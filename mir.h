@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include "mir-dlist.h"
 
+#ifdef __GNUC__
+#define MIR_UNUSED __attribute__((unused))
+#else
+#define MIR_UNUSED
+#endif
+
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
 
@@ -65,6 +71,8 @@ typedef enum {
 
 typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
 
+#define MIR_MAX_SCALE UINT8_MAX
+
 typedef int64_t MIR_disp_t;  /* Address displacement in memory */
 
 /* Register number (> 0).  A register always contain only one type
@@ -72,7 +80,7 @@ typedef int64_t MIR_disp_t;  /* Address displacement in memory */
 typedef uint32_t MIR_reg_t;
 
 #define MIR_MAX_REG_NUM UINT32_MAX
-#define MIR_ABSENT_HARD_REG_NUM MIR_MAX_REG_NUM
+#define MIR_NON_HARD_REG MIR_MAX_REG_NUM
 
 /* Immediate in immediate moves.  */
 typedef union {int64_t i; float f; double d;} MIR_imm_t;
@@ -83,8 +91,8 @@ typedef union {int64_t i; float f; double d;} MIR_imm_t;
    executed.  */
 typedef struct {
   MIR_type_t type : 8; MIR_scale_t scale : 8;
-  /* 0 means no reg for memory.  MIR_MAX_REG_NUM means no reg for hard
-     reg memory. */
+  /* 0 means no reg for memory.  MIR_NON_HARD_REG means no reg for
+     hard reg memory. */
   MIR_reg_t base, index;
   MIR_disp_t disp;
 } MIR_mem_t;
@@ -160,7 +168,7 @@ DEF_DLIST (MIR_item_t, item_link);
 extern DLIST (MIR_item_t) MIR_items; /* List of all items */
 
 /* Use it only internally:  */
-extern MIR_op_t MIR_new_reg_op (MIR_reg_t hard_reg);
+extern MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg);
 
 extern MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 					 MIR_reg_t index, MIR_scale_t scale);

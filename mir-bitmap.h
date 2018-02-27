@@ -70,7 +70,7 @@ static inline int bitmap_bit_p (const_bitmap_t bm, size_t nb) {
 }
 
 static inline int bitmap_set_bit_p (bitmap_t bm, size_t nb) {
-  size_t nw, sh, len = VARR_LENGTH (bitmap_el_t, bm);
+  size_t nw, sh;
   bitmap_el_t *addr;
   int res;
   

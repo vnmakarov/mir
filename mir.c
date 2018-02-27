@@ -384,7 +384,7 @@ void MIR_insert_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
-void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) {
+void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) { // ??? freeing
   if (! func_item->func_p)
     abort ();
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
@@ -441,8 +441,8 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
     break;
   case MIR_OP_MEM:
   case MIR_OP_HARD_REG_MEM: {
-    MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_ABSENT_HARD_REG_NUM;
-    void (*out_reg) (FILE, MIR_reg_t) = op.mode == MIR_OP_MEM ? MIR_output_reg : MIR_output_hard_reg;
+    MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_HARD_REG;
+    void (*out_reg) (FILE *, MIR_reg_t) = op.mode == MIR_OP_MEM ? MIR_output_reg : MIR_output_hard_reg;
     
     MIR_output_type (f, op.u.mem.type);
     fprintf (f, ":");
