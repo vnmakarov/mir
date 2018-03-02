@@ -140,18 +140,18 @@ struct pattern {
   {INSN_CODE, "r r md", "66 0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomisd r1,m2;setx r0; movzbl r0,r0*/
 
 #define BCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "r r l", "X 3B r0 R1;"       LONG_JUMP_OPCODE " l2"},  /* cmp r0,r1;jxx rel32*/ \
-  {INSN_CODE, "r m3 l", "X 3B r0 m1;"      LONG_JUMP_OPCODE " l2"},  /* cmp r0,m1;jxx rel8*/  \
-  {INSN_CODE, "r i0 l", "X 83 /7 R0 i1;"   LONG_JUMP_OPCODE " l2"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "r i2 l", "X 81 /7 R0 I1;"   LONG_JUMP_OPCODE " l2"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "m3 i0 l", "X 83 /7 m0 i1;"  LONG_JUMP_OPCODE " l2"},  /* cmp m0,i1;jxx rel32*/ \
-  {INSN_CODE, "m3 i2 l", "X 81 /7 m0 I1;"  LONG_JUMP_OPCODE " l2"},  /* cmp m0,i1;jxx rel32*/
+  {INSN_CODE, "l r r", "X 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
+  {INSN_CODE, "l r m3", "X 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
+  {INSN_CODE, "l r i0", "X 83 /7 R1 i2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {INSN_CODE, "l r i2", "X 81 /7 R1 I2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {INSN_CODE, "l m3 i0", "X 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
+  {INSN_CODE, "l m3 i2", "X 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
 
 #define FBCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "r r l", "0F 2E r0 R1;" LONG_JUMP_OPCODE " l2"},  /* ucomiss r0,r1;jxx rel8*/
+  {INSN_CODE, "l r r", "0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
 
 #define DBCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "r r l", "66 0F 2E r0 R1;" LONG_JUMP_OPCODE " l2"},  /* ucomisd r0,r1;jxx rel8*/
+  {INSN_CODE, "l r r", "66 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
 
 static struct pattern patterns[] = {
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
@@ -235,11 +235,13 @@ static struct pattern patterns[] = {
   FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLT, "0F 86")
   FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGT, "0F 83")
 
-  {MIR_FBEQ, "r r l", "0F 2E r0 R1; 7A v6; 0F 84 l2"},       /* ucomiss r0,r1;jp L;je rel32 L: */
-  {MIR_DBEQ, "r r l", "66 0F 2E r0 R1; 7A v6; 0F 84 l2"},    /* ucomisd r0,r1;jp L;je rel32 L: */
+  {MIR_FBEQ, "l r r", "0F 2E r1 R2; 7A v6; 0F 84 l0"},       /* ucomiss r0,r1;jp L;je rel32 L: */
+  {MIR_DBEQ, "l r r", "66 0F 2E r1 R2; 7A v6; 0F 84 l0"},    /* ucomisd r0,r1;jp L;je rel32 L: */
 
-  {MIR_FBNE, "r r l", "0F 2E r0 R1; 0F 8A l2; 0F 85 l2"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
-  {MIR_DBNE, "r r l", "66 0F 2E r0 R1; 0F 8A l2; 0F 85 l2"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  {MIR_FBNE, "l r r", "0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
+  {MIR_DBNE, "l r r", "66 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  /* ??? Returns */
+  {MIR_RET, "r", "C3"}, /* ret */
 };
 
 static MIR_reg_t get_clobbered_hard_reg (MIR_insn_t insn) {
@@ -279,26 +281,28 @@ static int pattern_index_cmp (const void *a1, const void *a2) {
 }
 
 static void patterns_init (void) {
-  int i, n = sizeof (patterns) / sizeof (struct pattern);
+  int i, ind, n = sizeof (patterns) / sizeof (struct pattern);
   MIR_insn_code_t prev_code, code;
   insn_pattern_info_t *info_addr;
+  static insn_pattern_info_t pinfo = {0, 0};
   
   VARR_CREATE (int, pattern_indexes, 0);
   for (i = 0; i < n; i++)
     VARR_PUSH (int, pattern_indexes, i);
   qsort (VARR_ADDR (int, pattern_indexes), n, sizeof (int), pattern_index_cmp);
   VARR_CREATE (insn_pattern_info_t, insn_pattern_info, 0);
-  VARR_EXPAND (insn_pattern_info_t, insn_pattern_info, MIR_INSN_BOUND);
-  info_addr = VARR_ADDR (insn_pattern_info_t, insn_pattern_info);
   for (i = 0; i < MIR_INSN_BOUND; i++)
-    info_addr[prev_code].start = info_addr[prev_code].num = 0;
-  for (prev_code = MIR_INSN_BOUND, i = 0; i < n; i++)
-    if ((code = patterns[i].code) != prev_code) {
+    VARR_PUSH (insn_pattern_info_t, insn_pattern_info, pinfo);
+  info_addr = VARR_ADDR (insn_pattern_info_t, insn_pattern_info);
+  for (prev_code = MIR_INSN_BOUND, i = 0; i < n; i++) {
+    ind = VARR_GET (int, pattern_indexes, i);
+    if ((code = patterns[ind].code) != prev_code) {
       if (i != 0)
 	info_addr[prev_code].num = i - info_addr[prev_code].start;
       info_addr[code].start = i;
       prev_code = code;
     }
+  }
   assert (prev_code != MIR_INSN_BOUND);
   info_addr[prev_code].num = n - info_addr[prev_code].start;
 }
@@ -310,7 +314,6 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   char ch, start_ch;
   MIR_op_t op, original;
   MIR_reg_t hr;
-  MIR_scale_t s;
   
   for (nop = 0, p = pat->pattern; *p != 0; p++) {
     assert (nop < nops);
@@ -349,7 +352,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if (op.mode != MIR_OP_DOUBLE) return FALSE;
       break;
     case 's':
-      if (op.mode != MIR_OP_INT || (s != 1 && s != 2 && s != 4 && s != 8)) return FALSE;
+      if (op.mode != MIR_OP_INT || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
       break;
     case 'm':
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
@@ -367,7 +370,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       break;
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-      n = ch - '0';
+      n = start_ch - '0';
       if (n >= nop) abort ();
       original = insn->ops[nop];
       if (original.mode != op.mode) return FALSE;
@@ -407,7 +410,7 @@ static const char *find_insn_pattern_replacement (MIR_insn_t insn) {
     if (pattern_match_p (pat, insn))
       return pat->replacement;
   }
-  assert (FALSE);
+  return NULL;
 }
 
 static void patterns_finish (void) {
@@ -416,7 +419,7 @@ static void patterns_finish (void) {
 }
 
 static int hex_value (int ch) {
-  return '0' <= ch && ch <= '9' ? ch - '0' : 'A' <= ch && ch <= 'F' ? ch - 'a' : -1;
+  return '0' <= ch && ch <= '9' ? ch - '0' : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10 : -1;
 }
 
 static uint64_t read_hex (const char **ptr) {
@@ -521,6 +524,12 @@ static void put_uint64 (uint64_t v, int nb) {
   }
 }
 
+static void set_uint64 (uint8_t *addr, uint64_t v, int nb) {
+  for (; nb > 0; nb--) {
+    *addr++ = v & 0xff; v >>= 4;
+  }
+}
+
 DEF_VARR (uint64_t);
 static VARR (uint64_t) *const_pool;
 
@@ -545,7 +554,7 @@ DEF_VARR (const_ref_t);
 static VARR (const_ref_t) *const_refs;
 
 struct label_ref {
-  size_t pc;
+  size_t label_val_disp, next_insn_disp;
   MIR_label_t label;
 };
 
@@ -568,7 +577,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
   const char *p, *insn_str;
   
   for (insn_str = replacement;; insn_str = p + 1) {
-    char ch, d1, d2;
+    char ch, start_ch, d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
     int rex_w = -1, rex_r = -1, rex_x = -1, rex_b = -1;
     int mod = -1, reg = -1, rm = -1;
@@ -589,14 +598,16 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	else abort ();	
 	p++;
       }
-      switch ((ch = *p)) {
+      if ((ch = *p) == 0)
+	break;
+      switch ((start_ch = ch = *p)) {
       case ' ': case '\t': break;
       case 'X':
 	if (opcode0 >= 0) {
 	  assert (opcode1 < 0);
 	  prefix = opcode0; opcode0 = -1;
 	}
-	rex_b = 1;
+	rex_w = 1;
 	break;
       case 'p':
 	ch = *++p;
@@ -620,7 +631,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	else {
 	  op = insn->ops[ch - '0'];
 	  assert (op.mode == MIR_OP_HARD_REG);
-	  if (ch == 'r')
+	  if (start_ch == 'r')
 	    setup_reg (&rex_r, &reg, op.u.hard_reg);
 	  else {
 	    setup_rm (&rex_b, &rm, op.u.hard_reg);
@@ -664,24 +675,21 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       }
       case 'i':
       case 'I':
-      case 'J': {
-	int case_ch = ch;
-	
+      case 'J':
 	ch = *++p;
 	if (! ('0' <= ch && ch <= '7')) abort ();
 	else {
 	  op = insn->ops[ch - '0'];
 	  assert (op.mode == MIR_OP_INT);
-	  if (case_ch == 'i') {
+	  if (start_ch == 'i') {
 	    assert (int8_p (op.u.i)); imm8 = (uint8_t) op.u.i;
-	  } else if (case_ch == 'I' ) {
+	  } else if (start_ch == 'I' ) {
 	    assert (int32_p (op.u.i)); imm32 = (uint32_t) op.u.i;
 	  } else {
 	    imm64_p = FALSE; imm64 = op.u.i;
 	  }
 	}
 	break;
-      }
       case 'l':
 	ch = *++p;
 	if (! ('0' <= ch && ch <= '2')) abort ();
@@ -690,7 +698,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	
 	  op = insn->ops[ch - '0'];
 	  assert (op.mode == MIR_OP_LABEL);
-	  lr.pc = 0; lr.label = op.u.label;
+	  lr.label_val_disp = lr.next_insn_disp = 0; lr.label = op.u.label;
 	  assert (label_ref_num < 0 && disp32 < 0);
 	  disp32 = 0; /* To reserve the space */
 	  label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
@@ -728,7 +736,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       case 'V':
 	++p;
 	v = read_hex (&p);
-	if (ch == 'v') {
+	if (start_ch == 'v') {
 	  assert (uint8_p (v)); imm8 = v;
 	} else {
 	  assert (uint32_p (v)); imm32 = v;
@@ -761,7 +769,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       if (reg < 0) reg = 0;
       if (rm < 0) rm = 0;
       assert (mod <= 3 && reg <= 7 && rm <= 7);
-      put_byte ((mod << 6) | (reg << 3) || rm);
+      put_byte ((mod << 6) | (reg << 3) | rm);
     }
     if (scale >= 0 || base >= 0 || index >= 0) {
       if (scale < 0) scale = 0;
@@ -773,12 +781,15 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
     if (const_ref_num >= 0)
       VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, code);
     if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].pc = VARR_LENGTH (uint8_t, code);
+      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, code);
     if (disp8 >= 0) put_byte (disp8);
     if (disp32 >= 0) put_uint64 (disp32, 4);
     if (imm8 >= 0) put_byte (imm8);
     if (imm32 >= 0) put_uint64 (imm32, 4);
     if (imm64_p) put_uint64 (imm64, 8);
+
+    if (label_ref_num >= 0)
+      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, code);
 
     if (ch == '\0')
       break;
@@ -792,10 +803,11 @@ static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
 }
 
 static int insn_ok_p (MIR_insn_t insn) {
-  return find_insn_pattern_replacement (insn) == NULL;
+  return find_insn_pattern_replacement (insn) != NULL;
 }
 
-static void *target_translate (MIR_item_t func) {
+static uint8_t *target_translate (MIR_item_t func, size_t *len) {
+  size_t i;
   MIR_insn_t insn;
   const char *replacement;
   
@@ -807,12 +819,25 @@ static void *target_translate (MIR_item_t func) {
   for (insn = DLIST_HEAD (MIR_insn_t, func->u.func->insns);
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
-    replacement = find_insn_pattern_replacement (insn);
-    assert (replacement != 0);
-    out_insn (insn, replacement);
+    if (insn->code == MIR_LABEL) {
+      set_label_disp (insn, VARR_LENGTH (uint8_t, code));
+    } else {
+      replacement = find_insn_pattern_replacement (insn);
+      assert (replacement != NULL);
+      out_insn (insn, replacement);
+    }
   }
-  // ??? pool, labels
-  return NULL;
+  /* Setting up labels */
+  for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++){
+    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
+    
+    set_uint64 (&VARR_ADDR (uint8_t, code)[lr.label_val_disp],
+		(int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp,
+		4);
+  }
+  // ??? pool
+  *len = VARR_LENGTH (uint8_t, code);
+  return VARR_ADDR (uint8_t, code);
 }
 
 static void target_init (void) {
@@ -820,9 +845,11 @@ static void target_init (void) {
   VARR_CREATE (uint64_t, const_pool, 0);
   VARR_CREATE (const_ref_t, const_refs, 0);
   VARR_CREATE (label_ref_t, label_refs, 0);
+  patterns_init ();
 }
 
 static void target_finish (void) {
+  patterns_finish ();
   VARR_DESTROY (uint8_t, code);
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);

@@ -158,7 +158,6 @@ void MIR_finish (void) {
 MIR_item_t MIR_new_func (const char *name, size_t nargs) {
   MIR_item_t func_item = malloc (sizeof (struct MIR_item));
   MIR_func_t func;
-  size_t i;
   
   if (func_item == NULL)
     abort ();
@@ -206,13 +205,11 @@ static MIR_insn_t create_insn (size_t nops, MIR_insn_code_t code) {
   insn = malloc (sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (nops - 1));
   if (insn == NULL)
     abort ();
-  insn->code = code;
+  insn->code = code; insn->data = NULL;
   return insn;
 }
 
 static MIR_insn_t new_insn1 (MIR_insn_code_t code) { return create_insn (1, code); }
-static MIR_insn_t new_insn2 (MIR_insn_code_t code) { return create_insn (2, code); }
-static MIR_insn_t new_insn3 (MIR_insn_code_t code) { return create_insn (3, code); }
 
 MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
   va_list argp;
@@ -233,8 +230,10 @@ static MIR_op_mode_t
 get_general_op_mode (MIR_op_t op, MIR_op_mode_t expected_mode) {
   switch (op.mode) {
   case MIR_OP_UNDEF: case MIR_OP_INT: case MIR_OP_FLOAT: case MIR_OP_DOUBLE:
-  case MIR_OP_NAME: case MIR_OP_LABEL: case MIR_OP_HARD_REG:
+  case MIR_OP_NAME: case MIR_OP_LABEL:
     return op.mode;
+  case MIR_OP_HARD_REG:
+    return expected_mode;
   case MIR_OP_REG: {
     MIR_op_mode_t mode = VARR_GET (MIR_op_mode_t, reg_modes, op.u.reg);
     
@@ -260,7 +259,7 @@ get_general_op_mode (MIR_op_t op, MIR_op_mode_t expected_mode) {
 
 MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_insn_t insn;
-  MIR_op_mode_t mode;
+  MIR_op_mode_t mode, reg_mode;
   int out_p;
   size_t i, insn_nops = MIR_insn_nops (code);
   
@@ -270,6 +269,25 @@ MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
     mode = MIR_insn_op_mode (code, i, &out_p);
     if (mode != get_general_op_mode (ops[i], mode))
       abort ();
+    switch (ops[i].mode) {
+    case MIR_OP_REG:
+      VARR_SET (MIR_op_mode_t, reg_modes, ops[i].u.reg, mode);
+      break;
+    case MIR_OP_MEM:
+      if (ops[i].u.mem.base != 0) {
+	reg_mode = VARR_GET (MIR_op_mode_t, reg_modes, ops[i].u.mem.base);
+	if (reg_mode != MIR_OP_UNDEF && reg_mode != MIR_OP_INT)
+	  abort ();
+	VARR_SET (MIR_op_mode_t, reg_modes, ops[i].u.mem.base, MIR_OP_INT);
+      }
+      if (ops[i].u.mem.index != 0) {
+	reg_mode = VARR_GET (MIR_op_mode_t, reg_modes, ops[i].u.mem.index);
+	if (reg_mode != MIR_OP_UNDEF && reg_mode != MIR_OP_INT)
+	  abort ();
+	VARR_SET (MIR_op_mode_t, reg_modes, ops[i].u.mem.index, MIR_OP_INT);
+      }
+      break;
+    }
   }
   insn = create_insn (nops, code);
   for (i = 0; i < nops; i++)
@@ -298,46 +316,48 @@ MIR_reg_t MIR_reg_mode (MIR_reg_t reg) {
 
 /* Functions to create operands.  */
 
+static void init_op (MIR_op_t *op, MIR_op_mode_t mode) { op->mode = mode; op->data = NULL; }
+
 MIR_op_t MIR_new_reg_op (MIR_reg_t reg) {
   MIR_op_t op;
 
   assert (reg < VARR_LENGTH (MIR_op_mode_t, reg_modes));
-  op.mode = MIR_OP_REG; op.u.reg = reg;
+  init_op (&op, MIR_OP_REG); op.u.reg = reg;
   return op;
 }
 
 MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg) { /* It is used only internally */
   MIR_op_t op;
 
-  op.mode = MIR_OP_HARD_REG; op.u.hard_reg = hard_reg;
+  init_op (&op, MIR_OP_HARD_REG); op.u.hard_reg = hard_reg;
   return op;
 }
 
 MIR_op_t MIR_new_int_op (int64_t i) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_INT; op.u.i = i;
+  init_op (&op, MIR_OP_INT); op.u.i = i;
   return op;
 }
 
 MIR_op_t MIR_new_float_op (float f) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_FLOAT; op.u.f = f;
+  init_op (&op, MIR_OP_FLOAT); op.u.f = f;
   return op;
 }
 
 MIR_op_t MIR_new_double_op (double d) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_DOUBLE; op.u.d = d;
+  init_op (&op, MIR_OP_DOUBLE); op.u.d = d;
   return op;
 }
 
 MIR_op_t MIR_new_name_op (MIR_name_t name) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_NAME; op.u.name = name;
+  init_op (&op, MIR_OP_NAME); op.u.name = name;
   return op;
 }
 
@@ -345,7 +365,7 @@ MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 			 MIR_reg_t index, MIR_scale_t scale) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_MEM; op.u.mem.type = type; op.u.mem.disp = disp;
+  init_op (&op, MIR_OP_MEM); op.u.mem.type = type; op.u.mem.disp = disp;
   op.u.mem.base = base; op.u.mem.index = index; op.u.mem.scale = scale;
   return op;
 }
@@ -354,7 +374,7 @@ MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t ba
 				  MIR_reg_t index, MIR_scale_t scale) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_HARD_REG_MEM; op.u.hard_reg_mem.type = type; op.u.hard_reg_mem.disp = disp;
+  init_op (&op, MIR_OP_HARD_REG_MEM); op.u.hard_reg_mem.type = type; op.u.hard_reg_mem.disp = disp;
   op.u.hard_reg_mem.base = base; op.u.hard_reg_mem.index = index; op.u.hard_reg_mem.scale = scale;
   return op;
 }
@@ -362,7 +382,7 @@ MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t ba
 MIR_op_t MIR_new_label_op (MIR_label_t label) {
   MIR_op_t op;
 
-  op.mode = MIR_OP_LABEL; op.u.label = label;
+  init_op (&op, MIR_OP_LABEL); op.u.label = label;
   return op;
 }
 
@@ -412,7 +432,7 @@ const char *MIR_type_str (MIR_type_t tp) {
 
 void MIR_output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (tp)); }
 
-void MIR_output_disp (FILE *f, MIR_reg_t disp) { fprintf (f, "%" PRId64, disp); }
+void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
 
 void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
 
@@ -496,7 +516,6 @@ void MIR_output_insn (FILE *f, MIR_insn_t insn) {
 }
 
 void MIR_output_item (FILE *f, MIR_item_t item) {
-  uint32_t i;
   MIR_insn_t insn;
   MIR_func_t func;
   
@@ -505,7 +524,8 @@ void MIR_output_item (FILE *f, MIR_item_t item) {
     return;
   }
   func = item->u.func;
-  fprintf (f, "%s:\tfunc\t%lu # %lu arg%s\n", func->name, func->nargs, func->nargs, func->nargs == 1 ? "" : "s");
+  fprintf (f, "%s:\tfunc\t%lu # %lu arg%s\n", func->name, (unsigned long) func->nargs,
+	   (unsigned long) func->nargs, func->nargs == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn);
   
@@ -556,22 +576,18 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, MIR_op_t *op, int o
     } else if (op->u.mem.base == 0 && op->u.mem.index != 0 && op->u.mem.scale == 1 && op->u.mem.disp == 0) {
       mem_op.u.mem.base = op->u.mem.index; mem_op.u.mem.index = 0; mem_op.u.mem.scale = 0;
     } else {
-      MIR_op_t addr_op, base_op, base_disp_op, ind_op;
+      MIR_op_t addr_op, base_op, ind_op;
       MIR_reg_t addr_reg;
       int after_p = ! move_p && out_p;
       
       addr_reg = MIR_new_reg ();
       addr_op = MIR_new_reg_op (addr_reg);
-      if (op->u.mem.disp != 0) {
+      if (op->u.mem.disp != 0)
 	insn = insert_op_insn (after_p, func_item, insn, MIR_new_insn (MIR_MOV, addr_op, MIR_new_int_op (op->u.mem.disp)));
-	base_disp_op = addr_op;
-      }
       if (op->u.mem.base != 0) {
 	base_op = MIR_new_reg_op (op->u.mem.base);
-	if (op->u.mem.disp != 0) {
+	if (op->u.mem.disp != 0)
 	  insn = insert_op_insn (after_p, func_item, insn, MIR_new_insn (MIR_ADD, addr_op, addr_op, base_op));
-	  base_disp_op = addr_op;
-	}
       }
       if (op->u.mem.index != 0 && op->u.mem.scale != 0) {
 	if (op->u.mem.scale == 1)
@@ -639,18 +655,12 @@ void MIR_simplify_func (MIR_item_t func_item) {
   }
 }
 
-#ifdef TEST_MIR
-static void error (const char *msg) {
-  fprintf (stderr, "%s -- goodbye\n", msg);
-  exit (1);
-}
-
-int main (void) {
+#if defined(TEST_MIR) || defined(TEST_MIR_GEN)
+MIR_item_t create_mir_example1 (void) {
   MIR_item_t func;
   MIR_label_t fin, cont;
   MIR_reg_t ARG1, R2;
   
-  MIR_init ();
   ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
   func = MIR_new_func ("test", 1);
   fin = MIR_new_label (); cont = MIR_new_label ();
@@ -661,6 +671,14 @@ int main (void) {
   MIR_append_insn (func, MIR_new_insn (MIR_BLT, MIR_new_label_op (cont), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
   MIR_append_insn (func, fin);
   MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (R2)));
+  return func;
+}
+
+MIR_item_t create_mir_example2 (void) {
+  MIR_item_t func;
+  MIR_reg_t ARG1, R2;
+  
+  ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
   func = MIR_new_func ("test2", 2);
   MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_mem_op (MIR_I64, 0, ARG1, R2, 8),
 				       MIR_new_mem_op (MIR_I64, 64, ARG1, 0, 0), MIR_new_mem_op (MIR_I64, 0, 0, ARG1, 8)));
@@ -668,7 +686,24 @@ int main (void) {
   MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_mem_op (MIR_I64, 0, 0, R2, 1)));
   MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_mem_op (MIR_I64, 1024, 0, 0, 0)));
   MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_mem_op (MIR_I64, 0, ARG1, R2, 8), MIR_new_mem_op (MIR_I64, 0, ARG1, 0, 8)));
-  MIR_simplify_func (func);
+  return func;
+}
+#endif
+
+#ifdef TEST_MIR
+static void error (const char *msg) {
+  fprintf (stderr, "%s -- goodbye\n", msg);
+  exit (1);
+}
+
+int main (void) {
+  MIR_item_t func1, func2;
+  
+  MIR_init ();
+  func = create_mir_example1 ();
+  func = create_mir_example2 ();
+  MIR_simplify_func (func1);
+  MIR_simplify_func (func2);
   MIR_output (stderr);
   MIR_finish ();
   return 0;

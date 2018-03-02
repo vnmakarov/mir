@@ -74,7 +74,7 @@ static inline int bitmap_set_bit_p (bitmap_t bm, size_t nb) {
   bitmap_el_t *addr;
   int res;
   
-  bitmap_expand (bm, nb);
+  bitmap_expand (bm, nb + 1);
   addr = VARR_ADDR (bitmap_el_t, bm);
   nw = nb / BITMAP_WORD_BITS; sh = nb % BITMAP_WORD_BITS;
   res = ((addr[nw] >> sh) & 1) == 0;

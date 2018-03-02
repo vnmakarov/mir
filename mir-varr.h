@@ -112,7 +112,7 @@ static inline T VARR_OP (T, pop) (VARR (T) *varr) {			      \
 #define VARR_GET(T, V, I) (VARR_OP (T, get) (V, I))
 #define VARR_SET(T, V, I, O) (VARR_OP (T, set) (V, I, O))
 #define VARR_TRUNC(T, V, S) (VARR_OP (T, trunc) (V, S))
-#define VARR_EXPAND(T, V, S) (VARR_OP (T, expand) (V, S))
+#define VARR_EXPAND(T, V, S, EL) (VARR_OP (T, expand) (V, S))
 #define VARR_PUSH(T, V, O) (VARR_OP (T, push) (V, O))
 #define VARR_POP(T, V) (VARR_OP(T, pop) (V))
 

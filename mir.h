@@ -2,6 +2,7 @@
 
 #define MIR_H
 
+#include <stdio.h>
 #include <stdint.h>
 #include "mir-dlist.h"
 
@@ -218,6 +219,9 @@ extern void MIR_append_insn (MIR_item_t func, MIR_insn_t insn);
 extern void MIR_insert_insn_after (MIR_item_t func, MIR_insn_t after, MIR_insn_t insn);
 extern void MIR_insert_insn_before (MIR_item_t func, MIR_insn_t before, MIR_insn_t insn);
 extern void MIR_remove_insn (MIR_item_t func, MIR_insn_t insn);
+
+extern void MIR_output (FILE *f);
+extern void MIR_output_insn (FILE *f, MIR_insn_t insn);
 
 extern void MIR_simplify (MIR_item_t func);
 
