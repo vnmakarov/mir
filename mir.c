@@ -11,6 +11,10 @@ DEF_VARR (MIR_op_t);
 
 static VARR (MIR_op_t) *temp_insn_ops;
 
+DEF_VARR (MIR_type_t);
+
+static VARR (MIR_type_t) *temp_arg_types;
+
 struct insn_desc {
   MIR_insn_code_t code; const char *name; unsigned op_modes[4];
 };
@@ -140,6 +144,7 @@ int MIR_init (void) {
 
   curr_label_num = curr_reg_num = 0;
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
+  VARR_CREATE (MIR_type_t, temp_arg_types, 0);
   VARR_CREATE (MIR_op_mode_t, reg_modes, 0);
   VARR_PUSH (MIR_op_mode_t, reg_modes, MIR_OP_UNDEF);
   check_and_prepare_insn_descs ();
@@ -150,29 +155,48 @@ int MIR_init (void) {
 
 void MIR_finish (void) {
   VARR_DESTROY (MIR_reg_t, temp_regs);
+  VARR_DESTROY (MIR_type_t, temp_arg_types);
   VARR_DESTROY (MIR_op_mode_t, reg_modes);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
 }
 
-MIR_item_t MIR_new_func (const char *name, size_t nargs) {
+MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size, size_t nargs, MIR_type_t *arg_types) {
   MIR_item_t func_item = malloc (sizeof (struct MIR_item));
   MIR_func_t func;
+  size_t i;
   
   if (func_item == NULL)
     abort ();
   func_item->data = NULL;
   func_item->func_p = TRUE;
-  func_item->u.func = func = malloc (sizeof (struct MIR_func));
+  func_item->u.func = func = malloc (sizeof (struct MIR_func) +  sizeof (MIR_op_mode_t) * (nargs == 0 ? 0 : nargs - 1));
   if (func == NULL)
     abort ();
   func->name = name;
-  func->nargs = nargs;
   DLIST_INIT (MIR_insn_t, func->insns);
+  func->frame_size = frame_size;
+  func->nargs = nargs;
+  for (i = 0; i < nargs; i++)
+    func->arg_types[i] = arg_types[i];
   DLIST_APPEND (MIR_item_t, MIR_items, func_item);
   return func_item;
 }
 
+MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...) {
+  va_list argp;
+  MIR_op_mode_t op_mode;
+  size_t i;
+  
+  va_start (argp, nargs);
+  VARR_TRUNC (MIR_type_t, temp_arg_types, 0);
+  for (i = 0; i < nargs; i++) {
+    op_mode = va_arg (argp, MIR_op_mode_t);
+    VARR_PUSH (MIR_type_t, temp_arg_types, op_mode);
+  }
+  va_end(argp);
+  return MIR_new_func_arr (name, frame_size, nargs, VARR_ADDR (MIR_type_t, temp_arg_types));
+}
 
 const char *MIR_insn_name (MIR_insn_code_t code) {
   if (code >= MIR_INSN_BOUND)
@@ -392,6 +416,12 @@ void MIR_append_insn (MIR_item_t func_item, MIR_insn_t insn) {
   DLIST_APPEND (MIR_insn_t, func_item->u.func->insns, insn);
 }
 
+void MIR_prepend_insn (MIR_item_t func_item, MIR_insn_t insn) {
+  if (! func_item->func_p)
+    abort ();
+  DLIST_PREPEND (MIR_insn_t, func_item->u.func->insns, insn);
+}
+
 void MIR_insert_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn_t insn) {
   if (! func_item->func_p)
     abort ();
@@ -408,11 +438,6 @@ void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) { // ??? freeing
   if (! func_item->func_p)
     abort ();
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
-}
-
-void MIR_simplify (MIR_item_t func_item) {
-  if (! func_item->func_p)
-    abort ();
 }
 
 const char *MIR_type_str (MIR_type_t tp) {
@@ -518,13 +543,17 @@ void MIR_output_insn (FILE *f, MIR_insn_t insn) {
 void MIR_output_item (FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
+  size_t i;
   
   if (! item->func_p) {
     fprintf (f, "%s:\textern\n", item->u.external);
     return;
   }
   func = item->u.func;
-  fprintf (f, "%s:\tfunc\t%lu # %lu arg%s\n", func->name, (unsigned long) func->nargs,
+  fprintf (f, "%s:\tfunc\t%lu", func->name, (unsigned long) func->frame_size);
+  for (i = 0; i < func->nargs; i++)
+    fprintf (f, ", %s", MIR_type_str (func->arg_types[i]));
+  fprintf (f, " # frame size = %lu, %lu arg%s\n", (unsigned long) func->frame_size,
 	   (unsigned long) func->nargs, func->nargs == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn);
@@ -662,7 +691,7 @@ MIR_item_t create_mir_example1 (void) {
   MIR_reg_t ARG1, R2;
   
   ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
-  func = MIR_new_func ("test", 1);
+  func = MIR_new_func ("test", 0, 1, MIR_I64);
   fin = MIR_new_label (); cont = MIR_new_label ();
   MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (R2), MIR_new_int_op (0)));
   MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
@@ -679,7 +708,7 @@ MIR_item_t create_mir_example2 (void) {
   MIR_reg_t ARG1, R2;
   
   ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
-  func = MIR_new_func ("test2", 2);
+  func = MIR_new_func ("test2", 0, 2, MIR_I64, MIR_I64);
   MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_mem_op (MIR_I64, 0, ARG1, R2, 8),
 				       MIR_new_mem_op (MIR_I64, 64, ARG1, 0, 0), MIR_new_mem_op (MIR_I64, 0, 0, ARG1, 8)));
   MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_mem_op (MIR_I64, 0, ARG1, 0, 0)));

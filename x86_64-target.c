@@ -38,9 +38,68 @@ static MIR_disp_t get_stack_slot_offset (MIR_reg_t slot) { /* slot is 0, 1, ... 
   return - (MIR_disp_t) (slot + 1) * sizeof (int64_t);
 }
 
-static void machinize (MIR_item_t func) {
-  //  ???
-  /* Remove absolute addresses */
+static void machinize (MIR_item_t func_item) {
+  MIR_func_t func;
+  MIR_insn_t insn, next_insn, new_insn;
+  MIR_insn_code_t code, new_insn_code;
+  MIR_reg_t ret_reg, arg_reg;
+  MIR_op_t ret_reg_op, arg_reg_op;
+  size_t i, int_num, float_num;
+
+  assert (func_item->func_p);
+  func = func_item->u.func;
+  for (i = int_num = float_num = 0; i < func->nargs; i++) {
+    MIR_type_t tp = func->arg_types[i];
+    if (tp == MIR_F || tp == MIR_D) {
+      switch (float_num) {
+      case 0: case 1: case 2: case 3:
+#ifndef _WIN64
+      case 4: case 5: case 6: case 7:
+#endif
+	arg_reg = XMM0_HARD_REG + float_num;
+	break;
+      default:
+	abort ();
+      }
+      float_num++;
+      new_insn_code = tp == MIR_F ? MIR_FMOV : MIR_DMOV;
+    } else {
+      switch (int_num
+#ifdef _WIN64
+	      + 2
+#endif
+	      ) {
+      case 0: arg_reg = DI_HARD_REG; break;
+      case 1: arg_reg = SI_HARD_REG; break;
+      case 2: arg_reg = DX_HARD_REG; break;
+      case 3: arg_reg = CX_HARD_REG; break;
+      case 4: arg_reg = R8_HARD_REG; break;
+      case 5: arg_reg = R9_HARD_REG; break;
+      default:
+	abort ();
+      }
+      int_num++;
+      new_insn_code = MIR_MOV;
+    }
+    arg_reg_op = MIR_new_hard_reg_op (arg_reg);
+    new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), arg_reg_op);
+    MIR_prepend_insn (func_item, new_insn);
+  }
+  for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
+    next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    code = insn->code;
+    if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+      assert (insn->ops[0].mode == MIR_OP_REG);
+      ret_reg = code == MIR_RET ? AX_HARD_REG :  XMM0_HARD_REG;
+      ret_reg_op = MIR_new_hard_reg_op (ret_reg);
+      new_insn_code = code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
+      new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
+      MIR_insert_insn_before (func_item, insn, new_insn);
+      insn->ops[0] = ret_reg_op;
+    }
+    //  ???
+    /* Remove absolute addresses */
+  }
 }
 
 struct pattern {
@@ -241,7 +300,9 @@ static struct pattern patterns[] = {
   {MIR_FBNE, "l r r", "0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "l r r", "66 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
   /* ??? Returns */
-  {MIR_RET, "r", "C3"}, /* ret */
+  {MIR_RET, "h0", "C3"},  /* ret */
+  {MIR_FRET, "h16", "C3"}, /* ret */
+  {MIR_DRET, "h16", "C3"}, /* ret */
 };
 
 static MIR_reg_t get_clobbered_hard_reg (MIR_insn_t insn) {
@@ -327,11 +388,11 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case 'h':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
       ch = *++p;
-      if (! ('0' <= ch && ch <= 9)) abort ();
+      if (! ('0' <= ch && ch <= '9')) abort ();
       else {
 	hr = ch - '0';
 	ch = *++p;
-	if ('0' <= ch && ch <= 9) hr = hr * 10 + ch - '0';
+	if ('0' <= ch && ch <= '9') hr = hr * 10 + ch - '0';
 	else --p;
 	if (op.u.hard_reg != hr) return FALSE;
       }

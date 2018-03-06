@@ -143,8 +143,10 @@ DEF_DLIST (MIR_insn_t, insn_link);
 /* Function definition */
 typedef struct MIR_func {
   const char *name;
-  uint32_t nargs;
   DLIST (MIR_insn_t) insns;
+  uint32_t frame_size;
+  uint32_t nargs;
+  MIR_type_t arg_types[1];
 } *MIR_func_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -192,7 +194,9 @@ static inline int MIR_ret_code_p (MIR_insn_code_t code) {
 extern int MIR_init (void);
 extern void MIR_finish (void);
 
-extern MIR_item_t MIR_new_func (const char *name, size_t nargs);
+extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
+				    size_t nargs, MIR_type_t *arg_types);
+extern MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...);
 
 extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);
 extern MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops);
@@ -216,6 +220,7 @@ extern MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base
 extern MIR_op_t MIR_new_label_op (MIR_label_t label);
 
 extern void MIR_append_insn (MIR_item_t func, MIR_insn_t insn);
+extern void MIR_prepend_insn (MIR_item_t func, MIR_insn_t insn);
 extern void MIR_insert_insn_after (MIR_item_t func, MIR_insn_t after, MIR_insn_t insn);
 extern void MIR_insert_insn_before (MIR_item_t func, MIR_insn_t before, MIR_insn_t insn);
 extern void MIR_remove_insn (MIR_item_t func, MIR_insn_t insn);
@@ -223,6 +228,6 @@ extern void MIR_remove_insn (MIR_item_t func, MIR_insn_t insn);
 extern void MIR_output (FILE *f);
 extern void MIR_output_insn (FILE *f, MIR_insn_t insn);
 
-extern void MIR_simplify (MIR_item_t func);
+extern void MIR_simplify_func (MIR_item_t func);
 
 #endif /* #ifndef MIR_H */

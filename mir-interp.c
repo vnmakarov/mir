@@ -517,7 +517,7 @@ MIR_val_t MIR_interp (MIR_item_t func_item, void (*resolver) (const char *name),
   if (! func_item->func_p)
     abort ();
   if (func_item->data == NULL) {
-    MIR_simplify (func_item);
+    MIR_simplify_func (func_item);
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
@@ -530,7 +530,21 @@ MIR_val_t MIR_interp (MIR_item_t func_item, void (*resolver) (const char *name),
   return eval (func_desc->code, bp);
 }
 
+#ifndef MIR_INTERP_DEBUG
+#define MIR_INTERP_DEBUG 0
+#endif
+
 #ifdef TEST_MIR_INTERP
+
+#include <sys/time.h>
+
+static double
+real_sec_time(void) {
+    struct timeval  tv;
+
+    gettimeofday(&tv, NULL);
+    return tv.tv_usec / 1000000.0 + tv.tv_sec;
+}
 
 static void error (const char *msg) {
   fprintf (stderr, "%s -- goodbye\n", msg);
@@ -542,11 +556,12 @@ int main (void) {
   MIR_label_t fin, cont;
   MIR_reg_t ARG1, R2;
   MIR_val_t val;
+  double start_time;
   const int64_t n_iter = 1000000000;
     
   MIR_init ();
   ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
-  func = MIR_new_func ("test", 1);
+  func = MIR_new_func ("test", 0, 1, MIR_I64);
   fin = MIR_new_label (); cont = MIR_new_label ();
   MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (R2), MIR_new_int_op (0)));
   MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
@@ -555,12 +570,20 @@ int main (void) {
   MIR_append_insn (func, MIR_new_insn (MIR_BLT, MIR_new_label_op (cont), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
   MIR_append_insn (func, fin);
   MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (R2)));
-  MIR_simplify_func (func);
+#if MIR_INTERP_DEBUG 
+  fprintf (stderr, "++++++ Before simplification:\n");
   MIR_output (stderr);
+#endif
+  MIR_simplify_func (func);
+#if MIR_INTERP_DEBUG 
+  fprintf (stderr, "++++++ After simplification:\n");
+  MIR_output (stderr);
+#endif
   MIR_interp_init ();
   val.i = n_iter;
+  start_time = real_sec_time ();
   val = MIR_interp (func, NULL, 1, val);
-  fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 "\n", n_iter, val.i);
+  fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
   MIR_interp_finish ();
   MIR_finish ();
   return 0;

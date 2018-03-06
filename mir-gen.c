@@ -29,7 +29,7 @@
                            x86_64-target.c) creating machine insns.
 
    Terminology:
-   reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP__MEM)
+   reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP_MEM)
    hard reg - MIR hard register (their numbers are in MIR_OP_HARD_REG and MIR_OP_HARD_REG_MEM)
    breg (based reg) - function pseudo registers whose numbers start with zero
    var - pseudo and hard register (var numbers for psedo-registers are based reg numbers + MAX_HARD_REG + 1)
@@ -51,9 +51,7 @@ static size_t get_label_disp (MIR_insn_t insn);
 #error "undefined or unsupported generation target"
 #endif
 
-#ifdef TEST_MIR_GEN
-#define MIR_GEN_DEBUG 0
-#else
+#ifndef MIR_GEN_DEBUG
 #define MIR_GEN_DEBUG 0
 #endif
 
@@ -523,7 +521,7 @@ static void initiate_bb_live_info (bb_t bb) {
 	    bitmap_clear_bit_p (bb->gen, reg2var (op.u.reg));
 	    bitmap_set_bit_p (bb->kill, reg2var (op.u.reg));
 	  }
-	  breg_infos[op.u.reg].freq++;
+	  breg_infos[reg2breg (op.u.reg)].freq++;
 	  break;
 	case MIR_OP_HARD_REG:
 	  if (! out_p && niter != 0)
@@ -538,11 +536,11 @@ static void initiate_bb_live_info (bb_t bb) {
 	    break;
 	  if (op.u.mem.base != 0) {
 	    bitmap_set_bit_p (bb->gen, reg2var (op.u.mem.base));
-	    breg_infos[op.u.mem.base].freq++;
+	    breg_infos[reg2breg (op.u.mem.base)].freq++;
 	  }
 	  if (op.u.mem.index != 0) {
 	    bitmap_set_bit_p (bb->gen, reg2var (op.u.mem.index));
-	    breg_infos[op.u.mem.index].freq++;
+	    breg_infos[reg2breg (op.u.mem.index)].freq++;
 	  }
 	  break;
 	case MIR_OP_HARD_REG_MEM:
@@ -571,9 +569,9 @@ static void initiate_bb_live_info (bb_t bb) {
       mv->bb_insn = bb_insn;
       DLIST_APPEND (mv_t, curr_cfg->moves, mv);
       if (insn->ops[0].mode == MIR_OP_REG)
-	DLIST_APPEND (dst_mv_t, breg_infos[insn->ops[0].u.reg].dst_moves, mv);
+	DLIST_APPEND (dst_mv_t, breg_infos[reg2breg (insn->ops[0].u.reg)].dst_moves, mv);
       if (insn->ops[1].mode == MIR_OP_REG)
-	DLIST_APPEND (src_mv_t, breg_infos[insn->ops[1].u.reg].src_moves, mv);
+	DLIST_APPEND (src_mv_t, breg_infos[reg2breg (insn->ops[1].u.reg)].src_moves, mv);
     }
   }
 }
@@ -845,12 +843,12 @@ static void setup_loc_profit_from_op (MIR_op_t op) {
   }
 }
 
-static void setup_loc_profits (MIR_reg_t bre) {
+static void setup_loc_profits (MIR_reg_t breg) {
   mv_t mv;
   
-  for (mv = DLIST_HEAD (dst_mv_t, curr_breg_infos[bre].dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
+  for (mv = DLIST_HEAD (dst_mv_t, curr_breg_infos[breg].dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
-  for (mv = DLIST_HEAD (src_mv_t, curr_breg_infos[bre].src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
+  for (mv = DLIST_HEAD (src_mv_t, curr_breg_infos[breg].src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
 }
 
@@ -922,7 +920,7 @@ static void assign (void) {
       VARR_PUSH (size_t, loc_profits, 0);
       VARR_PUSH (size_t, loc_profit_ages, 0);
     }
-    VARR_SET (MIR_reg_t, breg_renumber, i, best_loc);
+    VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
 	bitmap_set_bit_p (point_used_locs_addr[j], best_loc);
@@ -1078,6 +1076,53 @@ static void create_op_defs (MIR_op_t *op, MIR_insn_t def_insn1, size_t def_insn1
   op_def->nop2 = def_nop2;
 }
 
+static MIR_insn_code_t commutative_insn_code (MIR_insn_t insn) {
+  switch (insn->code) {
+  case MIR_ADD: case MIR_FADD: case MIR_DADD:
+  case MIR_MUL: case MIR_FMUL: case MIR_DMUL:
+  case MIR_AND: case MIR_OR: case MIR_XOR:
+  case MIR_EQ: case MIR_FEQ: case MIR_DEQ:
+  case MIR_NE: case MIR_FNE: case MIR_DNE:
+  case MIR_BEQ: case MIR_FBEQ: case MIR_DBEQ:
+  case MIR_BNE: case MIR_FBNE: case MIR_DBNE:
+    return insn->code;
+    break;
+  case MIR_LT: return MIR_GT;
+  case MIR_ULT: return MIR_UGT;
+  case MIR_FLT: return MIR_FGT;
+  case MIR_DLT: return MIR_DGT;
+  case MIR_LE: return MIR_GE;
+  case MIR_ULE: return MIR_UGE;
+  case MIR_FLE: return MIR_FGE;
+  case MIR_DLE: return MIR_DGE;
+  case MIR_GT: return MIR_LT;
+  case MIR_UGT: return MIR_ULT;
+  case MIR_FGT: return MIR_FLT;
+  case MIR_DGT: return MIR_DLT;
+  case MIR_GE: return MIR_LE;
+  case MIR_UGE: return MIR_ULE;
+  case MIR_FGE: return MIR_FLE;
+  case MIR_DGE: return MIR_DLE;
+  case MIR_BLT: return MIR_BGT;
+  case MIR_UBLT: return MIR_UBGT;
+  case MIR_FBLT: return MIR_FBGT;
+  case MIR_DBLT: return MIR_DBGT;
+  case MIR_BLE: return MIR_BGE;
+  case MIR_UBLE: return MIR_UBGE;
+  case MIR_FBLE: return MIR_FBGE;
+  case MIR_DBLE: return MIR_DBGE;
+  case MIR_BGT: return MIR_BLT;
+  case MIR_UBGT: return MIR_UBLT;
+  case MIR_FBGT: return MIR_FBLT;
+  case MIR_DBGT: return MIR_DBLT;
+  case MIR_BGE: return MIR_BLE;
+  case MIR_UBGE: return MIR_UBLE;
+  case MIR_FBGE: return MIR_FBLE;
+  case MIR_DBGE: return MIR_DBLE;
+  default: return MIR_INSN_BOUND;
+  }
+}
+
 static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
   MIR_insn_t def_insn;
   MIR_op_t src_op, op = insn->ops[nop];
@@ -1171,7 +1216,7 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
     }
   }
   if (! successfull_change_p)
-    insn->ops[nop] = op;
+      insn->ops[nop] = op;
   return successfull_change_p;
 }
 
@@ -1200,27 +1245,31 @@ static int latest_op_defs_p (MIR_op_t *op) {
   return TRUE;
 }
 
-static void combine_op (MIR_insn_t insn, size_t nop) {
-  int first_p;
+static int combine_op (MIR_insn_t insn, size_t nop) {
+  int first_p, change_p = FALSE;
   MIR_op_t new_op = insn->ops[nop], temp_op;
 
   for (first_p = TRUE;; first_p = !first_p) {
     if (! substitute_op_p (insn, nop, first_p) && ! first_p)
       break;
     temp_op = insn->ops[nop];
-    if (latest_op_defs_p (&temp_op))
+    if (latest_op_defs_p (&temp_op)) {
+      change_p = TRUE;
       new_op = temp_op;
+    }
   }
   insn->ops[nop] = new_op;
+  return change_p;
 }
 
 static void combine (void) {
   bb_t bb;
+  MIR_insn_code_t code, new_code;
   MIR_insn_t insn;
   bb_insn_t bb_insn;
   size_t nops, i, curr_insn_num;
-  MIR_op_t *op;
-  int out_p;
+  MIR_op_t temp_op, *op;
+  int iter, out_p, change_p;
 
   hreg_defs_addr = VARR_ADDR (hreg_def_t, hreg_defs);
   hreg_def_ages_addr = VARR_ADDR (size_t, hreg_def_ages);
@@ -1231,40 +1280,55 @@ static void combine (void) {
 	 bb_insn = DLIST_NEXT (bb_insn_t, bb_insn), curr_insn_num++) {
       ;
       insn = bb_insn->insn;
+      code = insn->code;
       nops = MIR_insn_nops (insn->code);
-      for (i = 0; i < nops; i++) {
-	op = &insn->ops[i];
-	op->data = NULL;
-	MIR_insn_op_mode (insn->code, i, &out_p);
-	if (! out_p) {
-	  if (op->mode == MIR_OP_HARD_REG
-	      && hreg_def_ages_addr[op->u.hard_reg] == curr_bb_hreg_def_age)
-	    create_op_defs (op, hreg_defs_addr[op->u.hard_reg].insn,
-			    hreg_defs_addr[op->u.hard_reg].insn_num,
-			    hreg_defs_addr[op->u.hard_reg].nop, NULL, 0, 0);
-	  else if (op->mode == MIR_OP_HARD_REG_MEM) {
-	    MIR_insn_t insn1 = NULL, insn2 = NULL;
-	    size_t nop1 = 0, nop2 = 0, insn1_num = 0, insn2_num = 0;
-	    
-	    if (op->u.hard_reg_mem.base == MIR_NON_HARD_REG
-		&& hreg_def_ages_addr[op->u.hard_reg_mem.base] == curr_bb_hreg_def_age) {
-	      insn1 = hreg_defs_addr[op->u.hard_reg_mem.base].insn;
-	      insn1_num = hreg_defs_addr[op->u.hard_reg_mem.base].insn_num;
-	      nop1 = hreg_defs_addr[op->u.hard_reg_mem.base].nop;
+      for (iter = 0; iter < 2; iter++) {
+	change_p = FALSE;
+	for (i = 0; i < nops; i++) {
+	  op = &insn->ops[i];
+	  op->data = NULL;
+	  MIR_insn_op_mode (insn->code, i, &out_p);
+	  if (! out_p) {
+	    if (op->mode == MIR_OP_HARD_REG
+		&& hreg_def_ages_addr[op->u.hard_reg] == curr_bb_hreg_def_age)
+	      create_op_defs (op, hreg_defs_addr[op->u.hard_reg].insn,
+			      hreg_defs_addr[op->u.hard_reg].insn_num,
+			      hreg_defs_addr[op->u.hard_reg].nop, NULL, 0, 0);
+	    else if (op->mode == MIR_OP_HARD_REG_MEM) {
+	      MIR_insn_t insn1 = NULL, insn2 = NULL;
+	      size_t nop1 = 0, nop2 = 0, insn1_num = 0, insn2_num = 0;
+	      
+	      if (op->u.hard_reg_mem.base == MIR_NON_HARD_REG
+		  && hreg_def_ages_addr[op->u.hard_reg_mem.base] == curr_bb_hreg_def_age) {
+		insn1 = hreg_defs_addr[op->u.hard_reg_mem.base].insn;
+		insn1_num = hreg_defs_addr[op->u.hard_reg_mem.base].insn_num;
+		nop1 = hreg_defs_addr[op->u.hard_reg_mem.base].nop;
+	      }
+	      if (op->u.hard_reg_mem.index == MIR_NON_HARD_REG
+		  && hreg_def_ages_addr[op->u.hard_reg_mem.index] == curr_bb_hreg_def_age) {
+		insn2 = hreg_defs_addr[op->u.hard_reg_mem.index].insn;
+		insn2_num = hreg_defs_addr[op->u.hard_reg_mem.index].insn_num;
+		nop2 = hreg_defs_addr[op->u.hard_reg_mem.index].nop;
+	      }
+	      if (insn1 != NULL || insn2 != NULL)
+		create_op_defs (op, insn1, insn1_num, nop1, insn2, insn2_num, nop2);
 	    }
-	    if (op->u.hard_reg_mem.index == MIR_NON_HARD_REG
-		&& hreg_def_ages_addr[op->u.hard_reg_mem.index] == curr_bb_hreg_def_age) {
-	      insn2 = hreg_defs_addr[op->u.hard_reg_mem.index].insn;
-	      insn2_num = hreg_defs_addr[op->u.hard_reg_mem.index].insn_num;
-	      nop2 = hreg_defs_addr[op->u.hard_reg_mem.index].nop;
-	    }
-	    if (insn1 != NULL || insn2 != NULL)
-	      create_op_defs (op, insn1, insn1_num, nop1, insn2, insn2_num, nop2);
+	    if (op->data != NULL && combine_op (insn, i))
+	      change_p = TRUE;
 	  }
-	  if (op->data != NULL)
-	    combine_op (insn, i);
+	}
+	if (iter == 0) {
+	  if ((new_code = commutative_insn_code (insn)) == MIR_INSN_BOUND)
+	    break;
+	  insn->code = new_code;
+	  temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
+	} else if (! change_p) {
+	  assert (commutative_insn_code (insn) == code);
+	  insn->code = code;
+	  temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
 	}
       }
+      
       for (i = 0; i < nops; i++) {
 	op = &insn->ops[i];
 	MIR_insn_op_mode (insn->code, i, &out_p);
@@ -1413,9 +1477,10 @@ static void print_code (uint8_t *code, size_t code_len) {
 }
 #endif 
 
-void MIR_gen (MIR_item_t func) {
+void *MIR_gen (MIR_item_t func) {
   uint8_t *code;
   size_t code_len;
+  void *res;
   
   assert (func->func_p && func->data == NULL);
   machinize (func);
@@ -1457,10 +1522,11 @@ void MIR_gen (MIR_item_t func) {
 #if MIR_GEN_DEBUG
   print_code (code, code_len);
 #endif 
-  get_code (code, code_len);
+  res = get_code (code, code_len);
   destroy_func_live_ranges ();
   destroy_func_cfg_live_info ();
   destroy_func_cfg ();
+  return res;
 }
 
 void MIR_init_gen (void) {
@@ -1527,7 +1593,10 @@ real_usec_time(void) {
 extern MIR_item_t create_mir_example1 (void);
 int main (void) {
   double start_time = real_usec_time ();
+  double start_execution_time;
   MIR_item_t func;
+  uint64_t (*fun) (uint64_t n_iter);
+  uint64_t res, arg = 1000000000;
   
   MIR_init ();
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
@@ -1536,7 +1605,7 @@ int main (void) {
   fprintf (stderr, "+++++++++++++MIR before simplification:\n");
   MIR_output (stderr);
 #endif
-  MIR_simplify (func);
+  MIR_simplify_func (func);
 #if MIR_GEN_DEBUG
   fprintf (stderr, "+++++++++++++MIR after simplification:\n");
   MIR_output (stderr);
@@ -1547,8 +1616,12 @@ int main (void) {
 #if MIR_GEN_DEBUG
   debug_file = stderr;
 #endif
-  MIR_gen (func);
+  fun = MIR_gen (func);
   fprintf (stderr, "MIR_gen end -- %.0f usec\n", real_usec_time () - start_time);
+  start_execution_time = real_usec_time ();
+  res = fun (arg);
+  fprintf (stderr, "fun (%ld) -> %ld -- call %.0f usec\n",
+	   arg, res, real_usec_time () - start_execution_time);
   MIR_finish_gen ();
   fprintf (stderr, "MIR_finish_gen end -- %.0f usec\n", real_usec_time () - start_time);
   MIR_finish ();
