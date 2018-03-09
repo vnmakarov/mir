@@ -12,8 +12,8 @@ mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-gen-bench:
-	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out
+mir-test:
+	$(CC) -g -DTEST_MIR mir.c && ./a.out
 
 interp-test:
 	$(CC) -g -D$(TARGET) -DTEST_MIR_INTERP -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out
@@ -23,6 +23,23 @@ interp-bench:
 
 gen-test:
 	$(CC) -g -D$(TARGET) -DTEST_MIR_GEN -DMIR_GEN_DEBUG=1 mir.c mir-gen.c && ./a.out
+
+gen-bench:
+	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out
+
+util-test: varr-test dlist-test bitmap-test htab-test
+
+varr-test:
+	$(CC) -g -I. tests/mir-varr-test.c && ./a.out
+
+dlist-test:
+	$(CC) -g -I. tests/mir-dlist-test.c && ./a.out
+
+bitmap-test:
+	$(CC) -g -I. tests/mir-bitmap-test.c && ./a.out
+
+htab-test:
+	$(CC) -g -I. tests/mir-htab-test.c && ./a.out
 
 clean:
 	rm -f $(OBJS) ./a.out

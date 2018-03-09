@@ -1,5 +1,4 @@
 #ifndef MIR_VARR_H
-
 #define MIR_VARR_H
 
 #include <stdio.h>
@@ -14,18 +13,20 @@
 #define VARR_ASSERT(EXPR, OP, T) ((void) (EXPR))
 
 #else
-static inline void mir_int_assert_fail (const char *op, const char *var) {
+static inline void mir_var_assert_fail (const char *op, const char *var) {
   fprintf (stderr, "wrong %s for %s", op, var); assert (0);
 }
 
 #define VARR_ASSERT(EXPR, OP, T)				              \
-  (void) ((EXPR) ? 0 : (mir_int_assert_fail (OP, #T), 0))
+  (void) ((EXPR) ? 0 : (mir_var_assert_fail (OP, #T), 0))
 
 #endif
 
 /*---------------- Typed variable length arrays -----------------------------*/
-#define VARR(T) VARR_##T
-#define VARR_OP(T, OP) VARR_##T##_##OP
+#define VARR_CONCAT2(A, B) A##B
+#define VARR_CONCAT3(A, B, C) A##B##C
+#define VARR(T)           VARR_CONCAT2 (VARR_, T)
+#define VARR_OP(T, OP)    VARR_CONCAT3 (VARR_, T, OP)
 
 #define VARR_T(T)                                                             \
 typedef struct VARR (T) {                                                     \
@@ -85,10 +86,17 @@ static inline void VARR_OP (T,trunc) (VARR (T) *varr, size_t size) {          \
 }									      \
                                                                               \
 static inline void VARR_OP (T,expand) (VARR (T) *varr, size_t size) {	      \
-  VARR_ASSERT (varr  && varr->varr, "expand", T);			      \
+  VARR_ASSERT (varr && varr->varr, "expand", T);			      \
   if  (varr->size < size)						      \
     varr->varr =  (T *) realloc (varr->varr, sizeof (T) * 3 * size / 2);      \
   varr->size = size;							      \
+}									      \
+									      \
+static inline void VARR_OP (T,tailor) (VARR (T) *varr, size_t size) {	      \
+  VARR_ASSERT (varr && varr->varr, "tailor", T);			      \
+  if  (varr->size != size)						      \
+    varr->varr = (T *) realloc (varr->varr, sizeof (T) * size);	              \
+  varr->els_num = varr->size = size;					      \
 }									      \
 									      \
 static inline void VARR_OP (T, push) (VARR (T) *varr, T obj) {	              \
@@ -112,7 +120,8 @@ static inline T VARR_OP (T, pop) (VARR (T) *varr) {			      \
 #define VARR_GET(T, V, I) (VARR_OP (T, get) (V, I))
 #define VARR_SET(T, V, I, O) (VARR_OP (T, set) (V, I, O))
 #define VARR_TRUNC(T, V, S) (VARR_OP (T, trunc) (V, S))
-#define VARR_EXPAND(T, V, S, EL) (VARR_OP (T, expand) (V, S))
+#define VARR_EXPAND(T, V, S) (VARR_OP (T, expand) (V, S))
+#define VARR_TAILOR(T, V, S) (VARR_OP (T, tailor) (V, S))
 #define VARR_PUSH(T, V, O) (VARR_OP (T, push) (V, O))
 #define VARR_POP(T, V) (VARR_OP(T, pop) (V))
 

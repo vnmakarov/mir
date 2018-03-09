@@ -80,7 +80,7 @@ int main (void) {
   status &= bitmap_bit_p (b3, 120);
   status &= bitmap_bit_count (b3) == 3;
   
-  fprintf (stderr, status ? "OK\n" : "FAIL\n");
+  fprintf (stderr, status ? "DLIST OK\n" : "DLIST FAILURE!\n");
   bitmap_destroy (b1); bitmap_destroy (b2); bitmap_destroy (b3); bitmap_destroy (b4);
   return !status;
 }

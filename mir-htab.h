@@ -1,0 +1,185 @@
+#ifndef MIR_HTAB_H
+#define MIR_HTAB_H
+
+#include "mir-varr.h"
+
+#define FALSE 0
+#define TRUE 1
+
+#if !defined(VARR_ENABLE_CHECKING) && !defined(NDEBUG)
+#define VARR_ENABLE_CHECKING
+#endif
+
+#ifndef HTAB_ENABLE_CHECKING
+#define HTAB_ASSERT(EXPR, OP, T) ((void) (EXPR))
+
+#else
+static inline void mir_htab_assert_fail (const char *op, const char *var) {
+  fprintf (stderr, "wrong %s for %s\n", op, var); assert (0);
+}
+
+#define HTAB_ASSERT(EXPR, OP, T)				              \
+  (void) ((EXPR) ? 0 : (mir_htab_assert_fail (OP, #T), 0))
+
+#endif
+
+/*---------------- Typed hash table -----------------------------*/
+typedef unsigned htab_ind_t;
+typedef unsigned htab_size_t;
+typedef unsigned htab_hash_t;
+
+#define HTAB_EMPTY_IND (~(htab_ind_t) 0)
+#define HTAB_DELETED_IND (HTAB_EMPTY_IND - 1)
+#define HTAB_DELETED_HASH 0
+
+enum htab_action { HTAB_FIND, HTAB_INSERT, HTAB_DELETE };
+
+#define HTAB(T)             HTAB_##T
+#define HTAB_OP(T, OP)      HTAB_##T##_##OP
+
+DEF_VARR (htab_ind_t)
+
+#define HTAB_EL(T) HTAB_EL_##T
+
+
+#define HTAB_T(T)							\
+typedef struct HTAB_EL (T) { htab_hash_t hash; T el; } HTAB_EL (T);	\
+DEF_VARR (HTAB_EL(T))							\
+typedef struct {				        		\
+  htab_size_t els_num, els_start, els_bound, collisions;		\
+  htab_hash_t (*hash_func) (T el);					\
+  int (*eq_func) (T el1, T el2);					\
+  VARR (HTAB_EL (T)) *els;						\
+  VARR (htab_ind_t) *entries;						\
+} HTAB (T);
+
+#define DEF_HTAB(T)                                                     \
+HTAB_T (T)								\
+									\
+static inline void HTAB_OP (T, create) (HTAB (T) **htab,		\
+                                        htab_size_t min_size,		\
+					htab_hash_t (*hash_func) (T el),\
+					int (*eq_func) (T el1, T el2)) {\
+  HTAB (T) *ht;								\
+  htab_size_t i, size;							\
+  									\
+  for (size = 2; min_size > size; size *= 2)				\
+    ;									\
+  ht = malloc (sizeof (*ht));						\
+  VARR_CREATE (HTAB_EL (T), ht->els, size);				\
+  VARR_TAILOR (HTAB_EL (T), ht->els, size);				\
+  VARR_CREATE (htab_ind_t, ht->entries, 2 * size);			\
+  ht->hash_func = hash_func;						\
+  ht->eq_func = eq_func;						\
+  ht->els_num = ht->els_start = ht->els_bound = ht->collisions = 0;	\
+  for (i = 0; i < 2 * size; i++)					\
+    VARR_PUSH (htab_ind_t, ht->entries, HTAB_EMPTY_IND);		\
+  *htab = ht;								\
+}									\
+									\
+static inline void HTAB_OP (T, destroy) (HTAB (T) **htab) {		\
+  HTAB_ASSERT (*htab != NULL, "destroy", T);				\
+  VARR_DESTROY (HTAB_EL (T), (*htab)->els);				\
+  VARR_DESTROY (htab_ind_t, (*htab)->entries);				\
+  free (*htab); *htab = NULL;						\
+}									\
+									\
+static inline void HTAB_OP (T, clear) (HTAB (T) *htab) {		\
+  htab_ind_t *addr;							\
+  htab_size_t i, size;							\
+  									\
+  HTAB_ASSERT (htab != NULL, "clear", T);				\
+  htab->els_num = htab->els_start = htab->els_bound = 0;		\
+  addr = VARR_ADDR (htab_ind_t, htab->entries);				\
+  size = VARR_LENGTH (htab_ind_t, htab->entries);			\
+  for (i = 0; i < size; i++)						\
+    addr[i] = HTAB_EMPTY_IND;						\
+}									\
+									\
+static inline int HTAB_OP (T, do) (HTAB (T) *htab, T el,		\
+				   enum htab_action action, T *res) {	\
+  htab_ind_t ind, el_ind, *entry, *first_deleted_entry = NULL;		\
+  htab_hash_t hash, peterb;						\
+  htab_size_t els_size, size, mask, start, bound, i;			\
+  htab_ind_t *addr;							\
+  HTAB_EL (T) *els_addr;						\
+  									\
+  HTAB_ASSERT (htab != NULL, "do 1", T);				\
+  size = VARR_LENGTH (htab_ind_t, htab->entries);			\
+  els_size = VARR_LENGTH (HTAB_EL (T), htab->els);			\
+  HTAB_ASSERT (els_size * 2 == size, "do 2", T);			\
+  if (action == HTAB_INSERT && htab->els_bound == els_size) {		\
+    size *= 2;								\
+    VARR_TAILOR (htab_ind_t, htab->entries, size);			\
+    addr = VARR_ADDR (htab_ind_t, htab->entries);			\
+    for (i = 0; i < size; i++)						\
+      addr[i] = HTAB_EMPTY_IND;						\
+    VARR_TAILOR (HTAB_EL (T), htab->els, els_size * 2);			\
+    els_addr = VARR_ADDR (HTAB_EL (T), htab->els);			\
+    start = htab->els_start; bound = htab->els_bound;			\
+    htab->els_start = htab->els_bound = htab->els_num = 0;		\
+    for (i = start; i < bound; i++)					\
+      if (els_addr[i].hash != HTAB_DELETED_HASH) {			\
+	HTAB_OP (T, do) (htab, els_addr[i].el, HTAB_INSERT, res);	\
+	HTAB_ASSERT (*res == els_addr[i].el, "do 3", T);		\
+      }									\
+    HTAB_ASSERT (bound - start >= htab->els_bound, "do 4", T);		\
+  }									\
+  mask = size - 1;							\
+  hash = (*htab->hash_func) (el);					\
+  if (hash == HTAB_DELETED_HASH)					\
+    hash += 1;								\
+  peterb = hash;							\
+  ind = hash & mask;							\
+  addr = VARR_ADDR (htab_ind_t, htab->entries);				\
+  els_addr = VARR_ADDR (HTAB_EL (T), htab->els);			\
+  for (;;htab->collisions++) {						\
+    entry = addr + ind;							\
+    el_ind = *entry;							\
+    if (el_ind != HTAB_EMPTY_IND) {					\
+      if (el_ind == HTAB_DELETED_IND) {					\
+	first_deleted_entry = entry;					\
+      } else if (els_addr[el_ind].hash == hash				\
+		 && (*htab->eq_func) (els_addr[el_ind].el, el)) {	\
+	*res = els_addr[el_ind].el;					\
+	if (action == HTAB_DELETE) {					\
+	  htab->els_num--;						\
+	  *entry = HTAB_DELETED_IND;					\
+	  els_addr[el_ind].hash = HTAB_DELETED_HASH;			\
+	}								\
+	return TRUE;							\
+      }									\
+    } else {								\
+      if (action == HTAB_INSERT) {					\
+	htab->els_num++;						\
+	if (first_deleted_entry != NULL)				\
+	  entry = first_deleted_entry;					\
+	els_addr[htab->els_bound].hash = hash;				\
+	els_addr[htab->els_bound].el = el;				\
+	*entry = htab->els_bound++;					\
+	*res = el;							\
+      }									\
+      return FALSE;							\
+    }									\
+    peterb >>= 11;							\
+    ind = (5 * ind + peterb + 1) & mask;				\
+  }									\
+}									\
+									\
+static inline htab_size_t HTAB_OP(T, els_num) (HTAB (T) *htab) {	\
+  HTAB_ASSERT (htab != NULL, "els_num", T);				\
+  return htab->els_num;							\
+}									\
+static inline htab_size_t HTAB_OP (T, collisions) (HTAB (T) *htab) {	\
+  HTAB_ASSERT (htab != NULL, "collisions", T);				\
+  return htab->collisions;						\
+}
+
+#define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ))
+#define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
+#define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
+#define HTAB_DO(T, V, A, EL, TAB_EL) (HTAB_OP (T, do) (V, A, EL, &(TAB_EL)))
+#define HTAB_ELS_NUM(T, V) (HTAB_OP (T, els_num) (V))
+#define HTAB_COLLISIONS(T, V) (HTAB_OP (T, collisions) (V))
+
+#endif /* #ifndef MIR_HTAB_H */
