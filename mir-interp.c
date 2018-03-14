@@ -551,25 +551,17 @@ static void error (const char *msg) {
   exit (1);
 }
 
+extern MIR_item_t create_mir_func_with_loop (void);
 int main (void) {
   MIR_item_t func;
   MIR_label_t fin, cont;
-  MIR_reg_t ARG1, R2;
+  MIR_reg_t ARG1, COUNT;
   MIR_val_t val;
   double start_time;
   const int64_t n_iter = 1000000000;
     
   MIR_init ();
-  ARG1 = MIR_new_reg (); R2 = MIR_new_reg ();
-  func = MIR_new_func ("test", 0, 1, MIR_I64);
-  fin = MIR_new_label (); cont = MIR_new_label ();
-  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (R2), MIR_new_int_op (0)));
-  MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
-  MIR_append_insn (func, cont);
-  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (R2), MIR_new_reg_op (R2), MIR_new_int_op (1)));
-  MIR_append_insn (func, MIR_new_insn (MIR_BLT, MIR_new_label_op (cont), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
-  MIR_append_insn (func, fin);
-  MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (R2)));
+  func = create_mir_func_with_loop ();
 #if MIR_INTERP_DEBUG 
   fprintf (stderr, "++++++ Before simplification:\n");
   MIR_output (stderr);

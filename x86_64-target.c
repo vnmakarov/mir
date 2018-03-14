@@ -14,10 +14,9 @@ const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD
 const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM8_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM9_HARD_REG;
 const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM9_HARD_REG;
 
-static inline int hard_reg_mode_ok_p (MIR_reg_t hard_reg, MIR_op_mode_t mode) {
+static inline int hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
-  assert (mode == MIR_OP_INT || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE);
-  return mode == MIR_OP_INT ? hard_reg < XMM0_HARD_REG : hard_reg >= XMM0_HARD_REG;
+  return type == MIR_F || type == MIR_D ? hard_reg >= XMM0_HARD_REG : hard_reg < XMM0_HARD_REG;
 }
 
 static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
@@ -49,7 +48,7 @@ static void machinize (MIR_item_t func_item) {
   assert (func_item->func_p);
   func = func_item->u.func;
   for (i = int_num = float_num = 0; i < func->nargs; i++) {
-    MIR_type_t tp = func->arg_types[i];
+    MIR_type_t tp = func->vars[i].type;
     if (tp == MIR_F || tp == MIR_D) {
       switch (float_num) {
       case 0: case 1: case 2: case 3:

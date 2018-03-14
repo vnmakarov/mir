@@ -67,7 +67,7 @@ typedef enum {
 typedef enum {
   /* Integer types of different size: */
   MIR_I8, MIR_U8, MIR_I16, MIR_U16, MIR_I32, MIR_U32, MIR_I64,
-  MIR_F, MIR_D /* Float or double type */
+  MIR_F, MIR_D /* Float or double type */, MIR_T_BOUND
 } MIR_type_t;
 
 typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
@@ -77,7 +77,8 @@ typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
 typedef int64_t MIR_disp_t;  /* Address displacement in memory */
 
 /* Register number (> 0).  A register always contain only one type
-   value: integer, float, or double. */
+   value: integer, float, or double.  Register numbers in insn
+   operands can be changed in MIR_finish_func.  */
 typedef uint32_t MIR_reg_t;
 
 #define MIR_MAX_REG_NUM UINT32_MAX
@@ -140,13 +141,18 @@ struct MIR_insn {
 /* Definition of double list of insns */
 DEF_DLIST (MIR_insn_t, insn_link);
 
+typedef struct MIR_var {
+  MIR_type_t type;
+  const char *name;
+} MIR_var_t;
+
 /* Function definition */
 typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
   uint32_t frame_size;
-  uint32_t nargs;
-  MIR_type_t arg_types[1];
+  uint32_t nargs, nlocals, ntemps;
+  MIR_var_t vars[1];
 } *MIR_func_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -195,11 +201,13 @@ extern int MIR_init (void);
 extern void MIR_finish (void);
 
 extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
-				    size_t nargs, MIR_type_t *arg_types);
-extern MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...);
+				    size_t nargs, size_t nlocals, MIR_var_t *vars);
+extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,
+				size_t nargs, size_t nlocals, ...);
+extern void MIR_finish_func (void);
 
-extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);
 extern MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops);
+extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);
 
 extern const char *MIR_insn_name (MIR_insn_code_t code);
 extern size_t MIR_insn_nops (MIR_insn_code_t code);
@@ -207,8 +215,11 @@ extern MIR_op_mode_t MIR_insn_op_mode (MIR_insn_code_t code, size_t nop, int *ou
 
 extern MIR_insn_t MIR_new_label (void);
 
-extern MIR_reg_t MIR_new_reg (void);
-extern MIR_reg_t MIR_reg_mode (MIR_reg_t reg);
+extern MIR_reg_t MIR_reg (const char *reg_name);
+/* The following two functions can be used only after
+   MIR_finish_func: */
+extern MIR_type_t MIR_reg_type (MIR_reg_t reg, MIR_func_t func);
+extern const char *MIR_reg_name (MIR_reg_t reg, MIR_func_t func);
 
 extern MIR_op_t MIR_new_reg_op (MIR_reg_t reg);
 extern MIR_op_t MIR_new_int_op (int64_t v);
@@ -229,5 +240,9 @@ extern void MIR_output (FILE *f);
 extern void MIR_output_insn (FILE *f, MIR_insn_t insn);
 
 extern void MIR_simplify_func (MIR_item_t func);
+
+/* For internal use only:  */
+extern const char *_MIR_uniq_string (const char *str);
+extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
 
 #endif /* #ifndef MIR_H */

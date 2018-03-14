@@ -104,10 +104,10 @@ static inline int HTAB_OP (T, do) (HTAB (T) *htab, T el,		\
   htab_ind_t *addr;							\
   HTAB_EL (T) *els_addr;						\
   									\
-  HTAB_ASSERT (htab != NULL, "do 1", T);				\
+  HTAB_ASSERT (htab != NULL, "do htab", T);				\
   size = VARR_LENGTH (htab_ind_t, htab->entries);			\
   els_size = VARR_LENGTH (HTAB_EL (T), htab->els);			\
-  HTAB_ASSERT (els_size * 2 == size, "do 2", T);			\
+  HTAB_ASSERT (els_size * 2 == size, "do size", T);			\
   if (action == HTAB_INSERT && htab->els_bound == els_size) {		\
     size *= 2;								\
     VARR_TAILOR (htab_ind_t, htab->entries, size);			\
@@ -121,9 +121,10 @@ static inline int HTAB_OP (T, do) (HTAB (T) *htab, T el,		\
     for (i = start; i < bound; i++)					\
       if (els_addr[i].hash != HTAB_DELETED_HASH) {			\
 	HTAB_OP (T, do) (htab, els_addr[i].el, HTAB_INSERT, res);	\
-	HTAB_ASSERT (*res == els_addr[i].el, "do 3", T);		\
+	HTAB_ASSERT ((*htab->eq_func) (*res, els_addr[i].el),		\
+                     "do expand", T);					\
       }									\
-    HTAB_ASSERT (bound - start >= htab->els_bound, "do 4", T);		\
+    HTAB_ASSERT (bound - start >= htab->els_bound, "do bound", T);	\
   }									\
   mask = size - 1;							\
   hash = (*htab->hash_func) (el);					\

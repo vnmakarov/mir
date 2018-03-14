@@ -903,7 +903,7 @@ static void assign (void) {
     for (loc = 0; loc <= max_loc; loc++) {
       if ((loc <= MAX_HARD_REG
 	   && (fixed_hard_reg_p (loc)
-	       || ! hard_reg_mode_ok_p (loc, MIR_reg_mode (reg))
+	       || ! hard_reg_type_ok_p (loc, MIR_reg_type (reg, curr_func->u.func))
 	       || (call_used_hard_reg_p (loc) && curr_breg_infos[breg].calls_num > 0)))
 	  || bitmap_bit_p (conflict_locs, loc))
 	continue;
@@ -1590,7 +1590,7 @@ real_usec_time(void) {
     return tv.tv_usec + tv.tv_sec * 1000000.0;
 }
 
-extern MIR_item_t create_mir_example1 (void);
+extern MIR_item_t create_mir_func_with_loop (void);
 int main (void) {
   double start_time = real_usec_time ();
   double start_execution_time;
@@ -1600,7 +1600,7 @@ int main (void) {
   
   MIR_init ();
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
-  func = create_mir_example1 ();
+  func = create_mir_func_with_loop ();
 #if MIR_GEN_DEBUG
   fprintf (stderr, "+++++++++++++MIR before simplification:\n");
   MIR_output (stderr);
