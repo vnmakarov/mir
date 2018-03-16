@@ -38,9 +38,22 @@
 
 #include <stdlib.h>
 #include <string.h>
+
+static void util_error (const char *message);
+#define MIR_VARR_ERROR util_error
+
 #include "mir.h"
 #include "mir-dlist.h"
 #include "mir-bitmap.h"
+
+static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
+
+static void *gen_malloc (size_t size) {
+  void *res = malloc (size);
+  if (res == NULL)
+    util_error ("no memory");
+  return res;
+}
 
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
@@ -153,7 +166,7 @@ static MIR_item_t curr_func;
 static func_cfg_t curr_cfg;
 
 static bb_insn_t create_bb_insn (MIR_insn_t insn, bb_t bb) {
-  bb_insn_t bb_insn = malloc (sizeof (struct bb_insn));
+  bb_insn_t bb_insn = gen_malloc (sizeof (struct bb_insn));
 
   insn->data = bb_insn;
   bb_insn->bb = bb;
@@ -183,7 +196,7 @@ static size_t get_label_disp (MIR_insn_t insn) {
 static size_t curr_bb_index;
 
 static bb_t create_bb (MIR_insn_t insn) {
-  bb_t bb = malloc (sizeof (struct bb));
+  bb_t bb = gen_malloc (sizeof (struct bb));
 
   DLIST_APPEND (bb_t, curr_cfg->bbs, bb);
   bb->index = curr_bb_index++;
@@ -198,7 +211,7 @@ static bb_t create_bb (MIR_insn_t insn) {
 }
 
 static edge_t create_edge (bb_t src, bb_t dst) {
-  edge_t e = malloc (sizeof (struct edge));
+  edge_t e = gen_malloc (sizeof (struct edge));
 
   e->src = src; e->dst = dst;
   DLIST_APPEND (in_edge_t, dst->in_edges, e);
@@ -275,7 +288,7 @@ static void output_out_edges (bb_t bb) {
 static void output_live_element (size_t nel) {
   fprintf (debug_file, "%3lu", (unsigned long) nel);
   if (var_is_reg_p (nel))
-    fprintf (debug_file, "(r%lu)", (unsigned long) var2reg (nel));
+    fprintf (debug_file, "(%s)", MIR_reg_name (var2reg (nel), curr_func->u.func));
 }
 
 static void output_bitmap (const char *head, bitmap_t bm) {
@@ -564,7 +577,7 @@ static void initiate_bb_live_info (bb_t bb) {
     if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
 	&& (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
 	&& (insn->ops[1].mode == MIR_OP_REG || insn->ops[1].mode == MIR_OP_HARD_REG)) {
-      mv_t mv = malloc (sizeof (struct mv));
+      mv_t mv = gen_malloc (sizeof (struct mv));
 
       mv->bb_insn = bb_insn;
       DLIST_APPEND (mv_t, curr_cfg->moves, mv);
@@ -622,7 +635,7 @@ DEF_VARR (live_range_t);
 static VARR (live_range_t) *var_live_ranges;
 
 static live_range_t create_live_range (int start, int finish, live_range_t next) {
-  live_range_t lr = malloc (sizeof (struct live_range));
+  live_range_t lr = gen_malloc (sizeof (struct live_range));
 
   assert (finish < 0 || start <= finish);
   lr->start = start; lr->finish = finish; lr->next = next;
@@ -692,7 +705,7 @@ static void print_live_ranges (void) {
       continue;
     fprintf (debug_file, "%lu", i);
     if (var_is_reg_p (i))
-      fprintf (debug_file, " (r%lu)", (unsigned long) var2reg (i));
+      fprintf (debug_file, " (r%lu)", MIR_reg_name (var2reg (i), curr_func->u.func));
     fprintf (debug_file, ":");
     for (; lr != NULL; lr = lr->next)
       fprintf (debug_file, " [%d..%d]", lr->start, lr->finish);
@@ -1065,7 +1078,7 @@ typedef struct op_def *op_def_t;
 
 static void create_op_defs (MIR_op_t *op, MIR_insn_t def_insn1, size_t def_insn1_num, size_t def_nop1,
 			    MIR_insn_t def_insn2, size_t def_insn2_num, size_t def_nop2) {
-  op_def_t op_def = malloc (sizeof (struct op_def));
+  op_def_t op_def = gen_malloc (sizeof (struct op_def));
 
   op->data = op_def;
   op_def->insn1 = def_insn1;
@@ -1489,7 +1502,7 @@ void *MIR_gen (MIR_item_t func) {
   MIR_output (debug_file);
 #endif
   curr_func = func;
-  curr_cfg = func->data = malloc (sizeof (struct func_cfg));
+  curr_cfg = func->data = gen_malloc (sizeof (struct func_cfg));
   build_func_cfg ();
 #if MIR_GEN_DEBUG
   fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");

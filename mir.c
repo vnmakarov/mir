@@ -1,4 +1,9 @@
 #include "mir.h"
+
+static void util_error (const char *message);
+#define MIR_VARR_ERROR util_error
+#define MIR_HTAB_ERROR MIR_VARR_ERROR 
+
 #include "mir-varr.h"
 #include "mir-htab.h"
 #include "mir-mum.h"
@@ -9,6 +14,38 @@
 
 #define FALSE 0
 #define TRUE 1
+
+typedef void MIR_NO_RETURN (*MIR_error_func_t) (enum MIR_error_type error_type, const char *message);
+
+static MIR_error_func_t error_func;
+
+static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *message) {
+  fprintf (stderr, "%s\n", message);
+  exit (0);
+}
+
+static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_alloc_error, message); }
+
+/* Reserved names:
+   fp - frame pointer
+   t<number> - a temp reg
+   hr<number> - a hardware reg */
+static int reserved_name_p (const char *name) {
+  size_t i, start;
+  
+  if (strcmp (name, "fp") == 0)
+    return TRUE;
+  if (name[0] == 't')
+    start = 1;
+  else if (name[0] == 'h' && name[1] == 'r')
+    start = 2;
+  else
+    return FALSE;
+  for (i = start; name[i] != '\0'; i++)
+    if (name[i] < '0' || name[i] > '9')
+      return FALSE;
+  return TRUE;
+}
 
 DEF_VARR (MIR_op_t);
 
@@ -111,6 +148,7 @@ static struct insn_desc insn_descs[] = {
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_UNDEF}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_UNDEF}},
   {MIR_LABEL, "label", {MIR_OP_UNDEF}},
+  {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_UNDEF}},
 };
 
 DEF_VARR (size_t);
@@ -122,8 +160,7 @@ static void check_and_prepare_insn_descs (void) {
   
   VARR_CREATE (size_t, insn_nops, 0);
   for (i = 0; i < MIR_INSN_BOUND; i++) {
-    if (insn_descs[i].code != i)
-      abort ();
+    assert (insn_descs[i].code == i);
     for (j = 0; insn_descs[i].op_modes[j] != MIR_OP_UNDEF; j++)
       ;
     VARR_PUSH (size_t, insn_nops, j);
@@ -164,7 +201,7 @@ static string_t string_store (const char *str) {
   if (HTAB_DO (string_t, string_tab, string, HTAB_FIND, el))
     return el;
   if ((heap_str = malloc (strlen (str) + 1)) == NULL)
-    abort ();
+    (*error_func) (MIR_alloc_error, "Not enough memory");
   strcpy (heap_str, str);
   string.str = heap_str;
   string.num = VARR_LENGTH (string_t, strings);
@@ -225,16 +262,21 @@ static htab_hash_t reg2rdn_hash (size_t rdn) {
 }
 
 static void reg_init (void) {
+  reg_desc_t rd;
+  
   VARR_CREATE (reg_desc_t, reg_descs, 300);
+  VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq);
   HTAB_CREATE (size_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq);
 }
 
-static void reg_create (MIR_func_t func, MIR_reg_t reg, const char *name, MIR_type_t type) {
+static void reg_create (MIR_func_t func, MIR_reg_t reg, const char *name, MIR_type_t type, int any_p) {
   reg_desc_t rd;
   size_t rdn, tab_rdn;
   int htab_res;
   
+  if (! any_p && reserved_name_p (name))
+    (*error_func) (MIR_reserved_name_error, "redefining a reserved name");
   rd.name_num = string_store (name).num;
   rd.func = func;
   rd.type = type;
@@ -243,7 +285,7 @@ static void reg_create (MIR_func_t func, MIR_reg_t reg, const char *name, MIR_ty
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
     VARR_POP (reg_desc_t, reg_descs);
-    abort (); /* repeated decl */
+    (*error_func) (MIR_repeated_decl_error, "Repeated reg declaration");
   }
   htab_res = HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
   assert (! htab_res);
@@ -266,7 +308,7 @@ static int curr_label_num;
 DLIST (MIR_item_t) MIR_items; /* List of all items */
 
 int MIR_init (void) {
-
+  error_func = default_error;
   curr_func = NULL;
   curr_label_num = 0;
   string_init ();
@@ -280,15 +322,19 @@ int MIR_init (void) {
 }
 
 void MIR_finish (void) {
-  if (curr_func != NULL)
-    abort (); /* unfinished func */
   reg_finish ();
   string_finish ();
   VARR_DESTROY (MIR_reg_t, temp_regs);
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
+  if (curr_func != NULL)
+    (*error_func) (MIR_finish_error, "finish when function is not finished"); 
 }
+
+MIR_error_func_t MIR_get_error_func (void) { return error_func; }
+
+void MIR_set_error_func (MIR_error_func_t func) { error_func = func; }
 
 MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
 			     size_t nargs, size_t nlocals, MIR_var_t *vars) {
@@ -296,25 +342,26 @@ MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
   MIR_func_t func;
   size_t nvars = nargs + nlocals;
   size_t i;
-  reg_desc_t rd;
   
   if (func_item == NULL)
-    abort ();
-  VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
+    (*error_func) (MIR_alloc_error, "Not enough memory");
   func_item->data = NULL;
   func_item->func_p = TRUE;
   curr_func = func_item->u.func = func
     = malloc (sizeof (struct MIR_func)
 	      +  sizeof (MIR_var_t) * (nvars == 0 ? 0 : nvars - 1));
-  if (func == NULL)
-    abort ();
+  if (func == NULL) {
+    free (func_item);
+    (*error_func) (MIR_alloc_error, "Not enough memory");
+  }
   func->name = string_store (name).str;
   DLIST_INIT (MIR_insn_t, func->insns);
   func->frame_size = frame_size; func->nargs = nargs; func->nlocals = nlocals; func->ntemps = 0;
   for (i = 0; i < nvars; i++) {
     func->vars[i] = vars[i];
-    reg_create (func, i + 1, vars[i].name, vars[i].type);
+    reg_create (func, i + 1, vars[i].name, vars[i].type, FALSE);
   }
+  reg_create (func, nvars + 1, "fp", MIR_I64, TRUE);
   DLIST_APPEND (MIR_item_t, MIR_items, func_item);
   return func_item;
 }
@@ -353,9 +400,11 @@ static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
 
 void MIR_finish_func (void) {
   MIR_insn_t insn;
+  MIR_error_type_t err;
+  const char *err_msg;
   
   if (curr_func == NULL)
-    abort ();
+    (*error_func) (MIR_no_func_error, "finish of non-existing function");
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn)) {
     MIR_insn_code_t code = insn->code;
     size_t i, insn_nops = MIR_insn_nops (code);
@@ -368,27 +417,47 @@ void MIR_finish_func (void) {
       switch (insn->ops[i].mode) {
       case MIR_OP_REG:
 	rd = find_rd_by_name_num (insn->ops[i].u.reg, curr_func);
-	if (rd == NULL)
-	  abort (); /* undeclared */
+	if (rd == NULL) {
+	  insn->code = MIR_INVALID_INSN;
+	  (*error_func) (MIR_undeclared_reg_error, "undeclared reg");
+	}
 	insn->ops[i].u.reg = rd->reg;
 	mode = type2mode (rd->type);
 	break;
       case MIR_OP_MEM:
 	if (insn->ops[i].u.mem.base != 0) {
 	  rd = find_rd_by_name_num (insn->ops[i].u.mem.base, curr_func);
-	  if (rd == NULL)
-	    abort (); /* undeclared */
-	  insn->ops[i].u.mem.base = rd->reg;
-	  if (type2mode (rd->type) != MIR_OP_INT)
-	    abort ();
+	  if (rd == NULL) {
+	    insn->code = MIR_INVALID_INSN;
+	    if (err == MIR_no_error) {
+	      err = MIR_undeclared_reg_error; err_msg = "undeclared reg";
+	    }
+	  } else {
+	    insn->ops[i].u.mem.base = rd->reg;
+	    if (type2mode (rd->type) != MIR_OP_INT) {
+	      insn->code = MIR_INVALID_INSN;
+	      if (err == MIR_no_error) {
+		err = MIR_reg_type_error; err_msg = "base reg of non-integer type";
+	      }
+	    }
+	  }
 	}
 	if (insn->ops[i].u.mem.index != 0) {
 	  rd = find_rd_by_name_num (insn->ops[i].u.mem.index, curr_func);
-	  if (rd == NULL)
-	    abort (); /* undeclared */
-	  insn->ops[i].u.mem.index = rd->reg;
-	  if (type2mode (rd->type) != MIR_OP_INT)
-	    abort ();
+	  if (rd == NULL) {
+	    insn->code = MIR_INVALID_INSN;
+	    if (err == MIR_no_error) {
+	      err = MIR_undeclared_reg_error; err_msg = "undeclared reg";
+	    }
+	  } else {
+	    insn->ops[i].u.mem.index = rd->reg;
+	    if (type2mode (rd->type) != MIR_OP_INT) {
+	      insn->code = MIR_INVALID_INSN;
+	      if (err == MIR_no_error) {
+		err = MIR_reg_type_error; err_msg = "index reg of non-integer type";
+	      }
+	    }
+	  }
 	}
 	mode = type2mode (insn->ops[i].u.mem.type);
 	break;
@@ -399,22 +468,31 @@ void MIR_finish_func (void) {
 	mode = insn->ops[i].mode;
 	break;
       }
-      if (mode != expected_mode)
-	abort ();
+      if (mode != expected_mode) {
+	insn->code = MIR_INVALID_INSN;
+	if (err == MIR_no_error) {
+	  err = MIR_op_mode_error; err_msg = "unexpected operand mode";
+	}
+      }
     }
   }
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
+    if (insn->code == MIR_INVALID_INSN) {
+      curr_func = NULL;
+      (*error_func) (err, err_msg);
+    }
   curr_func = NULL;
 }
 
 const char *MIR_insn_name (MIR_insn_code_t code) {
   if (code >= MIR_INSN_BOUND)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_insn_name");
   return insn_descs[code].name;
 }
 
 size_t MIR_insn_nops (MIR_insn_code_t code) {
   if (code >= MIR_INSN_BOUND)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_insn_nops");
   return VARR_GET (size_t, insn_nops, code);
 }
 
@@ -436,7 +514,7 @@ static MIR_insn_t create_insn (size_t nops, MIR_insn_code_t code) {
     nops = 1;
   insn = malloc (sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (nops - 1));
   if (insn == NULL)
-    abort ();
+    (*error_func) (MIR_alloc_error, "Not enough memory");
   insn->code = code; insn->data = NULL;
   return insn;
 }
@@ -450,7 +528,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   size_t i, insn_nops = MIR_insn_nops (code);
   
   if (nops != insn_nops)
-    abort ();
+    (*error_func) (MIR_ops_num_error, "wrong number of operands");
   insn = create_insn (nops, code);
   for (i = 0; i < nops; i++)
     insn->ops[i] = ops[i];
@@ -488,7 +566,7 @@ static reg_desc_t *find_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (! HTAB_DO (size_t, reg2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
     VARR_POP (reg_desc_t, reg_descs);
-    abort (); /* undeclared */
+    (*error_func) (MIR_undeclared_reg_error, "undeclared reg");
   }
   return &VARR_ADDR (reg_desc_t, reg_descs)[rdn];
 }
@@ -499,8 +577,8 @@ MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
   
   func->ntemps++;
   sprintf (name, "t%d", func->ntemps);
-  reg = func->nargs + func->nlocals + func->ntemps;
-  reg_create (func, reg, name, type);
+  reg = func->nargs + func->nlocals + func->ntemps + 1; /* fp */
+  reg_create (func, reg, name, type, TRUE);
   return reg;
 }
 
@@ -589,31 +667,31 @@ MIR_op_t MIR_new_label_op (MIR_label_t label) {
 
 void MIR_append_insn (MIR_item_t func_item, MIR_insn_t insn) {
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_append_insn");
   DLIST_APPEND (MIR_insn_t, func_item->u.func->insns, insn);
 }
 
 void MIR_prepend_insn (MIR_item_t func_item, MIR_insn_t insn) {
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_prepend_insn");
   DLIST_PREPEND (MIR_insn_t, func_item->u.func->insns, insn);
 }
 
 void MIR_insert_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn_t insn) {
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_insert_insn_after");
   DLIST_INSERT_AFTER (MIR_insn_t, func_item->u.func->insns, after, insn);
 }
 
 void MIR_insert_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_insert_insn_before");
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
 void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) { // ??? freeing
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_remove_insn");
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
 }
 
@@ -628,7 +706,8 @@ const char *MIR_type_str (MIR_type_t tp) {
   case MIR_I64: return "i64";
   case MIR_F: return "f";
   case MIR_D: return "d";
-  default: abort ();
+  default:
+    (*error_func) (MIR_wrong_param_value_error, "MIR_type_str");
   }
 }
 
@@ -697,7 +776,7 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
     MIR_output_label (f, op.u.label);
     break;
   default:
-    abort ();
+    assert (FALSE);
   }
 }
 
@@ -740,6 +819,7 @@ void MIR_output_item (FILE *f, MIR_item_t item) {
 	   (unsigned long) func->nlocals, func->nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn);
+  fprintf (f, "\tendfunc\n");
 }
 
 void MIR_output (FILE *f) {
@@ -833,7 +913,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, MIR_op_t *op, int o
     break;
   default:
     /* We don't simplify code with hard regs.  */
-    abort ();
+    assert (FALSE);
   }
 }
 
@@ -844,7 +924,6 @@ void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn) {
 
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (code, i, &out_p);
-    
     MIR_simplify_op (func_item, insn, &insn->ops[i], out_p, code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV);
   }
 }
@@ -854,7 +933,7 @@ void MIR_simplify_func (MIR_item_t func_item) {
   MIR_insn_t insn, next_insn;
 
   if (! func_item->func_p)
-    abort ();
+    (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify");
   func = func_item->u.func;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
@@ -912,11 +991,6 @@ MIR_item_t create_mir_example2 (void) {
 #endif
 
 #ifdef TEST_MIR
-static void error (const char *msg) {
-  fprintf (stderr, "%s -- goodbye\n", msg);
-  exit (1);
-}
-
 int main (void) {
   MIR_item_t func1, func2;
   

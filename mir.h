@@ -12,6 +12,21 @@
 #define MIR_UNUSED
 #endif
 
+typedef enum MIR_error_type {
+  MIR_no_error, MIR_syntax_error, MIR_alloc_error, MIR_finish_error, MIR_no_func_error,
+  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_undeclared_reg_error,
+  MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error, MIR_op_mode_error,
+  MIR_invalid_insn_error,
+} MIR_error_type_t;
+
+#ifdef __GNUC__
+#define MIR_NO_RETURN __attribute__((noreturn))
+#else
+#define MIR_NO_RETURN
+#endif
+
+typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *message);
+
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
 
@@ -60,7 +75,8 @@ typedef enum {
   MIR_RET, MIR_FRET, MIR_DRET,
   /* Special insns: */
   MIR_LABEL, /* One immediate operand is unique label number  */
-  MIR_INSN_BOUND /* Should be the last  */
+  MIR_INVALID_INSN,
+  MIR_INSN_BOUND,   /* Should be the last  */
 } MIR_insn_code_t;
 
 /* Data types: */
@@ -205,6 +221,9 @@ extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
 extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,
 				size_t nargs, size_t nlocals, ...);
 extern void MIR_finish_func (void);
+
+extern MIR_error_func_t MIR_get_error_func (void);
+extern void MIR_set_error_func (MIR_error_func_t func);
 
 extern MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops);
 extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);

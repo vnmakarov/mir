@@ -23,6 +23,22 @@ static inline void mir_htab_assert_fail (const char *op, const char *var) {
 
 #endif
 
+#ifdef __GNUC__
+#define MIR_HTAB_NO_RETURN __attribute__((noreturn))
+#else
+#define MIR_HTAB_NO_RETURN
+#endif
+
+static inline void MIR_HTAB_NO_RETURN mir_htab_error (const char *message) {
+#ifdef MIR_HTAB_ERROR
+  MIR_HTAB_ERROR (message);
+  assert (FALSE);
+#else
+  fprintf (stderr, "%s\n", message);
+  exit (1);
+#endif
+}
+
 /*---------------- Typed hash table -----------------------------*/
 typedef unsigned htab_ind_t;
 typedef unsigned htab_size_t;
@@ -66,6 +82,7 @@ static inline void HTAB_OP (T, create) (HTAB (T) **htab,		\
   for (size = 2; min_size > size; size *= 2)				\
     ;									\
   ht = malloc (sizeof (*ht));						\
+  if (ht == NULL) mir_htab_error ("htab: no memory");			\
   VARR_CREATE (HTAB_EL (T), ht->els, size);				\
   VARR_TAILOR (HTAB_EL (T), ht->els, size);				\
   VARR_CREATE (htab_ind_t, ht->entries, 2 * size);			\

@@ -2,10 +2,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <setjmp.h>
+
+static void util_error (const char *message);
+#define MIR_VARR_ERROR util_error
+#define MIR_HTAB_ERROR MIR_VARR_ERROR 
+
 #include "mir-varr.h"
 #include "mir-htab.h"
 #include "mir-mum.h"
 #include "mir-read.h"
+
+static void util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
 static size_t curr_line_num;
 
@@ -39,7 +47,22 @@ typedef struct token {
 DEF_VARR (char);
 static VARR (char) *token_text;
 
-static void error (const char *message) { fprintf (stderr, "%s\n", message); }
+static jmp_buf error_jmp_buf;
+
+static void (*read_error_func) (MIR_error_type_t error_type, const char *message);
+
+static void default_read_error_func (MIR_error_type_t error_type, const char *message) {
+  fprintf (stderr, "%s\n", message);
+}
+
+static void MIR_NO_RETURN process_error (enum MIR_error_type error_type, const char *message) {
+  (*read_error_func) (error_type, message);
+  longjmp (error_jmp_buf, TRUE);
+}
+
+MIR_read_error_func_t MIR_get_read_error_func (void) { return read_error_func; }
+
+void MIR_set_read_error_func (MIR_read_error_func_t func) { read_error_func = func; }
 
 /* Read number using GET_CHAR and UNGET_CHAR and already read
    character CH.  It should be guaranted that the input has a righ
@@ -204,7 +227,7 @@ static token_t read_token (int (*get_char) (void), void (*unget_char) (int)) {
 	if (ch == '+' || ch == '-') {
 	  next_ch = get_char ();
 	  if (! digit_p (next_ch))
-	    error ("no number after a sign");
+	    process_error (MIR_syntax_error, "no number after a sign");
 	  unget_char (next_ch);
 	}
 	read_number (ch, get_char, unget_char, &base, &float_p, &double_p);
@@ -225,7 +248,7 @@ static token_t read_token (int (*get_char) (void), void (*unget_char) (int)) {
 	  ;
 	return token;
       } else {
-	error ("wrong char");
+	process_error (MIR_syntax_error, "wrong char");
       }
     }
   }
@@ -288,6 +311,8 @@ MIR_type_t MIR_str2type (const char *type_name) {
   return MIR_T_BOUND;
 }
 
+static MIR_error_func_t saved_error_func;
+
 /* Syntax:
      program: { insn / sep }
      sep : ';' | NL
@@ -318,10 +343,19 @@ MIR_item_t MIR_read_string (const char *str) {
   int64_t i, frame_size, nargs, nlocals;
   int func_p, end_func_p, read_p, disp_p;
   insn_name_t in, el;
-  
+
+  saved_error_func = MIR_get_error_func ();
+  MIR_set_error_func (process_error);
   input_string = str;
   input_string_char_num = 0;
+  t.code = TC_NL;
   for (;;) {
+    if (setjmp (error_jmp_buf)) {
+      while (t.code != TC_NL && t.code != EOF)
+	t = read_token (get_string_char, unget_string_char);
+      if (t.code == TC_EOF)
+	break;
+    }
     VARR_TRUNC (label_name_t, label_names, 0);
     t = read_token (get_string_char, unget_string_char);
     while (t.code == TC_NL)
@@ -330,7 +364,7 @@ MIR_item_t MIR_read_string (const char *str) {
       break;
     for (;;) { /* label_names */
       if (t.code != TC_NAME)
-	error ("insn should start with label or insn name");
+	process_error (MIR_syntax_error, "insn should start with label or insn name");
       name = t.u.name;
       t = read_token (get_string_char, unget_string_char);
       if (t.code != TC_COL)
@@ -344,19 +378,20 @@ MIR_item_t MIR_read_string (const char *str) {
     if (strcmp (name, "func") == 0) {
       func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
-	error ("only one label should be used for func");
+	process_error (MIR_syntax_error, "only one label should be used for func");
     } else if (strcmp (name, "endfunc") == 0) {
       end_func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-	error ("endfunc should have no labels");
+	process_error (MIR_syntax_error, "endfunc should have no labels");
     } else {
       in.name = name;
       if (! HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
-	error ("Unknown insn");
+	process_error (MIR_syntax_error, "Unknown insn");
       insn_code = el.code;
       for (n = 0; n < VARR_LENGTH (label_name_t, label_names); n++) {
 	label = create_label_desc (VARR_GET (label_name_t, label_names, n));
-	MIR_append_insn (func, label);
+	if (func != NULL)
+	  MIR_append_insn (func, label);
       }
     }
     VARR_TRUNC (MIR_op_t, insn_ops, 0);
@@ -384,16 +419,16 @@ MIR_item_t MIR_read_string (const char *str) {
 	/* Memory or arg */
 	type = MIR_str2type (name);
 	if (type == MIR_T_BOUND)
-	  error ("Unknown type");
+	  process_error (MIR_syntax_error, "Unknown type");
 	else if (func_p && type != MIR_I64 && type != MIR_F && type != MIR_D)
-	  error ("wrong type for arg or local");
+	  process_error (MIR_syntax_error, "wrong type for arg or local");
 	t = read_token (get_string_char, unget_string_char);
 	op.mode = MIR_OP_MEM;
 	op.u.mem.type = type; op.u.mem.scale = 1;
 	op.u.mem.base = op.u.mem.index = 0; op.u.mem.disp = 0;
 	if (func_p) {
 	  if (t.code != TC_NAME)
-	    error ("wrong arg or local");
+	    process_error (MIR_syntax_error, "wrong arg or local");
 	  op.u.mem.disp = (MIR_disp_t) t.u.name;
 	  t = read_token (get_string_char, unget_string_char);
 	} else {
@@ -413,24 +448,24 @@ MIR_item_t MIR_read_string (const char *str) {
 	    if (t.code == TC_COMMA) {
 	      t = read_token (get_string_char, unget_string_char);
 	      if (t.code != TC_NAME)
-		error ("wrong index");
+		process_error (MIR_syntax_error, "wrong index");
 	      op.u.mem.index = MIR_reg (t.u.name);
 	      t = read_token (get_string_char, unget_string_char);
 	      if (t.code == TC_COMMA) {
 		t = read_token (get_string_char, unget_string_char);
 		if (t.code != TC_INT)
-		  error ("wrong index");
+		  process_error (MIR_syntax_error, "wrong index");
 		if (t.u.i != 1 && t.u.i != 2 && t.u.i != 4 && t.u.i != 8)
-		  error ("scale is not 1, 2, 4, or 8");
+		  process_error (MIR_syntax_error, "scale is not 1, 2, 4, or 8");
 		op.u.mem.scale = t.u.i;
 		t = read_token (get_string_char, unget_string_char);
 	      }
 	    }  
 	    if (t.code != TC_RIGHT_PAR)
-	      error ("wrong memory op");
+	      process_error (MIR_syntax_error, "wrong memory op");
 	    t = read_token (get_string_char, unget_string_char);
 	  } else if (! disp_p)
-	    error ("wrong memory");
+	    process_error (MIR_syntax_error, "wrong memory");
 	}
 	break;
       }
@@ -459,22 +494,22 @@ MIR_item_t MIR_read_string (const char *str) {
       t = read_token (get_string_char, unget_string_char);
     }
     if (t.code != TC_NL && t.code != TC_EOF && t.code != TC_SEMICOL)
-      error ("wrong insn end");
+      process_error (MIR_syntax_error, "wrong insn end");
     if (func_p) {
       VARR_TRUNC (MIR_var_t, func_vars, 0);
       if (func != NULL)
-	error ("nested func");
+	process_error (MIR_syntax_error, "nested func");
       op_addr = VARR_ADDR (MIR_op_t, insn_ops);
       if ((n = VARR_LENGTH (MIR_op_t, insn_ops)) < 3)
-	error ("too few params in func");
+	process_error (MIR_syntax_error, "too few params in func");
       if (op_addr[0].mode != MIR_OP_INT || (frame_size = op_addr[0].u.i) < 0)
-	error ("wrong frame size");
+	process_error (MIR_syntax_error, "wrong frame size");
       if (op_addr[1].mode != MIR_OP_INT || (nargs = op_addr[1].u.i) < 0)
-	error ("wrong args number");
+	process_error (MIR_syntax_error, "wrong args number");
       if (op_addr[2].mode != MIR_OP_INT || (nlocals = op_addr[2].u.i) < 0)
-	error ("wrong local number");
+	process_error (MIR_syntax_error, "wrong local number");
       if (nargs + nlocals != n - 3)
-	error ("discrepency in number of args and locals and number of their names");
+	process_error (MIR_syntax_error, "discrepency in number of args and locals and number of their names");
       for (i = 0; i < nargs + nlocals; i++) {
 	assert (op_addr[i + 3].mode == MIR_OP_MEM);
 	var.type = op_addr[i + 3].u.mem.type;
@@ -485,18 +520,20 @@ MIR_item_t MIR_read_string (const char *str) {
       HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
       if (func == NULL)
-	error ("standalone endfunc");
+	process_error (MIR_syntax_error, "standalone endfunc");
       if (VARR_LENGTH (MIR_op_t, insn_ops) != 0)
-	error ("endfunc should have no params");
-      MIR_finish_func ();
+	process_error (MIR_syntax_error, "endfunc should have no params");
       func = NULL;
+      MIR_finish_func ();
     } else {
       insn = MIR_new_insn_arr (insn_code, VARR_LENGTH (MIR_op_t, insn_ops), VARR_ADDR (MIR_op_t, insn_ops));
-      MIR_append_insn (func, insn);
+      if (func != NULL)
+	MIR_append_insn (func, insn);
     }
   }
   if (func != NULL)
-    error ("absent endfunc");
+    process_error (MIR_syntax_error, "absent endfunc");
+  MIR_set_error_func (saved_error_func);
   return NULL;
 }
 
@@ -504,6 +541,7 @@ void MIR_read_init (void) {
   insn_name_t in, el;
   size_t i;
   
+  read_error_func = default_read_error_func;
   VARR_CREATE (char, token_text, 0);
   VARR_CREATE (label_name_t, label_names, 0);
   VARR_CREATE (MIR_op_t, insn_ops, 0);
@@ -529,11 +567,9 @@ void MIR_read_finish (void) {
 #ifdef MIR_TEST_READ
 
 int main (void) {
-  MIR_item_t func;
-  
   MIR_init ();
   MIR_read_init ();
-  func = MIR_read_string ("\n\
+  MIR_read_string ("\n\
 loop: func 0, 1, 1, i64:limit, i64:count # a comment\n\
 \n\
        mov count, 0\n\
@@ -543,6 +579,29 @@ L2:    # a separate label\n\
 L1:    ret count  # label with insn\n\
        endfunc\n\
   ");
+  MIR_read_string ("\n\
+  sieve: func 819000, 0, 6, i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp\n\
+       mov iter, 0\n\
+loop:  bge fin, iter, 1000\n\
+       mov count, 0;  mov i, 0\n\
+loop2: bgt fin2, i, 819000\n\
+       mov u8:(fp, i), 1;  add i, i, 1\n\
+       jmp loop2\n\
+fin2:  mov i, 0\n\
+loop3: bgt fin3, i, 819000\n\
+       beq cont3, u8:(fp,i), 0\n\
+       add temp, i, i;  add prime, temp, 3;  add k, i, prime\n\
+loop4: bgt fin4, k, 819000\n\
+       mov u8:(fp, k), 0;  add k, k, prime\n\
+       jmp loop4\n\
+fin4:  add count, count, 1\n\
+cont3: add i, i, 1\n\
+       jmp loop3\n\
+fin3:  add iter, iter, 1\n\
+       jmp loop\n\
+fin:   ret count\n\
+       endfunc\n\
+");
   MIR_output (stderr);
   MIR_read_finish ();
   MIR_finish ();

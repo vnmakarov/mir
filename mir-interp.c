@@ -3,8 +3,14 @@
 #include <stdarg.h>
 #include <alloca.h>
 #include <inttypes.h>
+
+static void util_error (const char *message);
+#define MIR_VARR_ERROR util_error
+
 #include "mir-varr.h"
 #include "mir-interp.h"
+
+static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
 #define FALSE 0
 #define TRUE 1
@@ -30,7 +36,7 @@ typedef struct func_desc {
 
 static MIR_reg_t get_reg (MIR_op_t op, MIR_reg_t *max_nreg) {
   /* We do not interpret code with hard regs */
-  if (op.mode != MIR_OP_REG) abort ();
+  assert (op.mode == MIR_OP_REG);
   if (*max_nreg < op.u.reg)
     *max_nreg = op.u.reg;
   return op.u.reg;
@@ -68,7 +74,7 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
   case MIR_I32: return load_p ? IC_LDI32 : IC_STI32;
   case MIR_U32: return load_p ? IC_LDU32 : IC_STU32;
   case MIR_I64: return load_p ? IC_LDI64 : IC_STI64;
-  default: abort ();
+  default: assert (FALSE);
   }
 }
 
@@ -81,7 +87,7 @@ static VARR (MIR_insn_t) *branches;
 static void push_mem (MIR_op_t op) {
   MIR_val_t v;
   
-  if (op.mode != MIR_OP_MEM || op.u.mem.index != 0 || op.u.mem.scale != 0) abort ();
+  assert (op.mode == MIR_OP_MEM && op.u.mem.index == 0 && op.u.mem.scale == 0);
   v.i = op.u.mem.base; VARR_PUSH (MIR_val_t, code_varr, v);
   v.i = op.u.mem.disp; VARR_PUSH (MIR_val_t, code_varr, v);
 }
@@ -117,12 +123,11 @@ static void generate_icode (MIR_item_t func_item) {
 	v = get_icode (IC_MOVI); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.i; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else if (ops[1].mode == MIR_OP_REG) {
+      } else {
+	assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.reg; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else {
-	abort ();
       }
       break;
     case MIR_FMOV:
@@ -138,12 +143,11 @@ static void generate_icode (MIR_item_t func_item) {
 	v = get_icode (IC_MOVF); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.f; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else if (ops[1].mode == MIR_OP_REG) {
+      } else {
+	assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.reg; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else {
-	abort ();
       }
       break;
     case MIR_DMOV:
@@ -159,15 +163,17 @@ static void generate_icode (MIR_item_t func_item) {
 	v = get_icode (IC_MOVD); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.d; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else if (ops[1].mode == MIR_OP_REG) {
+      } else {
+	assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.reg; VARR_PUSH (MIR_val_t, code_varr, v);
-      } else {
-	abort ();
       }
       break;
     case MIR_LABEL:
+      break;
+    case MIR_INVALID_INSN:
+      (*MIR_get_error_func ()) (MIR_invalid_insn_error, "invalid insn for interpreter");
       break;
     case MIR_JMP:
       VARR_PUSH (MIR_insn_t, branches, insn);
@@ -194,8 +200,7 @@ static void generate_icode (MIR_item_t func_item) {
     default:
       v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
       for (i = 0; i < nops; i++) {
-	if (ops[i].mode != MIR_OP_REG)
-	  abort ();
+	assert (ops[i].mode == MIR_OP_REG);
 	v.i = get_reg (ops[i], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
       }
     }
@@ -208,9 +213,10 @@ static void generate_icode (MIR_item_t func_item) {
   }
   func_item->data = func_desc = malloc (sizeof (struct func_desc)
 					+ VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
+  if (func_desc == NULL)
+    (*MIR_get_error_func ()) (MIR_alloc_error, "no memory");
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr), VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
-  if (max_nreg >= MIR_MAX_REG_NUM)
-    abort ();
+  assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
 }
 
@@ -276,7 +282,13 @@ static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1,
 #define DCMP(op) do {int64_t *r; double p1, p2; r = get_dcmp_ops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BDCMP(op) do {double op1 = *get_dop (bp, ops + 1), op2 = *get_dop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
 
-static MIR_val_t eval (code_t code, MIR_val_t *bp) {
+#ifdef __GNUC__
+#define OPTIMIZE __attribute__((__optimize__ ("O2")))
+#else
+#define OPTIMIZE
+#endif
+
+static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
   code_t pc, ops;
   
 #define START_INSN(nops) do {ops = pc + 1; pc += nops + 1;} while (0)
@@ -481,7 +493,7 @@ static MIR_val_t eval (code_t code, MIR_val_t *bp) {
       CASE (IC_MOVD, 2); {double *r = get_dop (bp, ops), imm = get_d (ops + 1); *r = imm;} END_INSN;
 #if ! DIRECT_THREADED_DISPATCH
     default:
-      abort ();
+      assert (FALSE);
     }
   }
 #endif

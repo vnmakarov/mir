@@ -22,6 +22,22 @@ static inline void mir_var_assert_fail (const char *op, const char *var) {
 
 #endif
 
+#ifdef __GNUC__
+#define MIR_VARR_NO_RETURN __attribute__((noreturn))
+#else
+#define MIR_VARR_NO_RETURN
+#endif
+
+static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
+#ifdef MIR_VARR_ERROR
+  MIR_VARR_ERROR (message);
+  assert (0);
+#else
+  fprintf (stderr, "%s\n", message);
+  exit (1);
+#endif
+}
+
 /*---------------- Typed variable length arrays -----------------------------*/
 #define VARR_CONCAT2(A, B) A##B
 #define VARR_CONCAT3(A, B, C) A##B##C
@@ -43,6 +59,7 @@ static inline void VARR_OP (T, create) (VARR (T) **varr, size_t size) {       \
   VARR (T) *va;								      \
   if (size == 0) size = VARR_DEFAULT_SIZE;				      \
   *varr = va = (VARR (T) *) malloc (sizeof (VARR (T)));		              \
+  if (va == NULL) mir_varr_error ("varr: no memory");			      \
   va->els_num = 0; va->size = size;					      \
   va->varr = (T *) malloc (size * sizeof (T));				      \
 }                                                                             \

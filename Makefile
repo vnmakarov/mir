@@ -26,13 +26,13 @@ interp-test:
 	$(CC) -g -D$(TARGET) -DTEST_MIR_INTERP -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out
 
 interp-bench:
-	$(CC) -O2 -D$(TARGET) -DTEST_MIR_INTERP mir.c mir-interp.c && ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_INTERP mir.c mir-interp.c && ./a.out && size ./a.out
 
 gen-test:
 	$(CC) -g -D$(TARGET) -DTEST_MIR_GEN -DMIR_GEN_DEBUG=1 mir.c mir-gen.c && ./a.out
 
 gen-bench:
-	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 
