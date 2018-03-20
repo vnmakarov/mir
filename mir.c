@@ -26,6 +26,9 @@ static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const c
 
 static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_alloc_error, message); }
 
+#define HARD_REG_NAME_PREFIX "hr"
+#define TEMP_REG_NAME_PREFIX "hr"
+
 /* Reserved names:
    fp - frame pointer
    t<number> - a temp reg
@@ -33,12 +36,12 @@ static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_
 static int reserved_name_p (const char *name) {
   size_t i, start;
   
-  if (strcmp (name, "fp") == 0)
+  if (strcmp (name, FP_NAME) == 0)
     return TRUE;
-  if (name[0] == 't')
-    start = 1;
-  else if (name[0] == 'h' && name[1] == 'r')
-    start = 2;
+  if (strncmp (name, TEMP_REG_NAME_PREFIX, strlen (TEMP_REG_NAME_PREFIX)) == 0)
+    start = strlen (TEMP_REG_NAME_PREFIX);
+  else if (strncmp (name, HARD_REG_NAME_PREFIX, strlen (HARD_REG_NAME_PREFIX)) == 0)
+    start = strlen (HARD_REG_NAME_PREFIX);
   else
     return FALSE;
   for (i = start; name[i] != '\0'; i++)
@@ -594,6 +597,16 @@ const char *MIR_reg_name (MIR_reg_t reg, MIR_func_t func) {
   return VARR_ADDR (string_t, strings) [find_rd_by_reg (reg, func)->name_num].str;
 }
 
+MIR_reg_t MIR_func_reg (const char *reg_name, MIR_func_t func) {
+  string_t string = string_store (reg_name);
+  reg_desc_t *rd;
+  
+  rd = find_rd_by_name_num (string.num, func);
+  if (rd == NULL)
+    (*error_func) (MIR_undeclared_reg_error, "undeclared reg");
+  return rd->reg;
+}
+
 /* Functions to create operands.  */
 
 static void init_op (MIR_op_t *op, MIR_op_mode_t mode) { op->mode = mode; op->data = NULL; }
@@ -988,6 +1001,42 @@ MIR_item_t create_mir_example2 (void) {
   MIR_finish_func ();
   return func;
 }
+#endif
+
+#if defined(TEST_MIR_GEN2) || defined(TEST_MIR_INTERP2)
+
+#include "mir-read.h"
+
+MIR_item_t create_mir_func_sieve (void) {
+  MIR_read_init ();
+  MIR_read_string ("\n\
+sieve: func 819000, 0, 7, i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
+       sub flags, fp, 819000\n\
+       mov iter, 0\n\
+loop:  bge fin, iter, 1000\n\
+       mov count, 0;  mov i, 0\n\
+loop2: bge fin2, i, 819000\n\
+       mov u8:(flags, i), 1;  add i, i, 1\n\
+       jmp loop2\n\
+fin2:  mov i, 0\n\
+loop3: bge fin3, i, 819000\n\
+       beq cont3, u8:(flags,i), 0\n\
+       add temp, i, i;  add prime, temp, 3;  add k, i, prime\n\
+loop4: bge fin4, k, 819000\n\
+       mov u8:(flags, k), 0;  add k, k, prime\n\
+       jmp loop4\n\
+fin4:  add count, count, 1\n\
+cont3: add i, i, 1\n\
+       jmp loop3\n\
+fin3:  add iter, iter, 1\n\
+       jmp loop\n\
+fin:   ret count\n\
+       endfunc\n\
+");
+  MIR_read_finish ();
+  return DLIST_TAIL (MIR_item_t, MIR_items);
+}
+
 #endif
 
 #ifdef TEST_MIR

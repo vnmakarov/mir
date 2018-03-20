@@ -35,8 +35,8 @@ static inline void MIR_HTAB_NO_RETURN mir_htab_error (const char *message) {
   assert (FALSE);
 #else
   fprintf (stderr, "%s\n", message);
-  exit (1);
 #endif
+  exit (1);
 }
 
 /*---------------- Typed hash table -----------------------------*/

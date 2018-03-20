@@ -34,8 +34,8 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
   assert (0);
 #else
   fprintf (stderr, "%s\n", message);
-  exit (1);
 #endif
+  exit (1);
 }
 
 /*---------------- Typed variable length arrays -----------------------------*/

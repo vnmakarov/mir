@@ -1,13 +1,14 @@
 #include <limits.h>
 
 enum {
-  AX_HARD_REG = 0, DX_HARD_REG, CX_HARD_REG, BX_HARD_REG, BP_HARD_REG, SP_HARD_REG, SI_HARD_REG, DI_HARD_REG,
+  AX_HARD_REG = 0, DX_HARD_REG, CX_HARD_REG, BX_HARD_REG, SP_HARD_REG, BP_HARD_REG, SI_HARD_REG, DI_HARD_REG,
   R8_HARD_REG, R9_HARD_REG, R10_HARD_REG, R11_HARD_REG, R12_HARD_REG, R13_HARD_REG, R14_HARD_REG, R15_HARD_REG, 
   XMM0_HARD_REG, XMM1_HARD_REG, XMM2_HARD_REG, XMM3_HARD_REG, XMM4_HARD_REG, XMM5_HARD_REG, XMM6_HARD_REG, XMM7_HARD_REG, 
   XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG, XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG, 
 };
 
 static const MIR_reg_t MAX_HARD_REG = XMM15_HARD_REG;
+static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
 /* Hard regs not used in machinized code, preferably call used ones. */
 const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
@@ -36,6 +37,17 @@ static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
 static MIR_disp_t get_stack_slot_offset (MIR_reg_t slot) { /* slot is 0, 1, ... */
   return - (MIR_disp_t) (slot + 1) * sizeof (int64_t);
 }
+
+static MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
+  MIR_FADD, MIR_DADD, MIR_SUB, MIR_FSUB, MIR_DSUB,
+  MIR_MUL, MIR_FMUL, MIR_DMUL, MIR_DIV, MIR_UDIV, MIR_FDIV, MIR_DDIV,
+  MIR_MOD, MIR_UMOD, MIR_AND, MIR_OR, MIR_XOR, MIR_LSH, MIR_RSH, MIR_URSH,
+};
+
+typedef enum {
+  GC_INSN_PUSH = MIR_INSN_BOUND,
+  GC_INSN_BOUND
+} MIR_full_insn_code_t;
 
 static void machinize (MIR_item_t func_item) {
   MIR_func_t func;
@@ -96,9 +108,63 @@ static void machinize (MIR_item_t func_item) {
       MIR_insert_insn_before (func_item, insn, new_insn);
       insn->ops[0] = ret_reg_op;
     }
-    //  ???
+    //  ??? one ret and it is last insn
     /* Remove absolute addresses */
   }
+}
+
+static void make_prolog_epilog (MIR_item_t func_item,
+				bitmap_t used_hard_regs, size_t stack_slots_num) {
+  MIR_func_t func;
+  MIR_insn_t anchor, new_insn;
+  MIR_op_t sp_reg_op, fp_reg_op;
+  size_t i, n, saved_hard_regs_num, overall_frame_size;
+
+  assert (func_item->func_p);
+  func = func_item->u.func;
+  for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
+    if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+      saved_hard_regs_num++;
+  sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
+  sp_reg_op.u.hard_reg = SP_HARD_REG; fp_reg_op.u.hard_reg = BP_HARD_REG;
+  /* Prologue: */
+  anchor = DLIST_HEAD (MIR_insn_t, func->insns);
+  new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op,
+			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
+  gen_add_insn_before (func_item, anchor, new_insn); /* sp -= size of saved regs and bp */
+  new_insn = MIR_new_insn (MIR_MOV,
+			   MIR_new_hard_reg_mem_op (MIR_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+			   fp_reg_op);
+  gen_add_insn_before (func_item, anchor, new_insn); /* (sp) = bp */
+  new_insn = MIR_new_insn (MIR_MOV, fp_reg_op, sp_reg_op);
+  gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp */
+  for (i = n = 0; i <= MAX_HARD_REG; i++)
+    if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = MIR_new_insn (MIR_MOV,
+			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, BP_HARD_REG, MIR_NON_HARD_REG, 1),
+			       MIR_new_hard_reg_op (i));
+      gen_add_insn_before (func_item, anchor, new_insn);  /* disp(bp) = hard reg */
+    }
+  overall_frame_size = ((func->frame_size + 7) / 8 + stack_slots_num) * 8; /* round */
+  assert (overall_frame_size <= INT_MAX); /* ??? */
+  new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
+  gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  /* Epilogue: */
+  anchor = DLIST_TAIL (MIR_insn_t, func->insns);
+  new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
+  gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  for (i = n = 0; i <= MAX_HARD_REG; i++)
+    if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (i),
+			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, BP_HARD_REG, MIR_NON_HARD_REG, 1));
+      gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg =  disp(bp) */
+    }
+  new_insn = MIR_new_insn (MIR_MOV, fp_reg_op,
+			   MIR_new_hard_reg_mem_op (MIR_I64, 0, BP_HARD_REG, MIR_NON_HARD_REG, 1));
+  gen_add_insn_before (func_item, anchor, new_insn); /* bp = (bp) */
+  new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op,
+			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
+  gen_add_insn_before (func_item, anchor, new_insn); /* sp += size of saved regs and bp */
 }
 
 struct pattern {
@@ -111,7 +177,9 @@ struct pattern {
      f - immediate float
      d - immediate double
      s - immediate 1, 2, 4, or 8 (scale)
-     m[0-3] -  int type memory of size 8,16,32,64-bits
+     m[0-3] - int (signed or unsigned) type memory of size 8,16,32,64-bits
+     ms[0-3] - signed int type memory of size 8,16,32,64-bits
+     mu[0-3] - unsigned int type memory of size 8,16,32,64-bits
      mf - memory of float
      md - memory of double
      l - label which can be present by 32-bit
@@ -122,6 +190,7 @@ struct pattern {
      blank - ignore
      ; - insn separation
      X - REX byte with W=1
+     Y - Optional REX byte with W=0
      [0-9A-F]+ pairs of hexidecimal digits opcode
      p[0-2] = n-operand is an immediate in memory pool and we use its address
      r[0-2] = n-th operand in ModRM:reg
@@ -218,6 +287,22 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r i2", "X C7 /0 R0 I1"},  /* mov r0,i32 */
   {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
+
+  {MIR_MOV, "m0 r", "88 r1 m0"},       /* mov m0, r1 */
+  {MIR_MOV, "m1 r", "66 89 r1 m0"},    /* mov m0, r1 */
+  {MIR_MOV, "m2 r", "89 r1 m0"},       /* mov m0, r1 */
+
+  {MIR_MOV, "r ms0", "X 0F BE r0 m1"},  /* movsx r0, m1 */
+  {MIR_MOV, "r ms1", "X 0F BF r0 m1"},  /* movsx r0, m1 */
+  {MIR_MOV, "r ms2", "X 63 r0 m1"},     /* movsx r0, m1 */
+
+  {MIR_MOV, "r mu0", "X 0F B6 r0 m1"},  /* movzx r0, m1 */
+  {MIR_MOV, "r mu1", "X 0F B7 r0 m1"},  /* movzx r0, m1 */
+  {MIR_MOV, "r mu2", "8B r0 m1"},       /* mov r0, m1 */
+
+  {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"},    /* mov m0,i8 */
+  {MIR_MOV, "m1 i1", "66 Y C7 /0 m0 i1"}, /* mov m0,i16 */
+  {MIR_MOV, "m2 i2", "Y C7 /0 m0 i1"},      /* mov m0,i32 */
   
   {MIR_FMOV, "r r", "F3 0F 10 r0 R1"},     /* movss r0,r1 */
   {MIR_FMOV, "r mf", "F3 0F 10 r0 m1"},    /* movss r0,m32 */
@@ -286,6 +371,8 @@ static struct pattern patterns[] = {
   FCMP (MIR_FLT, "0F 92") DCMP (MIR_DLT, "0F 92") FCMP (MIR_FLE, "0F 96") DCMP (MIR_DLE, "0F 96")
   FCMP (MIR_FGT, "0F 97") DCMP (MIR_DGT, "0F 97") FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93")
 
+  {MIR_JMP, "l", "E9 l0"},
+  
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE,  "0F 85")
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83")
@@ -412,17 +499,33 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case 's':
       if (op.mode != MIR_OP_INT || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
       break;
-    case 'm':
+    case 'm': {
+      MIR_type_t type, type2;
+      int u_p, s_p;
+      
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
-      ch = *++p;
-      if (ch == '0' && op.u.mem.type != MIR_I8 && op.u.mem.type != MIR_U8) return FALSE;
-      else if (ch == '1' && op.u.mem.type != MIR_I16 && op.u.mem.type != MIR_U16) return FALSE;
-      else if (ch == '2' && op.u.mem.type != MIR_I32 && op.u.mem.type != MIR_U32) return FALSE;
-      else if (ch == '3' && op.u.mem.type != MIR_I64) return FALSE;
-      else if (ch == 'f' && op.u.mem.type != MIR_F) return FALSE;
-      else if (ch == 'd' && op.u.mem.type != MIR_D) return FALSE;
-      else assert (('0' <= ch && ch <= '3') || ch != 'f' || ch != 'd');
+      u_p = s_p = TRUE; ch = *++p;
+      switch (ch) {
+      case 'f': type = MIR_F; type2 = MIR_T_BOUND; break;
+      case 'd': type = MIR_D; type2 = MIR_T_BOUND; break;
+      case 'u': case 's':
+	u_p = ch == 'u'; s_p = ch == 's'; ch = *++p;
+	/* Fall through: */
+      default:
+	assert ('0' <= ch && ch <= '3');
+	if (ch == '0') {
+	  type = u_p ? MIR_U8 : MIR_I8; type2 = u_p && s_p ? MIR_I8 : MIR_T_BOUND;
+	} else if (ch == '1') {
+	  type = u_p ? MIR_U16 : MIR_I16; type2 = u_p && s_p ? MIR_I16 : MIR_T_BOUND;
+	} else if (ch == '2') {
+	  type = u_p ? MIR_U32 : MIR_I32; type2 = u_p && s_p ? MIR_I32 : MIR_T_BOUND;
+	} else {
+	  type = MIR_I64; type2 = MIR_T_BOUND;
+	}
+      }
+      if (op.u.mem.type != type && op.u.mem.type != type2) return FALSE;
       break;
+    }
     case 'l':
       if (op.mode != MIR_OP_LABEL) return FALSE;
       break;
@@ -430,7 +533,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case '5': case '6': case '7': case '8': case '9':
       n = start_ch - '0';
       assert (n < nop);
-      original = insn->ops[nop];
+      original = insn->ops[n];
       if (original.mode != op.mode) return FALSE;
       assert (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_INT
 	      || op.mode == MIR_OP_FLOAT || op.mode == MIR_OP_DOUBLE
@@ -519,7 +622,7 @@ static void setup_scale (int *scale, int v) {
 
 static void setup_base (int *rex_b, int *base, int v) { setup_r (rex_b, base, v); }
 
-static void setup_index (int *rex_i, int *index, int v) { setup_index (rex_i, index, v); }
+static void setup_index (int *rex_i, int *index, int v) { setup_r (rex_i, index, v); }
 
 static void setup_rip_rel_addr (MIR_disp_t rip_disp, int *mod, int *rm, int64_t *disp32) {
   assert (*mod < 0 && *rm < 0 && *disp32 < 0);
@@ -532,37 +635,46 @@ static void setup_mem (MIR_mem_t mem, int *mod, int *rm, int *scale, int *base, 
 		       int *index, int *rex_x, int *disp8, int64_t *disp32) {
   MIR_disp_t disp = mem.disp;
 
-  assert (disp8 < 0 && disp32 < 0);
-  assert (mem.index != MIR_NON_HARD_REG || mem.base != MIR_NON_HARD_REG); /* see machinize */
-  if (mem.index == MIR_NON_HARD_REG && mem.base != SP_HARD_REG) {
+  assert (*disp8 < 0 && *disp32 < 0 && mem.index != SP_HARD_REG);
+  if (mem.index == MIR_NON_HARD_REG && mem.base == MIR_NON_HARD_REG) { /* SIB: disp only */
+    setup_rm (NULL, rm, 4); *disp32 = (uint32_t) disp;
+    setup_base (NULL, base, BP_HARD_REG); setup_index (NULL, index, SP_HARD_REG);
+  } else if (mem.index == MIR_NON_HARD_REG
+	     && mem.base != SP_HARD_REG && mem.base != R12_HARD_REG) {
+    setup_rm (rex_b, rm, mem.base);
     if (disp == 0 && mem.base != BP_HARD_REG && mem.base != R13_HARD_REG) {
-      setup_mod (mod, 0); setup_rm (rex_b, rm, mem.base);
+      setup_mod (mod, 0);
+    } else if (int8_p (disp)) {
+      setup_mod (mod, 1); *disp8 = (uint8_t) disp;
     } else {
-      setup_rm (NULL, rm, 4);
-      if (int8_p (disp)) {
-	setup_mod (mod, 1); *disp8 = (uint8_t) disp;
-      } else {
-	setup_mod (mod, 2); *disp32 = (uint32_t) disp;
-      }
+      setup_mod (mod, 2); *disp32 = (uint32_t) disp;
     }
-  } else {
-    assert (mem.index != SP_HARD_REG);
-    setup_rm (NULL, mod, 4);
-    if (disp != 0 || mem.base == BP_HARD_REG || mem.base == R13_HARD_REG) {
-      if (int8_p (disp)) {
-	setup_mod (mod, 1); *disp8 = (uint8_t) disp;
-      } else {
-	setup_mod (mod, 2); *disp32 = (uint32_t) disp;
-      }
+  } else if (mem.index == MIR_NON_HARD_REG) { /* SIB: only base = sp or r12 */
+    setup_rm (NULL, rm, 4);
+    setup_index (NULL, index, SP_HARD_REG); setup_base (rex_b, base, mem.base);
+    if (disp == 0) {
+      setup_mod (mod, 0);
+    } else if (int8_p (disp)) {
+      setup_mod (mod, 1); *disp8 = (uint8_t) disp;
+    } else {
+      setup_mod (mod, 2); *disp32 = (uint32_t) disp;
     }
-    if (mem.index != MIR_NON_HARD_REG) {
-      setup_scale (scale, mem.scale == 1 ? 0 : mem.scale == 2 ? 1 : mem.scale == 4 ? 2 : 3);
+  } else if (mem.base == MIR_NON_HARD_REG) { /* SIB: index with scale only */
+    setup_rm (NULL, rm, 4);
+    setup_index (rex_x, index, mem.index); setup_base (NULL, base, BP_HARD_REG); 
+    setup_mod (mod, 0); *disp32 = (uint32_t) disp;
+    setup_scale (scale, mem.scale == 1 ? 0 : mem.scale == 2 ? 1 : mem.scale == 4 ? 2 : 3);
+  } else { /* SIB: base and index */
+    setup_rm (NULL, rm, 4);
+    setup_base (rex_b, base, mem.base); setup_index (rex_x, index, mem.index);
+    setup_scale (scale, mem.scale == 1 ? 0 : mem.scale == 2 ? 1 : mem.scale == 4 ? 2 : 3);
+    if (disp == 0 && mem.base != BP_HARD_REG && mem.base != R13_HARD_REG) {
+      setup_mod (mod, 0);
+    } else if (int8_p (disp)) {
+      setup_mod (mod, 1); *disp8 = (uint8_t) disp;
+    } else {
+      setup_mod (mod, 2); *disp32 = (uint32_t) disp;
     }
-    setup_base (rex_b, base, mem.base == MIR_NON_HARD_REG ? 5 : mem.base);
-    if (mem.index == MIR_NON_HARD_REG)
-      setup_index (NULL, index, 4);
-    else
-      setup_index (rex_x, index, mem.index);
   }
 }
 
@@ -575,13 +687,13 @@ static void put_byte (int byte) {
 
 static void put_uint64 (uint64_t v, int nb) {
   for (; nb > 0; nb--) {
-    put_byte (v & 0xff); v >>= 4;
+    put_byte (v & 0xff); v >>= 8;
   }
 }
 
-static void set_uint64 (uint8_t *addr, uint64_t v, int nb) {
+static void set_int64 (uint8_t *addr, int64_t v, int nb) {
   for (; nb > 0; nb--) {
-    *addr++ = v & 0xff; v >>= 4;
+    *addr++ = v & 0xff; v >>= 8;
   }
 }
 
@@ -666,6 +778,13 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	  prefix = opcode0; opcode0 = -1;
 	}
 	rex_w = 1;
+	break;
+      case 'Y':
+	if (opcode0 >= 0) {
+	  assert (opcode1 < 0);
+	  prefix = opcode0; opcode0 = -1;
+	}
+	rex_w = 0;
 	break;
       case 'p':
 	ch = *++p;
@@ -793,13 +912,13 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
     }
     if (prefix >= 0) put_byte (prefix);
     
-    if (rex_w >= 0 || rex_r >= 0 || rex_x >= 0 || rex_b >= 0) {
+    if (rex_w > 0 || rex_r >= 0 || rex_x >= 0 || rex_b >= 0) {
       if (rex_w < 0) rex_w = 0;
       if (rex_r < 0) rex_r = 0;
       if (rex_x < 0) rex_x = 0;
       if (rex_b < 0) rex_b = 0;
       assert (rex_w <= 1 && rex_r <= 1 && rex_x <= 1 && rex_b <= 1);
-      put_byte (0x48 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | (rex_b << 1));
+      put_byte (0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | (rex_b << 1));
     }
     
     assert (opcode0 >= 0 && lb <= 7);
@@ -868,17 +987,21 @@ static uint8_t *target_translate (MIR_item_t func, size_t *len) {
       set_label_disp (insn, VARR_LENGTH (uint8_t, code));
     } else {
       replacement = find_insn_pattern_replacement (insn);
-      assert (replacement != NULL);
-      out_insn (insn, replacement);
+      if (replacement == NULL) {
+	fprintf (stderr, "failure:"); MIR_output_insn (stderr, insn);
+      } else {
+	assert (replacement != NULL);
+	out_insn (insn, replacement);
+      }
     }
   }
   /* Setting up labels */
   for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++){
     label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
     
-    set_uint64 (&VARR_ADDR (uint8_t, code)[lr.label_val_disp],
-		(int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp,
-		4);
+    set_int64 (&VARR_ADDR (uint8_t, code)[lr.label_val_disp],
+	       (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp,
+	       4);
   }
   // ??? pool
   *len = VARR_LENGTH (uint8_t, code);
