@@ -918,7 +918,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       if (rex_x < 0) rex_x = 0;
       if (rex_b < 0) rex_b = 0;
       assert (rex_w <= 1 && rex_r <= 1 && rex_x <= 1 && rex_b <= 1);
-      put_byte (0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | (rex_b << 1));
+      put_byte (0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | rex_b);
     }
     
     assert (opcode0 >= 0 && lb <= 7);

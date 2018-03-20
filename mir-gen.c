@@ -5,14 +5,14 @@
             ----------------      -----------      -----------      -----------------
                                                                             |
                                                                             v
-            --------------------     ---------       --------       -------------------
-           | Build dependencies |<--| Rewrite |<----| Assign |<----| Build Live Ranges |
-            --------------------     ---------       --------       -------------------
-                     |
-                     v
-                 ---------      -----------------------      ------------------------
-                | Combine |--->| Dead code elimination |--->| Generate machine insns |
-                 ---------      -----------------------      ------------------------
+                      ---------     ---------       --------       -------------------
+                     | Combine |<--| Rewrite |<----| Assign |<----| Build Live Ranges |
+                      ---------     ---------       --------       -------------------
+                          |
+                          v
+               -----------------------      ------------------------
+              | Dead code elimination |--->| Generate machine insns |
+               -----------------------      ------------------------
 
    Simplify: Lowering MIR (in mir.c).
    Machinize: Machine-dependent code (e.g. in x86_64-target.c)
@@ -22,7 +22,6 @@
    Build Live Ranges: Calculating program point ranges for registers.
    Assign: Priority-based assigning hard regs and stack slots to registers.
    Rewrite: Transform MIR according to the assign using reserved hard regs.
-   Build dependcies: building data use-def chains in BB scope.
    Combine (code selection): Merging data-depended insns into one.
    Dead code elimination: Removing insns with unused outputs. 
    Generate machine insns: Machine-dependent code (e.g. in
