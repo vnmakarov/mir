@@ -305,6 +305,9 @@ static void reg_finish (void) {
 DEF_VARR (MIR_reg_t);
 static VARR (MIR_reg_t) *temp_regs;
 
+DEF_VARR (MIR_insn_t);
+static VARR (MIR_insn_t) *ret_insns;
+
 static MIR_func_t curr_func;
 static int curr_label_num;
 
@@ -320,6 +323,7 @@ int MIR_init (void) {
   VARR_CREATE (MIR_var_t, temp_vars, 0);
   check_and_prepare_insn_descs ();
   VARR_CREATE (MIR_reg_t, temp_regs, 0);
+  VARR_CREATE (MIR_insn_t, ret_insns, 0);
   DLIST_INIT (MIR_item_t, MIR_items);
   return TRUE;
 }
@@ -327,6 +331,7 @@ int MIR_init (void) {
 void MIR_finish (void) {
   reg_finish ();
   string_finish ();
+  VARR_DESTROY (MIR_insn_t, ret_insns);
   VARR_DESTROY (MIR_reg_t, temp_regs);
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
@@ -767,7 +772,7 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
     if (op.u.mem.disp != 0 || (op.u.mem.base == no_reg && op.u.mem.index == no_reg))
       MIR_output_disp (f, op.u.mem.disp);
     if (op.u.mem.base != no_reg || op.u.mem.index != no_reg) {
-      fprintf (f, "[");
+      fprintf (f, "(");
       if (op.u.mem.base != no_reg)
 	out_reg (f, op.u.mem.base);
       if (op.u.mem.index != no_reg) {
@@ -778,7 +783,7 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
 	  MIR_output_scale (f, op.u.mem.scale);
 	}
       }
-      fprintf (f, "]");
+      fprintf (f, ")");
     }
     break;
   }
@@ -941,13 +946,45 @@ void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn) {
   }
 }
 
+static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
+  size_t i;
+  MIR_insn_code_t mov_code;
+  MIR_type_t ret_type;
+  MIR_reg_t ret_reg;
+  MIR_op_t reg_op;
+  MIR_insn_t ret_label, insn = DLIST_TAIL (MIR_insn_t, func_item->u.func->insns);
+  
+  if (VARR_LENGTH (MIR_insn_t, ret_insns) == 1 && VARR_GET (MIR_insn_t, ret_insns, 0) == insn)
+    return;
+  assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET);
+  ret_type = ret_code == MIR_RET ? MIR_I64 : ret_code == MIR_FRET ? MIR_F : MIR_D;
+  mov_code = ret_code == MIR_RET ? MIR_MOV : ret_code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
+  ret_reg = _MIR_new_temp_reg (ret_type, func_item->u.func);
+  ret_label = NULL;
+  if (VARR_LENGTH (MIR_insn_t, ret_insns) != 0) {
+    ret_label = MIR_new_label ();
+    MIR_append_insn (func_item, ret_label);
+  }
+  MIR_append_insn (func_item, MIR_new_insn (ret_code, MIR_new_reg_op (ret_reg)));
+  for (i = 0; i < VARR_LENGTH (MIR_insn_t, ret_insns); i++) {
+    insn = VARR_GET (MIR_insn_t, ret_insns, i);
+    reg_op = insn->ops[0];
+    assert (reg_op.mode == MIR_OP_REG);
+    MIR_insert_insn_before (func_item, insn, MIR_new_insn (mov_code, MIR_new_reg_op (ret_reg), reg_op));
+    MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_JMP, MIR_new_label_op (ret_label)));
+    MIR_remove_insn (func_item, insn);
+  }
+}
+
 void MIR_simplify_func (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, next_insn;
-
+  MIR_insn_code_t ret_code = MIR_INSN_BOUND;
+  
   if (! func_item->func_p)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify");
   func = func_item->u.func;
+  VARR_TRUNC (MIR_insn_t, ret_insns, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
     MIR_op_t temp_op;
@@ -957,9 +994,17 @@ void MIR_simplify_func (MIR_item_t func_item) {
       MIR_insert_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
       insn->ops[0] = temp_op;
     }
+    if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+      if (ret_code == MIR_INSN_BOUND)
+	ret_code = code;
+      else if (ret_code != code)
+	(*error_func) (MIR_repeated_decl_error, "Different types in returns");
+      VARR_PUSH (MIR_insn_t, ret_insns, insn);
+    }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     MIR_simplify_insn (func_item, insn);
   }
+  make_one_ret (func_item, ret_code == MIR_INSN_BOUND ? MIR_RET : ret_code);
 }
 
 const char *_MIR_uniq_string (const char * str) {
