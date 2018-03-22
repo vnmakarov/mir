@@ -738,7 +738,7 @@ void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64
 void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
 
 void MIR_output_reg (FILE *f, MIR_reg_t reg) {
-  fprintf (f, "%s[%d]", MIR_reg_name (reg, curr_output_func), reg);
+  fprintf (f, "%s", MIR_reg_name (reg, curr_output_func));
 }
 
 void MIR_output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
