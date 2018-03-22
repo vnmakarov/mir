@@ -548,13 +548,12 @@ MIR_val_t MIR_interp (MIR_item_t func_item, void (*resolver) (const char *name),
   }
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
-  bp += func_desc->frame_size_in_vals;
   bp[0].i = 0;
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
     bp[i + 1] = va_arg (argp, MIR_val_t);
   va_end(argp);
-  bp[func_desc->fp_reg].i = (int64_t) (bp - 0); /* frame address */
+  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
   return eval (func_desc->code, bp);
 }
 

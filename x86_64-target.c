@@ -136,19 +136,19 @@ static void make_prolog_epilog (MIR_item_t func_item,
 			   MIR_new_hard_reg_mem_op (MIR_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			   fp_reg_op);
   gen_add_insn_before (func_item, anchor, new_insn); /* (sp) = bp */
-  new_insn = MIR_new_insn (MIR_MOV, fp_reg_op, sp_reg_op);
-  gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV,
-			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, BP_HARD_REG, MIR_NON_HARD_REG, 1),
+			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			       MIR_new_hard_reg_op (i));
-      gen_add_insn_before (func_item, anchor, new_insn);  /* disp(bp) = hard reg */
+      gen_add_insn_before (func_item, anchor, new_insn);  /* disp(sp) = hard reg */
     }
   overall_frame_size = ((func->frame_size + 7) / 8 + stack_slots_num) * 8; /* round */
   assert (overall_frame_size <= INT_MAX); /* ??? */
   new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
   gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  new_insn = MIR_new_insn (MIR_MOV, fp_reg_op, sp_reg_op);
+  gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
   new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
@@ -156,12 +156,12 @@ static void make_prolog_epilog (MIR_item_t func_item,
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (i),
-			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, BP_HARD_REG, MIR_NON_HARD_REG, 1));
-      gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg =  disp(bp) */
+			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+      gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg =  disp(sp) */
     }
   new_insn = MIR_new_insn (MIR_MOV, fp_reg_op,
-			   MIR_new_hard_reg_mem_op (MIR_I64, 0, BP_HARD_REG, MIR_NON_HARD_REG, 1));
-  gen_add_insn_before (func_item, anchor, new_insn); /* bp = (bp) */
+			   MIR_new_hard_reg_mem_op (MIR_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+  gen_add_insn_before (func_item, anchor, new_insn); /* bp = (sp) */
   new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op,
 			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
   gen_add_insn_before (func_item, anchor, new_insn); /* sp += size of saved regs and bp */

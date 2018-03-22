@@ -1056,7 +1056,7 @@ MIR_item_t create_mir_func_sieve (void) {
   MIR_read_init ();
   MIR_read_string ("\n\
 sieve: func 819000, 0, 7, i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
-       sub flags, fp, 819000\n\
+       mov flags, fp\n\
        mov iter, 0\n\
 loop:  bge fin, iter, 1000\n\
        mov count, 0;  mov i, 0\n\
