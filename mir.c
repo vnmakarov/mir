@@ -738,7 +738,7 @@ void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64
 void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
 
 void MIR_output_reg (FILE *f, MIR_reg_t reg) {
-  fprintf (f, "%s", MIR_reg_name (reg, curr_output_func));
+  fprintf (f, "%s[%d]", MIR_reg_name (reg, curr_output_func), reg);
 }
 
 void MIR_output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
@@ -857,8 +857,8 @@ static MIR_insn_t insert_op_insn (int out_p, MIR_item_t func_item,
   return insn;
 }
 
-void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, MIR_op_t *op, int out_p, int move_p) {
-  MIR_op_t new_op, mem_op;
+void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p, int move_p) {
+  MIR_op_t new_op, mem_op, *op = &insn->ops[nop];
   MIR_insn_t new_insn;
   MIR_func_t func = func_item->u.func;
   MIR_type_t type;
@@ -883,7 +883,6 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, MIR_op_t *op, int o
   case MIR_OP_MEM:
     mem_op = *op;
     type = mem_op.u.mem.type;
-    new_op = MIR_new_reg_op (_MIR_new_temp_reg (type != MIR_F && type != MIR_D ? MIR_I64 : type, func));
     if (op->u.mem.base != 0 && op->u.mem.disp == 0 && (op->u.mem.index == 0 || op->u.mem.scale == 0)) {
       mem_op.u.mem.index = 0; mem_op.u.mem.scale = 0;
     } else if (op->u.mem.base == 0 && op->u.mem.index != 0 && op->u.mem.scale == 1 && op->u.mem.disp == 0) {
@@ -918,16 +917,17 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, MIR_op_t *op, int o
       mem_op.u.mem.base = addr_reg;
       mem_op.u.mem.disp = 0; mem_op.u.mem.index = 0; mem_op.u.mem.scale = 0;
     }
-    if (move_p) {
+    if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
     } else {
-	if (out_p)
-	  new_insn = MIR_new_insn (MIR_MOV, mem_op, new_op);
-	else
-	  new_insn = MIR_new_insn (MIR_MOV, new_op, mem_op);
-	insn = insert_op_insn (out_p, func_item, insn, new_insn);
-	*op = new_op;
-      }
+      new_op = MIR_new_reg_op (_MIR_new_temp_reg (type != MIR_F && type != MIR_D ? MIR_I64 : type, func));
+      if (out_p)
+	new_insn = MIR_new_insn (MIR_MOV, mem_op, new_op);
+      else
+	new_insn = MIR_new_insn (MIR_MOV, new_op, mem_op);
+      insn = insert_op_insn (out_p, func_item, insn, new_insn);
+      *op = new_op;
+    }
     break;
   default:
     /* We don't simplify code with hard regs.  */
@@ -942,7 +942,7 @@ void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn) {
 
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (code, i, &out_p);
-    MIR_simplify_op (func_item, insn, &insn->ops[i], out_p, code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV);
+    MIR_simplify_op (func_item, insn, i, out_p, code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV);
   }
 }
 

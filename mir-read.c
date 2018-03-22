@@ -604,6 +604,9 @@ fin:   ret count\n\
        endfunc\n\
 ");
   MIR_output (stderr);
+  fprintf (stderr, "+++++++++++++After sieve simplification:\n");
+  MIR_simplify_func (DLIST_TAIL (MIR_item_t, MIR_items));
+  MIR_output (stderr);
   MIR_read_finish ();
   MIR_finish ();
   return 0;

@@ -30,7 +30,8 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
-  MIR_reg_t nregs;
+  MIR_reg_t fp_reg, nregs;
+  size_t frame_size_in_vals;
   MIR_val_t code[1];
 } *func_desc_t;
 
@@ -87,9 +88,9 @@ static VARR (MIR_insn_t) *branches;
 static void push_mem (MIR_op_t op) {
   MIR_val_t v;
   
-  assert (op.mode == MIR_OP_MEM && op.u.mem.index == 0 && op.u.mem.scale == 0);
+  assert (op.mode == MIR_OP_MEM && op.u.mem.disp == 0
+	  && op.u.mem.index == 0 && op.u.mem.scale == 0);
   v.i = op.u.mem.base; VARR_PUSH (MIR_val_t, code_varr, v);
-  v.i = op.u.mem.disp; VARR_PUSH (MIR_val_t, code_varr, v);
 }
 
 static void generate_icode (MIR_item_t func_item) {
@@ -218,6 +219,8 @@ static void generate_icode (MIR_item_t func_item) {
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr), VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
+  func_desc->frame_size_in_vals = (func->frame_size + sizeof (MIR_val_t) - 1) / sizeof (MIR_val_t);
+  func_desc->fp_reg = MIR_func_reg (FP_NAME, func);
 }
 
 static ALWAYS_INLINE int64_t get_i (MIR_val_t *v) { return v->i;}
@@ -265,6 +268,8 @@ static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1,
   *p1 = *get_dop (bp, c + 1); *p2 = *get_dop (bp, c + 2); return get_iop (bp, c);
 }
 
+static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp [get_i (c)].i; }
+
 #define IOP2(op) do {int64_t *r, p; r = get_2iops (bp, ops, &p); *r = op p;} while (0)
 #define IOP3(op) do {int64_t *r, p1, p2; r = get_3iops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define ICMP(op) do {int64_t *r, p1, p2; r = get_3iops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
@@ -281,6 +286,15 @@ static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1,
 #define DOP3(op) do {double *r, p1, p2; r = get_3dops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define DCMP(op) do {int64_t *r; double p1, p2; r = get_dcmp_ops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BDCMP(op) do {double op1 = *get_dop (bp, ops + 1), op2 = *get_dop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
+
+#define LD(op, val_type, mem_type) do {					\
+    val_type *r = get_## op (bp, ops); int64_t a = get_mem_addr (bp, ops + 1); \
+    *r = *((mem_type *) a);                                                  \
+  } while (0)
+#define ST(op, val_type, mem_type) do {					\
+    val_type v = *get_## op (bp, ops); int64_t a = get_mem_addr (bp, ops + 1); \
+    *((mem_type *) a) = v;                                                   \
+  } while (0)
 
 #ifdef __GNUC__
 #define OPTIMIZE __attribute__((__optimize__ ("O2")))
@@ -438,7 +452,7 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_FGE, 3); FCMP(>=); END_INSN;
       CASE (MIR_DGE, 3); DCMP(>=); END_INSN;
       
-      CASE (MIR_JMP, 1); pc = code + *get_iop (bp, ops); END_INSN;
+      CASE (MIR_JMP, 1); pc = code + get_i (ops); END_INSN;
       CASE (MIR_BT, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
       CASE (MIR_BF, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
       CASE (MIR_BEQ, 3);  BICMP (==); END_INSN;
@@ -467,27 +481,27 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_CALL_C, 0); END_INSN;
       
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_FRET, 1); END_INSN;
-      CASE (MIR_DRET, 1); END_INSN;
+      CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
+      CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
 
-      CASE (IC_LDI8, 3); END_INSN;
-      CASE (IC_LDU8, 3); END_INSN;
-      CASE (IC_LDI16, 3); END_INSN;
-      CASE (IC_LDU16, 3); END_INSN;
-      CASE (IC_LDI32, 3); END_INSN;
-      CASE (IC_LDU32, 3); END_INSN;
-      CASE (IC_LDI64, 3); END_INSN;
-      CASE (IC_LDF, 3); END_INSN;
-      CASE (IC_LDD, 3); END_INSN;
-      CASE (IC_STI8, 3); END_INSN;
-      CASE (IC_STU8, 3); END_INSN;
-      CASE (IC_STI16, 3); END_INSN;
-      CASE (IC_STU16, 3); END_INSN;
-      CASE (IC_STI32, 3); END_INSN;
-      CASE (IC_STU32, 3); END_INSN;
-      CASE (IC_STI64, 3); END_INSN;
-      CASE (IC_STF, 3); END_INSN;
-      CASE (IC_STD, 3); END_INSN;
+      CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
+      CASE (IC_LDU8, 2);  LD (iop, uint64_t, uint8_t); END_INSN;
+      CASE (IC_LDI16, 2); LD (iop, int64_t, int16_t); END_INSN;
+      CASE (IC_LDU16, 2); LD (iop, uint64_t, uint16_t); END_INSN;
+      CASE (IC_LDI32, 2); LD (iop, int64_t, int32_t); END_INSN;
+      CASE (IC_LDU32, 2); LD (iop, uint64_t, uint32_t); END_INSN;
+      CASE (IC_LDI64, 2); LD (iop, int64_t, int64_t); END_INSN;
+      CASE (IC_LDF, 2); LD (fop, float, float); END_INSN;
+      CASE (IC_LDD, 2); LD (dop, double, double); END_INSN;
+      CASE (IC_STI8, 2); ST (iop, int64_t, int8_t); END_INSN;
+      CASE (IC_STU8, 2); ST (iop, uint64_t, uint8_t); END_INSN;
+      CASE (IC_STI16, 2); ST (iop, int64_t, int16_t); END_INSN;
+      CASE (IC_STU16, 2); ST (iop, uint64_t, uint16_t); END_INSN;
+      CASE (IC_STI32, 2); ST (iop, int64_t, int32_t); END_INSN;
+      CASE (IC_STU32, 2); ST (iop, uint64_t, uint32_t); END_INSN;
+      CASE (IC_STI64, 2); ST (iop, int64_t, int64_t); END_INSN;
+      CASE (IC_STF, 2); ST (fop, float, float); END_INSN;
+      CASE (IC_STD, 2); ST (dop, double, double); END_INSN;
       CASE (IC_MOVI, 2); {int64_t *r = get_iop (bp, ops), imm = get_i (ops + 1); *r = imm;} END_INSN;
       CASE (IC_MOVF, 2); {float *r = get_fop (bp, ops), imm = get_f (ops + 1); *r = imm;} END_INSN;
       CASE (IC_MOVD, 2); {double *r = get_dop (bp, ops), imm = get_d (ops + 1); *r = imm;} END_INSN;
@@ -533,12 +547,14 @@ MIR_val_t MIR_interp (MIR_item_t func_item, void (*resolver) (const char *name),
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
-  bp = alloca (func_desc->nregs * sizeof (MIR_val_t));
+  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
+  bp += func_desc->frame_size_in_vals;
   bp[0].i = 0;
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
     bp[i + 1] = va_arg (argp, MIR_val_t);
   va_end(argp);
+  bp[func_desc->fp_reg].i = (int64_t) (bp - 0); /* frame address */
   return eval (func_desc->code, bp);
 }
 
@@ -546,7 +562,7 @@ MIR_val_t MIR_interp (MIR_item_t func_item, void (*resolver) (const char *name),
 #define MIR_INTERP_DEBUG 0
 #endif
 
-#ifdef TEST_MIR_INTERP
+#if defined(TEST_MIR_INTERP) || defined(TEST_MIR_INTERP2)
 
 #include <sys/time.h>
 
@@ -563,11 +579,13 @@ static void error (const char *msg) {
   exit (1);
 }
 
+#endif
+
+#ifdef TEST_MIR_INTERP
+
 extern MIR_item_t create_mir_func_with_loop (void);
 int main (void) {
   MIR_item_t func;
-  MIR_label_t fin, cont;
-  MIR_reg_t ARG1, COUNT;
   MIR_val_t val;
   double start_time;
   const int64_t n_iter = 1000000000;
@@ -575,12 +593,12 @@ int main (void) {
   MIR_init ();
   func = create_mir_func_with_loop ();
 #if MIR_INTERP_DEBUG 
-  fprintf (stderr, "++++++ Before simplification:\n");
+  fprintf (stderr, "++++++ Loop before simplification:\n");
   MIR_output (stderr);
 #endif
   MIR_simplify_func (func);
 #if MIR_INTERP_DEBUG 
-  fprintf (stderr, "++++++ After simplification:\n");
+  fprintf (stderr, "++++++ Loop after simplification:\n");
   MIR_output (stderr);
 #endif
   MIR_interp_init ();
@@ -588,6 +606,37 @@ int main (void) {
   start_time = real_sec_time ();
   val = MIR_interp (func, NULL, 1, val);
   fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
+  MIR_interp_finish ();
+  MIR_finish ();
+  return 0;
+}
+
+#endif
+
+#ifdef TEST_MIR_INTERP2
+
+extern MIR_item_t create_mir_func_sieve (void);
+
+int main (void) {
+  MIR_item_t func;
+  MIR_val_t val;
+  double start_time;
+    
+  MIR_init ();
+  func = create_mir_func_sieve ();
+#if MIR_INTERP_DEBUG 
+  fprintf (stderr, "\n++++++ SIEVE before simplification:\n");
+  MIR_output (stderr);
+#endif
+  MIR_simplify_func (func);
+#if MIR_INTERP_DEBUG 
+  fprintf (stderr, "++++++ SIEVE after simplification:\n");
+  MIR_output (stderr);
+#endif
+  MIR_interp_init ();
+  start_time = real_sec_time ();
+  val = MIR_interp (func, NULL, 0);
+  fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
   MIR_interp_finish ();
   MIR_finish ();
   return 0;
