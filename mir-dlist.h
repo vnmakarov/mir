@@ -36,13 +36,12 @@ typedef struct DLIST_LINK (T) {                                               \
 
 #define DEF_DLIST_LINK(T)  DLIST_LINK_T(T);
 
-#define DLIST_T(T)                                                            \
+#define DEF_DLIST_TYPE(T)                                                     \
 typedef struct DLIST (T) {                                                    \
   T head, tail; 							      \
 } DLIST (T)
 
-#define DEF_DLIST(T, LINK)		                            	      \
-DLIST_T(T);                                                                   \
+#define DEF_DLIST_CODE(T, LINK)		                            	      \
                                                                               \
 static inline void DLIST_OP (T, init) (DLIST (T) *list) {                     \
   list->head = list->tail = NULL;                                             \
@@ -132,6 +131,10 @@ static inline size_t DLIST_OP (T, length) (DLIST (T) *list) {                 \
     len++;                                                                    \
   return len;                                                                 \
 }
+
+#define DEF_DLIST(T, LINK)		                            	      \
+DEF_DLIST_TYPE(T);                                                            \
+DEF_DLIST_CODE(T, LINK)
 
 #define DLIST_INIT(T, L) (DLIST_OP (T, init) (&(L)))
 #define DLIST_HEAD(T, L) (DLIST_OP (T, head) (&(L)))

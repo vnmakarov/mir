@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <errno.h>
 #include <setjmp.h>
 
@@ -16,9 +17,6 @@ static void util_error (const char *message);
 static void util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
 static size_t curr_line_num;
-
-static int digit_p (int ch) { return '0' <= ch && ch <= '9'; }
-static int alpha_p (int ch) { return ('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z'); }
 
 typedef struct insn_name {
   const char *name;
@@ -100,7 +98,7 @@ static void read_number (int ch, int get_char (void), void unget_char (int),
     if (ch == '8' || ch == '9')
       dec_p = TRUE;
     hex_char_p = (('a' <= ch && ch <= 'f') || ('A' <= ch && ch <= 'F'));
-    if (ch != '_' && ! digit_p (ch) && (*base != 16 || ! hex_char_p))
+    if (ch != '_' && ! isdigit (ch) && (*base != 16 || ! hex_char_p))
       break;
     if (hex_char_p)
       hex_p = TRUE;
@@ -112,19 +110,19 @@ static void read_number (int ch, int get_char (void), void unget_char (int),
       if (ch != '_')
 	VARR_PUSH (char, token_text, ch);
       ch = get_char ();
-    } while (digit_p (ch) || ch == '_');
+    } while (isdigit (ch) || ch == '_');
   }
   if (ch == 'e' || ch == 'E') {
     *double_p = TRUE;
     ch = get_char ();
-    if (ch != '+' && ch != '-' && !digit_p (ch))
+    if (ch != '+' && ch != '-' && ! isdigit (ch))
       err_code = ABSENT_EXPONENT;
     else {
       VARR_PUSH (char, token_text, 'e');
       if (ch == '+' || ch == '-') {
 	VARR_PUSH (char, token_text, '-');
 	ch = get_char ();
-	if (! digit_p (ch))
+	if (! isdigit (ch))
 	  err_code = ABSENT_EXPONENT;
       }
       if (err_code == NUMBER_OK)
@@ -132,7 +130,7 @@ static void read_number (int ch, int get_char (void), void unget_char (int),
 	  if (ch != '_')
 	    VARR_PUSH (char, token_text, ch);
 	  ch = get_char ();
-	} while (digit_p (ch) || ch == '_');
+	} while (isdigit (ch) || ch == '_');
     }
   }
   if (*double_p) {
@@ -206,17 +204,17 @@ static token_t read_token (int (*get_char) (void), void (*unget_char) (int)) {
       return token;
     default:
       VARR_TRUNC (char, token_text, 0);
-      if (alpha_p (ch) || ch == '_') {
+      if (isalpha (ch) || ch == '_') {
 	do {
 	  VARR_PUSH (char, token_text, ch);
 	  ch = get_char ();
-	} while (alpha_p (ch) || digit_p (ch) || ch == '_');
+	} while (isalpha (ch) || isdigit (ch) || ch == '_');
 	VARR_PUSH (char, token_text, '\0');
 	unget_char (ch);
 	token.u.str = _MIR_uniq_string (VARR_ADDR (char, token_text));
 	token.code = TC_NAME;
 	return token;
-      } else if (ch == '+' || ch == '-' || digit_p (ch)) {
+      } else if (ch == '+' || ch == '-' || isdigit (ch)) {
 	const char *repr;
 	char *end;
 	int next_ch, base, float_p, double_p;
@@ -226,7 +224,7 @@ static token_t read_token (int (*get_char) (void), void (*unget_char) (int)) {
 	
 	if (ch == '+' || ch == '-') {
 	  next_ch = get_char ();
-	  if (! digit_p (next_ch))
+	  if (! isdigit (next_ch))
 	    process_error (MIR_syntax_error, "no number after a sign");
 	  unget_char (next_ch);
 	}

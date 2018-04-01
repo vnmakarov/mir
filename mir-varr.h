@@ -104,9 +104,10 @@ static inline void VARR_OP (T,trunc) (VARR (T) *varr, size_t size) {          \
                                                                               \
 static inline void VARR_OP (T,expand) (VARR (T) *varr, size_t size) {	      \
   VARR_ASSERT (varr && varr->varr, "expand", T);			      \
-  if  (varr->size < size)						      \
+  if  (varr->size < size) {						      \
     varr->varr =  (T *) realloc (varr->varr, sizeof (T) * 3 * size / 2);      \
-  varr->size = size;							      \
+    varr->size = size;							      \
+  }									      \
 }									      \
 									      \
 static inline void VARR_OP (T,tailor) (VARR (T) *varr, size_t size) {	      \
