@@ -12,9 +12,9 @@ mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-test: util-test mir-test read-test interp-test gen-test
+test: util-test mir-test read-test interp-test gen-test c-test
 
-bench: interp-bench gen-bench
+bench: interp-bench gen-bench c-bench
 
 mir-test:
 	$(CC) -g -DTEST_MIR mir.c && ./a.out
@@ -37,6 +37,12 @@ gen-test:
 gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_GEN2 mir.c mir-read.c mir-gen.c && ./a.out && size ./a.out
+
+c-test:
+	$(CC) -g -D$(TARGET) -DTEST_MIR_C mir-c.c && ./a.out
+
+c-bench:
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C mir-c.c && ./a.out && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 

@@ -37,18 +37,23 @@ static VARR (str_t) *strs;
 
 DEF_HTAB (str_t);
 static HTAB (str_t) *str_tab;
+static HTAB (str_t) *str_key_tab;
 
 static int str_eq (str_t str1, str_t str2) { return strcmp (str1.s, str2.s) == 0; }
 static htab_hash_t str_hash (str_t str) { return mum_hash (str.s, strlen (str.s), 0x42); }
+static int str_key_eq (str_t str1, str_t str2) { return str1.key == str2.key; }
+static htab_hash_t str_key_hash (str_t str) { return mum_hash64 (str.key, 0x24); }
+
 
 static void str_init (void) {
   str_t string;
   
   VARR_CREATE (str_t, strs, 0);
   HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq);
+  HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq);
 }
 
-static str_t str_add (const char *s, size_t key, size_t flags) {
+static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
   char *heap_s;
   str_t el, str;
   
@@ -60,7 +65,18 @@ static str_t str_add (const char *s, size_t key, size_t flags) {
   strcpy (heap_s, s); str.s = heap_s; str.key = key; str.flags = flags;
   VARR_PUSH (str_t, strs, str);
   HTAB_DO (str_t, str_tab, str, HTAB_INSERT, el);
+  if (key_p)
+    HTAB_DO (str_t, str_key_tab, str, HTAB_INSERT, el);
   return str;
+}
+
+static const char *find_str_by_key (size_t key) {
+  str_t el, str;
+  
+  str.key = key;
+  if (! HTAB_DO (str_t, str_key_tab, str, HTAB_FIND, el))
+    return NULL;
+  return el.s;
 }
 
 static void str_finish (void) {
@@ -70,6 +86,7 @@ static void str_finish (void) {
     free ((char *) VARR_ADDR (str_t, strs)[i].s);
   VARR_DESTROY (str_t, strs);
   HTAB_DESTROY (str_t, str_tab);
+  HTAB_DESTROY (str_t, str_key_tab);
 }
 
 
@@ -92,22 +109,23 @@ typedef enum {
   N_LSH, N_LSH_ASSIGN, N_RSH, N_RSH_ASSIGN, N_ADD, N_ADD_ASSIGN, N_SUB, N_SUB_ASSIGN,
   N_MUL, N_MUL_ASSIGN, N_DIV, N_DIV_ASSIGN, N_MOD, N_MOD_ASSIGN,
   N_IND, N_FIELD, N_DEREF, N_DEREF_FIELD, N_COND, N_INC, N_DEC, N_POST_INC, N_POST_DEC,
-  N_CAST, N_COMPOUND_LITERAL
+  N_ALIGNOF, N_SIZEOF, N_EXPR_SIZEOF, N_CAST, N_COMPOUND_LITERAL, N_CALL,
+  N_GENERIC, N_GENERIC_ASSOC
 } node_code_t;
 
 typedef struct node *node_t;
-typedef struct node *op_node_t;
+typedef struct node *all_node_list_elem_t;
 
+DEF_DLIST_LINK (all_node_list_elem_t);
 DEF_DLIST_LINK (node_t);
-DEF_DLIST_LINK (op_node_t);
-DEF_DLIST_TYPE (op_node_t);
+DEF_DLIST_TYPE (node_t);
 
 struct node {
   node_code_t code;
-  DLIST_LINK (node_t) node_link;
-  DLIST_LINK (op_node_t) op_link;
+  DLIST_LINK (all_node_list_elem_t) all_node_list_elem_link;
+  DLIST_LINK (node_t) op_link;
   union {
-    DLIST (op_node_t) ops;
+    DLIST (node_t) ops;
     const char *s;
     char ch;
     long l;
@@ -120,10 +138,10 @@ struct node {
   } u;
 };
 
-DEF_DLIST (node_t, node_link);
-DEF_DLIST_CODE (op_node_t, op_link);
+DEF_DLIST (all_node_list_elem_t, all_node_list_elem_link);
+DEF_DLIST_CODE (node_t, op_link);
 
-static struct node temp_node;
+static struct node err_node;
 
 typedef struct pos {
   int lno, ln_pos;
@@ -136,13 +154,13 @@ typedef struct token {
   node_t node;
 } token_t;
 
-static DLIST (node_t) all_nodes;
+static DLIST (all_node_list_elem_t) all_nodes;
 
 static void remove_all_nodes (void) {
   node_t n, next_n;
 
-  for (n = DLIST_HEAD (node_t, all_nodes); n != NULL; n = next_n) {
-    next_n = DLIST_NEXT (node_t, n);
+  for (n = DLIST_HEAD (all_node_list_elem_t, all_nodes); n != NULL; n = next_n) {
+    next_n = DLIST_NEXT (all_node_list_elem_t, n);
     free (n);
   }
 }
@@ -152,8 +170,8 @@ static node_t new_node (node_code_t node_code) {
 
   if (n == NULL) error ("no memory");
   n->code = node_code;
-  DLIST_INIT (op_node_t, n->u.ops);
-  DLIST_APPEND (node_t, all_nodes, n);
+  DLIST_INIT (node_t, n->u.ops);
+  DLIST_APPEND (all_node_list_elem_t, all_nodes, n);
   return n;
 }
 
@@ -162,7 +180,7 @@ static node_t new_const_node (node_code_t node_code) {
 
   if (n == NULL) error ("no memory");
   n->code = node_code;
-  DLIST_APPEND (node_t, all_nodes, n);
+  DLIST_APPEND (all_node_list_elem_t, all_nodes, n);
   return n;
 }
 
@@ -180,11 +198,11 @@ static node_t new_ul_node (unsigned long ul) { node_t n = new_const_node (N_UL);
 static node_t new_ull_node (unsigned long long ull) { node_t n = new_const_node (N_ULL); n->u.ull = ull; return n; }
 
 static void op_append (node_t n, node_t op) {
-  DLIST_APPEND (op_node_t, n->u.ops, op);
+  DLIST_APPEND (node_t, n->u.ops, op);
 }
 
 static pos_t curr_pos;
-static token_t curr_token;
+static token_t curr_token, prev_token;
 
 static void setup_curr_token (pos_t pos, int token_code, node_code_t node_code) {
   curr_token.pos = pos; curr_token.code = token_code;
@@ -568,7 +586,7 @@ static void get_next_token (void) {
 	}
       }
       VARR_PUSH (char, symbol_text, '\0');
-      str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0);
+      str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
       setup_curr_node_token (pos, T_STR, new_str_node (N_STR, str.s));
       return;
     }
@@ -582,7 +600,7 @@ static void get_next_token (void) {
 	} while (isalnum (curr_c) || curr_c == '_');
 	c_ungetc (curr_c);
 	VARR_PUSH (char, symbol_text, '\0');
-	str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0);
+	str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
 	if (str.key != T_STR) {
 	  setup_curr_token (pos, str.key, N_IGNORE);
 	} else {
@@ -606,6 +624,7 @@ static int record_level;
 static void read_token (void) {
   if (record_level > 0)
     VARR_PUSH (token_t, recorded_tokens, curr_token);
+  prev_token = curr_token;
   if (VARR_LENGTH (token_t, buffered_tokens) == 0)
     get_next_token ();
   else
@@ -616,7 +635,6 @@ static size_t record_start (void) {
   size_t mark = VARR_LENGTH (token_t, recorded_tokens);
 
   assert (record_level >= 0);
-  //  VARR_PUSH (token_t, recorded_tokens, curr_token);
   record_level++;
   return mark;
 }
@@ -637,9 +655,60 @@ static void record_stop (size_t mark, int restore_p) {
   curr_token = VARR_POP (token_t, buffered_tokens);
 }
 
-#define P(f) do {if ((r = (f) (no_err_p)) == NULL) return NULL; } while (0)
-#define PT(t) do {if (! M(t)) return NULL; } while (0)
+static const char *get_token_name (int token_code) {
+  static char buf[30];
+  const char *s;
+  
+  switch (token_code) {
+  case T_CONSTANT: return "constant";
+  case T_STR: return "string";
+  case T_ID: return "identifier";
+  case T_ASSIGN: return "assign op";
+  case T_DIVOP: return "/ or %";
+  case T_ADDOP: return "+ or -";
+  case T_SH: return "shift op";
+  case T_CMP: return "comparison op";
+  case T_EQNE: return "equality op";
+  case T_ANDAND: return "&&";
+  case T_OROR: return "||";
+  case T_INCDEC: return "++ or --";
+  case T_ARROW: return "->";
+  case T_UNOP: return "unary op";
+  case T_DOTS: return "...";
+  default:
+    if ((s = find_str_by_key (token_code)) != NULL)
+    return s;
+    if (isprint (token_code))
+      sprintf (buf, "%c", token_code);
+    else
+      sprintf (buf, "%d", token_code);
+    return buf;
+  }
+}
+
+static void syntax_error (int expected_token_code) {
+  static int context_len = 30;
+  char buf[context_len + 1];
+  int i, c;
+  
+  fprintf (stderr, "syntax error on %s", get_token_name (curr_token.code));
+  fprintf (stderr, " (expected %s):", get_token_name (expected_token_code));
+  for (i = 0; (c = c_getc ()) != EOF && i < context_len; i++)
+    buf[i] = c;
+  buf[i] = 0;
+  fprintf (stderr, " %s\n", buf);
+}
+
+#define P(f) do { if ((r = (f) (no_err_p)) == NULL) return NULL; } while (0)
+#define PT(t) do {                              \
+  if (! M(t)) {					\
+    if (record_level == 0) syntax_error (t);	\
+    return NULL;				\
+  }						\
+} while (0)
+
 #define PE(f, l) do {if ((r = (f) (no_err_p)) == NULL) goto l; } while (0)
+#define PTE(t, l) do {if (! M(t)) goto l; } while (0)
 
 typedef node_t (*nonterm_func_t) (int);
 
@@ -663,7 +732,7 @@ static int match (int c, node_code_t *node_code, node_t *node) {
 #define MN(c, node) match (c, NULL, &(node))
 
 static int try (nonterm_func_t f) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   size_t mark;
   
   mark = record_start ();
@@ -678,14 +747,14 @@ static int try (nonterm_func_t f) {
 D (type_name); D (expr); D (assign_expr); D (initializer_list);
 
 D (par_type_name) {
-  node_t r = &temp_node;
+  node_t r;
 
   PT ('('); P (type_name); PT (')');
   return r;
 }
 
 D (primary_expr) {
-  node_t r = &temp_node;
+  node_t r, n, op, gn;
 
   if (MN (T_ID, r) || MN (T_CONSTANT, r) || MN (T_STR, r)) {
     return r;
@@ -694,45 +763,59 @@ D (primary_expr) {
     if (M (')')) return r;
   } else if (M (T_GENERIC)) {
     PT ('('); P (assign_expr); PT (',');
+    n = new_node (N_GENERIC); op_append (n, r);
     for (;;) { /* generic-assoc-list , generic-association */
-      if (! M (T_DEFAULT)) {
-	P (type_name);
+      op = NULL;
+      if (M (T_DEFAULT)) {
+	P (type_name); op = r;
       }
       PT (':'); P (assign_expr);
+      if (op != NULL) {
+	gn = new_node (N_GENERIC_ASSOC);
+	op_append (gn, op); op_append (gn, r); r = gn;
+      }
+      op_append (n, r);
       if (! M (','))
 	break;
     }
     PT ('(');
+    return n;
   }
   return NULL;
 }
 
 D (post_expr) {
-  node_t r = &temp_node, n;
+  node_t r, n, op;
   node_code_t code;
 
   P (primary_expr);
   for (;;) {
     if (MC (T_INCDEC, code)) {
       code = code == N_INC ? N_POST_INC : N_POST_DEC;
+      n = new_node (code); op = r; r = &err_node;
     } else if (MC ('.', code) || MC (T_ARROW, code)) {
-      PT (T_ID);
+      op = r;
+      if (! MN (T_ID, r))
+	return NULL;
     } else if (MC ('[', code)) {
-      P (expr);
-      PT (']');
-    } else if (MC ('(', code)) {
+      op = r; P (expr); PT (']');
+    } else if (M ('(')) {
+      op = r; r = NULL; code = N_CALL;
       if (! C (')')) {
 	P (expr); /* expr list */
       }
       PT (')');
     } else break;
-    n = new_node (code); op_append (n, r); r = n;
+    n = new_node (code); op_append (n, op);
+    if (r != NULL)
+      op_append (n, r);
+    r = n;
   }
   return r;
 }
 
 D (unary_expr) {
-  node_t r = &temp_node, n, t;
+  node_t r, n, t;
   node_code_t code;
 
   if (TRY (par_type_name)) {
@@ -742,10 +825,12 @@ D (unary_expr) {
       if (! M ('}')) return NULL;
       n = new_node (N_COMPOUND_LITERAL); op_append (n, t); op_append (n, r); return n;
     }
-  } else if (MC (T_SIZEOF, code) && TRY (par_type_name)) {
-    n = new_node (code); op_append (n, r); return n;
-  } else if (MC (T_ALIGNOF, code)) {
-    P (par_type_name); n = new_node (code); op_append (n, r); return n;
+  } else if (M (T_SIZEOF) && TRY (par_type_name)) {
+    n = new_node (N_SIZEOF); op_append (n, r); return n;
+  } else if (M (T_SIZEOF)) {
+    code = N_EXPR_SIZEOF;
+  } else if (M (T_ALIGNOF)) {
+    P (par_type_name); n = new_node (N_ALIGNOF); op_append (n, r); return n;
   } else if (! MC (T_INCDEC, code) && ! MC (T_UNOP, code) && ! MC (T_ADDOP, code) && ! MC ('*', code)) {
     P (post_expr); return r;
   } else if (code == N_MUL) {
@@ -756,7 +841,7 @@ D (unary_expr) {
 }
 
 static node_t left_op (int no_err_p, int token, int token2, nonterm_func_t f) {
-  node_t r = &temp_node, n;
+  node_t r, n;
   node_code_t code;
 
   P (f);
@@ -768,7 +853,7 @@ static node_t left_op (int no_err_p, int token, int token2, nonterm_func_t f) {
 }
 
 static node_t right_op (int no_err_p, int token, int token2, nonterm_func_t left, nonterm_func_t right) {
-  node_t r = &temp_node, n;
+  node_t r, n;
   node_code_t code;
 
   P (left);
@@ -790,11 +875,12 @@ D (land_expr) { return left_op (no_err_p, T_ANDAND, -1, or_expr); }
 D (lor_expr) { return left_op (no_err_p, T_OROR, -1, land_expr); }
 
 D (cond_expr) {
-  node_t r = &temp_node, n;
+  node_t r, n;
   
   P (lor_expr);
   if (! M ('?')) return r;
-  P (expr); n = new_node (N_COND); op_append (n, r);
+  n = new_node (N_COND); op_append (n, r);
+  P (expr); op_append (n, r);
   if (! M (':')) return NULL;
   P (cond_expr); op_append (n, r);
   return n;
@@ -813,7 +899,7 @@ D (direct_abstract_declarator); D (typedef_name); D (initializer);
 D (st_assert);
 
 D (declaration) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
@@ -835,7 +921,7 @@ D (declaration) {
 }
 
 D (declaration_specs) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   int first_p;
   
   for (first_p = TRUE;; first_p = FALSE) {
@@ -853,7 +939,7 @@ D (declaration_specs) {
 }
 
 D (sc_spec) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (M (T_TYPEDEF)) {
   } else if (M (T_EXTERN)) {
@@ -867,7 +953,7 @@ D (sc_spec) {
 }
 
 D (type_spec) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   int id_p = FALSE;
   
   if (M (T_VOID)) {
@@ -914,7 +1000,7 @@ D (type_spec) {
 }
 
 D (struct_declaration_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   for (;;) {
     P (struct_declaration);
@@ -924,7 +1010,7 @@ D (struct_declaration_list) {
 }
 
 D (struct_declaration) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
@@ -947,7 +1033,7 @@ D (struct_declaration) {
 }
 
 D (spec_qual_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   int first_p;
   
   for (first_p = TRUE;; first_p = FALSE) {
@@ -964,7 +1050,7 @@ D (spec_qual_list) {
 }
 
 D (type_qual) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (M (T_CONST)) {
   } else if (M (T_RESTRICT)) {
@@ -976,7 +1062,7 @@ D (type_qual) {
 }
 
 D (func_spec) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (M (T_INLINE)) {
   } else {
@@ -986,7 +1072,7 @@ D (func_spec) {
 }
 
 D (align_spec) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   PT (T_ALIGNAS); PT ('(');
   if (TRY (type_name)) {
@@ -998,7 +1084,7 @@ D (align_spec) {
 }
 
 D (declarator) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (C ('*')) {
     P (pointer);
@@ -1008,7 +1094,7 @@ D (declarator) {
 }
 
 D (direct_declarator) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (M (T_ID)) {
   } else if (M ('(')) {
@@ -1046,7 +1132,7 @@ D (direct_declarator) {
 }
 
 D (pointer) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   PT ('*');
   if (C (T_CONST) || C (T_RESTRICT) || C (T_VOLATILE) || C (T_ATOMIC)) {
@@ -1059,7 +1145,7 @@ D (pointer) {
 }
 
 D (type_qual_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   for (;;) {
     P (type_qual);
@@ -1070,7 +1156,7 @@ D (type_qual_list) {
 }
 
 D (param_type_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   int comma_p;
   
   for (;;) { /* parameter-list, parameter-declaration */
@@ -1093,7 +1179,7 @@ D (param_type_list) {
 }
  
 D (id_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   for (;;) {
     PT (T_ID);
@@ -1104,7 +1190,7 @@ D (id_list) {
 }
 
 D (abstract_declarator) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (C ('*')) {
     P (pointer);
@@ -1114,7 +1200,7 @@ D (abstract_declarator) {
 }
 
 D (direct_abstract_declarator) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (TRY (abstract_declarator)) {
     if (! C ('(') && ! C ('['))
@@ -1151,14 +1237,14 @@ D (direct_abstract_declarator) {
 }
 
 D (typedef_name) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   PT (T_ID);
   return NULL;
 }
 
 D (initializer) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   if (! M ('{')) {
     P (assign_expr);
@@ -1172,7 +1258,7 @@ D (initializer) {
 }
 
 D (initializer_list) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   int first_p;
   
   for (;;) { /* designation */
@@ -1194,7 +1280,7 @@ D (initializer_list) {
 }
 
 D (type_name) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
 
   P (spec_qual_list);
   if (! C (')') && ! C (':')) {
@@ -1204,7 +1290,7 @@ D (type_name) {
 }
 
 D (st_assert) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   PT (T_STATIC_ASSERT); PT ('('); P (const_expr); PT (','); PT (')');  PT (';');
   return r;
@@ -1214,7 +1300,7 @@ D (st_assert) {
 D (compound_stmt);
 
 D (label) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   for (;;) {
     if (M (T_CASE)) {
@@ -1227,7 +1313,7 @@ D (label) {
 }
  
 D (stmt) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
   while (TRY (label)) {
   }
@@ -1276,39 +1362,68 @@ D (stmt) {
   return r;
 }
  
+static void error_recovery (int par_lev) {
+  if (prev_token.code == ';' || prev_token.code == '}')
+    return;
+  for (;;) {
+    if (curr_token.code == EOF || (par_lev == 0 && curr_token.code == ';'))
+      break;
+    if (curr_token.code == '{') {
+      par_lev++;
+    } else if (curr_token.code == '}') {
+      if (par_lev == 0)
+	return;
+      if (--par_lev == 0)
+	break;
+    }
+    read_token ();
+  }
+  read_token ();
+}
+
 D (compound_stmt) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
   
-  PT ('{');
+  PTE ('{', err0);
   while (! C ('}')) { /* block-item-list, block_item */
     if (TRY (declaration)) {
     } else {
-      P (stmt);
+      PE (stmt, err1);
     }
+    continue;
+  err1: error_recovery (1);
   }
   PT ('}');
+  return r;
+ err0:  error_recovery (0);
   return r;
 }
  
 D (transl_unit) {
-  node_t r = &temp_node;
+  node_t r = &err_node;
 
+  curr_token.code = ';'; /* for error recovery */
   read_token ();
   while (! C (EOF)) { /* external-declaration */
     if (TRY (declaration)) {
     } else {
-      P (declaration_specs); P (declarator);
+      PE (declaration_specs, err); PE (declarator, err);
       while (! C ('{')) { /* declaration-list */
-	P (declaration);
+	PE (declaration, err);
       }
       P (compound_stmt);
     }
+    continue;
+  err: error_recovery (0);
   }
+  return r;
 }
 
 static void fatal_error (C_error_code_t code, const char *message) {
   fprintf (stderr, "%s\n", message); exit (1);
 }
+
+static void kw_add (const char *name, token_code_t tc, size_t flags) { str_add (name, tc, flags, TRUE); }
 
 static void parse_init (void) {
   error_func = fatal_error;
@@ -1316,25 +1431,23 @@ static void parse_init (void) {
   VARR_CREATE (char, symbol_text, 100);
   VARR_CREATE (token_t, buffered_tokens, 32);
   VARR_CREATE (token_t, recorded_tokens, 32);
-  DLIST_INIT (node_t, all_nodes);
+  DLIST_INIT (all_node_list_elem_t, all_nodes);
   str_init ();
-  str_add ("_Bool", T_BOOL, 0); str_add ("_Complex", T_COMPLEX, 0);
-  str_add ("_Alignas", T_ALIGNAS, 0); str_add ("_Alignof", T_ALIGNOF, 0);
-  str_add ("_Atomic", T_ATOMIC, 0); str_add ("_Generic", T_GENERIC, 0);
-  str_add ("_Noreturn", T_NO_RETURN, 0); str_add ("_Static_assert", T_STATIC_ASSERT, 0);
-  str_add ("_Thread_local", T_THREAD_LOCAL, 0);
-  str_add ("auto", T_AUTO, 0); str_add ("break", T_BREAK, 0); str_add ("case", T_CASE, 0);
-  str_add ("char", T_CHAR, 0); str_add ("const", T_CONST, 0); str_add ("continue", T_CONTINUE, 0);
-  str_add ("default", T_DEFAULT, 0); str_add ("do", T_DO, 0); str_add ("double", T_DOUBLE, 0);
-  str_add ("else", T_ELSE, 0); str_add ("enum", T_ENUM, 0); str_add ("extern", T_EXTERN, 0);
-  str_add ("float", T_FLOAT, 0); str_add ("for", T_FOR, 0); str_add ("goto", T_GOTO, 0);
-  str_add ("if", T_IF, 0); str_add ("inline", T_INLINE, FLAG_EXT89); str_add ("int", T_INT, 0);
-  str_add ("long", T_LONG, 0); str_add ("register", T_REGISTER, 0); str_add ("restrict", T_RESTRICT, FLAG_C89);
-  str_add ("return", T_RETURN, 0); str_add ("short", T_SHORT, 0); str_add ("signed", T_SIGNED, 0);
-  str_add ("sizeof", T_SIZEOF, 0); str_add ("static", T_STATIC, 0); str_add ("struct", T_STRUCT, 0);
-  str_add ("switch", T_SWITCH, 0); str_add ("typedef", T_TYPEDEF, 0); str_add ("typeof", T_TYPEOF, FLAG_EXT);
-  str_add ("union", T_UNION, 0); str_add ("unsigned", T_UNSIGNED, 0); str_add ("void", T_VOID, 0);
-  str_add ("volatile", T_VOLATILE, 0); str_add ("while", T_WHILE, 0);
+  kw_add ("_Bool", T_BOOL, 0); kw_add ("_Complex", T_COMPLEX, 0); kw_add ("_Alignas", T_ALIGNAS, 0);
+  kw_add ("_Alignof", T_ALIGNOF, 0); kw_add ("_Atomic", T_ATOMIC, 0); kw_add ("_Generic", T_GENERIC, 0);
+  kw_add ("_Noreturn", T_NO_RETURN, 0); kw_add ("_Static_assert", T_STATIC_ASSERT, 0);
+  kw_add ("_Thread_local", T_THREAD_LOCAL, 0); kw_add ("auto", T_AUTO, 0); kw_add ("break", T_BREAK, 0);
+  kw_add ("case", T_CASE, 0); kw_add ("char", T_CHAR, 0); kw_add ("const", T_CONST, 0);
+  kw_add ("continue", T_CONTINUE, 0); kw_add ("default", T_DEFAULT, 0); kw_add ("do", T_DO, 0);
+  kw_add ("double", T_DOUBLE, 0); kw_add ("else", T_ELSE, 0); kw_add ("enum", T_ENUM, 0);
+  kw_add ("extern", T_EXTERN, 0); kw_add ("float", T_FLOAT, 0); kw_add ("for", T_FOR, 0);
+  kw_add ("goto", T_GOTO, 0); kw_add ("if", T_IF, 0); kw_add ("inline", T_INLINE, FLAG_EXT89);
+  kw_add ("int", T_INT, 0); kw_add ("long", T_LONG, 0); kw_add ("register", T_REGISTER, 0);
+  kw_add ("restrict", T_RESTRICT, FLAG_C89); kw_add ("return", T_RETURN, 0); kw_add ("short", T_SHORT, 0);
+  kw_add ("signed", T_SIGNED, 0); kw_add ("sizeof", T_SIZEOF, 0); kw_add ("static", T_STATIC, 0);
+  kw_add ("struct", T_STRUCT, 0); kw_add ("switch", T_SWITCH, 0); kw_add ("typedef", T_TYPEDEF, 0);
+  kw_add ("typeof", T_TYPEOF, FLAG_EXT); kw_add ("union", T_UNION, 0); kw_add ("unsigned", T_UNSIGNED, 0);
+  kw_add ("void", T_VOID, 0); kw_add ("volatile", T_VOLATILE, 0); kw_add ("while", T_WHILE, 0);
 }
 
 static node_t parse (void) {
@@ -1350,6 +1463,16 @@ static void parse_finish (void) {
 }
 
 #ifdef TEST_MIR_C
+#include <sys/time.h>
+
+static double
+real_usec_time(void) {
+    struct timeval  tv;
+
+    gettimeofday(&tv, NULL);
+    return tv.tv_usec + tv.tv_sec * 1000000.0;
+}
+
 static size_t curr_char;
 static const char *code;
 static int t_getc (void) {
@@ -1368,13 +1491,14 @@ static void t_ungetc (int c) {
 }
 
 int main (void) {
+  double start_time = real_usec_time ();
   node_t r;
   
   code = "\n\
-static const int SieveSize = 819000;\n\
+  static const while int SieveSize = 819000;\n\
   int sieve (void) {\n\
   int i, k, prime, count, iter;\n\
-  char flags[SieveSize];\n\
+  for;char flags[SieveSize];\n\
 \n\
   for (iter = 0; iter < 1000; iter++) {\n\
     count = 0;\n\
@@ -1397,10 +1521,13 @@ void main (void) {\n\
 ";
   curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
   parse_init ();
+  fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
   r = parse ();
+  fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
   if (r != NULL)
     fprintf (stderr, "OK\n");
   parse_finish ();
+  fprintf (stderr, "parser_finish end -- %.0f usec\n", real_usec_time () - start_time);
   return 0;
 }
 #endif
