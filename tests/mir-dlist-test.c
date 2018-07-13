@@ -26,6 +26,8 @@ int main (void) {
   status &= DLIST_LENGTH (elem_t, list) == 4;
   status &= DLIST_HEAD (elem_t, list) == &e1 && DLIST_TAIL (elem_t, list) == &e4;
   status &= DLIST_NEXT (elem_t, &e1) == &e2 && DLIST_PREV (elem_t, &e4) == &e3;
+  status &= DLIST_EL (elem_t, list, 0) == &e1 && DLIST_EL (elem_t, list, 3) == &e4;
+  status &= DLIST_EL (elem_t, list, -4) == &e1 && DLIST_EL (elem_t, list, -1) == &e4;
 
   DLIST_REMOVE (elem_t, list, &e1);
   DLIST_REMOVE (elem_t, list, &e3);

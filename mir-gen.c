@@ -58,7 +58,7 @@ static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
 
-#ifdef x86_64
+#ifdef __x86_64__
 #include "x86_64-target.c"
 #else
 #error "undefined or unsupported generation target"

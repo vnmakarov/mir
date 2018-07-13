@@ -54,6 +54,17 @@ static inline T DLIST_OP (T, tail) (DLIST (T) *list) {return list->tail;}     \
 static inline T DLIST_OP (T, prev) (T elem) {return elem->LINK.prev;}         \
 static inline T DLIST_OP (T, next) (T elem) {return elem->LINK.next;}         \
                                                                               \
+static inline T DLIST_OP (T, el) (DLIST (T) *list, int n) {		      \
+  T e;									      \
+									      \
+  if (n >= 0) {								      \
+    for (e = list->head; e != NULL && n != 0; e = e->LINK.next, n--);	      \
+  } else {								      \
+    for (e = list->tail; e != NULL && n != -1; e = e->LINK.prev, n++);	      \
+  }									      \
+  return e;								      \
+}									      \
+									      \
 static inline void DLIST_OP (T, prepend) (DLIST (T) *list, T elem) {          \
   DLIST_ASSERT (list && elem, "prepend", T);                                  \
   if (list->head == NULL) {                                                   \
@@ -141,6 +152,7 @@ DEF_DLIST_CODE(T, LINK)
 #define DLIST_TAIL(T, L) (DLIST_OP (T, tail) (&(L)))
 #define DLIST_PREV(T, E) (DLIST_OP (T, prev) (E))
 #define DLIST_NEXT(T, E) (DLIST_OP (T, next) (E))
+#define DLIST_EL(T, L, N) (DLIST_OP (T, el) (&(L), N))
 #define DLIST_PREPEND(T, L, E) (DLIST_OP (T, prepend) (&(L), (E)))
 #define DLIST_APPEND(T, L, E) (DLIST_OP (T, append) (&(L), (E)))
 #define DLIST_INSERT_BEFORE(T, L, B, E)                                       \

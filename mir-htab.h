@@ -184,7 +184,7 @@ static inline int HTAB_OP (T, do) (HTAB (T) *htab, T el,		\
   }									\
 }									\
 									\
-static inline htab_size_t HTAB_OP(T, els_num) (HTAB (T) *htab) {	\
+static inline htab_size_t HTAB_OP (T, els_num) (HTAB (T) *htab) {	\
   HTAB_ASSERT (htab != NULL, "els_num", T);				\
   return htab->els_num;							\
 }									\
