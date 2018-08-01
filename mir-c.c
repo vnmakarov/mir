@@ -32,9 +32,9 @@ typedef struct node *node_t;
 enum basic_type {
   TP_UNDEF, TP_VOID,
   /* Integer types: the first should be BOOL and the last should be
-     ULONG_LONG.  The order is important -- do not change it.  */
-  TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT, TP_INT, TP_UINT,
-  TP_LONG, TP_ULONG, TP_LONG_LONG, TP_ULONG_LONG,
+     ULLONG.  The order is important -- do not change it.  */
+  TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT, TP_INT, TP_UINT, TP_LONG, TP_ULONG,
+  TP_LLONG, TP_ULLONG,
   TP_FLOAT, TP_DOUBLE, TP_LONG_DOUBLE, TP_FLOAT_COMPLEX, TP_DOUBLE_COMPLEX, TP_LONG_DOUBLE_COMPLEX, 
 };
 
@@ -65,6 +65,10 @@ struct type {
   struct type_qual type_qual;
   node_t pos_node; /* set up and used only for checking type correctness */
   unsigned int incomplete_p : 1;
+  /* Raw type size (w/o alignment type itslef requirement but with
+     element alignment requirements), undefined if ullong max.  */
+  unsigned long long raw_size;
+  int align; /* type align, undefined if < 0  */
   enum type_mode mode;
   union {
     enum basic_type basic_type;
@@ -75,7 +79,10 @@ struct type {
   } u;
 };
 
-static unsigned long long raw_type_size (struct type *type);
+static unsigned long long raw_type_size (struct type *type) {
+  assert (type->raw_size != ULLONG_MAX);
+  return type->raw_size;
+}
 
 #ifdef __x86_64__
 #include "mir-cx86_64.h"
@@ -90,7 +97,8 @@ static VARR (void_ptr_t) *reg_memory;
 static void *reg_malloc (size_t s) {
   void *mem = malloc (s);
 
-  if (mem == NULL) error ("no memory");
+  if (mem == NULL)
+    error ("no memory");
   VARR_PUSH (void_ptr_t, reg_memory, mem);
   return mem;
 }
@@ -98,7 +106,7 @@ static void *reg_malloc (size_t s) {
 static void reg_memory_finish (void) {
   for (size_t i = 0; i < VARR_LENGTH (void_ptr_t, reg_memory); i++)
     free (VARR_GET (void_ptr_t, reg_memory, i));
-    VARR_DESTROY (void_ptr_t, reg_memory);
+  VARR_DESTROY (void_ptr_t, reg_memory);
 }
 
 static void reg_memory_init (void) {
@@ -134,7 +142,8 @@ static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
   if (HTAB_DO (str_t, str_tab, str, HTAB_FIND, el))
     return el;
   heap_s = reg_malloc (strlen (s) + 1);
-  strcpy (heap_s, s); str.s = heap_s; str.key = key; str.flags = flags;
+  strcpy (heap_s, s);
+  str.s = heap_s; str.key = key; str.flags = flags;
   HTAB_DO (str_t, str_tab, str, HTAB_INSERT, el);
   if (key_p)
     HTAB_DO (str_t, str_key_tab, str, HTAB_INSERT, el);
@@ -160,33 +169,27 @@ static void str_finish (void) {
 /* ------------------------- Scanner/Parser Start ------------------------------ */
 
 typedef enum {
-  T_CONSTANT = 256, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE,
-  T_ANDAND, T_OROR, T_INCDEC, T_ARROW, T_UNOP, T_DOTS,
-  T_BOOL, T_COMPLEX, T_ALIGNOF,
-  T_ALIGNAS, T_ATOMIC, T_GENERIC, T_NO_RETURN, T_STATIC_ASSERT, T_THREAD_LOCAL, T_THREAD,
-  T_AUTO, T_BREAK, T_CASE, T_CHAR, T_CONST, T_CONTINUE, T_DEFAULT,
-  T_DO, T_DOUBLE, T_ELSE, T_ENUM, T_EXTERN, T_FLOAT, T_FOR,
-  T_GOTO, T_IF, T_INLINE, T_INT, T_LONG, T_REGISTER, T_RESTRICT, T_RETURN,
-  T_SHORT, T_SIGNED, T_SIZEOF, T_STATIC, T_STRUCT, T_SWITCH, T_TYPEDEF, T_TYPEOF,
-  T_UNION, T_UNSIGNED, T_VOID, T_VOLATILE, T_WHILE,
+  T_CONSTANT = 256, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE, T_ANDAND, T_OROR,
+  T_INCDEC, T_ARROW, T_UNOP, T_DOTS, T_BOOL, T_COMPLEX, T_ALIGNOF, T_ALIGNAS, T_ATOMIC, T_GENERIC,
+  T_NO_RETURN, T_STATIC_ASSERT, T_THREAD_LOCAL, T_THREAD, T_AUTO, T_BREAK, T_CASE, T_CHAR, T_CONST,
+  T_CONTINUE, T_DEFAULT, T_DO, T_DOUBLE, T_ELSE, T_ENUM, T_EXTERN, T_FLOAT, T_FOR, T_GOTO, T_IF,
+  T_INLINE, T_INT, T_LONG, T_REGISTER, T_RESTRICT, T_RETURN, T_SHORT, T_SIGNED, T_SIZEOF, T_STATIC,
+  T_STRUCT, T_SWITCH, T_TYPEDEF, T_TYPEOF, T_UNION, T_UNSIGNED, T_VOID, T_VOLATILE, T_WHILE,
 } token_code_t;
 
 typedef enum {
-  N_IGNORE, N_I, N_L, N_LL, N_U, N_UL, N_ULL, N_F, N_D, N_LD, N_CH, N_STR, N_ID,
-  N_COMMA, N_ANDAND, N_OROR, N_EQ, N_NE, N_LT, N_LE, N_GT, N_GE, N_ASSIGN,
-  N_BITWISE_NOT, N_NOT, N_AND, N_AND_ASSIGN, N_OR, N_OR_ASSIGN, N_XOR, N_XOR_ASSIGN,
-  N_LSH, N_LSH_ASSIGN, N_RSH, N_RSH_ASSIGN, N_ADD, N_ADD_ASSIGN, N_SUB, N_SUB_ASSIGN,
-  N_MUL, N_MUL_ASSIGN, N_DIV, N_DIV_ASSIGN, N_MOD, N_MOD_ASSIGN,
+  N_IGNORE, N_I, N_L, N_LL, N_U, N_UL, N_ULL, N_F, N_D, N_LD, N_CH, N_STR, N_ID, N_COMMA, N_ANDAND,
+  N_OROR, N_EQ, N_NE, N_LT, N_LE, N_GT, N_GE, N_ASSIGN, N_BITWISE_NOT, N_NOT, N_AND, N_AND_ASSIGN,
+  N_OR, N_OR_ASSIGN, N_XOR, N_XOR_ASSIGN, N_LSH, N_LSH_ASSIGN, N_RSH, N_RSH_ASSIGN, N_ADD,
+  N_ADD_ASSIGN, N_SUB, N_SUB_ASSIGN, N_MUL, N_MUL_ASSIGN, N_DIV, N_DIV_ASSIGN, N_MOD, N_MOD_ASSIGN,
   N_IND, N_FIELD, N_ADDR, N_DEREF, N_DEREF_FIELD, N_COND, N_INC, N_DEC, N_POST_INC, N_POST_DEC,
-  N_ALIGNOF, N_SIZEOF, N_EXPR_SIZEOF, N_CAST, N_COMPOUND_LITERAL, N_CALL,
-  N_GENERIC, N_GENERIC_ASSOC,
-  N_IF, N_SWITCH, N_WHILE, N_DO, N_FOR, N_GOTO, N_CONTINUE, N_BREAK, N_RETURN, N_EXPR,
-  N_BLOCK, N_CASE, N_DEFAULT, N_LABEL, N_LIST, N_SPEC_DECL, N_SHARE,
-  N_TYPEDEF, N_EXTERN, N_STATIC, N_AUTO, N_REGISTER, N_THREAD_LOCAL, N_DECL,
-  N_VOID, N_CHAR, N_SHORT, N_INT, N_LONG, N_FLOAT, N_DOUBLE, N_SIGNED, N_UNSIGNED,
-  N_BOOL, N_COMPLEX, N_STRUCT, N_UNION, N_ENUM, N_ENUM_CONST, N_MEMBER,
-  N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN, N_ALIGNAS,
-  N_FUNC, N_STAR, N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT, N_FUNC_DEF
+  N_ALIGNOF, N_SIZEOF, N_EXPR_SIZEOF, N_CAST, N_COMPOUND_LITERAL, N_CALL, N_GENERIC, N_GENERIC_ASSOC,
+  N_IF, N_SWITCH, N_WHILE, N_DO, N_FOR, N_GOTO, N_CONTINUE, N_BREAK, N_RETURN, N_EXPR, N_BLOCK,
+  N_CASE, N_DEFAULT, N_LABEL, N_LIST, N_SPEC_DECL, N_SHARE, N_TYPEDEF, N_EXTERN, N_STATIC, N_AUTO,
+  N_REGISTER, N_THREAD_LOCAL, N_DECL, N_VOID, N_CHAR, N_SHORT, N_INT, N_LONG, N_FLOAT, N_DOUBLE,
+  N_SIGNED, N_UNSIGNED, N_BOOL, N_COMPLEX, N_STRUCT, N_UNION, N_ENUM, N_ENUM_CONST, N_MEMBER,
+  N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN, N_ALIGNAS, N_FUNC, N_STAR,
+  N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT, N_FUNC_DEF
 } node_code_t;
 
 DEF_DLIST_LINK (node_t);
@@ -230,19 +233,23 @@ typedef struct token {
   node_t node;
 } token_t;
 
-static void op_append (node_t n, node_t op) {
+static node_t add_pos (node_t n, pos_t p) {
+  if (n->pos.lno < 0)
+    n->pos = p;
+  return n;
+}
+
+static node_t op_append (node_t n, node_t op) {
   DLIST_APPEND (node_t, n->ops, op);
-  if (n->pos.lno < 0) n->pos = op->pos;
+  return add_pos (n, op->pos);
 }
 
 static void op_flat_append (node_t n, node_t op) {
-  node_t el, next_el;
-  
   if (op->code != N_LIST) {
     op_append (n, op);
     return;
   }
-  for (el = DLIST_HEAD (node_t, op->ops); el != NULL; el = next_el) {
+  for (node_t next_el, el = DLIST_HEAD (node_t, op->ops); el != NULL; el = next_el) {
     next_el = DLIST_NEXT (node_t, el);
     DLIST_REMOVE (node_t, op->ops, el);
     op_append (n, el);
@@ -251,82 +258,103 @@ static void op_flat_append (node_t n, node_t op) {
 
 static unsigned long curr_uid;
 
-static node_t new_node (node_code_t node_code) {
+static node_t new_node (node_code_t nc) {
   node_t n = reg_malloc (sizeof (struct node));
 
-  n->code = node_code;
-  n->uid = curr_uid++;
+  n->code = nc; n->uid = curr_uid++;
   DLIST_INIT (node_t, n->ops);
-  n->attr = NULL;
-  n->pos = no_pos;
+  n->attr = NULL; n->pos = no_pos;
   return n;
 }
 
-static node_t add_pos (node_t n, pos_t pos) { if (n->pos.lno < 0) n->pos = pos; return n; }
-
-static node_t new_pos_node (node_code_t node_code, pos_t pos) {
-  return add_pos (new_node (node_code), pos);
+static node_t new_pos_node (node_code_t nc, pos_t p) { return add_pos (new_node (nc), p); }
+static node_t new_node1 (node_code_t nc, node_t op1) { return op_append (new_node (nc), op1); }
+static node_t new_pos_node1 (node_code_t nc, pos_t p, node_t op1) {
+  return add_pos (new_node1 (nc, op1), p);
 }
-
-static node_t new_node1 (node_code_t node_code, node_t op1) {
-  node_t r = new_node (node_code);
-  op_append (r, op1); r->pos = op1->pos; return r;
+static node_t new_node2 (node_code_t nc, node_t op1, node_t op2) {
+  return op_append (new_node1 (nc, op1), op2);
 }
-
-static node_t new_pos_node1 (node_code_t node_code, pos_t pos, node_t op1) {
-  return add_pos (new_node1 (node_code, op1), pos);
+static node_t new_pos_node2 (node_code_t nc, pos_t p, node_t op1, node_t op2) {
+  return add_pos (new_node2 (nc, op1, op2), p);
 }
-
-static node_t new_node2 (node_code_t node_code, node_t op1, node_t op2) {
-  node_t r = new_node1 (node_code, op1);
-  op_append (r, op2);
-  if (r->pos.lno < 0) r->pos = op2->pos;
-  return r;
+static node_t new_node3 (node_code_t nc, node_t op1, node_t op2, node_t op3) {
+  return op_append (new_node2 (nc, op1, op2), op3);
 }
-
-static node_t new_pos_node2 (node_code_t node_code, pos_t pos, node_t op1, node_t op2) {
-  return add_pos (new_node2 (node_code, op1, op2), pos);
+static node_t new_pos_node3 (node_code_t nc, pos_t p, node_t op1, node_t op2, node_t op3) {
+  return add_pos (new_node3 (nc, op1, op2, op3), p);
 }
-
-static node_t new_node3 (node_code_t node_code, node_t op1, node_t op2, node_t op3) {
-  node_t r = new_node2 (node_code, op1, op2);
-  op_append (r, op3);
-  if (r->pos.lno < 0) r->pos = op3->pos;
-  return r;
+static node_t new_node4 (node_code_t nc, node_t op1, node_t op2, node_t op3, node_t op4) {
+  return op_append (new_node3 (nc, op1, op2, op3), op4);
 }
-
-static node_t new_pos_node3 (node_code_t node_code, pos_t pos, node_t op1, node_t op2, node_t op3) {
-  return add_pos (new_node3 (node_code, op1, op2, op3), pos);
+static node_t new_pos_node4 (node_code_t nc, pos_t p, node_t op1, node_t op2, node_t op3, node_t op4) {
+  return add_pos (new_node4 (nc, op1, op2, op3, op4), p);
 }
+static node_t new_ch_node (int ch, pos_t p) {
+  node_t n = new_pos_node (N_CH, p);
 
-static node_t new_node4 (node_code_t node_code, node_t op1, node_t op2, node_t op3, node_t op4) {
-  node_t r = new_node3 (node_code, op1, op2, op3);
-  op_append (r, op4);
-  if (r->pos.lno < 0) r->pos = op4->pos;
-  return r;
+  n->u.ch = ch;
+  return n;
 }
+static node_t new_i_node (long l, pos_t p) {
+  node_t n = new_pos_node (N_I, p);
 
-static node_t new_pos_node4 (node_code_t node_code, pos_t pos, node_t op1, node_t op2, node_t op3, node_t op4) {
-  return add_pos (new_node4 (node_code, op1, op2, op3, op4), pos);
+  n->u.l = l;
+  return n;
 }
+static node_t new_l_node (long l, pos_t p) {
+  node_t n = new_pos_node (N_L, p);
 
-static node_t new_str_node (node_code_t node_code, pos_t pos, const char *s) {
-  node_t n = new_pos_node (node_code, pos); n->u.s = s; return n;
+  n->u.l = l;
+  return n;
 }
+static node_t new_ll_node (long long ll, pos_t p) {
+  node_t n = new_pos_node (N_LL, p);
 
-static node_t new_ch_node (int ch, pos_t pos) { node_t n = new_pos_node (N_CH, pos); n->u.ch = ch; return n; }
-static node_t new_f_node (float f, pos_t pos) { node_t n = new_pos_node (N_F, pos); n->u.f = f; return n; }
-static node_t new_d_node (double d, pos_t pos) { node_t n = new_pos_node (N_D, pos); n->u.d = d; return n; }
-static node_t new_ld_node (long double ld, pos_t pos) { node_t n = new_pos_node (N_LD, pos); n->u.ld = ld; return n; }
-static node_t new_i_node (long l, pos_t pos) { node_t n = new_pos_node (N_I, pos); n->u.l = l; return n; }
-static node_t new_l_node (long l, pos_t pos) { node_t n = new_pos_node (N_L, pos); n->u.l = l; return n; }
-static node_t new_ll_node (long long ll, pos_t pos) { node_t n = new_pos_node (N_LL, pos); n->u.ll = ll; return n; }
-static node_t new_u_node (unsigned long ul, pos_t pos) { node_t n = new_pos_node (N_U, pos); n->u.ul = ul; return n; }
-static node_t new_ul_node (unsigned long ul, pos_t pos) {
-  node_t n = new_pos_node (N_UL, pos); n->u.ul = ul; return n;
+  n->u.ll = ll;
+  return n;
 }
-static node_t new_ull_node (unsigned long long ull, pos_t pos) {
-  node_t n = new_pos_node (N_ULL, pos); n->u.ull = ull; return n;
+static node_t new_u_node (unsigned long ul, pos_t p) {
+  node_t n = new_pos_node (N_U, p);
+
+  n->u.ul = ul;
+  return n;
+}
+static node_t new_ul_node (unsigned long ul, pos_t p) {
+  node_t n = new_pos_node (N_UL, p);
+
+  n->u.ul = ul;
+  return n;
+}
+static node_t new_ull_node (unsigned long long ull, pos_t p) {
+  node_t n = new_pos_node (N_ULL, p);
+
+  n->u.ull = ull;
+  return n;
+}
+static node_t new_f_node (float f, pos_t p) {
+  node_t n = new_pos_node (N_F, p);
+
+  n->u.f = f;
+  return n;
+}
+static node_t new_d_node (double d, pos_t p) {
+  node_t n = new_pos_node (N_D, p);
+
+  n->u.d = d;
+  return n;
+}
+static node_t new_ld_node (long double ld, pos_t p) {
+  node_t n = new_pos_node (N_LD, p);
+
+  n->u.ld = ld;
+  return n;
+}
+static node_t new_str_node (node_code_t nc, pos_t p, const char *s) {
+  node_t n = new_pos_node (nc, p);
+
+  n->u.s = s;
+  return n;
 }
 
 static node_t get_op (node_t n, int nop) {
@@ -354,11 +382,13 @@ static void (*c_ungetc) (int c);
 #define TAB_STOP 8
 
 static int p_getc (void) {
-  curr_pos.ln_pos++; return c_getc ();
+  curr_pos.ln_pos++;
+  return c_getc ();
 }
 
 static void p_ungetc (int c) {
-  curr_pos.ln_pos--; c_ungetc (c);
+  curr_pos.ln_pos--;
+  c_ungetc (c);
 }
 
 static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
@@ -366,27 +396,47 @@ static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
 
   /* `current_position' corresponds position at the read char here. */
   if (curr_c == EOF || curr_c == '\n') {
-    p_ungetc (curr_c); return (-1);
+    p_ungetc (curr_c);
+    return (-1);
   }
   *newln_p = *wrong_escape_p = FALSE;
   if (curr_c == '\\') {
     curr_c = p_getc ();
     switch (curr_c) {
-    case 'a': curr_c = '\a'; break;
-    case 'b': curr_c = '\b'; break;
-    case 'n': curr_c = '\n'; break;
-    case 'f': curr_c = '\f'; break;
-    case 'r': curr_c = '\r'; break;
-    case 't': curr_c = '\t'; break;
-    case 'v': curr_c = '\v'; break;
-    case '\\': case '\'': case '\?': case '\"': break;
-    case '\n': curr_pos.ln_pos = 0; curr_pos.lno++; *newln_p = TRUE; break;
+    case 'a':
+      curr_c = '\a';
+      break;
+    case 'b':
+      curr_c = '\b';
+      break;
+    case 'n':
+      curr_c = '\n';
+      break;
+    case 'f':
+      curr_c = '\f';
+      break;
+    case 'r':
+      curr_c = '\r';
+      break;
+    case 't':
+      curr_c = '\t';
+      break;
+    case 'v':
+      curr_c = '\v';
+      break;
+    case '\\': case '\'': case '\?': case '\"':
+      break;
+    case '\n':
+      curr_pos.ln_pos = 0; curr_pos.lno++; *newln_p = TRUE;
+      break;
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
-      ch = curr_c - '0'; curr_c = p_getc ();
+      ch = curr_c - '0';
+      curr_c = p_getc ();
       if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
 	p_ungetc (curr_c);
       else {
-	 ch = (ch * 8 + curr_c - '0'); curr_c = p_getc ();
+	 ch = (ch * 8 + curr_c - '0');
+	 curr_c = p_getc ();
 	 if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
 	   p_ungetc (curr_c);
 	 } else {
@@ -397,12 +447,15 @@ static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
       break;
     }
     case 'x': case 'X': {
-      ch = 0; curr_c = p_getc ();
+      ch = 0;
+      curr_c = p_getc ();
       for (ch = i = 0; isxdigit (curr_c); i++) {
 	c = isdigit (curr_c) ? curr_c - '0' : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10;
-	ch = (ch << 4) | c; curr_c = p_getc ();
+	ch = (ch << 4) | c;
+	curr_c = p_getc ();
       }
-      p_ungetc (curr_c); curr_c = ch; *wrong_escape_p = i == 0;
+      p_ungetc (curr_c);
+      curr_c = ch; *wrong_escape_p = i == 0;
     }
     default: *wrong_escape_p = TRUE; break;
     }
@@ -421,18 +474,18 @@ static void get_next_token (void) {
   for (;;) {
     curr_c = p_getc ();
     switch (start_c = curr_c) {
-    case ' ': case '\f':
+    case ' ': case '\r': case '\f':
       break;
     case '\t':
       curr_pos.ln_pos = ((curr_pos.ln_pos - 1) / TAB_STOP + 1) * TAB_STOP; break;
     case '\n':
       curr_pos.ln_pos = 0; curr_pos.lno++; break;
-    case '\r':
-      break;
     case '~':
-      setup_curr_token (curr_pos, T_UNOP, N_BITWISE_NOT); return;
+      setup_curr_token (curr_pos, T_UNOP, N_BITWISE_NOT);
+      return;
     case '+': case '-':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == start_c) {
 	setup_curr_token (pos, T_INCDEC, start_c == '+' ? N_INC : N_DEC);
       } else if (curr_c == '=') {
@@ -440,27 +493,34 @@ static void get_next_token (void) {
       } else if (start_c == '-' && curr_c == '>') {
 	setup_curr_token (pos, T_ARROW, N_DEREF_FIELD);
       } else if (isdigit (curr_c)) {
-	p_ungetc (curr_c); curr_c = start_c;
+	p_ungetc (curr_c);
+	curr_c = start_c;
 	goto number;
       } else if (curr_c == '.') {
 	curr_c = p_getc ();
 	if (isdigit (curr_c)){
-	  p_ungetc (curr_c); p_ungetc ('.'); curr_c = start_c;
+	  p_ungetc (curr_c);
+	  p_ungetc ('.');
+	  curr_c = start_c;
 	  goto number;
 	} else {
-	  p_ungetc (curr_c); p_ungetc ('.');
+	  p_ungetc (curr_c);
+	  p_ungetc ('.');
 	  setup_curr_token (pos, T_ADDOP, start_c == '+' ? N_ADD : N_SUB);
 	}
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, T_ADDOP, start_c == '+' ? N_ADD : N_SUB);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, T_ADDOP, start_c == '+' ? N_ADD : N_SUB);
       }
       return;
     case '=':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '=') {
 	setup_curr_token (pos, T_EQNE, N_EQ);
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, '=', N_ASSIGN);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, '=', N_ASSIGN);
       }
       return;
     case '<': case '>':
@@ -470,31 +530,40 @@ static void get_next_token (void) {
 	if (curr_c == '=') {
 	  setup_curr_token (pos, T_ASSIGN, start_c == '<' ? N_LSH_ASSIGN : N_RSH_ASSIGN);
 	} else {
-	  p_ungetc (curr_c); setup_curr_token (pos, T_SH, start_c == '<' ? N_LSH : N_RSH);
+	  p_ungetc (curr_c);
+	  setup_curr_token (pos, T_SH, start_c == '<' ? N_LSH : N_RSH);
 	}
       } else if (curr_c == '=') {
 	setup_curr_token (pos, T_CMP, start_c == '<' ? N_LE : N_GE);
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, T_CMP, start_c == '<' ? N_LT : N_GT);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, T_CMP, start_c == '<' ? N_LT : N_GT);
       }
       return;
     case '*':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '=') {
 	setup_curr_token (pos, T_ASSIGN, N_MUL_ASSIGN);
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, '*', N_MUL);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, '*', N_MUL);
       }
       return;
     case '/':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '=') {
 	setup_curr_token (pos, T_ASSIGN, N_DIV_ASSIGN);
       } else if (curr_c == '/') { /* comment // */
 	while ((curr_c = p_getc ()) != '\n' && curr_c != EOF)
 	  ;
-	curr_pos.ln_pos = 0; curr_pos.lno++; break;      
-      } else if (curr_c == '*') { /* usual C comment */
+	curr_pos.ln_pos = 0; curr_pos.lno++;
+	break;      
+      } else if (curr_c != '*') {
+	p_ungetc (curr_c);
+	setup_curr_token (pos, '*', N_MUL);
+      } else { /* usual C comment */
 	for (;;) {
 	  if ((curr_c = p_getc ()) == EOF)
 	    error_func (C_unfinished_comment, "unfinished comment");
@@ -507,8 +576,6 @@ static void get_next_token (void) {
 	  }
 	}
 	break;
-      } else {
-	p_ungetc (curr_c); setup_curr_token (pos, '*', N_MUL);
       }
       return;
     case '%':
@@ -516,21 +583,25 @@ static void get_next_token (void) {
       if (curr_c == '=') {
 	setup_curr_token (pos, T_ASSIGN, N_MOD_ASSIGN);
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, T_DIVOP, N_MOD);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, T_DIVOP, N_MOD);
       }
       return;
     case '&': case '|':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '=') {
 	setup_curr_token (pos, T_ASSIGN, start_c == '&' ? N_AND_ASSIGN : N_OR_ASSIGN);
       } else if (curr_c == start_c) {
 	setup_curr_token (pos, start_c == '&' ? T_ANDAND : T_OROR, start_c == '&' ? N_ANDAND : N_OROR);
       } else {
-	p_ungetc (curr_c); setup_curr_token (pos, start_c, start_c == '&' ? N_AND : N_OR);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, start_c, start_c == '&' ? N_AND : N_OR);
       }
       return;
     case '^': case '!':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '=') {
 	setup_curr_token (pos, start_c == '^' ? T_ASSIGN : T_EQNE, start_c == '^' ? N_XOR_ASSIGN : N_NE);
       } else {
@@ -539,35 +610,45 @@ static void get_next_token (void) {
       }
       return;
     case ';': case '?': case ':': case '(': case ')': case '{': case '}': case ']': case EOF:
-      setup_curr_token (curr_pos, curr_c, N_IGNORE); return;
+      setup_curr_token (curr_pos, curr_c, N_IGNORE);
+      return;
     case ',':
-      setup_curr_token (curr_pos, ',', N_COMMA); return;
+      setup_curr_token (curr_pos, ',', N_COMMA);
+      return;
     case '[':
-      setup_curr_token (curr_pos, '[', N_IND); return;
+      setup_curr_token (curr_pos, '[', N_IND);
+      return;
     case '.':
-      pos = curr_pos; curr_c = p_getc ();
+      pos = curr_pos;
+      curr_c = p_getc ();
       if (curr_c == '.') {
 	curr_c = p_getc ();
 	if (curr_c == '.') {
 	  setup_curr_token (pos, T_DOTS, N_IGNORE);
 	} else {
-	  p_ungetc (curr_c); p_ungetc ('.'); setup_curr_token (pos, '.', N_FIELD);
+	  p_ungetc (curr_c);
+	  p_ungetc ('.');
+	  setup_curr_token (pos, '.', N_FIELD);
 	}
 	return;
       } else if (! isdigit (curr_c)) {
-	p_ungetc (curr_c); setup_curr_token (pos, '.', N_FIELD);
+	p_ungetc (curr_c);
+	setup_curr_token (pos, '.', N_FIELD);
 	return;
       }
-      p_ungetc (curr_c); curr_c = '.';
+      p_ungetc (curr_c);
+      curr_c = '.';
     number:
       /* Fall through: */
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
       int base = 10, err_p = FALSE, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
       int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE, hex_char_p;
       
-      pos = curr_pos; VARR_TRUNC (char, symbol_text, 0);
+      pos = curr_pos;
+      VARR_TRUNC (char, symbol_text, 0);
       if (curr_c == '+' || curr_c == '-') {
-	VARR_PUSH (char, symbol_text, curr_c); curr_c = p_getc ();
+	VARR_PUSH (char, symbol_text, curr_c);
+	curr_c = p_getc ();
       }
       if (curr_c == '.' && VARR_LENGTH (char, symbol_text) == 0) {
 	VARR_PUSH (char, symbol_text, '0');
@@ -575,10 +656,14 @@ static void get_next_token (void) {
       if (curr_c == '0') {
 	curr_c = p_getc ();
 	if (curr_c != 'x' && curr_c != 'X') {
-	base = 8; p_ungetc (curr_c); curr_c = '0';
+	  base = 8;
+	  p_ungetc (curr_c);
+	  curr_c = '0';
 	} else {
-	  VARR_PUSH (char, symbol_text, '0'); VARR_PUSH (char, symbol_text, 'x');
-	  curr_c = p_getc (); base = 16;
+	  VARR_PUSH (char, symbol_text, '0');
+	  VARR_PUSH (char, symbol_text, 'x');
+	  curr_c = p_getc ();
+	  base = 16;
 	}
       }
       for (;;) {
@@ -596,54 +681,69 @@ static void get_next_token (void) {
       if (curr_c == '.') {
 	double_p = TRUE;
 	do {
-	  VARR_PUSH (char, symbol_text, curr_c); curr_c = p_getc ();
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  curr_c = p_getc ();
 	} while (isdigit (curr_c));
       }
       if ((base != 16 && (curr_c == 'e' || curr_c == 'E'))
 	  || (base == 16 && (curr_c == 'p' || curr_c == 'P'))) {
-	double_p = TRUE; curr_c = p_getc ();
+	double_p = TRUE;
+	curr_c = p_getc ();
 	if (curr_c != '+' && curr_c != '-' && ! isdigit (curr_c)) {
-	  error_func (C_absent_exponent, "absent exponent"); err_p = TRUE;
+	  error_func (C_absent_exponent, "absent exponent");
+	  err_p = TRUE;
 	} else {
 	  VARR_PUSH (char, symbol_text, base == 16 ? 'p' : 'e');
 	  if (curr_c == '+' || curr_c == '-') {
-	    VARR_PUSH (char, symbol_text, curr_c); curr_c = p_getc ();
+	    VARR_PUSH (char, symbol_text, curr_c);
+	    curr_c = p_getc ();
 	    if (! isdigit (curr_c)) {
-	      error_func (C_absent_exponent, "absent exponent"); err_p = TRUE;
+	      error_func (C_absent_exponent, "absent exponent");
+	      err_p = TRUE;
 	    }
 	  }
 	  if (! err_p) {
 	    do {
-	      VARR_PUSH (char, symbol_text, curr_c); curr_c = p_getc ();
+	      VARR_PUSH (char, symbol_text, curr_c);
+	      curr_c = p_getc ();
 	    } while (isdigit (curr_c));
 	  }
 	}
       } else if (! double_p && (curr_c == 'l' || curr_c == 'L')) {
-	long_p = TRUE; curr_c = p_getc ();
+	long_p = TRUE;
+	curr_c = p_getc ();
       }
       if (double_p) {
 	if (curr_c == 'f' || curr_c == 'F') {
-	  double_p = FALSE; float_p = TRUE; curr_c = p_getc ();
+	  double_p = FALSE; float_p = TRUE;
+	  curr_c = p_getc ();
 	} else if (curr_c == 'l' || curr_c == 'L') {
-	  double_p = FALSE; long_double_p = TRUE; curr_c = p_getc ();
+	  double_p = FALSE; long_double_p = TRUE;
+	  curr_c = p_getc ();
 	}
       } else {
 	int c2 = p_getc (), c3 = p_getc ();
 	
 	if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L')
 	    || (curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u')) {
-	  uns_p = long_long_p = TRUE; curr_c = p_getc ();
+	  uns_p = long_long_p = TRUE;
+	  curr_c = p_getc ();
 	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
 		   || (curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u')) {
 	  uns_p = long_p = TRUE; curr_c = c3;
 	} else if ((curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')) {
 	  long_p = TRUE; curr_c = c3;
 	} else if ((curr_c == 'l' || curr_c == 'L')) {
-	  long_p = TRUE; p_ungetc (c3); curr_c = c2;
+	  long_p = TRUE;
+	  p_ungetc (c3);
+	  curr_c = c2;
 	} else if ((curr_c == 'u' || curr_c == 'U')) {
-	  uns_p = TRUE; p_ungetc (c3); curr_c = c2;
+	  uns_p = TRUE;
+	  p_ungetc (c3);
+	  curr_c = c2;
 	} else {
-	  p_ungetc (c3); p_ungetc (c2);
+	  p_ungetc (c3);
+	  p_ungetc (c2);
 	}
       }
       VARR_PUSH (char, symbol_text, '\0');
@@ -653,32 +753,41 @@ static void get_next_token (void) {
       errno = 0;
       if (float_p) {
 	float f = strtof (VARR_ADDR (char, symbol_text), NULL);
+
 	setup_curr_node_token (pos, T_CONSTANT, new_f_node (f, pos));
       } else if (double_p) {
 	double d = strtod (VARR_ADDR (char, symbol_text), NULL);
+
 	setup_curr_node_token (pos, T_CONSTANT, new_d_node (d, pos));
       } else if (long_double_p) {
 	long double ld = strtod (VARR_ADDR (char, symbol_text), NULL);
+
 	setup_curr_node_token (pos, T_CONSTANT, new_ld_node (ld, pos));
       } else if (base == 8 && dec_p) {
-	error_func (C_wrong_octal_int, "wrong octal integer"); err_p = TRUE;
+	error_func (C_wrong_octal_int, "wrong octal integer");
+	err_p = TRUE;
       } else if (uns_p) {
 	if (long_long_p) {
 	  unsigned long long ull = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
+
 	  setup_curr_node_token (pos, T_CONSTANT, new_ull_node (ull, pos));
 	} else {
 	  unsigned long ul = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
+
 	  setup_curr_node_token (pos, T_CONSTANT, new_ul_node (ul, pos));  /* ??? unsigned int */
 	}
       } else if (long_long_p) {
 	long long ll = strtoll (VARR_ADDR (char, symbol_text), NULL, base);
+
 	setup_curr_node_token (pos, T_CONSTANT, new_ll_node (ll, pos));
       } else {
 	long l = strtol (VARR_ADDR (char, symbol_text), NULL, base);
+
 	setup_curr_node_token (pos, T_CONSTANT, new_l_node (l, pos)); /* ??? int */
       }
       if (errno) {
-	error_func (C_out_of_range_number, "number is out of range"); err_p = TRUE;
+	error_func (C_out_of_range_number, "number is out of range");
+	err_p = TRUE;
       }
       return;
     }
@@ -687,19 +796,23 @@ static void get_next_token (void) {
       
       pos = curr_pos; VARR_TRUNC (char, symbol_text, 0); curr_c = p_getc ();
       if (curr_c == '\'') {
-	error_func (C_invalid_char_constant, "empty character"); err_p = TRUE;
+	error_func (C_invalid_char_constant, "empty character");
+	err_p = TRUE;
       } else {
 	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
 	if (ch < 0 || newln_p) {
-	  error_func (C_invalid_char_constant, "invalid character"); err_p = TRUE;
+	  error_func (C_invalid_char_constant, "invalid character");
+	  err_p = TRUE;
 	} else if (wrong_escape_p) {
-	  error_func (C_invalid_char_constant, "invalid escape sequence"); err_p = TRUE;
+	  error_func (C_invalid_char_constant, "invalid escape sequence");
+	  err_p = TRUE;
 	}
       }
       curr_c = p_getc ();
       if (curr_c != '\'') {
 	p_ungetc (curr_c);
-	error_func (C_invalid_char_constant, "more one character in char"); err_p = TRUE;
+	error_func (C_invalid_char_constant, "more one character in char");
+	err_p = TRUE;
       }
       setup_curr_node_token (pos, T_CONSTANT, new_ch_node (ch, pos));
       return;
@@ -715,10 +828,14 @@ static void get_next_token (void) {
 	  break;
 	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
 	if (ch < 0) {
-	  error_func (C_no_string_end, "no string end"); err_p = TRUE; break;
+	  error_func (C_no_string_end, "no string end");
+	  err_p = TRUE;
+	  break;
 	}
 	if (wrong_escape_p) {
-	  error_func (C_invalid_str_constant, "invalid escape sequence"); err_p = TRUE; continue;
+	  error_func (C_invalid_str_constant, "invalid escape sequence");
+	  err_p = TRUE;
+	  continue;
 	}
 	if (! newln_p) {
 	  VARR_PUSH (char, symbol_text, ch);
@@ -735,7 +852,8 @@ static void get_next_token (void) {
 	
 	pos = curr_pos;
 	do {
-	  VARR_PUSH (char, symbol_text, curr_c); curr_c = p_getc ();
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  curr_c = p_getc ();
 	} while (isalnum (curr_c) || curr_c == '_');
 	p_ungetc (curr_c);
 	VARR_PUSH (char, symbol_text, '\0');
@@ -2089,7 +2207,7 @@ enum basic_type get_int_basic_type (size_t s) {
   return (s == sizeof (mir_int) ? TP_INT
 	  : s == sizeof (mir_short) ? TP_SHORT
 	  : s == sizeof (mir_long) ? TP_LONG
-	  : s == sizeof (mir_schar) ? TP_SCHAR : TP_LONG_LONG);
+	  : s == sizeof (mir_schar) ? TP_SCHAR : TP_LLONG);
 }
 
 static int type_qual_eq_p (const struct type_qual *tq1, const struct type_qual *tq2) {
@@ -2117,12 +2235,13 @@ static struct type_qual type_qual_union (struct type_qual *tq1, struct type_qual
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
   type->pos_node = NULL; type->incomplete_p = FALSE;
+  type->align = -1; type->raw_size = ULLONG_MAX;
 }
 
 static void set_type_pos_node (struct type *type, node_t n) { if (type->pos_node == NULL) type->pos_node = n; }
 
 static int standard_integer_type_p (struct type *type) {
-  return type->mode == TM_BASIC && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULONG_LONG;
+  return type->mode == TM_BASIC && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULLONG;
 }
 
 static int integer_type_p (struct type *type) {
@@ -2138,7 +2257,7 @@ static int signed_integer_type_p (struct type *type) {
     enum basic_type tp = type->u.basic_type;
     
     return ((tp == TP_CHAR && char_is_signed_p ())
-	    || tp == TP_SCHAR || tp == TP_SHORT || tp == TP_INT || tp == TP_LONG || tp == TP_LONG_LONG);
+	    || tp == TP_SCHAR || tp == TP_SHORT || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
   if (type->mode == TM_ENUM) { // ???
     return TRUE;
@@ -2165,7 +2284,7 @@ static struct type integer_promotion (struct type *type) {
   
   assert (integer_type_p (type));
   init_type (&res); res.mode = TM_BASIC;
-  if (type->mode == TM_BASIC && TP_LONG <= type->u.basic_type && type->u.basic_type <= TP_ULONG_LONG) {
+  if (type->mode == TM_BASIC && TP_LONG <= type->u.basic_type && type->u.basic_type <= TP_ULLONG) {
     res.u.basic_type = type->u.basic_type; return res;
   }
   if (type->mode == TM_BASIC
@@ -2211,12 +2330,12 @@ static struct type arithmetic_conversion (struct type *type1, struct type *type2
       SWAP (t1, t2, t);
     assert (! signed_integer_type_p (&t1) && signed_integer_type_p (&t2));
     if ((t1.u.basic_type == TP_ULONG && t2.u.basic_type < TP_LONG)
-	|| (t1.u.basic_type == TP_ULONG_LONG && t2.u.basic_type < TP_LONG_LONG)) {
+	|| (t1.u.basic_type == TP_ULLONG && t2.u.basic_type < TP_LLONG)) {
       res.u.basic_type = t1.u.basic_type;
     } else if ((t1.u.basic_type == TP_UINT && t2.u.basic_type >= TP_LONG
 		&& MIR_LONG_MAX >= MIR_UINT_MAX)
-	       || (t1.u.basic_type == TP_ULONG && t2.u.basic_type >= TP_LONG_LONG
-		   && MIR_LONG_LONG_MAX >= MIR_ULONG_MAX)) {
+	       || (t1.u.basic_type == TP_ULONG && t2.u.basic_type >= TP_LLONG
+		   && MIR_LLONG_MAX >= MIR_ULONG_MAX)) {
       res.u.basic_type = t2.u.basic_type;
     } else {
       res.u.basic_type = t1.u.basic_type;
@@ -2225,8 +2344,66 @@ static struct type arithmetic_conversion (struct type *type1, struct type *type2
   return res;
 }
 
+struct expr {
+  unsigned int const_p : 1;
+  node_t lvalue_node;
+  struct type *type;
+  union {
+    mir_long_long i_val;
+    mir_ulong_long u_val;
+    mir_long_double d_val;
+  } u;
+};
+
+static int compatible_types_p (struct type *type1, struct type *type2, int ignore_quals_p) {
+  if (type1->mode != type2->mode) return FALSE;
+  if (type1->mode == TM_BASIC) {
+    return (type1->u.basic_type == type2->u.basic_type
+	    && (ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual)));
+  } else if (type1->mode == TM_PTR) {
+    return ((ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual))
+	    && compatible_types_p (type1->u.ptr_type, type2->u.ptr_type, ignore_quals_p));
+  } else if (type1->mode == TM_ARR) {
+    struct expr *cexpr1, *cexpr2;
+    struct arr_type *at1 = type1->u.arr_type, *at2 = type2->u.arr_type;
+    
+    if (! compatible_types_p (at1->el_type, at2->el_type, ignore_quals_p))
+      return FALSE;
+    if (at1->size->code == N_IGNORE || at2->size->code == N_IGNORE)
+      return TRUE;
+    if ((cexpr1 = at1->size->attr)->const_p && (cexpr2 = at2->size->attr)->const_p
+	&& integer_type_p (cexpr2->type) && integer_type_p (cexpr2->type))
+      return cexpr1->u.i_val == cexpr2->u.i_val;
+    return TRUE;
+  } else if (type1->mode == TM_FUNC) {
+    struct func_type *ft1 = type1->u.func_type, *ft2 = type2->u.func_type;
+
+    if (DLIST_LENGTH (node_t, ft1->param_list->ops) != DLIST_LENGTH (node_t, ft2->param_list->ops))
+      return FALSE;
+    // ???
+  } else {
+    assert (type1->mode == TM_STRUCT || type1->mode == TM_UNION || type1->mode == TM_ENUM);
+    return (type1->u.tag_type == type2->u.tag_type
+	    && (ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual)));
+  }
+  return TRUE;
+}
+
 static struct type composite_type (struct type *tp1, struct type *tp2) {
-  return *tp1; // ???
+  struct type t = *tp1;
+  
+  assert (compatible_types_p (tp1, tp2, FALSE) && tp1->mode == tp2->mode);
+  if (tp1->mode == TM_ARR) {
+    struct arr_type *arr_type;
+
+    t.u.arr_type = arr_type = reg_malloc (sizeof (struct arr_type));
+    *arr_type = *tp1->u.arr_type;
+    if (arr_type->size == N_IGNORE)
+      arr_type->size = tp2->u.arr_type->size;
+    *arr_type->el_type = composite_type (tp1->u.arr_type->el_type, tp2->u.arr_type->el_type);
+  } else if (tp1->mode == TM_FUNC) {
+  }
+  return t;
 }
 
 static struct type *create_type (struct type *copy) {
@@ -2253,23 +2430,13 @@ struct enum_value {
   mir_int val;
 };
 
-struct expr {
-  unsigned int const_p : 1;
-  node_t lvalue_node;
-  struct type *type;
-  union {
-    mir_long_long i_val;
-    mir_ulong_long u_val;
-    mir_long_double d_val;
-  } u;
-};
-
 struct node_scope {
   node_t scope;
 };
 
 struct decl {
   unsigned long long offset; /* field, ??? var */
+  int bit_offset, unit_size; /* for bitfields, -1 for non bitfields. */
   struct decl_spec decl_spec;
 };
 
@@ -2301,11 +2468,12 @@ static int basic_type_size (enum basic_type bt) {
   case TP_UINT: return sizeof (mir_uint);
   case TP_LONG: return sizeof (mir_long);
   case TP_ULONG: return sizeof (mir_ulong);
-  case TP_LONG_LONG: return sizeof (mir_long_long);
-  case TP_ULONG_LONG: return sizeof (mir_ulong_long);
+  case TP_LLONG: return sizeof (mir_long_long);
+  case TP_ULLONG: return sizeof (mir_ulong_long);
   case TP_FLOAT: return sizeof (mir_float);
   case TP_DOUBLE: return sizeof (mir_double);
   case TP_LONG_DOUBLE: return sizeof (mir_long_double);
+  case TP_VOID: return 1; // ???
   default: abort ();
   }
 }
@@ -2314,9 +2482,13 @@ static int basic_type_align (enum basic_type bt) {
   return basic_type_size (bt);
 }
 
-static int type_align (struct type *type) {
+static int type_align (struct type *type) { assert (type->align >= 0); return type->align; }
+
+static void aux_set_type_align (struct type *type) { /* Should be called only from set_type_layout. */
   int align, member_align;
   
+  if (type->align >= 0)
+    return;
   if (type->mode == TM_BASIC) {
     align = basic_type_align (type->u.basic_type);
   } else if (type->mode == TM_PTR) {
@@ -2324,10 +2496,10 @@ static int type_align (struct type *type) {
   } else if (type->mode == TM_ENUM) {
     align = basic_type_align (TP_INT);
   } else if (type->mode == TM_FUNC) {
-    align = sizeof (mir_size_t); // ???
+    align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
     align = type_align (type->u.arr_type->el_type);
-  } else {
+  } else if (! type->incomplete_p) {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     for (node_t member = DLIST_HEAD (node_t, DLIST_EL (node_t, type->u.tag_type->ops, 1)->ops);
          member != NULL;
@@ -2343,15 +2515,20 @@ static int type_align (struct type *type) {
 #ifdef ADJUST_TYPE_ALIGNMENT
   align = ADJUST_TYPE_ALIGNMENT (align, type);
 #endif
-  return align;
+  type->align = align;
 }
 
-static unsigned long long type_size (struct type *type);
+static unsigned long long type_size (struct type *type) {
+  assert (type->raw_size != ULLONG_MAX && type->align >= 0);
+  return (type->raw_size + type->align - 1) / type->align * type->align;
+}
 
-static unsigned long long type_size_1 (struct type *type, int align_adjust_p) {
+static void set_type_layout (struct type *type) {
   int align;
   unsigned long long size;
 
+  if (type->raw_size != ULLONG_MAX)
+    return; /* defined */
   if (type->mode == TM_BASIC) {
     size = basic_type_size (type->u.basic_type);
   } else if (type->mode == TM_PTR) {
@@ -2359,14 +2536,14 @@ static unsigned long long type_size_1 (struct type *type, int align_adjust_p) {
   } else if (type->mode == TM_ENUM) {
     size = basic_type_size (TP_INT);
   } else if (type->mode == TM_FUNC) {
-    size = sizeof (mir_size_t); // ???
+    size = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
     struct arr_type *arr_type = type->u.arr_type;
     struct expr *cexpr = arr_type->size->attr;
     unsigned long long nel = arr_type->size->code == N_IGNORE || ! cexpr->const_p ? 1 : cexpr->u.i_val;
 
-    size = type_size (arr_type->el_type) * nel;
-  } else {
+    set_type_layout (arr_type->el_type); size = type_size (arr_type->el_type) * nel;
+  } else if (! type->incomplete_p) {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     size = 0;
     for (node_t member = DLIST_HEAD (node_t, DLIST_EL (node_t, type->u.tag_type->ops, 1)->ops);
@@ -2374,11 +2551,13 @@ static unsigned long long type_size_1 (struct type *type, int align_adjust_p) {
          member = DLIST_NEXT (node_t, member))
       if (member->code == N_MEMBER) {
         struct decl *decl = member->attr;
-	int bit_offset = 0, member_align = type_align (decl->decl_spec.type);
-	unsigned long long offset, len, member_size = type_size (decl->decl_spec.type);
+	int bit_offset = 0, member_align;
+	unsigned long long offset, len, member_size;
 	node_t width = DLIST_EL (node_t, member->ops, 2);
 	struct expr *expr;
 	
+	set_type_layout (decl->decl_spec.type); member_size = type_size (decl->decl_spec.type);
+	member_align = type_align (decl->decl_spec.type);
 	if (width->code == N_IGNORE || !(expr = width->attr)->const_p) {
 	  if (type->mode == TM_STRUCT) {
 	    offset = (size + member_align - 1) / member_align * member_align;
@@ -2389,6 +2568,7 @@ static unsigned long long type_size_1 (struct type *type, int align_adjust_p) {
 	      size =  member_size;
 	  }
 	  decl->offset = offset;
+	  decl->bit_offset = decl->unit_size = -1;
 	} else {
 	  int unit_size, bit_len = expr->u.u_val;
 	  
@@ -2400,19 +2580,16 @@ static unsigned long long type_size_1 (struct type *type, int align_adjust_p) {
 	  len = (offset * MIR_CHAR_BIT + bit_offset + bit_len - 1) / MIR_CHAR_BIT / unit_size * unit_size;
 	  if (type->mode == TM_STRUCT) size = len;
 	  else if (size < len) size = len;
-	  decl->offset = 0; /* ??? */
+	  decl->offset = offset;
+	  decl->bit_offset = bit_offset;
+	  decl->unit_size = unit_size;
 	}
       }
   }
-  if (align_adjust_p) {
-    align = type_align (type);
-    size = (size + align - 1) / align * align;
-  }
-  return size;
+  type->raw_size = size; aux_set_type_align (type); /* we might need raw_size for alignment calculations */
+  if (type->mode == TM_PTR)  /* Visit the pointed but after setting size to avoid looping */
+    set_type_layout (type->u.ptr_type);
 }
-
-static unsigned long long type_size (struct type *type) { return type_size_1 (type,  TRUE); }
-static unsigned long long raw_type_size (struct type *type) { return type_size_1 (type,  FALSE); }
 
 static int int_bit_size (struct type *type) {
   assert (type->mode == TM_BASIC);
@@ -2523,40 +2700,6 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
     r = sym.def_node;
   }
   return r;
-}
-
-static int compatible_types_p (struct type *type1, struct type *type2, int ignore_quals_p) {
-  if (type1->mode != type2->mode) return FALSE;
-  if (type1->mode == TM_BASIC) {
-    return (type1->u.basic_type == type2->u.basic_type
-	    && (ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual)));
-  } else if (type1->mode == TM_PTR) {
-    return ((ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual))
-	    && compatible_types_p (type1->u.ptr_type, type2->u.ptr_type, ignore_quals_p));
-  } else if (type1->mode == TM_ARR) {
-    struct expr *cexpr1, *cexpr2;
-    struct arr_type *at1 = type1->u.arr_type, *at2 = type2->u.arr_type;
-    
-    if (! compatible_types_p (at1->el_type, at2->el_type, ignore_quals_p))
-      return FALSE;
-    if (at1->size->code == N_IGNORE || at2->size->code == N_IGNORE)
-      return TRUE;
-    if ((cexpr1 = at1->size->attr)->const_p && (cexpr2 = at2->size->attr)->const_p
-	&& integer_type_p (cexpr2->type) && integer_type_p (cexpr2->type))
-      return cexpr1->u.i_val == cexpr2->u.i_val;
-    return TRUE;
-  } else if (type1->mode == TM_FUNC) {
-    struct func_type *ft1 = type1->u.func_type, *ft2 = type2->u.func_type;
-
-    if (DLIST_LENGTH (node_t, ft1->param_list->ops) != DLIST_LENGTH (node_t, ft2->param_list->ops))
-      return FALSE;
-    // ???
-  }
-  return TRUE;
-}
-
-static int assignment_compatible_types_p (struct type *type1, struct type *type2) {
-  return TRUE; // ???
 }
 
 static int func_param_decl_p;
@@ -2696,7 +2839,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       else if (size == 2)
 	type->u.basic_type = sign >= 0 ? TP_LONG : TP_ULONG;
       else
-	type->u.basic_type = sign >= 0 ? TP_LONG_LONG : TP_ULONG_LONG;
+	type->u.basic_type = sign >= 0 ? TP_LLONG : TP_ULLONG;
       break;
     case N_BOOL:
       set_type_pos_node (type, n);
@@ -2849,7 +2992,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     else if (size == 0) type->u.basic_type = sign >= 0 ? TP_INT : TP_UINT;
     else if (size == 1) type->u.basic_type = sign >= 0 ? TP_SHORT : TP_USHORT;
     else if (size == 2) type->u.basic_type = sign >= 0 ? TP_LONG : TP_ULONG;
-    else type->u.basic_type = sign >= 0 ? TP_LONG_LONG : TP_ULONG_LONG;
+    else type->u.basic_type = sign >= 0 ? TP_LLONG : TP_ULLONG;
   }
   set_type_qual (r, &type->type_qual, type->mode);
   if (res->align_node) {
@@ -3166,6 +3309,43 @@ static void check_type (struct type *type, int level, int func_def_p) {
   }
 }
 
+static void check_assignment_types (struct type *left, struct type *right, node_t assign_node) {
+  node_code_t code = assign_node->code;
+  pos_t pos = assign_node->pos;
+  
+  if (arithmetic_type_p (left)) {
+    if (! arithmetic_type_p (right)
+	&& (left->mode != TM_BASIC || left->u.basic_type != TP_BOOL || right->mode != TM_PTR)) {
+      print_error (pos, (code == N_CALL ? "incompatible argument type for arithemtic type parameter\n"
+			 : code == N_RETURN ? "incompatible return-expr type in function returning an arithemtic value\n"
+			 : "incompatible types in assignment to an arithemtic type lvalue\n"));
+    }
+  } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
+    if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
+	|| ! compatible_types_p (left, right, TRUE)) {
+      print_error (pos, (code == N_CALL ? "incompatible argument type for struct/union type parameter\n"
+			 : code == N_RETURN ? "incompatible return-expr type in function returning a struct/union\n"
+			 : "incompatible types in assignment to struct/union\n"));
+    }
+  } else if (left->mode == TM_PTR) {
+    if (right->mode != TM_PTR
+	|| (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
+	    && ! void_ptr_p (left) && ! void_ptr_p (right))) {
+      print_error (pos, (code == N_CALL ? "incompatible argument type for pointer type parameter\n"
+			 : code == N_RETURN ? "incompatible return-expr type in function returning a pointer\n"
+			 : "incompatible types in assignment to a pointer\n"));
+    } else if (right->u.ptr_type->type_qual.atomic_p) {
+      print_error (pos, (code == N_CALL ? "passing a pointer of an atomic type\n"
+			 : code == N_RETURN ? "returning a pointer of an atomic type\n"
+			 : "assignment of pointer of an atomic type\n"));
+    } else if (! type_qual_subset_p (&right->u.ptr_type->type_qual, &left->u.ptr_type->type_qual)) {
+      print_error (pos, (code == N_CALL ? "discarding type qualifiers in passing argument\n"
+			 : code == N_RETURN ? "return discards a type qualifier from a pointer\n"
+			 : "assignment discards a type qualifier from a pointer\n"));
+    }
+  }
+}
+
 static void check_initializer (struct type *type, node_t initializer, int const_only_p, int top_p) {
   struct expr *cexpr;
   node_t des_list, curr_des, init, last_member, value, size_node, temp;
@@ -3177,16 +3357,11 @@ static void check_initializer (struct type *type, node_t initializer, int const_
   if (initializer->code != N_LIST) {
     if (type->mode == TM_ARR || type->mode == TM_STRUCT  || type->mode == TM_UNION) {
       print_error (initializer->pos, "invalid initializer -- {} should be used\n");
-      return;
-    }
-    if (! (cexpr = initializer->attr)->const_p && const_only_p) {
+    } else if (! (cexpr = initializer->attr)->const_p && const_only_p) {
       print_error (initializer->pos,
 		   "initializer of static or thread local object should be a constant expression\n");
-      return;
-    }
-    if (! assignment_compatible_types_p (cexpr->type, type)) {
-      print_error (initializer->pos, "incompatible assignment types\n");
-      return;
+    } else {
+      check_assignment_types (cexpr->type, type, initializer);
     }
     return;
   }
@@ -3325,7 +3500,6 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     decl_spec.type = type;
   }
   check_type (type, 0, func_def_p);
-  check_decl_align (&decl_spec);
   if (declarator->code == N_DECL) {
     id = DLIST_HEAD (node_t, declarator->ops);
     list_head = DLIST_HEAD (node_t, DLIST_NEXT (node_t, id)->ops);
@@ -3348,6 +3522,10 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
 	fprintf (stderr, " of %s", id->u.s);
       fprintf (stderr, "\n");
     }
+  }
+  if (decl_node->code != N_MEMBER) {
+    set_type_layout (type);
+    check_decl_align (&decl_spec);
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
@@ -3530,6 +3708,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
       } else {
 	e->type->mode = TM_BASIC;
 	e->type->u.basic_type = get_int_basic_type (sizeof (mir_ptrdiff_t));
+	set_type_layout (e->type);
 	if (e1->const_p && e2->const_p) {
 	  size = type_size (t1->u.ptr_type);
 	  e->const_p = TRUE;
@@ -3572,43 +3751,6 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
   }
 }
 
-static void check_assignment_types (struct type *left, struct type *right, node_t assign_node) {
-  node_code_t code = assign_node->code;
-  pos_t pos = assign_node->pos;
-  
-  if (arithmetic_type_p (left)) {
-    if (! arithmetic_type_p (right)
-	&& (left->mode != TM_BASIC || left->u.basic_type != TP_BOOL || right->mode != TM_PTR)) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for arithemtic type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning an arithemtic value\n"
-			 : "incompatible types in assignment to an arithemtic type lvalue\n"));
-    }
-  } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
-    if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
-	|| ! compatible_types_p (left, right, TRUE)) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for struct/union type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning a struct/union\n"
-			 : "incompatible types in assignment to struct/union\n"));
-    }
-  } else if (left->mode == TM_PTR) {
-    if (right->mode != TM_PTR
-	|| (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
-	    && ! void_ptr_p (left) && ! void_ptr_p (right))) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for pointer type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning a pointer\n"
-			 : "incompatible types in assignment to a pointer\n"));
-    } else if (right->u.ptr_type->type_qual.atomic_p) {
-      print_error (pos, (code == N_CALL ? "passing a pointer of an atomic type\n"
-			 : code == N_RETURN ? "returning a pointer of an atomic type\n"
-			 : "assignment of pointer of an atomic type\n"));
-    } else if (! type_qual_subset_p (&right->u.ptr_type->type_qual, &left->u.ptr_type->type_qual)) {
-      print_error (pos, (code == N_CALL ? "discarding type qualifiers in passing argument\n"
-			 : code == N_RETURN ? "return discards a type qualifier from a pointer\n"
-			 : "assignment discards a type qualifier from a pointer\n"));
-    }
-  }
-}
-
 DEF_HTAB (case_t);
 static HTAB (case_t) *case_tab;
 
@@ -3640,7 +3782,7 @@ static int case_eq (case_t el1, case_t el2) {
 
 static node_t curr_func_def, curr_loop, curr_loop_switch;
 
- static int check (node_t r, node_t context) {
+static int check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2;
@@ -3658,14 +3800,14 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
     e = create_basic_type_expr (r, r->code == N_I ? TP_INT : TP_LONG); e->const_p = TRUE; e->u.i_val = r->u.l;
     break;
   case N_LL:
-    e = create_basic_type_expr (r, TP_LONG_LONG); e->const_p = TRUE; e->u.i_val = r->u.ll;
+    e = create_basic_type_expr (r, TP_LLONG); e->const_p = TRUE; e->u.i_val = r->u.ll;
     break;
   case N_U:
   case N_UL:
     e = create_basic_type_expr (r, r->code == N_U ? TP_UINT : TP_ULONG); e->const_p = TRUE; e->u.u_val = r->u.ul;
     break;
   case N_ULL:
-    e = create_basic_type_expr (r, TP_ULONG_LONG); e->const_p = TRUE; e->u.u_val = r->u.ull;
+    e = create_basic_type_expr (r, TP_ULLONG); e->const_p = TRUE; e->u.u_val = r->u.ull;
     break;
   case N_F:
     e = create_basic_type_expr (r, TP_FLOAT); e->const_p = TRUE; e->u.d_val = r->u.f;
@@ -3692,6 +3834,7 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
     clear_type_qual (&arr_type->ind_type_qual); arr_type->static_p = FALSE;
     arr_type->el_type = create_type (NULL); arr_type->el_type->pos_node = r;
     arr_type->el_type->mode = TM_BASIC; arr_type->el_type->u.basic_type = TP_CHAR;
+    arr_type->size = new_i_node (strlen (r->u.s) + 1, r->pos); check (arr_type->size, NULL);
     break;
   }
   case N_ID: {
@@ -4128,10 +4271,10 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
       switch (decl_spec->type->u.basic_type) {								\
 	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom);		\
 	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom);		\
-	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULONG_LONG, mir_ulong_long, u_val, mfrom);	\
+	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ulong_long, u_val, mfrom);	\
 	CONV (TP_SCHAR, mir_char, i_val, mfrom);							\
 	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom);			\
-	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LONG_LONG, mir_long_long, i_val, mfrom);	\
+	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_long_long, i_val, mfrom);	\
 	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom);		\
 	CONV (TP_LONG_DOUBLE, mir_long_double, d_val, mfrom);						\
       case TP_CHAR:											\
@@ -4146,14 +4289,14 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
       
 #define BASIC_TO_CONV(cast, mto)									\
       switch (t2->u.basic_type) {									\
-      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULONG_LONG:	\
+      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:		\
 	e->u.mto = (cast) e2->u.u_val; break;								\
       case TP_CHAR:											\
 	if (! char_is_signed_p ()) {									\
 	  e->u.mto = (cast) e2->u.u_val; break;								\
 	}												\
 	/* Fall through: */										\
-      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LONG_LONG:			\
+      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:				\
 	e->u.mto = (cast) e2->u.i_val; break;								\
       case TP_FLOAT: case TP_DOUBLE: case TP_LONG_DOUBLE:						\
 	e->u.mto = (cast) e2->u.d_val; break;								\
@@ -4182,14 +4325,14 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
         BASIC_TO_CONV (mir_int, i_val);
       } else {
 	switch (t2->u.basic_type) {
-	case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULONG_LONG:
+	case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:
 	  BASIC_FROM_CONV (u_val); break;
 	case TP_CHAR:
 	  if (! char_is_signed_p ()) {
 	    BASIC_FROM_CONV (u_val); break;
 	  }
 	  /* Fall through: */
-	case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LONG_LONG:
+	case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:
 	  BASIC_FROM_CONV (i_val); break;
 	case TP_FLOAT: case TP_DOUBLE: case TP_LONG_DOUBLE:
 	  BASIC_FROM_CONV (d_val); break;
@@ -4500,6 +4643,7 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
     r->attr = reg_malloc (sizeof (struct decl_spec));
     *((struct decl_spec *) r->attr) = decl_spec;
     check_type (((struct decl_spec *) r->attr)->type, 0, FALSE);
+    set_type_layout (((struct decl_spec *) r->attr)->type);
     check_decl_align (r->attr);
     break;
   }
@@ -4598,7 +4742,10 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
 	}
       }
     }
-    check (cond, r); // checking, promotion ???
+    check (cond, r);  e1 = cond->attr; t1 = e1->type;
+    if (! scalar_type_p (t1)) {
+      print_error (cond->pos, "for-condition should be of a scalar type\n");
+    }
     check (iter, r);
     check (stmt, r);
     curr_scope = ((struct node_scope *) r->attr)->scope;
@@ -4653,9 +4800,10 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
   default:
     abort ();
   }
-  if (e != NULL && context && context->code != N_ALIGNOF
-      && context->code != N_SIZEOF && context->code != N_ADDR) {
-    e->type = adjust_type (e->type);
+  if (e != NULL) {
+    if (context && context->code != N_ALIGNOF && context->code != N_SIZEOF && context->code != N_ADDR)
+      e->type = adjust_type (e->type);
+    set_type_layout (e->type);
   }
   return TRUE;
 }
@@ -4808,28 +4956,37 @@ int main (int argc, const char *argv[]) {
   double start_time = real_usec_time ();
   node_t r;
   VARR (char) *input;
-  int c;
+  int c, i, debug_p = FALSE;
   
   VARR_CREATE (char, input, 100);
-  if (argc == 3 && strcmp (argv[1], "-c") == 0) {
-    code = argv[2];
-  } else if (argc == 2) {
-    FILE *f;
-    
-    if (strcmp (argv[1], "-i") == 0) {
-      f = stdin;
-    } else if ((f = fopen (argv[1], "r")) == NULL) {
-      print_error (no_pos, "can not open %s -- goodbye\n", argv[1]);
-      exit (1);
+  if (argc > 1) {
+    for (i = 1; i < argc; i++) {
+      FILE *f = NULL;
+
+      if (strcmp (argv[i], "-d") == 0) {
+	debug_p = TRUE;
+      } else if (strcmp (argv[i], "-i") == 0) {
+	f = stdin;
+      } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
+	code = argv[++i];
+      } else {
+	
+	if ((f = fopen (argv[1], "r")) == NULL) {
+	  print_error (no_pos, "can not open %s -- goodbye\n", argv[1]);
+	  exit (1);
+	}
+      }
+      if (f) {
+	while ((c = getc (f)) != EOF)
+	  VARR_PUSH (char, input, c);
+	VARR_PUSH (char, input, 0);
+	code = VARR_ADDR (char, input);
+	fclose (f);
+      }
     }
-    while ((c = getc (f)) != EOF)
-      VARR_PUSH (char, input, c);
-    VARR_PUSH (char, input, 0);
-    code = VARR_ADDR (char, input);
-    if (strcmp (argv[1], "-i") != 0)
-      fclose (f);
   } else {
     code =
+"  extern int printf(const char *format, ...);\n"
 "  static const int SieveSize = 819000;\n"
 "  int sieve (void) {\n"
 "  int i, k, prime, count, iter;\n"
@@ -4862,7 +5019,8 @@ int main (int argc, const char *argv[]) {
   fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
   if (r != NULL) {
     fprintf (stderr, "parse - OK\n");
-    pr_node (stderr, r, 0);
+    if (debug_p)
+      pr_node (stderr, r, 0);
     if (check (r, NULL)) {
       fprintf (stderr, "check - OK\n");
     }
