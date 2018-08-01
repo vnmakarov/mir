@@ -45,7 +45,8 @@ enum basic_type {
      ULLONG.  The order is important -- do not change it.  */
   TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT, TP_INT, TP_UINT, TP_LONG, TP_ULONG,
   TP_LLONG, TP_ULLONG,
-  TP_FLOAT, TP_DOUBLE, TP_LONG_DOUBLE, TP_FLOAT_COMPLEX, TP_DOUBLE_COMPLEX, TP_LONG_DOUBLE_COMPLEX, 
+  TP_FLOAT, TP_DOUBLE, TP_LONG_DOUBLE,
+  TP_FLOAT_COMPLEX, TP_DOUBLE_COMPLEX, TP_LONG_DOUBLE_COMPLEX, 
 };
 
 struct type_qual {
@@ -193,13 +194,14 @@ typedef enum {
   N_OR, N_OR_ASSIGN, N_XOR, N_XOR_ASSIGN, N_LSH, N_LSH_ASSIGN, N_RSH, N_RSH_ASSIGN, N_ADD,
   N_ADD_ASSIGN, N_SUB, N_SUB_ASSIGN, N_MUL, N_MUL_ASSIGN, N_DIV, N_DIV_ASSIGN, N_MOD, N_MOD_ASSIGN,
   N_IND, N_FIELD, N_ADDR, N_DEREF, N_DEREF_FIELD, N_COND, N_INC, N_DEC, N_POST_INC, N_POST_DEC,
-  N_ALIGNOF, N_SIZEOF, N_EXPR_SIZEOF, N_CAST, N_COMPOUND_LITERAL, N_CALL, N_GENERIC, N_GENERIC_ASSOC,
-  N_IF, N_SWITCH, N_WHILE, N_DO, N_FOR, N_GOTO, N_CONTINUE, N_BREAK, N_RETURN, N_EXPR, N_BLOCK,
-  N_CASE, N_DEFAULT, N_LABEL, N_LIST, N_SPEC_DECL, N_SHARE, N_TYPEDEF, N_EXTERN, N_STATIC, N_AUTO,
-  N_REGISTER, N_THREAD_LOCAL, N_DECL, N_VOID, N_CHAR, N_SHORT, N_INT, N_LONG, N_FLOAT, N_DOUBLE,
-  N_SIGNED, N_UNSIGNED, N_BOOL, N_COMPLEX, N_STRUCT, N_UNION, N_ENUM, N_ENUM_CONST, N_MEMBER,
-  N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN, N_ALIGNAS, N_FUNC, N_STAR,
-  N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT, N_FUNC_DEF
+  N_ALIGNOF, N_SIZEOF, N_EXPR_SIZEOF, N_CAST, N_COMPOUND_LITERAL, N_CALL, N_GENERIC,
+  N_GENERIC_ASSOC, N_IF, N_SWITCH, N_WHILE, N_DO, N_FOR, N_GOTO, N_CONTINUE, N_BREAK, N_RETURN,
+  N_EXPR, N_BLOCK, N_CASE, N_DEFAULT, N_LABEL, N_LIST, N_SPEC_DECL, N_SHARE, N_TYPEDEF, N_EXTERN,
+  N_STATIC, N_AUTO, N_REGISTER, N_THREAD_LOCAL, N_DECL, N_VOID, N_CHAR, N_SHORT, N_INT, N_LONG,
+  N_FLOAT, N_DOUBLE, N_SIGNED, N_UNSIGNED, N_BOOL, N_COMPLEX, N_STRUCT, N_UNION, N_ENUM,
+  N_ENUM_CONST, N_MEMBER, N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN,
+  N_ALIGNAS, N_FUNC, N_STAR, N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT,
+  N_FUNC_DEF
 } node_code_t;
 
 DEF_DLIST_LINK (node_t);
@@ -297,7 +299,8 @@ static node_t new_pos_node3 (node_code_t nc, pos_t p, node_t op1, node_t op2, no
 static node_t new_node4 (node_code_t nc, node_t op1, node_t op2, node_t op3, node_t op4) {
   return op_append (new_node3 (nc, op1, op2, op3), op4);
 }
-static node_t new_pos_node4 (node_code_t nc, pos_t p, node_t op1, node_t op2, node_t op3, node_t op4) {
+static node_t new_pos_node4 (node_code_t nc, pos_t p,
+			     node_t op1, node_t op2, node_t op3, node_t op4) {
   return add_pos (new_node4 (nc, op1, op2, op3, op4), p);
 }
 static node_t new_ch_node (int ch, pos_t p) {
@@ -650,9 +653,11 @@ static void get_next_token (void) {
       curr_c = '.';
     number:
       /* Fall through: */
-    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9': {
       int base = 10, err_p = FALSE, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
-      int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE, hex_char_p;
+      int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE;
+      int hex_char_p;
       
       pos = curr_pos;
       VARR_TRUNC (char, symbol_text, 0);
@@ -734,8 +739,10 @@ static void get_next_token (void) {
       } else {
 	int c2 = p_getc (), c3 = p_getc ();
 	
-	if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L')
-	    || (curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u')) {
+	if (((curr_c == 'u' || curr_c == 'U')
+	     && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L'))
+	    || ((curr_c == 'l' || curr_c == 'L')
+		&& (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u'))) {
 	  uns_p = long_long_p = TRUE;
 	  curr_c = p_getc ();
 	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
@@ -967,7 +974,10 @@ static const char *get_token_name (int token_code) {
   }
 }
 
-static void print_pos (pos_t pos) { if (pos.lno >= 0) fprintf (stderr, "%d:%d: ", pos.lno, pos.ln_pos); }
+static void print_pos (pos_t pos) {
+  if (pos.lno >= 0)
+    fprintf (stderr, "%d:%d: ", pos.lno, pos.ln_pos);
+}
 
 static void syntax_error (const char *expected_name) {
   static int context_len = 30;
@@ -1126,7 +1136,8 @@ D (primary_expr) {
     return r;
   } else if (M ('(')) {
     P (expr);
-    if (M (')')) return r;
+    if (M (')'))
+      return r;
   } else if (MP (T_GENERIC, pos)) {
     PT ('('); P (assign_expr); PT (',');
     list = new_node (N_LIST);
@@ -1135,7 +1146,8 @@ D (primary_expr) {
       if (MP (T_DEFAULT, pos)) {
 	op = new_node (N_IGNORE);
       } else {
-	P (type_name); op = r; pos = op->pos;
+	P (type_name);
+	op = r; pos = op->pos;
       }
       PT (':'); P (assign_expr);
       gn = new_pos_node2 (N_GENERIC_ASSOC, pos, op, r);
@@ -1165,18 +1177,22 @@ DA (post_expr_part) {
 	return &err_node;
     } else if (MC ('[', pos, code)) {
       op = r; P (expr); PT (']');
-    } else if (MP ('(', pos)) {
-      op = r; r = NULL; code = N_CALL; list = new_node (N_LIST);
+    } else if (! MP ('(', pos)) {
+      break;
+    } else {
+      op = r; r = NULL; code = N_CALL;
+      list = new_node (N_LIST);
       if (! C (')')) {
 	for (;;) {
-	  P (assign_expr); op_append (list, r);
+	  P (assign_expr);
+	  op_append (list, r);
 	  if ( ! M (','))
 	    break;
 	}
       }
       r = list;
       PT (')');
-    } else break;
+    }
     n = new_pos_node1 (code, pos, op);
     if (r != NULL)
       op_append (n, r);
@@ -1202,17 +1218,20 @@ D (unary_expr) {
   if ((r = TRY (par_type_name)) != &err_node) {
     t = r;
     if (! MP ('{', pos)) {
-      P (unary_expr); r = new_node2 (N_CAST, t, r);
+      P (unary_expr);
+      r = new_node2 (N_CAST, t, r);
     } else {
       P (initializer_list);
-      if (! M ('}')) return &err_node;
+      if (! M ('}'))
+	return &err_node;
       r = new_pos_node2 (N_COMPOUND_LITERAL, pos, t, r);
       PA (post_expr_part, r);
     }
     return r;
   } else if (MP (T_SIZEOF, pos)) {
     if ((r = TRY (par_type_name)) != &err_node) {
-      r = new_pos_node1 (N_SIZEOF, pos, r); return r;
+      r = new_pos_node1 (N_SIZEOF, pos, r);
+      return r;
     }
     code = N_EXPR_SIZEOF;
   } else if (MP (T_ALIGNOF, pos)) {
@@ -1225,13 +1244,16 @@ D (unary_expr) {
     return r;
   } else if (! MC (T_INCDEC, pos, code) && ! MC (T_UNOP, pos, code) && ! MC (T_ADDOP, pos, code)
 	     && ! MC ('*', pos, code)  && ! MC ('&', pos, code)) {
-    P (post_expr); return r;
+    P (post_expr);
+    return r;
   } else if (code == N_AND) {
     code = N_ADDR;
   } else if (code == N_MUL) {
     code = N_DEREF;
   }
-  P (unary_expr); r = new_pos_node1 (code, pos, r); return r;
+  P (unary_expr);
+  r = new_pos_node1 (code, pos, r);
+  return r;
 }
 
 static node_t left_op (int no_err_p, int token, int token2, nonterm_func_t f) {
@@ -1242,19 +1264,25 @@ static node_t left_op (int no_err_p, int token, int token2, nonterm_func_t f) {
   P (f);
   while (MC (token, pos, code) || (token2 >= 0 && MC (token2, pos, code))) {
     n = new_pos_node1 (code, pos, r);
-    P (f); op_append (n, r); r = n;
+    P (f);
+    op_append (n, r);
+    r = n;
   }
   return r;
 }
 
-static node_t right_op (int no_err_p, int token, int token2, nonterm_func_t left, nonterm_func_t right) {
+static node_t right_op (int no_err_p, int token, int token2,
+			nonterm_func_t left, nonterm_func_t right) {
   node_code_t code;
   node_t r, n;
   pos_t pos;
   
   P (left);
   if (MC (token, pos, code) || (token2 >= 0 && MC (token2, pos, code))) {
-    n = new_pos_node1 (code, pos, r); P (right); op_append (n, r); r = n;
+    n = new_pos_node1 (code, pos, r);
+    P (right);
+    op_append (n, r);
+    r = n;
   }
   return r;
 }
@@ -1275,11 +1303,15 @@ D (cond_expr) {
   pos_t pos;
   
   P (lor_expr);
-  if (! MP ('?', pos)) return r;
+  if (! MP ('?', pos))
+    return r;
   n = new_pos_node1 (N_COND, pos, r);
-  P (expr); op_append (n, r);
-  if (! M (':')) return &err_node;
-  P (cond_expr); op_append (n, r);
+  P (expr);
+  op_append (n, r);
+  if (! M (':'))
+    return &err_node;
+  P (cond_expr);
+  op_append (n, r);
   return n;
 }
 
@@ -1289,11 +1321,11 @@ D (assign_expr) { return right_op (no_err_p, T_ASSIGN, '=', cond_expr, assign_ex
 D (expr) { return right_op (no_err_p, ',', -1, assign_expr, expr); }
 
 /* Declarations; */
-D (declaration_specs); D (sc_spec); D (type_spec); D (struct_declaration_list); D (struct_declaration);
-D (spec_qual_list); D (type_qual); D (func_spec); D (align_spec); D (declarator); D (direct_declarator);
-D (pointer); D (type_qual_list); D (param_type_list); D (id_list); D (abstract_declarator);
-D (direct_abstract_declarator); D (typedef_name); D (initializer);
-D (st_assert);
+D (declaration_specs); D (sc_spec); D (type_spec); D (struct_declaration_list);
+D (struct_declaration); D (spec_qual_list); D (type_qual); D (func_spec); D (align_spec);
+D (declarator); D (direct_declarator); D (pointer); D (type_qual_list); D (param_type_list);
+D (id_list); D (abstract_declarator); D (direct_abstract_declarator); D (typedef_name);
+D (initializer); D (st_assert);
 
 D (declaration) {
   int typedef_p;
@@ -1311,9 +1343,12 @@ D (declaration) {
 	  break;
       typedef_p = op != NULL;
       for (;;) { /* init-declarator */
-	P (declarator); decl = r; assert (decl->code == N_DECL);
+	P (declarator);
+	decl = r;
+	assert (decl->code == N_DECL);
 	if (typedef_p) {
-	  op = NL_HEAD (decl->ops); tpname_add (op, curr_scope);
+	  op = NL_HEAD (decl->ops);
+	  tpname_add (op, curr_scope);
 	}
 	if (M ('=')) {
 	  P (initializer);
@@ -1325,7 +1360,8 @@ D (declaration) {
 	  break;
       }
     }
-    r = list; PT (';');
+    r = list;
+    PT (';');
   }
   return r;
 }
@@ -1344,7 +1380,8 @@ D (declaration_specs) {
     } else if (first_p) {
       P (type_spec);
     } else if ((r = TRY (type_spec)) != &err_node) {
-    } else break;
+    } else
+      break;
     op_append (list, r);
   }
   return list;
@@ -1403,7 +1440,8 @@ D (type_spec) {
   } else if (MP (T_ATOMIC, pos)) { /* atomic-type-specifier */
     PT ('('); P (type_name); PT (')');
     print_error (pos, "Atomic types are not supported\n"); 
-  } else if ((struct_p = MP (T_STRUCT, pos)) || MP (T_UNION, pos)) { /* struct-or-union-specifier, struct-or-union */
+  } else if ((struct_p = MP (T_STRUCT, pos)) || MP (T_UNION, pos)) {
+    /* struct-or-union-specifier, struct-or-union */
     if (! MN (T_ID, op1)) {
       op1 = new_node (N_IGNORE);
     } else {
@@ -1464,7 +1502,8 @@ D (struct_declaration_list) {
 	op_append (res, el);
       }
     }
-    if (C ('}')) break;
+    if (C ('}'))
+      break;
   }
   return res;
 }
@@ -1532,7 +1571,8 @@ D (type_qual) {
   } else if (MP (T_ATOMIC, pos)) {
     r = new_pos_node (N_ATOMIC, pos);
   } else {
-    if (record_level == 0) syntax_error ("a type qualifier");
+    if (record_level == 0)
+      syntax_error ("a type qualifier");
     r = &err_node;
   }
   return r;
@@ -1547,7 +1587,8 @@ D (func_spec) {
   } else if (MP (T_NO_RETURN, pos)) {
     r = new_pos_node (N_NO_RETURN, pos);
   } else {
-    if (record_level == 0) syntax_error ("a function specifier");
+    if (record_level == 0)
+      syntax_error ("a function specifier");
     r = &err_node;
   }
   return r;
@@ -1628,11 +1669,14 @@ D (direct_declarator) {
       } else {
 	ae = new_node (N_IGNORE);
       }
-      PT (']'); op_append (list, new_node3 (N_ARR,
-					    static_p ? new_pos_node (N_STATIC, static_pos)
-					    : new_node (N_IGNORE),
-					    tql, ae));
-    } else break;
+      PT (']');
+      op_append (list, new_node3 (N_ARR,
+				  static_p
+				  ? new_pos_node (N_STATIC, static_pos)
+				  : new_node (N_IGNORE),
+				  tql, ae));
+    } else
+      break;
   }
   return res;
 }
@@ -1760,7 +1804,8 @@ D (direct_abstract_declarator) {
     } else {
       PTP ('[', pos);
       if (MP ('*', pos2)) {
-	r = new_pos_node3 (N_ARR, pos, new_node (N_IGNORE), new_node (N_IGNORE), new_pos_node (N_STAR, pos2));
+	r = new_pos_node3 (N_ARR, pos, new_node (N_IGNORE),
+			   new_node (N_IGNORE), new_pos_node (N_STAR, pos2));
       } else {
 	int static_p = FALSE;
 	
@@ -1780,7 +1825,9 @@ D (direct_abstract_declarator) {
 	} else {
 	  ae = new_node (N_IGNORE);
 	}
-	r = new_pos_node3 (N_ARR, pos, static_p ? new_pos_node (N_STATIC, pos2) : new_node (N_IGNORE), tql, ae);
+	r = new_pos_node3 (N_ARR, pos,
+			   static_p ? new_pos_node (N_STATIC, pos2) : new_node (N_IGNORE),
+			   tql, ae);
       }
       PT (']'); op_append (list, r);
     }
@@ -1861,7 +1908,8 @@ D (st_assert) {
   node_t op1, r;
   pos_t pos;
   
-  PTP (T_STATIC_ASSERT, pos); PT ('('); P (const_expr); op1 = r; PT (','); PTN (T_STR); PT (')');  PT (';');
+  PTP (T_STATIC_ASSERT, pos); PT ('('); P (const_expr); op1 = r;
+  PT (','); PTN (T_STR); PT (')');  PT (';');
   r = new_pos_node2 (N_ST_ASSERT, pos, op1, r);
   return r;
 }
@@ -1936,7 +1984,12 @@ D (stmt) {
       P (expr); op3 = r;
     }
     PT (')'); P (stmt);
-    op_append (n, l); op_append (n, op1); op_append (n, op2); op_append (n, op3); op_append (n, r); r = n;
+    op_append (n, l);
+    op_append (n, op1);
+    op_append (n, op2);
+    op_append (n, op3);
+    op_append (n, r);
+    r = n;
   } else if (MP (T_GOTO, pos)) {  /* jump-statement */
     PTN (T_ID); PT (';'); r = new_pos_node2 (N_GOTO, pos, l, r);
   } else if (MP (T_CONTINUE, pos)) {  /* continue-statement */
@@ -1972,7 +2025,8 @@ static void error_recovery (int par_lev) {
       if (--par_lev <= 0)
 	break;
     }
-    fprintf (stderr, " %s(%d:%d)", get_token_name (curr_token.code), curr_token.pos.lno, curr_token.pos.ln_pos);
+    fprintf (stderr, " %s(%d:%d)",
+	     get_token_name (curr_token.code), curr_token.pos.lno, curr_token.pos.ln_pos);
     read_token ();
   }
   fprintf (stderr, " %s", get_token_name (curr_token.code));
@@ -2014,8 +2068,10 @@ D (transl_unit) {
   while (! C (EOF)) { /* external-declaration */
     if ((r = TRY (declaration)) != &err_node) {
     } else {
-      PE (declaration_specs, err); ds = r; PE (declarator, err); d = r;
-      dl = new_node (N_LIST); d->u.scope = curr_scope; curr_scope = d;
+      PE (declaration_specs, err); ds = r;
+      PE (declarator, err); d = r;
+      dl = new_node (N_LIST);
+      d->u.scope = curr_scope; curr_scope = d;
       while (! C ('{')) { /* declaration-list */
 	PE (declaration, decl_err); op_flat_append (dl, r);
       }
@@ -2037,7 +2093,9 @@ static void fatal_error (C_error_code_t code, const char *message) {
   exit (1);
 }
 
-static void kw_add (const char *name, token_code_t tc, size_t flags) { str_add (name, tc, flags, TRUE); }
+static void kw_add (const char *name, token_code_t tc, size_t flags) {
+  str_add (name, tc, flags, TRUE);
+}
 
 static void parse_init (void) {
   error_func = fatal_error; record_level = 0;
@@ -2047,21 +2105,50 @@ static void parse_init (void) {
   VARR_CREATE (token_t, buffered_tokens, 32);
   VARR_CREATE (token_t, recorded_tokens, 32);
   str_init ();
-  kw_add ("_Bool", T_BOOL, 0); kw_add ("_Complex", T_COMPLEX, 0); kw_add ("_Alignas", T_ALIGNAS, 0);
-  kw_add ("_Alignof", T_ALIGNOF, 0); kw_add ("_Atomic", T_ATOMIC, 0); kw_add ("_Generic", T_GENERIC, 0);
-  kw_add ("_Noreturn", T_NO_RETURN, 0); kw_add ("_Static_assert", T_STATIC_ASSERT, 0);
-  kw_add ("_Thread_local", T_THREAD_LOCAL, 0); kw_add ("auto", T_AUTO, 0); kw_add ("break", T_BREAK, 0);
-  kw_add ("case", T_CASE, 0); kw_add ("char", T_CHAR, 0); kw_add ("const", T_CONST, 0);
-  kw_add ("continue", T_CONTINUE, 0); kw_add ("default", T_DEFAULT, 0); kw_add ("do", T_DO, 0);
-  kw_add ("double", T_DOUBLE, 0); kw_add ("else", T_ELSE, 0); kw_add ("enum", T_ENUM, 0);
-  kw_add ("extern", T_EXTERN, 0); kw_add ("float", T_FLOAT, 0); kw_add ("for", T_FOR, 0);
-  kw_add ("goto", T_GOTO, 0); kw_add ("if", T_IF, 0); kw_add ("inline", T_INLINE, FLAG_EXT89);
-  kw_add ("int", T_INT, 0); kw_add ("long", T_LONG, 0); kw_add ("register", T_REGISTER, 0);
-  kw_add ("restrict", T_RESTRICT, FLAG_C89); kw_add ("return", T_RETURN, 0); kw_add ("short", T_SHORT, 0);
-  kw_add ("signed", T_SIGNED, 0); kw_add ("sizeof", T_SIZEOF, 0); kw_add ("static", T_STATIC, 0);
-  kw_add ("struct", T_STRUCT, 0); kw_add ("switch", T_SWITCH, 0); kw_add ("typedef", T_TYPEDEF, 0);
-  kw_add ("typeof", T_TYPEOF, FLAG_EXT); kw_add ("union", T_UNION, 0); kw_add ("unsigned", T_UNSIGNED, 0);
-  kw_add ("void", T_VOID, 0); kw_add ("volatile", T_VOLATILE, 0); kw_add ("while", T_WHILE, 0);
+  kw_add ("_Bool", T_BOOL, 0);
+  kw_add ("_Complex", T_COMPLEX, 0);
+  kw_add ("_Alignas", T_ALIGNAS, 0);
+  kw_add ("_Alignof", T_ALIGNOF, 0);
+  kw_add ("_Atomic", T_ATOMIC, 0);
+  kw_add ("_Generic", T_GENERIC, 0);
+  kw_add ("_Noreturn", T_NO_RETURN, 0);
+  kw_add ("_Static_assert", T_STATIC_ASSERT, 0);
+  kw_add ("_Thread_local", T_THREAD_LOCAL, 0);
+  kw_add ("auto", T_AUTO, 0);
+  kw_add ("break", T_BREAK, 0);
+  kw_add ("case", T_CASE, 0);
+  kw_add ("char", T_CHAR, 0);
+  kw_add ("const", T_CONST, 0);
+  kw_add ("continue", T_CONTINUE, 0);
+  kw_add ("default", T_DEFAULT, 0);
+  kw_add ("do", T_DO, 0);
+  kw_add ("double", T_DOUBLE, 0);
+  kw_add ("else", T_ELSE, 0);
+  kw_add ("enum", T_ENUM, 0);
+  kw_add ("extern", T_EXTERN, 0);
+  kw_add ("float", T_FLOAT, 0);
+  kw_add ("for", T_FOR, 0);
+  kw_add ("goto", T_GOTO, 0);
+  kw_add ("if", T_IF, 0);
+  kw_add ("inline", T_INLINE, FLAG_EXT89);
+  kw_add ("int", T_INT, 0);
+  kw_add ("long", T_LONG, 0);
+  kw_add ("register", T_REGISTER, 0);
+  kw_add ("restrict", T_RESTRICT, FLAG_C89);
+  kw_add ("return", T_RETURN, 0);
+  kw_add ("short", T_SHORT, 0);
+  kw_add ("signed", T_SIGNED, 0);
+  kw_add ("sizeof", T_SIZEOF, 0);
+  kw_add ("static", T_STATIC, 0);
+  kw_add ("struct", T_STRUCT, 0);
+  kw_add ("switch", T_SWITCH, 0);
+  kw_add ("typedef", T_TYPEDEF, 0);
+  kw_add ("typeof", T_TYPEOF, FLAG_EXT);
+  kw_add ("union", T_UNION, 0);
+  kw_add ("unsigned", T_UNSIGNED, 0);
+  kw_add ("void", T_VOID, 0);
+  kw_add ("volatile", T_VOLATILE, 0);
+  kw_add ("while", T_WHILE, 0);
   tpname_init ();
   curr_scope = NULL;
 }
@@ -2103,19 +2190,18 @@ expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD | N_CH | N_STR |
      | N_LSH (expr, expr) | N_RSH (expr, expr)
      | N_NOT (expr) | N_BITWISE_NOT (expr)
      | N_INC (expr) | N_DEC (expr) | N_POST_INC (expr)| N_POST_DEC (expr)
-     | N_ALIGNOF (type_name?) | N_SIZEOF (type_name) | N_EXPR_SIZEOF (expr) | N_CAST (type_name, expr)
-     | N_COMMA (expr, expr) | N_ANDAND (expr, expr) | N_OROR (expr, expr)
-     | N_EQ (expr, expr) | N_NE (expr, expr)
+     | N_ALIGNOF (type_name?) | N_SIZEOF (type_name) | N_EXPR_SIZEOF (expr)
+     | N_CAST (type_name, expr) | N_COMMA (expr, expr) | N_ANDAND (expr, expr)
+     | N_OROR (expr, expr) | N_EQ (expr, expr) | N_NE (expr, expr)
      | N_LT (expr, expr) | N_LE (expr, expr) | N_GT (expr, expr) | N_GE (expr, expr)
      | N_AND (expr, expr) | N_OR (expr, expr) | N_XOR (expr, expr)
      | N_ASSIGN (expr, expr) | N_ADD_ASSIGN (expr, expr) | N_SUB_ASSIGN (expr, expr)
      | N_MUL_ASSIGN (expr, expr) | N_DIV_ASSIGN (expr, expr) | N_MOD_ASSIGN (expr, expr)
      | N_LSH_ASSIGN (expr, expr) | N_RSH_ASSIGN (expr, expr)
      | N_AND_ASSIGN (expr, expr) | N_OR_ASSIGN (expr, expr) | N_XOR_ASSIGN (expr, expr)
-     | N_DEREF (expr) | | N_ADDR (expr) | N_IND (expr, expr) | N_FIELD (expr, N_ID) | | N_DEREF_FIELD (expr, N_ID)
-     | N_COND (expr, expr, expr)
-     | N_COMPOUND_LITERAL (type_name, initializer)
-     | N_CALL (expr, N_LIST:(expr)*)
+     | N_DEREF (expr) | | N_ADDR (expr) | N_IND (expr, expr) | N_FIELD (expr, N_ID)
+     | N_DEREF_FIELD (expr, N_ID) | N_COND (expr, expr, expr)
+     | N_COMPOUND_LITERAL (type_name, initializer) | N_CALL (expr, N_LIST:(expr)*)
      | N_GENERIC (expr, N_LIST:(N_GENERIC_ASSOC (type_name?, expr))+ )
 label: N_CASE(expr) | N_DEFAULT | N_LABEL(N_ID)
 stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
@@ -2138,8 +2224,10 @@ struct_declaration_list: N_LIST: struct_declaration+
 struct_declaration: st_assert | N_MEMBER(spec_qual_list, declarator?, const_expr?)
 spec_qual_list: N_LIST:(type_qual|type_spec)*
 declarator: the same as direct declarator
-direct_declarator: N_DECL(N_ID, N_LIST:(N_POINTER(type_qual_list) | N_FUNC(id_list|parameter_list)
-                                          | N_ARR(N_STATIC?, type_qual_list, (assign_expr|N_STAR)?))*)
+direct_declarator: N_DECL(N_ID,
+                          N_LIST:(N_POINTER(type_qual_list) | N_FUNC(id_list|parameter_list)
+                                            | N_ARR(N_STATIC?, type_qual_list,
+                                                    (assign_expr|N_STAR)?))*)
 -pointer: N_LIST: N_POINTER(type_qual_list)*
 type_qual_list : N_LIST: type_qual*
 parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
@@ -2149,13 +2237,15 @@ initializer: assign_expr | initialize_list
 initialize_list: N_LIST: N_INIT(N_LIST:(const_expr | N_FIELD_ID (N_ID))* initializer)+
 type_name: N_TYPE(spec_qual_list, abstract_declarator)
 abstract_declarator: the same as abstract direct declarator
-abstract_direct_declarator: N_DECL(ignore, N_LIST:(N_POINTER(type_qual_list) | N_FUNC(parameter_list)
-                                                    | N_ARR(N_STATIC?, type_qual_list, (assign_expr|N_STAR)?))*)
+abstract_direct_declarator: N_DECL(ignore,
+                                   N_LIST:(N_POINTER(type_qual_list) | N_FUNC(parameter_list)
+                                           | N_ARR(N_STATIC?, type_qual_list,
+                                                   (assign_expr|N_STAR)?))*)
 typedef_name: N_ID
-transl_unit: N_LIST:(declaration | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
+transl_unit: N_LIST:(declaration
+           | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
 
 Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more.
-
 */
 
 /* ---------------------------- Checker Start -------------------------------- */
@@ -2254,7 +2344,8 @@ static struct type_qual type_qual_union (struct type_qual *tq1, struct type_qual
   struct type_qual res;
 
   res.const_p = tq1->const_p || tq2->const_p; res.restrict_p = tq1->restrict_p || tq2->restrict_p;
-  res.volatile_p = tq1->volatile_p || tq2->volatile_p; res.atomic_p = tq1->atomic_p || tq2->atomic_p;
+  res.volatile_p = tq1->volatile_p || tq2->volatile_p;
+  res.atomic_p = tq1->atomic_p || tq2->atomic_p;
   return res;
 }
 
@@ -2269,7 +2360,8 @@ static void set_type_pos_node (struct type *type, node_t n) {
 }
 
 static int standard_integer_type_p (struct type *type) {
-  return type->mode == TM_BASIC && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULLONG;
+  return (type->mode == TM_BASIC
+	  && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULLONG);
 }
 
 static int integer_type_p (struct type *type) {
@@ -2285,7 +2377,8 @@ static int signed_integer_type_p (struct type *type) {
     enum basic_type tp = type->u.basic_type;
     
     return ((tp == TP_CHAR && char_is_signed_p ())
-	    || tp == TP_SCHAR || tp == TP_SHORT || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
+	    || tp == TP_SCHAR || tp == TP_SHORT
+	    || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
   if (type->mode == TM_ENUM) { // ???
     return TRUE;
@@ -2448,7 +2541,8 @@ static struct type *create_type (struct type *copy) {
 }
 
 struct decl_spec {
-  unsigned int typedef_p : 1, extern_p : 1, static_p : 1, auto_p : 1, register_p : 1, thread_local_p : 1;
+  unsigned int typedef_p : 1, extern_p : 1, static_p : 1;
+  unsigned int auto_p : 1, register_p : 1, thread_local_p : 1;
   unsigned int inline_p : 1, no_return_p : 1; /* func specifiers  */
   int align; // negative value means undefined
   node_t align_node; //  strictest valid N_ALIGNAS node
@@ -2534,7 +2628,8 @@ static int type_align (struct type *type) {
   assert (type->align >= 0);
   return type->align; }
 
-static void aux_set_type_align (struct type *type) { /* Should be called only from set_type_layout. */
+static void aux_set_type_align (struct type *type) {
+  /* Should be called only from set_type_layout. */
   int align, member_align;
   
   if (type->align >= 0)
@@ -2590,7 +2685,8 @@ static void set_type_layout (struct type *type) {
   } else if (type->mode == TM_ARR) {
     struct arr_type *arr_type = type->u.arr_type;
     struct expr *cexpr = arr_type->size->attr;
-    unsigned long long nel = arr_type->size->code == N_IGNORE || ! cexpr->const_p ? 1 : cexpr->u.i_val;
+    unsigned long long nel = (arr_type->size->code == N_IGNORE || ! cexpr->const_p
+			      ? 1 : cexpr->u.i_val);
 
     set_type_layout (arr_type->el_type);
     size = type_size (arr_type->el_type) * nel;
@@ -2628,7 +2724,8 @@ static void set_type_layout (struct type *type) {
 	  /* Get byte and bit offsets (offset, bit_offset) and storage
 	     unit size for the bit field. */
 	  unit_size = get_bit_field_info (bit_len, &offset, &bit_offset);
-	  len = (offset * MIR_CHAR_BIT + bit_offset + bit_len - 1) / MIR_CHAR_BIT / unit_size * unit_size;
+	  len = ((offset * MIR_CHAR_BIT + bit_offset + bit_len - 1)
+		 / MIR_CHAR_BIT / unit_size * unit_size);
 	  if (type->mode == TM_STRUCT)
 	    size = len;
 	  else if (size < len)
@@ -2639,7 +2736,8 @@ static void set_type_layout (struct type *type) {
 	}
       }
   }
-  type->raw_size = size; aux_set_type_align (type); /* we might need raw_size for alignment calculations */
+  /* we might need raw_size for alignment calculations */
+  type->raw_size = size; aux_set_type_align (type);
   if (type->mode == TM_PTR)  /* Visit the pointed but after setting size to avoid looping */
     set_type_layout (type->u.ptr_type);
 }
@@ -2650,7 +2748,8 @@ static int int_bit_size (struct type *type) {
 }
 
 static int void_ptr_p (struct type *type) {
-  return type->mode == TM_PTR && type->u.ptr_type->mode == TM_BASIC && type->u.ptr_type->u.basic_type == TP_VOID;
+  return (type->mode == TM_PTR
+	  && type->u.ptr_type->mode == TM_BASIC && type->u.ptr_type->u.basic_type == TP_VOID);
 }
 
 static int null_const_p (struct expr *expr, struct type *type) {
@@ -2698,7 +2797,8 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
     }
 }
 
-static void check_type_duplication (struct type *type, node_t n, const char *name, int size, int sign) {
+static void check_type_duplication (struct type *type, node_t n, const char *name,
+				    int size, int sign) {
   if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
     print_error (n->pos, "%s with another type\n", name);
   else if (type->mode != TM_BASIC && size != 0)
@@ -2799,7 +2899,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   if (r->attr != NULL)
     return *(struct decl_spec *) r->attr;
   r->attr = res = reg_malloc (sizeof (struct decl_spec));
-  res->typedef_p = res->extern_p = res->static_p = res->auto_p = res->register_p = res->thread_local_p = FALSE;
+  res->typedef_p = res->extern_p = res->static_p = res->auto_p = FALSE;
+  res->register_p = res->thread_local_p = FALSE;
   res->inline_p = res->no_return_p = FALSE; res->align = -1; res->align_node = NULL;
   res->type = type = create_type (NULL); type->pos_node = r;
   type->mode = TM_BASIC; type->u.basic_type = TP_UNDEF;
@@ -3048,7 +3149,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	    print_error (op->pos, "non-constant value in _Alignas\n");
 	  } else if (! integer_type_p (cexpr->type)) {
 	    print_error (op->pos, "constant value in _Alignas is not of an integer type\n");
-	  } else if (! signed_integer_type_p (cexpr->type) || ! supported_alignment_p (cexpr->u.i_val)) {
+	  } else if (! signed_integer_type_p (cexpr->type)
+		     || ! supported_alignment_p (cexpr->u.i_val)) {
 	    print_error (op->pos, "constant value in _Alignas specifies unspported alignment\n");
 	  } else if (invalid_alignment (cexpr->u.i_val)) {
 	    print_error (op->pos, "unsupported alignmnent\n");
@@ -3186,7 +3288,8 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	  
 	  if (p->code == N_ID) {
 	    if (! func_def_p)
-	      print_error (p->pos, "parameters identifier list can be only in function definition\n");
+	      print_error (p->pos,
+			   "parameters identifier list can be only in function definition\n");
 	    break;
 	  } else {
 	    if (p != first_param)
@@ -3244,7 +3347,8 @@ static void check_labels (node_t labels, node_t target) {
 	symbol_insert (S_LABEL, id, func_block_scope, target, NULL);
       }
     } else if (curr_switch == NULL) {
-      print_error (l->pos, "%s not witin a switch-stmt\n", l->code == N_CASE ? "case label" : "default label");
+      print_error (l->pos, "%s not witin a switch-stmt\n",
+		   l->code == N_CASE ? "case label" : "default label");
     } else {
       struct switch_attr *switch_attr = curr_switch->attr;
       struct type *type = &switch_attr->type;
@@ -3283,7 +3387,8 @@ static void check_labels (node_t labels, node_t target) {
   }
 }
 
-static node_code_t get_id_linkage (int func_p, node_t id, node_t scope, struct decl_spec decl_spec) {
+static node_code_t get_id_linkage (int func_p, node_t id, node_t scope,
+				   struct decl_spec decl_spec) {
   node_code_t linkage;
   node_t def = find_def (S_REGULAR, id, scope, NULL);
   
@@ -3291,9 +3396,11 @@ static node_code_t get_id_linkage (int func_p, node_t id, node_t scope, struct d
     return N_IGNORE; // p6: no linkage
   if (decl_spec.static_p && scope == NULL)
     return N_STATIC; // p3: internal linkage
-  if (decl_spec.extern_p && def != NULL && (linkage = ((struct decl *) def->attr)->decl_spec.linkage) != N_IGNORE)
+  if (decl_spec.extern_p && def != NULL
+      && (linkage = ((struct decl *) def->attr)->decl_spec.linkage) != N_IGNORE)
     return linkage; // p4: previous linkage
-  if (decl_spec.extern_p && (def == NULL || ((struct decl *) def->attr)->decl_spec.linkage == N_IGNORE))
+  if (decl_spec.extern_p
+      && (def == NULL || ((struct decl *) def->attr)->decl_spec.linkage == N_IGNORE))
     return N_EXTERN; // p4: external linkage
   if (! decl_spec.static_p && ! decl_spec.extern_p && (scope == NULL || func_p))
     return N_EXTERN; // p5
@@ -3347,7 +3454,8 @@ static void check_type (struct type *type, int level, int func_def_p) {
       if (arr_type->static_p)
 	print_error (type->pos_node->pos, "static should be only in parameter outermost\n");
       else if (! type_qual_eq_p (&arr_type->ind_type_qual, &zero_type_qual))
-	print_error (type->pos_node->pos, "type qualifiers should be only in parameter outermost array\n");
+	print_error (type->pos_node->pos,
+		     "type qualifiers should be only in parameter outermost array\n");
     }
     break;
   }
@@ -3396,41 +3504,49 @@ static void check_type (struct type *type, int level, int func_def_p) {
 static void check_assignment_types (struct type *left, struct type *right, node_t assign_node) {
   node_code_t code = assign_node->code;
   pos_t pos = assign_node->pos;
+  const char *msg;
   
   if (arithmetic_type_p (left)) {
     if (! arithmetic_type_p (right)
 	&& (left->mode != TM_BASIC || left->u.basic_type != TP_BOOL || right->mode != TM_PTR)) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for arithemtic type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning an arithemtic value\n"
-			 : "incompatible types in assignment to an arithemtic type lvalue\n"));
+      msg = (code == N_CALL ? "incompatible argument type for arithemtic type parameter"
+	     : code != N_RETURN ? "incompatible types in assignment to an arithemtic type lvalue"
+	     : "incompatible return-expr type in function returning an arithemtic value");
+      print_error (pos, "%s\n", msg);
     }
   } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
     if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
 	|| ! compatible_types_p (left, right, TRUE)) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for struct/union type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning a struct/union\n"
-			 : "incompatible types in assignment to struct/union\n"));
+      msg = (code == N_CALL ? "incompatible argument type for struct/union type parameter"
+	     : code != N_RETURN ? "incompatible types in assignment to struct/union"
+	     : "incompatible return-expr type in function returning a struct/union");
+      print_error (pos, "%s\n", msg);
     }
   } else if (left->mode == TM_PTR) {
     if (right->mode != TM_PTR
 	|| (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
 	    && ! void_ptr_p (left) && ! void_ptr_p (right))) {
-      print_error (pos, (code == N_CALL ? "incompatible argument type for pointer type parameter\n"
-			 : code == N_RETURN ? "incompatible return-expr type in function returning a pointer\n"
-			 : "incompatible types in assignment to a pointer\n"));
+      msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
+	     : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
+	     : "incompatible types in assignment to a pointer");
+      print_error (pos, "%s\n", msg);
     } else if (right->u.ptr_type->type_qual.atomic_p) {
-      print_error (pos, (code == N_CALL ? "passing a pointer of an atomic type\n"
-			 : code == N_RETURN ? "returning a pointer of an atomic type\n"
-			 : "assignment of pointer of an atomic type\n"));
-    } else if (! type_qual_subset_p (&right->u.ptr_type->type_qual, &left->u.ptr_type->type_qual)) {
-      print_error (pos, (code == N_CALL ? "discarding type qualifiers in passing argument\n"
-			 : code == N_RETURN ? "return discards a type qualifier from a pointer\n"
-			 : "assignment discards a type qualifier from a pointer\n"));
+      msg = (code == N_CALL ? "passing a pointer of an atomic type"
+	     : code == N_RETURN ? "returning a pointer of an atomic type"
+	     : "assignment of pointer of an atomic type");
+      print_error (pos, "%s\n", msg);
+    } else if (! type_qual_subset_p (&right->u.ptr_type->type_qual,
+				     &left->u.ptr_type->type_qual)) {
+      msg = (code == N_CALL ? "discarding type qualifiers in passing argument"
+	     : code == N_RETURN ? "return discards a type qualifier from a pointer"
+	     : "assignment discards a type qualifier from a pointer");
+      print_error (pos, "%s\n", msg);
     }
   }
 }
 
-static void check_initializer (struct type *type, node_t initializer, int const_only_p, int top_p) {
+static void check_initializer (struct type *type, node_t initializer,
+			       int const_only_p, int top_p) {
   struct expr *cexpr;
   node_t des_list, curr_des, init, last_member, value, size_node, temp;
   mir_long_long last_index, max_index, size_val;
@@ -3473,19 +3589,23 @@ static void check_initializer (struct type *type, node_t initializer, int const_
   last_member = NULL; size_val = -1;
   if (type->mode == TM_ARR) {
     size_node = type->u.arr_type->size; sexpr = size_node->attr;
-    size_val = size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type) ? sexpr->u.i_val : -1;
+    size_val = (size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type)
+		? sexpr->u.i_val : -1);
   }
   max_index = last_index = -1; last_member = NULL;
   for (; init != NULL; init = NL_NEXT (init)) {
     assert (init->code == N_INIT);
     des_list = NL_HEAD (init->ops);
     value = NL_NEXT (des_list);
-    if (0&&value->code == N_LIST && type->mode != TM_ARR && type->mode != TM_STRUCT  && type->mode != TM_UNION) {
+    if (0&&value->code == N_LIST && type->mode != TM_ARR
+	&& type->mode != TM_STRUCT  && type->mode != TM_UNION) {
       print_error (init->pos, "braces around scalar initializer\n");
       continue;
     }
     if (value->code != N_LIST && ! ((struct expr *) value->attr)->const_p && const_only_p) {
-      print_error (init->pos, "initializer of static or thread local object should be a constant expression\n");
+      print_error
+	(init->pos,
+	 "initializer of static or thread local object should be a constant expression\n");
       continue;
     }
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
@@ -3512,7 +3632,8 @@ static void check_initializer (struct type *type, node_t initializer, int const_
 	if (last_member == NULL || (! first_p && type->mode == TM_UNION)) {
 	  print_error (init->pos, "excess elements in struct/union initializer\n");
 	} else {
-	  check_initializer (((struct decl *) last_member->attr)->decl_spec.type, value, const_only_p, FALSE);
+	  check_initializer (((struct decl *) last_member->attr)->decl_spec.type,
+			     value, const_only_p, FALSE);
 	}
       }
     } else {
@@ -3527,7 +3648,8 @@ static void check_initializer (struct type *type, node_t initializer, int const_
 	  } else {
 	    last_member = sym.def_node;
 	    assert (last_member->code == N_MEMBER);
-	    check_initializer (((struct decl *) last_member->attr)->decl_spec.type, value, const_only_p, FALSE);
+	    check_initializer (((struct decl *) last_member->attr)->decl_spec.type, value,
+			       const_only_p, FALSE);
 	  }
 	} else if (type->mode != TM_ARR) {
 	  print_error (curr_des->pos, "array index in initializer for non-array\n");
@@ -3537,7 +3659,8 @@ static void check_initializer (struct type *type, node_t initializer, int const_
 	  print_error (curr_des->pos, "array index in initializer not of integer type\n");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
 	  print_error (curr_des->pos, "negative array index in initializer\n");
-	} else if (size_val >= 0 && (! signed_integer_type_p (cexpr->type) || size_val <= cexpr->u.i_val)) {
+	} else if (size_val >= 0
+		   && (! signed_integer_type_p (cexpr->type) || size_val <= cexpr->u.i_val)) {
 	  print_error (curr_des->pos, "array index in initializer exceeds array bounds\n");
 	} else {
 	  check_initializer (type->u.arr_type->el_type, value, const_only_p, FALSE);
@@ -3562,7 +3685,8 @@ static void check_decl_align (struct decl_spec *decl_spec) {
   if (decl_spec->align < 0)
     return;
   if (decl_spec->align < type_align (decl_spec->type))
-    print_error (decl_spec->align_node->pos,  "requested alignment is less than minimum alignment for the type\n");
+    print_error (decl_spec->align_node->pos,
+		 "requested alignment is less than minimum alignment for the type\n");
 }
 
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
@@ -3572,7 +3696,8 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   struct type *type;
   struct decl *decl = reg_malloc (sizeof (struct decl));
   
-  assert (decl_node->code == N_MEMBER || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
+  assert (decl_node->code == N_MEMBER
+	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
@@ -3617,7 +3742,8 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     return;
   }
   if (decl_spec.linkage != N_IGNORE && scope != NULL) {
-    print_error (initializer->pos, "initialization for block scope identifier with external or internal linkage\n");
+    print_error (initializer->pos,
+		 "initialization for block scope identifier with external or internal linkage\n");
     return;
   }
   check (initializer, decl_node);
@@ -3645,7 +3771,8 @@ static void process_unop (node_t r, node_t *op, struct expr **e, struct type **t
   *e = (*op)->attr; *t = (*e)->type;
 }
 
-static void process_bin_ops (node_t r, node_t *op1, node_t *op2, struct expr **e1, struct expr **e2,
+static void process_bin_ops (node_t r, node_t *op1, node_t *op2,
+			     struct expr **e1, struct expr **e2,
 			     struct type **t1, struct type **t2, node_t context) {
   *op1 = NL_HEAD (r->ops);
   *op2 = NL_NEXT (*op1);
@@ -3654,8 +3781,8 @@ static void process_bin_ops (node_t r, node_t *op1, node_t *op2, struct expr **e
   *e1 = (*op1)->attr; *e2 = (*op2)->attr; *t1 = (*e1)->type; *t2 = (*e2)->type;
 }
 
-static void process_type_bin_ops (node_t r, node_t *op1, node_t *op2, struct expr **e2, struct type **t2,
-				  node_t context) {
+static void process_type_bin_ops (node_t r, node_t *op1, node_t *op2,
+				  struct expr **e2, struct type **t2, node_t context) {
   *op1 = NL_HEAD (r->ops);
   *op2 = NL_NEXT (*op1);
   check (*op1, context);
@@ -3734,9 +3861,11 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	e->const_p = TRUE;
 	if (signed_integer_type_p (&t)) {
 	  if (signed_integer_type_p (&rt))
-	    e->u.i_val = r->code == N_LSH ? e1->u.i_val << e2->u.i_val : e1->u.i_val >> e2->u.i_val;
+	    e->u.i_val
+	      = r->code == N_LSH ? e1->u.i_val << e2->u.i_val : e1->u.i_val >> e2->u.i_val;
 	  else
-	    e->u.i_val = r->code == N_LSH ? e1->u.i_val << e2->u.u_val : e1->u.i_val >> e2->u.u_val;
+	    e->u.i_val
+	      = r->code == N_LSH ? e1->u.i_val << e2->u.u_val : e1->u.i_val >> e2->u.u_val;
 	} else if (signed_integer_type_p (&rt)) {
 	  e->u.u_val = r->code == N_LSH ? e1->u.u_val << e2->u.i_val : e1->u.u_val >> e2->u.i_val;
 	} else {
@@ -3748,7 +3877,8 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
   case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC:
   case N_ADD: case N_SUB: case N_ADD_ASSIGN: case N_SUB_ASSIGN: {
     mir_size_t size;
-    int add_p = r->code == N_ADD || r->code == N_ADD_ASSIGN || r->code == N_INC || r->code == N_POST_INC;
+    int add_p = (r->code == N_ADD || r->code == N_ADD_ASSIGN
+		 || r->code == N_INC || r->code == N_POST_INC);
     
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
@@ -3834,10 +3964,12 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	  e->u.d_val = (r->code == N_MUL ? e1->u.d_val * e2->u.d_val : e1->u.d_val / e2->u.d_val);
 	else if (signed_integer_type_p (&t))
 	  e->u.i_val = (r->code == N_MUL ? e1->u.i_val * e2->u.i_val
-			: r->code == N_DIV ? e1->u.i_val / e2->u.i_val : e1->u.i_val % e2->u.i_val);
+			: r->code == N_DIV ? e1->u.i_val / e2->u.i_val
+			: e1->u.i_val % e2->u.i_val);
 	else
 	  e->u.u_val = (r->code == N_MUL ? e1->u.u_val * e2->u.u_val
-			: r->code == N_DIV ? e1->u.u_val / e2->u.u_val : e1->u.u_val % e2->u.u_val);
+			: r->code == N_DIV ? e1->u.u_val / e2->u.u_val
+			: e1->u.u_val % e2->u.u_val);
       }
     }
     break;
@@ -4025,26 +4157,38 @@ static int check (node_t r, node_t context) {
 	print_error (r->pos, "pointer to atomic type as a comparison operand\n");
       } else if (e1->const_p && e2->const_p) {
 	e->const_p = TRUE;
-	e->u.i_val = (r->code == N_EQ ? e1->u.u_val == e2->u.u_val : r->code == N_NE ? e1->u.u_val != e2->u.u_val
-		      : r->code == N_LT ? e1->u.u_val < e2->u.u_val : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
-		      : r->code == N_GT ? e1->u.u_val > e2->u.u_val : e1->u.u_val >= e2->u.u_val);
+	e->u.i_val = (r->code == N_EQ ? e1->u.u_val == e2->u.u_val
+		      : r->code == N_NE ? e1->u.u_val != e2->u.u_val
+		      : r->code == N_LT ? e1->u.u_val < e2->u.u_val
+		      : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
+		      : r->code == N_GT ? e1->u.u_val > e2->u.u_val
+		      : e1->u.u_val >= e2->u.u_val);
       }
     } else if (arithmetic_type_p (t1) && arithmetic_type_p (t2)) {
       if (e1->const_p && e2->const_p) {
 	t = arithmetic_conversion (t1, t2); convert_value (e1, &t); convert_value (e2, &t);
 	e->const_p = TRUE;
 	if (floating_type_p (&t))
-	  e->u.i_val = (r->code == N_EQ ? e1->u.d_val == e2->u.d_val : r->code == N_NE ? e1->u.d_val != e2->u.d_val
-			: r->code == N_LT ? e1->u.d_val < e2->u.d_val : r->code == N_LE ? e1->u.d_val <= e2->u.d_val
-			: r->code == N_GT ? e1->u.d_val > e2->u.d_val : e1->u.d_val >= e2->u.d_val);
+	  e->u.i_val = (r->code == N_EQ ? e1->u.d_val == e2->u.d_val
+			: r->code == N_NE ? e1->u.d_val != e2->u.d_val
+			: r->code == N_LT ? e1->u.d_val < e2->u.d_val
+			: r->code == N_LE ? e1->u.d_val <= e2->u.d_val
+			: r->code == N_GT ? e1->u.d_val > e2->u.d_val
+			: e1->u.d_val >= e2->u.d_val);
 	else if (signed_integer_type_p (&t))
-	  e->u.i_val = (r->code == N_EQ ? e1->u.i_val == e2->u.i_val : r->code == N_NE ? e1->u.i_val != e2->u.i_val
-			: r->code == N_LT ? e1->u.i_val < e2->u.i_val : r->code == N_LE ? e1->u.i_val <= e2->u.i_val
-			: r->code == N_GT ? e1->u.i_val > e2->u.i_val : e1->u.i_val >= e2->u.i_val);
+	  e->u.i_val = (r->code == N_EQ ? e1->u.i_val == e2->u.i_val
+			: r->code == N_NE ? e1->u.i_val != e2->u.i_val
+			: r->code == N_LT ? e1->u.i_val < e2->u.i_val
+			: r->code == N_LE ? e1->u.i_val <= e2->u.i_val
+			: r->code == N_GT ? e1->u.i_val > e2->u.i_val
+			: e1->u.i_val >= e2->u.i_val);
 	else
-	  e->u.i_val = (r->code == N_EQ ? e1->u.u_val == e2->u.u_val : r->code == N_NE ? e1->u.u_val != e2->u.u_val
-			: r->code == N_LT ? e1->u.u_val < e2->u.u_val : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
-			: r->code == N_GT ? e1->u.u_val > e2->u.u_val : e1->u.u_val >= e2->u.u_val);
+	  e->u.i_val = (r->code == N_EQ ? e1->u.u_val == e2->u.u_val
+			: r->code == N_NE ? e1->u.u_val != e2->u.u_val
+			: r->code == N_LT ? e1->u.u_val < e2->u.u_val
+			: r->code == N_LE ? e1->u.u_val <= e2->u.u_val
+			: r->code == N_GT ? e1->u.u_val > e2->u.u_val
+			: e1->u.u_val >= e2->u.u_val);
       }
     } else {
       print_error (r->pos, "invalid types of comparison operands\n");
@@ -4126,8 +4270,7 @@ static int check (node_t r, node_t context) {
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
     check_assign_op (r, op1, op2, e1, e2, t1, t2);
     break;
-  case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN:
-  case N_LSH_ASSIGN: case N_RSH_ASSIGN:
+  case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN: {
     struct expr saved_expr;
     
@@ -4205,7 +4348,8 @@ static int check (node_t r, node_t context) {
       
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-	print_error (r->pos, "cannot take address of bit-field %s\n", NL_HEAD (declarator->ops)->u.s);
+	print_error (r->pos, "cannot take address of bit-field %s\n",
+		     NL_HEAD (declarator->ops)->u.s);
       }
       t2 = create_type (decl->decl_spec.type);
       if (op1->code == N_DEREF_FIELD && (e2 = NL_HEAD (op1->ops)->attr)->const_p) {
@@ -4237,9 +4381,11 @@ static int check (node_t r, node_t context) {
       t1 = t1->u.ptr_type;
     }
     if (t1->mode != TM_STRUCT && t1->mode != TM_UNION) {
-      print_error (r->pos, "request for member %s in something not a structure or union\n", op2->u.s);
+      print_error (r->pos,
+		   "request for member %s in something not a structure or union\n", op2->u.s);
     } else if (! symbol_find (S_REGULAR, op2, t1->u.tag_type, &sym)) {
-      print_error (r->pos, "%s has no member %s\n", t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s);
+      print_error (r->pos, "%s has no member %s\n",
+		   t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s);
     } else {
       assert (sym.def_node->code == N_MEMBER);
       decl = sym.def_node->attr;
@@ -4288,7 +4434,8 @@ static int check (node_t r, node_t context) {
     if (t2->mode == TM_BASIC && t3->mode == TM_BASIC
 	&& t2->u.basic_type == TP_VOID && t3->u.basic_type == TP_VOID) {
       e->type->u.basic_type = TP_VOID;
-    } else if ((t2->mode == TM_STRUCT || t2->mode == TM_UNION) && (t3->mode == TM_STRUCT || t3->mode == TM_UNION)
+    } else if ((t2->mode == TM_STRUCT || t2->mode == TM_UNION)
+	       && (t3->mode == TM_STRUCT || t3->mode == TM_UNION)
 	       && t2->u.tag_type == t3->u.tag_type) {
       *e->type = *t2;
     } else if (t2->mode != TM_PTR && t3->mode != TM_PTR) {
@@ -4298,7 +4445,8 @@ static int check (node_t r, node_t context) {
       t = composite_type (t2->u.ptr_type, t3->u.ptr_type);
       e->type->mode = TM_PTR; e->type->pos_node = r;
       e->type->u.ptr_type = create_type (&t);
-      e->type->u.ptr_type->type_qual = type_qual_union (&t2->u.ptr_type->type_qual, &t3->u.ptr_type->type_qual);
+      e->type->u.ptr_type->type_qual = type_qual_union (&t2->u.ptr_type->type_qual,
+							&t3->u.ptr_type->type_qual);
       if ((t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p)
 	  && ! null_const_p (e2, t2) && ! null_const_p (e3, t3)) {
 	print_error (r->pos, "pointer to atomic type in true or false parts of cond-expression\n");
@@ -4313,13 +4461,16 @@ static int check (node_t r, node_t context) {
 	e->type->u.ptr_type = e3->type->u.ptr_type;
       } else {
 	if (t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p) {
-	  print_error (r->pos, "pointer to atomic type in true or false parts of cond-expression\n");
+	  print_error (r->pos,
+		       "pointer to atomic type in true or false parts of cond-expression\n");
 	}
 	e->type->u.ptr_type->mode = TM_BASIC; e->type->u.ptr_type->u.basic_type = TP_VOID;
       }
-      e->type->u.ptr_type->type_qual = type_qual_union (&t2->u.ptr_type->type_qual, &t3->u.ptr_type->type_qual);
+      e->type->u.ptr_type->type_qual = type_qual_union (&t2->u.ptr_type->type_qual,
+							&t3->u.ptr_type->type_qual);
     } else {
-      print_error (r->pos, "incompatible pointer types in true and false parts of cond-expression\n");
+      print_error (r->pos,
+		   "incompatible pointer types in true and false parts of cond-expression\n");
       break;
     }
     if (e1->const_p) {
@@ -4345,12 +4496,15 @@ static int check (node_t r, node_t context) {
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
     if (decl_spec->type->incomplete_p) {
-      print_error (r->pos, "%s of incomplete type requested\n", r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
+      print_error (r->pos, "%s of incomplete type requested\n",
+		   r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else if (decl_spec->type->mode == TM_FUNC) {
-      print_error (r->pos, "%s of function type requested\n", r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
+      print_error (r->pos, "%s of function type requested\n",
+		   r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else {
       e->const_p = TRUE;
-      e->u.i_val = r->code == N_SIZEOF ? type_size (decl_spec->type) : type_align  (decl_spec->type);
+      e->u.i_val = (r->code == N_SIZEOF
+		    ? type_size (decl_spec->type) : type_align  (decl_spec->type));
     }
     break;
   }
@@ -4394,41 +4548,41 @@ static int check (node_t r, node_t context) {
     } else if (e2->const_p && ! void_p) {
       
 #define CONV(TP, cast, mto, mfrom) case TP: e->u.mto = (cast) e2->u.mfrom; break;
-#define BASIC_FROM_CONV(mfrom)										\
-      switch (decl_spec->type->u.basic_type) {								\
-	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom);		\
-	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom);		\
-	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ulong_long, u_val, mfrom);	\
-	CONV (TP_SCHAR, mir_char, i_val, mfrom);							\
-	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom);			\
-	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_long_long, i_val, mfrom);		\
-	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom);		\
-	CONV (TP_LONG_DOUBLE, mir_long_double, d_val, mfrom);						\
-      case TP_CHAR:											\
-	if (char_is_signed_p ())									\
-	  e->u.i_val = (mir_char) e2->u.mfrom;								\
-	else												\
-	  e->u.u_val = (mir_char) e2->u.mfrom;								\
-	break;												\
-      default:												\
-	assert (FALSE);											\
+#define BASIC_FROM_CONV(mfrom)									 \
+      switch (decl_spec->type->u.basic_type) {							 \
+	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom);	 \
+	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom);	 \
+	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ulong_long, u_val, mfrom); \
+	CONV (TP_SCHAR, mir_char, i_val, mfrom);						 \
+	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom);		 \
+	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_long_long, i_val, mfrom);	 \
+	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom);	 \
+	CONV (TP_LONG_DOUBLE, mir_long_double, d_val, mfrom);					 \
+      case TP_CHAR:										 \
+	if (char_is_signed_p ())								 \
+	  e->u.i_val = (mir_char) e2->u.mfrom;							 \
+	else											 \
+	  e->u.u_val = (mir_char) e2->u.mfrom;							 \
+	break;											 \
+      default:											 \
+	assert (FALSE);										 \
       }
       
-#define BASIC_TO_CONV(cast, mto)									\
-      switch (t2->u.basic_type) {									\
-      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:		\
-	e->u.mto = (cast) e2->u.u_val; break;								\
-      case TP_CHAR:											\
-	if (! char_is_signed_p ()) {									\
-	  e->u.mto = (cast) e2->u.u_val; break;								\
-	}												\
-	/* Fall through: */										\
-      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:				\
-	e->u.mto = (cast) e2->u.i_val; break;								\
-      case TP_FLOAT: case TP_DOUBLE: case TP_LONG_DOUBLE:						\
-	e->u.mto = (cast) e2->u.d_val; break;								\
-      default:												\
-	assert (FALSE);											\
+#define BASIC_TO_CONV(cast, mto)								 \
+      switch (t2->u.basic_type) {								 \
+      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	 \
+	e->u.mto = (cast) e2->u.u_val; break;							 \
+      case TP_CHAR:										 \
+	if (! char_is_signed_p ()) {								 \
+	  e->u.mto = (cast) e2->u.u_val; break;							 \
+	}											 \
+	/* Fall through: */									 \
+      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:			 \
+	e->u.mto = (cast) e2->u.i_val; break;							 \
+      case TP_FLOAT: case TP_DOUBLE: case TP_LONG_DOUBLE:					 \
+	e->u.mto = (cast) e2->u.d_val; break;							 \
+      default:											 \
+	assert (FALSE);										 \
       }
 
       e->const_p = TRUE;
@@ -4511,7 +4665,8 @@ static int check (node_t r, node_t context) {
     ret_type = func_type->ret_type;
     e = create_expr (r);
     *e->type = *ret_type;
-    if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID) && ret_type->incomplete_p) {
+    if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)
+	&& ret_type->incomplete_p) {
       print_error (r->pos, "function return type is incomplete\n");
     }
     param_list = func_type->param_list;
@@ -4572,8 +4727,9 @@ static int check (node_t r, node_t context) {
 	print_error (ga->pos, "_Generic case has incomplete type\n");
       } else if (compatible_types_p (&t, decl_spec->type, TRUE)) {
 	if (ga_case)
-	  print_error (ga_case->pos,
-		       "_Generic expr type is compatible with more than one generic association type\n");
+	  print_error
+	    (ga_case->pos,
+	     "_Generic expr type is compatible with more than one generic association type\n");
 	ga_case = ga;
       } else {
 	for (ga2 = NL_HEAD (list->ops); ga2 != ga; ga2 = NL_NEXT (ga2)) {
@@ -4661,18 +4817,23 @@ static int check (node_t r, node_t context) {
 	  print_error (const_expr->pos, "bit field with _Atomic\n");
 	if (! cexpr->const_p) {
 	  print_error (const_expr->pos, "bit field is not a constant expr\n");
-	} else if (! integer_type_p (type) && (type->mode != TM_BASIC || type->u.basic_type != T_BOOL)) {
-	  print_error (const_expr->pos,
-		       "bit field type should be _Bool, a signed integer, or an unsigned integer type\n");
+	} else if (! integer_type_p (type)
+		   && (type->mode != TM_BASIC || type->u.basic_type != T_BOOL)) {
+	  print_error
+	    (const_expr->pos,
+	     "bit field type should be _Bool, a signed integer, or an unsigned integer type\n");
 	} else if (! integer_type_p (cexpr->type)
 		   && (cexpr->type->mode != TM_BASIC || cexpr->type->u.basic_type != TP_BOOL)) {
 	  print_error (const_expr->pos, "bit field width is not of an integer type\n");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
 	  print_error (const_expr->pos, "bit field width is negative\n");
 	} else if (cexpr->u.i_val == 0  && declarator->code == N_DECL) {
-	  print_error (const_expr->pos, "zero bit field width for %s\n", NL_HEAD (declarator->ops)->u.s);
-	} else if ((! signed_integer_type_p (cexpr->type) && cexpr->u.u_val > int_bit_size (cexpr->type))
-		   || (signed_integer_type_p (cexpr->type) && cexpr->u.i_val > int_bit_size (cexpr->type))) {
+	  print_error (const_expr->pos, "zero bit field width for %s\n",
+		       NL_HEAD (declarator->ops)->u.s);
+	} else if ((! signed_integer_type_p (cexpr->type)
+		    && cexpr->u.u_val > int_bit_size (cexpr->type))
+		   || (signed_integer_type_p (cexpr->type)
+		       && cexpr->u.i_val > int_bit_size (cexpr->type))) {
 	  print_error (const_expr->pos, "bit field width exceeds its type\n");
 	}
       }
@@ -4741,7 +4902,8 @@ static int check (node_t r, node_t context) {
 	decl_spec = ((struct decl *) decl->attr)->decl_spec;
 	if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p
 	    || decl_spec.auto_p || decl_spec.thread_local_p) {
-	  print_error (param_id->pos, "storage specifier in a function parameter %s\n", param_id->u.s);
+	  print_error (param_id->pos, "storage specifier in a function parameter %s\n",
+		       param_id->u.s);
 	}
       }
     }
@@ -4754,7 +4916,8 @@ static int check (node_t r, node_t context) {
       assert (param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
       assert (param_id->code == N_ID);
-      print_error (param_id->pos, "declaration for parameter %s but no such parameter\n", param_id->u.s);
+      print_error (param_id->pos, "declaration for parameter %s but no such parameter\n",
+		   param_id->u.s);
     }
     check (block, r);
     /* Process all gotos: */
@@ -4838,7 +5001,9 @@ static int check (node_t r, node_t context) {
     switch_attr->type = t;
     DLIST_INIT (case_t, ((struct switch_attr *) curr_switch->attr)->case_labels);
     check (stmt, r);
-    for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL; c = DLIST_NEXT (case_t, c)) {
+    for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels);
+	 c != NULL;
+	 c = DLIST_NEXT (case_t, c)) {
       if (c->case_node->code == N_DEFAULT)
 	continue;
       if (HTAB_DO (case_t, case_tab, c, HTAB_FIND, el)) {
@@ -4892,7 +5057,8 @@ static int check (node_t r, node_t context) {
 	decl = spec_decl->attr;
 	if (decl->decl_spec.typedef_p || decl->decl_spec.extern_p
 	    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p) {
-	  print_error (spec_decl->pos, "wrong storage specifier of for-loop initial declaration\n");
+	  print_error (spec_decl->pos,
+		       "wrong storage specifier of for-loop initial declaration\n");
 	  break;
 	}
       }
@@ -4938,9 +5104,11 @@ static int check (node_t r, node_t context) {
     check_labels (labels, r);
     check (expr, r);
     ret_type = type->u.func_type->ret_type;
-    if (expr->code != N_IGNORE && ret_type->mode == TM_BASIC && ret_type->u.basic_type == TP_VOID) {
+    if (expr->code != N_IGNORE
+	&& ret_type->mode == TM_BASIC && ret_type->u.basic_type == TP_VOID) {
       print_error (r->pos, "return with a value in function returning void\n");
-    } else if (expr->code == N_IGNORE && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
+    } else if (expr->code == N_IGNORE
+	       && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
       print_error (r->pos, "return with no value in function returning non-void\n");
     } else if (expr->code != N_IGNORE) {
       check_assignment_types (ret_type, ((struct expr *) expr->attr)->type, r);
@@ -4958,7 +5126,8 @@ static int check (node_t r, node_t context) {
     abort ();
   }
   if (e != NULL) {
-    if (context && context->code != N_ALIGNOF && context->code != N_SIZEOF && context->code != N_ADDR)
+    if (context && context->code != N_ALIGNOF
+	&& context->code != N_SIZEOF && context->code != N_ADDR)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
   }
@@ -4988,19 +5157,20 @@ static void check_finish (void) {
 static const char *get_node_name (node_code_t code) {
 #define C(n) case N_##n: return #n;
   switch (code) {
-    C (IGNORE) C (L) C (LL) C (UL) C (ULL) C (F) C (D) C (LD) C (CH) C (STR) C (ID) C (COMMA) C (ANDAND)
-      C (OROR) C (EQ) C (NE) C (LT) C (LE) C (GT) C (GE) C (ASSIGN) C (BITWISE_NOT) C (NOT) C (AND) C (AND_ASSIGN)
-      C (OR) C (OR_ASSIGN) C (XOR) C (XOR_ASSIGN) C (LSH) C (LSH_ASSIGN) C (RSH) C (RSH_ASSIGN)
-      C (ADD) C (ADD_ASSIGN) C (SUB) C (SUB_ASSIGN) C (MUL) C (MUL_ASSIGN) C (DIV) C (DIV_ASSIGN)
-      C (MOD) C (MOD_ASSIGN) C (IND) C (FIELD) C (ADDR) C (DEREF) C (DEREF_FIELD) C (COND) C (INC) C (DEC)
-      C (POST_INC) C (POST_DEC) C (ALIGNOF) C (SIZEOF) C (EXPR_SIZEOF) C (CAST) C (COMPOUND_LITERAL)
-      C (CALL) C (GENERIC) C (GENERIC_ASSOC) C (IF) C (SWITCH) C (WHILE) C (DO) C (FOR) C (GOTO) C (CONTINUE)
-      C (BREAK) C (RETURN) C (EXPR) C (BLOCK) C (CASE) C (DEFAULT) C (LABEL) C (LIST) C (SPEC_DECL) C (SHARE)
-      C (TYPEDEF) C (EXTERN) C (STATIC) C (AUTO) C (REGISTER) C (THREAD_LOCAL) C (DECL) C (VOID) C (CHAR)
-      C (SHORT) C (INT) C (LONG) C (FLOAT) C (DOUBLE) C (SIGNED) C (UNSIGNED) C (BOOL) C (COMPLEX) C (STRUCT)
-      C (UNION) C (ENUM) C (ENUM_CONST) C (MEMBER) C (CONST) C (RESTRICT) C (VOLATILE) C (ATOMIC) C (INLINE)
-      C (NO_RETURN) C (ALIGNAS) C (FUNC) C (STAR) C (POINTER) C (DOTS) C (ARR) C (INIT) C (FIELD_ID) C (TYPE)
-      C (ST_ASSERT) C (FUNC_DEF)
+    C (IGNORE) C (L) C (LL) C (UL) C (ULL) C (F) C (D) C (LD) C (CH) C (STR) C (ID) C (COMMA)
+    C (ANDAND) C (OROR) C (EQ) C (NE) C (LT) C (LE) C (GT) C (GE) C (ASSIGN) C (BITWISE_NOT)
+    C (NOT) C (AND) C (AND_ASSIGN) C (OR) C (OR_ASSIGN) C (XOR) C (XOR_ASSIGN) C (LSH)
+    C (LSH_ASSIGN) C (RSH) C (RSH_ASSIGN) C (ADD) C (ADD_ASSIGN) C (SUB) C (SUB_ASSIGN) C (MUL)
+    C (MUL_ASSIGN) C (DIV) C (DIV_ASSIGN) C (MOD) C (MOD_ASSIGN) C (IND) C (FIELD) C (ADDR)
+    C (DEREF) C (DEREF_FIELD) C (COND) C (INC) C (DEC) C (POST_INC) C (POST_DEC) C (ALIGNOF)
+    C (SIZEOF) C (EXPR_SIZEOF) C (CAST) C (COMPOUND_LITERAL) C (CALL) C (GENERIC) C (GENERIC_ASSOC)
+    C (IF) C (SWITCH) C (WHILE) C (DO) C (FOR) C (GOTO) C (CONTINUE) C (BREAK) C (RETURN) C (EXPR)
+    C (BLOCK) C (CASE) C (DEFAULT) C (LABEL) C (LIST) C (SPEC_DECL) C (SHARE) C (TYPEDEF)
+    C (EXTERN) C (STATIC) C (AUTO) C (REGISTER) C (THREAD_LOCAL) C (DECL) C (VOID) C (CHAR)
+    C (SHORT) C (INT) C (LONG) C (FLOAT) C (DOUBLE) C (SIGNED) C (UNSIGNED) C (BOOL) C (COMPLEX)
+    C (STRUCT) C (UNION) C (ENUM) C (ENUM_CONST) C (MEMBER) C (CONST) C (RESTRICT) C (VOLATILE)
+    C (ATOMIC) C (INLINE) C (NO_RETURN) C (ALIGNAS) C (FUNC) C (STAR) C (POINTER) C (DOTS) C (ARR)
+    C (INIT) C (FIELD_ID) C (TYPE) C (ST_ASSERT) C (FUNC_DEF)
   default:
     abort ();
   }
@@ -5057,22 +5227,24 @@ static void pr_node (FILE *f, node_t n, int indent) {
   case N_CH: fprintf (f, " '"); print_char (f, n->u.ch); fprintf (f, "'\n"); break;
   case N_STR: fprintf (f, " \""); print_chars (f, n->u.s); fprintf (f, "\"\n"); break;
   case N_ID: fprintf (f, " %s\n", n->u.s); break;
-  case N_COMMA: case N_ANDAND: case N_OROR: case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE:
-  case N_ASSIGN: case N_BITWISE_NOT: case N_NOT: case N_AND: case N_AND_ASSIGN: case N_OR: case N_OR_ASSIGN:
-  case N_XOR: case N_XOR_ASSIGN: case N_LSH: case N_LSH_ASSIGN: case N_RSH: case N_RSH_ASSIGN: case N_ADD:
-  case N_ADD_ASSIGN: case N_SUB: case N_SUB_ASSIGN: case N_MUL: case N_MUL_ASSIGN: case N_DIV:
-  case N_DIV_ASSIGN: case N_MOD: case N_MOD_ASSIGN: case N_IND: case N_FIELD: case N_ADDR: case N_DEREF:
-  case N_DEREF_FIELD: case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: case N_ALIGNOF:
-  case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL: case N_CALL: case N_GENERIC:
-  case N_GENERIC_ASSOC: case N_IF: case N_SWITCH: case N_WHILE: case N_DO: case N_FOR: case N_GOTO:
-  case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR: case N_BLOCK: case N_CASE: case N_DEFAULT:
-  case N_LABEL: case N_LIST: case N_SPEC_DECL: case N_SHARE: case N_TYPEDEF: case N_EXTERN: case N_STATIC:
-  case N_AUTO: case N_REGISTER: case N_THREAD_LOCAL: case N_DECL: case N_VOID: case N_CHAR: case N_SHORT:
-  case N_INT: case N_LONG: case N_FLOAT: case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL:
-  case N_COMPLEX: case N_STRUCT: case N_UNION: case N_ENUM: case N_ENUM_CONST: case N_MEMBER:
-  case N_CONST: case N_RESTRICT: case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN:
-  case N_ALIGNAS: case N_FUNC: case N_STAR: case N_POINTER: case N_DOTS: case N_ARR:
-  case N_INIT: case N_FIELD_ID: case N_TYPE: case N_ST_ASSERT: case N_FUNC_DEF:
+  case N_COMMA: case N_ANDAND: case N_OROR: case N_EQ: case N_NE: case N_LT: case N_LE:
+  case N_GT: case N_GE: case N_ASSIGN: case N_BITWISE_NOT: case N_NOT: case N_AND:
+  case N_AND_ASSIGN: case N_OR: case N_OR_ASSIGN: case N_XOR: case N_XOR_ASSIGN: case N_LSH:
+  case N_LSH_ASSIGN: case N_RSH: case N_RSH_ASSIGN: case N_ADD: case N_ADD_ASSIGN: case N_SUB:
+  case N_SUB_ASSIGN: case N_MUL: case N_MUL_ASSIGN: case N_DIV: case N_DIV_ASSIGN: case N_MOD:
+  case N_MOD_ASSIGN: case N_IND: case N_FIELD: case N_ADDR: case N_DEREF: case N_DEREF_FIELD:
+  case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: case N_ALIGNOF:
+  case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL: case N_CALL:
+  case N_GENERIC: case N_GENERIC_ASSOC: case N_IF: case N_SWITCH: case N_WHILE: case N_DO:
+  case N_FOR: case N_GOTO: case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR: case N_BLOCK:
+  case N_CASE: case N_DEFAULT: case N_LABEL: case N_LIST: case N_SPEC_DECL: case N_SHARE:
+  case N_TYPEDEF: case N_EXTERN: case N_STATIC: case N_AUTO: case N_REGISTER: case N_THREAD_LOCAL:
+  case N_DECL: case N_VOID: case N_CHAR: case N_SHORT: case N_INT: case N_LONG: case N_FLOAT:
+  case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL: case N_COMPLEX: case N_STRUCT:
+  case N_UNION: case N_ENUM: case N_ENUM_CONST: case N_MEMBER: case N_CONST: case N_RESTRICT:
+  case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN: case N_ALIGNAS: case N_FUNC:
+  case N_STAR: case N_POINTER: case N_DOTS: case N_ARR: case N_INIT: case N_FIELD_ID: case N_TYPE:
+  case N_ST_ASSERT: case N_FUNC_DEF:
     fprintf (f, "\n"); pr_ops (f, n, indent);
     break;
   default:
