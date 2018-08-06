@@ -140,9 +140,36 @@ static htab_hash_t str_hash (str_t str) { return mum_hash (str.s, strlen (str.s)
 static int str_key_eq (str_t str1, str_t str2) { return str1.key == str2.key; }
 static htab_hash_t str_key_hash (str_t str) { return mum_hash64 (str.key, 0x24); }
 
+static const char *uniq_str (const char *str);
+
+static const char *lnot_str, *sharp_str, *percent_str, *and_str, *lpar_str, *rpar_str, *star_str;
+static const char *plus_str, *comma_str, *minus_str, *dot_str, *slash_str, *colon_str;
+static const char *semicolon_str, *lt_str, *assign_str, *gt_str, *qmark_str, *lbracket_str;
+static const char *backslash_str, *rbracket_str, *xor_str, *lbrace_str, *or_str, *rbrace_str;
+static const char *not_str, *eq_str, *inc_str, *dec_str, *plusassign_str, *minusassign_str;
+static const char *arrow_str, *lshassign_str, *rshassign_str, *lsh_str, *rsh_str, *le_str, *ge_str;
+static const char *rbracket_str, *rbrace_str, *mulassign_str, *divassign_str, *modassign_str;
+static const char *sharp2_str, *doublesharp2_str, *lbrace2_str, *andassign_str, *orassign_str;
+static const char *land_str, *lor_str, *xorassign_str, *ne_str, *eof_str, *lbracket2_str;
+static const char *rbracket2_str, *rbrace2_str, *doublesharp_str, *dots_str;
+
 static void str_init (void) {
   HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq);
   HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq);
+#define U(n, s) n ## _str = uniq_str (s)
+  U (lnot, "!"); U (sharp, "#"); U (percent, "%"); U (and, "&"); U (lpar, "("); U (rpar, ")");
+  U (star, "*"); U (plus, "+"); U (comma, ","); U (minus, "-"); U (dot, "."); U (slash, "/");
+  U (colon, ":"); U (semicolon, ";"); U (lt, "<"); U (assign, "="); U (gt, ">"); U (qmark, "?");
+  U (lbracket, "["); U (backslash, "\\"); U (rbracket, "]"); U (xor, "^"); U (lbrace, "{");
+  U (or, "|"); U (rbrace, "}"); U (not, "~"); U (eq, "="); U (inc, "++"); U (dec, "--");
+  U (plusassign, "+="); U (minusassign, "-="); U (arrow, "->"); U (lshassign, "<<=");
+  U (rshassign, ">>="); U (lsh, "<<"); U (rsh, ">>"); U (le, "<="); U (ge, ">=");
+  U (rbracket, "<:"); U (rbrace, "<%"); U (mulassign, "*="); U (divassign, "/=");
+  U (modassign, "%="); U (sharp2, "%:"); U (doublesharp2, "%:%:"); U (lbrace2, "%>");
+  U (andassign, "&="); U (orassign, "|="); U (land, "&&"); U ( lor, "||"); U (xorassign, "^=");
+  U (ne, "!="); U (eof, "<EOF>"); U (lbracket2, "<:"); U (rbracket2, ":>"); U (rbrace2, "<%");
+  U (doublesharp, "##"); U (dots, "...");
+#undef U
 }
 
 static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
@@ -188,6 +215,15 @@ typedef enum {
   T_STRUCT, T_SWITCH, T_TYPEDEF, T_TYPEOF, T_UNION, T_UNSIGNED, T_VOID, T_VOLATILE, T_WHILE,
 } token_code_t;
 
+typedef enum { /* tokens existing in preprocessor: */
+  T_HEADER,         /* include header */
+  T_NO_MACRO_IDENT, /* ??? */
+  T_PLM, T_DBLNO,   /* placemarker, ## in replacement list */
+  T_EOA, T_EOR,     /* end of argument and macro replacement */
+  T_EOP,            /* end of processing */
+} full_token_code_t;
+
+
 typedef enum {
   N_IGNORE, N_I, N_L, N_LL, N_U, N_UL, N_ULL, N_F, N_D, N_LD, N_CH, N_STR, N_ID, N_COMMA, N_ANDAND,
   N_OROR, N_EQ, N_NE, N_LT, N_LE, N_GT, N_GE, N_ASSIGN, N_BITWISE_NOT, N_NOT, N_AND, N_AND_ASSIGN,
@@ -208,10 +244,11 @@ DEF_DLIST_LINK (node_t);
 DEF_DLIST_TYPE (node_t);
 
 typedef struct pos {
+  const char *fname;
   int lno, ln_pos;
 } pos_t;
 
-static const pos_t no_pos = {-1, -1};
+static const pos_t no_pos = {NULL, -1, -1};
 
 struct node {
   node_code_t code;
@@ -243,7 +280,8 @@ typedef struct token {
   pos_t pos;
   node_code_t node_code;
   node_t node;
-} token_t;
+  const char *repr;
+} *token_t;
 
 static node_t add_pos (node_t n, pos_t p) {
   if (n->pos.lno < 0)
@@ -377,555 +415,31 @@ static node_t get_op (node_t n, int nop) {
   return n;
 }
 
-static pos_t curr_pos;
-static token_t curr_token, prev_token;
-
-static void setup_curr_token (pos_t pos, int token_code, node_code_t node_code) {
-  curr_token.pos = pos; curr_token.code = token_code;
-  curr_token.node_code = node_code; curr_token.node = NULL;
+static const char *uniq_str (const char *str) {
+  return str_add (str, T_STR, 0, FALSE).s;
 }
 
-static void setup_curr_node_token (pos_t pos, int token_code, node_t node) {
-  curr_token.pos = pos; curr_token.code = token_code;
-  curr_token.node_code = N_IGNORE; curr_token.node = node;
+static token_t curr_token;
+
+static void setup_curr_token (pos_t pos, const char *repr, int token_code, node_code_t node_code) {
+  curr_token = reg_malloc (sizeof (struct token));
+  curr_token->pos = pos; curr_token->code = token_code; curr_token->repr = repr;
+  curr_token->node_code = node_code; curr_token->node = NULL;
 }
 
-static int (*c_getc) (void);
-static void (*c_ungetc) (int c);
-#define TAB_STOP 8
-
-static int p_getc (void) {
-  curr_pos.ln_pos++;
-  return c_getc ();
+static void setup_curr_token_wo_uniq_repr (pos_t pos, const char *repr,
+					   int token_code, node_code_t node_code) {
+  setup_curr_token (pos, uniq_str (repr), token_code, node_code);
 }
 
-static void p_ungetc (int c) {
-  curr_pos.ln_pos--;
-  c_ungetc (c);
+static void setup_curr_node_token (pos_t pos, const char *repr, int token_code, node_t node) {
+  setup_curr_token_wo_uniq_repr (pos, repr,  token_code, N_IGNORE);
+  curr_token->node = node;
 }
 
-static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
-  int ch, i, c;
-
-  /* `current_position' corresponds position at the read char here. */
-  if (curr_c == EOF || curr_c == '\n') {
-    p_ungetc (curr_c);
-    return (-1);
-  }
-  *newln_p = *wrong_escape_p = FALSE;
-  if (curr_c == '\\') {
-    curr_c = p_getc ();
-    switch (curr_c) {
-    case 'a':
-      curr_c = '\a';
-      break;
-    case 'b':
-      curr_c = '\b';
-      break;
-    case 'n':
-      curr_c = '\n';
-      break;
-    case 'f':
-      curr_c = '\f';
-      break;
-    case 'r':
-      curr_c = '\r';
-      break;
-    case 't':
-      curr_c = '\t';
-      break;
-    case 'v':
-      curr_c = '\v';
-      break;
-    case '\\': case '\'': case '\?': case '\"':
-      break;
-    case '\n':
-      curr_pos.ln_pos = 0; curr_pos.lno++; *newln_p = TRUE;
-      break;
-    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
-      ch = curr_c - '0';
-      curr_c = p_getc ();
-      if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
-	p_ungetc (curr_c);
-      else {
-	 ch = (ch * 8 + curr_c - '0');
-	 curr_c = p_getc ();
-	 if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
-	   p_ungetc (curr_c);
-	 } else {
-	   ch = (ch * 8 + curr_c - '0');
-	 }
-      }
-      curr_c = ch;
-      break;
-    }
-    case 'x': case 'X': {
-      ch = 0;
-      curr_c = p_getc ();
-      for (ch = i = 0; isxdigit (curr_c); i++) {
-	c = isdigit (curr_c) ? curr_c - '0' : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10;
-	ch = (ch << 4) | c;
-	curr_c = p_getc ();
-      }
-      p_ungetc (curr_c);
-      curr_c = ch; *wrong_escape_p = i == 0;
-    }
-    default: *wrong_escape_p = TRUE; break;
-    }
-  }
-  return curr_c;
-}
-
-DEF_VARR (char);
-static VARR (char) *symbol_text;
-
-static void get_next_token (void) {
-  int start_c, curr_c, error_chars_num = 0;
-  pos_t pos;
-  
-  VARR_TRUNC (char, symbol_text, 0);
-  for (;;) {
-    curr_c = p_getc ();
-    switch (start_c = curr_c) {
-    case ' ': case '\r': case '\f':
-      break;
-    case '\t':
-      curr_pos.ln_pos = ((curr_pos.ln_pos - 1) / TAB_STOP + 1) * TAB_STOP; break;
-    case '\n':
-      curr_pos.ln_pos = 0; curr_pos.lno++; break;
-    case '~':
-      setup_curr_token (curr_pos, T_UNOP, N_BITWISE_NOT);
-      return;
-    case '+': case '-':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == start_c) {
-	setup_curr_token (pos, T_INCDEC, start_c == '+' ? N_INC : N_DEC);
-      } else if (curr_c == '=') {
-	setup_curr_token (pos, T_ASSIGN, start_c == '+' ? N_ADD_ASSIGN : N_SUB_ASSIGN);
-      } else if (start_c == '-' && curr_c == '>') {
-	setup_curr_token (pos, T_ARROW, N_DEREF_FIELD);
-      } else if (isdigit (curr_c)) {
-	p_ungetc (curr_c);
-	curr_c = start_c;
-	goto number;
-      } else if (curr_c == '.') {
-	curr_c = p_getc ();
-	if (isdigit (curr_c)){
-	  p_ungetc (curr_c);
-	  p_ungetc ('.');
-	  curr_c = start_c;
-	  goto number;
-	} else {
-	  p_ungetc (curr_c);
-	  p_ungetc ('.');
-	  setup_curr_token (pos, T_ADDOP, start_c == '+' ? N_ADD : N_SUB);
-	}
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, T_ADDOP, start_c == '+' ? N_ADD : N_SUB);
-      }
-      return;
-    case '=':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, T_EQNE, N_EQ);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, '=', N_ASSIGN);
-      }
-      return;
-    case '<': case '>':
-      pos = curr_pos; curr_c = p_getc ();
-      if (curr_c == start_c) {
-	curr_c = p_getc (); 
-	if (curr_c == '=') {
-	  setup_curr_token (pos, T_ASSIGN, start_c == '<' ? N_LSH_ASSIGN : N_RSH_ASSIGN);
-	} else {
-	  p_ungetc (curr_c);
-	  setup_curr_token (pos, T_SH, start_c == '<' ? N_LSH : N_RSH);
-	}
-      } else if (curr_c == '=') {
-	setup_curr_token (pos, T_CMP, start_c == '<' ? N_LE : N_GE);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, T_CMP, start_c == '<' ? N_LT : N_GT);
-      }
-      return;
-    case '*':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, T_ASSIGN, N_MUL_ASSIGN);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, '*', N_MUL);
-      }
-      return;
-    case '/':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, T_ASSIGN, N_DIV_ASSIGN);
-      } else if (curr_c == '/') { /* comment // */
-	while ((curr_c = p_getc ()) != '\n' && curr_c != EOF)
-	  ;
-	curr_pos.ln_pos = 0; curr_pos.lno++;
-	break;      
-      } else if (curr_c != '*') {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, '*', N_MUL);
-      } else { /* usual C comment */
-	for (;;) {
-	  if ((curr_c = p_getc ()) == EOF)
-	    error_func (C_unfinished_comment, "unfinished comment");
-	  if (curr_c == '*') {
-	    if ((curr_c = p_getc ()) == '/') {
-	      break;
-	    } else {
-	      p_ungetc (curr_c);
-	    }
-	  }
-	}
-	break;
-      }
-      return;
-    case '%':
-      pos = curr_pos; curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, T_ASSIGN, N_MOD_ASSIGN);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, T_DIVOP, N_MOD);
-      }
-      return;
-    case '&': case '|':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, T_ASSIGN, start_c == '&' ? N_AND_ASSIGN : N_OR_ASSIGN);
-      } else if (curr_c == start_c) {
-	setup_curr_token (pos, start_c == '&' ? T_ANDAND : T_OROR, start_c == '&' ? N_ANDAND : N_OROR);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, start_c, start_c == '&' ? N_AND : N_OR);
-      }
-      return;
-    case '^': case '!':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '=') {
-	setup_curr_token (pos, start_c == '^' ? T_ASSIGN : T_EQNE, start_c == '^' ? N_XOR_ASSIGN : N_NE);
-      } else {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, start_c == '^' ? '^' : T_UNOP, start_c == '^' ? N_XOR : N_NOT);
-      }
-      return;
-    case ';': case '?': case ':': case '(': case ')': case '{': case '}': case ']': case EOF:
-      setup_curr_token (curr_pos, curr_c, N_IGNORE);
-      return;
-    case ',':
-      setup_curr_token (curr_pos, ',', N_COMMA);
-      return;
-    case '[':
-      setup_curr_token (curr_pos, '[', N_IND);
-      return;
-    case '.':
-      pos = curr_pos;
-      curr_c = p_getc ();
-      if (curr_c == '.') {
-	curr_c = p_getc ();
-	if (curr_c == '.') {
-	  setup_curr_token (pos, T_DOTS, N_IGNORE);
-	} else {
-	  p_ungetc (curr_c);
-	  p_ungetc ('.');
-	  setup_curr_token (pos, '.', N_FIELD);
-	}
-	return;
-      } else if (! isdigit (curr_c)) {
-	p_ungetc (curr_c);
-	setup_curr_token (pos, '.', N_FIELD);
-	return;
-      }
-      p_ungetc (curr_c);
-      curr_c = '.';
-    number:
-      /* Fall through: */
-    case '0': case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9': {
-      int base = 10, err_p = FALSE, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
-      int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE;
-      int hex_char_p;
-      
-      pos = curr_pos;
-      VARR_TRUNC (char, symbol_text, 0);
-      if (curr_c == '+' || curr_c == '-') {
-	VARR_PUSH (char, symbol_text, curr_c);
-	curr_c = p_getc ();
-      }
-      if (curr_c == '.' && VARR_LENGTH (char, symbol_text) == 0) {
-	VARR_PUSH (char, symbol_text, '0');
-      }
-      if (curr_c == '0') {
-	curr_c = p_getc ();
-	if (curr_c != 'x' && curr_c != 'X') {
-	  base = 8;
-	  p_ungetc (curr_c);
-	  curr_c = '0';
-	} else {
-	  VARR_PUSH (char, symbol_text, '0');
-	  VARR_PUSH (char, symbol_text, 'x');
-	  curr_c = p_getc ();
-	  base = 16;
-	}
-      }
-      for (;;) {
-	VARR_PUSH (char, symbol_text, curr_c);
-	curr_c = p_getc ();
-	if (curr_c == '8' || curr_c == '9')
-	  dec_p = TRUE;
-	hex_char_p = isxdigit (curr_c);
-	if (! isdigit (curr_c) && (base != 16 || ! hex_char_p))
-	  break;
-	if (hex_char_p && ! isdigit (curr_c))
-	  hex_p = TRUE;
-      }
-      assert (base == 16 || ! hex_p);
-      if (curr_c == '.') {
-	double_p = TRUE;
-	do {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = p_getc ();
-	} while (isdigit (curr_c));
-      }
-      if ((base != 16 && (curr_c == 'e' || curr_c == 'E'))
-	  || (base == 16 && (curr_c == 'p' || curr_c == 'P'))) {
-	double_p = TRUE;
-	curr_c = p_getc ();
-	if (curr_c != '+' && curr_c != '-' && ! isdigit (curr_c)) {
-	  error_func (C_absent_exponent, "absent exponent");
-	  err_p = TRUE;
-	} else {
-	  VARR_PUSH (char, symbol_text, base == 16 ? 'p' : 'e');
-	  if (curr_c == '+' || curr_c == '-') {
-	    VARR_PUSH (char, symbol_text, curr_c);
-	    curr_c = p_getc ();
-	    if (! isdigit (curr_c)) {
-	      error_func (C_absent_exponent, "absent exponent");
-	      err_p = TRUE;
-	    }
-	  }
-	  if (! err_p) {
-	    do {
-	      VARR_PUSH (char, symbol_text, curr_c);
-	      curr_c = p_getc ();
-	    } while (isdigit (curr_c));
-	  }
-	}
-      } else if (! double_p && (curr_c == 'l' || curr_c == 'L')) {
-	long_p = TRUE;
-	curr_c = p_getc ();
-      }
-      if (double_p) {
-	if (curr_c == 'f' || curr_c == 'F') {
-	  double_p = FALSE; float_p = TRUE;
-	  curr_c = p_getc ();
-	} else if (curr_c == 'l' || curr_c == 'L') {
-	  double_p = FALSE; long_double_p = TRUE;
-	  curr_c = p_getc ();
-	}
-      } else {
-	int c2 = p_getc (), c3 = p_getc ();
-	
-	if (((curr_c == 'u' || curr_c == 'U')
-	     && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L'))
-	    || ((curr_c == 'l' || curr_c == 'L')
-		&& (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u'))) {
-	  uns_p = long_long_p = TRUE;
-	  curr_c = p_getc ();
-	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
-		   || (curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u')) {
-	  uns_p = long_p = TRUE; curr_c = c3;
-	} else if ((curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')) {
-	  long_p = TRUE; curr_c = c3;
-	} else if ((curr_c == 'l' || curr_c == 'L')) {
-	  long_p = TRUE;
-	  p_ungetc (c3);
-	  curr_c = c2;
-	} else if ((curr_c == 'u' || curr_c == 'U')) {
-	  uns_p = TRUE;
-	  p_ungetc (c3);
-	  curr_c = c2;
-	} else {
-	  p_ungetc (c3);
-	  p_ungetc (c2);
-	}
-      }
-      VARR_PUSH (char, symbol_text, '\0');
-      p_ungetc (curr_c);
-      if (err_p)
-	return;
-      errno = 0;
-      if (float_p) {
-	float f = strtof (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, T_CONSTANT, new_f_node (f, pos));
-      } else if (double_p) {
-	double d = strtod (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, T_CONSTANT, new_d_node (d, pos));
-      } else if (long_double_p) {
-	long double ld = strtod (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, T_CONSTANT, new_ld_node (ld, pos));
-      } else if (base == 8 && dec_p) {
-	error_func (C_wrong_octal_int, "wrong octal integer");
-	err_p = TRUE;
-      } else if (uns_p) {
-	if (long_long_p) {
-	  unsigned long long ull = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
-
-	  setup_curr_node_token (pos, T_CONSTANT, new_ull_node (ull, pos));
-	} else {
-	  unsigned long ul = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
-
-	  setup_curr_node_token (pos, T_CONSTANT, new_ul_node (ul, pos));  /* ??? unsigned int */
-	}
-      } else if (long_long_p) {
-	long long ll = strtoll (VARR_ADDR (char, symbol_text), NULL, base);
-
-	setup_curr_node_token (pos, T_CONSTANT, new_ll_node (ll, pos));
-      } else {
-	long l = strtol (VARR_ADDR (char, symbol_text), NULL, base);
-
-	setup_curr_node_token (pos, T_CONSTANT, new_l_node (l, pos)); /* ??? int */
-      }
-      if (errno) {
-	error_func (C_out_of_range_number, "number is out of range");
-	err_p = TRUE;
-      }
-      return;
-    }
-    case '\'': { /* ??? unicode and wchar */
-      int ch, newln_p, wrong_escape_p, err_p = FALSE;
-      
-      pos = curr_pos; VARR_TRUNC (char, symbol_text, 0); curr_c = p_getc ();
-      if (curr_c == '\'') {
-	error_func (C_invalid_char_constant, "empty character");
-	err_p = TRUE;
-      } else {
-	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
-	if (ch < 0 || newln_p) {
-	  error_func (C_invalid_char_constant, "invalid character");
-	  err_p = TRUE;
-	} else if (wrong_escape_p) {
-	  error_func (C_invalid_char_constant, "invalid escape sequence");
-	  err_p = TRUE;
-	}
-      }
-      curr_c = p_getc ();
-      if (curr_c != '\'') {
-	p_ungetc (curr_c);
-	error_func (C_invalid_char_constant, "more one character in char");
-	err_p = TRUE;
-      }
-      setup_curr_node_token (pos, T_CONSTANT, new_ch_node (ch, pos));
-      return;
-    }
-    case '\"': { /* ??? unicode and wchar */
-      int ch, newln_p, wrong_escape_p, err_p = FALSE;
-      str_t str;
-      
-      pos = curr_pos; VARR_TRUNC (char, symbol_text, 0);
-      for (;;) {
-	curr_c = p_getc ();
-	if (curr_c == '\"')
-	  break;
-	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
-	if (ch < 0) {
-	  error_func (C_no_string_end, "no string end");
-	  err_p = TRUE;
-	  break;
-	}
-	if (wrong_escape_p) {
-	  error_func (C_invalid_str_constant, "invalid escape sequence");
-	  err_p = TRUE;
-	  continue;
-	}
-	if (! newln_p) {
-	  VARR_PUSH (char, symbol_text, ch);
-	}
-      }
-      VARR_PUSH (char, symbol_text, '\0');
-      str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
-      setup_curr_node_token (pos, T_STR, new_str_node (N_STR, pos, str.s));
-      return;
-    }
-    default:
-      if (isalpha (curr_c) || curr_c == '_' ) {
-	str_t str;
-	
-	pos = curr_pos;
-	do {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = p_getc ();
-	} while (isalnum (curr_c) || curr_c == '_');
-	p_ungetc (curr_c);
-	VARR_PUSH (char, symbol_text, '\0');
-	str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
-	if (str.key != T_STR) {
-	  setup_curr_token (pos, str.key, N_IGNORE);
-	} else {
-	  setup_curr_node_token (pos, T_ID, new_str_node (N_ID, pos, str.s));
-	}
-	return;
-      } else {
-	error_chars_num++;
-	if (error_chars_num == 1)
-	  error_func (C_invalid_char, "invalid input character");
-      }
-    }
-  }
-}
-
-DEF_VARR (token_t);
-static VARR (token_t) *recorded_tokens, *buffered_tokens;
-static int record_level;
-
-static void read_token (void) {
-  if (record_level > 0)
-    VARR_PUSH (token_t, recorded_tokens, curr_token);
-  prev_token = curr_token;
-  if (VARR_LENGTH (token_t, buffered_tokens) == 0)
-    get_next_token ();
-  else
-    curr_token = VARR_POP (token_t, buffered_tokens);
-}
-
-static size_t record_start (void) {
-  size_t mark = VARR_LENGTH (token_t, recorded_tokens);
-
-  assert (record_level >= 0);
-  record_level++;
-  return mark;
-}
-
-static void record_stop (size_t mark, int restore_p) {
-  assert (record_level > 0);
-  record_level--;
-  if (! restore_p) {
-    if (record_level == 0)
-      VARR_TRUNC (token_t, recorded_tokens, mark);
-    return;
-  }
-  VARR_PUSH (token_t, buffered_tokens, curr_token);
-  while (VARR_LENGTH (token_t, recorded_tokens) > mark) {
-    curr_token = VARR_POP (token_t, recorded_tokens);
-    VARR_PUSH (token_t, buffered_tokens, curr_token);
-  }
-  curr_token = VARR_POP (token_t, buffered_tokens);
+static void print_pos (pos_t pos) {
+  if (pos.lno >= 0)
+    fprintf (stderr, "%s:%d:%d: ", pos.fname, pos.lno, pos.ln_pos);
 }
 
 static const char *get_token_name (int token_code) {
@@ -964,7 +478,7 @@ static const char *get_token_name (int token_code) {
   case T_DOTS:
     return "...";
   default:
-    if ((s = find_str_by_key (token_code)) != NULL)
+    if ((s = find_str_by_key (token_code)) != NULL) // ???
       return s;
     if (isprint (token_code))
       sprintf (buf, "%c", token_code);
@@ -974,27 +488,8 @@ static const char *get_token_name (int token_code) {
   }
 }
 
-static void print_pos (pos_t pos) {
-  if (pos.lno >= 0)
-    fprintf (stderr, "%d:%d: ", pos.lno, pos.ln_pos);
-}
-
-static void syntax_error (const char *expected_name) {
-  static int context_len = 30;
-  char buf[context_len + 1];
-  int i, c;
-  
-  print_pos (curr_token.pos);
-  fprintf (stderr, "syntax error on %s", get_token_name (curr_token.code));
-  fprintf (stderr, " (expected '%s'):", expected_name);
-  for (i = 0; (c = c_getc ()) != EOF && c != '\n' && i < context_len; i++)
-    buf[i] = c;
-  buf[i] = '\0';
-  c_ungetc (c);
-  for (i--; i >= 0; i--)
-    c_ungetc (buf[i]);
-  fprintf (stderr, " `%s'\n", buf);
-}
+static int (*c_getc) (void);
+static void (*c_ungetc) (int c);
 
 static void print_error (pos_t pos, const char *format, ...) {
   va_list args;
@@ -1003,6 +498,931 @@ static void print_error (pos_t pos, const char *format, ...) {
   print_pos (pos);
   vfprintf (stderr, format, args);
   va_end (args);
+}
+
+#define TAB_STOP 8
+
+#define EOU (EOF - 1) /* end of whole translation unit text */
+
+DEF_VARR (char);
+
+typedef struct stream {
+  FILE *f;                  /* the current file */
+  const char *fname;        /* NULL for stdin */
+  VARR (char) *ln;          /* stream current line in reverse order */
+  pos_t pos;                /* includes file name used for reports */
+  fpos_t fpos;              /* file pos to resume stream */
+} *stream_t;
+
+DEF_VARR (stream_t);
+static VARR (stream_t) *streams;  /* stack of streams */
+static stream_t cs;               /* current stream */
+  
+static void init_streams (void) {
+  VARR_CREATE (stream_t, streams, 32);
+}
+
+static void finish_streams (void) { // ???
+  VARR_DESTROY (stream_t, streams);
+}
+
+static stream_t new_stream (FILE *f, const char *fname) {
+  stream_t s = malloc (sizeof (struct stream));
+  
+  VARR_CREATE (char, s->ln, 128);
+  s->f = f; s->fname = s->pos.fname = fname;
+  s->pos.lno = s->pos.ln_pos = 0;
+}
+
+static void free_stream (stream_t s) {
+  VARR_DESTROY (char, s->ln);
+  free (s);
+}
+
+static void add_stream (FILE *f, const char *fname) {
+  if (cs != NULL && cs->f != stdin) {
+    fgetpos (cs->f, &cs->fpos);
+    fclose (cs->f);
+  }
+  cs = new_stream (f, fname);
+  VARR_PUSH (stream_t, streams, cs);
+}
+
+static void change_stream_fname_lno (const char *fname, int lno) {
+  if (fname != NULL)
+    cs->fname = fname;
+  cs->pos.lno = lno; cs->pos.ln_pos = 0;
+}
+
+static void remove_trigraphs (void) {
+  int len = VARR_LENGTH (char, cs->ln);
+  char *addr = VARR_ADDR (char, cs->ln);
+  int i, start, to, ch;
+  
+  for (i = to = 0; i < len; i++, to++) {
+    addr[to] = addr[i];
+    for (start = i; i < len && addr[i] == '?'; i++, to++)
+      addr[to] = addr[i];
+    if (i >= len)
+      break;
+    if (i < start + 2) {
+      addr[to] = addr[i];
+      continue;
+    }
+    switch (addr[i]) {
+    case '=': ch = '#'; break;
+    case '(': ch = '['; break;
+    case '/': ch = '\\'; break;
+    case ')': ch = ']'; break;
+    case '\'': ch = '^'; break;
+    case '<': ch = '{'; break;
+    case '!': ch = '|'; break;
+    case '>': ch = '}'; break;
+    case '-': ch = '~'; break;
+    default: ch = 0; break;
+    }
+    if (ch == 0)
+      continue;
+    to -= 2;
+    addr[to] = ch;
+    len -= 2;
+  }
+  VARR_TRUNC (char, cs->ln, len);
+}
+  
+static int ln_get (FILE *f) {
+  if (f == NULL)
+    return c_getc (); /* top level */
+  return fgetc (f);
+}
+
+static int get_line (void) { /* translation phase 1 and 2 */
+  int c, eof_p = 0;
+  char *addr;
+
+  VARR_TRUNC (char, cs->ln, 0);
+  for (c = ln_get (cs->f); c != EOF && c != '\n'; c = ln_get (cs->f))
+    VARR_PUSH (char, cs->ln, c);
+  eof_p = c == EOF;
+  if (eof_p) {
+    if (VARR_LENGTH (char, cs->ln) == 0)
+      return FALSE;
+    if (c != '\n')
+      print_error (cs->pos, "no end of line at file end\n");
+  }
+  remove_trigraphs ();
+  VARR_PUSH (char, cs->ln, '\n');
+  /* make reverse order: */
+  addr = VARR_ADDR (char, cs->ln);
+  for (int i = VARR_LENGTH (char, cs->ln) - 1, j = 0; i > j; i--, j++) {
+    int temp = addr[i];
+    
+    addr[i] = addr[j]; addr[j] = temp;
+  }
+  return TRUE;
+}
+
+static int cs_get (void) {
+  stream_t s;
+
+  if (VARR_LENGTH (char, cs->ln) >  0) {
+    cs->pos.ln_pos++;
+    return VARR_POP (char, cs->ln);
+  }
+  if (get_line ())
+    return cs_get ();
+  return EOF;
+}
+  
+static void cs_unget (int c) {
+  cs->pos.ln_pos--;
+  VARR_PUSH (char, cs->ln, c);
+}
+  
+static void set_string_stream (const char *str, int lno, const char *fname) {
+  /* read from string str */
+  cs = new_stream (NULL, NULL);
+  VARR_PUSH (stream_t, streams, cs);
+  cs->pos.lno = lno; cs->pos.ln_pos = 0; cs->pos.fname = fname;
+  for (; *str != '\0'; str++)
+    VARR_PUSH (char, cs->ln, *str);
+}
+
+static void remove_string_stream (void) {
+  assert (cs->f == NULL);
+  free_stream (VARR_POP (stream_t, streams));
+  cs = VARR_LAST (stream_t, streams);
+}
+
+static VARR (char) *symbol_text, *temp_string;
+
+static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
+  int ch, i, c;
+
+  /* `current_position' corresponds position at the read char here. */
+  if (curr_c == EOF || curr_c == '\n') {
+    cs_unget (curr_c);
+    return (-1);
+  }
+  *newln_p = *wrong_escape_p = FALSE;
+  VARR_PUSH (char, symbol_text, curr_c);
+  if (curr_c == '\\') {
+    curr_c = cs_get ();
+    VARR_PUSH (char, symbol_text, curr_c);
+    switch (curr_c) {
+    case 'a':
+      curr_c = '\a';
+      break;
+    case 'b':
+      curr_c = '\b';
+      break;
+    case 'n':
+      curr_c = '\n';
+      break;
+    case 'f':
+      curr_c = '\f';
+      break;
+    case 'r':
+      curr_c = '\r';
+      break;
+    case 't':
+      curr_c = '\t';
+      break;
+    case 'v':
+      curr_c = '\v';
+      break;
+    case '\\': case '\'': case '\?': case '\"':
+      break;
+    case '\n':
+      cs->pos.ln_pos = 0;
+      cs->pos.lno++;
+      *newln_p = TRUE;
+      break;
+    case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
+      ch = curr_c - '0';
+      curr_c = cs_get ();
+      if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
+	cs_unget (curr_c);
+      else {
+	VARR_PUSH (char, symbol_text, curr_c);
+	 ch = (ch * 8 + curr_c - '0');
+	 curr_c = cs_get ();
+	 if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
+	   cs_unget (curr_c);
+	 } else {
+	   VARR_PUSH (char, symbol_text, curr_c);
+	   ch = (ch * 8 + curr_c - '0');
+	 }
+      }
+      curr_c = ch;
+      break;
+    }
+    case 'x': case 'X': {
+      ch = 0;
+      curr_c = cs_get ();
+      for (ch = i = 0; isxdigit (curr_c); i++) {
+	VARR_PUSH (char, symbol_text, curr_c);
+	c = isdigit (curr_c) ? curr_c - '0' : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10;
+	ch = (ch << 4) | c;
+	curr_c = cs_get ();
+      }
+      cs_unget (curr_c);
+      curr_c = ch; *wrong_escape_p = i == 0;
+    }
+    default:
+      *wrong_escape_p = TRUE;
+      break;
+    }
+  }
+  return curr_c;
+}
+
+DEF_VARR (token_t);
+static VARR (token_t) *buffered_tokens;
+
+static void read_next_pptoken (void) {
+  int start_c, curr_c, nl_p;
+  pos_t pos;
+  
+  if (cs->f != NULL && VARR_LENGTH (token_t, buffered_tokens) != 0) {
+    curr_token = VARR_POP (token_t, buffered_tokens);
+    return;
+  }
+  VARR_TRUNC (char, symbol_text, 0);
+  curr_c = cs_get ();
+  for (nl_p = FALSE;; curr_c = cs_get ()) { /* process white spaces/comments */
+    if (curr_c == ' ' || curr_c == '\t' || curr_c == '\f' || curr_c == '\r' || curr_c == '\v') {
+      VARR_PUSH (char, symbol_text, curr_c);
+      continue;
+    } else if (curr_c == '\n') {
+      cs->pos.ln_pos = 0;
+      cs->pos.lno++;
+      VARR_PUSH (char, symbol_text, curr_c);
+      nl_p = TRUE;
+      continue;
+    } else if (curr_c != '/') {
+      break;
+    }
+    curr_c = cs_get ();
+    if (curr_c == '/') {
+      VARR_PUSH (char, symbol_text, '/');
+      VARR_PUSH (char, symbol_text, curr_c);
+      nl_p = TRUE;
+      for (curr_c = cs_get ();
+	   curr_c != '\n' && curr_c != EOU && curr_c != EOF;
+	   curr_c = cs_get ())
+	VARR_PUSH (char, symbol_text, curr_c);
+      if (curr_c != '\n') {
+	error_func (C_unfinished_comment, "unfinished comment");
+	break;
+      }
+      cs_unget (curr_c);
+    } else if (curr_c == '*') {
+      VARR_PUSH (char, symbol_text, '/');
+      VARR_PUSH (char, symbol_text, curr_c);
+      for (;;) {
+	for (curr_c = cs_get ();
+	     curr_c != '*' && curr_c != EOU && curr_c != EOF;
+	     curr_c = cs_get ()) {
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  if (curr_c == '\n') {
+	    cs->pos.ln_pos = 0;
+	    cs->pos.lno++;
+	  }
+	}
+	if (curr_c == '*') {
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  curr_c = cs_get ();
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  if (curr_c != '/')
+	    continue;
+	}
+	break;
+      }
+      if (curr_c != '/') {
+	error_func (C_unfinished_comment, "unfinished comment");
+	break;
+      }
+    } else {
+      cs_unget (curr_c);
+      curr_c = '/';
+      break;
+    }
+  }
+  if (VARR_LENGTH (char, symbol_text) != 0) {
+    cs_unget (curr_c);
+    VARR_PUSH (char, symbol_text, '\0');
+    setup_curr_token_wo_uniq_repr (cs->pos, VARR_ADDR (char, symbol_text),
+				   nl_p ? '\n' : ' ',  N_IGNORE);
+    return;
+  }
+  for (;;) {
+    switch (start_c = curr_c) {
+    case '\t':
+      cs->pos.ln_pos = ((cs->pos.ln_pos - 1) / TAB_STOP + 1) * TAB_STOP;
+      break;
+    case '~':
+      setup_curr_token (cs->pos, not_str, T_UNOP, N_BITWISE_NOT);
+      return;
+    case '+': case '-':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == start_c) {
+	if (start_c == '+')
+	  setup_curr_token (pos, inc_str, T_INCDEC, N_INC);
+	else
+	  setup_curr_token (pos, dec_str, T_INCDEC, N_DEC);
+      } else if (curr_c == '=') {
+	if (start_c == '+')
+	  setup_curr_token (pos, plusassign_str, T_ASSIGN, N_ADD_ASSIGN);
+	else
+	  setup_curr_token (pos, minusassign_str, T_ASSIGN, N_SUB_ASSIGN);
+      } else if (start_c == '-' && curr_c == '>') {
+	setup_curr_token (pos, arrow_str, T_ARROW, N_DEREF_FIELD);
+      } else if (isdigit (curr_c)) {
+	cs_unget (curr_c);
+	curr_c = start_c;
+	goto number;
+      } else if (curr_c == '.') {
+	curr_c = cs_get ();
+	if (isdigit (curr_c)){
+	  cs_unget ('.');
+	  cs_unget (curr_c);
+	  curr_c = start_c;
+	  goto number;
+	} else {
+	  cs_unget ('.');
+	  cs_unget (curr_c);
+	  if (start_c == '+')
+	    setup_curr_token (pos, plus_str, T_ADDOP, N_ADD);
+	  else
+	    setup_curr_token (pos, minus_str, T_ADDOP, N_SUB);
+	}
+      } else {
+	cs_unget (curr_c);
+	if (start_c == '+')
+	  setup_curr_token (pos, plus_str, T_ADDOP, N_ADD);
+	else
+	  setup_curr_token (pos, minus_str, T_ADDOP, N_SUB);
+      }
+      return;
+    case '=':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == '=') {
+	setup_curr_token (pos, eq_str, T_EQNE, N_EQ);
+      } else {
+	cs_unget (curr_c);
+	setup_curr_token (pos, assign_str, '=', N_ASSIGN);
+      }
+      return;
+    case '<': case '>':
+      pos = cs->pos; curr_c = cs_get ();
+      if (curr_c == start_c) {
+	curr_c = cs_get (); 
+	if (curr_c == '=') {
+	  if (start_c == '<')
+	    setup_curr_token (pos, lshassign_str, T_ASSIGN, N_LSH_ASSIGN);
+	  else
+	    setup_curr_token (pos, rshassign_str, T_ASSIGN, N_RSH_ASSIGN);
+	} else {
+	  cs_unget (curr_c);
+	  if (start_c == '<')
+	    setup_curr_token (pos, lsh_str, T_SH, N_LSH);
+	  else
+	    setup_curr_token (pos, rsh_str, T_SH, N_RSH);
+	}
+      } else if (curr_c == '=') {
+	if (start_c == '<')
+	  setup_curr_token (pos, le_str, T_CMP, N_LE);
+	else
+	  setup_curr_token (pos, ge_str, T_CMP, N_GE);
+      } else if (start_c == '<' && curr_c == ':') {
+	setup_curr_token (pos, rbracket2_str, '[', N_IGNORE);
+      } else if (start_c == '<' && curr_c == '%') {
+	setup_curr_token (pos, rbrace2_str, '{', N_IGNORE);
+      } else {
+	cs_unget (curr_c);
+	if (start_c == '<')
+	  setup_curr_token (pos, lt_str, T_CMP, N_LT);
+	else
+	  setup_curr_token (pos, gt_str, T_CMP, N_GT);
+      }
+      return;
+    case '*':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == '=') {
+	setup_curr_token (pos, mulassign_str, T_ASSIGN, N_MUL_ASSIGN);
+      } else {
+	cs_unget (curr_c);
+	setup_curr_token (pos, star_str, '*', N_MUL);
+      }
+      return;
+    case '/':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      assert (curr_c != '/' && curr_c != '*');
+      if (curr_c == '=') {
+	setup_curr_token (pos, divassign_str, T_ASSIGN, N_DIV_ASSIGN);
+      } else if (curr_c == '/') { /* comment // */
+	assert (FALSE);
+	while ((curr_c = cs_get ()) != '\n' && curr_c != EOF && curr_c != EOU)
+	  ;
+	cs->pos.ln_pos = 0; cs->pos.lno++;
+	break;      
+      } else if (curr_c != '*') {
+	cs_unget (curr_c);
+	setup_curr_token (pos, slash_str, '/', N_DIV);
+      } else { /* usual C comment */
+	assert (FALSE);
+	for (;;) {
+	  if ((curr_c = cs_get ()) == EOF || curr_c == EOU)
+	    error_func (C_unfinished_comment, "unfinished comment");
+	  if (curr_c == '*') {
+	    if ((curr_c = cs_get ()) == '/') {
+	      break;
+	    } else {
+	      cs_unget (curr_c);
+	    }
+	  }
+	}
+	break;
+      }
+      return;
+    case '%':
+      pos = cs->pos; curr_c = cs_get ();
+      if (curr_c == '=') {
+	setup_curr_token (pos, modassign_str, T_ASSIGN, N_MOD_ASSIGN);
+      } else if (curr_c == '>') {
+	setup_curr_token (pos, lbrace2_str, '}', N_IGNORE);
+      } else if (curr_c == ':') {
+	curr_c = cs_get ();
+	if (curr_c != '%') {
+	  cs_unget (curr_c);
+	  setup_curr_token (pos, sharp2_str, '#', N_IGNORE);
+	} else {
+	  curr_c = cs_get ();
+	  if (curr_c == ':')
+	    setup_curr_token (pos, doublesharp2_str, T_DBLNO, N_IGNORE);
+	  else {
+	    cs_unget ('%');
+	    cs_unget (curr_c);
+	    setup_curr_token (pos, sharp2_str, '#', N_IGNORE);
+	  }
+	}
+      } else {
+	cs_unget (curr_c);
+	setup_curr_token (pos, percent_str, T_DIVOP, N_MOD);
+      }
+      return;
+    case '&': case '|':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == '=') {
+	if (start_c == '&')
+	  setup_curr_token (pos, andassign_str, T_ASSIGN, N_AND_ASSIGN);
+	else
+	  setup_curr_token (pos, orassign_str, T_ASSIGN, N_OR_ASSIGN);
+      } else if (curr_c == start_c) {
+	if (start_c == '&')
+	  setup_curr_token (pos, land_str, T_ANDAND, N_ANDAND);
+	else
+	  setup_curr_token (pos, lor_str, T_OROR, N_OROR);
+      } else {
+	cs_unget (curr_c);
+	if (start_c == '&')
+	  setup_curr_token (pos, and_str, start_c, N_AND);
+	else
+	  setup_curr_token (pos, or_str, start_c, N_OR);
+      }
+      return;
+    case '^': case '!':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == '=') {
+	if (start_c == '^')
+	setup_curr_token (pos, xorassign_str, T_ASSIGN, N_XOR_ASSIGN);
+	else
+	setup_curr_token (pos, ne_str,  T_EQNE, N_NE);
+      } else {
+	cs_unget (curr_c);
+	if (start_c == '^')
+	  setup_curr_token (pos, xor_str, '^', N_XOR);
+	else
+	  setup_curr_token (pos, lnot_str, T_UNOP, N_NOT);
+
+      }
+      return;
+    case ';':
+      setup_curr_token (cs->pos, semicolon_str, curr_c, N_IGNORE);
+      return;
+    case '?':
+      setup_curr_token (cs->pos, qmark_str, curr_c, N_IGNORE);
+      return;
+    case '(':
+      setup_curr_token (cs->pos, lpar_str, curr_c, N_IGNORE);
+      return;
+    case ')':
+      setup_curr_token (cs->pos, rpar_str, curr_c, N_IGNORE);
+      return;
+    case '{':
+      setup_curr_token (cs->pos, lbrace_str, curr_c, N_IGNORE);
+      return;
+    case '}':
+      setup_curr_token (cs->pos, rbrace_str, curr_c, N_IGNORE);
+      return;
+    case ']':
+      setup_curr_token (cs->pos, rbracket_str, curr_c, N_IGNORE);
+      return;
+    case EOF: {
+      pos_t pos = cs->pos;
+      
+      if (cs->f != stdin && cs->f != NULL)
+	fclose (cs->f);
+      free_stream (VARR_POP (stream_t, streams));
+      if (VARR_LENGTH (stream_t, streams) == 0) {
+	setup_curr_token (pos, eof_str, EOU, N_IGNORE);
+	return;
+      }
+      cs = VARR_LAST (stream_t, streams);
+      if (cs->fname == NULL) {
+	cs->f = stdin;
+      } else {
+	cs->f = fopen (cs->fname, "r");
+	fsetpos (cs->f, &cs->fpos);
+      }
+      setup_curr_token (cs->pos, eof_str, EOF, N_IGNORE);
+      return;
+    }
+    case ':':
+      curr_c = cs_get ();
+      if (curr_c == '>') {
+	setup_curr_token (cs->pos, rbracket2_str, ']', N_IGNORE);
+      } else {
+	cs_unget (curr_c);
+	setup_curr_token (cs->pos, colon_str, ':', N_IGNORE);
+      }
+      return;
+    case '#':
+      curr_c = cs_get ();
+      if (curr_c == '#') {
+	setup_curr_token (cs->pos, doublesharp_str, T_DBLNO, N_IGNORE);
+      } else {
+	cs_unget (curr_c);
+	setup_curr_token (cs->pos, sharp_str, '#', N_IGNORE);
+      }
+      return;
+    case ',':
+      setup_curr_token (cs->pos, comma_str, ',', N_COMMA);
+      return;
+    case '[':
+      setup_curr_token (cs->pos, lbracket_str, '[', N_IND);
+      return;
+    case '.':
+      pos = cs->pos;
+      curr_c = cs_get ();
+      if (curr_c == '.') {
+	curr_c = cs_get ();
+	if (curr_c == '.') {
+	  setup_curr_token (pos, dots_str, T_DOTS, N_IGNORE);
+	} else {
+	  cs_unget ('.');
+	  cs_unget (curr_c);
+	  setup_curr_token (pos, dot_str, '.', N_FIELD);
+	}
+	return;
+      } else if (! isdigit (curr_c)) {
+	cs_unget (curr_c);
+	setup_curr_token (pos, dot_str, '.', N_FIELD);
+	return;
+      }
+      cs_unget (curr_c);
+      curr_c = '.';
+    number:
+      /* Fall through: */
+    case '0': case '1': case '2': case '3': case '4':
+    case '5': case '6': case '7': case '8': case '9': {
+      int base = 10, err_p = FALSE, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
+      int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE;
+      int hex_char_p;
+      
+      pos = cs->pos;
+      VARR_TRUNC (char, symbol_text, 0);
+      if (curr_c == '+' || curr_c == '-') {
+	VARR_PUSH (char, symbol_text, curr_c);
+	curr_c = cs_get ();
+      }
+      if (curr_c == '.' && VARR_LENGTH (char, symbol_text) == 0) {
+	VARR_PUSH (char, symbol_text, '0');
+      }
+      if (curr_c == '0') {
+	curr_c = cs_get ();
+	if (curr_c != 'x' && curr_c != 'X') {
+	  base = 8;
+	  cs_unget (curr_c);
+	  curr_c = '0';
+	} else {
+	  VARR_PUSH (char, symbol_text, '0');
+	  VARR_PUSH (char, symbol_text, 'x');
+	  curr_c = cs_get ();
+	  base = 16;
+	}
+      }
+      for (;;) {
+	VARR_PUSH (char, symbol_text, curr_c);
+	curr_c = cs_get ();
+	if (curr_c == '8' || curr_c == '9')
+	  dec_p = TRUE;
+	hex_char_p = isxdigit (curr_c);
+	if (! isdigit (curr_c) && (base != 16 || ! hex_char_p))
+	  break;
+	if (hex_char_p && ! isdigit (curr_c))
+	  hex_p = TRUE;
+      }
+      assert (base == 16 || ! hex_p);
+      if (curr_c == '.') {
+	double_p = TRUE;
+	do {
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  curr_c = cs_get ();
+	} while (isdigit (curr_c));
+      }
+      if ((base != 16 && (curr_c == 'e' || curr_c == 'E'))
+	  || (base == 16 && (curr_c == 'p' || curr_c == 'P'))) {
+	double_p = TRUE;
+	curr_c = cs_get ();
+	if (curr_c != '+' && curr_c != '-' && ! isdigit (curr_c)) {
+	  error_func (C_absent_exponent, "absent exponent");
+	  err_p = TRUE;
+	} else {
+	  VARR_PUSH (char, symbol_text, base == 16 ? 'p' : 'e');
+	  if (curr_c == '+' || curr_c == '-') {
+	    VARR_PUSH (char, symbol_text, curr_c);
+	    curr_c = cs_get ();
+	    if (! isdigit (curr_c)) {
+	      error_func (C_absent_exponent, "absent exponent");
+	      err_p = TRUE;
+	    }
+	  }
+	  if (! err_p) {
+	    do {
+	      VARR_PUSH (char, symbol_text, curr_c);
+	      curr_c = cs_get ();
+	    } while (isdigit (curr_c));
+	  }
+	}
+      } else if (! double_p && (curr_c == 'l' || curr_c == 'L')) {
+	long_p = TRUE;
+	curr_c = cs_get ();
+      }
+      if (double_p) {
+	if (curr_c == 'f' || curr_c == 'F') {
+	  double_p = FALSE; float_p = TRUE;
+	  curr_c = cs_get ();
+	} else if (curr_c == 'l' || curr_c == 'L') {
+	  double_p = FALSE; long_double_p = TRUE;
+	  curr_c = cs_get ();
+	}
+      } else {
+	int c2 = cs_get (), c3 = cs_get ();
+	
+	if (((curr_c == 'u' || curr_c == 'U')
+	     && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L'))
+	    || ((curr_c == 'l' || curr_c == 'L')
+		&& (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u'))) {
+	  uns_p = long_long_p = TRUE;
+	  curr_c = cs_get ();
+	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
+		   || (curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u')) {
+	  uns_p = long_p = TRUE; curr_c = c3;
+	} else if ((curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')) {
+	  long_p = TRUE; curr_c = c3;
+	} else if ((curr_c == 'l' || curr_c == 'L')) {
+	  long_p = TRUE;
+	  cs_unget (c3);
+	  curr_c = c2;
+	} else if ((curr_c == 'u' || curr_c == 'U')) {
+	  uns_p = TRUE;
+	  cs_unget (c3);
+	  curr_c = c2;
+	} else {
+	  cs_unget (c3);
+	  cs_unget (c2);
+	}
+      }
+      VARR_PUSH (char, symbol_text, '\0');
+      cs_unget (curr_c);
+      if (err_p)
+	return;
+      errno = 0;
+      if (float_p) {
+	float f = strtof (VARR_ADDR (char, symbol_text), NULL);
+
+	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_f_node (f, pos));
+      } else if (double_p) {
+	double d = strtod (VARR_ADDR (char, symbol_text), NULL);
+
+	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_d_node (d, pos));
+      } else if (long_double_p) {
+	long double ld = strtod (VARR_ADDR (char, symbol_text), NULL);
+
+	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_ld_node (ld, pos));
+      } else if (base == 8 && dec_p) {
+	error_func (C_wrong_octal_int, "wrong octal integer");
+	err_p = TRUE;
+      } else if (uns_p) {
+	if (long_long_p) {
+	  unsigned long long ull = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
+
+	  setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
+				 T_CONSTANT, new_ull_node (ull, pos));
+	} else {
+	  unsigned long ul = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
+
+	  setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
+				 T_CONSTANT, new_ul_node (ul, pos));  /* ??? unsigned int */
+	}
+      } else if (long_long_p) {
+	long long ll = strtoll (VARR_ADDR (char, symbol_text), NULL, base);
+
+	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
+			       T_CONSTANT, new_ll_node (ll, pos));
+      } else {
+	long l = strtol (VARR_ADDR (char, symbol_text), NULL, base);
+
+	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_l_node (l, pos)); /* ??? int */
+      }
+      if (errno) {
+	error_func (C_out_of_range_number, "number is out of range");
+	err_p = TRUE;
+      }
+      return;
+    }
+    case '\'': { /* ??? unicode and wchar */
+      int ch, newln_p, wrong_escape_p, err_p = FALSE;
+      
+      pos = cs->pos;
+      VARR_PUSH (char, symbol_text, curr_c);
+      curr_c = cs_get ();
+      if (curr_c == '\'') {
+	error_func (C_invalid_char_constant, "empty character");
+	err_p = TRUE;
+      } else {
+	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
+	if (ch < 0 || newln_p) {
+	  error_func (C_invalid_char_constant, "invalid character");
+	  err_p = TRUE;
+	} else if (wrong_escape_p) {
+	  error_func (C_invalid_char_constant, "invalid escape sequence");
+	  err_p = TRUE;
+	}
+      }
+      curr_c = cs_get ();
+      if (curr_c == '\'') {
+	VARR_PUSH (char, symbol_text, curr_c);
+      } else {
+	cs_unget (curr_c);
+	error_func (C_invalid_char_constant, "more one character in char");
+	err_p = TRUE;
+      }
+      VARR_PUSH (char, symbol_text, '\0');
+      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_ch_node (ch, pos));
+      return;
+    }
+    case '\"': { /* ??? unicode and wchar */
+      int ch, newln_p, wrong_escape_p, err_p = FALSE;
+      str_t str;
+      
+      pos = cs->pos;
+      VARR_TRUNC (char, temp_string, 0);
+      VARR_PUSH (char, symbol_text, curr_c);
+      for (;;) {
+	curr_c = cs_get ();
+	if (curr_c == '\"') {
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  break;
+	}
+	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
+	if (ch < 0) {
+	  error_func (C_no_string_end, "no string end");
+	  err_p = TRUE;
+	  break;
+	}
+	if (wrong_escape_p) {
+	  error_func (C_invalid_str_constant, "invalid escape sequence");
+	  err_p = TRUE;
+	  continue;
+	}
+	if (! newln_p) {
+	  VARR_PUSH (char, temp_string, ch);
+	}
+      }
+      VARR_PUSH (char, temp_string, '\0');
+      VARR_PUSH (char, symbol_text, '\0');
+      str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
+      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_STR, new_str_node (N_STR, pos, str.s));
+      return;
+    }
+    default:
+      if (isalpha (curr_c) || curr_c == '_' ) {
+	str_t str;
+	
+	pos = cs->pos;
+	do {
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  curr_c = cs_get ();
+	} while (isalnum (curr_c) || curr_c == '_');
+	cs_unget (curr_c);
+	VARR_PUSH (char, symbol_text, '\0');
+	str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
+	setup_curr_token (pos, str.s, T_ID, N_IGNORE);
+	curr_token->node = new_str_node (N_ID, pos, str.s);
+	return;
+      } else {
+	VARR_PUSH (char, symbol_text, curr_c);
+	VARR_PUSH (char, symbol_text, '0');
+	setup_curr_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), curr_c, N_IGNORE);
+      }
+    }
+  }
+}
+
+static void unread_next_pptoken (token_t t) {
+  VARR_PUSH (token_t, buffered_tokens, t);
+}
+
+static token_t pptoken2token (token_t t, int id2kw_p) {
+  if (t->code == T_ID && id2kw_p) {
+    str_t str = str_add (t->repr, T_STR, 0, FALSE);
+    
+    if (str.key != T_STR) {
+      t->code = str.key; t->node_code = N_IGNORE; t->node = NULL;
+    }
+    return t;
+  } else if (curr_token->code == ' ' || curr_token->code == '\n') {
+    return NULL;
+  }
+  return t;
+}
+
+static VARR (token_t) *recorded_tokens;
+static size_t next_token_index;
+static int record_level;
+
+static void pre (void) {
+  for (;;) {
+    read_next_pptoken ();
+    if ((curr_token = pptoken2token (curr_token, TRUE)) == NULL)
+      continue;
+    if (curr_token->code == EOU)
+      curr_token->code = EOF;
+    VARR_PUSH (token_t, recorded_tokens, curr_token);
+    if (curr_token->code == EOF)
+      break;
+  }
+  next_token_index = 0;
+}
+
+static void read_token (void) {
+  curr_token = VARR_GET (token_t, recorded_tokens, next_token_index);
+  next_token_index++;
+}
+
+static void unread_token (token_t t) {
+  assert (next_token_index != 0);
+  next_token_index--;
+}
+
+static size_t record_start (void) {
+  assert (next_token_index > 0 && record_level >= 0);
+  record_level++;
+  return next_token_index - 1;
+}
+
+static void record_stop (size_t mark, int restore_p) {
+  assert (record_level > 0);
+  record_level--;
+  if (! restore_p)
+    return;
+  next_token_index = mark;
+  read_token ();
+}
+
+static void syntax_error (const char *expected_name) {
+  static int context_len = 5;
+  token_t buf[context_len + 1];
+  int i, c;
+  
+  print_pos (curr_token->pos);
+  fprintf (stderr, "syntax error on %s", get_token_name (curr_token->code));
+  fprintf (stderr, " (expected '%s'):", expected_name);
+#if 0
+  for (i = 0; i < context_len && curr_token->code != EOF; i++) {
+    fprintf (stderr, " %s", curr_token->repr);
+  }
+#endif
+  fprintf (stderr, "\n");
 }
 
 static node_t curr_scope;
@@ -1086,17 +1506,17 @@ typedef node_t (*nonterm_func_t) (int);
 #define D(f) static node_t f (int no_err_p)
 #define DA(f) static node_t f (int no_err_p, node_t arg)
 
-static int C (int c) { return curr_token.code == c; }
+static int C (int c) { return curr_token->code == c; }
 
 static int match (int c, pos_t *pos, node_code_t *node_code, node_t *node) {
-  if (curr_token.code != c)
+  if (curr_token->code != c)
     return FALSE;
   if (pos != NULL)
-    *pos = curr_token.pos;
+    *pos = curr_token->pos;
   if (node_code != NULL)
-    *node_code = curr_token.node_code;
+    *node_code = curr_token->node_code;
   if (node != NULL)
-    *node = curr_token.node;
+    *node = curr_token->node;
   read_token ();
   return TRUE;
 }
@@ -2017,19 +2437,19 @@ D (stmt) {
 static void error_recovery (int par_lev) {
   fprintf (stderr, "error recovery: skipping");
   for (;;) {
-    if (curr_token.code == EOF || (par_lev == 0 && curr_token.code == ';'))
+    if (curr_token->code == EOF || (par_lev == 0 && curr_token->code == ';'))
       break;
-    if (curr_token.code == '{') {
+    if (curr_token->code == '{') {
       par_lev++;
-    } else if (curr_token.code == '}') {
+    } else if (curr_token->code == '}') {
       if (--par_lev <= 0)
 	break;
     }
     fprintf (stderr, " %s(%d:%d)",
-	     get_token_name (curr_token.code), curr_token.pos.lno, curr_token.pos.ln_pos);
+	     get_token_name (curr_token->code), curr_token->pos.lno, curr_token->pos.ln_pos);
     read_token ();
   }
-  fprintf (stderr, " %s", get_token_name (curr_token.code));
+  fprintf (stderr, " %s", get_token_name (curr_token->code));
   read_token ();
   fprintf (stderr, "\n");
 }
@@ -2062,7 +2482,7 @@ D (compound_stmt) {
 D (transl_unit) {
   node_t list, ds, d, dl, r;
 
-  curr_token.code = ';'; /* for error recovery */
+  //curr_token->code = ';'; /* for error recovery */
   read_token ();
   list = new_node (N_LIST);
   while (! C (EOF)) { /* external-declaration */
@@ -2097,11 +2517,14 @@ static void kw_add (const char *name, token_code_t tc, size_t flags) {
   str_add (name, tc, flags, TRUE);
 }
 
-static void parse_init (void) {
+static void parse_init (const char *source) {
   error_func = fatal_error; record_level = 0;
   reg_memory_init ();
-  curr_uid = 0; curr_pos.lno = 1; curr_pos.ln_pos = 0;
-  VARR_CREATE (char, symbol_text, 100);
+  curr_uid = 0;
+  init_streams ();
+  add_stream (NULL, source);
+  VARR_CREATE (char, symbol_text, 128);
+  VARR_CREATE (char, temp_string, 128);
   VARR_CREATE (token_t, buffered_tokens, 32);
   VARR_CREATE (token_t, recorded_tokens, 32);
   str_init ();
@@ -2154,15 +2577,18 @@ static void parse_init (void) {
 }
 
 static node_t parse (void) {
+  pre ();
   return transl_unit (FALSE);
 }
 
 static void parse_finish (void) {
   VARR_DESTROY (char, symbol_text);
+  VARR_DESTROY (char, temp_string);
   VARR_DESTROY (token_t, buffered_tokens);
   VARR_DESTROY (token_t, recorded_tokens);
   str_finish ();
   tpname_finish ();
+  finish_streams ();
   reg_memory_finish ();
 }
 
@@ -2547,7 +2973,6 @@ struct decl_spec {
   int align; // negative value means undefined
   node_t align_node; //  strictest valid N_ALIGNAS node
   node_code_t linkage; // N_IGNORE - none, N_STATIC - internal, N_EXTERN - external
-  node_t align_spec;
   struct type *type;
 };
 
@@ -2762,7 +3187,7 @@ static void convert_value (struct expr *e, struct type *t) {
 
 static int non_reg_decl_spec_p (struct decl_spec *ds) {
   return (ds->typedef_p || ds->extern_p || ds->static_p || ds->auto_p
-	  || ds->thread_local_p || ds->inline_p || ds->no_return_p || ds->align_spec);
+	  || ds->thread_local_p || ds->inline_p || ds->no_return_p || ds->align_node);
 }
 
 static void create_node_scope (node_t node) {
@@ -2899,9 +3324,10 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   if (r->attr != NULL)
     return *(struct decl_spec *) r->attr;
   r->attr = res = reg_malloc (sizeof (struct decl_spec));
-  res->typedef_p = res->extern_p = res->static_p = res->auto_p = FALSE;
-  res->register_p = res->thread_local_p = FALSE;
-  res->inline_p = res->no_return_p = FALSE; res->align = -1; res->align_node = NULL;
+  res->typedef_p = res->extern_p = res->static_p = FALSE;
+  res->auto_p = res->register_p = res->thread_local_p = FALSE;
+  res->inline_p = res->no_return_p = FALSE;
+  res->align = -1; res->align_node = NULL;
   res->type = type = create_type (NULL); type->pos_node = r;
   type->mode = TM_BASIC; type->u.basic_type = TP_UNDEF;
   for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
@@ -3246,6 +3672,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       
       type->mode = TM_ARR; type->pos_node = n;
       type->u.arr_type = arr_type = reg_malloc (sizeof (struct arr_type));
+      clear_type_qual (&arr_type->ind_type_qual);
       set_type_qual (type_qual, &arr_type->ind_type_qual, TM_UNDEF);
       check (size, n);
       arr_type->size = size;
@@ -3962,7 +4389,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	convert_value (e2, &t);
 	if (r->code != N_MOD && floating_type_p (&t))
 	  e->u.d_val = (r->code == N_MUL ? e1->u.d_val * e2->u.d_val : e1->u.d_val / e2->u.d_val);
-	else if (signed_integer_type_p (&t))
+	else if (signed_integer_type_p (&t)) // ??? zero
 	  e->u.i_val = (r->code == N_MUL ? e1->u.i_val * e2->u.i_val
 			: r->code == N_DIV ? e1->u.i_val / e2->u.i_val
 			: e1->u.i_val % e2->u.i_val);
@@ -5271,7 +5698,8 @@ static int t_getc (void) {
 
   if (c == 0)
     c = EOF;
-  else curr_char++;
+  else
+    curr_char++;
   return c;
 }
 
@@ -5289,31 +5717,34 @@ int main (int argc, const char *argv[]) {
   node_t r;
   VARR (char) *input;
   int c, i, debug_p = FALSE;
+  const char *source;
   
+  code = NULL;
   VARR_CREATE (char, input, 100);
-  if (argc > 1) {
-    for (i = 1; i < argc; i++) {
-      FILE *f = NULL;
-
-      if (strcmp (argv[i], "-d") == 0) {
-	debug_p = TRUE;
-      } else if (strcmp (argv[i], "-i") == 0) {
-	f = stdin;
-      } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
-	code = argv[++i];
-      } else if ((f = fopen (argv[1], "r")) == NULL) {
-	  print_error (no_pos, "can not open %s -- goodbye\n", argv[1]);
-	  exit (1);
-      }
-      if (f) {
-	while ((c = getc (f)) != EOF)
-	  VARR_PUSH (char, input, c);
-	VARR_PUSH (char, input, 0);
-	code = VARR_ADDR (char, input);
-	fclose (f);
-      }
+  for (i = 1; i < argc; i++) {
+    FILE *f = NULL;
+    
+    if (strcmp (argv[i], "-d") == 0) {
+      debug_p = TRUE;
+    } else if (strcmp (argv[i], "-i") == 0) {
+      f = stdin; source = "<stdin>";
+    } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
+      code = argv[++i]; source = "<command-line>";
+    } else if ((f = fopen (argv[i], "r")) == NULL) {
+      print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
+      exit (1);
+    } else {
+      source = argv[i];
     }
-  } else {
+    if (f) {
+      while ((c = getc (f)) != EOF)
+	VARR_PUSH (char, input, c);
+      VARR_PUSH (char, input, 0);
+      code = VARR_ADDR (char, input);
+      fclose (f);
+    }
+  }
+  if (code == NULL) {
     code =
 "  extern int printf(const char *format, ...);\n"
 "  static const int SieveSize = 819000;\n"
@@ -5339,9 +5770,10 @@ int main (int argc, const char *argv[]) {
 "void main (void) {\n"
 "  printf (\"%d\\n\", sieve ());\n"
 "}\n";
+    source = "<example>";
   }
   curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
-  parse_init ();
+  parse_init (source);
   check_init ();
   fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
   r = parse ();
