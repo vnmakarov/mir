@@ -207,7 +207,7 @@ static void str_finish (void) {
 /* ------------------------- Scanner/Parser Start ------------------------------ */
 
 typedef enum {
-  T_CONSTANT = 256, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE, T_ANDAND, T_OROR,
+  T_NUMBER = 256, T_CH, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE, T_ANDAND, T_OROR,
   T_INCDEC, T_ARROW, T_UNOP, T_DOTS, T_BOOL, T_COMPLEX, T_ALIGNOF, T_ALIGNAS, T_ATOMIC, T_GENERIC,
   T_NO_RETURN, T_STATIC_ASSERT, T_THREAD_LOCAL, T_THREAD, T_AUTO, T_BREAK, T_CASE, T_CHAR, T_CONST,
   T_CONTINUE, T_DEFAULT, T_DO, T_DOUBLE, T_ELSE, T_ENUM, T_EXTERN, T_FLOAT, T_FOR, T_GOTO, T_IF,
@@ -447,8 +447,10 @@ static const char *get_token_name (int token_code) {
   const char *s;
   
   switch (token_code) {
-  case T_CONSTANT:
-    return "constant";
+  case T_NUMBER:
+    return "number";
+  case T_CH:
+    return "char constant";
   case T_STR:
     return "string";
   case T_ID:
@@ -933,7 +935,7 @@ static void read_next_pptoken (void) {
 	break;      
       } else if (curr_c != '*') {
 	cs_unget (curr_c);
-	setup_curr_token (pos, slash_str, '/', N_DIV);
+	setup_curr_token (pos, slash_str, T_DIVOP, N_DIV);
       } else { /* usual C comment */
 	assert (FALSE);
 	for (;;) {
@@ -1103,9 +1105,9 @@ static void read_next_pptoken (void) {
       /* Fall through: */
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': {
-      int base = 10, err_p = FALSE, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
-      int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE, dec_p = FALSE, hex_p = FALSE;
-      int hex_char_p;
+      int base = 10, err_p = FALSE, double_p = FALSE;
+      int dec_p = FALSE, hex_p = FALSE;
+      int prev_c, hex_char_p;
       
       pos = cs->pos;
       VARR_TRUNC (char, symbol_text, 0);
@@ -1151,12 +1153,13 @@ static void read_next_pptoken (void) {
       if ((base != 16 && (curr_c == 'e' || curr_c == 'E'))
 	  || (base == 16 && (curr_c == 'p' || curr_c == 'P'))) {
 	double_p = TRUE;
+	prev_c = curr_c;
 	curr_c = cs_get ();
 	if (curr_c != '+' && curr_c != '-' && ! isdigit (curr_c)) {
 	  error_func (C_absent_exponent, "absent exponent");
 	  err_p = TRUE;
 	} else {
-	  VARR_PUSH (char, symbol_text, base == 16 ? 'p' : 'e');
+	  VARR_PUSH (char, symbol_text, prev_c);
 	  if (curr_c == '+' || curr_c == '-') {
 	    VARR_PUSH (char, symbol_text, curr_c);
 	    curr_c = cs_get ();
@@ -1173,15 +1176,14 @@ static void read_next_pptoken (void) {
 	  }
 	}
       } else if (! double_p && (curr_c == 'l' || curr_c == 'L')) {
-	long_p = TRUE;
 	curr_c = cs_get ();
       }
       if (double_p) {
 	if (curr_c == 'f' || curr_c == 'F') {
-	  double_p = FALSE; float_p = TRUE;
+	  VARR_PUSH (char, symbol_text, curr_c);
 	  curr_c = cs_get ();
 	} else if (curr_c == 'l' || curr_c == 'L') {
-	  double_p = FALSE; long_double_p = TRUE;
+	  VARR_PUSH (char, symbol_text, curr_c);
 	  curr_c = cs_get ();
 	}
       } else {
@@ -1191,19 +1193,25 @@ static void read_next_pptoken (void) {
 	     && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L'))
 	    || ((curr_c == 'l' || curr_c == 'L')
 		&& (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u'))) {
-	  uns_p = long_long_p = TRUE;
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  VARR_PUSH (char, symbol_text, c2);
+	  VARR_PUSH (char, symbol_text, c3);
 	  curr_c = cs_get ();
 	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
 		   || (curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u')) {
-	  uns_p = long_p = TRUE; curr_c = c3;
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  VARR_PUSH (char, symbol_text, c2);
+	  curr_c = c3;
 	} else if ((curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')) {
-	  long_p = TRUE; curr_c = c3;
+	  VARR_PUSH (char, symbol_text, curr_c);
+	  VARR_PUSH (char, symbol_text, c2);
+	  curr_c = c3;
 	} else if ((curr_c == 'l' || curr_c == 'L')) {
-	  long_p = TRUE;
+	  VARR_PUSH (char, symbol_text, curr_c);
 	  cs_unget (c3);
 	  curr_c = c2;
 	} else if ((curr_c == 'u' || curr_c == 'U')) {
-	  uns_p = TRUE;
+	  VARR_PUSH (char, symbol_text, curr_c);
 	  cs_unget (c3);
 	  curr_c = c2;
 	} else {
@@ -1213,50 +1221,13 @@ static void read_next_pptoken (void) {
       }
       VARR_PUSH (char, symbol_text, '\0');
       cs_unget (curr_c);
-      if (err_p)
-	return;
-      errno = 0;
-      if (float_p) {
-	float f = strtof (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_f_node (f, pos));
-      } else if (double_p) {
-	double d = strtod (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_d_node (d, pos));
-      } else if (long_double_p) {
-	long double ld = strtod (VARR_ADDR (char, symbol_text), NULL);
-
-	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_ld_node (ld, pos));
-      } else if (base == 8 && dec_p) {
+      if (! err_p && base == 8 && dec_p) {
 	error_func (C_wrong_octal_int, "wrong octal integer");
 	err_p = TRUE;
-      } else if (uns_p) {
-	if (long_long_p) {
-	  unsigned long long ull = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
-
-	  setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
-				 T_CONSTANT, new_ull_node (ull, pos));
-	} else {
-	  unsigned long ul = strtoul (VARR_ADDR (char, symbol_text), NULL, base);
-
-	  setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
-				 T_CONSTANT, new_ul_node (ul, pos));  /* ??? unsigned int */
-	}
-      } else if (long_long_p) {
-	long long ll = strtoll (VARR_ADDR (char, symbol_text), NULL, base);
-
-	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text),
-			       T_CONSTANT, new_ll_node (ll, pos));
-      } else {
-	long l = strtol (VARR_ADDR (char, symbol_text), NULL, base);
-
-	setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_l_node (l, pos)); /* ??? int */
       }
-      if (errno) {
-	error_func (C_out_of_range_number, "number is out of range");
-	err_p = TRUE;
-      }
+      if (err_p)
+	return;
+      setup_curr_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), T_NUMBER, N_IGNORE);
       return;
     }
     case '\'': { /* ??? unicode and wchar */
@@ -1287,7 +1258,7 @@ static void read_next_pptoken (void) {
 	err_p = TRUE;
       }
       VARR_PUSH (char, symbol_text, '\0');
-      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CONSTANT, new_ch_node (ch, pos));
+      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CH, new_ch_node (ch, pos));
       return;
     }
     case '\"': { /* ??? unicode and wchar */
@@ -1353,6 +1324,8 @@ static void unread_next_pptoken (token_t t) {
 }
 
 static token_t pptoken2token (token_t t, int id2kw_p) {
+  assert (t->code != T_HEADER && t->code != T_EOA && t->code != T_EOR && t->code != T_EOP
+	  && t->code != EOF && t->code != EOU && t->code != T_PLM && t->code != T_DBLNO);
   if (t->code == T_ID && id2kw_p) {
     str_t str = str_add (t->repr, T_STR, 0, FALSE);
     
@@ -1360,8 +1333,62 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
       t->code = str.key; t->node_code = N_IGNORE; t->node = NULL;
     }
     return t;
-  } else if (curr_token->code == ' ' || curr_token->code == '\n') {
+  } else if (t->code == ' ' || t->code == '\n') {
     return NULL;
+  } else if (t->code == T_NUMBER) {
+    int i, base = 10, float_p = FALSE, double_p = FALSE, long_double_p = FALSE;
+    int uns_p = FALSE, long_p = FALSE, long_long_p = FALSE;
+    const char *repr = t->repr;
+    int last = strlen (repr) - 1;
+    
+    assert (last >= 0);
+    if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
+      repr += 2; base = 16;
+    } else if (repr[0] == '0') {
+      base = 8;
+    }
+    for (i = last; i >= 0; i--) {
+      if (repr[i] == 'l' && repr[i - 1] == 'l' || repr[i] == 'L' && repr[i - 1] == 'L') {
+	i--; long_long_p = TRUE;
+      } else if (repr[i] == 'l' || repr[i] == 'L') {
+	long_p = TRUE;
+      } else if (repr[i] == 'u' || repr[i] == 'U') {
+	uns_p = TRUE;
+      } else if (repr[i] == '.') {
+	double_p = TRUE;
+      } else if (repr[i] == 'p' || repr[i] == 'P') {
+	assert (base == 16);
+	double_p = TRUE;
+      } else if ((repr[i] == 'e' || repr[i] == 'E') && base != 16) {
+	double_p = TRUE;
+      }
+    }
+    if (repr[last] == 'f' || repr[last] == 'f') {
+      float_p = TRUE; double_p = FALSE;
+    } else if (double_p && long_p) {
+      long_double_p = TRUE; double_p = FALSE;
+    }
+    errno = 0;
+    if (float_p) {
+      t->node = new_f_node (strtof (repr, NULL), t->pos);
+    } else if (double_p) {
+      t->node = new_d_node (strtod (repr, NULL), t->pos);
+    } else if (long_double_p) {
+      t->node = new_ld_node (strtold (repr, NULL), t->pos);
+    } else if (uns_p) {
+      if (long_long_p) {
+	t->node = new_ull_node (strtoull (repr, NULL, base), t->pos);
+      } else {
+	t->node = new_ul_node (strtoul (repr, NULL, base), t->pos); /* ??? unsigned int */
+      }
+    } else if (long_long_p) {
+      t->node = new_ll_node (strtoll (repr, NULL, base), t->pos);
+    } else {
+      t->node = new_l_node (strtol (repr, NULL, base), t->pos); /* ??? int */
+    }
+    if (errno) {
+      error_func (C_out_of_range_number, "number is out of range");
+    }
   }
   return t;
 }
@@ -1373,10 +1400,10 @@ static int record_level;
 static void pre (void) {
   for (;;) {
     read_next_pptoken ();
-    if ((curr_token = pptoken2token (curr_token, TRUE)) == NULL)
-      continue;
     if (curr_token->code == EOU)
       curr_token->code = EOF;
+    else if ((curr_token = pptoken2token (curr_token, TRUE)) == NULL)
+      continue;
     VARR_PUSH (token_t, recorded_tokens, curr_token);
     if (curr_token->code == EOF)
       break;
@@ -1552,7 +1579,7 @@ D (primary_expr) {
   node_t r, n, op, gn, list;
   pos_t pos;
   
-  if (MN (T_ID, r) || MN (T_CONSTANT, r) || MN (T_STR, r)) {
+  if (MN (T_ID, r) || MN (T_NUMBER, r) || MN (T_CH, r) || MN (T_STR, r)) {
     return r;
   } else if (M ('(')) {
     P (expr);
