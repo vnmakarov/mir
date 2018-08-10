@@ -7,6 +7,11 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <errno.h>
+#include "time.h"
+
+static int debug_p, verbose_p;
+
+static const int max_nested_includes = 32;
 
 #define MIR_VARR_ERROR error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR 
@@ -124,6 +129,10 @@ static void reg_memory_init (void) {
   VARR_CREATE (void_ptr_t, reg_memory, 4096);
 }
 
+static int char_is_signed_p (void) {
+  return MIR_CHAR_MAX == MIR_SCHAR_MAX;
+}
+
 enum str_flag { FLAG_EXT = 1, FLAG_C89, FLAG_EXT89 };
 
 typedef struct {
@@ -142,34 +151,9 @@ static htab_hash_t str_key_hash (str_t str) { return mum_hash64 (str.key, 0x24);
 
 static const char *uniq_str (const char *str);
 
-static const char *lnot_str, *sharp_str, *percent_str, *and_str, *lpar_str, *rpar_str, *star_str;
-static const char *plus_str, *comma_str, *minus_str, *dot_str, *slash_str, *colon_str;
-static const char *semicolon_str, *lt_str, *assign_str, *gt_str, *qmark_str, *lbracket_str;
-static const char *backslash_str, *rbracket_str, *xor_str, *lbrace_str, *or_str, *rbrace_str;
-static const char *not_str, *eq_str, *inc_str, *dec_str, *plusassign_str, *minusassign_str;
-static const char *arrow_str, *lshassign_str, *rshassign_str, *lsh_str, *rsh_str, *le_str, *ge_str;
-static const char *rbracket_str, *rbrace_str, *mulassign_str, *divassign_str, *modassign_str;
-static const char *sharp2_str, *doublesharp2_str, *lbrace2_str, *andassign_str, *orassign_str;
-static const char *land_str, *lor_str, *xorassign_str, *ne_str, *eof_str, *lbracket2_str;
-static const char *rbracket2_str, *rbrace2_str, *doublesharp_str, *dots_str;
-
 static void str_init (void) {
   HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq);
   HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq);
-#define U(n, s) n ## _str = uniq_str (s)
-  U (lnot, "!"); U (sharp, "#"); U (percent, "%"); U (and, "&"); U (lpar, "("); U (rpar, ")");
-  U (star, "*"); U (plus, "+"); U (comma, ","); U (minus, "-"); U (dot, "."); U (slash, "/");
-  U (colon, ":"); U (semicolon, ";"); U (lt, "<"); U (assign, "="); U (gt, ">"); U (qmark, "?");
-  U (lbracket, "["); U (backslash, "\\"); U (rbracket, "]"); U (xor, "^"); U (lbrace, "{");
-  U (or, "|"); U (rbrace, "}"); U (not, "~"); U (eq, "="); U (inc, "++"); U (dec, "--");
-  U (plusassign, "+="); U (minusassign, "-="); U (arrow, "->"); U (lshassign, "<<=");
-  U (rshassign, ">>="); U (lsh, "<<"); U (rsh, ">>"); U (le, "<="); U (ge, ">=");
-  U (rbracket, "<:"); U (rbrace, "<%"); U (mulassign, "*="); U (divassign, "/=");
-  U (modassign, "%="); U (sharp2, "%:"); U (doublesharp2, "%:%:"); U (lbrace2, "%>");
-  U (andassign, "&="); U (orassign, "|="); U (land, "&&"); U ( lor, "||"); U (xorassign, "^=");
-  U (ne, "!="); U (eof, "<EOF>"); U (lbracket2, "<:"); U (rbracket2, ":>"); U (rbrace2, "<%");
-  U (doublesharp, "##"); U (dots, "...");
-#undef U
 }
 
 static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
@@ -213,14 +197,17 @@ typedef enum {
   T_CONTINUE, T_DEFAULT, T_DO, T_DOUBLE, T_ELSE, T_ENUM, T_EXTERN, T_FLOAT, T_FOR, T_GOTO, T_IF,
   T_INLINE, T_INT, T_LONG, T_REGISTER, T_RESTRICT, T_RETURN, T_SHORT, T_SIGNED, T_SIZEOF, T_STATIC,
   T_STRUCT, T_SWITCH, T_TYPEDEF, T_TYPEOF, T_UNION, T_UNSIGNED, T_VOID, T_VOLATILE, T_WHILE,
+  T_EOF,
 } token_code_t;
 
-typedef enum { /* tokens existing in preprocessor: */
-  T_HEADER,         /* include header */
+typedef enum { /* tokens existing in preprocessor only: */
+  T_HEADER = T_EOF + 1,         /* include header */
   T_NO_MACRO_IDENT, /* ??? */
-  T_PLM, T_DBLNO,   /* placemarker, ## in replacement list */
+  T_DBLNO,          /* ## */
+  T_PLM, T_RDBLNO,  /* placemarker, ## in replacement list */
   T_EOA, T_EOR,     /* end of argument and macro replacement */
   T_EOP,            /* end of processing */
+  T_EOU,            /* end of translation unit */
 } full_token_code_t;
 
 
@@ -276,7 +263,8 @@ DEF_DLIST_CODE (node_t, op_link);
 static struct node err_node;
 
 typedef struct token {
-  token_code_t code;
+  token_code_t code : 16;
+  int processed_p : 16;
   pos_t pos;
   node_code_t node_code;
   node_t node;
@@ -401,7 +389,7 @@ static node_t new_ld_node (long double ld, pos_t p) {
   n->u.ld = ld;
   return n;
 }
-static node_t new_str_node (node_code_t nc, pos_t p, const char *s) {
+static node_t new_str_node (node_code_t nc, const char *s, pos_t p) {
   node_t n = new_pos_node (nc, p);
 
   n->u.s = s;
@@ -419,22 +407,25 @@ static const char *uniq_str (const char *str) {
   return str_add (str, T_STR, 0, FALSE).s;
 }
 
-static token_t curr_token;
-
-static void setup_curr_token (pos_t pos, const char *repr, int token_code, node_code_t node_code) {
-  curr_token = reg_malloc (sizeof (struct token));
-  curr_token->pos = pos; curr_token->code = token_code; curr_token->repr = repr;
-  curr_token->node_code = node_code; curr_token->node = NULL;
+static token_t new_token (pos_t pos, const char *repr, int token_code, node_code_t node_code) {
+  token_t token = reg_malloc (sizeof (struct token));
+  
+  token->code = token_code; token->processed_p = FALSE;
+  token->pos = pos; token->repr = repr;
+  token->node_code = node_code; token->node = NULL;
+  return token;
 }
 
-static void setup_curr_token_wo_uniq_repr (pos_t pos, const char *repr,
+static token_t new_token_wo_uniq_repr (pos_t pos, const char *repr,
 					   int token_code, node_code_t node_code) {
-  setup_curr_token (pos, uniq_str (repr), token_code, node_code);
+  return new_token (pos, uniq_str (repr), token_code, node_code);
 }
 
-static void setup_curr_node_token (pos_t pos, const char *repr, int token_code, node_t node) {
-  setup_curr_token_wo_uniq_repr (pos, repr,  token_code, N_IGNORE);
-  curr_token->node = node;
+static token_t new_node_token (pos_t pos, const char *repr, int token_code, node_t node) {
+  token_t token = new_token_wo_uniq_repr (pos, repr,  token_code, N_IGNORE);
+  
+  token->node = node;
+  return token;
 }
 
 static void print_pos (pos_t pos) {
@@ -502,15 +493,23 @@ static void print_error (pos_t pos, const char *format, ...) {
   va_end (args);
 }
 
-#define TAB_STOP 8
+static void print_warning (pos_t pos, const char *format, ...) {
+  va_list args;
+   
+  va_start (args, format);
+  print_pos (pos);
+  fprintf (stderr, "warning -- ");
+  vfprintf (stderr, format, args);
+  va_end (args);
+}
 
-#define EOU (EOF - 1) /* end of whole translation unit text */
+#define TAB_STOP 8
 
 DEF_VARR (char);
 
 typedef struct stream {
-  FILE *f;                  /* the current file */
-  const char *fname;        /* NULL for stdin */
+  FILE *f;                  /* the current file, NULL for top level file */
+  const char *fname;        /* NULL only for sting stream */
   VARR (char) *ln;          /* stream current line in reverse order */
   pos_t pos;                /* includes file name used for reports */
   fpos_t fpos;              /* file pos to resume stream */
@@ -533,7 +532,8 @@ static stream_t new_stream (FILE *f, const char *fname) {
   
   VARR_CREATE (char, s->ln, 128);
   s->f = f; s->fname = s->pos.fname = fname;
-  s->pos.lno = s->pos.ln_pos = 0;
+  s->pos.lno = 1; s->pos.ln_pos = 0;
+  return s;
 }
 
 static void free_stream (stream_t s) {
@@ -542,7 +542,8 @@ static void free_stream (stream_t s) {
 }
 
 static void add_stream (FILE *f, const char *fname) {
-  if (cs != NULL && cs->f != stdin) {
+  assert (fname != NULL);
+  if (cs != NULL && cs->f !=  NULL && cs->f != stdin) {
     fgetpos (cs->f, &cs->fpos);
     fclose (cs->f);
   }
@@ -550,10 +551,8 @@ static void add_stream (FILE *f, const char *fname) {
   VARR_PUSH (stream_t, streams, cs);
 }
 
-static void change_stream_fname_lno (const char *fname, int lno) {
-  if (fname != NULL)
-    cs->fname = fname;
-  cs->pos.lno = lno; cs->pos.ln_pos = 0;
+static void change_stream_pos (pos_t pos) {
+  cs->pos = pos;
 }
 
 static void remove_trigraphs (void) {
@@ -598,9 +597,20 @@ static int ln_get (FILE *f) {
   return fgetc (f);
 }
 
+static char *reverse (VARR (char)  *v) {
+  char *addr = VARR_ADDR (char, v);
+  int i, j, temp, last = (int) VARR_LENGTH (char, v) - 1;
+  
+  if (last >= 0 && addr[last] == '\0')
+    last--;
+  for (i = last, j = 0; i > j; i--, j++) {
+    temp = addr[i]; addr[i] = addr[j]; addr[j] = temp;
+  }
+  return addr;
+}
+
 static int get_line (void) { /* translation phase 1 and 2 */
   int c, eof_p = 0;
-  char *addr;
 
   VARR_TRUNC (char, cs->ln, 0);
   for (c = ln_get (cs->f); c != EOF && c != '\n'; c = ln_get (cs->f))
@@ -614,25 +624,20 @@ static int get_line (void) { /* translation phase 1 and 2 */
   }
   remove_trigraphs ();
   VARR_PUSH (char, cs->ln, '\n');
-  /* make reverse order: */
-  addr = VARR_ADDR (char, cs->ln);
-  for (int i = VARR_LENGTH (char, cs->ln) - 1, j = 0; i > j; i--, j++) {
-    int temp = addr[i];
-    
-    addr[i] = addr[j]; addr[j] = temp;
-  }
+  reverse (cs->ln);
   return TRUE;
 }
 
 static int cs_get (void) {
-  stream_t s;
-
-  if (VARR_LENGTH (char, cs->ln) >  0) {
+  if (VARR_LENGTH (char, cs->ln) > 0) {
     cs->pos.ln_pos++;
     return VARR_POP (char, cs->ln);
   }
-  if (get_line ())
-    return cs_get ();
+  if (cs->fname != NULL && get_line ()) {
+    assert (VARR_LENGTH (char, cs->ln) > 0);
+    cs->pos.ln_pos = 0;
+    return VARR_POP (char, cs->ln);
+  }
   return EOF;
 }
   
@@ -641,36 +646,44 @@ static void cs_unget (int c) {
   VARR_PUSH (char, cs->ln, c);
 }
   
-static void set_string_stream (const char *str, int lno, const char *fname) {
+static void set_string_stream (const char *str, pos_t pos,
+			       void (*transform) (const char *, VARR (char) *)) {
   /* read from string str */
   cs = new_stream (NULL, NULL);
   VARR_PUSH (stream_t, streams, cs);
-  cs->pos.lno = lno; cs->pos.ln_pos = 0; cs->pos.fname = fname;
-  for (; *str != '\0'; str++)
-    VARR_PUSH (char, cs->ln, *str);
+  cs->pos = pos;
+  if (transform != NULL) {
+    transform (str, cs->ln);
+  } else {
+    for (; *str != '\0'; str++)
+      VARR_PUSH (char, cs->ln, *str);
+  }
 }
 
 static void remove_string_stream (void) {
-  assert (cs->f == NULL);
+  assert (cs->f == NULL && cs->f == NULL);
   free_stream (VARR_POP (stream_t, streams));
   cs = VARR_LAST (stream_t, streams);
 }
 
 static VARR (char) *symbol_text, *temp_string;
 
-static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
-  int ch, i, c;
+static int set_string_val (token_t t, VARR (char) *temp) {
+  int i, str_len, curr_c, lns_num = 0;
+  const char *str;
 
-  /* `current_position' corresponds position at the read char here. */
-  if (curr_c == EOF || curr_c == '\n') {
-    cs_unget (curr_c);
-    return (-1);
-  }
-  *newln_p = *wrong_escape_p = FALSE;
-  VARR_PUSH (char, symbol_text, curr_c);
-  if (curr_c == '\\') {
-    curr_c = cs_get ();
-    VARR_PUSH (char, symbol_text, curr_c);
+  assert (t->code == T_STR || t->code == T_CH);
+  str = t->repr;
+  VARR_TRUNC (char, temp, 0);
+  str_len = strlen (str);
+  assert (str_len >= 2 && (str[0] == '"' || str[0] == '\'') && str[0] == str[str_len - 1]);
+  for (i = 1; i < str_len - 1; i++) {
+    curr_c = str[i];
+    if (curr_c != '\\') {
+      VARR_PUSH (char, temp, curr_c);
+      continue;
+    }
+    curr_c = str[++i];
     switch (curr_c) {
     case 'a':
       curr_c = '\a';
@@ -696,151 +709,197 @@ static int read_str_code (int curr_c, int *newln_p, int *wrong_escape_p) {
     case '\\': case '\'': case '\?': case '\"':
       break;
     case '\n':
-      cs->pos.ln_pos = 0;
-      cs->pos.lno++;
-      *newln_p = TRUE;
+      lns_num++;
       break;
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
-      ch = curr_c - '0';
-      curr_c = cs_get ();
-      if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
-	cs_unget (curr_c);
-      else {
-	VARR_PUSH (char, symbol_text, curr_c);
-	 ch = (ch * 8 + curr_c - '0');
-	 curr_c = cs_get ();
-	 if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
-	   cs_unget (curr_c);
-	 } else {
-	   VARR_PUSH (char, symbol_text, curr_c);
-	   ch = (ch * 8 + curr_c - '0');
-	 }
+      unsigned long v = curr_c;
+
+      curr_c = str[++i];
+      if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
+	i--;
+      } else {
+	v = v * 8 + curr_c; curr_c = str[++i];
+	if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
+	  i--;
+	else
+	  v = v * 8 + curr_c;
       }
-      curr_c = ch;
+      curr_c = v;
       break;
     }
     case 'x': case 'X': {
-      ch = 0;
-      curr_c = cs_get ();
-      for (ch = i = 0; isxdigit (curr_c); i++) {
-	VARR_PUSH (char, symbol_text, curr_c);
-	c = isdigit (curr_c) ? curr_c - '0' : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10;
-	ch = (ch << 4) | c;
-	curr_c = cs_get ();
+      int first_p = TRUE;
+      unsigned long v = 0;
+      
+      for (i++; ; i++) {
+	curr_c = str[i];
+	if (! isxdigit (curr_c))
+	  break;
+	first_p = FALSE; v *= 16;
+	v += (isdigit (curr_c) ? curr_c - '0'
+	      : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
       }
-      cs_unget (curr_c);
-      curr_c = ch; *wrong_escape_p = i == 0;
-    }
-    default:
-      *wrong_escape_p = TRUE;
+      if (first_p)
+	print_error (t->pos, "wrong hexadecimal char %c", curr_c);
+      else if (v > MIR_UCHAR_MAX)
+	print_error (t->pos, "too big hexadecimal char 0x%x", v);
+      curr_c = v;
+      i--;
       break;
     }
+    default:
+      print_error (t->pos, "wrong escape char 0x%x\n", curr_c);
+      curr_c = 0;
+    }
+    if (curr_c != 0)
+      VARR_PUSH (char, temp, curr_c);
   }
-  return curr_c;
+  VARR_PUSH (char, temp, '\0');
+  if (t->repr[0] == '"')
+    t->node->u.s = uniq_str (VARR_ADDR (char, temp));
+  else if (VARR_LENGTH (char, temp) == 1)
+    print_error (t->pos, "empty char constant\n");
+  else
+    t->node->u.ch = VARR_GET (char, temp, 0);
+  return lns_num;
+}
+
+static token_t new_id_token (pos_t pos, const char *id_str) {
+  token_t token;
+  const char *str = uniq_str (id_str);
+  
+  token = new_token (pos, str, T_ID, N_IGNORE);
+  token->node = new_str_node (N_ID, str, pos);
+  return token;
 }
 
 DEF_VARR (token_t);
 static VARR (token_t) *buffered_tokens;
 
-static void read_next_pptoken (void) {
-  int start_c, curr_c, nl_p;
+static token_t get_next_pptoken_1 (int header_p) {
+  int start_c, curr_c, nl_p, comment_char;
   pos_t pos;
   
-  if (cs->f != NULL && VARR_LENGTH (token_t, buffered_tokens) != 0) {
-    curr_token = VARR_POP (token_t, buffered_tokens);
-    return;
+  if (cs->fname != NULL && VARR_LENGTH (token_t, buffered_tokens) != 0) {
+    return VARR_POP (token_t, buffered_tokens);
   }
   VARR_TRUNC (char, symbol_text, 0);
-  curr_c = cs_get ();
-  for (nl_p = FALSE;; curr_c = cs_get ()) { /* process white spaces/comments */
-    if (curr_c == ' ' || curr_c == '\t' || curr_c == '\f' || curr_c == '\r' || curr_c == '\v') {
-      VARR_PUSH (char, symbol_text, curr_c);
-      continue;
-    } else if (curr_c == '\n') {
-      cs->pos.ln_pos = 0;
-      cs->pos.lno++;
-      VARR_PUSH (char, symbol_text, curr_c);
-      nl_p = TRUE;
-      continue;
-    } else if (curr_c != '/') {
-      break;
-    }
-    curr_c = cs_get ();
-    if (curr_c == '/') {
-      VARR_PUSH (char, symbol_text, '/');
-      VARR_PUSH (char, symbol_text, curr_c);
-      nl_p = TRUE;
-      for (curr_c = cs_get ();
-	   curr_c != '\n' && curr_c != EOU && curr_c != EOF;
-	   curr_c = cs_get ())
-	VARR_PUSH (char, symbol_text, curr_c);
-      if (curr_c != '\n') {
-	error_func (C_unfinished_comment, "unfinished comment");
-	break;
-      }
-      cs_unget (curr_c);
-    } else if (curr_c == '*') {
-      VARR_PUSH (char, symbol_text, '/');
-      VARR_PUSH (char, symbol_text, curr_c);
-      for (;;) {
-	for (curr_c = cs_get ();
-	     curr_c != '*' && curr_c != EOU && curr_c != EOF;
-	     curr_c = cs_get ()) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  if (curr_c == '\n') {
-	    cs->pos.ln_pos = 0;
-	    cs->pos.lno++;
-	  }
-	}
-	if (curr_c == '*') {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = cs_get ();
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  if (curr_c != '/')
-	    continue;
-	}
-	break;
-      }
-      if (curr_c != '/') {
-	error_func (C_unfinished_comment, "unfinished comment");
-	break;
-      }
-    } else {
-      cs_unget (curr_c);
-      curr_c = '/';
-      break;
-    }
-  }
-  if (VARR_LENGTH (char, symbol_text) != 0) {
-    cs_unget (curr_c);
-    VARR_PUSH (char, symbol_text, '\0');
-    setup_curr_token_wo_uniq_repr (cs->pos, VARR_ADDR (char, symbol_text),
-				   nl_p ? '\n' : ' ',  N_IGNORE);
-    return;
-  }
   for (;;) {
+    curr_c = cs_get ();
+    /* Process sequence of white spaces/comments: */
+    for (comment_char = -1, nl_p = FALSE;; curr_c = cs_get ()) {
+      switch (curr_c) {
+      case '\t':
+	cs->pos.ln_pos = (cs->pos.ln_pos / TAB_STOP + 1) * TAB_STOP;
+	/* fall through */
+      case ' ': case '\f': case '\r': case '\v':
+	break;
+      case '\n':
+	cs->pos.lno++; cs->pos.ln_pos = 0;
+	if (comment_char < 0) {
+	  nl_p = TRUE;
+	} else if (comment_char == '/') {
+	  comment_char = -1;
+	}
+	break;
+      case '/':
+	if (comment_char >= 0)
+	  break;
+	curr_c = cs_get ();
+	if (curr_c == '/' || curr_c == '*') {
+	  VARR_PUSH (char, symbol_text, '/');
+	  comment_char = curr_c;
+	  break;
+	}
+	cs_unget (curr_c);
+	curr_c = '/';
+	goto end_ws;
+      case '*':
+	if (comment_char < 0)
+	  goto end_ws;
+	if (comment_char != '*')
+	  break;
+	VARR_PUSH (char, symbol_text, '*');
+	curr_c = cs_get ();
+	if (curr_c == '/')
+	  comment_char = -1;
+	break;
+      case '\\':
+	curr_c = cs_get ();
+	if (curr_c == '\n') {
+	  cs->pos.lno++; cs->pos.ln_pos = 0;
+	  continue;
+	}
+	cs_unget (curr_c);
+	curr_c = '\\';
+	/* fall through */
+      default:
+	if (comment_char < 0)
+	  goto end_ws;
+	if (curr_c == EOF) {
+	  error_func (C_unfinished_comment, "unfinished comment");
+	  goto end_ws;
+	}
+	break;
+      }
+      VARR_PUSH (char, symbol_text, curr_c);
+    }
+  end_ws:
+    if (VARR_LENGTH (char, symbol_text) != 0) {
+      cs_unget (curr_c);
+      VARR_PUSH (char, symbol_text, '\0');
+      return new_token_wo_uniq_repr (cs->pos, VARR_ADDR (char, symbol_text),
+				     nl_p ? '\n' : ' ',  N_IGNORE);
+    }
+    if (header_p && (curr_c == '<' || curr_c == '\"')) {
+      int i, stop;
+      
+      pos = cs->pos;
+      VARR_TRUNC (char, temp_string, 0);
+      for (stop = curr_c == '<' ? '>' : '\"';;) {
+	VARR_PUSH (char, symbol_text, curr_c);
+	curr_c = cs_get ();
+	VARR_PUSH (char, temp_string, curr_c);
+	if (curr_c == stop || curr_c == '\n' || curr_c == EOF)
+	  break;
+      }
+      if (curr_c == stop) {
+	VARR_PUSH (char, symbol_text, curr_c);
+	VARR_PUSH (char, symbol_text, '\0');
+	VARR_POP (char, temp_string);
+	VARR_PUSH (char, temp_string, '\0');
+	return new_node_token (pos, VARR_ADDR (char, symbol_text), T_HEADER,
+			       new_str_node (N_STR, uniq_str (VARR_ADDR (char, temp_string)), pos));
+      } else {
+	VARR_PUSH (char, symbol_text, curr_c);
+	for (i = 0; i < VARR_LENGTH (char, symbol_text); i++)
+	  cs_unget (VARR_GET (char, symbol_text, i));
+	curr_c = (stop == '>' ? '<' : '\"');
+      }
+    }
     switch (start_c = curr_c) {
-    case '\t':
-      cs->pos.ln_pos = ((cs->pos.ln_pos - 1) / TAB_STOP + 1) * TAB_STOP;
-      break;
+    case '\\':
+      curr_c = cs_get ();
+      assert (curr_c != '\n');
+      cs_unget (curr_c);
+      return new_token (cs->pos, "\\", '\\', N_IGNORE);
     case '~':
-      setup_curr_token (cs->pos, not_str, T_UNOP, N_BITWISE_NOT);
-      return;
+      return new_token (cs->pos, "~", T_UNOP, N_BITWISE_NOT);
     case '+': case '-':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == start_c) {
 	if (start_c == '+')
-	  setup_curr_token (pos, inc_str, T_INCDEC, N_INC);
+	  return new_token (pos, "++", T_INCDEC, N_INC);
 	else
-	  setup_curr_token (pos, dec_str, T_INCDEC, N_DEC);
+	  return new_token (pos, "--", T_INCDEC, N_DEC);
       } else if (curr_c == '=') {
 	if (start_c == '+')
-	  setup_curr_token (pos, plusassign_str, T_ASSIGN, N_ADD_ASSIGN);
+	  return new_token (pos, "+=", T_ASSIGN, N_ADD_ASSIGN);
 	else
-	  setup_curr_token (pos, minusassign_str, T_ASSIGN, N_SUB_ASSIGN);
+	  return new_token (pos, "-=", T_ASSIGN, N_SUB_ASSIGN);
       } else if (start_c == '-' && curr_c == '>') {
-	setup_curr_token (pos, arrow_str, T_ARROW, N_DEREF_FIELD);
+	return new_token (pos, "->", T_ARROW, N_DEREF_FIELD);
       } else if (isdigit (curr_c)) {
 	cs_unget (curr_c);
 	curr_c = start_c;
@@ -856,187 +915,158 @@ static void read_next_pptoken (void) {
 	  cs_unget ('.');
 	  cs_unget (curr_c);
 	  if (start_c == '+')
-	    setup_curr_token (pos, plus_str, T_ADDOP, N_ADD);
+	    return new_token (pos, "+", T_ADDOP, N_ADD);
 	  else
-	    setup_curr_token (pos, minus_str, T_ADDOP, N_SUB);
+	    return new_token (pos, "-", T_ADDOP, N_SUB);
 	}
       } else {
 	cs_unget (curr_c);
 	if (start_c == '+')
-	  setup_curr_token (pos, plus_str, T_ADDOP, N_ADD);
+	  return new_token (pos, "+", T_ADDOP, N_ADD);
 	else
-	  setup_curr_token (pos, minus_str, T_ADDOP, N_SUB);
+	  return new_token (pos, "-", T_ADDOP, N_SUB);
       }
-      return;
+      assert (FALSE);
     case '=':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == '=') {
-	setup_curr_token (pos, eq_str, T_EQNE, N_EQ);
+	return new_token (pos, "==", T_EQNE, N_EQ);
       } else {
 	cs_unget (curr_c);
-	setup_curr_token (pos, assign_str, '=', N_ASSIGN);
+	return new_token (pos, "=", '=', N_ASSIGN);
       }
-      return;
+      assert (FALSE);
     case '<': case '>':
       pos = cs->pos; curr_c = cs_get ();
       if (curr_c == start_c) {
 	curr_c = cs_get (); 
 	if (curr_c == '=') {
 	  if (start_c == '<')
-	    setup_curr_token (pos, lshassign_str, T_ASSIGN, N_LSH_ASSIGN);
+	    return new_token (pos, "<<=", T_ASSIGN, N_LSH_ASSIGN);
 	  else
-	    setup_curr_token (pos, rshassign_str, T_ASSIGN, N_RSH_ASSIGN);
+	    return new_token (pos, ">>=", T_ASSIGN, N_RSH_ASSIGN);
 	} else {
 	  cs_unget (curr_c);
 	  if (start_c == '<')
-	    setup_curr_token (pos, lsh_str, T_SH, N_LSH);
+	    return new_token (pos, "<<", T_SH, N_LSH);
 	  else
-	    setup_curr_token (pos, rsh_str, T_SH, N_RSH);
+	    return new_token (pos, ">>", T_SH, N_RSH);
 	}
       } else if (curr_c == '=') {
 	if (start_c == '<')
-	  setup_curr_token (pos, le_str, T_CMP, N_LE);
+	  return new_token (pos, "<=", T_CMP, N_LE);
 	else
-	  setup_curr_token (pos, ge_str, T_CMP, N_GE);
+	  return new_token (pos, ">=", T_CMP, N_GE);
       } else if (start_c == '<' && curr_c == ':') {
-	setup_curr_token (pos, rbracket2_str, '[', N_IGNORE);
+	return new_token (pos, "<:", '[', N_IGNORE);
       } else if (start_c == '<' && curr_c == '%') {
-	setup_curr_token (pos, rbrace2_str, '{', N_IGNORE);
+	return new_token (pos, "<%", '{', N_IGNORE);
       } else {
 	cs_unget (curr_c);
 	if (start_c == '<')
-	  setup_curr_token (pos, lt_str, T_CMP, N_LT);
+	  return new_token (pos, "<", T_CMP, N_LT);
 	else
-	  setup_curr_token (pos, gt_str, T_CMP, N_GT);
+	  return new_token (pos, ">", T_CMP, N_GT);
       }
-      return;
+      assert (FALSE);
     case '*':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == '=') {
-	setup_curr_token (pos, mulassign_str, T_ASSIGN, N_MUL_ASSIGN);
+	return new_token (pos, "*=", T_ASSIGN, N_MUL_ASSIGN);
       } else {
 	cs_unget (curr_c);
-	setup_curr_token (pos, star_str, '*', N_MUL);
+	return new_token (pos, "*", '*', N_MUL);
       }
-      return;
+      assert (FALSE);
     case '/':
       pos = cs->pos;
       curr_c = cs_get ();
       assert (curr_c != '/' && curr_c != '*');
-      if (curr_c == '=') {
-	setup_curr_token (pos, divassign_str, T_ASSIGN, N_DIV_ASSIGN);
-      } else if (curr_c == '/') { /* comment // */
-	assert (FALSE);
-	while ((curr_c = cs_get ()) != '\n' && curr_c != EOF && curr_c != EOU)
-	  ;
-	cs->pos.ln_pos = 0; cs->pos.lno++;
-	break;      
-      } else if (curr_c != '*') {
-	cs_unget (curr_c);
-	setup_curr_token (pos, slash_str, T_DIVOP, N_DIV);
-      } else { /* usual C comment */
-	assert (FALSE);
-	for (;;) {
-	  if ((curr_c = cs_get ()) == EOF || curr_c == EOU)
-	    error_func (C_unfinished_comment, "unfinished comment");
-	  if (curr_c == '*') {
-	    if ((curr_c = cs_get ()) == '/') {
-	      break;
-	    } else {
-	      cs_unget (curr_c);
-	    }
-	  }
-	}
-	break;
-      }
-      return;
+      if (curr_c == '=')
+	return new_token (pos, "/=", T_ASSIGN, N_DIV_ASSIGN);
+      assert (curr_c != '*' && curr_c != '/'); /* we already processed comments */
+      cs_unget (curr_c);
+      return new_token (pos, "/", T_DIVOP, N_DIV);
     case '%':
       pos = cs->pos; curr_c = cs_get ();
       if (curr_c == '=') {
-	setup_curr_token (pos, modassign_str, T_ASSIGN, N_MOD_ASSIGN);
+	return new_token (pos, "%=", T_ASSIGN, N_MOD_ASSIGN);
       } else if (curr_c == '>') {
-	setup_curr_token (pos, lbrace2_str, '}', N_IGNORE);
+	return new_token (pos, "%>", '}', N_IGNORE);
       } else if (curr_c == ':') {
 	curr_c = cs_get ();
 	if (curr_c != '%') {
 	  cs_unget (curr_c);
-	  setup_curr_token (pos, sharp2_str, '#', N_IGNORE);
+	  return new_token (pos, "%:", '#', N_IGNORE);
 	} else {
 	  curr_c = cs_get ();
 	  if (curr_c == ':')
-	    setup_curr_token (pos, doublesharp2_str, T_DBLNO, N_IGNORE);
+	    return new_token (pos, "%:%:", T_DBLNO, N_IGNORE);
 	  else {
 	    cs_unget ('%');
 	    cs_unget (curr_c);
-	    setup_curr_token (pos, sharp2_str, '#', N_IGNORE);
+	    return new_token (pos, "%:", '#', N_IGNORE);
 	  }
 	}
       } else {
 	cs_unget (curr_c);
-	setup_curr_token (pos, percent_str, T_DIVOP, N_MOD);
+	return new_token (pos, "%", T_DIVOP, N_MOD);
       }
-      return;
+      assert (FALSE);
     case '&': case '|':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == '=') {
 	if (start_c == '&')
-	  setup_curr_token (pos, andassign_str, T_ASSIGN, N_AND_ASSIGN);
+	  return new_token (pos, "&=", T_ASSIGN, N_AND_ASSIGN);
 	else
-	  setup_curr_token (pos, orassign_str, T_ASSIGN, N_OR_ASSIGN);
+	  return new_token (pos, "|=", T_ASSIGN, N_OR_ASSIGN);
       } else if (curr_c == start_c) {
 	if (start_c == '&')
-	  setup_curr_token (pos, land_str, T_ANDAND, N_ANDAND);
+	  return new_token (pos, "&&", T_ANDAND, N_ANDAND);
 	else
-	  setup_curr_token (pos, lor_str, T_OROR, N_OROR);
+	  return new_token (pos, "||", T_OROR, N_OROR);
       } else {
 	cs_unget (curr_c);
 	if (start_c == '&')
-	  setup_curr_token (pos, and_str, start_c, N_AND);
+	  return new_token (pos, "&", start_c, N_AND);
 	else
-	  setup_curr_token (pos, or_str, start_c, N_OR);
+	  return new_token (pos, "|", start_c, N_OR);
       }
-      return;
+      assert (FALSE);
     case '^': case '!':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == '=') {
 	if (start_c == '^')
-	setup_curr_token (pos, xorassign_str, T_ASSIGN, N_XOR_ASSIGN);
+	return new_token (pos, "^=", T_ASSIGN, N_XOR_ASSIGN);
 	else
-	setup_curr_token (pos, ne_str,  T_EQNE, N_NE);
+	return new_token (pos, "!=",  T_EQNE, N_NE);
       } else {
 	cs_unget (curr_c);
 	if (start_c == '^')
-	  setup_curr_token (pos, xor_str, '^', N_XOR);
+	  return new_token (pos, "^", '^', N_XOR);
 	else
-	  setup_curr_token (pos, lnot_str, T_UNOP, N_NOT);
+	  return new_token (pos, "!", T_UNOP, N_NOT);
 
       }
-      return;
+      assert (FALSE);
     case ';':
-      setup_curr_token (cs->pos, semicolon_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, ";", curr_c, N_IGNORE);
     case '?':
-      setup_curr_token (cs->pos, qmark_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, "?", curr_c, N_IGNORE);
     case '(':
-      setup_curr_token (cs->pos, lpar_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, "(", curr_c, N_IGNORE);
     case ')':
-      setup_curr_token (cs->pos, rpar_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, ")", curr_c, N_IGNORE);
     case '{':
-      setup_curr_token (cs->pos, lbrace_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, "{", curr_c, N_IGNORE);
     case '}':
-      setup_curr_token (cs->pos, rbrace_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, "}", curr_c, N_IGNORE);
     case ']':
-      setup_curr_token (cs->pos, rbracket_str, curr_c, N_IGNORE);
-      return;
+      return new_token (cs->pos, "]", curr_c, N_IGNORE);
     case EOF: {
       pos_t pos = cs->pos;
       
@@ -1044,60 +1074,50 @@ static void read_next_pptoken (void) {
 	fclose (cs->f);
       free_stream (VARR_POP (stream_t, streams));
       if (VARR_LENGTH (stream_t, streams) == 0) {
-	setup_curr_token (pos, eof_str, EOU, N_IGNORE);
-	return;
+	return new_token (pos, "<EOU>", T_EOU, N_IGNORE);
       }
       cs = VARR_LAST (stream_t, streams);
-      if (cs->fname == NULL) {
-	cs->f = stdin;
-      } else {
+      if (cs->fname != NULL && VARR_LENGTH (stream_t, streams) > 1) {
 	cs->f = fopen (cs->fname, "r");
 	fsetpos (cs->f, &cs->fpos);
       }
-      setup_curr_token (cs->pos, eof_str, EOF, N_IGNORE);
-      return;
+      return new_token (cs->pos, "<EOF>", T_EOF, N_IGNORE);
     }
     case ':':
       curr_c = cs_get ();
       if (curr_c == '>') {
-	setup_curr_token (cs->pos, rbracket2_str, ']', N_IGNORE);
+	return new_token (cs->pos, ":>", ']', N_IGNORE);
       } else {
 	cs_unget (curr_c);
-	setup_curr_token (cs->pos, colon_str, ':', N_IGNORE);
+	return new_token (cs->pos, ":", ':', N_IGNORE);
       }
-      return;
     case '#':
       curr_c = cs_get ();
       if (curr_c == '#') {
-	setup_curr_token (cs->pos, doublesharp_str, T_DBLNO, N_IGNORE);
+	return new_token (cs->pos, "##", T_DBLNO, N_IGNORE);
       } else {
 	cs_unget (curr_c);
-	setup_curr_token (cs->pos, sharp_str, '#', N_IGNORE);
+	return new_token (cs->pos, "#", '#', N_IGNORE);
       }
-      return;
     case ',':
-      setup_curr_token (cs->pos, comma_str, ',', N_COMMA);
-      return;
+      return new_token (cs->pos, ",", ',', N_COMMA);
     case '[':
-      setup_curr_token (cs->pos, lbracket_str, '[', N_IND);
-      return;
+      return new_token (cs->pos, "[", '[', N_IND);
     case '.':
       pos = cs->pos;
       curr_c = cs_get ();
       if (curr_c == '.') {
 	curr_c = cs_get ();
 	if (curr_c == '.') {
-	  setup_curr_token (pos, dots_str, T_DOTS, N_IGNORE);
+	  return new_token (pos, "...", T_DOTS, N_IGNORE);
 	} else {
 	  cs_unget ('.');
 	  cs_unget (curr_c);
-	  setup_curr_token (pos, dot_str, '.', N_FIELD);
+	  return new_token (pos, ".", '.', N_FIELD);
 	}
-	return;
       } else if (! isdigit (curr_c)) {
 	cs_unget (curr_c);
-	setup_curr_token (pos, dot_str, '.', N_FIELD);
-	return;
+	return new_token (pos, ".", '.', N_FIELD);
       }
       cs_unget (curr_c);
       curr_c = '.';
@@ -1115,9 +1135,11 @@ static void read_next_pptoken (void) {
 	VARR_PUSH (char, symbol_text, curr_c);
 	curr_c = cs_get ();
       }
+#if 0
       if (curr_c == '.' && VARR_LENGTH (char, symbol_text) == 0) {
 	VARR_PUSH (char, symbol_text, '0');
       }
+#endif
       if (curr_c == '0') {
 	curr_c = cs_get ();
 	if (curr_c != 'x' && curr_c != 'X') {
@@ -1175,8 +1197,6 @@ static void read_next_pptoken (void) {
 	    } while (isdigit (curr_c));
 	  }
 	}
-      } else if (! double_p && (curr_c == 'l' || curr_c == 'L')) {
-	curr_c = cs_get ();
       }
       if (double_p) {
 	if (curr_c == 'f' || curr_c == 'F') {
@@ -1197,8 +1217,8 @@ static void read_next_pptoken (void) {
 	  VARR_PUSH (char, symbol_text, c2);
 	  VARR_PUSH (char, symbol_text, c3);
 	  curr_c = cs_get ();
-	} else if ((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L')
-		   || (curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u')) {
+	} else if (((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L'))
+		   || ((curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u'))) {
 	  VARR_PUSH (char, symbol_text, curr_c);
 	  VARR_PUSH (char, symbol_text, c2);
 	  curr_c = c3;
@@ -1225,80 +1245,44 @@ static void read_next_pptoken (void) {
 	error_func (C_wrong_octal_int, "wrong octal integer");
 	err_p = TRUE;
       }
-      if (err_p)
-	return;
-      setup_curr_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), T_NUMBER, N_IGNORE);
-      return;
+      return new_token_wo_uniq_repr (pos, err_p ? "1" : VARR_ADDR (char, symbol_text),
+				     T_NUMBER, N_IGNORE);
     }
-    case '\'': { /* ??? unicode and wchar */
-      int ch, newln_p, wrong_escape_p, err_p = FALSE;
+    case '\'': case '\"': { /* ??? unicode and wchar */
+      token_t t;
+      int lns_num, stop = curr_c;
       
       pos = cs->pos;
       VARR_PUSH (char, symbol_text, curr_c);
-      curr_c = cs_get ();
-      if (curr_c == '\'') {
-	error_func (C_invalid_char_constant, "empty character");
-	err_p = TRUE;
-      } else {
-	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
-	if (ch < 0 || newln_p) {
-	  error_func (C_invalid_char_constant, "invalid character");
-	  err_p = TRUE;
-	} else if (wrong_escape_p) {
-	  error_func (C_invalid_char_constant, "invalid escape sequence");
-	  err_p = TRUE;
-	}
-      }
-      curr_c = cs_get ();
-      if (curr_c == '\'') {
+      for (curr_c = cs_get ();
+	   curr_c != stop && curr_c != '\n' && curr_c != EOF;
+	   curr_c = cs_get ()) {
 	VARR_PUSH (char, symbol_text, curr_c);
-      } else {
-	cs_unget (curr_c);
-	error_func (C_invalid_char_constant, "more one character in char");
-	err_p = TRUE;
-      }
-      VARR_PUSH (char, symbol_text, '\0');
-      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_CH, new_ch_node (ch, pos));
-      return;
-    }
-    case '\"': { /* ??? unicode and wchar */
-      int ch, newln_p, wrong_escape_p, err_p = FALSE;
-      str_t str;
-      
-      pos = cs->pos;
-      VARR_TRUNC (char, temp_string, 0);
-      VARR_PUSH (char, symbol_text, curr_c);
-      for (;;) {
-	curr_c = cs_get ();
-	if (curr_c == '\"') {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  break;
-	}
-	ch = read_str_code (curr_c, &newln_p, &wrong_escape_p);
-	if (ch < 0) {
-	  error_func (C_no_string_end, "no string end");
-	  err_p = TRUE;
-	  break;
-	}
-	if (wrong_escape_p) {
-	  error_func (C_invalid_str_constant, "invalid escape sequence");
-	  err_p = TRUE;
+	if (curr_c != '\\' )
 	  continue;
-	}
-	if (! newln_p) {
-	  VARR_PUSH (char, temp_string, ch);
-	}
+	curr_c = cs_get ();
+	if (curr_c == '\n' || curr_c == EOF)
+	  break;
+	VARR_PUSH (char, symbol_text, curr_c);
       }
-      VARR_PUSH (char, temp_string, '\0');
+      if (curr_c == stop) {
+	if (stop == '\'' && VARR_LENGTH (char, symbol_text) == 1)
+	  print_error (pos, "empty character\n");
+      } else {
+	print_error (pos, "unterminated %s\n", stop == '"' ? "string" : "char");
+      }
+      VARR_PUSH (char, symbol_text, curr_c);
       VARR_PUSH (char, symbol_text, '\0');
-      str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
-      setup_curr_node_token (pos, VARR_ADDR (char, symbol_text), T_STR, new_str_node (N_STR, pos, str.s));
-      return;
+      t = (stop == '\"' ? new_node_token (pos, VARR_ADDR (char, symbol_text), T_STR,
+					  new_str_node (N_STR, NULL, pos))
+	   : new_node_token (pos, VARR_ADDR (char, symbol_text), T_CH, new_ch_node (' ', pos)));
+      if ((lns_num = set_string_val (t, symbol_text)) !=  0) {
+	cs->pos.lno += lns_num; cs->pos.ln_pos = 0;
+      }
+      return t;
     }
     default:
       if (isalpha (curr_c) || curr_c == '_' ) {
-	str_t str;
-	
 	pos = cs->pos;
 	do {
 	  VARR_PUSH (char, symbol_text, curr_c);
@@ -1306,26 +1290,90 @@ static void read_next_pptoken (void) {
 	} while (isalnum (curr_c) || curr_c == '_');
 	cs_unget (curr_c);
 	VARR_PUSH (char, symbol_text, '\0');
-	str = str_add (VARR_ADDR (char, symbol_text), T_STR, 0, FALSE);
-	setup_curr_token (pos, str.s, T_ID, N_IGNORE);
-	curr_token->node = new_str_node (N_ID, pos, str.s);
-	return;
+	return new_id_token (pos, VARR_ADDR (char, symbol_text));
       } else {
 	VARR_PUSH (char, symbol_text, curr_c);
-	VARR_PUSH (char, symbol_text, '0');
-	setup_curr_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), curr_c, N_IGNORE);
+	VARR_PUSH (char, symbol_text, '\0');
+	return new_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), curr_c, N_IGNORE);
       }
     }
   }
 }
 
-static void unread_next_pptoken (token_t t) {
+static token_t get_next_pptoken (void) {
+  return get_next_pptoken_1 (FALSE);
+}
+
+static token_t get_next_include_pptoken (void) {
+  return get_next_pptoken_1 (TRUE);
+}
+
+static void unget_next_pptoken (token_t t) {
   VARR_PUSH (token_t, buffered_tokens, t);
+}
+
+static const char *stringify (const char *str, VARR (char) *to) {
+  VARR_TRUNC (char, to, 0);
+  VARR_PUSH (char, to, '"');
+  for (; *str != '\0'; str++) {
+    if (*str == '\"' || *str == '\\')
+      VARR_PUSH (char, to, '\\');
+    VARR_PUSH (char, to, *str);
+  }
+  VARR_PUSH (char, to, '"');
+  return VARR_ADDR (char, to);
+}
+
+static void destringify (const char *repr, VARR (char) *to) {
+  int i, repr_len = strlen (repr);
+  
+  VARR_TRUNC (char, to,  0);
+  if (repr_len == 0)
+    return;
+  i = repr[0] == '"' ? 1 : 0;
+  if (i == 1 && repr_len == 1)
+    return;
+  if (repr [repr_len - 1] == '"')
+    repr_len--;
+  for (; i < repr_len; i++)
+    if (repr[i] != '\\' || i + 1 >= repr_len || (repr[i + 1] != '\\' && repr[i + 1] != '"'))
+      VARR_PUSH (char, to, repr[i]);
+}
+
+static token_t token_stringify (token_t t, VARR (token_t) *ts) { // ts - vector, t defines pos. for empty vector
+  int i;
+  
+  if (VARR_LENGTH (token_t, ts) != 0)
+    t = VARR_GET (token_t, ts, 0);
+  t = new_node_token (t->pos, "", T_STR, new_str_node (N_STR, "", t->pos));
+  VARR_TRUNC (char, temp_string, 0);
+  for (const char *s = t->repr; *s != 0; s++)
+    VARR_PUSH (char, temp_string, *s);
+  VARR_PUSH (char, temp_string, '"');
+  for (i = 0; i < VARR_LENGTH (token_t, ts); i++)
+    if (VARR_GET (token_t, ts, i)->code == ' ') {
+      VARR_PUSH (char, temp_string, ' ');
+    } else {
+      for (const char *s = VARR_GET (token_t, ts, i)->repr; *s != 0; s++) {
+	int c = VARR_LENGTH (token_t, ts) == i + 1 ? '\0' : VARR_GET (token_t, ts, i + 1)->repr[0];
+	
+	/* It is an implementation defined behaviour analogous GCC/Clang: */
+	if (*s == '\"' || (*s == '\\' && c != 'a' && c != 'b'
+			   && c != 'f' && c != 'n' && c != 'r' && c != 't'))
+	  VARR_PUSH (char, temp_string, '\\');
+	VARR_PUSH (char, temp_string, *s);
+      }
+    }
+  VARR_PUSH (char, temp_string, '"');
+  VARR_PUSH (char, temp_string, '\0');
+  t->repr = uniq_str (VARR_ADDR (char, temp_string));
+  set_string_val (t, temp_string);
+  return t;
 }
 
 static token_t pptoken2token (token_t t, int id2kw_p) {
   assert (t->code != T_HEADER && t->code != T_EOA && t->code != T_EOR && t->code != T_EOP
-	  && t->code != EOF && t->code != EOU && t->code != T_PLM && t->code != T_DBLNO);
+	  && t->code != T_EOF && t->code != T_EOU && t->code != T_PLM && t->code != T_RDBLNO);
   if (t->code == T_ID && id2kw_p) {
     str_t str = str_add (t->repr, T_STR, 0, FALSE);
     
@@ -1348,7 +1396,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
       base = 8;
     }
     for (i = last; i >= 0; i--) {
-      if (repr[i] == 'l' && repr[i - 1] == 'l' || repr[i] == 'L' && repr[i - 1] == 'L') {
+      if ((repr[i] == 'l' && repr[i - 1] == 'l') || (repr[i] == 'L' && repr[i - 1] == 'L')) {
 	i--; long_long_p = TRUE;
       } else if (repr[i] == 'l' || repr[i] == 'L') {
 	long_p = TRUE;
@@ -1387,38 +1435,1518 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
       t->node = new_l_node (strtol (repr, NULL, base), t->pos); /* ??? int */
     }
     if (errno) {
-      error_func (C_out_of_range_number, "number is out of range");
+      print_error (t->pos, "number %s is out of range\n", repr);
     }
   }
   return t;
 }
 
+/* --------------------------- Preprocessor -------------------------------- */
+
+/* Dirs to search include files in "" and in <>.  End mark is NULL. */
+static const char **string_header_dirs, **bracket_header_dirs;
+
+static VARR (char) *temp_string;
+
+static void add_to_temp_string (const char *str) {
+  size_t i, len;
+  
+  if ((len = VARR_LENGTH (char, temp_string)) != 0
+      && VARR_GET (char, temp_string, len - 1) == '\0') {
+    VARR_POP (char, temp_string);
+ }
+ len = strlen (str);
+ for (i = 0; i < len; i++)
+   VARR_PUSH (char, temp_string, str[i]);
+ VARR_PUSH (char, temp_string, '\0');
+}
+ 
+static VARR (token_t) *temp_tokens;
+
+typedef struct macro { /* macro definition: */
+  token_t id;                  /* T_ID */
+  VARR (token_t) *params;  /* (T_ID)* [N_DOTS], NULL means no params */
+  VARR (token_t) *replacement; /* token*, NULL means a standard macro */
+  int ignore_p;
+} *macro_t;
+
+DEF_HTAB (macro_t);
+static HTAB (macro_t) *macro_tab;
+
+static int macro_eq (macro_t macro1, macro_t macro2) {
+  return macro1->id->repr == macro2->id->repr;
+}
+
+static htab_hash_t macro_hash (macro_t macro) {
+  return mum_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
+}
+
+DEF_VARR (macro_t);
+static VARR (macro_t) *macros;
+
+static macro_t new_macro (token_t id, VARR (token_t) *params, VARR (token_t) *replacement);
+
+static void new_std_macro (const char *id_str) {
+  new_macro (new_id_token (no_pos, id_str), NULL, NULL);
+}
+
+static void init_macros (void) {
+  VARR_CREATE (macro_t, macros, 2048);
+  HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq);
+  /* Standard macros : */
+  new_std_macro ("__DATE__");
+  new_std_macro ("__FILE__");
+  new_std_macro ("__LINE__");
+  new_std_macro ("__STDC__");
+  new_std_macro ("__STDC_HOSTED__");
+  new_std_macro ("__STDC_VERSION__");
+  new_std_macro ("__TIME__");
+}
+
+static macro_t new_macro (token_t id, VARR (token_t) *params, VARR (token_t) *replacement) {
+  macro_t tab_m, m = malloc (sizeof (struct macro));
+  
+  m->id = id; m->params = params; m->replacement = replacement; m->ignore_p = FALSE;
+  assert (! HTAB_DO (macro_t, macro_tab, m, HTAB_FIND, tab_m));
+  HTAB_DO (macro_t, macro_tab, m, HTAB_INSERT, tab_m);
+  VARR_PUSH (macro_t, macros, m);
+  return m;
+}
+
+static void finish_macros (void) {
+  while (VARR_LENGTH (macro_t, macros) != 0) {
+    macro_t m = VARR_POP (macro_t, macros);
+
+    if (m->params != NULL)
+      VARR_DESTROY (token_t, m->params);
+    if (m->replacement != NULL)
+      VARR_DESTROY (token_t, m->replacement);
+    free (m);
+  }
+  VARR_DESTROY (macro_t, macros);
+  HTAB_DESTROY (macro_t, macro_tab);
+}
+
+typedef VARR (token_t) *token_arr_t;
+
+DEF_VARR (token_arr_t);
+
+typedef struct macro_call {
+  macro_t macro;
+  /* Var array of arguments, each arg is var array of tokens, NULL for args absence: */
+  VARR (token_arr_t) *args;
+  int repl_pos;    /* position in macro replacement */
+  VARR (token_t) *repl_buffer; /* LIST:(token nodes)* */
+} *macro_call_t;
+
+static macro_call_t new_macro_call (macro_t m) {
+  macro_call_t mc = malloc (sizeof (struct macro_call));
+
+  mc->macro = m; mc->repl_pos = 0; mc->args = NULL;
+  VARR_CREATE (token_t, mc->repl_buffer, 64);
+  return mc;
+}
+
+static void free_macro_call (macro_call_t mc) {
+  VARR_DESTROY (token_t, mc->repl_buffer);
+  if (mc->args != NULL) {
+    while (VARR_LENGTH (token_arr_t, mc->args) != 0) {
+      VARR (token_t) *arg = VARR_POP (token_arr_t, mc->args);
+      VARR_DESTROY (token_t, arg);
+    }
+    VARR_DESTROY (token_arr_t, mc->args);
+  }
+  free (mc);
+}
+
+typedef struct ifstate {
+  int skip_p, true_p, else_p;  /* ??? flags that we are in a else part and in a false part */
+  pos_t if_pos;  /* pos for #if and last #else, #elif */
+} *ifstate_t;
+
+DEF_VARR (ifstate_t);
+static VARR (ifstate_t) *ifs; /* stack of ifstates */
+
+static ifstate_t new_ifstate (int skip_p, int true_p, int else_p, pos_t if_pos) {
+  ifstate_t ifstate = malloc (sizeof (struct ifstate));
+
+  ifstate->skip_p = skip_p; ifstate->true_p = true_p;
+  ifstate->else_p = else_p; ifstate->if_pos = if_pos;
+  return ifstate;
+}
+
+static void pop_ifstate (void) {
+  free (VARR_POP (ifstate_t, ifs));
+}
+
+static int no_out_p; /* don't output lexs -- put them into buffer */
+static int skip_if_part_p;
+static int ifs_length_at_file_start; /* Length of ifs at the file start. */
+static const char *varg = "__VA_ARGS__";
+static token_t if_id; /* last processed token #if or #elif: used for error messages */
+static char date_str[100], time_str[100];
+
+DEF_VARR (int);
+static VARR (int) *includes; /* stack of ifs_length_at_file_start */
+
+static VARR (token_t) *buffer;
+
+DEF_VARR (macro_call_t);
+static VARR (macro_call_t) *macro_call_stack;
+
+static void (*out_token_func) (token_t);
+
+static void update_includes (void) {
+  ifs_length_at_file_start = VARR_LENGTH (ifstate_t, ifs);
+  VARR_PUSH (int, includes, ifs_length_at_file_start);
+}
+
+static void pre_init (void) {
+  time_t t;
+  struct tm *tm;
+  
+  no_out_p = skip_if_part_p = FALSE; ifs_length_at_file_start = 0;
+  t = time (NULL);
+  tm = localtime(&t);
+  if (tm == NULL) {
+    strcpy (date_str, "\"Unknown date\"");
+    strcpy (time_str, "\"Unknown time\"");
+  } else {
+    strftime (date_str, sizeof (date_str), "\"%b %d %Y\"", tm);
+    strftime (time_str, sizeof (time_str), "\"%H:%M:%S\"", tm);
+  }
+  VARR_CREATE (token_t, temp_tokens, 128);
+  VARR_CREATE (int, includes, 512);
+  VARR_CREATE (token_t, buffer, 2048);
+  init_macros ();
+  VARR_CREATE (ifstate_t, ifs, 512);
+  VARR_CREATE (macro_call_t, macro_call_stack, 512);
+  update_includes ();
+}
+
+static void pre_finish (void) {
+  VARR_DESTROY (token_t, temp_tokens);
+  VARR_DESTROY (int, includes);
+  VARR_DESTROY (token_t, buffer);
+  finish_macros ();
+  while (VARR_LENGTH (ifstate_t, ifs) != 0)
+    pop_ifstate ();
+  VARR_DESTROY (ifstate_t, ifs);
+  while (VARR_LENGTH (macro_call_t, macro_call_stack) != 0)
+    free_macro_call (VARR_POP (macro_call_t, macro_call_stack));
+  VARR_DESTROY (macro_call_t, macro_call_stack);
+}
+
+static void add_include_stream (const char *fname) {
+  FILE *f;
+  
+  assert (fname != NULL);
+  if ((f = fopen (fname, "r")) == NULL) {
+    fprintf (stderr, "error in opening file %s\n", fname);
+    exit (1); // ???
+  }
+  add_stream (f, fname);
+  update_includes ();
+}
+
+static void skip_nl (token_t t, VARR (token_t) *buffer) { /* skip until new line */
+  if (t == NULL)
+    t = get_next_pptoken ();
+  for (; t->code != '\n'; t = get_next_pptoken ()) // ??>
+    if (buffer != NULL)
+      VARR_PUSH (token_t, buffer, t);
+  unget_next_pptoken (t);
+}
+
+static int find_param (VARR (token_t) *params, const char *name) {
+  size_t len;
+  token_t param;
+  
+  len = VARR_LENGTH (token_t, params);
+  if (strcmp (name, varg) == 0 && len != 0 && VARR_LAST (token_t, params)->code == T_DOTS)
+    return len - 1;
+  for (int i = 0; i < len; i++)  {
+    param = VARR_GET (token_t, params, i);
+    if (strcmp (param->repr, name) == 0)
+      return i;
+  }
+  return -1;
+}
+
+static int params_eq_p (VARR (token_t) *params1, VARR (token_t) *params2) {
+  token_t param1, param2;
+  
+  if (params1 == NULL || params2 == NULL)
+    return params1 == params2;
+  if (VARR_LENGTH (token_t, params1) != VARR_LENGTH (token_t, params2))
+    return FALSE;
+  for (int i = 0; i < VARR_LENGTH (token_t, params1); i++)  {
+    param1 = VARR_GET (token_t, params1, i);
+    param2 = VARR_GET (token_t, params2, i);
+    if (strcmp (param1->repr, param2->repr) != 0)
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static int replacement_eq_p (VARR (token_t) *r1, VARR (token_t) *r2) {
+  token_t el1, el2;
+  
+  if (VARR_LENGTH (token_t, r1) != VARR_LENGTH (token_t, r2))
+    return FALSE;
+  for (int i = 0; i < VARR_LENGTH (token_t, r1); i++)  {
+    el1 = VARR_GET (token_t, r1, i);
+    el2 = VARR_GET (token_t, r2, i);
+    
+    if (el1->code == ' ' && el2->code == ' ')
+      return TRUE;
+    if (el1->node_code != el2->node_code)
+      return FALSE;
+    if (strcmp (el1->repr, el2->repr) != 0)
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static void define (void) {
+  VARR (token_t) *repl, *params;
+  token_t id, t;
+  const char *name;
+  macro_t m;
+  struct  macro macro_struct;
+  
+  t = get_next_pptoken (); // ???
+  if (t->code == ' ')
+    t = get_next_pptoken (); // ??
+  if (t->code != T_ID) {
+    print_error (t->pos, "no ident after #define: %s\n", t->repr);
+    skip_nl (t, NULL);
+    return;
+  }
+  id = t;
+  t = get_next_pptoken ();
+  VARR_CREATE (token_t, repl, 64);
+  params = NULL;
+  if (t->code == '(') {
+    VARR_CREATE (token_t, params, 16);
+    t = get_next_pptoken (); /* skip '(' */
+    if (t->code == ' ')
+      t = get_next_pptoken ();
+    if (t->code != ')') {
+      for (;;) {
+	if (t->code == ' ')
+	  t = get_next_pptoken ();
+	if (t->code == T_ID) {
+	  if (find_param (params, t->repr) >= 0)
+	    print_error (t->pos, "repeated macro parameter %s\n", t->repr);
+	  VARR_PUSH (token_t, params, t);
+	} else if (t->code == T_DOTS) {
+	  VARR_PUSH (token_t, params, t);
+	} else {
+	  print_error (t->pos, "macro parameter is expected\n");
+	  break;
+	}
+	t = get_next_pptoken ();
+	if (t->code == ' ')
+	  t = get_next_pptoken ();
+	if (t->code == ')')
+	  break;
+	if (VARR_LAST (token_t, params)->code == T_DOTS) {
+	  print_error (t->pos, "... is not the last parameter\n");
+	  break;
+	}
+	if (t->code == T_DOTS)
+	  continue;
+	if (t->code != ',') {
+	  print_error (t->pos, "missed ,\n");
+	  continue;
+	}
+	t = get_next_pptoken ();
+      }
+    }
+    for (;t->code != '\n' && t->code != ')';)
+      t = get_next_pptoken ();
+    if (t->code == ')')
+      t = get_next_pptoken ();
+  }
+  if (t->code == ' ')
+    t = get_next_pptoken ();
+  for (; t->code != '\n'; t = get_next_pptoken ()) {
+    if (t->code == T_DBLNO)
+      t->code = T_RDBLNO;
+    VARR_PUSH (token_t, repl, t);
+  }
+  unget_next_pptoken (t);
+  name = id->repr; macro_struct.id = id;
+  if (! HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, m)) {
+    if (strcmp (name, "defined") == 0) {
+      print_error (id->pos, "macro definition of %s\n", name);
+    } else {
+      new_macro (id, params, repl);
+    }
+  } else if (m->replacement == NULL) {
+    print_error (id->pos, "standard macro %s redefinition\n", name);
+  } else if (! params_eq_p (m->params, params) || ! replacement_eq_p (m->replacement, repl)) {
+    print_error (id->pos, "different macro redefinition of %s\n", name);
+  }
+}
+
+static void push_back (VARR (token_t) *tokens) {
+  for (int i = (int) VARR_LENGTH (token_t, tokens) - 1; i >= 0;  i--)
+    unget_next_pptoken (VARR_GET (token_t, tokens, i));
+}
+
+static int file_found_p (const char *name) {
+  FILE *f;
+  
+  if ((f = fopen (name, "r")) == NULL)
+    return FALSE;
+  fclose (f);
+  return TRUE;
+}
+
+static const char *get_full_name (const char *dir, const char *name) {
+  size_t len;
+  
+  VARR_TRUNC (char, temp_string, 0);
+  if (dir == NULL || *dir == '\0') {
+    assert (name != NULL && name[0] != '\0');
+    return name;
+  }
+  len = strlen (dir);
+  assert (len > 0);
+  add_to_temp_string (dir);
+  if (dir[len - 1] != '/')
+    add_to_temp_string ("/");
+  add_to_temp_string (name);
+  return VARR_ADDR (char, temp_string);
+}
+
+static const char *get_include_fname (token_t t) {
+  const char *fullname, *name;
+
+  assert (t->code == T_STR || t->code == T_HEADER);
+  if ((name = t->node->u.s)[0] != '/') {
+    if (t->repr[0] == '"')
+      for (size_t i = 0; string_header_dirs[i] != NULL; i++) {
+	fullname = get_full_name (string_header_dirs[i], name);
+	if (file_found_p (fullname))
+	  return uniq_str (fullname);
+      }
+    for (size_t i = 0; bracket_header_dirs[i] != NULL; i++) {
+      fullname = get_full_name (bracket_header_dirs[i], name);
+      if (file_found_p (fullname))
+	return uniq_str (fullname);
+    }
+  }
+  return name;
+}
+
+static int digits_p (const char *str) {
+  while ('0' <= *str && *str <= '9')
+    str++;
+  return *str == '\0';
+}
+
+static pos_t check_line_directive_args (VARR (token_t) *buffer) {
+  size_t i, len = VARR_LENGTH (token_t, buffer);
+  token_t *buffer_arr = VARR_ADDR (token_t, buffer);
+  const char *fname;
+  pos_t pos;
+  int lno;
+  unsigned long long l;
+  
+  if (len == 0)
+    return no_pos;
+  i = buffer_arr[0]->code == ' ' ? 1 : 0;
+  fname = buffer_arr[i]->pos.fname;
+  if (i >= len || buffer_arr[i]->code != T_NUMBER)
+    return no_pos;
+  if (! digits_p (buffer_arr[i]->repr))
+    return no_pos;
+  errno = 0;
+  lno = l = strtoll (buffer_arr[i]->repr, NULL, 10);
+  if (errno || l > ((1ul << 31) - 1))
+    print_error (buffer_arr[i]->pos, "#line with too big value: %s\n", buffer_arr[i]->repr);
+  i++;
+  if (i < len && buffer_arr[i]->code == ' ')
+    i++;
+  if (i < len && buffer_arr[i]->code == T_STR) {
+    fname = buffer_arr[i]->node->u.s; i++;
+  }
+  if (i == len) {
+    pos.fname = fname; pos.lno = lno; pos.ln_pos = 0;
+    return pos;
+  }
+  return no_pos;
+}
+
+static void check_pragma (token_t t, VARR (token_t) *tokens) {
+  token_t *tokens_arr = VARR_ADDR (token_t, tokens);
+  size_t i, tokens_len = VARR_LENGTH (token_t, tokens);
+  
+  i = 0;
+  if (i < tokens_len && tokens_arr[i]->code == ' ')
+    i++;
+  if (i >= tokens_len || tokens_arr[i]->code != T_ID
+      || strcmp (tokens_arr[i]->repr, "STDC") != 0) {
+    print_warning (t->pos, "unknown pragma\n");
+    return;
+  }
+  i++;
+  if (i < tokens_len && tokens_arr[i]->code == ' ')
+    i++;
+  if (i >= tokens_len || tokens_arr[i]->code != T_ID) {
+    print_error (t->pos, "wrong STDC pragma\n");
+    return;
+  }
+  if (strcmp (tokens_arr[i]->repr, "FP_CONTRACT") != 0
+      && strcmp (tokens_arr[i]->repr, "FENV_ACCESS") != 0
+      && strcmp (tokens_arr[i]->repr, "CX_LIMITED_RANGE") != 0) {
+    print_error (t->pos, "unknown STDC pragma %s\n", tokens_arr[i]->repr);
+    return;
+  }
+  i++;
+  if (i < tokens_len && tokens_arr[i]->code == ' ')
+    i++;
+  if (i >= tokens_len || tokens_arr[i]->code != T_ID) {
+    print_error (t->pos, "wrong STDC pragma value\n");
+    return;
+  }
+  if (strcmp (tokens_arr[i]->repr, "ON") != 0 && strcmp (tokens_arr[i]->repr, "OFF") != 0
+      && strcmp (tokens_arr[i]->repr, "DEFAULT") != 0) {
+    print_error (t->pos, "unknown STDC pragma value\n", tokens_arr[i]->repr);
+    return;
+  }
+  i++;
+  if (i < tokens_len && (tokens_arr[i]->code == ' ' || tokens_arr[i]->code == '\n'))
+    i++;
+  if (i < tokens_len)
+    print_error (t->pos, "garbage at STDC pragma end\n");
+}
+
+static void pop_macro_call (void) {
+  macro_call_t mc;
+
+  mc = VARR_POP (macro_call_t, macro_call_stack);
+  mc->macro->ignore_p = FALSE;
+  free_macro_call (mc);
+}
+
+static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
+  macro_t m;
+  token_t t;
+  int va_p, level = 0;
+  size_t params_len;
+  VARR (token_arr_t) *args;
+  VARR (token_t) *arg, *temp_arr;
+  
+  m = mc->macro;
+  VARR_CREATE (token_arr_t, args, 16);
+  VARR_CREATE (token_t, arg, 16);
+  params_len = VARR_LENGTH (token_t, m->params);
+  va_p = params_len == 1 && VARR_GET (token_t, m->params, 0)->code == T_DOTS;
+  for (;;) {
+    t = get_next_pptoken ();
+    if (t->code == T_EOR) {
+      t = get_next_pptoken ();
+      pop_macro_call ();
+    }
+    if (t->code == T_EOF || t->code == T_EOU || t->code == T_EOR || t->code == T_EOA)
+      break;
+    if (level == 0 && t->code == ')' )
+      break;
+    if (level == 0 && ! va_p && t->code == ',') {
+      VARR_PUSH (token_arr_t, args, arg);
+      VARR_CREATE (token_t, arg, 16);
+      if (VARR_LENGTH (token_arr_t, args) == params_len - 1
+	  && strcmp (VARR_GET (token_t, m->params, params_len - 1)->repr, "...") == 0)
+	va_p = 1;
+    } else {
+      VARR_PUSH (token_t, arg, t);
+      if (t->code == ')')
+	level--;
+      else if (t->code == '(')
+	level++;
+    }
+  }
+  if (t->code != ')')
+    print_error (t->pos, "unfinished call of macro %s\n", m->id->repr);
+  VARR_PUSH (token_arr_t, args, arg);
+  if (params_len == 0 && VARR_LENGTH (token_arr_t, args) == 1
+      && VARR_LENGTH (token_t, VARR_GET (token_arr_t, args, 0)) == 0) {
+    temp_arr = VARR_POP (token_arr_t, args);
+    VARR_DESTROY (token_t, temp_arr);
+  } else if (VARR_LENGTH (token_arr_t, args) > params_len) {
+    t = VARR_GET (token_t, VARR_GET (token_arr_t, args, params_len), 0);
+    while (VARR_LENGTH (token_arr_t, args) > params_len) {
+      temp_arr = VARR_POP (token_arr_t, args);
+      VARR_DESTROY (token_t, temp_arr);
+    }
+    print_error (t->pos, "too many args for call of macro %s\n", m->id->repr);
+  } else if (VARR_LENGTH (token_arr_t, args) < params_len) {
+    for (; VARR_LENGTH (token_arr_t, args) < params_len;) {
+      VARR_CREATE (token_t, arg, 16);
+      VARR_PUSH (token_arr_t, args, arg);
+    }
+    print_error (t->pos, "not enough args for call of macro %s\n", m->id->repr);
+  }
+  mc->args = args;
+}
+
+static token_t token_concat (token_t t1, token_t t2) {
+  token_t t, next;
+  
+  VARR_TRUNC (char, temp_string, 0);
+  add_to_temp_string (t1->repr);
+  add_to_temp_string (t2->repr);
+  reverse (temp_string);
+  set_string_stream (VARR_ADDR (char, temp_string), t1->pos, NULL);
+  t = get_next_pptoken ();
+  next = get_next_pptoken ();
+  if (next->code != T_EOF) {
+    print_error (t1->pos, "wrong result of ##: %s\n", reverse (temp_string));
+    remove_string_stream ();
+  }
+  return t;
+}
+
+static void add_token (VARR (token_t) *to, token_t t) {
+  if ((t->code != ' ' && t->code != '\n') || VARR_LENGTH (token_t, to) == 0
+      || (VARR_LAST (token_t, to)->code != ' ' && VARR_LAST (token_t, to)->code != '\n'))
+    VARR_PUSH (token_t, to, t);
+}
+
+static void add_replacement_tokens (VARR (token_t) *to, VARR (token_t) *from) {
+  for (int i = 0; i < VARR_LENGTH (token_t, from); i++)
+    add_token (to, VARR_GET (token_t, from, i));
+}
+
+static void add_tokens (VARR (token_t) *to, VARR (token_t) *from) {
+  for (size_t i = 0; i < VARR_LENGTH (token_t, from); i++)
+    add_token (to, VARR_GET (token_t, from , i));
+}
+
+static void del_tokens (VARR (token_t) *tokens, int from, int len) {
+  int diff, tokens_len = VARR_LENGTH (token_t, tokens);
+  token_t *addr = VARR_ADDR (token_t, tokens);
+  
+  if (len < 0)
+    len = tokens_len - from;
+  assert (from + len <= tokens_len);
+  if ((diff = tokens_len - from - len) > 0)
+    memmove (addr + from, addr + from + len, diff * sizeof (token_t));
+  VARR_TRUNC (token_t, tokens, tokens_len - len);
+}
+
+static VARR (token_t) *do_concat (VARR (token_t) *tokens) {
+  int i, j, k, len = VARR_LENGTH (token_t, tokens);
+  token_t t;
+  
+  for (i = len - 1; i >= 0 ; i--)
+    if (VARR_GET (token_t, tokens, i)->code == T_RDBLNO) {
+      j = i + 1; k = i - 1;
+      if (VARR_GET (token_t, tokens, j)->code == ' '
+	  || VARR_GET (token_t, tokens, j)->code == '\n')
+	j++;
+      if (VARR_GET (token_t, tokens, k)->code == ' '
+	  || VARR_GET (token_t, tokens, k)->code == '\n')
+	k--;
+      if (VARR_GET (token_t, tokens, j)->code == T_PLM) {
+	if (k != i - 1 && j + 1 < len
+	    && (VARR_GET (token_t, tokens, j + 1)->code == ' '
+		|| VARR_GET (token_t, tokens, j + 1)->code == '\n'))
+	  j++;
+	del_tokens (tokens, i, j - i + 1);
+      } else if (VARR_GET (token_t, tokens, k)->code == T_PLM) {
+	if (j != i + 1 && k != 0
+	    && (VARR_GET (token_t, tokens, k - 1)->code == ' '
+		|| VARR_GET (token_t, tokens, k - 1)->code == '\n'))
+	  k--;
+	del_tokens (tokens, k, i - k + 1);
+      } else {
+	t = token_concat (VARR_GET (token_t, tokens, k), VARR_GET (token_t, tokens, j));
+	del_tokens (tokens, k + 1, j - k);
+	VARR_SET (token_t, tokens, k, t);
+      }
+      i = k;
+      len = VARR_LENGTH (token_t, tokens);
+    }
+  for (i = len - 1; i >= 0 ; i--)
+    VARR_GET (token_t, tokens, i)->processed_p = TRUE;
+  return tokens;
+}
+
+static void process_replacement (macro_call_t mc) {
+  macro_t m;
+  token_t t, *m_repl;
+  VARR (token_t) *arg;
+  int i, m_repl_len, sharp_pos;
+  
+  m = mc->macro; sharp_pos = -1;
+  m_repl = VARR_ADDR (token_t, m->replacement);
+  m_repl_len = VARR_LENGTH (token_t, m->replacement);
+  for (;;) {
+    if (mc->repl_pos >= m_repl_len) {
+      t = get_next_pptoken ();
+      unget_next_pptoken (t);
+      unget_next_pptoken (new_token (t->pos, "", T_EOR, N_IGNORE));
+      push_back (do_concat (mc->repl_buffer));
+      m->ignore_p = TRUE;
+      return;
+    }
+    t = m_repl[mc->repl_pos++];
+    if (t->code == T_ID) {
+      i = find_param (m->params, t->repr);
+      if (i >= 0) {
+	arg = VARR_GET (token_arr_t, mc->args, i);
+	if (sharp_pos >= 0) {
+	  del_tokens (mc->repl_buffer, sharp_pos, -1);
+	  if (VARR_LENGTH (token_t, arg) != 0
+	      && (VARR_GET (token_t, arg, 0)->code == ' '
+		  || VARR_GET (token_t, arg, 0)->code == '\n'))
+	    del_tokens (arg, 0, 1);
+	  if (VARR_LENGTH (token_t, arg) != 0
+	      && (VARR_LAST (token_t, arg)->code == ' ' || VARR_LAST (token_t, arg)->code == '\n'))
+	    VARR_POP (token_t, arg);
+	  t = token_stringify (mc->macro->id, arg);
+	} else if ((mc->repl_pos >= 2 && m_repl[mc->repl_pos - 2]->code == T_RDBLNO)
+		   || (mc->repl_pos >= 3 && m_repl[mc->repl_pos - 2]->code == ' '
+		       && m_repl[mc->repl_pos - 3]->code == T_RDBLNO)
+		   || (mc->repl_pos < m_repl_len && m_repl[mc->repl_pos]->code == T_RDBLNO)
+		   || (mc->repl_pos + 1 < m_repl_len && m_repl[mc->repl_pos + 1]->code == T_RDBLNO
+		       && m_repl[mc->repl_pos]->code == ' ')) {
+	  if (VARR_LENGTH (token_t, arg) == 0) {
+	    t = new_token (t->pos, "", T_PLM, N_IGNORE);
+	  } else {
+	    add_tokens (mc->repl_buffer, arg);
+	    continue;
+	  }
+	} else {
+	  unget_next_pptoken (new_token (t->pos, "", T_EOA, N_IGNORE));
+	  push_back (arg);
+	  return;
+	}
+      }
+    } else if (t->code == '#') {
+      sharp_pos = VARR_LENGTH (token_t, mc->repl_buffer);
+    } else if (t->code != ' ') {
+      sharp_pos = -1;
+    }
+    add_token (mc->repl_buffer, t);
+  }
+}
+
+static void prepare_pragma_string (const char *repr, VARR (char) *to) {
+  destringify (repr, to);
+  reverse (to);
+}
+
+static int process_pragma (token_t t) {
+  token_t t1, t2;
+
+  if (strcmp (t->repr, "_Pragma") != 0)
+    return FALSE;
+  VARR_TRUNC (token_t, temp_tokens, 0);
+  t1 = get_next_pptoken ();
+  VARR_PUSH (token_t, temp_tokens, t1);
+  if (t1->code == ' ' || t1->code == '\n') {
+    t1 = get_next_pptoken ();
+    VARR_PUSH (token_t, temp_tokens, t1);
+  }
+  if (t1->code != '(') {
+    push_back (temp_tokens);
+    return FALSE;
+  }
+  t1 = get_next_pptoken ();
+  VARR_PUSH (token_t, temp_tokens, t1);
+  if (t1->code == ' ' || t1->code == '\n') {
+    t1 = get_next_pptoken ();
+    VARR_PUSH (token_t, temp_tokens, t1);
+  }
+  if (t1->code != T_STR) {
+    push_back (temp_tokens);
+    return FALSE;
+  }
+  t2 = t1;
+  t1 = get_next_pptoken ();
+  VARR_PUSH (token_t, temp_tokens, t1); 
+  if (t1->code == ' ' || t1->code == '\n') {
+    t1 = get_next_pptoken ();
+    VARR_PUSH (token_t, temp_tokens, t1);
+  }
+  if (t1->code != ')') {
+    push_back (temp_tokens);
+    return FALSE;
+  }
+  set_string_stream (t2->repr, t2->pos, prepare_pragma_string);
+  VARR_TRUNC (token_t, temp_tokens, 0);
+  for (t1 = get_next_pptoken (); t1->code != T_EOF; t1 = get_next_pptoken ())
+    VARR_PUSH (token_t, temp_tokens, t1);
+#if 0
+  remove_string_stream ();
+  #endif
+  check_pragma (t2, temp_tokens);
+  return TRUE;
+}
+
+static void flush_buffer (void) {
+  for (size_t i = 0; i < VARR_LENGTH (token_t, buffer); i++)
+    out_token_func (VARR_GET (token_t, buffer, i));
+  VARR_TRUNC (token_t, buffer, 0);
+}
+
+static void out_token (token_t t) {
+  if (no_out_p || VARR_LENGTH (macro_call_t, macro_call_stack) != 0) {
+    VARR_PUSH (token_t, buffer, t);
+    return;
+  }
+  flush_buffer ();
+  out_token_func (t);
+}
+
+struct val {
+  int uns_p;
+  union {
+    mir_long_long i_val;
+    mir_ulong_long u_val;
+  } u;
+};
+ 
+static void move_tokens (VARR (token_t) *to, VARR (token_t) *from) {
+  VARR_TRUNC (token_t, to, 0);
+  for (int i = 0; i < VARR_LENGTH (token_t, from); i++)
+    VARR_PUSH (token_t, to, VARR_GET (token_t, from, i));
+  VARR_TRUNC (token_t, from, 0);
+}
+
+static void reverse_move_tokens (VARR (token_t) *to, VARR (token_t) *from) {
+  VARR_TRUNC (token_t, to, 0);
+  while (VARR_LENGTH (token_t, from) != 0)
+    VARR_PUSH (token_t, to, VARR_POP (token_t, from)); 
+}
+
+static void processing (int ignore_directive_p);
+
+static struct val eval_expr (VARR (token_t) *buffer, token_t if_token);
+
+static void process_directive (void) {
+  token_t t, t1;
+  int i, true_p;
+  VARR (token_t) *temp_buffer;
+  pos_t pos;
+  struct macro macro;
+  macro_t tab_macro;
+  const char *name;
+  
+  t = get_next_pptoken ();
+  if (t->code == '\n')
+    return;
+  if (t->code == ' ')
+    t = get_next_pptoken ();
+  if (t->code != T_ID) {
+    if (! skip_if_part_p)
+      print_error (t->pos, "wrong directive name %s\n", t->repr);
+    skip_nl (NULL,  NULL);
+    return;
+  }
+  VARR_CREATE (token_t, temp_buffer, 64);
+  if (strcmp (t->repr, "ifdef") == 0 || strcmp (t->repr, "ifndef") == 0) {
+    t1 = t;
+    if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
+      skip_if_part_p = true_p = TRUE;
+      skip_nl (NULL, NULL);
+    } else {
+      t = get_next_pptoken ();
+      skip_if_part_p = FALSE;
+      if (t->code == ' ')
+	t = get_next_pptoken ();
+      if (t->code != T_ID) {
+	print_error (t->pos, "wrong #%s\n", t1->repr);
+      } else {
+	macro.id = t;
+	skip_if_part_p = HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_macro);
+      }
+      t = get_next_pptoken ();
+      if (t->code != '\n') {
+	print_error (t1->pos, "garbage at the end of #%s\n", t1->repr);
+	skip_nl (NULL, NULL);
+      }
+      if (strcmp (t1->repr, "ifdef") == 0)
+	skip_if_part_p = ! skip_if_part_p;
+      true_p = ! skip_if_part_p;
+    }
+    VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t1->pos));
+  } else if (strcmp (t->repr, "endif") == 0 || strcmp (t->repr, "else") == 0) {
+    t1 = t;
+    t = get_next_pptoken ();
+    if (t->code != '\n') {
+      print_error (t1->pos, "garbage at the end of #%s\n", t1->repr);
+      skip_nl (NULL, NULL);
+    }
+    if (VARR_LENGTH (ifstate_t, ifs) <= ifs_length_at_file_start)
+      print_error (t1->pos, "unmatched #%s\n", t1->repr);
+    else if (strcmp (t1->repr, "endif") == 0) {
+      pop_ifstate ();
+      skip_if_part_p = VARR_LENGTH (ifstate_t, ifs) == 0 ? 0 : VARR_LAST (ifstate_t, ifs)->skip_p;
+    } else if (VARR_LAST (ifstate_t, ifs)->else_p) {
+      print_error (t1->pos, "repeated #else\n");
+      VARR_LAST (ifstate_t, ifs)->skip_p = 1;
+      skip_if_part_p = TRUE;
+    } else {
+      skip_if_part_p = VARR_LAST (ifstate_t, ifs)->true_p;
+      VARR_LAST (ifstate_t, ifs)->true_p = TRUE;
+      VARR_LAST (ifstate_t, ifs)->skip_p = skip_if_part_p;
+      VARR_LAST (ifstate_t, ifs)->else_p = FALSE;
+    }
+  } else if (strcmp (t->repr, "if") == 0 || strcmp (t->repr, "elif") == 0) {
+    if_id = t;
+    if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
+      skip_if_part_p = true_p = TRUE;
+      skip_nl (NULL, NULL);
+      if (strcmp (t->repr, "if") == 0)
+	VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t->pos));
+    } else if (strcmp (t->repr, "elif") == 0 && VARR_LAST (ifstate_t, ifs)->true_p) {
+      VARR_LAST (ifstate_t, ifs)->skip_p = TRUE;
+      skip_if_part_p = TRUE;
+      skip_nl (NULL, NULL);
+    } else {
+      struct val val;
+      
+      skip_nl (NULL, temp_buffer);
+      val = eval_expr (temp_buffer, t);
+      true_p = val.uns_p ? val.u.u_val != 0 : val.u.i_val != 0;
+      skip_if_part_p = ! true_p;
+      if (strcmp (t->repr, "if") == 0)
+	VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t->pos));
+      else {
+	VARR_LAST (ifstate_t, ifs)->skip_p = skip_if_part_p;
+	VARR_LAST (ifstate_t, ifs)->true_p = true_p;
+      }
+    }
+  } else if (skip_if_part_p) {
+    skip_nl (NULL, NULL);
+  } else if (strcmp (t->repr, "define") == 0) {
+    define ();
+  } else if (strcmp (t->repr, "include") == 0) {
+    t = get_next_include_pptoken ();
+    if (t->code == ' ')
+      t = get_next_include_pptoken ();
+    t1 = get_next_pptoken ();
+    if ((t->code == T_STR || t->code == T_HEADER) && t1->code == '\n')
+      name = get_include_fname (t);
+    else {
+      VARR_PUSH (token_t, temp_buffer, t);
+      skip_nl (t1, temp_buffer);
+      unget_next_pptoken (new_token (t->pos, "", T_EOP, N_IGNORE));
+      push_back (temp_buffer);
+      assert (VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && ! no_out_p);
+      no_out_p = TRUE;
+      processing (TRUE);
+      no_out_p = FALSE;
+      reverse_move_tokens (temp_buffer, buffer);
+      i = 0;
+      if (VARR_LENGTH (token_t, temp_buffer) != 0 && VARR_GET (token_t, temp_buffer, 0)->code == ' ')
+	i++;
+      if (i != VARR_LENGTH (token_t, temp_buffer) - 1
+	  || (VARR_GET (token_t, temp_buffer, i)->code != T_STR
+	      && VARR_GET (token_t, temp_buffer, i)->code != T_HEADER)) {
+	print_error (t->pos, "wrong #include\n");
+	goto ret;
+      }
+      name = get_include_fname (VARR_GET (token_t, temp_buffer, i));
+    }
+    if (VARR_LENGTH (int, includes) >= max_nested_includes) {
+      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (int, includes));
+      goto ret;
+    }
+    add_include_stream (name);
+  } else if (strcmp (t->repr, "line") == 0) {
+    skip_nl (NULL, temp_buffer);
+    unget_next_pptoken (new_token (t->pos, "", T_EOP, N_IGNORE));
+    push_back (temp_buffer);
+    assert (VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && ! no_out_p);
+    no_out_p = 1;
+    processing (TRUE);
+    no_out_p = 0;
+    move_tokens (temp_buffer, buffer);
+    pos = check_line_directive_args (temp_buffer);
+    if (pos.lno < 0) {
+      print_error (t->pos, "wrong #line\n");
+    } else {
+      change_stream_pos (pos);
+    }
+  } else if (strcmp (t->repr, "error") == 0) {
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string ("#error");
+    for (t1 = get_next_pptoken (); t1->code != '\n'; t1 = get_next_pptoken ())
+      add_to_temp_string (t1->repr);
+    print_error (t->pos, "%s\n", VARR_ADDR (char, temp_string));
+  } else if (strcmp (t->repr, "pragma") == 0) {
+    skip_nl (NULL, temp_buffer);
+    check_pragma (t, temp_buffer);
+  } else if (strcmp (t->repr, "undef") == 0) {
+    t = get_next_pptoken ();
+    if (t->code == ' ')
+      t = get_next_pptoken ();
+    if (t->code == '\n') {
+      print_error (t->pos, "no ident after #undef\n");
+      goto ret;
+    }
+    if (t->code != T_ID) {
+      print_error (t->pos, "no ident after #undef\n");
+      skip_nl (t, NULL);
+      goto ret;
+    }
+    if (strcmp (t->repr, "defined") == 0) {
+      print_error (t->pos, "#undef of %s\n", t->repr);
+    } else {
+      macro.id = t;
+      if (HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_macro)) {
+	if (tab_macro->replacement == NULL)
+	  print_error (t->pos, "#undef of standard macro %s\n", t->repr);
+	else
+	  HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_macro);
+      }
+    }
+  }
+ ret:
+  VARR_DESTROY (token_t, temp_buffer);
+}
+
+static VARR (token_t) *pre_expr;
+
+static int pre_match (int c, pos_t *pos, node_code_t *node_code, node_t *node) {
+  token_t t;
+  
+  if (VARR_LENGTH (token_t, pre_expr) == 0)
+    return FALSE;
+  t = VARR_LAST (token_t, pre_expr);
+  if (t->code != c)
+    return FALSE;
+  if (pos != NULL)
+    *pos = t->pos;
+  if (node_code != NULL)
+    *node_code = t->node_code;
+  if (node != NULL)
+    *node = t->node;
+  VARR_POP (token_t, pre_expr);
+  return TRUE;
+}
+
+static node_t pre_cond_expr (void);
+
+/* Expressions: */
+static node_t pre_primary_expr (void) {
+  node_t r;
+  
+  if (pre_match (T_NUMBER, NULL, NULL, &r) || pre_match (T_CH, NULL, NULL, &r))
+    return r;
+  if (pre_match ('(', NULL, NULL, NULL)) {
+    if ((r = pre_cond_expr ()) == NULL)
+      return r;
+    if (pre_match (')', NULL, NULL, NULL))
+      return r;
+  }
+  return NULL;
+}
+
+static node_t pre_unary_expr (void) {
+  node_t r;
+  node_code_t code;
+  pos_t pos;
+  
+  if (! pre_match (T_UNOP, &pos, &code, NULL) && ! pre_match (T_ADDOP, &pos, &code, NULL))
+    return pre_primary_expr ();
+  if ((r = pre_unary_expr ()) == NULL)
+    return r;
+  r = new_pos_node1 (code, pos, r);
+  return r;
+}
+
+static node_t pre_left_op (int token, int token2, node_t (*f) (void)) {
+  node_code_t code;
+  node_t r, n;
+  pos_t pos;
+  
+  if ((r = f ()) == NULL)
+    return r;
+  while (pre_match (token, &pos, &code, NULL)
+	 || (token2 >= 0 && pre_match (token2, &pos, &code, NULL))) {
+    n = new_pos_node1 (code, pos, r);
+    if ((r = f ()) == NULL)
+      return r;
+    op_append (n, r);
+    r = n;
+  }
+  return r;
+}
+
+static node_t pre_mul_expr (void) { return pre_left_op (T_DIVOP, '*', pre_unary_expr); }
+static node_t pre_add_expr (void) { return pre_left_op (T_ADDOP, -1, pre_mul_expr); }
+static node_t pre_sh_expr (void) { return pre_left_op (T_SH, -1, pre_add_expr); }
+static node_t pre_rel_expr (void) { return pre_left_op (T_CMP, -1, pre_sh_expr); }
+static node_t pre_eq_expr (void) { return pre_left_op (T_EQNE, -1, pre_rel_expr); }
+static node_t pre_and_expr (void) { return pre_left_op ('&', -1, pre_eq_expr); }
+static node_t pre_xor_expr (void) { return pre_left_op ('^', -1, pre_and_expr); }
+static node_t pre_or_expr (void) { return pre_left_op ('|', -1, pre_xor_expr); }
+static node_t pre_land_expr (void) { return pre_left_op (T_ANDAND, -1, pre_or_expr); }
+static node_t pre_lor_expr (void) { return pre_left_op (T_OROR, -1, pre_land_expr); }
+
+static node_t pre_cond_expr (void) {
+  node_t r, n;
+  pos_t pos;
+  
+  if ((r = pre_lor_expr ()) == NULL)
+    return r;
+  if (! pre_match ('?', &pos, NULL, NULL))
+    return r;
+  n = new_pos_node1 (N_COND, pos, r);
+  if ((r = pre_cond_expr ()) == NULL)
+    return r;
+  op_append (n, r);
+  if (! pre_match (':', NULL, NULL, NULL))
+    return NULL;
+  if ((r = pre_cond_expr ()) == NULL)
+    return r;
+  op_append (n, r);
+  return n;
+}
+
+static node_t parse_pre_expr (VARR (token_t) *expr) {
+  node_t r;
+  token_t t;
+  
+  pre_expr = expr;
+  t = VARR_LAST (token_t, expr);
+  if ((r = pre_cond_expr ()) != NULL && VARR_LENGTH (token_t, expr) == 0)
+    return r;
+  if (VARR_LENGTH (token_t, expr) != 0)
+    t = VARR_POP (token_t, expr);
+  print_error (t->pos, "wrong preprocessor expression\n");
+  return NULL;
+}
+
+static struct val eval (node_t tree);
+
+static struct val eval_expr (VARR (token_t) *expr_buffer, token_t if_token) {
+  int i, j, k, len;
+  token_t t, id, ppt;
+  const char *res;
+  struct macro macro_struct;
+  macro_t tab_macro;
+  VARR (token_t) *temp_buffer;
+  node_t tree;
+
+  for (i = 0; i < VARR_LENGTH (token_t, expr_buffer); i++) {
+    /* Change defined ident and defined (ident) */
+    t = VARR_GET (token_t, expr_buffer, i);
+    if (t->code == T_ID && strcmp (t->repr, "defined") == 0) {
+      j = i + 1;
+      len = VARR_LENGTH (token_t, expr_buffer);
+      if (j < len && VARR_GET (token_t, expr_buffer, j)->code == ' ')
+	j++;
+      if (j >= len)
+	continue;
+      if ((id = VARR_GET (token_t, expr_buffer, j))->code == T_ID) {
+	macro_struct.id = id;
+	res = HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, tab_macro) ? "1" : "0";
+	VARR_SET (token_t, expr_buffer, i, new_token (t->pos, res, T_NUMBER, N_IGNORE)); // ???
+	del_tokens (expr_buffer, i + 1, j - i);
+	continue;
+      }
+      if (j >= len || VARR_GET (token_t, expr_buffer, j)->code != '(')
+	continue;
+      j++;
+      if (j < len && VARR_GET (token_t, expr_buffer, j)->code == ' ')
+	j++;
+      if (j >= len || VARR_GET (token_t, expr_buffer, j)->code != T_ID)
+	continue;
+      k = j; j++;
+      if (j < len && VARR_GET (token_t, expr_buffer, j)->code == ' ')
+	j++;
+      if (j >= len || VARR_GET (token_t, expr_buffer, j)->code != ')')
+	continue;
+      macro_struct.id = VARR_GET (token_t, expr_buffer, k);
+      res = HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, tab_macro) ? "1" : "0";
+      VARR_SET (token_t, expr_buffer, i, new_token (t->pos, res, T_NUMBER, N_IGNORE)); // ???
+      del_tokens (expr_buffer, i + 1, j - i);
+    }
+  }
+  assert (VARR_LENGTH (token_t, buffer) == 0
+	  && VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && ! no_out_p);
+  /* macro substitution */
+  unget_next_pptoken (new_token (if_token->pos, "", T_EOP, N_IGNORE));
+  push_back (expr_buffer);
+  no_out_p = TRUE;
+  processing (TRUE);
+  no_out_p = FALSE;
+  reverse_move_tokens (expr_buffer, buffer);
+  VARR_CREATE (token_t, temp_buffer, VARR_LENGTH (token_t, expr_buffer));
+  for (i = j = 0; i < VARR_LENGTH (token_t, expr_buffer); i++) {
+    int change_p = TRUE;
+
+    /* changing PP tokens to tokens and idents to "0" */
+    ppt = VARR_GET (token_t, expr_buffer, i);
+    t = pptoken2token (ppt, FALSE);
+    if (t == NULL || t->code == ' ' || t->code == '\n')
+      continue;
+    if (t->code == T_NUMBER
+	&& (t->node->code == N_F || t->node->code == N_D || t->node->code == N_LD)) {
+      print_error (ppt->pos, "floating point in #if/#elif: %s\n", ppt->repr);
+    } else if (t->code == T_STR) {
+      print_error (ppt->pos, "string in #if/#elif: %s\n", ppt->repr);
+    } else if (t->code != T_ID) {
+      change_p = FALSE;
+    }
+    if (change_p)
+      t = new_node_token (ppt->pos, "0", T_NUMBER, new_ll_node (0, ppt->pos));
+    VARR_PUSH (token_t, temp_buffer, t);
+  }
+  no_out_p = TRUE;
+  tree = parse_pre_expr (temp_buffer);
+  no_out_p = FALSE;
+  VARR_DESTROY (token_t, temp_buffer);
+  if (tree == NULL) {
+    struct val val;
+    
+    val.uns_p = FALSE; val.u.i_val = 0;
+    return val;
+  }
+  return eval (tree);
+}
+
+static int eval_binop_operands (node_t tree, struct val *v1, struct val *v2) {
+  *v1 = eval (NL_HEAD (tree->ops));
+  *v2 = eval (NL_EL (tree->ops, 1));
+  if (v1->uns_p && ! v2->uns_p) {
+    v2->uns_p = TRUE; v2->u.u_val = v2->u.i_val;
+  } else if (! v1->uns_p && v2->uns_p) {
+    v1->uns_p = TRUE; v1->u.u_val = v1->u.i_val;
+  }
+  return v1->uns_p;
+}
+
+static struct val eval (node_t tree) {
+  int cond;
+  struct val res, v1, v2;
+
+#define UNOP(op)			\
+  do {					\
+    v1 = eval (NL_HEAD (tree->ops));	\
+    res = v1;				\
+    if (res.uns_p)			\
+      res.u.u_val = op res.u.u_val;	\
+    else				\
+      res.u.i_val = op res.u.i_val;	\
+  } while (0)
+
+#define BINOP(op)					\
+  do {							\
+    res.uns_p = eval_binop_operands (tree, &v1, &v2);	\
+    if (res.uns_p)					\
+      res.u.u_val = v1.u.u_val op v2.u.u_val;		\
+    else						\
+      res.u.i_val = v1.u.i_val op v2.u.i_val; 		\
+  } while (0)
+
+  switch (tree->code) {
+  case N_CH:
+    res.uns_p = ! char_is_signed_p () || MIR_CHAR_MAX > MIR_INT_MAX;
+    if (res.uns_p)
+      res.u.u_val = tree->u.ch;
+    else
+      res.u.i_val = tree->u.ch;
+    break;
+  case N_I:
+  case N_L:
+    res.uns_p = FALSE; res.u.i_val = tree->u.l;
+    break;
+  case N_LL:
+    res.uns_p = FALSE; res.u.i_val = tree->u.ll;
+    break;
+  case N_U:
+  case N_UL:
+    res.uns_p = TRUE; res.u.u_val = tree->u.ul;
+    break;
+  case N_ULL:
+    res.uns_p = TRUE; res.u.u_val = tree->u.ull;
+    break;
+  case N_BITWISE_NOT:
+    UNOP (~); break;
+  case N_NOT:
+    UNOP (!); break;
+  case N_EQ:
+    BINOP (==); break;
+  case N_NE:
+    BINOP (!=); break;
+  case N_LT:
+    BINOP (<); break;
+  case N_LE:
+    BINOP (<=); break;
+  case N_GT:
+    BINOP (>); break;
+  case N_GE:
+    BINOP (>=); break;
+  case N_ADD:
+    if (NL_EL (tree->ops, 1) == NULL) {
+      UNOP (+);
+    } else {
+      BINOP (+);
+    }
+    break;
+  case N_SUB:
+    if (NL_EL (tree->ops, 1) == NULL) {
+      UNOP (-);
+    } else {
+      BINOP (-);
+    }
+    break;
+  case N_AND:
+    BINOP (&); break;
+  case N_OR:
+    BINOP (|); break;
+  case N_XOR:
+    BINOP (^); break;
+  case N_LSH:
+    BINOP (<<); break;
+  case N_RSH:
+    BINOP (>>); break;
+  case N_MUL:
+    BINOP (*); break;
+  case N_DIV: case N_MOD: {
+    int zero_p;
+    
+    res.uns_p = eval_binop_operands (tree, &v1, &v2);
+    if (res.uns_p) {
+      res.u.u_val = ((zero_p = v2.u.u_val == 0) ? 1
+		     : tree->code == N_DIV ? v1.u.u_val / v2.u.u_val : v1.u.u_val % v2.u.u_val);
+    } else {
+      res.u.i_val = ((zero_p = v2.u.i_val == 0) ? 1
+		     : tree->code == N_DIV ? v1.u.i_val / v2.u.i_val : v1.u.i_val % v2.u.i_val);
+    }
+    if (zero_p)
+      print_error (tree->pos, "division (%s) by zero in preporocessor\n",
+		   tree->code == N_DIV ? "/" : "%");
+    break;
+  }
+  case N_ANDAND:
+  case N_OROR:
+    v1 = eval (NL_HEAD (tree->ops));
+    cond = v1.uns_p ? v1.u.u_val == 0 : v1.u.i_val == 0;
+    if (tree->code == N_ANDAND ? cond : ! cond) {
+      v2 = eval (NL_EL (tree->ops, 1));
+      cond = v2.uns_p ? v2.u.u_val == 0 : v2.u.i_val == 0;
+    }
+    res.uns_p = FALSE; res.u.i_val = cond;
+    break;
+  case N_COND:
+    v1 = eval (NL_HEAD (tree->ops));
+    cond = v1.uns_p ? v1.u.u_val != 0 : v1.u.i_val != 0;
+    res = eval (NL_EL (tree->ops, cond ? 1 : 2));
+    break;
+  default:
+    assert (FALSE);
+  }
+  return res;
+}
+
+static void processing (int ignore_directive_p) {
+  token_t t, t1, t2;
+  struct macro macro_struct;
+  macro_t m;
+  macro_call_t mc;
+  int newln_p;
+  
+  for (newln_p = TRUE;;) { /* Main loop. */
+    t = get_next_pptoken ();
+    if (t->code == T_EOP)
+      return; /* end of processing */
+    if (newln_p && ! ignore_directive_p && t->code == '#') {
+      process_directive ();
+      continue;
+    }
+    if (t->code == '\n') {
+      newln_p = TRUE;
+      out_token (t);
+      continue;
+    } else if (t->code == ' ') {
+      out_token (t);
+      continue;
+    } else if (t->code == T_EOF || t->code == T_EOU) {
+      ifs_length_at_file_start = VARR_POP (int, includes);
+      if (VARR_LENGTH (ifstate_t, ifs) > ifs_length_at_file_start) {
+	print_error (VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if\n");
+      }
+      if (t->code == T_EOU)
+	return;
+      while (VARR_LENGTH (ifstate_t, ifs) > ifs_length_at_file_start)
+	pop_ifstate ();
+      skip_if_part_p = VARR_LENGTH (ifstate_t, ifs) == 0 ? 0 : VARR_LAST (ifstate_t, ifs)->skip_p;
+      newln_p = TRUE;
+      continue;
+    } else if (skip_if_part_p) {
+      skip_nl (t, NULL);
+      newln_p = TRUE;
+      continue;
+    }
+    newln_p = FALSE;
+    if (t->code == T_EOR) { // finish macro call
+      pop_macro_call ();
+      continue;
+    } else if (t->code == T_EOA) { /* arg end: add the result to repl_buffer */
+      mc = VARR_LAST (macro_call_t, macro_call_stack);
+      add_replacement_tokens (mc->repl_buffer, buffer);
+      VARR_TRUNC (token_t, buffer, 0);
+      process_replacement (mc);
+      continue;
+    } else if (t->code != T_ID) {
+      out_token (t);
+      continue;
+    }
+    macro_struct.id = t;
+    if (! HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, m)) {
+      if (! process_pragma (t))
+	out_token (t);
+      continue;
+    }
+    if (m->replacement == NULL) { /* standard macro */
+      if (strcmp (t->repr, "__STDC__") == 0) {
+	out_token (new_token (t->pos, "1", T_NUMBER, N_IGNORE));
+      } else if (strcmp (t->repr, "__STDC_HOSTED__") == 0) {
+	out_token (new_token (t->pos, "1", T_NUMBER, N_IGNORE));
+      } else if (strcmp (t->repr, "__STDC_VERSION__") == 0) {
+	out_token (new_token (t->pos, "201112L", T_NUMBER, N_IGNORE)); // ???
+      } else if (strcmp (t->repr, "__FILE__") == 0) { 
+	stringify (t->pos.fname, temp_string);
+	VARR_PUSH (char, temp_string, '\0');
+	out_token (new_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR, N_IGNORE));
+      } else if (strcmp (t->repr, "__LINE__") == 0) {
+	char str[50];
+	
+	sprintf (str, "%d", t->pos.lno);
+	out_token (new_token (t->pos, uniq_str (str), T_NUMBER, N_IGNORE));
+      } else if (strcmp (t->repr, "__DATE__") == 0) {
+	out_token (new_token (t->pos, date_str, T_STR, N_IGNORE));
+      } else if (strcmp (t->repr, "__TIME__") == 0) {
+	out_token (new_token (t->pos, time_str, T_STR, N_IGNORE));
+      } else {
+	assert (FALSE);
+      }
+      continue;
+    }
+    if (m->ignore_p) {
+      t->code = T_NO_MACRO_IDENT;
+      out_token (t);
+      continue;
+    }
+    if (m->params == NULL) { /* macro without parameters */
+      unget_next_pptoken (new_token (t->pos, "", T_EOR, N_IGNORE));
+      push_back (do_concat (m->replacement));
+      mc = new_macro_call (m);
+      m->ignore_p = TRUE;
+      VARR_PUSH (macro_call_t, macro_call_stack, mc);
+    } else { /* macro with parameters */
+      t2 = NULL;
+      t1 = get_next_pptoken ();
+      if (t1->code == T_EOR) {
+	pop_macro_call ();
+	t1 = get_next_pptoken ();
+      }
+      if (t1->code == ' ' || t1->code == '\n') {
+	t2 = t1;
+	t1 = get_next_pptoken ();
+      }
+      if (t1->code != '(') { /* no args: it is not a macro call */
+	unget_next_pptoken (t1);
+	if (t2 != NULL)
+	  unget_next_pptoken (t2);
+	out_token (t);
+	continue;
+      }
+      mc = new_macro_call (m);
+      find_args (mc);
+      VARR_PUSH (macro_call_t, macro_call_stack, mc);
+      process_replacement (mc);
+    }
+  }
+}
+
+static token_t pre_last_token;
+static pos_t shouldbe_pre_pos, actual_pre_pos;
+static const char *pre_start_fname;
+
+static void text_pre_out (token_t t) { /* NULL means end of output */
+  int i;
+
+  if (t == NULL && pre_last_token != NULL && pre_last_token->code == '\n') {
+    printf ("\n");
+    return;
+  }
+  pre_last_token = t;
+  if (! t->processed_p) {
+    shouldbe_pre_pos = t->pos;
+  }
+  if (t->code == '\n')
+    return;
+  if (actual_pre_pos.fname != shouldbe_pre_pos.fname
+      || actual_pre_pos.lno != shouldbe_pre_pos.lno) {
+    if (actual_pre_pos.fname == shouldbe_pre_pos.fname
+	&& actual_pre_pos.lno < shouldbe_pre_pos.lno
+	&& actual_pre_pos.lno + 4 >= shouldbe_pre_pos.lno) {
+      for (; actual_pre_pos.lno != shouldbe_pre_pos.lno; actual_pre_pos.lno++)
+	printf ("\n");
+    } else {
+      if (pre_last_token != NULL)
+	printf ("\n");
+      printf ("#line %d", shouldbe_pre_pos.lno);
+      if (actual_pre_pos.fname != shouldbe_pre_pos.fname) {
+	stringify (t->pos.fname, temp_string);
+	VARR_PUSH (char, temp_string, '\0');
+	printf (" %s", VARR_ADDR (char, temp_string));
+      }
+      printf ("\n");
+    }
+    for (i = 0; i < shouldbe_pre_pos.ln_pos; i++)
+      printf (" ");
+    actual_pre_pos = shouldbe_pre_pos;
+  }
+  printf ("%s", t->code == ' ' ? " " : t->repr);
+}
+
 static VARR (token_t) *recorded_tokens;
-static size_t next_token_index;
 static int record_level;
+static size_t next_token_index;
+
+static void pre_out (token_t t) {
+  if (t == NULL) {
+    t = new_token (pre_last_token == NULL ? no_pos : pre_last_token->pos, "<EOF>", T_EOF, N_IGNORE);
+  } else {
+    assert (t->code != T_EOU && t->code != EOF);
+    pre_last_token = t;
+    if ((t = pptoken2token (t, TRUE)) == NULL)
+      return;
+  }
+  VARR_PUSH (token_t, recorded_tokens, t);
+}
 
 static void pre (void) {
-  for (;;) {
-    read_next_pptoken ();
-    if (curr_token->code == EOU)
-      curr_token->code = EOF;
-    else if ((curr_token = pptoken2token (curr_token, TRUE)) == NULL)
-      continue;
-    VARR_PUSH (token_t, recorded_tokens, curr_token);
-    if (curr_token->code == EOF)
-      break;
-  }
+  pre_last_token = NULL;
+  actual_pre_pos.fname = NULL;
+  shouldbe_pre_pos.fname = pre_start_fname; shouldbe_pre_pos.lno = 1; shouldbe_pre_pos.ln_pos = 0;
+  out_token_func = pre_out;
+  processing (FALSE);
+  out_token_func (NULL);
   next_token_index = 0;
 }
+
+/* ------------------------- Preprocessor End ------------------------------ */
+
+static token_t curr_token;
 
 static void read_token (void) {
   curr_token = VARR_GET (token_t, recorded_tokens, next_token_index);
   next_token_index++;
-}
-
-static void unread_token (token_t t) {
-  assert (next_token_index != 0);
-  next_token_index--;
 }
 
 static size_t record_start (void) {
@@ -1437,15 +2965,13 @@ static void record_stop (size_t mark, int restore_p) {
 }
 
 static void syntax_error (const char *expected_name) {
-  static int context_len = 5;
-  token_t buf[context_len + 1];
-  int i, c;
+  static const int context_len = 5;
   
   print_pos (curr_token->pos);
   fprintf (stderr, "syntax error on %s", get_token_name (curr_token->code));
   fprintf (stderr, " (expected '%s'):", expected_name);
 #if 0
-  for (i = 0; i < context_len && curr_token->code != EOF; i++) {
+  for (int i = 0; i < context_len && curr_token->code != T_EOF; i++) {
     fprintf (stderr, " %s", curr_token->repr);
   }
 #endif
@@ -1649,9 +3175,7 @@ DA (post_expr_part) {
 }
 
 D (post_expr) {
-  node_t r, n, op, list;
-  node_code_t code;
-  pos_t pos;
+  node_t r;
   
   P (primary_expr); PA (post_expr_part, r);
   return r;
@@ -1746,7 +3270,7 @@ D (land_expr) { return left_op (no_err_p, T_ANDAND, -1, or_expr); }
 D (lor_expr) { return left_op (no_err_p, T_OROR, -1, land_expr); }
 
 D (cond_expr) {
-  node_t r, n, pn;
+  node_t r, n;
   pos_t pos;
   
   P (lor_expr);
@@ -2315,7 +3839,6 @@ D (initializer) {
 D (initializer_list) {
   node_t list, list2, r;
   int first_p;
-  pos_t pos;
   
   list = new_node (N_LIST);
   for (;;) { /* designation */
@@ -2462,9 +3985,10 @@ D (stmt) {
 }
  
 static void error_recovery (int par_lev) {
-  fprintf (stderr, "error recovery: skipping");
+  if (debug_p)
+    fprintf (stderr, "error recovery: skipping");
   for (;;) {
-    if (curr_token->code == EOF || (par_lev == 0 && curr_token->code == ';'))
+    if (curr_token->code == T_EOF || (par_lev == 0 && curr_token->code == ';'))
       break;
     if (curr_token->code == '{') {
       par_lev++;
@@ -2472,13 +3996,14 @@ static void error_recovery (int par_lev) {
       if (--par_lev <= 0)
 	break;
     }
-    fprintf (stderr, " %s(%d:%d)",
-	     get_token_name (curr_token->code), curr_token->pos.lno, curr_token->pos.ln_pos);
+    if (debug_p)
+      fprintf (stderr, " %s(%d:%d)",
+	       get_token_name (curr_token->code), curr_token->pos.lno, curr_token->pos.ln_pos);
     read_token ();
   }
-  fprintf (stderr, " %s", get_token_name (curr_token->code));
+  if (debug_p)
+    fprintf (stderr, " %s\n", get_token_name (curr_token->code));
   read_token ();
-  fprintf (stderr, "\n");
 }
 
 D (compound_stmt) {
@@ -2487,7 +4012,7 @@ D (compound_stmt) {
   
   PTE ('{', pos, err0); list = new_node (N_LIST);
   n = new_pos_node1 (N_BLOCK, pos, list); n->u.scope = curr_scope; curr_scope = n;
-  while (! C ('}') && ! C (EOF)) { /* block-item-list, block_item */
+  while (! C ('}') && ! C (T_EOF)) { /* block-item-list, block_item */
     if ((r = TRY (declaration)) != &err_node) {
     } else {
       PE (stmt, err1);
@@ -2498,7 +4023,7 @@ D (compound_stmt) {
     error_recovery (1);
   }
   curr_scope = n->u.scope;
-  if (! C (EOF))
+  if (! C (T_EOF))
     PT ('}');
   return n;
  err0:
@@ -2512,7 +4037,7 @@ D (transl_unit) {
   //curr_token->code = ';'; /* for error recovery */
   read_token ();
   list = new_node (N_LIST);
-  while (! C (EOF)) { /* external-declaration */
+  while (! C (T_EOF)) { /* external-declaration */
     if ((r = TRY (declaration)) != &err_node) {
     } else {
       PE (declaration_specs, err); ds = r;
@@ -2549,12 +4074,14 @@ static void parse_init (const char *source) {
   reg_memory_init ();
   curr_uid = 0;
   init_streams ();
+  pre_start_fname = source;
   add_stream (NULL, source);
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
   VARR_CREATE (token_t, buffered_tokens, 32);
   VARR_CREATE (token_t, recorded_tokens, 32);
   str_init ();
+  pre_init ();
   kw_add ("_Bool", T_BOOL, 0);
   kw_add ("_Complex", T_COMPLEX, 0);
   kw_add ("_Alignas", T_ALIGNAS, 0);
@@ -2613,6 +4140,7 @@ static void parse_finish (void) {
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (token_t, buffered_tokens);
   VARR_DESTROY (token_t, recorded_tokens);
+  pre_finish ();
   str_finish ();
   tpname_finish ();
   finish_streams ();
@@ -2747,13 +4275,6 @@ static int symbol_find (enum symbol_mode mode, node_t id, node_t scope, symbol_t
   return found_p;
 }
 
-static void symbol_delete (enum symbol_mode mode, node_t id, node_t scope) {
-  symbol_t el, symbol;
-  
-  symbol.mode = mode; symbol.id = id; symbol.scope = scope;
-  HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_DELETE, el);
-}
-
 static void symbol_insert (enum symbol_mode mode, node_t id, node_t scope,
 			   node_t def_node, node_t aux_node) {
   symbol_t el, symbol;
@@ -2819,10 +4340,6 @@ static int standard_integer_type_p (struct type *type) {
 
 static int integer_type_p (struct type *type) {
   return standard_integer_type_p (type) || type->mode == TM_ENUM;
-}
-
-static int char_is_signed_p (void) {
-  return MIR_CHAR_MAX == MIR_SCHAR_MAX;
 }
 
 static int signed_integer_type_p (struct type *type) {
@@ -3096,18 +4613,20 @@ static void aux_set_type_align (struct type *type) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
     align = type_align (type->u.arr_type->el_type);
-  } else if (! type->incomplete_p) {
+  } else {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-    for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
-         member != NULL;
-         member = NL_NEXT (member))
-      if (member->code == N_MEMBER) {
-        struct decl *decl = member->attr;
-	
-	member_align = type_align (decl->decl_spec.type);
-	if (align < member_align)
-	  align = member_align;
-      }
+    align =  1;
+    if (! type->incomplete_p)
+      for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
+	   member != NULL;
+	   member = NL_NEXT (member))
+	if (member->code == N_MEMBER) {
+	  struct decl *decl = member->attr;
+	  
+	  member_align = type_align (decl->decl_spec.type);
+	  if (align < member_align)
+	    align = member_align;
+	}
   }
 #ifdef ADJUST_TYPE_ALIGNMENT
   align = ADJUST_TYPE_ALIGNMENT (align, type);
@@ -3121,7 +4640,6 @@ static unsigned long long type_size (struct type *type) {
 }
 
 static void set_type_layout (struct type *type) {
-  int align;
   unsigned long long size;
 
   if (type->raw_size != ULLONG_MAX)
@@ -3142,54 +4660,57 @@ static void set_type_layout (struct type *type) {
 
     set_type_layout (arr_type->el_type);
     size = type_size (arr_type->el_type) * nel;
-  } else if (! type->incomplete_p) {
+  } else {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     size = 0;
-    for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
-         member != NULL;
-         member = NL_NEXT (member))
-      if (member->code == N_MEMBER) {
-        struct decl *decl = member->attr;
-	int bit_offset = 0, member_align;
-	unsigned long long offset, len, member_size;
-	node_t width = NL_EL (member->ops, 2);
-	struct expr *expr;
-	
-	set_type_layout (decl->decl_spec.type); member_size = type_size (decl->decl_spec.type);
-	member_align = type_align (decl->decl_spec.type);
-	if (width->code == N_IGNORE || !(expr = width->attr)->const_p) {
-	  if (type->mode == TM_STRUCT) {
-	    offset = (size + member_align - 1) / member_align * member_align;
-	    size = offset + member_size;
-	  } else {
-	    offset = 0;
-	    if (size < member_size)
-	      size =  member_size;
-	  }
-	  decl->offset = offset;
-	  decl->bit_offset = decl->unit_size = -1;
-	} else {
-	  int unit_size, bit_len = expr->u.u_val;
+    if (! type->incomplete_p)
+      for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
+	   member != NULL;
+	   member = NL_NEXT (member))
+	if (member->code == N_MEMBER) {
+	  struct decl *decl = member->attr;
+	  int bit_offset = 0, member_align;
+	  unsigned long long offset, len, member_size;
+	  node_t width = NL_EL (member->ops, 2);
+	  struct expr *expr;
 	  
-	  if (type->mode == TM_UNION)
-	    bit_offset = offset = 0;
-	  /* Get byte and bit offsets (offset, bit_offset) and storage
-	     unit size for the bit field. */
-	  unit_size = get_bit_field_info (bit_len, &offset, &bit_offset);
-	  len = ((offset * MIR_CHAR_BIT + bit_offset + bit_len - 1)
-		 / MIR_CHAR_BIT / unit_size * unit_size);
-	  if (type->mode == TM_STRUCT)
-	    size = len;
-	  else if (size < len)
-	    size = len;
-	  decl->offset = offset;
-	  decl->bit_offset = bit_offset;
-	  decl->unit_size = unit_size;
+	  set_type_layout (decl->decl_spec.type);
+	  member_size = type_size (decl->decl_spec.type);
+	  member_align = type_align (decl->decl_spec.type);
+	  if (width->code == N_IGNORE || !(expr = width->attr)->const_p) {
+	    if (type->mode == TM_STRUCT) {
+	      offset = (size + member_align - 1) / member_align * member_align;
+	      size = offset + member_size;
+	    } else {
+	      offset = 0;
+	      if (size < member_size)
+		size =  member_size;
+	    }
+	    decl->offset = offset;
+	    decl->bit_offset = decl->unit_size = -1;
+	  } else {
+	    int unit_size, bit_len = expr->u.u_val;
+	    
+	    if (type->mode == TM_UNION)
+	      bit_offset = offset = 0;
+	    /* Get byte and bit offsets (offset, bit_offset) and storage
+	       unit size for the bit field. */
+	    unit_size = get_bit_field_info (bit_len, &offset, &bit_offset);
+	    len = ((offset * MIR_CHAR_BIT + bit_offset + bit_len - 1)
+		   / MIR_CHAR_BIT / unit_size * unit_size);
+	    if (type->mode == TM_STRUCT)
+	      size = len;
+	    else if (size < len)
+	      size = len;
+	    decl->offset = offset;
+	    decl->bit_offset = bit_offset;
+	    decl->unit_size = unit_size;
+	  }
 	}
-      }
   }
   /* we might need raw_size for alignment calculations */
-  type->raw_size = size; aux_set_type_align (type);
+  type->raw_size = size;
+  aux_set_type_align (type);
   if (type->mode == TM_PTR)  /* Visit the pointed but after setting size to avoid looping */
     set_type_layout (type->u.ptr_type);
 }
@@ -3246,6 +4767,8 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
       else if (tmode == TM_FUNC)
 	print_error (n->pos, "_Atomic qualifying function\n");
       break;
+    default:
+      break;  /* Ignore */
     }
 }
 
@@ -3306,8 +4829,6 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   }
   return r;
 }
-
-static int func_param_decl_p;
 
 static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
 			node_t def_node, node_code_t linkage) {
@@ -4146,7 +5667,7 @@ static void check_decl_align (struct decl_spec *decl_spec) {
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
 			 node_t width, node_t initializer) {
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
-  node_t id, list_head, declarator, def;
+  node_t id, list_head, declarator;
   struct type *type;
   struct decl *decl = reg_malloc (sizeof (struct decl));
   
@@ -4607,7 +6128,7 @@ static int check (node_t r, node_t context) {
 	print_error (r->pos, "incompatible pointer types in comparison\n");
       } else if ((t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p)
 		 && ((r->code != N_EQ && r->code != N_NE)
-		     || ! null_const_p (e1, t1) && ! null_const_p (e2, t2))) {
+		     || ! (null_const_p (e1, t1) || null_const_p (e2, t2)))) {
 	print_error (r->pos, "pointer to atomic type as a comparison operand\n");
       } else if (e1->const_p && e2->const_p) {
 	e->const_p = TRUE;
@@ -4852,7 +6373,7 @@ static int check (node_t r, node_t context) {
     node_t op3;
     struct expr *e3;
     struct type *t3;
-    int v, first_p;
+    int v = 0, first_p;
     
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
     op3 = NL_NEXT (op2); check (op3, r);
@@ -5127,7 +6648,7 @@ static int check (node_t r, node_t context) {
     param = start_param = NL_HEAD (param_list->ops);
     arg_list = NL_NEXT (op1);
     if (void_param_p (start_param)) { /* f(void) */
-      if (NL_HEAD (arg_list->ops) != NULL)
+      if ((arg = NL_HEAD (arg_list->ops)) != NULL)
 	print_error (arg->pos, "too many arguments\n");
       break;
     }
@@ -5272,7 +6793,7 @@ static int check (node_t r, node_t context) {
 	if (! cexpr->const_p) {
 	  print_error (const_expr->pos, "bit field is not a constant expr\n");
 	} else if (! integer_type_p (type)
-		   && (type->mode != TM_BASIC || type->u.basic_type != T_BOOL)) {
+		   && (type->mode != TM_BASIC || type->u.basic_type != TP_BOOL)) {
 	  print_error
 	    (const_expr->pos,
 	     "bit field type should be _Bool, a signed integer, or an unsigned integer type\n");
@@ -5530,7 +7051,6 @@ static int check (node_t r, node_t context) {
   }
   case N_GOTO: {
     node_t labels = NL_HEAD (r->ops);
-    node_t id = NL_NEXT (labels);
     
     check_labels (labels, r);
     VARR_PUSH (node_t, gotos, r);
@@ -5677,7 +7197,7 @@ static void pr_node (FILE *f, node_t n, int indent) {
   case N_ULL: fprintf (f, " %lluull\n", (unsigned long long) n->u.ull); break;
   case N_F: fprintf (f, " %.*g\n", FLT_DECIMAL_DIG, (double) n->u.f); break;
   case N_D: fprintf (f, " %.*g\n", DBL_DECIMAL_DIG, (double) n->u.d); break;
-  case N_LD: fprintf (f, " %.*Lg\n", LDBL_DECIMAL_DIG, (double) n->u.ld); break;
+  case N_LD: fprintf (f, " %.*Lg\n", LDBL_DECIMAL_DIG, (long double) n->u.ld); break;
   case N_CH: fprintf (f, " '"); print_char (f, n->u.ch); fprintf (f, "'\n"); break;
   case N_STR: fprintf (f, " \""); print_chars (f, n->u.s); fprintf (f, "\"\n"); break;
   case N_ID: fprintf (f, " %s\n", n->u.s); break;
@@ -5743,16 +7263,19 @@ int main (int argc, const char *argv[]) {
   double start_time = real_usec_time ();
   node_t r;
   VARR (char) *input;
-  int c, i, debug_p = FALSE;
-  const char *source;
+  int c, i;
+  const char *source = NULL;
   
   code = NULL;
   VARR_CREATE (char, input, 100);
+  debug_p = verbose_p = FALSE;
   for (i = 1; i < argc; i++) {
     FILE *f = NULL;
     
     if (strcmp (argv[i], "-d") == 0) {
-      debug_p = TRUE;
+      verbose_p = debug_p = TRUE;
+    } else if (strcmp (argv[i], "-v") == 0) {
+      verbose_p = TRUE;
     } else if (strcmp (argv[i], "-i") == 0) {
       f = stdin; source = "<stdin>";
     } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
@@ -5799,24 +7322,35 @@ int main (int argc, const char *argv[]) {
 "}\n";
     source = "<example>";
   }
+  assert (source != NULL);
   curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
   parse_init (source);
   check_init ();
-  fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
+  if (verbose_p)
+    fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
+  {
+    static const char *dirs[] = {".", NULL};
+
+    string_header_dirs = bracket_header_dirs = dirs;
+  }
   r = parse ();
-  fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
+  if (verbose_p)
+    fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
   if (r != NULL) {
-    fprintf (stderr, "parse - OK\n");
+    if (verbose_p)
+      fprintf (stderr, "parse - OK\n");
     if (debug_p)
       pr_node (stderr, r, 0);
     if (check (r, NULL)) {
-      fprintf (stderr, "check - OK\n");
+      if (verbose_p)
+	fprintf (stderr, "check - OK\n");
     }
   }
   VARR_DESTROY (char, input);
   parse_finish ();
   check_finish ();
-  fprintf (stderr, "parser_finish end -- %.0f usec\n", real_usec_time () - start_time);
+  if (verbose_p)
+    fprintf (stderr, "parser_finish end -- %.0f usec\n", real_usec_time () - start_time);
   return 0;
 }
 #endif
