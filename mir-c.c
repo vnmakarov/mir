@@ -9,7 +9,9 @@
 #include <errno.h>
 #include "time.h"
 
-static int debug_p, verbose_p;
+static int debug_p, verbose_p, no_prepro_p, prepro_only_p;
+/* Dirs to search include files in "" and in <>.  End mark is NULL. */
+static const char **header_dirs, **system_header_dirs;
 
 static const int max_nested_includes = 32;
 
@@ -1443,9 +1445,6 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
 
 /* --------------------------- Preprocessor -------------------------------- */
 
-/* Dirs to search include files in "" and in <>.  End mark is NULL. */
-static const char **string_header_dirs, **bracket_header_dirs;
-
 static VARR (char) *temp_string;
 
 static void add_to_temp_string (const char *str) {
@@ -1587,18 +1586,18 @@ static token_t if_id; /* last processed token #if or #elif: used for error messa
 static char date_str[100], time_str[100];
 
 DEF_VARR (int);
-static VARR (int) *includes; /* stack of ifs_length_at_file_start */
+static VARR (int) *include_marks; /* stack of ifs_length_at_file_start */
 
 static VARR (token_t) *buffer;
 
 DEF_VARR (macro_call_t);
 static VARR (macro_call_t) *macro_call_stack;
 
-static void (*out_token_func) (token_t);
+static void (*pre_out_token_func) (token_t);
 
-static void update_includes (void) {
+static void update_include_marks (void) {
   ifs_length_at_file_start = VARR_LENGTH (ifstate_t, ifs);
-  VARR_PUSH (int, includes, ifs_length_at_file_start);
+  VARR_PUSH (int, include_marks, ifs_length_at_file_start);
 }
 
 static void pre_init (void) {
@@ -1616,17 +1615,17 @@ static void pre_init (void) {
     strftime (time_str, sizeof (time_str), "\"%H:%M:%S\"", tm);
   }
   VARR_CREATE (token_t, temp_tokens, 128);
-  VARR_CREATE (int, includes, 512);
+  VARR_CREATE (int, include_marks, 512);
   VARR_CREATE (token_t, buffer, 2048);
   init_macros ();
   VARR_CREATE (ifstate_t, ifs, 512);
   VARR_CREATE (macro_call_t, macro_call_stack, 512);
-  update_includes ();
+  update_include_marks ();
 }
 
 static void pre_finish (void) {
   VARR_DESTROY (token_t, temp_tokens);
-  VARR_DESTROY (int, includes);
+  VARR_DESTROY (int, include_marks);
   VARR_DESTROY (token_t, buffer);
   finish_macros ();
   while (VARR_LENGTH (ifstate_t, ifs) != 0)
@@ -1646,7 +1645,7 @@ static void add_include_stream (const char *fname) {
     exit (1); // ???
   }
   add_stream (f, fname);
-  update_includes ();
+  update_include_marks ();
 }
 
 static void skip_nl (token_t t, VARR (token_t) *buffer) { /* skip until new line */
@@ -1828,13 +1827,13 @@ static const char *get_include_fname (token_t t) {
   assert (t->code == T_STR || t->code == T_HEADER);
   if ((name = t->node->u.s)[0] != '/') {
     if (t->repr[0] == '"')
-      for (size_t i = 0; string_header_dirs[i] != NULL; i++) {
-	fullname = get_full_name (string_header_dirs[i], name);
+      for (size_t i = 0; header_dirs[i] != NULL; i++) {
+	fullname = get_full_name (header_dirs[i], name);
 	if (file_found_p (fullname))
 	  return uniq_str (fullname);
       }
-    for (size_t i = 0; bracket_header_dirs[i] != NULL; i++) {
-      fullname = get_full_name (bracket_header_dirs[i], name);
+    for (size_t i = 0; system_header_dirs[i] != NULL; i++) {
+      fullname = get_full_name (system_header_dirs[i], name);
       if (file_found_p (fullname))
 	return uniq_str (fullname);
     }
@@ -2192,7 +2191,7 @@ static int process_pragma (token_t t) {
 
 static void flush_buffer (void) {
   for (size_t i = 0; i < VARR_LENGTH (token_t, buffer); i++)
-    out_token_func (VARR_GET (token_t, buffer, i));
+    pre_out_token_func (VARR_GET (token_t, buffer, i));
   VARR_TRUNC (token_t, buffer, 0);
 }
 
@@ -2202,7 +2201,7 @@ static void out_token (token_t t) {
     return;
   }
   flush_buffer ();
-  out_token_func (t);
+  pre_out_token_func (t);
 }
 
 struct val {
@@ -2356,8 +2355,8 @@ static void process_directive (void) {
       }
       name = get_include_fname (VARR_GET (token_t, temp_buffer, i));
     }
-    if (VARR_LENGTH (int, includes) >= max_nested_includes) {
-      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (int, includes));
+    if (VARR_LENGTH (int, include_marks) >= max_nested_includes) {
+      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (int, include_marks));
       goto ret;
     }
     add_include_stream (name);
@@ -2774,7 +2773,7 @@ static void processing (int ignore_directive_p) {
       out_token (t);
       continue;
     } else if (t->code == T_EOF || t->code == T_EOU) {
-      ifs_length_at_file_start = VARR_POP (int, includes);
+      ifs_length_at_file_start = VARR_POP (int, include_marks);
       if (VARR_LENGTH (ifstate_t, ifs) > ifs_length_at_file_start) {
 	print_error (VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if\n");
       }
@@ -2876,7 +2875,7 @@ static token_t pre_last_token;
 static pos_t shouldbe_pre_pos, actual_pre_pos;
 static const char *pre_start_fname;
 
-static void text_pre_out (token_t t) { /* NULL means end of output */
+static void pre_text_out (token_t t) { /* NULL means end of output */
   int i;
 
   if (t == NULL && pre_last_token != NULL && pre_last_token->code == '\n') {
@@ -2930,13 +2929,34 @@ static void pre_out (token_t t) {
   VARR_PUSH (token_t, recorded_tokens, t);
 }
 
+static unsigned long pptokens_num;
+
+static void common_pre_out (token_t t) {
+  pptokens_num++;
+  (prepro_only_p ? pre_text_out : pre_out) (t);
+}
+
 static void pre (void) {
   pre_last_token = NULL;
   actual_pre_pos.fname = NULL;
   shouldbe_pre_pos.fname = pre_start_fname; shouldbe_pre_pos.lno = 1; shouldbe_pre_pos.ln_pos = 0;
-  out_token_func = pre_out;
-  processing (FALSE);
-  out_token_func (NULL);
+  pre_out_token_func = common_pre_out;
+  pptokens_num = 0;
+  if (! no_prepro_p) {
+    processing (FALSE);
+  } else {
+    for (;;) {
+      token_t t = get_next_pptoken ();
+
+      if (t->code == T_EOF || t->code == T_EOU)
+	break;
+      pre_out_token_func (t);
+    }
+  }
+  pre_out_token_func (NULL);
+  if (verbose_p)
+    fprintf (stderr, "Preprocessor tokens -- %lu, Parse tokens -- %lu\n",
+	     pptokens_num, (unsigned long) VARR_LENGTH (token_t, recorded_tokens));
   next_token_index = 0;
 }
 
@@ -4132,6 +4152,8 @@ static void parse_init (const char *source) {
 
 static node_t parse (void) {
   pre ();
+  if (prepro_only_p)
+    return NULL;
   return transl_unit (FALSE);
 }
 
@@ -7226,6 +7248,51 @@ static void pr_node (FILE *f, node_t n, int indent) {
   }
 }
 
+static VARR (void_ptr_t) *headers;
+static VARR (void_ptr_t) *system_headers;
+
+static int init_options (int argc, const char *argv[]) {
+  debug_p = verbose_p = no_prepro_p = prepro_only_p = FALSE;
+  VARR_CREATE (void_ptr_t, headers, 0);
+  VARR_CREATE (void_ptr_t, system_headers, 0);
+  for (int i = 1; i < argc; i++) {
+    if (strcmp (argv[i], "-d") == 0) {
+      verbose_p = debug_p = TRUE;
+    } else if (strcmp (argv[i], "-v") == 0) {
+      verbose_p = TRUE;
+    } else if (strcmp (argv[i], "-E") == 0) {
+      prepro_only_p = TRUE;
+    } else if (strcmp (argv[i], "-fpreprocessed") == 0) {
+      no_prepro_p = TRUE;
+    } else if (strncmp (argv[i], "-I", 2) == 0) {
+      char *i_dir;
+      const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
+      
+      if (*dir == '\0')
+	continue;
+      i_dir = reg_malloc (strlen (dir) + 1);
+      strcpy (i_dir, dir);
+      VARR_PUSH (void_ptr_t, headers, i_dir);
+      VARR_PUSH (void_ptr_t, system_headers, i_dir);
+    } else {
+      return FALSE;
+    }
+  }
+  VARR_PUSH (void_ptr_t, headers, NULL);
+#ifdef __linux__
+  VARR_PUSH (void_ptr_t, system_headers, "/usr/include");
+#endif
+  VARR_PUSH (void_ptr_t, system_headers, NULL);
+  header_dirs = (const char **) VARR_ADDR (void_ptr_t, headers);
+  system_header_dirs = (const char **) VARR_ADDR (void_ptr_t, system_headers);
+  return TRUE;
+}
+
+static void finish_options (void) {
+  VARR_DESTROY (void_ptr_t, headers);
+  VARR_DESTROY (void_ptr_t, system_headers);
+}
+
 #ifdef TEST_MIR_C
 #include <sys/time.h>
 
@@ -7263,28 +7330,30 @@ int main (int argc, const char *argv[]) {
   double start_time = real_usec_time ();
   node_t r;
   VARR (char) *input;
-  int c, i;
+  int c, i, j;
   const char *source = NULL;
   
   code = NULL;
   VARR_CREATE (char, input, 100);
-  debug_p = verbose_p = FALSE;
-  for (i = 1; i < argc; i++) {
+
+  for (i = j = 1; i < argc; i++) {
     FILE *f = NULL;
     
-    if (strcmp (argv[i], "-d") == 0) {
-      verbose_p = debug_p = TRUE;
-    } else if (strcmp (argv[i], "-v") == 0) {
-      verbose_p = TRUE;
-    } else if (strcmp (argv[i], "-i") == 0) {
+    if (strcmp (argv[i], "-i") == 0) {
       f = stdin; source = "<stdin>";
     } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
       code = argv[++i]; source = "<command-line>";
-    } else if ((f = fopen (argv[i], "r")) == NULL) {
-      print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
-      exit (1);
-    } else {
+    } else if (strcmp (argv[i], "-I") == 0 && i + 1 < argc) {
+      argv[j++] = argv[i++];
+      argv[j++] = argv[i];
+    } else if (*argv[i] != '-') {
       source = argv[i];
+      if ((f = fopen (argv[i], "r")) == NULL) {
+	print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
+	exit (1);
+      }
+    } else {
+      argv[j++] = argv[i];
     }
     if (f) {
       while ((c = getc (f)) != EOF)
@@ -7297,7 +7366,7 @@ int main (int argc, const char *argv[]) {
   if (code == NULL) {
     code =
 "  extern int printf(const char *format, ...);\n"
-"  static const int SieveSize = 819000;\n"
+"  #define SieveSize 819000\n"
 "  int sieve (void) {\n"
 "  int i, k, prime, count, iter;\n"
 "  char flags[SieveSize];\n"
@@ -7326,13 +7395,13 @@ int main (int argc, const char *argv[]) {
   curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
   parse_init (source);
   check_init ();
+  if (! init_options (j, argv)) {
+    finish_options ();
+    fprintf (stderr, "wrong command line (use -h for usage) -- goodbye\n");
+    exit (1);
+  }
   if (verbose_p)
     fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
-  {
-    static const char *dirs[] = {".", NULL};
-
-    string_header_dirs = bracket_header_dirs = dirs;
-  }
   r = parse ();
   if (verbose_p)
     fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
@@ -7349,6 +7418,7 @@ int main (int argc, const char *argv[]) {
   VARR_DESTROY (char, input);
   parse_finish ();
   check_finish ();
+  finish_options ();
   if (verbose_p)
     fprintf (stderr, "parser_finish end -- %.0f usec\n", real_usec_time () - start_time);
   return 0;
