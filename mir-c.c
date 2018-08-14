@@ -510,22 +510,33 @@ static void print_warning (pos_t pos, const char *format, ...) {
 DEF_VARR (char);
 
 typedef struct stream {
-  FILE *f;                  /* the current file, NULL for top level file */
-  const char *fname;        /* NULL only for sting stream */
-  VARR (char) *ln;          /* stream current line in reverse order */
-  pos_t pos;                /* includes file name used for reports */
-  fpos_t fpos;              /* file pos to resume stream */
+  FILE *f;                         /* the current file, NULL for top level file */
+  const char *fname;               /* NULL only for sting stream */
+  VARR (char) *ln;                 /* stream current line in reverse order */
+  pos_t pos;                       /* includes file name used for reports */
+  fpos_t fpos;                     /* file pos to resume stream */
+  int ifs_length_at_stream_start;  /* length of ifs at the stream start */
 } *stream_t;
 
 DEF_VARR (stream_t);
 static VARR (stream_t) *streams;  /* stack of streams */
-static stream_t cs;               /* current stream */
+static stream_t cs, eof_s;        /* current stream and stream corresponding the last EOF */
   
 static void init_streams (void) {
+  eof_s = NULL;
   VARR_CREATE (stream_t, streams, 32);
 }
 
-static void finish_streams (void) { // ???
+static void free_stream (stream_t s) {
+  VARR_DESTROY (char, s->ln);
+  free (s);
+}
+
+static void finish_streams (void) {
+  if (eof_s != NULL)
+    free_stream (eof_s);
+  while (VARR_LENGTH (stream_t, streams) != 0)
+    free_stream (VARR_POP (stream_t, streams));
   VARR_DESTROY (stream_t, streams);
 }
 
@@ -534,13 +545,8 @@ static stream_t new_stream (FILE *f, const char *fname) {
   
   VARR_CREATE (char, s->ln, 128);
   s->f = f; s->fname = s->pos.fname = fname;
-  s->pos.lno = 1; s->pos.ln_pos = 0;
+  s->pos.lno = 1; s->pos.ln_pos = 0; s->ifs_length_at_stream_start = 0;
   return s;
-}
-
-static void free_stream (stream_t s) {
-  VARR_DESTROY (char, s->ln);
-  free (s);
 }
 
 static void add_stream (FILE *f, const char *fname) {
@@ -1072,9 +1078,11 @@ static token_t get_next_pptoken_1 (int header_p) {
     case EOF: {
       pos_t pos = cs->pos;
       
+      if (eof_s != NULL)
+	free_stream (eof_s);
       if (cs->f != stdin && cs->f != NULL)
 	fclose (cs->f);
-      free_stream (VARR_POP (stream_t, streams));
+      eof_s = VARR_POP (stream_t, streams);
       if (VARR_LENGTH (stream_t, streams) == 0) {
 	return new_token (pos, "<EOU>", T_EOU, N_IGNORE);
       }
@@ -1494,12 +1502,9 @@ static void init_macros (void) {
   HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq);
   /* Standard macros : */
   new_std_macro ("__DATE__");
+  new_std_macro ("__TIME__");
   new_std_macro ("__FILE__");
   new_std_macro ("__LINE__");
-  new_std_macro ("__STDC__");
-  new_std_macro ("__STDC_HOSTED__");
-  new_std_macro ("__STDC_VERSION__");
-  new_std_macro ("__TIME__");
 }
 
 static macro_t new_macro (token_t id, VARR (token_t) *params, VARR (token_t) *replacement) {
@@ -1580,13 +1585,9 @@ static void pop_ifstate (void) {
 
 static int no_out_p; /* don't output lexs -- put them into buffer */
 static int skip_if_part_p;
-static int ifs_length_at_file_start; /* Length of ifs at the file start. */
 static const char *varg = "__VA_ARGS__";
 static token_t if_id; /* last processed token #if or #elif: used for error messages */
 static char date_str[100], time_str[100];
-
-DEF_VARR (int);
-static VARR (int) *include_marks; /* stack of ifs_length_at_file_start */
 
 static VARR (token_t) *buffer;
 
@@ -1595,16 +1596,11 @@ static VARR (macro_call_t) *macro_call_stack;
 
 static void (*pre_out_token_func) (token_t);
 
-static void update_include_marks (void) {
-  ifs_length_at_file_start = VARR_LENGTH (ifstate_t, ifs);
-  VARR_PUSH (int, include_marks, ifs_length_at_file_start);
-}
-
 static void pre_init (void) {
   time_t t;
   struct tm *tm;
   
-  no_out_p = skip_if_part_p = FALSE; ifs_length_at_file_start = 0;
+  no_out_p = skip_if_part_p = FALSE;
   t = time (NULL);
   tm = localtime(&t);
   if (tm == NULL) {
@@ -1615,17 +1611,14 @@ static void pre_init (void) {
     strftime (time_str, sizeof (time_str), "\"%H:%M:%S\"", tm);
   }
   VARR_CREATE (token_t, temp_tokens, 128);
-  VARR_CREATE (int, include_marks, 512);
   VARR_CREATE (token_t, buffer, 2048);
   init_macros ();
   VARR_CREATE (ifstate_t, ifs, 512);
   VARR_CREATE (macro_call_t, macro_call_stack, 512);
-  update_include_marks ();
 }
 
 static void pre_finish (void) {
   VARR_DESTROY (token_t, temp_tokens);
-  VARR_DESTROY (int, include_marks);
   VARR_DESTROY (token_t, buffer);
   finish_macros ();
   while (VARR_LENGTH (ifstate_t, ifs) != 0)
@@ -1645,7 +1638,7 @@ static void add_include_stream (const char *fname) {
     exit (1); // ???
   }
   add_stream (f, fname);
-  update_include_marks ();
+  cs->ifs_length_at_stream_start = VARR_LENGTH (ifstate_t, ifs);
 }
 
 static void skip_nl (token_t t, VARR (token_t) *buffer) { /* skip until new line */
@@ -2251,6 +2244,7 @@ static void process_directive (void) {
   }
   VARR_CREATE (token_t, temp_buffer, 64);
   if (strcmp (t->repr, "ifdef") == 0 || strcmp (t->repr, "ifndef") == 0) {
+    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
     t1 = t;
     if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
       skip_if_part_p = true_p = TRUE;
@@ -2277,13 +2271,14 @@ static void process_directive (void) {
     }
     VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t1->pos));
   } else if (strcmp (t->repr, "endif") == 0 || strcmp (t->repr, "else") == 0) {
+    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
     t1 = t;
     t = get_next_pptoken ();
     if (t->code != '\n') {
       print_error (t1->pos, "garbage at the end of #%s\n", t1->repr);
       skip_nl (NULL, NULL);
     }
-    if (VARR_LENGTH (ifstate_t, ifs) <= ifs_length_at_file_start)
+    if (VARR_LENGTH (ifstate_t, ifs) < cs->ifs_length_at_stream_start)
       print_error (t1->pos, "unmatched #%s\n", t1->repr);
     else if (strcmp (t1->repr, "endif") == 0) {
       pop_ifstate ();
@@ -2300,18 +2295,24 @@ static void process_directive (void) {
     }
   } else if (strcmp (t->repr, "if") == 0 || strcmp (t->repr, "elif") == 0) {
     if_id = t;
-    if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
+    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
+    if (strcmp (t->repr, "elif") == 0 && VARR_LENGTH (ifstate_t, ifs) == 0) {
+      print_error (t->pos, "#elif without #if\n");
+    } else if (strcmp (t->repr, "elif") == 0 && VARR_LAST (ifstate_t, ifs)->else_p)  {
+      print_error (t->pos, "#elif after #else\n");
+      skip_if_part_p = TRUE;
+    } else if (strcmp (t->repr, "if") == 0 && VARR_LENGTH (ifstate_t, ifs) != 0
+	       && VARR_LAST (ifstate_t, ifs)->skip_p) {
       skip_if_part_p = true_p = TRUE;
       skip_nl (NULL, NULL);
-      if (strcmp (t->repr, "if") == 0)
-	VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t->pos));
+      VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t->pos));
     } else if (strcmp (t->repr, "elif") == 0 && VARR_LAST (ifstate_t, ifs)->true_p) {
-      VARR_LAST (ifstate_t, ifs)->skip_p = TRUE;
-      skip_if_part_p = TRUE;
+      VARR_LAST (ifstate_t, ifs)->skip_p = skip_if_part_p = TRUE;
       skip_nl (NULL, NULL);
     } else {
       struct val val;
       
+      skip_if_part_p = FALSE; /* for eval expr */
       skip_nl (NULL, temp_buffer);
       val = eval_expr (temp_buffer, t);
       true_p = val.uns_p ? val.u.u_val != 0 : val.u.i_val != 0;
@@ -2355,8 +2356,9 @@ static void process_directive (void) {
       }
       name = get_include_fname (VARR_GET (token_t, temp_buffer, i));
     }
-    if (VARR_LENGTH (int, include_marks) >= max_nested_includes) {
-      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (int, include_marks));
+    //    fprintf (stderr, "include: %s\n", name);
+    if (VARR_LENGTH (stream_t, streams) >= max_nested_includes + 1) {
+      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
     add_include_stream (name);
@@ -2732,10 +2734,10 @@ static struct val eval (node_t tree) {
   case N_ANDAND:
   case N_OROR:
     v1 = eval (NL_HEAD (tree->ops));
-    cond = v1.uns_p ? v1.u.u_val == 0 : v1.u.i_val == 0;
+    cond = v1.uns_p ? v1.u.u_val != 0 : v1.u.i_val != 0;
     if (tree->code == N_ANDAND ? cond : ! cond) {
       v2 = eval (NL_EL (tree->ops, 1));
-      cond = v2.uns_p ? v2.u.u_val == 0 : v2.u.i_val == 0;
+      cond = v2.uns_p ? v2.u.u_val != 0 : v2.u.i_val != 0;
     }
     res.uns_p = FALSE; res.u.i_val = cond;
     break;
@@ -2773,13 +2775,12 @@ static void processing (int ignore_directive_p) {
       out_token (t);
       continue;
     } else if (t->code == T_EOF || t->code == T_EOU) {
-      ifs_length_at_file_start = VARR_POP (int, include_marks);
-      if (VARR_LENGTH (ifstate_t, ifs) > ifs_length_at_file_start) {
+      if (VARR_LENGTH (ifstate_t, ifs) > eof_s->ifs_length_at_stream_start) {
 	print_error (VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if\n");
       }
       if (t->code == T_EOU)
 	return;
-      while (VARR_LENGTH (ifstate_t, ifs) > ifs_length_at_file_start)
+      while (VARR_LENGTH (ifstate_t, ifs) > eof_s->ifs_length_at_stream_start)
 	pop_ifstate ();
       skip_if_part_p = VARR_LENGTH (ifstate_t, ifs) == 0 ? 0 : VARR_LAST (ifstate_t, ifs)->skip_p;
       newln_p = TRUE;
@@ -4089,13 +4090,11 @@ static void kw_add (const char *name, token_code_t tc, size_t flags) {
   str_add (name, tc, flags, TRUE);
 }
 
-static void parse_init (const char *source) {
+static void parse_init (void) {
   error_func = fatal_error; record_level = 0;
   reg_memory_init ();
   curr_uid = 0;
   init_streams ();
-  pre_start_fname = source;
-  add_stream (NULL, source);
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
   VARR_CREATE (token_t, buffered_tokens, 32);
@@ -4146,15 +4145,54 @@ static void parse_init (const char *source) {
   kw_add ("void", T_VOID, 0);
   kw_add ("volatile", T_VOLATILE, 0);
   kw_add ("while", T_WHILE, 0);
+  kw_add ("__restrict", T_RESTRICT, FLAG_EXT); kw_add ("__restrict__", T_RESTRICT, FLAG_EXT);
+  kw_add ("__inline", T_INLINE, FLAG_EXT); kw_add ("__inline__", T_INLINE, FLAG_EXT);
   tpname_init ();
   curr_scope = NULL;
 }
 
-static node_t parse (void) {
+#ifndef SOURCEDIR
+#define SOURCEDIR "./"
+#endif
+
+#ifndef INSTALLDIR
+#define INSTALLDIR "/usr/bin/"
+#endif
+
+static void add_standard_includes (void) {
+  FILE *f;
+  const char *str1, *str2;
+  
+  for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string (SOURCEDIR); add_to_temp_string (standard_includes[i]);
+    str1 = uniq_str (VARR_ADDR (char, temp_string));
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string (INSTALLDIR); add_to_temp_string ("../"); add_to_temp_string (standard_includes[i]);
+    str2 = uniq_str (VARR_ADDR (char, temp_string));
+
+    if ((f = fopen (str1, "r")) != NULL) {
+      add_stream (f, str1);
+    } else if ((f = fopen (str2, "r")) != NULL) {
+      add_stream (f, str2);
+    } else {
+      fprintf (stderr, "Cannot open %s or %s -- good bye\n", str1, str2);
+      exit (0);
+    }
+  }
+}
+
+static node_t parse (const char *source) {
+  node_t res;
+  
+  pre_start_fname = source;
+  add_stream (NULL, source);
+  add_standard_includes ();
   pre ();
   if (prepro_only_p)
     return NULL;
-  return transl_unit (FALSE);
+  res = transl_unit (FALSE);
+  return res;
 }
 
 static void parse_finish (void) {
@@ -5048,10 +5086,16 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       struct decl *decl;
       
       set_type_pos_node (type, n);
-      assert (def != NULL && def->code == N_SPEC_DECL);
-      decl = def->attr;
-      assert (decl->decl_spec.typedef_p);
-      *type = *decl->decl_spec.type;
+      if (def == NULL) {
+	print_error (n->pos, "unknown type %s\n", n->u.s);
+	init_type (type);
+	type->mode = TM_BASIC; type->u.basic_type = TP_INT;
+      } else {
+	assert (def->code == N_SPEC_DECL);
+	decl = def->attr;
+	assert (decl->decl_spec.typedef_p);
+	*type = *decl->decl_spec.type;
+      }
       break;
     }
     case N_STRUCT:
@@ -5957,16 +6001,30 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	e->const_p = TRUE;
 	convert_value (e1, &t);
 	convert_value (e2, &t);
-	if (r->code != N_MOD && floating_type_p (&t))
-	  e->u.d_val = (r->code == N_MUL ? e1->u.d_val * e2->u.d_val : e1->u.d_val / e2->u.d_val);
-	else if (signed_integer_type_p (&t)) // ??? zero
-	  e->u.i_val = (r->code == N_MUL ? e1->u.i_val * e2->u.i_val
-			: r->code == N_DIV ? e1->u.i_val / e2->u.i_val
-			: e1->u.i_val % e2->u.i_val);
-	else
-	  e->u.u_val = (r->code == N_MUL ? e1->u.u_val * e2->u.u_val
-			: r->code == N_DIV ? e1->u.u_val / e2->u.u_val
-			: e1->u.u_val % e2->u.u_val);
+	if (r->code == N_MUL) {
+	  if (floating_type_p (&t))
+	    e->u.d_val = e1->u.d_val * e2->u.d_val;
+	  else if (signed_integer_type_p (&t))
+	    e->u.i_val = e1->u.i_val * e2->u.i_val;
+	  else
+	    e->u.u_val = e1->u.u_val * e2->u.u_val;
+	} else if ((floating_type_p (&t) && e2->u.d_val == 0.0)
+		   || (signed_integer_type_p (&t) && e2->u.i_val == 0)
+		   || (integer_type_p (&t) && ! signed_integer_type_p (&t) && e2->u.u_val == 0)) {
+	  print_error (r->pos, "Division by zero\n");
+	  if (floating_type_p (&t))
+	    e->u.d_val = 0.0;
+	  else if (signed_integer_type_p (&t))
+	    e->u.i_val = 0;
+	  else
+	    e->u.u_val = 0;
+	} else if (r->code != N_MOD && floating_type_p (&t)) {
+	  e->u.d_val = e1->u.d_val / e2->u.d_val;
+	} else if (signed_integer_type_p (&t)) {// ??? zero
+	  e->u.i_val = r->code == N_DIV ? e1->u.i_val / e2->u.i_val : e1->u.i_val % e2->u.i_val;
+	} else {
+	  e->u.u_val = r->code == N_DIV ? e1->u.u_val / e2->u.u_val : e1->u.u_val % e2->u.u_val;
+	}
       }
     }
     break;
@@ -7248,13 +7306,19 @@ static void pr_node (FILE *f, node_t n, int indent) {
   }
 }
 
-static VARR (void_ptr_t) *headers;
-static VARR (void_ptr_t) *system_headers;
+typedef const char *char_ptr_t;
 
-static int init_options (int argc, const char *argv[]) {
+DEF_VARR (char_ptr_t);
+static VARR (char_ptr_t) *headers;
+static VARR (char_ptr_t) *system_headers;
+
+static void init_options (int argc, const char *argv[],
+			  int (*other_option_func) (int, int, const char **)) {
+  const char *str;
+  
   debug_p = verbose_p = no_prepro_p = prepro_only_p = FALSE;
-  VARR_CREATE (void_ptr_t, headers, 0);
-  VARR_CREATE (void_ptr_t, system_headers, 0);
+  VARR_CREATE (char_ptr_t, headers, 0);
+  VARR_CREATE (char_ptr_t, system_headers, 0);
   for (int i = 1; i < argc; i++) {
     if (strcmp (argv[i], "-d") == 0) {
       verbose_p = debug_p = TRUE;
@@ -7272,25 +7336,85 @@ static int init_options (int argc, const char *argv[]) {
 	continue;
       i_dir = reg_malloc (strlen (dir) + 1);
       strcpy (i_dir, dir);
-      VARR_PUSH (void_ptr_t, headers, i_dir);
-      VARR_PUSH (void_ptr_t, system_headers, i_dir);
+      VARR_PUSH (char_ptr_t, headers, i_dir);
+      VARR_PUSH (char_ptr_t, system_headers, i_dir);
+    } else if (strncmp (argv[i], "-U", 2) == 0 || strncmp (argv[i], "-D", 2) == 0) {
+      int ok_p;
+      pos_t pos;
+      token_t t, id;
+      struct macro macro;
+      macro_t tab_m;
+      VARR (token_t) *repl;
+      const char *bound, *def = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
+
+      pos.fname = "<command line>"; pos.lno = 1; pos.ln_pos = 0;
+      VARR_CREATE (token_t, repl, 16);
+      if (argv[i][1] == 'U' || (bound = strchr (def, '=')) == NULL) {
+	id = new_id_token (pos, def);
+	VARR_PUSH (token_t, repl, new_token (pos, "1", T_NUMBER, N_IGNORE));
+      } else {
+	VARR_TRUNC (char, temp_string, 0);
+	while (def < bound)
+	  VARR_PUSH (char, temp_string, *def++);
+	VARR_PUSH (char, temp_string, '\0');
+	id = new_id_token (pos, VARR_ADDR (char, temp_string));
+	for (def++; *def != '\0'; def++)
+	  VARR_PUSH (char, temp_string, *def);
+	VARR_PUSH (char, temp_string, '\0');
+	reverse (temp_string);
+	set_string_stream (VARR_ADDR (char, temp_string), pos, NULL);
+	while ((t = get_next_pptoken ())->code != T_EOF && t->code != T_EOU)
+	  VARR_PUSH (token_t, repl, t);
+      }
+      if ((ok_p = isalpha (id->repr[0]))) {
+	for (int i = 1; id->repr[i] != '\0'; i++)
+	  if (! isalnum (id->repr[i])) {
+	    ok_p = FALSE;
+	    break;
+	  }
+      }
+      if (! ok_p) {
+	fprintf (stderr, "macro name %s is not an identifier\n", id->repr);
+      } else {
+	macro.id = id;
+	if (argv[i][1] == 'U') {
+	  HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_m);
+	} else {
+	  if (HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_m)) {
+	    if (! replacement_eq_p (tab_m->replacement, repl))
+	      fprintf (stderr, "warning -- redefinition of macro %s on the command line\n", id->repr);
+	    HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_m);
+	  }
+	  new_macro (macro.id, NULL, repl);
+	}
+      }
     } else {
-      return FALSE;
+      i = other_option_func (i, argc, argv);
     }
   }
-  VARR_PUSH (void_ptr_t, headers, NULL);
+  VARR_PUSH (char_ptr_t, headers, NULL);
+  for (int i = 0; i < sizeof (standard_include_dirs) / sizeof (char *); i++) {
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string (SOURCEDIR); add_to_temp_string (standard_include_dirs[i]);
+    str = uniq_str (VARR_ADDR (char, temp_string));
+    VARR_PUSH (char_ptr_t, system_headers, str);
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string (INSTALLDIR); add_to_temp_string ("../");
+    add_to_temp_string (standard_include_dirs[i]);
+    str = uniq_str (VARR_ADDR (char, temp_string));
+    VARR_PUSH (char_ptr_t, system_headers, str);
+  }
 #ifdef __linux__
-  VARR_PUSH (void_ptr_t, system_headers, "/usr/include");
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
 #endif
-  VARR_PUSH (void_ptr_t, system_headers, NULL);
-  header_dirs = (const char **) VARR_ADDR (void_ptr_t, headers);
-  system_header_dirs = (const char **) VARR_ADDR (void_ptr_t, system_headers);
-  return TRUE;
+  VARR_PUSH (char_ptr_t, system_headers, NULL);
+  header_dirs = (const char **) VARR_ADDR (char_ptr_t, headers);
+  system_header_dirs = (const char **) VARR_ADDR (char_ptr_t, system_headers);
 }
 
 static void finish_options (void) {
-  VARR_DESTROY (void_ptr_t, headers);
-  VARR_DESTROY (void_ptr_t, system_headers);
+  VARR_DESTROY (char_ptr_t, headers);
+  VARR_DESTROY (char_ptr_t, system_headers);
 }
 
 #ifdef TEST_MIR_C
@@ -7326,48 +7450,53 @@ static void t_ungetc (int c) {
   }
 }
 
+static const char *source;
+static VARR (char) *input;
+
+static int other_option_func (int i, int argc, const char *argv[]) {
+  FILE *f = NULL;
+  int c;
+  
+  if (strcmp (argv[i], "-i") == 0) {
+    f = stdin; source = "<stdin>";
+  } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
+    code = argv[++i]; source = "<command-line>";
+  } else if (*argv[i] != '-') {
+    source = argv[i];
+    if ((f = fopen (argv[i], "r")) == NULL) {
+      print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
+      exit (1);
+    }
+  } else {
+    finish_options ();
+    fprintf (stderr, "unknow command line option %s (use -h for usage) -- goodbye\n", argv[i]);
+    exit (1);
+  }
+  if (f) {
+    while ((c = getc (f)) != EOF)
+      VARR_PUSH (char, input, c);
+    VARR_PUSH (char, input, 0);
+    code = VARR_ADDR (char, input);
+    fclose (f);
+  }
+  return i;
+}
+
 int main (int argc, const char *argv[]) {
   double start_time = real_usec_time ();
   node_t r;
-  VARR (char) *input;
-  int c, i, j;
-  const char *source = NULL;
   
-  code = NULL;
+  code = NULL; source = NULL;
   VARR_CREATE (char, input, 100);
-
-  for (i = j = 1; i < argc; i++) {
-    FILE *f = NULL;
-    
-    if (strcmp (argv[i], "-i") == 0) {
-      f = stdin; source = "<stdin>";
-    } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
-      code = argv[++i]; source = "<command-line>";
-    } else if (strcmp (argv[i], "-I") == 0 && i + 1 < argc) {
-      argv[j++] = argv[i++];
-      argv[j++] = argv[i];
-    } else if (*argv[i] != '-') {
-      source = argv[i];
-      if ((f = fopen (argv[i], "r")) == NULL) {
-	print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
-	exit (1);
-      }
-    } else {
-      argv[j++] = argv[i];
-    }
-    if (f) {
-      while ((c = getc (f)) != EOF)
-	VARR_PUSH (char, input, c);
-      VARR_PUSH (char, input, 0);
-      code = VARR_ADDR (char, input);
-      fclose (f);
-    }
-  }
+  curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
+  parse_init ();
+  check_init ();
+  init_options (argc, argv, other_option_func);
   if (code == NULL) {
     code =
-"  extern int printf(const char *format, ...);\n"
-"  #define SieveSize 819000\n"
-"  int sieve (void) {\n"
+"//#include <stdio.h>\n"
+"#define SieveSize 819000\n"
+"int sieve (void) {\n"
 "  int i, k, prime, count, iter;\n"
 "  char flags[SieveSize];\n"
 "\n"
@@ -7392,17 +7521,9 @@ int main (int argc, const char *argv[]) {
     source = "<example>";
   }
   assert (source != NULL);
-  curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
-  parse_init (source);
-  check_init ();
-  if (! init_options (j, argv)) {
-    finish_options ();
-    fprintf (stderr, "wrong command line (use -h for usage) -- goodbye\n");
-    exit (1);
-  }
   if (verbose_p)
     fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
-  r = parse ();
+  r = parse (source);
   if (verbose_p)
     fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
   if (r != NULL) {

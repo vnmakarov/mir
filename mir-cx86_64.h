@@ -43,6 +43,16 @@ typedef uint8_t mir_bool;
 typedef int64_t mir_ptrdiff_t;
 typedef uint64_t mir_size_t;
 
+static const char *standard_includes[] = {
+  "include/mirc/mirc.h",
+  "include/mirc/x86-64/mirc-x86_64-linux.h"
+};
+
+static const char *standard_include_dirs[] = {
+  "include/mirc/",
+  "include/mirc/x86-64/"
+};
+
 #define ADJUST_TYPE_ALIGNMENT(align, type) x86_adjust_type_alignment (align, type)
 
 static int x86_adjust_type_alignment (int align, struct type *type) {
