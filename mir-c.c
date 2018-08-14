@@ -1,4 +1,11 @@
-/* expr extensions */
+/* C to MIR compiler.  It is a four pass compiler:
+   o preprocessor pass generating tokens
+   o parsing pass generating AST
+   o context pass checking context constraints and augmenting AST
+   o generation pass producing MIR
+
+   The compiler implements C11 standard w/o C11 optional features:
+   atomic, complex, variable size arrays. */
 
 #include <assert.h>
 #include <string.h>
@@ -190,7 +197,76 @@ static void str_finish (void) {
 
 
 
-/* ------------------------- Scanner/Parser Start ------------------------------ */
+/* ------------------------- Parser Start ------------------------------ */
+
+/* Parser is manualy writen parser with back-tracing to keep original
+   grammar close to C11 standard grammar as possible.  It has a
+   rudimentary syntax error recovery based on stop symbols ';' and
+   '}'.  The input is parse tokens and the output is the following AST
+   nodes (the AST root is transl_unit):
+
+expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD | N_CH | N_STR | N_ID
+     | N_ADD (expr) | N_SUB (expr) | N_ADD (expr, expr) | N_SUB (expr, expr)
+     | N_MUL (expr, expr) | N_DIV (expr, expr) | N_MOD (expr, expr)
+     | N_LSH (expr, expr) | N_RSH (expr, expr)
+     | N_NOT (expr) | N_BITWISE_NOT (expr)
+     | N_INC (expr) | N_DEC (expr) | N_POST_INC (expr)| N_POST_DEC (expr)
+     | N_ALIGNOF (type_name?) | N_SIZEOF (type_name) | N_EXPR_SIZEOF (expr)
+     | N_CAST (type_name, expr) | N_COMMA (expr, expr) | N_ANDAND (expr, expr)
+     | N_OROR (expr, expr) | N_EQ (expr, expr) | N_NE (expr, expr)
+     | N_LT (expr, expr) | N_LE (expr, expr) | N_GT (expr, expr) | N_GE (expr, expr)
+     | N_AND (expr, expr) | N_OR (expr, expr) | N_XOR (expr, expr)
+     | N_ASSIGN (expr, expr) | N_ADD_ASSIGN (expr, expr) | N_SUB_ASSIGN (expr, expr)
+     | N_MUL_ASSIGN (expr, expr) | N_DIV_ASSIGN (expr, expr) | N_MOD_ASSIGN (expr, expr)
+     | N_LSH_ASSIGN (expr, expr) | N_RSH_ASSIGN (expr, expr)
+     | N_AND_ASSIGN (expr, expr) | N_OR_ASSIGN (expr, expr) | N_XOR_ASSIGN (expr, expr)
+     | N_DEREF (expr) | | N_ADDR (expr) | N_IND (expr, expr) | N_FIELD (expr, N_ID)
+     | N_DEREF_FIELD (expr, N_ID) | N_COND (expr, expr, expr)
+     | N_COMPOUND_LITERAL (type_name, initializer) | N_CALL (expr, N_LIST:(expr)*)
+     | N_GENERIC (expr, N_LIST:(N_GENERIC_ASSOC (type_name?, expr))+ )
+label: N_CASE(expr) | N_DEFAULT | N_LABEL(N_ID)
+stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
+    | N_SWITCH(N_LIST:(label)*, expr, stmt) | (N_WHILE|N_DO) (N_LIST:(label)*, expr, stmt)
+    | N_FOR(N_LIST:(label)*,(N_LIST: declaration+ | expr)?, expr?, expr?, stmt)
+    | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
+    | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
+compound_stmt: N_BLOCK(N_LIST:(declaration | stmt)*)
+declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
+st_assert: N_ST_ASSERT(const_expr, N_STR)
+declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
+align_spec: N_ALIGNAS(type_name|const_expr)
+sc_spec: N_TYPEDEF|N_EXTERN|N_STATIC|N_AUTO|N_REGISTER|N_THREAD_LOCAL
+type_qual: N_CONST|N_RESTRICT|N_VOLATILE|N_ATOMIC
+func_spec: N_INLINE|N_NO_RETURN
+type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGNED|N_BOOL|N_COMPLEX
+         | (N_STRUCT|N_UNION) (N_ID?, struct_declaration_list?)
+	 | N_ENUM(N_ID?, N_LIST?: N_ENUM_COST(N_ID, const_expr?)*) | typedef_name
+struct_declaration_list: N_LIST: struct_declaration+
+struct_declaration: st_assert | N_MEMBER(spec_qual_list, declarator?, const_expr?)
+spec_qual_list: N_LIST:(type_qual|type_spec)*
+declarator: the same as direct declarator
+direct_declarator: N_DECL(N_ID,
+                          N_LIST:(N_POINTER(type_qual_list) | N_FUNC(id_list|parameter_list)
+                                            | N_ARR(N_STATIC?, type_qual_list,
+                                                    (assign_expr|N_STAR)?))*)
+-pointer: N_LIST: N_POINTER(type_qual_list)*
+type_qual_list : N_LIST: type_qual*
+parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
+                             | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
+id_list: N_LIST: N_ID*
+initializer: assign_expr | initialize_list
+initialize_list: N_LIST: N_INIT(N_LIST:(const_expr | N_FIELD_ID (N_ID))* initializer)+
+type_name: N_TYPE(spec_qual_list, abstract_declarator)
+abstract_declarator: the same as abstract direct declarator
+abstract_direct_declarator: N_DECL(ignore,
+                                   N_LIST:(N_POINTER(type_qual_list) | N_FUNC(parameter_list)
+                                           | N_ARR(N_STATIC?, type_qual_list,
+                                                   (assign_expr|N_STAR)?))*)
+typedef_name: N_ID
+transl_unit: N_LIST:(declaration
+           | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
+
+Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more. */
 
 typedef enum {
   T_NUMBER = 256, T_CH, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE, T_ANDAND, T_OROR,
@@ -1452,6 +1528,9 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
 }
 
 /* --------------------------- Preprocessor -------------------------------- */
+
+/* It is a token based prerpocessor.
+   It is input preprocessor tokens and output is (parser) tokens */
 
 static VARR (char) *temp_string;
 
@@ -2874,7 +2953,6 @@ static void processing (int ignore_directive_p) {
 
 static token_t pre_last_token;
 static pos_t shouldbe_pre_pos, actual_pre_pos;
-static const char *pre_start_fname;
 
 static void pre_text_out (token_t t) { /* NULL means end of output */
   int i;
@@ -2937,10 +3015,10 @@ static void common_pre_out (token_t t) {
   (prepro_only_p ? pre_text_out : pre_out) (t);
 }
 
-static void pre (void) {
+static void pre (const char *start_source_name) {
   pre_last_token = NULL;
   actual_pre_pos.fname = NULL;
-  shouldbe_pre_pos.fname = pre_start_fname; shouldbe_pre_pos.lno = 1; shouldbe_pre_pos.ln_pos = 0;
+  shouldbe_pre_pos.fname = start_source_name; shouldbe_pre_pos.lno = 1; shouldbe_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
   if (! no_prepro_p) {
@@ -2956,7 +3034,7 @@ static void pre (void) {
   }
   pre_out_token_func (NULL);
   if (verbose_p)
-    fprintf (stderr, "Preprocessor tokens -- %lu, Parse tokens -- %lu\n",
+    fprintf (stderr, "    preprocessor tokens -- %lu, parse tokens -- %lu\n",
 	     pptokens_num, (unsigned long) VARR_LENGTH (token_t, recorded_tokens));
   next_token_index = 0;
 }
@@ -4182,17 +4260,8 @@ static void add_standard_includes (void) {
   }
 }
 
-static node_t parse (const char *source) {
-  node_t res;
-  
-  pre_start_fname = source;
-  add_stream (NULL, source);
-  add_standard_includes ();
-  pre ();
-  if (prepro_only_p)
-    return NULL;
-  res = transl_unit (FALSE);
-  return res;
+static node_t parse (void) {
+  return transl_unit (FALSE);
 }
 
 static void parse_finish (void) {
@@ -4220,76 +4289,14 @@ static void parse_finish (void) {
 #undef MN
 #undef TRY
 
-/* ------------------------- Scanner/Parser End ------------------------------ */
+/* ------------------------- Parser End ------------------------------ */
 
 
-/* We generate the following AST nodes:
+/* ---------------------- Context Checker Start ---------------------- */
 
-expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD | N_CH | N_STR | N_ID
-     | N_ADD (expr) | N_SUB (expr) | N_ADD (expr, expr) | N_SUB (expr, expr)
-     | N_MUL (expr, expr) | N_DIV (expr, expr) | N_MOD (expr, expr)
-     | N_LSH (expr, expr) | N_RSH (expr, expr)
-     | N_NOT (expr) | N_BITWISE_NOT (expr)
-     | N_INC (expr) | N_DEC (expr) | N_POST_INC (expr)| N_POST_DEC (expr)
-     | N_ALIGNOF (type_name?) | N_SIZEOF (type_name) | N_EXPR_SIZEOF (expr)
-     | N_CAST (type_name, expr) | N_COMMA (expr, expr) | N_ANDAND (expr, expr)
-     | N_OROR (expr, expr) | N_EQ (expr, expr) | N_NE (expr, expr)
-     | N_LT (expr, expr) | N_LE (expr, expr) | N_GT (expr, expr) | N_GE (expr, expr)
-     | N_AND (expr, expr) | N_OR (expr, expr) | N_XOR (expr, expr)
-     | N_ASSIGN (expr, expr) | N_ADD_ASSIGN (expr, expr) | N_SUB_ASSIGN (expr, expr)
-     | N_MUL_ASSIGN (expr, expr) | N_DIV_ASSIGN (expr, expr) | N_MOD_ASSIGN (expr, expr)
-     | N_LSH_ASSIGN (expr, expr) | N_RSH_ASSIGN (expr, expr)
-     | N_AND_ASSIGN (expr, expr) | N_OR_ASSIGN (expr, expr) | N_XOR_ASSIGN (expr, expr)
-     | N_DEREF (expr) | | N_ADDR (expr) | N_IND (expr, expr) | N_FIELD (expr, N_ID)
-     | N_DEREF_FIELD (expr, N_ID) | N_COND (expr, expr, expr)
-     | N_COMPOUND_LITERAL (type_name, initializer) | N_CALL (expr, N_LIST:(expr)*)
-     | N_GENERIC (expr, N_LIST:(N_GENERIC_ASSOC (type_name?, expr))+ )
-label: N_CASE(expr) | N_DEFAULT | N_LABEL(N_ID)
-stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
-    | N_SWITCH(N_LIST:(label)*, expr, stmt) | (N_WHILE|N_DO) (N_LIST:(label)*, expr, stmt)
-    | N_FOR(N_LIST:(label)*,(N_LIST: declaration+ | expr)?, expr?, expr?, stmt)
-    | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
-    | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
-compound_stmt: N_BLOCK(N_LIST:(declaration | stmt)*)
-declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
-st_assert: N_ST_ASSERT(const_expr, N_STR)
-declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
-align_spec: N_ALIGNAS(type_name|const_expr)
-sc_spec: N_TYPEDEF|N_EXTERN|N_STATIC|N_AUTO|N_REGISTER|N_THREAD_LOCAL
-type_qual: N_CONST|N_RESTRICT|N_VOLATILE|N_ATOMIC
-func_spec: N_INLINE|N_NO_RETURN
-type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGNED|N_BOOL|N_COMPLEX
-         | (N_STRUCT|N_UNION) (N_ID?, struct_declaration_list?)
-	 | N_ENUM(N_ID?, N_LIST?: N_ENUM_COST(N_ID, const_expr?)*) | typedef_name
-struct_declaration_list: N_LIST: struct_declaration+
-struct_declaration: st_assert | N_MEMBER(spec_qual_list, declarator?, const_expr?)
-spec_qual_list: N_LIST:(type_qual|type_spec)*
-declarator: the same as direct declarator
-direct_declarator: N_DECL(N_ID,
-                          N_LIST:(N_POINTER(type_qual_list) | N_FUNC(id_list|parameter_list)
-                                            | N_ARR(N_STATIC?, type_qual_list,
-                                                    (assign_expr|N_STAR)?))*)
--pointer: N_LIST: N_POINTER(type_qual_list)*
-type_qual_list : N_LIST: type_qual*
-parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
-                             | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
-id_list: N_LIST: N_ID*
-initializer: assign_expr | initialize_list
-initialize_list: N_LIST: N_INIT(N_LIST:(const_expr | N_FIELD_ID (N_ID))* initializer)+
-type_name: N_TYPE(spec_qual_list, abstract_declarator)
-abstract_declarator: the same as abstract direct declarator
-abstract_direct_declarator: N_DECL(ignore,
-                                   N_LIST:(N_POINTER(type_qual_list) | N_FUNC(parameter_list)
-                                           | N_ARR(N_STATIC?, type_qual_list,
-                                                   (assign_expr|N_STAR)?))*)
-typedef_name: N_ID
-transl_unit: N_LIST:(declaration
-           | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
-
-Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more.
-*/
-
-/* ---------------------------- Checker Start -------------------------------- */
+/* The context checker is AST traversing pass which checks C11
+   constraints.  It also augmenting AST nodes by type and layout
+   information.  */
 
 static int supported_alignment_p (mir_long_long align) { return TRUE; } // ???
 
@@ -7205,6 +7212,14 @@ static void check_finish (void) {
 }
 
 /* ---------------------------- Checker Finish -------------------------------- */
+
+
+/* -------------------------- MIR generator start ----------------------------- */
+
+static void gen (void) {
+}
+
+/* ------------------------- MIR generator finish ----------------------------- */
 
 
 
@@ -7417,7 +7432,15 @@ static void finish_options (void) {
   VARR_DESTROY (char_ptr_t, system_headers);
 }
 
-#ifdef TEST_MIR_C
+static void compile_init (int argc, const char *argv[],
+			  int (*getc_func) (void), void (*ungetc_func) (int),
+			  int other_option_func (int, int, const char **)) {
+  c_getc = getc_func; c_ungetc = ungetc_func;
+  parse_init ();
+  check_init ();
+  init_options (argc, argv, other_option_func);
+}
+
 #include <sys/time.h>
 
 static double
@@ -7428,6 +7451,51 @@ real_usec_time(void) {
   return tv.tv_usec + tv.tv_sec * 1000000.0;
 }
 
+static void compile (const char *source_name) {
+  double start_time = real_usec_time ();
+  node_t r;
+  
+  if (verbose_p)
+    fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
+  add_stream (NULL, source_name);
+  add_standard_includes ();
+  pre (source_name);
+  if (verbose_p)
+    fprintf (stderr, "  preprocessor end    -- %.0f usec\n", real_usec_time () - start_time);
+  if (! prepro_only_p) {
+    r = parse ();
+    if (verbose_p)
+      fprintf (stderr, "  parser end          -- %.0f usec\n", real_usec_time () - start_time);
+    if (r == NULL) {
+      if (verbose_p)
+	fprintf (stderr, "parser - FAIL\n");
+    } else {
+      if (debug_p)
+	pr_node (stderr, r, 0);
+      if (! check (r, NULL)) {
+	if (verbose_p)
+	  fprintf (stderr, "context checker - FAIL\n");
+      } else {
+	if (verbose_p)
+	  fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
+	gen ();
+	if (verbose_p)
+	  fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
+      }
+    }
+  }
+  if (verbose_p)
+    fprintf (stderr, "compiler end                -- %.0f usec\n", real_usec_time () - start_time);
+}
+
+static void compile_finish (void) {
+  parse_finish ();
+  check_finish ();
+  finish_options ();
+}
+
+/* ------------------------- Small test example ------------------------- */
+#ifdef TEST_MIR_C
 static size_t curr_char;
 static const char *code;
 
@@ -7450,7 +7518,7 @@ static void t_ungetc (int c) {
   }
 }
 
-static const char *source;
+static const char *source_name;
 static VARR (char) *input;
 
 static int other_option_func (int i, int argc, const char *argv[]) {
@@ -7458,11 +7526,11 @@ static int other_option_func (int i, int argc, const char *argv[]) {
   int c;
   
   if (strcmp (argv[i], "-i") == 0) {
-    f = stdin; source = "<stdin>";
+    f = stdin; source_name = "<stdin>";
   } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
-    code = argv[++i]; source = "<command-line>";
+    code = argv[++i]; source_name = "<command-line>";
   } else if (*argv[i] != '-') {
-    source = argv[i];
+    source_name = argv[i];
     if ((f = fopen (argv[i], "r")) == NULL) {
       print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
       exit (1);
@@ -7483,18 +7551,13 @@ static int other_option_func (int i, int argc, const char *argv[]) {
 }
 
 int main (int argc, const char *argv[]) {
-  double start_time = real_usec_time ();
-  node_t r;
-  
-  code = NULL; source = NULL;
+  code = NULL; source_name = NULL;
   VARR_CREATE (char, input, 100);
-  curr_char = 0; c_getc = t_getc; c_ungetc = t_ungetc;
-  parse_init ();
-  check_init ();
-  init_options (argc, argv, other_option_func);
+  curr_char = 0;
+  compile_init (argc, argv, t_getc, t_ungetc, other_option_func);
   if (code == NULL) {
     code =
-"//#include <stdio.h>\n"
+"#include <stdio.h>\n"
 "#define SieveSize 819000\n"
 "int sieve (void) {\n"
 "  int i, k, prime, count, iter;\n"
@@ -7518,30 +7581,12 @@ int main (int argc, const char *argv[]) {
 "void main (void) {\n"
 "  printf (\"%d\\n\", sieve ());\n"
 "}\n";
-    source = "<example>";
+    source_name = "<example>";
   }
-  assert (source != NULL);
-  if (verbose_p)
-    fprintf (stderr, "parser_init end -- %.0f usec\n", real_usec_time () - start_time);
-  r = parse (source);
-  if (verbose_p)
-    fprintf (stderr, "parser end -- %.0f usec\n", real_usec_time () - start_time);
-  if (r != NULL) {
-    if (verbose_p)
-      fprintf (stderr, "parse - OK\n");
-    if (debug_p)
-      pr_node (stderr, r, 0);
-    if (check (r, NULL)) {
-      if (verbose_p)
-	fprintf (stderr, "check - OK\n");
-    }
-  }
+  assert (source_name != NULL);
+  compile (source_name);
+  compile_finish ();
   VARR_DESTROY (char, input);
-  parse_finish ();
-  check_finish ();
-  finish_options ();
-  if (verbose_p)
-    fprintf (stderr, "parser_finish end -- %.0f usec\n", real_usec_time () - start_time);
   return 0;
 }
 #endif
