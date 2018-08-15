@@ -64,26 +64,3 @@ static int x86_adjust_type_alignment (int align, struct type *type) {
 static int invalid_alignment (mir_long_long align) {
   return align != 0 && align != 1 && align != 2 && align != 4 && align != 8 && align != 16;
 }
-
-/* Update BYTE_OFFSET and BIT_OFFSET for a bit field of length BIT_LEN.
-   Return storage unit size to use.  */
-static int get_bit_field_info (int bit_len, unsigned long long *byte_offset, int *bit_offset) {
-  int unit_size;
-  unsigned long long start_byte, finish_byte, start_unit_byte;
-  
-  assert (bit_len <= 8 * 8);
-  for (;;) {
-    for (unit_size = 1; unit_size <= 8; unit_size *= 2) {
-      if (bit_len > unit_size * 8) continue;
-      start_byte = *byte_offset; finish_byte = (start_byte * 8 + *bit_offset + bit_len - 1) / 8;
-      start_unit_byte = (start_byte / unit_size) * unit_size;
-      if (finish_byte < start_unit_byte + unit_size)
-	break;
-    }
-    if (unit_size <= 8)
-      break;
-    (*byte_offset)++;
-    *bit_offset = 0;
-  }
-  return unit_size;
-}

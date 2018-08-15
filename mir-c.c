@@ -60,7 +60,6 @@ enum basic_type {
   TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT, TP_INT, TP_UINT, TP_LONG, TP_ULONG,
   TP_LLONG, TP_ULLONG,
   TP_FLOAT, TP_DOUBLE, TP_LONG_DOUBLE,
-  TP_FLOAT_COMPLEX, TP_DOUBLE_COMPLEX, TP_LONG_DOUBLE_COMPLEX, 
 };
 
 struct type_qual {
@@ -238,18 +237,18 @@ align_spec: N_ALIGNAS(type_name|const_expr)
 sc_spec: N_TYPEDEF|N_EXTERN|N_STATIC|N_AUTO|N_REGISTER|N_THREAD_LOCAL
 type_qual: N_CONST|N_RESTRICT|N_VOLATILE|N_ATOMIC
 func_spec: N_INLINE|N_NO_RETURN
-type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGNED|N_BOOL|N_COMPLEX
+type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGNED|N_BOOL
          | (N_STRUCT|N_UNION) (N_ID?, struct_declaration_list?)
 	 | N_ENUM(N_ID?, N_LIST?: N_ENUM_COST(N_ID, const_expr?)*) | typedef_name
 struct_declaration_list: N_LIST: struct_declaration+
-struct_declaration: st_assert | N_MEMBER(spec_qual_list, declarator?, const_expr?)
+struct_declaration: st_assert | N_MEMBER(N_SHARE(spec_qual_list), declarator?, const_expr?)
 spec_qual_list: N_LIST:(type_qual|type_spec)*
 declarator: the same as direct declarator
 direct_declarator: N_DECL(N_ID,
                           N_LIST:(N_POINTER(type_qual_list) | N_FUNC(id_list|parameter_list)
                                             | N_ARR(N_STATIC?, type_qual_list,
                                                     (assign_expr|N_STAR)?))*)
--pointer: N_LIST: N_POINTER(type_qual_list)*
+pointer: N_LIST: N_POINTER(type_qual_list)*
 type_qual_list : N_LIST: type_qual*
 parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
                              | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
@@ -266,7 +265,19 @@ typedef_name: N_ID
 transl_unit: N_LIST:(declaration
            | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
 
-Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more. */
+Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more.
+
+1. expr nodes have attribute "struct expr", N_ID not expr context has NULL attribute.
+2. N_SWITCH has attribute "struct switch_attr"
+3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
+4. N_GOTO hash attribute node_t (target stmt)
+5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
+6. N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
+7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec"
+8. N_ENUM_CONST has attribute "struct enum_value"
+9. N_CASE and N_DEFAULT have attribute "struct case_attr"
+
+*/
 
 typedef enum {
   T_NUMBER = 256, T_CH, T_STR, T_ID, T_ASSIGN, T_DIVOP, T_ADDOP, T_SH, T_CMP, T_EQNE, T_ANDAND, T_OROR,
@@ -299,7 +310,7 @@ typedef enum {
   N_GENERIC_ASSOC, N_IF, N_SWITCH, N_WHILE, N_DO, N_FOR, N_GOTO, N_CONTINUE, N_BREAK, N_RETURN,
   N_EXPR, N_BLOCK, N_CASE, N_DEFAULT, N_LABEL, N_LIST, N_SPEC_DECL, N_SHARE, N_TYPEDEF, N_EXTERN,
   N_STATIC, N_AUTO, N_REGISTER, N_THREAD_LOCAL, N_DECL, N_VOID, N_CHAR, N_SHORT, N_INT, N_LONG,
-  N_FLOAT, N_DOUBLE, N_SIGNED, N_UNSIGNED, N_BOOL, N_COMPLEX, N_STRUCT, N_UNION, N_ENUM,
+  N_FLOAT, N_DOUBLE, N_SIGNED, N_UNSIGNED, N_BOOL, N_STRUCT, N_UNION, N_ENUM,
   N_ENUM_CONST, N_MEMBER, N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN,
   N_ALIGNAS, N_FUNC, N_STAR, N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT,
   N_FUNC_DEF
@@ -3130,14 +3141,14 @@ static void tpname_finish (void) {
 #define P(f) do { if ((r = (f) (no_err_p)) == &err_node) return r; } while (0)
 #define PA(f, a) do { if ((r = (f) (no_err_p, a)) == &err_node) return r; } while (0)
 #define PT(t) do {                              		\
-    if (! M(t)) {						\
+  if (! M(t)) {						        \
     if (record_level == 0) syntax_error (get_token_name (t));	\
     return &err_node;						\
   }								\
 } while (0)
 
 #define PTP(t, pos) do {                              		\
-    if (! MP(t, pos)) {						\
+  if (! MP(t, pos)) {						\
     if (record_level == 0) syntax_error (get_token_name (t));	\
     return &err_node;						\
   }								\
@@ -3506,7 +3517,9 @@ D (type_spec) {
   } else if (MP (T_BOOL, pos)) {
     r = new_pos_node (N_BOOL, pos);
   } else if (MP (T_COMPLEX, pos)) {
-    r = new_pos_node (N_COMPLEX, pos);
+    if (record_level == 0)
+      print_error (pos, "complex numbers are not supported\n");
+    return &err_node;
   } else if (MP (T_ATOMIC, pos)) { /* atomic-type-specifier */
     PT ('('); P (type_name); PT (')');
     print_error (pos, "Atomic types are not supported\n"); 
@@ -3597,7 +3610,7 @@ D (struct_declaration) {
 	} else {
 	  r = new_node (N_IGNORE);
 	}
-	op = new_pos_node3 (N_MEMBER, op->pos, spec, op, r);
+	op = new_pos_node3 (N_MEMBER, op->pos, new_node1 (N_SHARE, spec), op, r);
 	op_append (list, op);
 	if (! M (','))
 	  break;
@@ -4597,7 +4610,7 @@ struct node_scope {
 
 struct decl {
   unsigned long long offset; /* field, ??? var */
-  int bit_offset, unit_size; /* for bitfields, -1 for non bitfields. */
+  int bit_offset; /* for bitfields, -1 for non bitfields. */
   struct decl_spec decl_spec;
 };
 
@@ -4706,19 +4719,63 @@ static unsigned long long type_size (struct type *type) {
   return (type->raw_size + type->align - 1) / type->align * type->align;
 }
 
+
+/* BOUND_BIT is used only if BF_P.  */
+static void update_field_layout (int *bf_p, unsigned long long *overall_size,
+				 unsigned long long *offset, int *bound_bit,
+				 unsigned long long prev_size, unsigned long long size,
+				 int align, int bits) {
+  unsigned long long prev_field_offset = *offset, bytes = 0;
+  int start_bit, diff;
+  
+  assert (size > 0);
+  if (! *bf_p) { /* field -> bit field or field */
+    if (bits >= 0 && size > prev_size) {
+      *bound_bit = prev_size * MIR_CHAR_BIT;
+    } else {
+      prev_field_offset += prev_size;
+      *offset = prev_field_offset / align * align;
+      *bound_bit = (prev_field_offset - *offset) * MIR_CHAR_BIT;
+      prev_field_offset = *offset;
+    }
+  }
+  *bf_p = bits >= 0;
+  if (bits < 0) {
+    bytes = size - 1;
+    bits = MIR_CHAR_BIT;
+  }
+  *offset = prev_field_offset / align * align;
+  diff = prev_field_offset - *offset;
+  for (;;) {
+    start_bit = *bound_bit + diff * MIR_CHAR_BIT;
+    if (start_bit < 0)
+      start_bit = 0;
+    if ((start_bit + bits - 1) / MIR_CHAR_BIT + 1 + bytes <= size) {
+      *bound_bit = start_bit + bits;
+      break;
+    }
+    *offset += align;
+    diff -= align;
+    if (bytes >= align)
+      bytes -= align;
+  }
+  if (*overall_size < *offset + size)
+    *overall_size = *offset + size;
+}
+
 static void set_type_layout (struct type *type) {
-  unsigned long long size;
+  unsigned long long overall_size = 0;
 
   if (type->raw_size != ULLONG_MAX)
     return; /* defined */
   if (type->mode == TM_BASIC) {
-    size = basic_type_size (type->u.basic_type);
+    overall_size = basic_type_size (type->u.basic_type);
   } else if (type->mode == TM_PTR) {
-    size = sizeof (mir_size_t);
+    overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    size = basic_type_size (TP_INT);
+    overall_size = basic_type_size (TP_INT);
   } else if (type->mode == TM_FUNC) {
-    size = sizeof (mir_size_t);
+    overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
     struct arr_type *arr_type = type->u.arr_type;
     struct expr *cexpr = arr_type->size->attr;
@@ -4726,57 +4783,51 @@ static void set_type_layout (struct type *type) {
 			      ? 1 : cexpr->u.i_val);
 
     set_type_layout (arr_type->el_type);
-    size = type_size (arr_type->el_type) * nel;
+    overall_size = type_size (arr_type->el_type) * nel;
   } else {
+    int bf_p = FALSE, bits = -1, bound_bit = 0;
+    unsigned long long offset = 0, prev_size = 0;
+    
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-    size = 0;
     if (! type->incomplete_p)
       for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
 	   member != NULL;
 	   member = NL_NEXT (member))
 	if (member->code == N_MEMBER) {
 	  struct decl *decl = member->attr;
-	  int bit_offset = 0, member_align;
-	  unsigned long long offset, len, member_size;
+	  int member_align;
+	  unsigned long long member_size;
 	  node_t width = NL_EL (member->ops, 2);
 	  struct expr *expr;
 	  
 	  set_type_layout (decl->decl_spec.type);
 	  member_size = type_size (decl->decl_spec.type);
 	  member_align = type_align (decl->decl_spec.type);
-	  if (width->code == N_IGNORE || !(expr = width->attr)->const_p) {
-	    if (type->mode == TM_STRUCT) {
-	      offset = (size + member_align - 1) / member_align * member_align;
-	      size = offset + member_size;
-	    } else {
-	      offset = 0;
-	      if (size < member_size)
-		size =  member_size;
-	    }
+	  bits = width->code == N_IGNORE || !(expr = width->attr)->const_p ? -1 : expr->u.u_val;
+	  if (bits != 0) {
+	    update_field_layout (&bf_p, &overall_size, &offset, &bound_bit,
+				 prev_size, member_size, member_align, bits);
+	    prev_size = member_size;
 	    decl->offset = offset;
-	    decl->bit_offset = decl->unit_size = -1;
-	  } else {
-	    int unit_size, bit_len = expr->u.u_val;
-	    
-	    if (type->mode == TM_UNION)
-	      bit_offset = offset = 0;
-	    /* Get byte and bit offsets (offset, bit_offset) and storage
-	       unit size for the bit field. */
-	    unit_size = get_bit_field_info (bit_len, &offset, &bit_offset);
-	    len = ((offset * MIR_CHAR_BIT + bit_offset + bit_len - 1)
-		   / MIR_CHAR_BIT / unit_size * unit_size);
-	    if (type->mode == TM_STRUCT)
-	      size = len;
-	    else if (size < len)
-	      size = len;
-	    decl->offset = offset;
-	    decl->bit_offset = bit_offset;
-	    decl->unit_size = unit_size;
+	    decl->bit_offset = bits < 0 ? -1 : bound_bit - bits;
+	  } else { /* Finish the last unit */
+	    bf_p = FALSE;
+	    offset = (offset + member_align - 1) / member_align;
+	    /* The offset and bit_offset do not matter, but make
+	       bit_offset less member_size in bits */
+	    decl->offset = offset + bound_bit / (member_size * MIR_CHAR_BIT);
+	    decl->bit_offset = bound_bit % (member_size * MIR_CHAR_BIT);
+	  }
+	  if (type->mode == TM_UNION) {
+	    offset = prev_size = 0;
+	    bf_p = FALSE;
+	    bits = -1;
+	    bound_bit = 0;
 	  }
 	}
   }
   /* we might need raw_size for alignment calculations */
-  type->raw_size = size;
+  type->raw_size = overall_size;
   aux_set_type_align (type);
   if (type->mode == TM_PTR)  /* Visit the pointed but after setting size to avoid looping */
     set_type_layout (type->u.ptr_type);
@@ -4965,8 +5016,6 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	print_error (n->pos, "short with long\n");
       else
 	size = 2;
-    } else if (n->code == N_COMPLEX) {
-      print_error (n->pos, "complex numbers are not supported\n");
     }
   for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
     switch (n->code) {
@@ -5030,7 +5079,6 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       break;
     case N_UNSIGNED:
     case N_SIGNED:
-    case N_COMPLEX:
     case N_SHORT:
     case N_LONG:
       set_type_pos_node (type, n);
@@ -5306,7 +5354,9 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       node_t last = NL_TAIL (param_list->ops);
       int saved_in_params_p = in_params_p;
       
+#if 0
       n->attr = type;
+#endif
       type->mode = TM_FUNC; type->pos_node = n;
       type->u.func_type = func_type = reg_malloc (sizeof (struct func_type));
       func_type->ret_type = NULL;
@@ -5370,7 +5420,8 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	}
       }
       in_params_p = saved_in_params_p;
-      curr_scope = ((struct node_scope *) n->attr)->scope;
+      if (! func_def_p)
+	curr_scope = ((struct node_scope *) n->attr)->scope;
       break;
     }
     default:
@@ -5387,7 +5438,7 @@ static void check_labels (node_t labels, node_t target) {
   for (node_t l = NL_HEAD (labels->ops); l != NULL; l = NL_NEXT (l)) {
     if (l->code == N_LABEL) {
       symbol_t sym;
-      node_t id = NL_HEAD (labels->ops);
+      node_t id = NL_HEAD (l->ops);
       
       if (symbol_find (S_LABEL, id, func_block_scope, &sym)) {
 	print_error (id->pos, "label %s redeclaration\n", id->u.s);
@@ -5746,6 +5797,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   
   assert (decl_node->code == N_MEMBER
 	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
+  decl->offset = 0; decl->bit_offset = -1;
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
@@ -6865,7 +6917,8 @@ static int check (node_t r, node_t context) {
     node_t specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (specs);
     node_t const_expr = NL_NEXT (declarator);
-    struct decl_spec decl_spec = check_decl_spec (specs, r);
+    node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
+    struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
     create_decl (curr_scope, r, decl_spec, const_expr, NULL);
     type = ((struct decl *) r->attr)->decl_spec.type;
@@ -7236,7 +7289,7 @@ static const char *get_node_name (node_code_t code) {
     C (IF) C (SWITCH) C (WHILE) C (DO) C (FOR) C (GOTO) C (CONTINUE) C (BREAK) C (RETURN) C (EXPR)
     C (BLOCK) C (CASE) C (DEFAULT) C (LABEL) C (LIST) C (SPEC_DECL) C (SHARE) C (TYPEDEF)
     C (EXTERN) C (STATIC) C (AUTO) C (REGISTER) C (THREAD_LOCAL) C (DECL) C (VOID) C (CHAR)
-    C (SHORT) C (INT) C (LONG) C (FLOAT) C (DOUBLE) C (SIGNED) C (UNSIGNED) C (BOOL) C (COMPLEX)
+    C (SHORT) C (INT) C (LONG) C (FLOAT) C (DOUBLE) C (SIGNED) C (UNSIGNED) C (BOOL)
     C (STRUCT) C (UNION) C (ENUM) C (ENUM_CONST) C (MEMBER) C (CONST) C (RESTRICT) C (VOLATILE)
     C (ATOMIC) C (INLINE) C (NO_RETURN) C (ALIGNAS) C (FUNC) C (STAR) C (POINTER) C (DOTS) C (ARR)
     C (INIT) C (FIELD_ID) C (TYPE) C (ST_ASSERT) C (FUNC_DEF)
@@ -7261,17 +7314,148 @@ static void print_chars (FILE *f, const char *str) {
     print_char (f, *str++);
 }
 
-static void pr_node (FILE *f, node_t n, int indent);
+static void pr_node (FILE *f, node_t n, int indent, int attr_p);
 
-static void pr_ops (FILE *f, node_t n, int indent) {
+static void pr_ops (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   node_t op;
   
   for (i = 0; (op = get_op (n, i)) != NULL; i++)
-    pr_node (f, op, indent + 2);
+    pr_node (f, op, indent + 2, attr_p);
 }
 
-static void pr_node (FILE *f, node_t n, int indent) {
+static void print_qual (FILE *f, struct type_qual type_qual) {
+  if (type_qual.const_p)
+    fprintf (f, ", const");
+  if (type_qual.restrict_p)
+    fprintf (f, ", restrict");
+  if (type_qual.volatile_p)
+    fprintf (f, ", volatile");
+  if (type_qual.atomic_p)
+    fprintf (f, ", atomic");
+}
+
+static void print_type (FILE *f, struct type *type) {
+  switch (type->mode) {
+  case TM_UNDEF:
+    fprintf (f, "undef type mode");
+    break;
+  case TM_BASIC:
+    switch (type->u.basic_type) {
+    case TP_UNDEF: fprintf (f, "undef type"); break;
+    case TP_VOID: fprintf (f, "void"); break;
+    case TP_BOOL: fprintf (f, "bool"); break;
+    case TP_CHAR: fprintf (f, "char"); break;
+    case TP_SCHAR: fprintf (f, "signed char"); break;
+    case TP_UCHAR: fprintf (f, "unsigned char"); break;
+    case TP_SHORT: fprintf (f, "short"); break;
+    case TP_USHORT: fprintf (f, "unsigned short"); break;
+    case TP_INT: fprintf (f, "int"); break;
+    case TP_UINT: fprintf (f, "unsigned int"); break;
+    case TP_LONG: fprintf (f, "long"); break;
+    case TP_ULONG: fprintf (f, "unsigned long"); break;
+    case TP_LLONG: fprintf (f, "long long"); break;
+    case TP_ULLONG: fprintf (f, "unsigned long long"); break;
+    case TP_FLOAT: fprintf (f, "float"); break;
+    case TP_DOUBLE: fprintf (f, "double"); break;
+    case TP_LONG_DOUBLE: fprintf (f, "long double"); break;
+    default:
+      assert (FALSE);
+    }
+    break;
+  case TM_ENUM:
+    fprintf (f, "enum node %lu", type->u.tag_type->uid);
+    break;
+  case TM_PTR:
+    fprintf (f, "ptr (");
+    print_type (f, type->u.ptr_type);
+    fprintf (f, ")");
+    break;
+  case TM_STRUCT:
+    fprintf (f, "struct node %lu", type->u.tag_type->uid);
+    break;
+  case TM_UNION:
+    fprintf (f, "union node %lu", type->u.tag_type->uid);
+    break;
+  case TM_ARR:
+    fprintf (f, "array [%s", type->u.arr_type->static_p ? "static " : "");
+    print_qual (f, type->u.arr_type->ind_type_qual);
+    fprintf (f, "size node %lu] (", type->u.arr_type->size->uid);
+    print_type (f, type->u.arr_type->el_type);
+    fprintf (f, ")");
+    break;
+  case TM_FUNC:
+    fprintf (f, "func ");
+    print_type (f, type->u.func_type->ret_type);
+    fprintf (f, "(params node %lu", type->u.func_type->param_list->uid);
+    fprintf (f, type->u.func_type->dots_p ? ", ...)" : ")");
+    break;
+  default:
+    assert (FALSE);
+  }
+  print_qual (f, type->type_qual);
+  if (type->incomplete_p)
+    fprintf (f, ", incomplete");
+  if (type->raw_size != ULLONG_MAX)
+    fprintf (f, ", size = %llu", type->raw_size);
+  if (type->align >= 0)
+    fprintf (f, ", align = %d", type->align);
+}
+
+static void print_decl_spec (FILE *f, struct decl_spec *decl_spec) {
+  if (decl_spec->typedef_p)
+    fprintf (f, " typedef, ");
+  if (decl_spec->extern_p)
+    fprintf (f, " extern, ");
+  if (decl_spec->static_p)
+    fprintf (f, " static, ");
+  if (decl_spec->auto_p)
+    fprintf (f, " auto, ");
+  if (decl_spec->register_p)
+    fprintf (f, " register, ");
+  if (decl_spec->thread_local_p)
+    fprintf (f, " thread local, ");
+  if (decl_spec->inline_p)
+    fprintf (f, " inline, ");
+  if (decl_spec->no_return_p)
+    fprintf (f, " no return, ");
+  if (decl_spec->align >= 0)
+    fprintf (f, " align = %d, ", decl_spec->align);
+  if (decl_spec->align_node != NULL)
+    fprintf (f, " strictest align node %lu, ", decl_spec->align_node->uid);
+  print_type (f, decl_spec->type);
+}
+
+static void print_decl (FILE *f, struct decl *decl) {
+  if (decl == NULL)
+    return;
+  fprintf (f, ": ");
+  print_decl_spec (f, &decl->decl_spec);
+  fprintf (f, ", offset = %llu", decl->offset);
+  if (decl->bit_offset >= 0)
+    fprintf (f, ", bit offset = %d", decl->bit_offset);
+}
+
+static void print_expr (FILE *f, struct expr *e) {
+  if (e == NULL)
+    return; /* e.g. N_ID which is not an expr */
+  fprintf (f, ": ");
+  if (e->lvalue_node)
+    fprintf (f, "lvalue, ");
+  print_type (f, e->type);
+  if (e->const_p) {
+    fprintf (f, ", const = ");
+    if (! integer_type_p (e->type)) {
+      fprintf (f, " %.*Lg\n", LDBL_DECIMAL_DIG, (long double) e->u.d_val);
+    } else if (signed_integer_type_p (e->type)) {
+      fprintf (f, "%lld", (long long) e->u.i_val);
+    } else {
+      fprintf (f, "%llu", (unsigned long long) e->u.u_val);
+    }
+  }
+}
+
+static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   
   fprintf (f, "%6lu: ", n->uid);
@@ -7284,18 +7468,24 @@ static void pr_node (FILE *f, node_t n, int indent) {
   fprintf (f, "%s", get_node_name (n->code));
   switch (n->code) {
   case N_IGNORE: fprintf (f, "\n"); break;
-  case N_I: fprintf (f, " %lld\n", (long long) n->u.l); break;
-  case N_L: fprintf (f, " %lldl\n", (long long) n->u.l); break;
-  case N_LL: fprintf (f, " %lldll\n", (long long) n->u.ll); break;
-  case N_U: fprintf (f, " %lluu\n", (unsigned long long) n->u.ul); break;
-  case N_UL: fprintf (f, " %lluul\n", (unsigned long long) n->u.ul); break;
-  case N_ULL: fprintf (f, " %lluull\n", (unsigned long long) n->u.ull); break;
-  case N_F: fprintf (f, " %.*g\n", FLT_DECIMAL_DIG, (double) n->u.f); break;
-  case N_D: fprintf (f, " %.*g\n", DBL_DECIMAL_DIG, (double) n->u.d); break;
-  case N_LD: fprintf (f, " %.*Lg\n", LDBL_DECIMAL_DIG, (long double) n->u.ld); break;
-  case N_CH: fprintf (f, " '"); print_char (f, n->u.ch); fprintf (f, "'\n"); break;
-  case N_STR: fprintf (f, " \""); print_chars (f, n->u.s); fprintf (f, "\"\n"); break;
-  case N_ID: fprintf (f, " %s\n", n->u.s); break;
+  case N_I: fprintf (f, " %lld", (long long) n->u.l); goto expr;
+  case N_L: fprintf (f, " %lldl", (long long) n->u.l); goto expr;
+  case N_LL: fprintf (f, " %lldll", (long long) n->u.ll); goto expr;
+  case N_U: fprintf (f, " %lluu", (unsigned long long) n->u.ul); goto expr;
+  case N_UL: fprintf (f, " %lluul", (unsigned long long) n->u.ul); goto expr;
+  case N_ULL: fprintf (f, " %lluull", (unsigned long long) n->u.ull); goto expr;
+  case N_F: fprintf (f, " %.*g", FLT_DECIMAL_DIG, (double) n->u.f); goto expr;
+  case N_D: fprintf (f, " %.*g", DBL_DECIMAL_DIG, (double) n->u.d); goto expr;
+  case N_LD: fprintf (f, " %.*Lg", LDBL_DECIMAL_DIG, (long double) n->u.ld); goto expr;
+  case N_CH: fprintf (f, " '"); print_char (f, n->u.ch); fprintf (f, "'"); goto expr;
+  case N_STR: fprintf (f, " \""); print_chars (f, n->u.s); fprintf (f, "\""); goto expr;
+  case N_ID:
+    fprintf (f, " %s", n->u.s);
+  expr:
+    if (attr_p)
+      print_expr (f, n->attr);
+    fprintf (f, "\n");
+    break;
   case N_COMMA: case N_ANDAND: case N_OROR: case N_EQ: case N_NE: case N_LT: case N_LE:
   case N_GT: case N_GE: case N_ASSIGN: case N_BITWISE_NOT: case N_NOT: case N_AND:
   case N_AND_ASSIGN: case N_OR: case N_OR_ASSIGN: case N_XOR: case N_XOR_ASSIGN: case N_LSH:
@@ -7304,17 +7494,72 @@ static void pr_node (FILE *f, node_t n, int indent) {
   case N_MOD_ASSIGN: case N_IND: case N_FIELD: case N_ADDR: case N_DEREF: case N_DEREF_FIELD:
   case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: case N_ALIGNOF:
   case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL: case N_CALL:
-  case N_GENERIC: case N_GENERIC_ASSOC: case N_IF: case N_SWITCH: case N_WHILE: case N_DO:
-  case N_FOR: case N_GOTO: case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR: case N_BLOCK:
-  case N_CASE: case N_DEFAULT: case N_LABEL: case N_LIST: case N_SPEC_DECL: case N_SHARE:
+    if (attr_p)
+      print_expr (f, n->attr);
+    fprintf (f, "\n");
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_GENERIC: case N_GENERIC_ASSOC: case N_IF: case N_WHILE: case N_DO:
+  case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR:
+  case N_CASE: case N_DEFAULT: case N_LABEL: case N_SHARE:
   case N_TYPEDEF: case N_EXTERN: case N_STATIC: case N_AUTO: case N_REGISTER: case N_THREAD_LOCAL:
   case N_DECL: case N_VOID: case N_CHAR: case N_SHORT: case N_INT: case N_LONG: case N_FLOAT:
-  case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL: case N_COMPLEX: case N_STRUCT:
-  case N_UNION: case N_ENUM: case N_ENUM_CONST: case N_MEMBER: case N_CONST: case N_RESTRICT:
-  case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN: case N_ALIGNAS: case N_FUNC:
+  case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL:
+  case N_ENUM: case N_CONST: case N_RESTRICT:
+  case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN: case N_ALIGNAS:
   case N_STAR: case N_POINTER: case N_DOTS: case N_ARR: case N_INIT: case N_FIELD_ID: case N_TYPE:
-  case N_ST_ASSERT: case N_FUNC_DEF:
-    fprintf (f, "\n"); pr_ops (f, n, indent);
+  case N_ST_ASSERT:
+    fprintf (f, "\n");
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_LIST:
+    if (attr_p && n->attr != NULL) {
+      fprintf (f, ": ");
+      print_decl_spec (f, (struct decl_spec *) n->attr);
+    }
+    fprintf (f, "\n");
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_SPEC_DECL: case N_MEMBER: case N_FUNC_DEF:
+    if (attr_p)
+      print_decl (f, (struct decl *) n->attr);
+    fprintf (f, "\n");
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_FUNC:
+    if (! attr_p || n->attr == NULL) {
+      fprintf (f, "\n");
+      pr_ops (f, n, indent, attr_p);
+      break;
+    }
+    /* fall through: */
+  case N_STRUCT: case N_UNION: case N_BLOCK: case N_FOR:
+    if (! attr_p || ((n->code == N_STRUCT || n->code == N_UNION)
+		     && (NL_EL (n->ops, 1) == NULL || NL_EL (n->ops, 1)->code == N_IGNORE)))
+      fprintf (f, "\n");
+    else if (((struct node_scope *) n->attr)->scope == NULL)
+      fprintf (f, ": higher scope is NULL\n");
+    else
+      fprintf (f, ": higher scope node %lu\n", ((struct node_scope *) n->attr)->scope->uid);
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_SWITCH:
+    if (attr_p) {
+      fprintf (f, ": ");
+      print_type (f, &((struct switch_attr *) n->attr)->type);
+    }
+    fprintf (f, "\n");
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_GOTO:
+    if (attr_p)
+      fprintf (f, ": target node %lu\n", ((node_t) n->attr)->uid);
+    pr_ops (f, n, indent, attr_p);
+    break;
+  case N_ENUM_CONST: 
+    if (attr_p)
+      fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
+    pr_ops (f, n, indent, attr_p);
     break;
   default:
     abort ();
@@ -7470,12 +7715,14 @@ static void compile (const char *source_name) {
       if (verbose_p)
 	fprintf (stderr, "parser - FAIL\n");
     } else {
-      if (debug_p)
-	pr_node (stderr, r, 0);
       if (! check (r, NULL)) {
+	if (debug_p)
+	  pr_node (stderr, r, 0, FALSE);
 	if (verbose_p)
 	  fprintf (stderr, "context checker - FAIL\n");
       } else {
+	if (debug_p)
+	  pr_node (stderr, r, 0, TRUE);
 	if (verbose_p)
 	  fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
 	gen ();
@@ -7557,7 +7804,7 @@ int main (int argc, const char *argv[]) {
   compile_init (argc, argv, t_getc, t_ungetc, other_option_func);
   if (code == NULL) {
     code =
-"#include <stdio.h>\n"
+"int printf (const char *, ...);\n"
 "#define SieveSize 819000\n"
 "int sieve (void) {\n"
 "  int i, k, prime, count, iter;\n"
