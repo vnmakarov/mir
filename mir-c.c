@@ -1898,19 +1898,28 @@ static int file_found_p (const char *name) {
   return TRUE;
 }
 
-static const char *get_full_name (const char *dir, const char *name) {
+static const char *get_full_name (const char *base, const char *name, int dir_base_p) {
+  const char *str, *last;
   size_t len;
   
   VARR_TRUNC (char, temp_string, 0);
-  if (dir == NULL || *dir == '\0') {
+  if (base == NULL || *base == '\0') {
     assert (name != NULL && name[0] != '\0');
     return name;
   }
-  len = strlen (dir);
-  assert (len > 0);
-  add_to_temp_string (dir);
-  if (dir[len - 1] != '/')
-    add_to_temp_string ("/");
+  if (dir_base_p) {
+    len = strlen (base);
+    assert (len > 0);
+    add_to_temp_string (base);
+    if (base[len - 1] != '/')
+      add_to_temp_string ("/");
+  } else if ((last = strrchr (base, '/')) == NULL) {
+    add_to_temp_string ("./");
+  } else {
+    for (str = base; str <= last; str++)
+      VARR_PUSH (char, temp_string, *str);
+    VARR_PUSH (char, temp_string, '\0');
+  }
   add_to_temp_string (name);
   return VARR_ADDR (char, temp_string);
 }
@@ -1920,14 +1929,21 @@ static const char *get_include_fname (token_t t) {
 
   assert (t->code == T_STR || t->code == T_HEADER);
   if ((name = t->node->u.s)[0] != '/') {
-    if (t->repr[0] == '"')
-      for (size_t i = 0; header_dirs[i] != NULL; i++) {
-	fullname = get_full_name (header_dirs[i], name);
+    if (t->repr[0] == '"') {
+      /* Search relative to the current source dir */
+      if (cs->fname != NULL) {
+	fullname = get_full_name (cs->fname, name, FALSE);
 	if (file_found_p (fullname))
 	  return uniq_str (fullname);
       }
+      for (size_t i = 0; header_dirs[i] != NULL; i++) {
+	fullname = get_full_name (header_dirs[i], name, TRUE);
+	if (file_found_p (fullname))
+	  return uniq_str (fullname);
+      }
+    }
     for (size_t i = 0; system_header_dirs[i] != NULL; i++) {
-      fullname = get_full_name (system_header_dirs[i], name);
+      fullname = get_full_name (system_header_dirs[i], name, TRUE);
       if (file_found_p (fullname))
 	return uniq_str (fullname);
     }
