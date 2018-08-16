@@ -16,13 +16,19 @@
 #include <errno.h>
 #include "time.h"
 
+#ifdef __x86_64__
+#include "mir-cx86_64.h"
+#else
+#error "undefined or unsupported generation target for C"
+#endif
+
 static int debug_p, verbose_p, no_prepro_p, prepro_only_p;
 /* Dirs to search include files in "" and in <>.  End mark is NULL. */
 static const char **header_dirs, **system_header_dirs;
 
 static const int max_nested_includes = 32;
 
-#define MIR_VARR_ERROR error
+#define MIR_VARR_ERROR alloc_error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR 
 
 #define FALSE 0
@@ -34,7 +40,7 @@ typedef enum {
 } C_error_code_t;
 
 static void (*error_func) (C_error_code_t code, const char *message);
-static void error (const char *message) { error_func (C_alloc_error, message); }
+static void alloc_error (const char *message) { error_func (C_alloc_error, message); }
 
 #include "mir-varr.h"
 #include "mir-dlist.h"
@@ -89,9 +95,9 @@ struct type {
   struct type_qual type_qual;
   node_t pos_node; /* set up and used only for checking type correctness */
   unsigned int incomplete_p : 1;
-  /* Raw type size (w/o alignment type itslef requirement but with
-     element alignment requirements), undefined if ullong max.  */
-  unsigned long long raw_size;
+  /* Raw type size (w/o alignment type itself requirement but with
+     element alignment requirements), undefined if mir_size_max.  */
+  mir_size_t raw_size;
   int align; /* type align, undefined if < 0  */
   enum type_mode mode;
   union {
@@ -103,13 +109,13 @@ struct type {
   } u;
 };
 
-static unsigned long long raw_type_size (struct type *type) {
-  assert (type->raw_size != ULLONG_MAX);
+static mir_size_t raw_type_size (struct type *type) {
+  assert (type->raw_size != MIR_SIZE_MAX);
   return type->raw_size;
 }
 
 #ifdef __x86_64__
-#include "mir-cx86_64.h"
+#include "mir-cx86_64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -122,7 +128,7 @@ static void *reg_malloc (size_t s) {
   void *mem = malloc (s);
 
   if (mem == NULL)
-    error ("no memory");
+    alloc_error ("no memory");
   VARR_PUSH (void_ptr_t, reg_memory, mem);
   return mem;
 }
@@ -262,8 +268,9 @@ abstract_direct_declarator: N_DECL(ignore,
                                            | N_ARR(N_STATIC?, type_qual_list,
                                                    (assign_expr|N_STAR)?))*)
 typedef_name: N_ID
-transl_unit: N_LIST:(declaration
-           | N_FUNC_DEF(declaration_specs, declarator, N_LIST: declaration*, compound_stmt))*
+transl_unit: N_MODULE(N_LIST:(declaration
+                              | N_FUNC_DEF(declaration_specs, declarator,
+                                           N_LIST: declaration*, compound_stmt))*)
 
 Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more.
 
@@ -272,7 +279,7 @@ Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means
 3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
 4. N_GOTO hash attribute node_t (target stmt)
 5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
-6. N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
+6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
 7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec"
 8. N_ENUM_CONST has attribute "struct enum_value"
 9. N_CASE and N_DEFAULT have attribute "struct case_attr"
@@ -313,7 +320,7 @@ typedef enum {
   N_FLOAT, N_DOUBLE, N_SIGNED, N_UNSIGNED, N_BOOL, N_STRUCT, N_UNION, N_ENUM,
   N_ENUM_CONST, N_MEMBER, N_CONST, N_RESTRICT, N_VOLATILE, N_ATOMIC, N_INLINE, N_NO_RETURN,
   N_ALIGNAS, N_FUNC, N_STAR, N_POINTER, N_DOTS, N_ARR, N_INIT, N_FIELD_ID, N_TYPE, N_ST_ASSERT,
-  N_FUNC_DEF
+  N_FUNC_DEF, N_MODULE
 } node_code_t;
 
 DEF_DLIST_LINK (node_t);
@@ -517,9 +524,12 @@ static token_t new_node_token (pos_t pos, const char *repr, int token_code, node
   return token;
 }
 
-static void print_pos (pos_t pos) {
-  if (pos.lno >= 0)
-    fprintf (stderr, "%s:%d:%d: ", pos.fname, pos.lno, pos.ln_pos);
+static void print_pos (FILE *f, pos_t pos, int col_p) {
+  if (pos.lno < 0)
+    return;
+  fprintf (f, "%s:%d", pos.fname, pos.lno);
+  if (col_p)
+    fprintf (f, ":%d: ", pos.ln_pos);
 }
 
 static const char *get_token_name (int token_code) {
@@ -573,23 +583,29 @@ static const char *get_token_name (int token_code) {
 static int (*c_getc) (void);
 static void (*c_ungetc) (int c);
 
-static void print_error (pos_t pos, const char *format, ...) {
+static unsigned n_errors, n_warnings;
+
+static void error (pos_t pos, const char *format, ...) {
   va_list args;
    
+  n_errors++;
   va_start (args, format);
-  print_pos (pos);
+  print_pos (stderr, pos, TRUE);
   vfprintf (stderr, format, args);
   va_end (args);
+  fprintf (stderr, "\n");
 }
 
-static void print_warning (pos_t pos, const char *format, ...) {
+static void warning (pos_t pos, const char *format, ...) {
   va_list args;
    
+  n_warnings++;
   va_start (args, format);
-  print_pos (pos);
+  print_pos (stderr, pos, TRUE);
   fprintf (stderr, "warning -- ");
   vfprintf (stderr, format, args);
   va_end (args);
+  fprintf (stderr, "\n");
 }
 
 #define TAB_STOP 8
@@ -715,7 +731,7 @@ static int get_line (void) { /* translation phase 1 and 2 */
     if (VARR_LENGTH (char, cs->ln) == 0)
       return FALSE;
     if (c != '\n')
-      print_error (cs->pos, "no end of line at file end\n");
+      error (cs->pos, "no end of line at file end");
   }
   remove_trigraphs ();
   VARR_PUSH (char, cs->ln, '\n');
@@ -835,15 +851,15 @@ static int set_string_val (token_t t, VARR (char) *temp) {
 	      : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
       }
       if (first_p)
-	print_error (t->pos, "wrong hexadecimal char %c", curr_c);
+	error (t->pos, "wrong hexadecimal char %c", curr_c);
       else if (v > MIR_UCHAR_MAX)
-	print_error (t->pos, "too big hexadecimal char 0x%x", v);
+	error (t->pos, "too big hexadecimal char 0x%x", v);
       curr_c = v;
       i--;
       break;
     }
     default:
-      print_error (t->pos, "wrong escape char 0x%x\n", curr_c);
+      error (t->pos, "wrong escape char 0x%x", curr_c);
       curr_c = 0;
     }
     if (curr_c != 0)
@@ -853,7 +869,7 @@ static int set_string_val (token_t t, VARR (char) *temp) {
   if (t->repr[0] == '"')
     t->node->u.s = uniq_str (VARR_ADDR (char, temp));
   else if (VARR_LENGTH (char, temp) == 1)
-    print_error (t->pos, "empty char constant\n");
+    error (t->pos, "empty char constant");
   else
     t->node->u.ch = VARR_GET (char, temp, 0);
   return lns_num;
@@ -1232,11 +1248,6 @@ static token_t get_next_pptoken_1 (int header_p) {
 	VARR_PUSH (char, symbol_text, curr_c);
 	curr_c = cs_get ();
       }
-#if 0
-      if (curr_c == '.' && VARR_LENGTH (char, symbol_text) == 0) {
-	VARR_PUSH (char, symbol_text, '0');
-      }
-#endif
       if (curr_c == '0') {
 	curr_c = cs_get ();
 	if (curr_c != 'x' && curr_c != 'X') {
@@ -1364,9 +1375,9 @@ static token_t get_next_pptoken_1 (int header_p) {
       }
       if (curr_c == stop) {
 	if (stop == '\'' && VARR_LENGTH (char, symbol_text) == 1)
-	  print_error (pos, "empty character\n");
+	  error (pos, "empty character");
       } else {
-	print_error (pos, "unterminated %s\n", stop == '"' ? "string" : "char");
+	error (pos, "unterminated %s", stop == '"' ? "string" : "char");
       }
       VARR_PUSH (char, symbol_text, curr_c);
       VARR_PUSH (char, symbol_text, '\0');
@@ -1532,7 +1543,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
       t->node = new_l_node (strtol (repr, NULL, base), t->pos); /* ??? int */
     }
     if (errno) {
-      print_error (t->pos, "number %s is out of range\n", repr);
+      error (t->pos, "number %s is out of range", repr);
     }
   }
   return t;
@@ -1801,7 +1812,7 @@ static void define (void) {
   if (t->code == ' ')
     t = get_next_pptoken (); // ??
   if (t->code != T_ID) {
-    print_error (t->pos, "no ident after #define: %s\n", t->repr);
+    error (t->pos, "no ident after #define: %s", t->repr);
     skip_nl (t, NULL);
     return;
   }
@@ -1820,12 +1831,12 @@ static void define (void) {
 	  t = get_next_pptoken ();
 	if (t->code == T_ID) {
 	  if (find_param (params, t->repr) >= 0)
-	    print_error (t->pos, "repeated macro parameter %s\n", t->repr);
+	    error (t->pos, "repeated macro parameter %s", t->repr);
 	  VARR_PUSH (token_t, params, t);
 	} else if (t->code == T_DOTS) {
 	  VARR_PUSH (token_t, params, t);
 	} else {
-	  print_error (t->pos, "macro parameter is expected\n");
+	  error (t->pos, "macro parameter is expected");
 	  break;
 	}
 	t = get_next_pptoken ();
@@ -1834,13 +1845,13 @@ static void define (void) {
 	if (t->code == ')')
 	  break;
 	if (VARR_LAST (token_t, params)->code == T_DOTS) {
-	  print_error (t->pos, "... is not the last parameter\n");
+	  error (t->pos, "... is not the last parameter");
 	  break;
 	}
 	if (t->code == T_DOTS)
 	  continue;
 	if (t->code != ',') {
-	  print_error (t->pos, "missed ,\n");
+	  error (t->pos, "missed ,");
 	  continue;
 	}
 	t = get_next_pptoken ();
@@ -1862,14 +1873,14 @@ static void define (void) {
   name = id->repr; macro_struct.id = id;
   if (! HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, m)) {
     if (strcmp (name, "defined") == 0) {
-      print_error (id->pos, "macro definition of %s\n", name);
+      error (id->pos, "macro definition of %s", name);
     } else {
       new_macro (id, params, repl);
     }
   } else if (m->replacement == NULL) {
-    print_error (id->pos, "standard macro %s redefinition\n", name);
+    error (id->pos, "standard macro %s redefinition", name);
   } else if (! params_eq_p (m->params, params) || ! replacement_eq_p (m->replacement, repl)) {
-    print_error (id->pos, "different macro redefinition of %s\n", name);
+    error (id->pos, "different macro redefinition of %s", name);
   }
 }
 
@@ -1949,7 +1960,7 @@ static pos_t check_line_directive_args (VARR (token_t) *buffer) {
   errno = 0;
   lno = l = strtoll (buffer_arr[i]->repr, NULL, 10);
   if (errno || l > ((1ul << 31) - 1))
-    print_error (buffer_arr[i]->pos, "#line with too big value: %s\n", buffer_arr[i]->repr);
+    error (buffer_arr[i]->pos, "#line with too big value: %s", buffer_arr[i]->repr);
   i++;
   if (i < len && buffer_arr[i]->code == ' ')
     i++;
@@ -1972,39 +1983,39 @@ static void check_pragma (token_t t, VARR (token_t) *tokens) {
     i++;
   if (i >= tokens_len || tokens_arr[i]->code != T_ID
       || strcmp (tokens_arr[i]->repr, "STDC") != 0) {
-    print_warning (t->pos, "unknown pragma\n");
+    warning (t->pos, "unknown pragma");
     return;
   }
   i++;
   if (i < tokens_len && tokens_arr[i]->code == ' ')
     i++;
   if (i >= tokens_len || tokens_arr[i]->code != T_ID) {
-    print_error (t->pos, "wrong STDC pragma\n");
+    error (t->pos, "wrong STDC pragma");
     return;
   }
   if (strcmp (tokens_arr[i]->repr, "FP_CONTRACT") != 0
       && strcmp (tokens_arr[i]->repr, "FENV_ACCESS") != 0
       && strcmp (tokens_arr[i]->repr, "CX_LIMITED_RANGE") != 0) {
-    print_error (t->pos, "unknown STDC pragma %s\n", tokens_arr[i]->repr);
+    error (t->pos, "unknown STDC pragma %s", tokens_arr[i]->repr);
     return;
   }
   i++;
   if (i < tokens_len && tokens_arr[i]->code == ' ')
     i++;
   if (i >= tokens_len || tokens_arr[i]->code != T_ID) {
-    print_error (t->pos, "wrong STDC pragma value\n");
+    error (t->pos, "wrong STDC pragma value");
     return;
   }
   if (strcmp (tokens_arr[i]->repr, "ON") != 0 && strcmp (tokens_arr[i]->repr, "OFF") != 0
       && strcmp (tokens_arr[i]->repr, "DEFAULT") != 0) {
-    print_error (t->pos, "unknown STDC pragma value\n", tokens_arr[i]->repr);
+    error (t->pos, "unknown STDC pragma value", tokens_arr[i]->repr);
     return;
   }
   i++;
   if (i < tokens_len && (tokens_arr[i]->code == ' ' || tokens_arr[i]->code == '\n'))
     i++;
   if (i < tokens_len)
-    print_error (t->pos, "garbage at STDC pragma end\n");
+    error (t->pos, "garbage at STDC pragma end");
 }
 
 static void pop_macro_call (void) {
@@ -2053,7 +2064,7 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
     }
   }
   if (t->code != ')')
-    print_error (t->pos, "unfinished call of macro %s\n", m->id->repr);
+    error (t->pos, "unfinished call of macro %s", m->id->repr);
   VARR_PUSH (token_arr_t, args, arg);
   if (params_len == 0 && VARR_LENGTH (token_arr_t, args) == 1
       && VARR_LENGTH (token_t, VARR_GET (token_arr_t, args, 0)) == 0) {
@@ -2065,13 +2076,13 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
       temp_arr = VARR_POP (token_arr_t, args);
       VARR_DESTROY (token_t, temp_arr);
     }
-    print_error (t->pos, "too many args for call of macro %s\n", m->id->repr);
+    error (t->pos, "too many args for call of macro %s", m->id->repr);
   } else if (VARR_LENGTH (token_arr_t, args) < params_len) {
     for (; VARR_LENGTH (token_arr_t, args) < params_len;) {
       VARR_CREATE (token_t, arg, 16);
       VARR_PUSH (token_arr_t, args, arg);
     }
-    print_error (t->pos, "not enough args for call of macro %s\n", m->id->repr);
+    error (t->pos, "not enough args for call of macro %s", m->id->repr);
   }
   mc->args = args;
 }
@@ -2087,7 +2098,7 @@ static token_t token_concat (token_t t1, token_t t2) {
   t = get_next_pptoken ();
   next = get_next_pptoken ();
   if (next->code != T_EOF) {
-    print_error (t1->pos, "wrong result of ##: %s\n", reverse (temp_string));
+    error (t1->pos, "wrong result of ##: %s", reverse (temp_string));
     remove_string_stream ();
   }
   return t;
@@ -2265,9 +2276,6 @@ static int process_pragma (token_t t) {
   VARR_TRUNC (token_t, temp_tokens, 0);
   for (t1 = get_next_pptoken (); t1->code != T_EOF; t1 = get_next_pptoken ())
     VARR_PUSH (token_t, temp_tokens, t1);
-#if 0
-  remove_string_stream ();
-  #endif
   check_pragma (t2, temp_tokens);
   return TRUE;
 }
@@ -2328,13 +2336,12 @@ static void process_directive (void) {
     t = get_next_pptoken ();
   if (t->code != T_ID) {
     if (! skip_if_part_p)
-      print_error (t->pos, "wrong directive name %s\n", t->repr);
+      error (t->pos, "wrong directive name %s", t->repr);
     skip_nl (NULL,  NULL);
     return;
   }
   VARR_CREATE (token_t, temp_buffer, 64);
   if (strcmp (t->repr, "ifdef") == 0 || strcmp (t->repr, "ifndef") == 0) {
-    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
     t1 = t;
     if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
       skip_if_part_p = true_p = TRUE;
@@ -2345,14 +2352,14 @@ static void process_directive (void) {
       if (t->code == ' ')
 	t = get_next_pptoken ();
       if (t->code != T_ID) {
-	print_error (t->pos, "wrong #%s\n", t1->repr);
+	error (t->pos, "wrong #%s", t1->repr);
       } else {
 	macro.id = t;
 	skip_if_part_p = HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_macro);
       }
       t = get_next_pptoken ();
       if (t->code != '\n') {
-	print_error (t1->pos, "garbage at the end of #%s\n", t1->repr);
+	error (t1->pos, "garbage at the end of #%s", t1->repr);
 	skip_nl (NULL, NULL);
       }
       if (strcmp (t1->repr, "ifdef") == 0)
@@ -2361,20 +2368,19 @@ static void process_directive (void) {
     }
     VARR_PUSH (ifstate_t, ifs, new_ifstate (skip_if_part_p, true_p, FALSE, t1->pos));
   } else if (strcmp (t->repr, "endif") == 0 || strcmp (t->repr, "else") == 0) {
-    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
     t1 = t;
     t = get_next_pptoken ();
     if (t->code != '\n') {
-      print_error (t1->pos, "garbage at the end of #%s\n", t1->repr);
+      error (t1->pos, "garbage at the end of #%s", t1->repr);
       skip_nl (NULL, NULL);
     }
     if (VARR_LENGTH (ifstate_t, ifs) < cs->ifs_length_at_stream_start)
-      print_error (t1->pos, "unmatched #%s\n", t1->repr);
+      error (t1->pos, "unmatched #%s", t1->repr);
     else if (strcmp (t1->repr, "endif") == 0) {
       pop_ifstate ();
       skip_if_part_p = VARR_LENGTH (ifstate_t, ifs) == 0 ? 0 : VARR_LAST (ifstate_t, ifs)->skip_p;
     } else if (VARR_LAST (ifstate_t, ifs)->else_p) {
-      print_error (t1->pos, "repeated #else\n");
+      error (t1->pos, "repeated #else");
       VARR_LAST (ifstate_t, ifs)->skip_p = 1;
       skip_if_part_p = TRUE;
     } else {
@@ -2385,11 +2391,10 @@ static void process_directive (void) {
     }
   } else if (strcmp (t->repr, "if") == 0 || strcmp (t->repr, "elif") == 0) {
     if_id = t;
-    //    fprintf (stderr, "%s(%s): %d -- %d,%d\n", t->repr, t->pos.fname, t->pos.lno, (int) VARR_LENGTH (ifstate_t, ifs), cs->ifs_length_at_stream_start);
     if (strcmp (t->repr, "elif") == 0 && VARR_LENGTH (ifstate_t, ifs) == 0) {
-      print_error (t->pos, "#elif without #if\n");
+      error (t->pos, "#elif without #if");
     } else if (strcmp (t->repr, "elif") == 0 && VARR_LAST (ifstate_t, ifs)->else_p)  {
-      print_error (t->pos, "#elif after #else\n");
+      error (t->pos, "#elif after #else");
       skip_if_part_p = TRUE;
     } else if (strcmp (t->repr, "if") == 0 && VARR_LENGTH (ifstate_t, ifs) != 0
 	       && VARR_LAST (ifstate_t, ifs)->skip_p) {
@@ -2441,14 +2446,13 @@ static void process_directive (void) {
       if (i != VARR_LENGTH (token_t, temp_buffer) - 1
 	  || (VARR_GET (token_t, temp_buffer, i)->code != T_STR
 	      && VARR_GET (token_t, temp_buffer, i)->code != T_HEADER)) {
-	print_error (t->pos, "wrong #include\n");
+	error (t->pos, "wrong #include");
 	goto ret;
       }
       name = get_include_fname (VARR_GET (token_t, temp_buffer, i));
     }
-    //    fprintf (stderr, "include: %s\n", name);
     if (VARR_LENGTH (stream_t, streams) >= max_nested_includes + 1) {
-      print_error (t->pos, "more %d include levels\n", VARR_LENGTH (stream_t, streams) - 1);
+      error (t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
     add_include_stream (name);
@@ -2463,7 +2467,7 @@ static void process_directive (void) {
     move_tokens (temp_buffer, buffer);
     pos = check_line_directive_args (temp_buffer);
     if (pos.lno < 0) {
-      print_error (t->pos, "wrong #line\n");
+      error (t->pos, "wrong #line");
     } else {
       change_stream_pos (pos);
     }
@@ -2472,7 +2476,7 @@ static void process_directive (void) {
     add_to_temp_string ("#error");
     for (t1 = get_next_pptoken (); t1->code != '\n'; t1 = get_next_pptoken ())
       add_to_temp_string (t1->repr);
-    print_error (t->pos, "%s\n", VARR_ADDR (char, temp_string));
+    error (t->pos, "%s", VARR_ADDR (char, temp_string));
   } else if (strcmp (t->repr, "pragma") == 0) {
     skip_nl (NULL, temp_buffer);
     check_pragma (t, temp_buffer);
@@ -2481,21 +2485,21 @@ static void process_directive (void) {
     if (t->code == ' ')
       t = get_next_pptoken ();
     if (t->code == '\n') {
-      print_error (t->pos, "no ident after #undef\n");
+      error (t->pos, "no ident after #undef");
       goto ret;
     }
     if (t->code != T_ID) {
-      print_error (t->pos, "no ident after #undef\n");
+      error (t->pos, "no ident after #undef");
       skip_nl (t, NULL);
       goto ret;
     }
     if (strcmp (t->repr, "defined") == 0) {
-      print_error (t->pos, "#undef of %s\n", t->repr);
+      error (t->pos, "#undef of %s", t->repr);
     } else {
       macro.id = t;
       if (HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_macro)) {
 	if (tab_macro->replacement == NULL)
-	  print_error (t->pos, "#undef of standard macro %s\n", t->repr);
+	  error (t->pos, "#undef of standard macro %s", t->repr);
 	else
 	  HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_macro);
       }
@@ -2614,7 +2618,7 @@ static node_t parse_pre_expr (VARR (token_t) *expr) {
     return r;
   if (VARR_LENGTH (token_t, expr) != 0)
     t = VARR_POP (token_t, expr);
-  print_error (t->pos, "wrong preprocessor expression\n");
+  error (t->pos, "wrong preprocessor expression");
   return NULL;
 }
 
@@ -2684,9 +2688,9 @@ static struct val eval_expr (VARR (token_t) *expr_buffer, token_t if_token) {
       continue;
     if (t->code == T_NUMBER
 	&& (t->node->code == N_F || t->node->code == N_D || t->node->code == N_LD)) {
-      print_error (ppt->pos, "floating point in #if/#elif: %s\n", ppt->repr);
+      error (ppt->pos, "floating point in #if/#elif: %s", ppt->repr);
     } else if (t->code == T_STR) {
-      print_error (ppt->pos, "string in #if/#elif: %s\n", ppt->repr);
+      error (ppt->pos, "string in #if/#elif: %s", ppt->repr);
     } else if (t->code != T_ID) {
       change_p = FALSE;
     }
@@ -2817,8 +2821,7 @@ static struct val eval (node_t tree) {
 		     : tree->code == N_DIV ? v1.u.i_val / v2.u.i_val : v1.u.i_val % v2.u.i_val);
     }
     if (zero_p)
-      print_error (tree->pos, "division (%s) by zero in preporocessor\n",
-		   tree->code == N_DIV ? "/" : "%");
+      error (tree->pos, "division (%s) by zero in preporocessor", tree->code == N_DIV ? "/" : "%");
     break;
   }
   case N_ANDAND:
@@ -2866,7 +2869,7 @@ static void processing (int ignore_directive_p) {
       continue;
     } else if (t->code == T_EOF || t->code == T_EOU) {
       if (VARR_LENGTH (ifstate_t, ifs) > eof_s->ifs_length_at_stream_start) {
-	print_error (VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if\n");
+	error (VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if");
       }
       if (t->code == T_EOU)
 	return;
@@ -3077,7 +3080,7 @@ static void record_stop (size_t mark, int restore_p) {
 static void syntax_error (const char *expected_name) {
   static const int context_len = 5;
   
-  print_pos (curr_token->pos);
+  print_pos (stderr, curr_token->pos, TRUE);
   fprintf (stderr, "syntax error on %s", get_token_name (curr_token->code));
   fprintf (stderr, " (expected '%s'):", expected_name);
 #if 0
@@ -3088,7 +3091,7 @@ static void syntax_error (const char *expected_name) {
   fprintf (stderr, "\n");
 }
 
-static node_t curr_scope;
+static node_t top_scope, curr_scope;
 
 typedef struct {
   node_t id, scope;
@@ -3518,11 +3521,11 @@ D (type_spec) {
     r = new_pos_node (N_BOOL, pos);
   } else if (MP (T_COMPLEX, pos)) {
     if (record_level == 0)
-      print_error (pos, "complex numbers are not supported\n");
+      error (pos, "complex numbers are not supported");
     return &err_node;
   } else if (MP (T_ATOMIC, pos)) { /* atomic-type-specifier */
     PT ('('); P (type_name); PT (')');
-    print_error (pos, "Atomic types are not supported\n"); 
+    error (pos, "Atomic types are not supported"); 
   } else if ((struct_p = MP (T_STRUCT, pos)) || MP (T_UNION, pos)) {
     /* struct-or-union-specifier, struct-or-union */
     if (! MN (T_ID, op1)) {
@@ -4169,7 +4172,7 @@ D (transl_unit) {
   err:
     error_recovery (0);
   }
-  return list;
+  return new_node1 (N_MODULE, list);
 }
 
 static void fatal_error (C_error_code_t code, const char *message) {
@@ -4239,7 +4242,6 @@ static void parse_init (void) {
   kw_add ("__restrict", T_RESTRICT, FLAG_EXT); kw_add ("__restrict__", T_RESTRICT, FLAG_EXT);
   kw_add ("__inline", T_INLINE, FLAG_EXT); kw_add ("__inline__", T_INLINE, FLAG_EXT);
   tpname_init ();
-  curr_scope = NULL;
 }
 
 #ifndef SOURCEDIR
@@ -4405,7 +4407,8 @@ static struct type_qual type_qual_union (struct type_qual *tq1, struct type_qual
 
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
-  type->pos_node = NULL; type->incomplete_p = FALSE; type->align = -1; type->raw_size = ULLONG_MAX;
+  type->pos_node = NULL; type->incomplete_p = FALSE;
+  type->align = -1; type->raw_size = MIR_SIZE_MAX;
 }
 
 static void set_type_pos_node (struct type *type, node_t n) {
@@ -4605,11 +4608,12 @@ struct enum_value {
 };
 
 struct node_scope {
+  mir_size_t size, offset;
   node_t scope;
 };
 
 struct decl {
-  unsigned long long offset; /* field, ??? var */
+  mir_size_t offset; /* field, ??? var */
   int bit_offset; /* for bitfields, -1 for non bitfields. */
   struct decl_spec decl_spec;
 };
@@ -4714,18 +4718,18 @@ static void aux_set_type_align (struct type *type) {
   type->align = align;
 }
 
-static unsigned long long type_size (struct type *type) {
-  assert (type->raw_size != ULLONG_MAX && type->align >= 0);
+static mir_size_t type_size (struct type *type) {
+  assert (type->raw_size != MIR_SIZE_MAX && type->align >= 0);
   return (type->raw_size + type->align - 1) / type->align * type->align;
 }
 
 
 /* BOUND_BIT is used only if BF_P.  */
-static void update_field_layout (int *bf_p, unsigned long long *overall_size,
-				 unsigned long long *offset, int *bound_bit,
-				 unsigned long long prev_size, unsigned long long size,
+static void update_field_layout (int *bf_p, mir_size_t *overall_size,
+				 mir_size_t *offset, int *bound_bit,
+				 mir_size_t prev_size, mir_size_t size,
 				 int align, int bits) {
-  unsigned long long prev_field_offset = *offset, bytes = 0;
+  mir_size_t prev_field_offset = *offset, bytes = 0;
   int start_bit, diff;
   
   assert (size > 0);
@@ -4764,9 +4768,9 @@ static void update_field_layout (int *bf_p, unsigned long long *overall_size,
 }
 
 static void set_type_layout (struct type *type) {
-  unsigned long long overall_size = 0;
+  mir_size_t overall_size = 0;
 
-  if (type->raw_size != ULLONG_MAX)
+  if (type->raw_size != MIR_SIZE_MAX)
     return; /* defined */
   if (type->mode == TM_BASIC) {
     overall_size = basic_type_size (type->u.basic_type);
@@ -4779,14 +4783,13 @@ static void set_type_layout (struct type *type) {
   } else if (type->mode == TM_ARR) {
     struct arr_type *arr_type = type->u.arr_type;
     struct expr *cexpr = arr_type->size->attr;
-    unsigned long long nel = (arr_type->size->code == N_IGNORE || ! cexpr->const_p
-			      ? 1 : cexpr->u.i_val);
+    mir_size_t nel = (arr_type->size->code == N_IGNORE || ! cexpr->const_p ? 1 : cexpr->u.i_val);
 
     set_type_layout (arr_type->el_type);
     overall_size = type_size (arr_type->el_type) * nel;
   } else {
     int bf_p = FALSE, bits = -1, bound_bit = 0;
-    unsigned long long offset = 0, prev_size = 0;
+    mir_size_t offset = 0, prev_size = 0;
     
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     if (! type->incomplete_p)
@@ -4796,7 +4799,7 @@ static void set_type_layout (struct type *type) {
 	if (member->code == N_MEMBER) {
 	  struct decl *decl = member->attr;
 	  int member_align;
-	  unsigned long long member_size;
+	  mir_size_t member_size;
 	  node_t width = NL_EL (member->ops, 2);
 	  struct expr *expr;
 	  
@@ -4860,7 +4863,21 @@ static void create_node_scope (node_t node) {
   struct node_scope *ns = reg_malloc (sizeof (struct node_scope));
   
   assert (node != curr_scope);
+  ns->size = 0;
+  ns->offset = curr_scope == NULL ? 0 : ((struct node_scope *) curr_scope->attr)->offset;
   node->attr = ns; ns->scope = curr_scope; curr_scope = node;
+}
+
+static void finish_scope (void) {
+  struct node_scope *ns = (struct node_scope *) curr_scope->attr;
+  mir_size_t size = ns->size;
+  
+  curr_scope = ns->scope;
+  if (curr_scope != NULL && curr_scope != top_scope) {
+    ns = (struct node_scope *) curr_scope->attr;
+    if (ns->size < size)
+      ns->size = size;
+  }
 }
 
 static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode) {
@@ -4873,7 +4890,7 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
     case N_RESTRICT:
       tq->restrict_p = TRUE;
       if (tmode != TM_PTR && tmode != TM_UNDEF)
-	print_error (n->pos, "restrict requires a pointer\n");
+	error (n->pos, "restrict requires a pointer");
       break;
     case N_VOLATILE:
       tq->volatile_p = TRUE;
@@ -4881,9 +4898,9 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
     case N_ATOMIC:
       tq->atomic_p = TRUE;
       if (tmode == TM_ARR)
-	print_error (n->pos, "_Atomic qualifying array\n");
+	error (n->pos, "_Atomic qualifying array");
       else if (tmode == TM_FUNC)
-	print_error (n->pos, "_Atomic qualifying function\n");
+	error (n->pos, "_Atomic qualifying function");
       break;
     default:
       break;  /* Ignore */
@@ -4893,11 +4910,11 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
 static void check_type_duplication (struct type *type, node_t n, const char *name,
 				    int size, int sign) {
   if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-    print_error (n->pos, "%s with another type\n", name);
+    error (n->pos, "%s with another type", name);
   else if (type->mode != TM_BASIC && size != 0)
-    print_error (n->pos, "size with non-numeric type\n");
+    error (n->pos, "size with non-numeric type");
   else if (type->mode != TM_BASIC && sign != 0)
-    print_error (n->pos, "sign attribute with non-integer type\n");
+    error (n->pos, "sign attribute with non-integer type");
 }
 
 static node_t find_def (enum symbol_mode mode, node_t id, node_t scope, node_t *aux_node) {
@@ -4932,10 +4949,10 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   if (! found_p) {
     symbol_insert (S_TAG, id, curr_scope, r, NULL);
   } else if (sym.def_node->code != r->code) {
-    print_error (id->pos, "kind of tag %s is unmatched with previous declaration\n", id->u.s);
+    error (id->pos, "kind of tag %s is unmatched with previous declaration", id->u.s);
   } else if ((tab_decl_list = NL_EL (sym.def_node->ops, 1))->code != N_IGNORE
 	     && decl_list->code != N_IGNORE) {
-    print_error (id->pos, "tag %s redeclaration\n", id->u.s);
+    error (id->pos, "tag %s redeclaration", id->u.s);
   } else {
     if (decl_list->code != N_IGNORE) { /* swap */
       DLIST (node_t) temp = r->ops;
@@ -4955,12 +4972,12 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
   
   if (id->code == N_IGNORE)
     return;
-  assert (id->code == N_ID);
-  assert (scope == NULL || scope->code == N_BLOCK || scope->code == N_STRUCT
+  assert (id->code == N_ID && scope != NULL);
+  assert (scope->code == N_MODULE || scope->code == N_BLOCK || scope->code == N_STRUCT
 	  || scope->code == N_UNION || scope->code == N_FUNC || scope->code == N_FOR);
   decl_spec = ((struct decl *) def_node->attr)->decl_spec;
-  if (scope != NULL && decl_spec.thread_local_p && ! decl_spec.static_p && ! decl_spec.extern_p)
-    print_error (id->pos, "auto %s is declared as thread local\n", id->u.s);
+  if (decl_spec.thread_local_p && ! decl_spec.static_p && ! decl_spec.extern_p)
+    error (id->pos, "auto %s is declared as thread local", id->u.s);
   if (! symbol_find (mode, id, scope, &sym)) {
     symbol_insert (mode, id, scope, def_node, NULL);
     return;
@@ -4969,18 +4986,18 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
   if (linkage == N_IGNORE) {
     if (! decl_spec.typedef_p || ! tab_decl_spec.typedef_p
 	|| decl_spec.type != tab_decl_spec.type)
-      print_error (id->pos, "repeated declaration %s\n", id->u.s);
+      error (id->pos, "repeated declaration %s", id->u.s);
   } else if (! compatible_types_p (decl_spec.type, tab_decl_spec.type, FALSE)) {
-    print_error (id->pos, "incompatible types of %s declarations\n", id->u.s);
+    error (id->pos, "incompatible types of %s declarations", id->u.s);
   }
   if (tab_decl_spec.thread_local_p != decl_spec.thread_local_p) {
-    print_error (id->pos, "thread local and non-thread local declarations of %s\n", id->u.s);
+    error (id->pos, "thread local and non-thread local declarations of %s", id->u.s);
   }
 }
 
 static int in_params_p;
 
-static int check (node_t node, node_t context);
+static void check (node_t node, node_t context);
     
 static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   int n_sc = 0, sign = 0, size = 0;
@@ -4993,27 +5010,27 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   res->typedef_p = res->extern_p = res->static_p = FALSE;
   res->auto_p = res->register_p = res->thread_local_p = FALSE;
   res->inline_p = res->no_return_p = FALSE;
-  res->align = -1; res->align_node = NULL;
+  res->align = -1; res->align_node = NULL; res->linkage = N_IGNORE;
   res->type = type = create_type (NULL); type->pos_node = r;
   type->mode = TM_BASIC; type->u.basic_type = TP_UNDEF;
   for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
     if (n->code == N_SIGNED || n->code == N_UNSIGNED) {
       if (sign != 0)
-	print_error (n->pos, "more than one sign qualifier\n");
+	error (n->pos, "more than one sign qualifier");
       else
 	sign = n->code == N_SIGNED ? 1 : -1;
     } else if (n->code == N_SHORT) {
       if (size != 0)
-	print_error (n->pos, "more than one type\n");
+	error (n->pos, "more than one type");
       else
 	size = 1;
     } else if (n->code == N_LONG) {
       if (size == 2)
 	size = 3;
       else if (size == 3)
-	print_error (n->pos, "more than two long\n");
+	error (n->pos, "more than two long");
       else if (size == 1)
-	print_error (n->pos, "short with long\n");
+	error (n->pos, "short with long");
       else
 	size = 2;
     }
@@ -5024,13 +5041,13 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       /* Func specifiers: */
     case N_INLINE:
       if (decl->code != N_FUNC_DEF)
-	print_error (n->pos, "non-function declaration with inline\n");
+	error (n->pos, "non-function declaration with inline");
       else
 	res->inline_p = TRUE;
       break;
     case N_NO_RETURN:
       if (decl->code != N_FUNC_DEF)
-	print_error (n->pos, "non-function declaration with _Noreturn\n");
+	error (n->pos, "non-function declaration with _Noreturn");
       else
 	res->no_return_p = TRUE;
       break;
@@ -5039,7 +5056,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_AUTO:
     case N_REGISTER:
       if (n_sc != 0)
-	print_error (n->pos, "more than one storage specifier\n");
+	error (n->pos, "more than one storage specifier");
       else if (n->code == N_TYPEDEF)
 	res->typedef_p = TRUE;
       else if (n->code == N_AUTO)
@@ -5051,7 +5068,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_EXTERN:
     case N_STATIC:
       if (n_sc != 0 && (n_sc != 1 || !res->thread_local_p))
-	print_error (n->pos, "more than one storage specifier\n");
+	error (n->pos, "more than one storage specifier");
       else if (n->code == N_EXTERN)
 	res->extern_p = TRUE;
       else
@@ -5060,7 +5077,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       break;
     case N_THREAD_LOCAL:
       if (n_sc != 0 && (n_sc != 1 || (!res->extern_p && !res->static_p)))
-	print_error (n->pos, "more than one storage specifier\n");
+	error (n->pos, "more than one storage specifier");
       else
 	res->thread_local_p = TRUE;
       n_sc++;
@@ -5068,11 +5085,11 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_VOID:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-	print_error (n->pos, "void with another type\n");
+	error (n->pos, "void with another type");
       else if (sign != 0)
-	print_error (n->pos, "void with sign qualifier\n");
+	error (n->pos, "void with sign qualifier");
       else if (size != 0)
-	print_error (n->pos, "void with short or long\n");
+	error (n->pos, "void with short or long");
       else {
 	type->u.basic_type = TP_VOID; type->incomplete_p = TRUE;
       }
@@ -5087,10 +5104,10 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_INT:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF) {
-	print_error (n->pos, "char or int with another type\n");
+	error (n->pos, "char or int with another type");
       } else if (n->code == N_CHAR) {
 	if (size != 0)
-	  print_error (n->pos, "char with short or long\n");
+	  error (n->pos, "char with short or long");
 	else
 	  type->u.basic_type = sign == 0 ? TP_CHAR : sign < 0 ? TP_UCHAR : TP_SCHAR;
       } else if (size == 0)
@@ -5105,36 +5122,36 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_BOOL:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-	print_error (n->pos, "_Bool with another type\n");
+	error (n->pos, "_Bool with another type");
       else if (sign != 0)
-	print_error (n->pos, "_Bool with sign qualifier\n");
+	error (n->pos, "_Bool with sign qualifier");
       else if (size != 0)
-	print_error (n->pos, "_Bool with short or long\n");
+	error (n->pos, "_Bool with short or long");
       type->u.basic_type = TP_BOOL;
       break;
     case N_FLOAT:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-	print_error (n->pos, "float with another type\n");
+	error (n->pos, "float with another type");
       else if (sign != 0)
-	print_error (n->pos, "float with sign qualifier\n");
+	error (n->pos, "float with sign qualifier");
       else if (size != 0)
-	print_error (n->pos, "float with short or long\n");
+	error (n->pos, "float with short or long");
       else
 	type->u.basic_type = TP_FLOAT;
       break;
     case N_DOUBLE:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-	print_error (n->pos, "double with another type\n");
+	error (n->pos, "double with another type");
       else if (sign != 0)
-	print_error (n->pos, "double with sign qualifier\n");
+	error (n->pos, "double with sign qualifier");
       else if (size == 0)
 	type->u.basic_type = TP_DOUBLE;
       else if (size == 2)
 	type->u.basic_type = TP_LONG_DOUBLE;
       else
-	print_error (n->pos, "double with short\n");
+	error (n->pos, "double with short");
       break;
     case N_ID: {
       node_t def = find_def (S_REGULAR, n, curr_scope, NULL);
@@ -5142,7 +5159,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       
       set_type_pos_node (type, n);
       if (def == NULL) {
-	print_error (n->pos, "unknown type %s\n", n->u.s);
+	error (n->pos, "unknown type %s", n->u.s);
 	init_type (type);
 	type->mode = TM_BASIC; type->u.basic_type = TP_INT;
       } else {
@@ -5166,7 +5183,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       if (decl_list->code != N_IGNORE) {
 	create_node_scope (res);
 	check (decl_list, n);
-	curr_scope = ((struct node_scope *) res->attr)->scope;
+	finish_scope ();
       }
       break;
     }
@@ -5181,7 +5198,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
       if (enum_list->code == N_IGNORE) {
 	if (type->incomplete_p)
-	  print_error (n->pos, "enum storage size is unknown\n");
+	  error (n->pos, "enum storage size is unknown");
       } else {
 	mir_int curr_val = 0;
 	
@@ -5194,7 +5211,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	  id = NL_HEAD (en->ops); const_expr = NL_NEXT (id);
 	  check (const_expr, n);
 	  if (symbol_find (S_REGULAR, id, curr_scope, &sym)) {
-	    print_error (id->pos, "enum constant %s redeclaration\n", id->u.s);
+	    error (id->pos, "enum constant %s redeclaration", id->u.s);
 	  } else {
 	    symbol_insert (S_REGULAR, id, curr_scope, en, n);
 	  }
@@ -5202,12 +5219,12 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	    struct expr *cexpr = const_expr->attr;
 	    
 	    if (! cexpr->const_p)
-	      print_error (const_expr->pos, "non-constant value in enum const expression\n");
+	      error (const_expr->pos, "non-constant value in enum const expression");
 	    else if (! integer_type_p (cexpr->type))
-	      print_error (const_expr->pos, "enum const expression is not of an integer type\n");
+	      error (const_expr->pos, "enum const expression is not of an integer type");
 	    else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val > MIR_INT_MAX)
 		     || (! signed_integer_type_p (cexpr->type) && cexpr->u.u_val > MIR_INT_MAX))
-	      print_error (const_expr->pos, "enum const expression is not represented by int\n");
+	      error (const_expr->pos, "enum const expression is not represented by int");
 	    else
 	      curr_val = cexpr->u.i_val;
 	  }
@@ -5223,12 +5240,12 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       int align = -1;
       
       if (decl->code == N_FUNC_DEF) {
-	print_error (n->pos, "_Alignas for function\n");
+	error (n->pos, "_Alignas for function");
       } else if (decl->code == N_MEMBER && (el = NL_EL (decl->ops, 3)) != NULL
 		 && el->code != N_IGNORE) {
-	print_error (n->pos, "_Alignas for a bit-field\n");
+	error (n->pos, "_Alignas for a bit-field");
       } else if (decl->code == N_SPEC_DECL && in_params_p) {
-	print_error (n->pos, "_Alignas for a function parameter\n");
+	error (n->pos, "_Alignas for a function parameter");
       } else {
 	node_t op = NL_HEAD (n->ops);
 
@@ -5241,14 +5258,14 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	  struct expr *cexpr = op->attr;
 
 	  if (! cexpr->const_p) {
-	    print_error (op->pos, "non-constant value in _Alignas\n");
+	    error (op->pos, "non-constant value in _Alignas");
 	  } else if (! integer_type_p (cexpr->type)) {
-	    print_error (op->pos, "constant value in _Alignas is not of an integer type\n");
+	    error (op->pos, "constant value in _Alignas is not of an integer type");
 	  } else if (! signed_integer_type_p (cexpr->type)
 		     || ! supported_alignment_p (cexpr->u.i_val)) {
-	    print_error (op->pos, "constant value in _Alignas specifies unspported alignment\n");
+	    error (op->pos, "constant value in _Alignas specifies unspported alignment");
 	  } else if (invalid_alignment (cexpr->u.i_val)) {
-	    print_error (op->pos, "unsupported alignmnent\n");
+	    error (op->pos, "unsupported alignmnent");
 	  } else {
 	    align = cexpr->u.i_val;
 	  }
@@ -5264,7 +5281,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     }
   if (type->mode == TM_BASIC && type->u.basic_type == TP_UNDEF) {
     if (size == 0 && sign == 0)
-      print_error (r->pos, "no any type specifier\n");
+      error (r->pos, "no any type specifier");
     else if (size == 0)
       type->u.basic_type = sign >= 0 ? TP_INT : TP_UINT;
     else if (size == 1)
@@ -5277,9 +5294,9 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   set_type_qual (r, &type->type_qual, type->mode);
   if (res->align_node) {
     if (res->typedef_p)
-      print_error (res->align_node->pos, "_Alignas in typedef\n");
+      error (res->align_node->pos, "_Alignas in typedef");
     else if (res->register_p)
-      print_error (res->align_node->pos, "_Alignas with register\n");
+      error (res->align_node->pos, "_Alignas with register");
   }
   return *res;
 }
@@ -5298,7 +5315,9 @@ static struct type *append_type (struct type *head, struct type *el) {
     holder = &head->u.func_type->ret_type;
   }
   *holder = append_type (*holder, el);
-  if (head->mode != TM_PTR && (*holder)->incomplete_p)
+  if (head->mode != TM_PTR && (*holder)->incomplete_p
+      && (head->mode != TM_FUNC
+	  || (*holder)->mode != TM_BASIC || (*holder)->u.basic_type != TP_VOID))
     head->incomplete_p = TRUE;
   return head;
 }
@@ -5354,9 +5373,6 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       node_t last = NL_TAIL (param_list->ops);
       int saved_in_params_p = in_params_p;
       
-#if 0
-      n->attr = type;
-#endif
       type->mode = TM_FUNC; type->pos_node = n;
       type->u.func_type = func_type = reg_malloc (sizeof (struct func_type));
       func_type->ret_type = NULL;
@@ -5374,10 +5390,10 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	
 	if (non_reg_decl_spec_p (ds) || ds->register_p
 	    || ! type_qual_eq_p (&ds->type->type_qual, &zero_type_qual)) {
-	  print_error (first_param->pos, "qualified void parameter\n");
+	  error (first_param->pos, "qualified void parameter");
 	}
 	if (NL_NEXT (first_param) != NULL) {
-	  print_error (first_param->pos, "void must be the only parameter\n");
+	  error (first_param->pos, "void must be the only parameter");
 	}
       } else {
 	for (node_t p = first_param; p != NULL; p = NL_NEXT (p)) {
@@ -5386,8 +5402,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	  
 	  if (p->code == N_ID) {
 	    if (! func_def_p)
-	      print_error (p->pos,
-			   "parameters identifier list can be only in function definition\n");
+	      error (p->pos, "parameters identifier list can be only in function definition");
 	    break;
 	  } else {
 	    if (p != first_param)
@@ -5421,7 +5436,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       }
       in_params_p = saved_in_params_p;
       if (! func_def_p)
-	curr_scope = ((struct node_scope *) n->attr)->scope;
+	finish_scope ();
       break;
     }
     default:
@@ -5441,13 +5456,13 @@ static void check_labels (node_t labels, node_t target) {
       node_t id = NL_HEAD (l->ops);
       
       if (symbol_find (S_LABEL, id, func_block_scope, &sym)) {
-	print_error (id->pos, "label %s redeclaration\n", id->u.s);
+	error (id->pos, "label %s redeclaration", id->u.s);
       } else {
 	symbol_insert (S_LABEL, id, func_block_scope, target, NULL);
       }
     } else if (curr_switch == NULL) {
-      print_error (l->pos, "%s not witin a switch-stmt\n",
-		   l->code == N_CASE ? "case label" : "default label");
+      error (l->pos, "%s not within a switch-stmt",
+	     l->code == N_CASE ? "case label" : "default label");
     } else {
       struct switch_attr *switch_attr = curr_switch->attr;
       struct type *type = &switch_attr->type;
@@ -5458,7 +5473,7 @@ static void check_labels (node_t labels, node_t target) {
       
       if (case_expr == NULL) {
 	if (default_p) {
-	  print_error (l->pos, "multiple default labels in one switch\n");
+	  error (l->pos, "multiple default labels in one switch");
 	} else {
 	  ok_p = TRUE;
 	}
@@ -5466,9 +5481,9 @@ static void check_labels (node_t labels, node_t target) {
 	check (case_expr, target);
 	expr = case_expr->attr;
 	if (! expr->const_p) {
-	  print_error (case_expr->pos, "case-expr is not a constant expression\n");
+	  error (case_expr->pos, "case-expr is not a constant expression");
 	} else if (! integer_type_p (expr->type)) {
-	  print_error (case_expr->pos, "case-expr is not an integer type expression\n");
+	  error (case_expr->pos, "case-expr is not an integer type expression");
 	} else {
 	  convert_value (expr, type);
 	  ok_p = TRUE;
@@ -5530,31 +5545,30 @@ static void check_type (struct type *type, int level, int func_def_p) {
     if (size_node->code == N_IGNORE) {
       type->incomplete_p = TRUE;
     } else if (size_node->code == N_STAR) {
-      print_error (size_node->pos, "variable size arrays are not supported\n");
+      error (size_node->pos, "variable size arrays are not supported");
     } else {
       struct expr *cexpr = size_node->attr;
       
       if (! integer_type_p (cexpr->type)) {
-	print_error (size_node->pos, "non-integer array size type\n");
+	error (size_node->pos, "non-integer array size type");
       } else if (! cexpr->const_p) {
-	print_error (size_node->pos, "variable size arrays are not supported\n");
+	error (size_node->pos, "variable size arrays are not supported");
       } else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val <= 0)
 		 || (! signed_integer_type_p (cexpr->type) && cexpr->u.u_val == 0)) {
-	print_error (size_node->pos, "array size should be positive\n");
+	error (size_node->pos, "array size should be positive");
       }
     }
     check_type (el_type, level + 1, FALSE);
     if (el_type->mode == TM_FUNC) {
-      print_error (type->pos_node->pos, "array of functions\n");
+      error (type->pos_node->pos, "array of functions");
     } else if (el_type->incomplete_p) {
-      print_error (type->pos_node->pos, "incomplete array element type\n");
+      error (type->pos_node->pos, "incomplete array element type");
       type->incomplete_p = TRUE;
     } else if (! in_params_p || level != 0) {
       if (arr_type->static_p)
-	print_error (type->pos_node->pos, "static should be only in parameter outermost\n");
+	error (type->pos_node->pos, "static should be only in parameter outermost");
       else if (! type_qual_eq_p (&arr_type->ind_type_qual, &zero_type_qual))
-	print_error (type->pos_node->pos,
-		     "type qualifiers should be only in parameter outermost array\n");
+	error (type->pos_node->pos, "type qualifiers should be only in parameter outermost array");
     }
     break;
   }
@@ -5566,9 +5580,9 @@ static void check_type (struct type *type, int level, int func_def_p) {
     
     check_type (ret_type, level + 1, FALSE);
     if (ret_type->mode == TM_FUNC) {
-      print_error (ret_type->pos_node->pos, "function returning a function\n");
+      error (ret_type->pos_node->pos, "function returning a function");
     } else if (ret_type->mode == TM_ARR) {
-      print_error (ret_type->pos_node->pos, "function returning an array\n");
+      error (ret_type->pos_node->pos, "function returning an array");
     }
     first_param = NL_HEAD (param_list->ops);
     if (! void_param_p (first_param)) {
@@ -5584,12 +5598,12 @@ static void check_type (struct type *type, int level, int func_def_p) {
 	  break;
 	}
 	if (non_reg_decl_spec_p (&decl_spec)) {
-	  print_error (p->pos, "prohibited specifier in a function parameter\n");
+	  error (p->pos, "prohibited specifier in a function parameter");
 	} else if (func_def_p) {
 	  if (p->code == N_TYPE)
-	    print_error (p->pos, "parameter type without a name in function definition\n");
+	    error (p->pos, "parameter type without a name in function definition");
 	  else if (decl_spec.type->incomplete_p)
-	    print_error (p->pos, "incomplete parameter type in function definition\n");
+	    error (p->pos, "incomplete parameter type in function definition");
 	}
       }
     }
@@ -5611,7 +5625,7 @@ static void check_assignment_types (struct type *left, struct type *right, node_
       msg = (code == N_CALL ? "incompatible argument type for arithemtic type parameter"
 	     : code != N_RETURN ? "incompatible types in assignment to an arithemtic type lvalue"
 	     : "incompatible return-expr type in function returning an arithemtic value");
-      print_error (pos, "%s\n", msg);
+      error (pos, "%s", msg);
     }
   } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
     if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
@@ -5619,7 +5633,7 @@ static void check_assignment_types (struct type *left, struct type *right, node_
       msg = (code == N_CALL ? "incompatible argument type for struct/union type parameter"
 	     : code != N_RETURN ? "incompatible types in assignment to struct/union"
 	     : "incompatible return-expr type in function returning a struct/union");
-      print_error (pos, "%s\n", msg);
+      error (pos, "%s", msg);
     }
   } else if (left->mode == TM_PTR) {
     if (right->mode != TM_PTR
@@ -5628,18 +5642,18 @@ static void check_assignment_types (struct type *left, struct type *right, node_
       msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
 	     : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
 	     : "incompatible types in assignment to a pointer");
-      print_error (pos, "%s\n", msg);
+      error (pos, "%s", msg);
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
 	     : code == N_RETURN ? "returning a pointer of an atomic type"
 	     : "assignment of pointer of an atomic type");
-      print_error (pos, "%s\n", msg);
+      error (pos, "%s", msg);
     } else if (! type_qual_subset_p (&right->u.ptr_type->type_qual,
 				     &left->u.ptr_type->type_qual)) {
       msg = (code == N_CALL ? "discarding type qualifiers in passing argument"
 	     : code == N_RETURN ? "return discards a type qualifier from a pointer"
 	     : "assignment discards a type qualifier from a pointer");
-      print_error (pos, "%s\n", msg);
+      error (pos, "%s", msg);
     }
   }
 }
@@ -5655,10 +5669,10 @@ static void check_initializer (struct type *type, node_t initializer,
  scalar:
   if (initializer->code != N_LIST) {
     if (type->mode == TM_ARR || type->mode == TM_STRUCT  || type->mode == TM_UNION) {
-      print_error (initializer->pos, "invalid initializer -- {} should be used\n");
+      error (initializer->pos, "invalid initializer -- {} should be used");
     } else if (! (cexpr = initializer->attr)->const_p && const_only_p) {
-      print_error (initializer->pos,
-		   "initializer of static or thread local object should be a constant expression\n");
+      error (initializer->pos,
+	     "initializer of static or thread local object should be a constant expression");
     } else {
       check_assignment_types (cexpr->type, type, initializer);
     }
@@ -5670,16 +5684,16 @@ static void check_initializer (struct type *type, node_t initializer,
   assert (des_list->code == N_LIST);
   if (type->mode != TM_ARR && type->mode != TM_STRUCT  && type->mode != TM_UNION) {
     if ((temp = NL_NEXT (init)) != NULL) {
-      print_error (temp->pos, "excess elements in scalar initializer\n");
+      error (temp->pos, "excess elements in scalar initializer");
       return;
     }
     if ((temp = NL_HEAD (des_list->ops)) != NULL) {
-      print_error (temp->pos, "designator in scalar initializer\n");
+      error (temp->pos, "designator in scalar initializer");
       return;
     }
     initializer = NL_NEXT (des_list);
     if (! top_p) {
-      print_error (init->pos, "braces around scalar initializer\n");
+      error (init->pos, "braces around scalar initializer");
       return;
     }
     top_p = FALSE;
@@ -5698,13 +5712,12 @@ static void check_initializer (struct type *type, node_t initializer,
     value = NL_NEXT (des_list);
     if (0&&value->code == N_LIST && type->mode != TM_ARR
 	&& type->mode != TM_STRUCT  && type->mode != TM_UNION) {
-      print_error (init->pos, "braces around scalar initializer\n");
+      error (init->pos, "braces around scalar initializer");
       continue;
     }
     if (value->code != N_LIST && ! ((struct expr *) value->attr)->const_p && const_only_p) {
-      print_error
-	(init->pos,
-	 "initializer of static or thread local object should be a constant expression\n");
+      error (init->pos,
+	     "initializer of static or thread local object should be a constant expression");
       continue;
     }
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
@@ -5714,7 +5727,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	if (max_index < last_index)
 	  max_index = last_index;
 	if (last_index >= 0 && size_val >= 0 && size_val <= last_index)
-	  print_error (init->pos, "excess elements in array initializer\n");
+	  error (init->pos, "excess elements in array initializer");
       } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
 	int first_p = last_member == NULL;
 	
@@ -5729,7 +5742,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	while (last_member != NULL && last_member->code != N_MEMBER)
 	  last_member = NL_NEXT (last_member);
 	if (last_member == NULL || (! first_p && type->mode == TM_UNION)) {
-	  print_error (init->pos, "excess elements in struct/union initializer\n");
+	  error (init->pos, "excess elements in struct/union initializer");
 	} else {
 	  check_initializer (((struct decl *) last_member->attr)->decl_spec.type,
 			     value, const_only_p, FALSE);
@@ -5741,9 +5754,9 @@ static void check_initializer (struct type *type, node_t initializer,
 	  node_t id = NL_HEAD (curr_des->ops);
 	  
 	  if (type->mode != TM_STRUCT && type->mode != TM_UNION) {
-	    print_error (curr_des->pos, "field name not in struct or union initializer\n");
+	    error (curr_des->pos, "field name not in struct or union initializer");
 	  } else if (! symbol_find (S_REGULAR, id, type->u.tag_type, &sym)) {
-	    print_error (curr_des->pos, "unknown field %s in initializer\n", id->u.s);
+	    error (curr_des->pos, "unknown field %s in initializer", id->u.s);
 	  } else {
 	    last_member = sym.def_node;
 	    assert (last_member->code == N_MEMBER);
@@ -5751,16 +5764,16 @@ static void check_initializer (struct type *type, node_t initializer,
 			       const_only_p, FALSE);
 	  }
 	} else if (type->mode != TM_ARR) {
-	  print_error (curr_des->pos, "array index in initializer for non-array\n");
+	  error (curr_des->pos, "array index in initializer for non-array");
 	} else if (! (cexpr = curr_des->attr)->const_p) {
-	  print_error (curr_des->pos, "nonconstant array index in initializer\n");
+	  error (curr_des->pos, "nonconstant array index in initializer");
 	} else if (integer_type_p (cexpr->type)) {
-	  print_error (curr_des->pos, "array index in initializer not of integer type\n");
+	  error (curr_des->pos, "array index in initializer not of integer type");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
-	  print_error (curr_des->pos, "negative array index in initializer\n");
+	  error (curr_des->pos, "negative array index in initializer");
 	} else if (size_val >= 0
 		   && (! signed_integer_type_p (cexpr->type) || size_val <= cexpr->u.i_val)) {
-	  print_error (curr_des->pos, "array index in initializer exceeds array bounds\n");
+	  error (curr_des->pos, "array index in initializer exceeds array bounds");
 	} else {
 	  check_initializer (type->u.arr_type->el_type, value, const_only_p, FALSE);
 	  last_index = cexpr->u.i_val;
@@ -5784,8 +5797,8 @@ static void check_decl_align (struct decl_spec *decl_spec) {
   if (decl_spec->align < 0)
     return;
   if (decl_spec->align < type_align (decl_spec->type))
-    print_error (decl_spec->align_node->pos,
-		 "requested alignment is less than minimum alignment for the type\n");
+    error (decl_spec->align_node->pos,
+	   "requested alignment is less than minimum alignment for the type");
 }
 
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
@@ -5817,33 +5830,38 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   }
   decl->decl_spec = decl_spec; decl_node->attr = decl;
   if (declarator->code == N_DECL) {
-    if (scope == NULL)
-      def_symbol (S_REGULAR, id, NULL, decl_node, decl_spec.linkage);
-    else {
-      def_symbol (S_REGULAR, id, scope, decl_node, decl_spec.linkage);
-      if (decl_spec.linkage == N_EXTERN)
-	def_symbol (S_REGULAR, id, NULL, decl_node, N_EXTERN);
-    }
+    def_symbol (S_REGULAR, id, scope, decl_node, decl_spec.linkage);
+    if (decl_spec.linkage == N_EXTERN)
+      def_symbol (S_REGULAR, id, top_scope, decl_node, N_EXTERN);
     if (func_p && decl_spec.thread_local_p) {
-      print_error (id->pos, "thread local function declaration");
+      error (id->pos, "thread local function declaration");
       if (id->code != N_IGNORE)
 	fprintf (stderr, " of %s", id->u.s);
       fprintf (stderr, "\n");
     }
   }
   if (decl_node->code != N_MEMBER) {
+    struct node_scope *ns = (struct node_scope *) curr_scope->attr;
+    
     set_type_layout (type);
     check_decl_align (&decl_spec);
+    if (! decl_spec.typedef_p && ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC) {
+      ns->offset = (ns->offset + type->align - 1) / type->align * type->align;
+      decl->offset = ns->offset;
+      ns->offset += type_size (type);
+      if (ns->size < ns->offset)
+	ns->size = ns->offset;
+    }
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
   if (type->incomplete_p && (type->mode != TM_ARR || type->u.arr_type->el_type->incomplete_p)) {
-    print_error (initializer->pos, "initialization of incomplete type variable\n");
+    error (initializer->pos, "initialization of incomplete type variable");
     return;
   }
   if (decl_spec.linkage != N_IGNORE && scope != NULL) {
-    print_error (initializer->pos,
-		 "initialization for block scope identifier with external or internal linkage\n");
+    error (initializer->pos,
+	   "initialization for block scope identifier with external or internal linkage");
     return;
   }
   check (initializer, decl_node);
@@ -5925,7 +5943,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! integer_type_p (t1) || ! integer_type_p (t2)) {
-      print_error (r->pos, "bitwise operation operands should be of an integer type\n");
+      error (r->pos, "bitwise operation operands should be of an integer type");
     } else {
       t = arithmetic_conversion (t1, t2);
       e->type->u.basic_type = t.u.basic_type;
@@ -5949,7 +5967,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! integer_type_p (t1) || ! integer_type_p (t2)) {
-      print_error (r->pos, "shift operands should be of an integer type\n");
+      error (r->pos, "shift operands should be of an integer type");
     } else {
       t = integer_promotion (t1);
       e->type->u.basic_type = t.u.basic_type;
@@ -5999,9 +6017,9 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
     } else if (add_p) {
       if (t2->mode == TM_PTR) { SWAP (t1, t2, tt); SWAP (e1, e2, te); }
       if (t1->mode != TM_PTR || ! integer_type_p (t2)) {
-	print_error (r->pos, "invalid operand types of +\n");
+	error (r->pos, "invalid operand types of +");
       } else if (t1->u.ptr_type->incomplete_p) {
-	print_error (r->pos, "pointer to incomplete type as an operand of +\n");
+	error (r->pos, "pointer to incomplete type as an operand of +");
       } else {
 	*e->type = *t1;
 	if (e1->const_p && e2->const_p) {
@@ -6013,7 +6031,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
       }
     } else if (t1->mode == TM_PTR && integer_type_p (t2)) {
       if (t1->u.ptr_type->incomplete_p) {
-	print_error (r->pos, "pointer to incomplete type as an operand of -\n");
+	error (r->pos, "pointer to incomplete type as an operand of -");
       } else {
 	*e->type = *t1;
 	if (e1->const_p && e2->const_p) {
@@ -6025,9 +6043,9 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
       }
     } else if (t1->mode == TM_PTR && t2->mode == TM_PTR && compatible_types_p (t1, t2, TRUE)) {
       if (t1->u.ptr_type->incomplete_p && t2->u.ptr_type->incomplete_p) {
-	print_error (r->pos, "pointer to incomplete type as an operand of -\n");
+	error (r->pos, "pointer to incomplete type as an operand of -");
       } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
-	print_error (r->pos, "pointer to atomic type as an operand of -\n");
+	error (r->pos, "pointer to atomic type as an operand of -");
       } else {
 	e->type->mode = TM_BASIC;
 	e->type->u.basic_type = get_int_basic_type (sizeof (mir_ptrdiff_t));
@@ -6041,7 +6059,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	}
       }
     } else {
-      print_error (r->pos, "invalid operand types of -\n");
+      error (r->pos, "invalid operand types of -");
     }
     break;
   }
@@ -6050,9 +6068,9 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (r->code == N_MOD && (! integer_type_p (t1) || ! integer_type_p (t2))) {
-      print_error (r->pos, "invalid operand types of %%\n");
+      error (r->pos, "invalid operand types of %%");
     } else if (r->code != N_MOD && (! arithmetic_type_p (t1) || ! arithmetic_type_p (t2))) {
-      print_error (r->pos, "invalid operand types of %s\n", r->code == N_MUL ? "*" : "/");
+      error (r->pos, "invalid operand types of %s", r->code == N_MUL ? "*" : "/");
     } else {
       t = arithmetic_conversion (t1, t2);
       e->type->u.basic_type = t.u.basic_type;
@@ -6070,7 +6088,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
 	} else if ((floating_type_p (&t) && e2->u.d_val == 0.0)
 		   || (signed_integer_type_p (&t) && e2->u.i_val == 0)
 		   || (integer_type_p (&t) && ! signed_integer_type_p (&t) && e2->u.u_val == 0)) {
-	  print_error (r->pos, "Division by zero\n");
+	  error (r->pos, "Division by zero");
 	  if (floating_type_p (&t))
 	    e->u.d_val = 0.0;
 	  else if (signed_integer_type_p (&t))
@@ -6123,7 +6141,7 @@ static int case_eq (case_t el1, case_t el2) {
 
 static node_t curr_func_def, curr_loop, curr_loop_switch;
 
-static int check (node_t r, node_t context) {
+static void check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2;
@@ -6195,14 +6213,14 @@ static int check (node_t r, node_t context) {
     op1 = find_def (S_REGULAR, r, curr_scope, &aux_node);
     e = create_expr (r);
     if (op1 == NULL) {
-      print_error (r->pos, "undeclared identifier %s\n", r->u.s);
+      error (r->pos, "undeclared identifier %s", r->u.s);
     } else if (op1->code == N_IGNORE) {
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
       struct decl *decl = op1->attr;
       
       if (decl->decl_spec.typedef_p) {
-	print_error (r->pos, "typedef name %s as an operand\n", r->u.s);
+	error (r->pos, "typedef name %s as an operand", r->u.s);
       }
       *e->type = *decl->decl_spec.type;
       e->lvalue_node = op1;
@@ -6228,7 +6246,7 @@ static int check (node_t r, node_t context) {
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! scalar_type_p (t1) || ! scalar_type_p (t2)) {
-      print_error (r->pos, "invalid operand types of %s\n", r->code == N_ANDAND ? "&&" : "||");
+      error (r->pos, "invalid operand types of %s", r->code == N_ANDAND ? "&&" : "||");
     } else if (e1->const_p) {
       int v;
       
@@ -6264,11 +6282,11 @@ static int check (node_t r, node_t context) {
 	  && ((r->code != N_EQ && r->code != N_NE)
 	      || (! void_ptr_p (t1) && ! void_ptr_p (t2)
 		  && ! null_const_p (e1, t1) && ! null_const_p (e2, t2)))) {
-	print_error (r->pos, "incompatible pointer types in comparison\n");
+	error (r->pos, "incompatible pointer types in comparison");
       } else if ((t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p)
 		 && ((r->code != N_EQ && r->code != N_NE)
 		     || ! (null_const_p (e1, t1) || null_const_p (e2, t2)))) {
-	print_error (r->pos, "pointer to atomic type as a comparison operand\n");
+	error (r->pos, "pointer to atomic type as a comparison operand");
       } else if (e1->const_p && e2->const_p) {
 	e->const_p = TRUE;
 	e->u.i_val = (r->code == N_EQ ? e1->u.u_val == e2->u.u_val
@@ -6305,7 +6323,7 @@ static int check (node_t r, node_t context) {
 			: e1->u.u_val >= e2->u.u_val);
       }
     } else {
-      print_error (r->pos, "invalid types of comparison operands\n");
+      error (r->pos, "invalid types of comparison operands");
     }
     break;
   case N_BITWISE_NOT:
@@ -6314,9 +6332,9 @@ static int check (node_t r, node_t context) {
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (r->code == N_BITWISE_NOT && ! integer_type_p (t1)) {
-      print_error (r->pos, "bitwise-not operand should be of an integer type\n");
+      error (r->pos, "bitwise-not operand should be of an integer type");
     } else if (r->code == N_NOT && ! scalar_type_p (t1)) {
-      print_error (r->pos, "not operand should be of a scalar type\n");
+      error (r->pos, "not operand should be of a scalar type");
     } else if (r->code == N_BITWISE_NOT) {
       t = integer_promotion (t1);
       e->type->u.basic_type = t.u.basic_type;
@@ -6356,7 +6374,7 @@ static int check (node_t r, node_t context) {
       e = create_expr (r);
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
       if (! arithmetic_type_p (t1)) {
-	print_error (r->pos, "unary + or - operand should be of an arithmentic type\n");
+	error (r->pos, "unary + or - operand should be of an arithmentic type");
       } else {
 	if (e1->const_p)
 	  e->const_p = TRUE;
@@ -6403,7 +6421,7 @@ static int check (node_t r, node_t context) {
   assign:
     e = create_expr (r);
     if (! e1->lvalue_node) {
-      print_error (r->pos, "lvalue required as left operand of assignment\n");
+      error (r->pos, "lvalue required as left operand of assignment");
     }
     check_assignment_types (t1, t2, r);
     *e->type = *t1;
@@ -6413,21 +6431,21 @@ static int check (node_t r, node_t context) {
     e = create_expr (r);
     e->lvalue_node = r; e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (t1->mode != TM_PTR && t1->mode != TM_ARR) {
-      print_error (r->pos, "subscripted value is neither array nor pointer\n");
+      error (r->pos, "subscripted value is neither array nor pointer");
     } else if (t1->mode == TM_PTR) {
       *e->type = *t1->u.ptr_type;
       if (t1->u.ptr_type->incomplete_p) {
-	print_error (r->pos, "pointer to incomplete type in array subscription\n");
+	error (r->pos, "pointer to incomplete type in array subscription");
       }
     } else {
       *e->type = *t1->u.arr_type->el_type;
       e->type->type_qual = t1->u.arr_type->ind_type_qual;
       if (e->type->incomplete_p) {
-	print_error (r->pos, "array type has incomplete element type\n");
+	error (r->pos, "array type has incomplete element type");
       }
     }
     if (! integer_type_p (t2)) {
-      print_error (r->pos, "array subscript is not an integer\n");
+      error (r->pos, "array subscript is not an integer");
     }
     break;
   case N_ADDR:
@@ -6442,7 +6460,7 @@ static int check (node_t r, node_t context) {
       break;
     } else if (! e1->lvalue_node) {
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
-      print_error (r->pos, "lvalue required as unary & operand\n");
+      error (r->pos, "lvalue required as unary & operand");
       break;
     }
     if (op1->code == N_IND) {
@@ -6452,7 +6470,7 @@ static int check (node_t r, node_t context) {
       struct decl *decl = decl_node->attr;
 
       if (decl->decl_spec.register_p) {
-	print_error (r->pos, "address of register variable %s requested\n", op1->u.s);
+	error (r->pos, "address of register variable %s requested", op1->u.s);
       }
       t2 = create_type (decl->decl_spec.type);
     } else if (e1->lvalue_node->code == N_MEMBER) {
@@ -6462,8 +6480,7 @@ static int check (node_t r, node_t context) {
       
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-	print_error (r->pos, "cannot take address of bit-field %s\n",
-		     NL_HEAD (declarator->ops)->u.s);
+	error (r->pos, "cannot take address of bit-field %s", NL_HEAD (declarator->ops)->u.s);
       }
       t2 = create_type (decl->decl_spec.type);
       if (op1->code == N_DEREF_FIELD && (e2 = NL_HEAD (op1->ops)->attr)->const_p) {
@@ -6478,7 +6495,7 @@ static int check (node_t r, node_t context) {
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (t1->mode != TM_PTR) {
-      print_error (r->pos, "invalid type argument of unary *\n");
+      error (r->pos, "invalid type argument of unary *");
     } else {
       *e->type = *t1->u.ptr_type;
     }
@@ -6495,11 +6512,9 @@ static int check (node_t r, node_t context) {
       t1 = t1->u.ptr_type;
     }
     if (t1->mode != TM_STRUCT && t1->mode != TM_UNION) {
-      print_error (r->pos,
-		   "request for member %s in something not a structure or union\n", op2->u.s);
+      error (r->pos, "request for member %s in something not a structure or union", op2->u.s);
     } else if (! symbol_find (S_REGULAR, op2, t1->u.tag_type, &sym)) {
-      print_error (r->pos, "%s has no member %s\n",
-		   t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s);
+      error (r->pos, "%s has no member %s", t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s);
     } else {
       assert (sym.def_node->code == N_MEMBER);
       decl = sym.def_node->attr;
@@ -6522,7 +6537,7 @@ static int check (node_t r, node_t context) {
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! scalar_type_p (t1)) {
-      print_error (r->pos, "condition should be of a scalar type\n");
+      error (r->pos, "condition should be of a scalar type");
       break;
     }
     if (e1->const_p) {
@@ -6553,7 +6568,7 @@ static int check (node_t r, node_t context) {
 	       && t2->u.tag_type == t3->u.tag_type) {
       *e->type = *t2;
     } else if (t2->mode != TM_PTR && t3->mode != TM_PTR) {
-      print_error (r->pos, "incompatible types in true and false parts of cond-expression\n");
+      error (r->pos, "incompatible types in true and false parts of cond-expression");
       break;
     } else if (compatible_types_p (t2, t3, TRUE)) {
       t = composite_type (t2->u.ptr_type, t3->u.ptr_type);
@@ -6563,7 +6578,7 @@ static int check (node_t r, node_t context) {
 							&t3->u.ptr_type->type_qual);
       if ((t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p)
 	  && ! null_const_p (e2, t2) && ! null_const_p (e3, t3)) {
-	print_error (r->pos, "pointer to atomic type in true or false parts of cond-expression\n");
+	error (r->pos, "pointer to atomic type in true or false parts of cond-expression");
       }
     } else if ((first_p = void_ptr_p (t2)) || void_ptr_p (t3)) {
       e->type->mode = TM_PTR; e->type->pos_node = r;
@@ -6575,16 +6590,14 @@ static int check (node_t r, node_t context) {
 	e->type->u.ptr_type = e3->type->u.ptr_type;
       } else {
 	if (t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p) {
-	  print_error (r->pos,
-		       "pointer to atomic type in true or false parts of cond-expression\n");
+	  error (r->pos, "pointer to atomic type in true or false parts of cond-expression");
 	}
 	e->type->u.ptr_type->mode = TM_BASIC; e->type->u.ptr_type->u.basic_type = TP_VOID;
       }
       e->type->u.ptr_type->type_qual = type_qual_union (&t2->u.ptr_type->type_qual,
 							&t3->u.ptr_type->type_qual);
     } else {
-      print_error (r->pos,
-		   "incompatible pointer types in true and false parts of cond-expression\n");
+      error (r->pos, "incompatible pointer types in true and false parts of cond-expression");
       break;
     }
     if (e1->const_p) {
@@ -6602,19 +6615,19 @@ static int check (node_t r, node_t context) {
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e = create_expr (r);
-    e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
+    e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT; // ???
     if (r->code == N_ALIGNOF && op1->code == N_IGNORE) {
-      print_error (r->pos, "_Alignof of non-type\n");
+      error (r->pos, "_Alignof of non-type");
       break;
     }
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
     if (decl_spec->type->incomplete_p) {
-      print_error (r->pos, "%s of incomplete type requested\n",
-		   r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
+      error (r->pos, "%s of incomplete type requested",
+	     r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else if (decl_spec->type->mode == TM_FUNC) {
-      print_error (r->pos, "%s of function type requested\n",
-		   r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
+      error (r->pos, "%s of function type requested",
+	     r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else {
       e->const_p = TRUE;
       e->u.i_val = (r->code == N_SIZEOF
@@ -6625,18 +6638,18 @@ static int check (node_t r, node_t context) {
   case N_EXPR_SIZEOF:
     process_unop (r, &op1, &e1, &t1, r);
     e = create_expr (r);
-    e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
+    e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT; // ???
     if (t1->incomplete_p) {
-      print_error (r->pos, "sizeof of incomplete type requested\n");
+      error (r->pos, "sizeof of incomplete type requested");
     } else if (t1->mode == TM_FUNC) {
-      print_error (r->pos, "sizeof of function type requested\n");
+      error (r->pos, "sizeof of function type requested");
     } else if (e1->lvalue_node && e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->ops, 1);
       node_t width = NL_NEXT (declarator);
       
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-	print_error (r->pos, "sizeof applied to a bit-field %s\n", NL_HEAD (declarator->ops)->u.s);
+	error (r->pos, "sizeof applied to a bit-field %s", NL_HEAD (declarator->ops)->u.s);
       }
     }
     e->const_p = TRUE;
@@ -6652,13 +6665,13 @@ static int check (node_t r, node_t context) {
     *e->type = *decl_spec->type;
     void_p = decl_spec->type->mode == TM_BASIC && decl_spec->type->u.basic_type == TP_VOID;
     if (! void_p && ! scalar_type_p (decl_spec->type)) {
-      print_error (r->pos, "conversion to non-scalar type requested\n");
+      error (r->pos, "conversion to non-scalar type requested");
     } else if (! scalar_type_p (t2)) {
-      print_error (r->pos, "conversion of non-scalar value requested\n");
+      error (r->pos, "conversion of non-scalar value requested");
     } else if (t2->mode == TM_PTR && floating_type_p (decl_spec->type)) {
-      print_error (r->pos, "conversion of a pointer to floating value requested\n");
+      error (r->pos, "conversion of a pointer to floating value requested");
     } else if (decl_spec->type->mode == TM_PTR && floating_type_p (t2)) {
-      print_error (r->pos, "conversion of floating point value to a pointer requested\n");
+      error (r->pos, "conversion of floating point value to a pointer requested");
     } else if (e2->const_p && ! void_p) {
       
 #define CONV(TP, cast, mto, mfrom) case TP: e->u.mto = (cast) e2->u.mfrom; break;
@@ -6755,7 +6768,7 @@ static int check (node_t r, node_t context) {
     check (op1, r); decl_spec = op1->attr; t1 = decl_spec->type; check (list, r);
     if (t1->incomplete_p && (t1->mode != TM_ARR || t1->u.arr_type->size != N_IGNORE
 			     || t1->u.arr_type->el_type->incomplete_p)) {
-      print_error (r->pos, "compound literal of incomplete type\n");
+      error (r->pos, "compound literal of incomplete type");
       break;
     }
     check_initializer (t1, list, decl_spec->static_p || decl_spec->thread_local_p, FALSE);
@@ -6772,7 +6785,7 @@ static int check (node_t r, node_t context) {
     op1 = NL_HEAD (r->ops);
     check (op1, r); e1 = op1->attr; t1 = e1->type;
     if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
-      print_error (r->pos, "called object is not a function or function pointer\n");
+      error (r->pos, "called object is not a function or function pointer");
       break;
     }
     func_type = t1->u.func_type;
@@ -6781,14 +6794,14 @@ static int check (node_t r, node_t context) {
     *e->type = *ret_type;
     if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)
 	&& ret_type->incomplete_p) {
-      print_error (r->pos, "function return type is incomplete\n");
+      error (r->pos, "function return type is incomplete");
     }
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->ops);
     arg_list = NL_NEXT (op1);
     if (void_param_p (start_param)) { /* f(void) */
       if ((arg = NL_HEAD (arg_list->ops)) != NULL)
-	print_error (arg->pos, "too many arguments\n");
+	error (arg->pos, "too many arguments");
       break;
     }
     for (node_t arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) {
@@ -6798,7 +6811,7 @@ static int check (node_t r, node_t context) {
 	continue;  /* no params or ident list */
       if (param == NULL) {
 	if (! func_type->dots_p)
-	  print_error (arg->pos, "too many arguments\n");
+	  error (arg->pos, "too many arguments");
 	start_param = NULL; /* ignore the rest args */
 	continue;
       }
@@ -6808,7 +6821,7 @@ static int check (node_t r, node_t context) {
       param = NL_NEXT (param);
     }
     if (param != NULL) {
-      print_error (r->pos, "too few arguments\n");
+      error (r->pos, "too few arguments");
     }
     break;
   }
@@ -6831,19 +6844,18 @@ static int check (node_t r, node_t context) {
       check (expr, r);
       if (type_name->code == N_IGNORE) {
 	if (default_case)
-	  print_error (ga->pos, "duplicate default case in _Generic\n");
+	  error (ga->pos, "duplicate default case in _Generic");
 	default_case = ga;
 	continue;
       }
       assert (type_name->code == N_TYPE);
       decl_spec = type_name->attr;
       if (decl_spec->type->incomplete_p) {
-	print_error (ga->pos, "_Generic case has incomplete type\n");
+	error (ga->pos, "_Generic case has incomplete type");
       } else if (compatible_types_p (&t, decl_spec->type, TRUE)) {
 	if (ga_case)
-	  print_error
-	    (ga_case->pos,
-	     "_Generic expr type is compatible with more than one generic association type\n");
+	  error (ga_case->pos,
+		 "_Generic expr type is compatible with more than one generic association type");
 	ga_case = ga;
       } else {
 	for (ga2 = NL_HEAD (list->ops); ga2 != ga; ga2 = NL_NEXT (ga2)) {
@@ -6851,7 +6863,7 @@ static int check (node_t r, node_t context) {
 	  if (type_name2->code != N_IGNORE
 	      && ! (t2 = ((struct decl_spec *) type_name2->attr)->type)->incomplete_p
 	      && compatible_types_p (t2, decl_spec->type, TRUE)) {
-	    print_error (ga->pos, "two or more compatible generic association types\n");
+	    error (ga->pos, "two or more compatible generic association types");
 	    break;
 	  }
 	}
@@ -6859,7 +6871,7 @@ static int check (node_t r, node_t context) {
     }
     e = create_expr (r);
     if (default_case == NULL && ga_case == NULL) {
-      print_error (r->pos, "expression type is not compatible with generic association\n");
+      error (r->pos, "expression type is not compatible with generic association");
     } else { /* make compatible association a list head  */
       if (ga_case == NULL)
 	ga_case = default_case;
@@ -6883,9 +6895,9 @@ static int check (node_t r, node_t context) {
       create_decl (curr_scope, r, decl_spec, NULL, initializer);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
       if (NL_HEAD (decl_spec.type->u.tag_type->ops)->code != N_ID)
-	print_error (r->pos, "unnamed struct/union with no instances\n");
+	error (r->pos, "unnamed struct/union with no instances");
     } else if (decl_spec.type->mode != TM_ENUM) {
-      print_error (r->pos, "useless declaration\n");
+      error (r->pos, "useless declaration");
     }
     /* We have at least one enum constant according to the syntax. */
     break;
@@ -6897,9 +6909,9 @@ static int check (node_t r, node_t context) {
     check (op1, r);
     e1 = op1->attr; t1 = e1->type;
     if (! e1->const_p) {
-      print_error (r->pos, "expression in static assertion is not constant\n");
+      error (r->pos, "expression in static assertion is not constant");
     } else if (! integer_type_p (t1)) {
-      print_error (r->pos, "expression in static assertion is not an integer\n");
+      error (r->pos, "expression in static assertion is not an integer");
     } else {
       if (signed_integer_type_p (t1))
 	ok_p = e1->u.i_val != 0;
@@ -6907,7 +6919,7 @@ static int check (node_t r, node_t context) {
 	ok_p = e1->u.u_val != 0;
       if (! ok_p) {
 	assert (NL_NEXT (op1) != NULL && NL_NEXT (op1)->code == N_STR);
-	print_error (r->pos, "static assertion failed: \"%s\"\n", NL_NEXT (op1)->u.s);
+	error (r->pos, "static assertion failed: \"%s\"", NL_NEXT (op1)->u.s);
       }
     }
     break;
@@ -6929,41 +6941,40 @@ static int check (node_t r, node_t context) {
       cexpr = const_expr->attr;
       if (cexpr != NULL) {
 	if (type->type_qual.atomic_p)
-	  print_error (const_expr->pos, "bit field with _Atomic\n");
+	  error (const_expr->pos, "bit field with _Atomic");
 	if (! cexpr->const_p) {
-	  print_error (const_expr->pos, "bit field is not a constant expr\n");
+	  error (const_expr->pos, "bit field is not a constant expr");
 	} else if (! integer_type_p (type)
 		   && (type->mode != TM_BASIC || type->u.basic_type != TP_BOOL)) {
-	  print_error
-	    (const_expr->pos,
-	     "bit field type should be _Bool, a signed integer, or an unsigned integer type\n");
+	  error (const_expr->pos,
+		 "bit field type should be _Bool, a signed integer, or an unsigned integer type");
 	} else if (! integer_type_p (cexpr->type)
 		   && (cexpr->type->mode != TM_BASIC || cexpr->type->u.basic_type != TP_BOOL)) {
-	  print_error (const_expr->pos, "bit field width is not of an integer type\n");
+	  error (const_expr->pos, "bit field width is not of an integer type");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
-	  print_error (const_expr->pos, "bit field width is negative\n");
-	} else if (cexpr->u.i_val == 0  && declarator->code == N_DECL) {
-	  print_error (const_expr->pos, "zero bit field width for %s\n",
-		       NL_HEAD (declarator->ops)->u.s);
+	  error (const_expr->pos, "bit field width is negative");
+	} else if (cexpr->u.i_val == 0 && declarator->code == N_DECL) {
+	  error (const_expr->pos, "zero bit field width for %s", NL_HEAD (declarator->ops)->u.s);
 	} else if ((! signed_integer_type_p (cexpr->type)
 		    && cexpr->u.u_val > int_bit_size (cexpr->type))
 		   || (signed_integer_type_p (cexpr->type)
 		       && cexpr->u.i_val > int_bit_size (cexpr->type))) {
-	  print_error (const_expr->pos, "bit field width exceeds its type\n");
+	  error (const_expr->pos, "bit field width exceeds its type");
 	}
       }
     }
     if (declarator->code == N_IGNORE) {
-      print_error (r->pos, "no declarator in struct or union declaration\n");
+      if (const_expr->code == N_IGNORE)
+	error (r->pos, "no declarator in struct or union declaration");
     } else {
       node_t id = NL_HEAD (declarator->ops);
 
       if (type->mode == TM_FUNC) {
-	print_error (id->pos, "field %s is declared as a function\n", id->u.s);
+	error (id->pos, "field %s is declared as a function", id->u.s);
       } else if (type->incomplete_p) {
 	/* el_type is checked on completness in N_ARR */
 	if (type->mode != TM_ARR || type->u.arr_type->size->code != N_IGNORE)
-	  print_error (id->pos, "field %s has incomplete type\n", id->u.s);
+	  error (id->pos, "field %s has incomplete type", id->u.s);
       }
     }
     break;
@@ -6986,7 +6997,7 @@ static int check (node_t r, node_t context) {
     create_node_scope (block);
     func_block_scope = curr_scope;
     curr_func_def = r; curr_switch = curr_loop = curr_loop_switch = NULL;
-    create_decl (NULL, r, decl_spec, NULL, NULL);
+    create_decl (top_scope, r, decl_spec, NULL, NULL);
     curr_scope = func_block_scope;
     check (declarations, r);
     /* Process parameter identifier list:  */
@@ -7000,7 +7011,7 @@ static int check (node_t r, node_t context) {
 	break;
       NL_REMOVE (param_list->ops, p);
       if (! symbol_find (S_REGULAR, p, curr_scope, &sym)) {
-	print_error (p->pos, "parameter %s has no type\n", p->u.s);
+	error (p->pos, "parameter %s has no type", p->u.s);
       } else {
 	node_t decl = sym.def_node;
 	struct decl_spec decl_spec;
@@ -7012,13 +7023,12 @@ static int check (node_t r, node_t context) {
 	assert (param_declarator->code == N_DECL);
 	param_id = NL_HEAD (param_declarator->ops);
 	if (NL_NEXT (param_declarator)->code != N_IGNORE) {
-	  print_error (p->pos, "initialized parameter %s\n", param_id->u.s);
+	  error (p->pos, "initialized parameter %s", param_id->u.s);
 	}
 	decl_spec = ((struct decl *) decl->attr)->decl_spec;
 	if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p
 	    || decl_spec.auto_p || decl_spec.thread_local_p) {
-	  print_error (param_id->pos, "storage specifier in a function parameter %s\n",
-		       param_id->u.s);
+	  error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s);
 	}
       }
     }
@@ -7031,8 +7041,7 @@ static int check (node_t r, node_t context) {
       assert (param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
       assert (param_id->code == N_ID);
-      print_error (param_id->pos, "declaration for parameter %s but no such parameter\n",
-		   param_id->u.s);
+      error (param_id->pos, "declaration for parameter %s but no such parameter", param_id->u.s);
     }
     check (block, r);
     /* Process all gotos: */
@@ -7042,14 +7051,14 @@ static int check (node_t r, node_t context) {
       node_t id = NL_NEXT (NL_HEAD (n->ops));
 
       if (! symbol_find (S_LABEL, id, func_block_scope, &sym)) {
-	print_error (id->pos, "undefined label %s\n", id->u.s);
+	error (id->pos, "undefined label %s", id->u.s);
       } else {
 	n->attr = sym.def_node;
       }
     }
     VARR_TRUNC (node_t, gotos, 0);
-    assert (curr_scope == NULL); /* set up in the block */
-    func_block_scope = NULL;
+    assert (curr_scope == top_scope); /* set up in the block */
+    func_block_scope = top_scope;
     break;
   }
   case N_TYPE: {
@@ -7068,13 +7077,18 @@ static int check (node_t r, node_t context) {
     check_decl_align (r->attr);
     break;
   }
-  case N_BLOCK: {
+  case N_BLOCK:
     if (curr_scope != r)
       create_node_scope (r); /* it happens if it is the top func block */
     check (NL_HEAD (r->ops), r);
-    curr_scope = ((struct node_scope *) r->attr)->scope;
+    finish_scope ();
     break;
-  }
+  case N_MODULE:
+    create_node_scope (r);
+    top_scope = curr_scope;
+    check (NL_HEAD (r->ops), r);
+    finish_scope ();
+    break;
   case N_IF: {
     node_t labels = NL_HEAD (r->ops);
     node_t expr = NL_NEXT (labels);
@@ -7085,7 +7099,7 @@ static int check (node_t r, node_t context) {
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
     if (! scalar_type_p (t1)) {
-      print_error (expr->pos, "if-expr should be of a scalar type\n");
+      error (expr->pos, "if-expr should be of a scalar type");
     }
     check (if_stmt, r);
     check (else_stmt, r);
@@ -7107,7 +7121,7 @@ static int check (node_t r, node_t context) {
     if (! integer_type_p (type)) {
       init_type (&t);
       t.mode = TM_BASIC; t.u.basic_type = TP_INT;
-      print_error (expr->pos, "switch-expr is of non-integer type\n");
+      error (expr->pos, "switch-expr is of non-integer type");
     } else {
       t = integer_promotion (type);
     }
@@ -7122,7 +7136,7 @@ static int check (node_t r, node_t context) {
       if (c->case_node->code == N_DEFAULT)
 	continue;
       if (HTAB_DO (case_t, case_tab, c, HTAB_FIND, el)) {
-	print_error (c->case_node->pos, "duplicate case value\n");
+	error (c->case_node->pos, "duplicate case value");
 	continue;
       }
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
@@ -7143,7 +7157,7 @@ static int check (node_t r, node_t context) {
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
     if (! scalar_type_p (t1)) {
-      print_error (expr->pos, "while-expr should be of a scalar type\n");
+      error (expr->pos, "while-expr should be of a scalar type");
     }
     curr_loop = curr_loop_switch = r;
     check (stmt, r);
@@ -7172,8 +7186,7 @@ static int check (node_t r, node_t context) {
 	decl = spec_decl->attr;
 	if (decl->decl_spec.typedef_p || decl->decl_spec.extern_p
 	    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p) {
-	  print_error (spec_decl->pos,
-		       "wrong storage specifier of for-loop initial declaration\n");
+	  error (spec_decl->pos, "wrong storage specifier of for-loop initial declaration");
 	  break;
 	}
       }
@@ -7181,11 +7194,11 @@ static int check (node_t r, node_t context) {
     check (cond, r);
     e1 = cond->attr; t1 = e1->type;
     if (! scalar_type_p (t1)) {
-      print_error (cond->pos, "for-condition should be of a scalar type\n");
+      error (cond->pos, "for-condition should be of a scalar type");
     }
     check (iter, r);
     check (stmt, r);
-    curr_scope = ((struct node_scope *) r->attr)->scope;
+    finish_scope ();
     curr_loop_switch = saved_loop_switch; curr_loop = saved_loop;
     break;
   }
@@ -7201,9 +7214,9 @@ static int check (node_t r, node_t context) {
     node_t labels = NL_HEAD (r->ops);
     
     if (r->code == N_BREAK && curr_loop_switch == NULL) {
-      print_error (r->pos, "break statement not within loop or switch\n");
+      error (r->pos, "break statement not within loop or switch");
     } else if (r->code == N_CONTINUE && curr_loop == NULL) {
-      print_error (r->pos, "continue statement not within a loop\n");
+      error (r->pos, "continue statement not within a loop");
     }
     check_labels (labels, r);
     break;
@@ -7220,10 +7233,10 @@ static int check (node_t r, node_t context) {
     ret_type = type->u.func_type->ret_type;
     if (expr->code != N_IGNORE
 	&& ret_type->mode == TM_BASIC && ret_type->u.basic_type == TP_VOID) {
-      print_error (r->pos, "return with a value in function returning void\n");
+      error (r->pos, "return with a value in function returning void");
     } else if (expr->code == N_IGNORE
 	       && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
-      print_error (r->pos, "return with no value in function returning non-void\n");
+      error (r->pos, "return with no value in function returning non-void");
     } else if (expr->code != N_IGNORE) {
       check_assignment_types (ret_type, ((struct expr *) expr->attr)->type, r);
     }
@@ -7245,13 +7258,12 @@ static int check (node_t r, node_t context) {
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
   }
-  return TRUE;
 }
 
 static void check_init (void) {
   n_i1_node = new_i_node (1, no_pos);
   check (n_i1_node, NULL);
-  curr_scope = func_block_scope = NULL;
+  func_block_scope = curr_scope = NULL;
   VARR_CREATE (node_t, gotos, 0);
   symbol_init ();
   in_params_p = FALSE;
@@ -7292,7 +7304,7 @@ static const char *get_node_name (node_code_t code) {
     C (SHORT) C (INT) C (LONG) C (FLOAT) C (DOUBLE) C (SIGNED) C (UNSIGNED) C (BOOL)
     C (STRUCT) C (UNION) C (ENUM) C (ENUM_CONST) C (MEMBER) C (CONST) C (RESTRICT) C (VOLATILE)
     C (ATOMIC) C (INLINE) C (NO_RETURN) C (ALIGNAS) C (FUNC) C (STAR) C (POINTER) C (DOTS) C (ARR)
-    C (INIT) C (FIELD_ID) C (TYPE) C (ST_ASSERT) C (FUNC_DEF)
+    C (INIT) C (FIELD_ID) C (TYPE) C (ST_ASSERT) C (FUNC_DEF) C (MODULE)
   default:
     abort ();
   }
@@ -7314,14 +7326,14 @@ static void print_chars (FILE *f, const char *str) {
     print_char (f, *str++);
 }
 
-static void pr_node (FILE *f, node_t n, int indent, int attr_p);
+static void print_node (FILE *f, node_t n, int indent, int attr_p);
 
-static void pr_ops (FILE *f, node_t n, int indent, int attr_p) {
+static void print_ops (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   node_t op;
   
   for (i = 0; (op = get_op (n, i)) != NULL; i++)
-    pr_node (f, op, indent + 2, attr_p);
+    print_node (f, op, indent + 2, attr_p);
 }
 
 static void print_qual (FILE *f, struct type_qual type_qual) {
@@ -7396,10 +7408,11 @@ static void print_type (FILE *f, struct type *type) {
   print_qual (f, type->type_qual);
   if (type->incomplete_p)
     fprintf (f, ", incomplete");
-  if (type->raw_size != ULLONG_MAX)
-    fprintf (f, ", size = %llu", type->raw_size);
+  if (type->raw_size != MIR_SIZE_MAX)
+    fprintf (f, ", raw size = %llu", (unsigned long long) type->raw_size);
   if (type->align >= 0)
     fprintf (f, ", align = %d", type->align);
+  fprintf (f, " ");
 }
 
 static void print_decl_spec (FILE *f, struct decl_spec *decl_spec) {
@@ -7423,6 +7436,8 @@ static void print_decl_spec (FILE *f, struct decl_spec *decl_spec) {
     fprintf (f, " align = %d, ", decl_spec->align);
   if (decl_spec->align_node != NULL)
     fprintf (f, " strictest align node %lu, ", decl_spec->align_node->uid);
+  if (decl_spec->linkage != N_IGNORE)
+    fprintf (f, " %s linkage, ", decl_spec->linkage == N_STATIC ? "static" : "extern");
   print_type (f, decl_spec->type);
 }
 
@@ -7431,7 +7446,7 @@ static void print_decl (FILE *f, struct decl *decl) {
     return;
   fprintf (f, ": ");
   print_decl_spec (f, &decl->decl_spec);
-  fprintf (f, ", offset = %llu", decl->offset);
+  fprintf (f, ", offset = %llu", (unsigned long long) decl->offset);
   if (decl->bit_offset >= 0)
     fprintf (f, ", bit offset = %d", decl->bit_offset);
 }
@@ -7455,7 +7470,7 @@ static void print_expr (FILE *f, struct expr *e) {
   }
 }
 
-static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
+static void print_node (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   
   fprintf (f, "%6lu: ", n->uid);
@@ -7465,7 +7480,9 @@ static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
     fprintf (f, "<error>\n");
     return;
   }
-  fprintf (f, "%s", get_node_name (n->code));
+  fprintf (f, "%s (", get_node_name (n->code));
+  print_pos (f, n->pos, FALSE);
+  fprintf (f, ")");
   switch (n->code) {
   case N_IGNORE: fprintf (f, "\n"); break;
   case N_I: fprintf (f, " %lld", (long long) n->u.l); goto expr;
@@ -7494,23 +7511,22 @@ static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
   case N_MOD_ASSIGN: case N_IND: case N_FIELD: case N_ADDR: case N_DEREF: case N_DEREF_FIELD:
   case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: case N_ALIGNOF:
   case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL: case N_CALL:
+  case N_GENERIC:
     if (attr_p)
       print_expr (f, n->attr);
     fprintf (f, "\n");
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
-  case N_GENERIC: case N_GENERIC_ASSOC: case N_IF: case N_WHILE: case N_DO:
-  case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR:
-  case N_CASE: case N_DEFAULT: case N_LABEL: case N_SHARE:
+  case N_GENERIC_ASSOC: case N_IF: case N_WHILE: case N_DO: case N_CONTINUE: case N_BREAK:
+  case N_RETURN: case N_EXPR: case N_CASE: case N_DEFAULT: case N_LABEL: case N_SHARE:
   case N_TYPEDEF: case N_EXTERN: case N_STATIC: case N_AUTO: case N_REGISTER: case N_THREAD_LOCAL:
   case N_DECL: case N_VOID: case N_CHAR: case N_SHORT: case N_INT: case N_LONG: case N_FLOAT:
-  case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL:
-  case N_ENUM: case N_CONST: case N_RESTRICT:
-  case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN: case N_ALIGNAS:
+  case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL: case N_ENUM: case N_CONST:
+  case N_RESTRICT: case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN: case N_ALIGNAS:
   case N_STAR: case N_POINTER: case N_DOTS: case N_ARR: case N_INIT: case N_FIELD_ID: case N_TYPE:
   case N_ST_ASSERT:
     fprintf (f, "\n");
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_LIST:
     if (attr_p && n->attr != NULL) {
@@ -7518,30 +7534,34 @@ static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
       print_decl_spec (f, (struct decl_spec *) n->attr);
     }
     fprintf (f, "\n");
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_SPEC_DECL: case N_MEMBER: case N_FUNC_DEF:
     if (attr_p)
       print_decl (f, (struct decl *) n->attr);
     fprintf (f, "\n");
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_FUNC:
     if (! attr_p || n->attr == NULL) {
       fprintf (f, "\n");
-      pr_ops (f, n, indent, attr_p);
+      print_ops (f, n, indent, attr_p);
       break;
     }
     /* fall through: */
-  case N_STRUCT: case N_UNION: case N_BLOCK: case N_FOR:
+  case N_STRUCT: case N_UNION: case N_MODULE: case N_BLOCK: case N_FOR:
     if (! attr_p || ((n->code == N_STRUCT || n->code == N_UNION)
 		     && (NL_EL (n->ops, 1) == NULL || NL_EL (n->ops, 1)->code == N_IGNORE)))
       fprintf (f, "\n");
-    else if (((struct node_scope *) n->attr)->scope == NULL)
-      fprintf (f, ": higher scope is NULL\n");
+    else if (n->code == N_MODULE)
+      fprintf (f, ": the top scope");
     else
-      fprintf (f, ": higher scope node %lu\n", ((struct node_scope *) n->attr)->scope->uid);
-    pr_ops (f, n, indent, attr_p);
+      fprintf (f, ": higher scope node %lu", ((struct node_scope *) n->attr)->scope->uid);
+    if (n->code == N_STRUCT || n->code == N_UNION)
+      fprintf (f, "\n");
+    else
+      fprintf (f, ", size = %llu\n", (unsigned long long) ((struct node_scope *) n->attr)->size);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_SWITCH:
     if (attr_p) {
@@ -7549,17 +7569,17 @@ static void pr_node (FILE *f, node_t n, int indent, int attr_p) {
       print_type (f, &((struct switch_attr *) n->attr)->type);
     }
     fprintf (f, "\n");
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_GOTO:
     if (attr_p)
       fprintf (f, ": target node %lu\n", ((node_t) n->attr)->uid);
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   case N_ENUM_CONST: 
     if (attr_p)
       fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
-    pr_ops (f, n, indent, attr_p);
+    print_ops (f, n, indent, attr_p);
     break;
   default:
     abort ();
@@ -7680,8 +7700,10 @@ static void finish_options (void) {
 static void compile_init (int argc, const char *argv[],
 			  int (*getc_func) (void), void (*ungetc_func) (int),
 			  int other_option_func (int, int, const char **)) {
+  n_errors = n_warnings = 0;
   c_getc = getc_func; c_ungetc = ungetc_func;
   parse_init ();
+  curr_scope = NULL;
   check_init ();
   init_options (argc, argv, other_option_func);
 }
@@ -7696,9 +7718,10 @@ real_usec_time(void) {
   return tv.tv_usec + tv.tv_sec * 1000000.0;
 }
 
-static void compile (const char *source_name) {
+static int compile (const char *source_name) {
   double start_time = real_usec_time ();
   node_t r;
+  unsigned n_error_before;
   
   if (verbose_p)
     fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
@@ -7711,28 +7734,28 @@ static void compile (const char *source_name) {
     r = parse ();
     if (verbose_p)
       fprintf (stderr, "  parser end          -- %.0f usec\n", real_usec_time () - start_time);
-    if (r == NULL) {
+    if (verbose_p && n_errors)
+      fprintf (stderr, "parser - FAIL\n");
+    n_error_before = n_errors;
+    check (r, NULL);
+    if (n_errors > n_error_before) {
+      if (debug_p)
+	print_node (stderr, r, 0, FALSE);
       if (verbose_p)
-	fprintf (stderr, "parser - FAIL\n");
+	fprintf (stderr, "context checker - FAIL\n");
     } else {
-      if (! check (r, NULL)) {
-	if (debug_p)
-	  pr_node (stderr, r, 0, FALSE);
-	if (verbose_p)
-	  fprintf (stderr, "context checker - FAIL\n");
-      } else {
-	if (debug_p)
-	  pr_node (stderr, r, 0, TRUE);
-	if (verbose_p)
-	  fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
-	gen ();
-	if (verbose_p)
-	  fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
-      }
+      if (debug_p)
+	print_node (stderr, r, 0, TRUE);
+      if (verbose_p)
+	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
+      gen ();
+      if (verbose_p)
+	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
     }
   }
   if (verbose_p)
     fprintf (stderr, "compiler end                -- %.0f usec\n", real_usec_time () - start_time);
+  return n_errors == 0;
 }
 
 static void compile_finish (void) {
@@ -7779,12 +7802,12 @@ static int other_option_func (int i, int argc, const char *argv[]) {
   } else if (*argv[i] != '-') {
     source_name = argv[i];
     if ((f = fopen (argv[i], "r")) == NULL) {
-      print_error (no_pos, "can not open %s -- goodbye\n", argv[i]);
+      error (no_pos, "can not open %s -- goodbye", argv[i]);
       exit (1);
     }
   } else {
     finish_options ();
-    fprintf (stderr, "unknow command line option %s (use -h for usage) -- goodbye\n", argv[i]);
+    error (no_pos, "unknow command line option %s (use -h for usage) -- goodbye", argv[i]);
     exit (1);
   }
   if (f) {
@@ -7798,6 +7821,8 @@ static int other_option_func (int i, int argc, const char *argv[]) {
 }
 
 int main (int argc, const char *argv[]) {
+  int ok_p;
+  
   code = NULL; source_name = NULL;
   VARR_CREATE (char, input, 100);
   curr_char = 0;
@@ -7831,9 +7856,9 @@ int main (int argc, const char *argv[]) {
     source_name = "<example>";
   }
   assert (source_name != NULL);
-  compile (source_name);
+  ok_p = compile (source_name);
   compile_finish ();
   VARR_DESTROY (char, input);
-  return 0;
+  return ! ok_p;
 }
 #endif
