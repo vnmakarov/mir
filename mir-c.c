@@ -274,16 +274,6 @@ transl_unit: N_MODULE(N_LIST:(declaration
 
 Here ? means it can be N_IGNORE, * means 0 or more elements in the list, + means 1 or more.
 
-1. expr nodes have attribute "struct expr", N_ID not expr context has NULL attribute.
-2. N_SWITCH has attribute "struct switch_attr"
-3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
-4. N_GOTO hash attribute node_t (target stmt)
-5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
-6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
-7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec"
-8. N_ENUM_CONST has attribute "struct enum_value"
-9. N_CASE and N_DEFAULT have attribute "struct case_attr"
-
 */
 
 typedef enum {
@@ -4327,7 +4317,19 @@ static void parse_finish (void) {
 
 /* The context checker is AST traversing pass which checks C11
    constraints.  It also augmenting AST nodes by type and layout
-   information.  */
+   information.  Here are the created node attributes:
+
+1. expr nodes have attribute "struct expr", N_ID not expr context has NULL attribute.
+2. N_SWITCH has attribute "struct switch_attr"
+3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
+4. N_GOTO hash attribute node_t (target stmt)
+5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
+6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
+7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec"
+8. N_ENUM_CONST has attribute "struct enum_value"
+9. N_CASE and N_DEFAULT have attribute "struct case_attr"
+
+*/
 
 static int supported_alignment_p (mir_long_long align) { return TRUE; } // ???
 
@@ -4629,10 +4631,14 @@ struct node_scope {
 };
 
 struct decl {
-  mir_size_t offset; /* field, ??? var */
+  unsigned addr_p : 1, reg_p : 1; /* true if address is taken and reg can be used */
   int bit_offset; /* for bitfields, -1 for non bitfields. */
+  mir_size_t offset; /* var offset in frame or bss */
+  node_t scope; // declaration scope
   struct decl_spec decl_spec;
 };
+
+typedef struct decl *decl_t;
 
 typedef struct case_attr *case_t;
 
@@ -4721,7 +4727,7 @@ static void aux_set_type_align (struct type *type) {
 	   member != NULL;
 	   member = NL_NEXT (member))
 	if (member->code == N_MEMBER) {
-	  struct decl *decl = member->attr;
+	  decl_t decl = member->attr;
 	  
 	  member_align = type_align (decl->decl_spec.type);
 	  if (align < member_align)
@@ -4813,7 +4819,7 @@ static void set_type_layout (struct type *type) {
 	   member != NULL;
 	   member = NL_NEXT (member))
 	if (member->code == N_MEMBER) {
-	  struct decl *decl = member->attr;
+	  decl_t decl = member->attr;
 	  int member_align;
 	  mir_size_t member_size;
 	  node_t width = NL_EL (member->ops, 2);
@@ -4991,14 +4997,14 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
   assert (id->code == N_ID && scope != NULL);
   assert (scope->code == N_MODULE || scope->code == N_BLOCK || scope->code == N_STRUCT
 	  || scope->code == N_UNION || scope->code == N_FUNC || scope->code == N_FOR);
-  decl_spec = ((struct decl *) def_node->attr)->decl_spec;
+  decl_spec = ((decl_t) def_node->attr)->decl_spec;
   if (decl_spec.thread_local_p && ! decl_spec.static_p && ! decl_spec.extern_p)
     error (id->pos, "auto %s is declared as thread local", id->u.s);
   if (! symbol_find (mode, id, scope, &sym)) {
     symbol_insert (mode, id, scope, def_node, NULL);
     return;
   }
-  tab_decl_spec = ((struct decl *) sym.def_node->attr)->decl_spec;
+  tab_decl_spec = ((decl_t) sym.def_node->attr)->decl_spec;
   if (linkage == N_IGNORE) {
     if (! decl_spec.typedef_p || ! tab_decl_spec.typedef_p
 	|| decl_spec.type != tab_decl_spec.type)
@@ -5171,7 +5177,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       break;
     case N_ID: {
       node_t def = find_def (S_REGULAR, n, curr_scope, NULL);
-      struct decl *decl;
+      decl_t decl;
       
       set_type_pos_node (type, n);
       if (def == NULL) {
@@ -5429,7 +5435,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	      node_t declarator = NL_EL (p->ops, 1);
 	      
 	      assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
-	      decl_spec_ptr = &((struct decl *) p->attr)->decl_spec;
+	      decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
 	    }
 	    type = decl_spec_ptr->type;
 	    /* Parameter adjustments: */
@@ -5527,10 +5533,10 @@ static node_code_t get_id_linkage (int func_p, node_t id, node_t scope,
   if (decl_spec.static_p && scope == NULL)
     return N_STATIC; // p3: internal linkage
   if (decl_spec.extern_p && def != NULL
-      && (linkage = ((struct decl *) def->attr)->decl_spec.linkage) != N_IGNORE)
+      && (linkage = ((decl_t) def->attr)->decl_spec.linkage) != N_IGNORE)
     return linkage; // p4: previous linkage
   if (decl_spec.extern_p
-      && (def == NULL || ((struct decl *) def->attr)->decl_spec.linkage == N_IGNORE))
+      && (def == NULL || ((decl_t) def->attr)->decl_spec.linkage == N_IGNORE))
     return N_EXTERN; // p4: external linkage
   if (! decl_spec.static_p && ! decl_spec.extern_p && (scope == NULL || func_p))
     return N_EXTERN; // p5
@@ -5607,7 +5613,7 @@ static void check_type (struct type *type, int level, int func_def_p) {
 	  decl_spec = *((struct decl_spec *) p->attr);
 	  check_type (decl_spec.type, level + 1, FALSE);
 	} else if (p->code == N_SPEC_DECL) {
-	  decl_spec = ((struct decl *) p->attr)->decl_spec;
+	  decl_spec = ((decl_t) p->attr)->decl_spec;
 	  check_type (decl_spec.type, level + 1, FALSE);
 	} else {
 	  assert (p->code == N_ID);
@@ -5760,7 +5766,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	if (last_member == NULL || (! first_p && type->mode == TM_UNION)) {
 	  error (init->pos, "excess elements in struct/union initializer");
 	} else {
-	  check_initializer (((struct decl *) last_member->attr)->decl_spec.type,
+	  check_initializer (((decl_t) last_member->attr)->decl_spec.type,
 			     value, const_only_p, FALSE);
 	}
       }
@@ -5776,7 +5782,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	  } else {
 	    last_member = sym.def_node;
 	    assert (last_member->code == N_MEMBER);
-	    check_initializer (((struct decl *) last_member->attr)->decl_spec.type, value,
+	    check_initializer (((decl_t) last_member->attr)->decl_spec.type, value,
 			       const_only_p, FALSE);
 	  }
 	} else if (type->mode != TM_ARR) {
@@ -5817,16 +5823,20 @@ static void check_decl_align (struct decl_spec *decl_spec) {
 	   "requested alignment is less than minimum alignment for the type");
 }
 
+DEF_VARR (decl_t);
+static VARR (decl_t) *decls_for_allocation;
+
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
 			 node_t width, node_t initializer) {
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
   node_t id, list_head, declarator;
   struct type *type;
-  struct decl *decl = reg_malloc (sizeof (struct decl));
+  decl_t decl = reg_malloc (sizeof (struct decl));
   
   assert (decl_node->code == N_MEMBER
 	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
-  decl->offset = 0; decl->bit_offset = -1;
+  decl->addr_p = FALSE; decl->reg_p = FALSE; decl->offset = 0; decl->bit_offset = -1;
+  decl->scope = curr_scope;
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
@@ -5857,17 +5867,10 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     }
   }
   if (decl_node->code != N_MEMBER) {
-    struct node_scope *ns = (struct node_scope *) curr_scope->attr;
-    
     set_type_layout (type);
     check_decl_align (&decl_spec);
-    if (! decl_spec.typedef_p && ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC) {
-      ns->offset = (ns->offset + type->align - 1) / type->align * type->align;
-      decl->offset = ns->offset;
-      ns->offset += type_size (type);
-      if (ns->size < ns->offset)
-	ns->size = ns->offset;
-    }
+    if (! decl_spec.typedef_p && ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
+      VARR_PUSH (decl_t, decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
@@ -6233,7 +6236,7 @@ static void check (node_t r, node_t context) {
     } else if (op1->code == N_IGNORE) {
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
-      struct decl *decl = op1->attr;
+      decl_t decl = op1->attr;
       
       if (decl->decl_spec.typedef_p) {
 	error (r->pos, "typedef name %s as an operand", r->u.s);
@@ -6241,7 +6244,7 @@ static void check (node_t r, node_t context) {
       *e->type = *decl->decl_spec.type;
       e->lvalue_node = op1;
     } else if (op1->code == N_FUNC_DEF) {
-      struct decl *decl = op1->attr;
+      decl_t decl = op1->attr;
 
       assert (decl->decl_spec.type->mode == TM_FUNC);
       *e->type = *decl->decl_spec.type;
@@ -6483,16 +6486,16 @@ static void check (node_t r, node_t context) {
       t2 = create_type (t1);
     } else if (op1->code == N_ID) {
       node_t decl_node = e1->lvalue_node;
-      struct decl *decl = decl_node->attr;
+      decl_t decl = decl_node->attr;
 
-      if (decl->decl_spec.register_p) {
+      decl->addr_p = TRUE;
+      if (decl->decl_spec.register_p)
 	error (r->pos, "address of register variable %s requested", op1->u.s);
-      }
       t2 = create_type (decl->decl_spec.type);
     } else if (e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->ops, 1);
       node_t width = NL_NEXT (declarator);
-      struct decl *decl = e1->lvalue_node->attr;
+      decl_t decl = e1->lvalue_node->attr;
       
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
@@ -6518,7 +6521,7 @@ static void check (node_t r, node_t context) {
     break;
   case N_FIELD: case N_DEREF_FIELD: {
     symbol_t sym;
-    struct decl *decl;
+    decl_t decl;
     
     process_unop (r, &op1, &e1, &t1, r); e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
@@ -6832,7 +6835,7 @@ static void check (node_t r, node_t context) {
 	continue;
       }
       assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
-      decl_spec = param->code == N_TYPE ? param->attr : &((struct decl *) param->attr)->decl_spec;
+      decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
       check_assignment_types (decl_spec->type, e2->type, r);
       param = NL_NEXT (param);
     }
@@ -6949,7 +6952,7 @@ static void check (node_t r, node_t context) {
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
     create_decl (curr_scope, r, decl_spec, const_expr, NULL);
-    type = ((struct decl *) r->attr)->decl_spec.type;
+    type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
       struct expr *cexpr;
       
@@ -7041,7 +7044,7 @@ static void check (node_t r, node_t context) {
 	if (NL_NEXT (param_declarator)->code != N_IGNORE) {
 	  error (p->pos, "initialized parameter %s", param_id->u.s);
 	}
-	decl_spec = ((struct decl *) decl->attr)->decl_spec;
+	decl_spec = ((decl_t) decl->attr)->decl_spec;
 	if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p
 	    || decl_spec.auto_p || decl_spec.thread_local_p) {
 	  error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s);
@@ -7186,7 +7189,7 @@ static void check (node_t r, node_t context) {
     node_t cond = NL_NEXT (init);
     node_t iter = NL_NEXT (cond);
     node_t stmt = NL_NEXT (iter);
-    struct decl *decl;
+    decl_t decl;
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
     
@@ -7240,7 +7243,7 @@ static void check (node_t r, node_t context) {
   case N_RETURN: {
     node_t labels = NL_HEAD (r->ops);
     node_t expr = NL_NEXT (labels);
-    struct decl *decl = curr_func_def->attr;
+    decl_t decl = curr_func_def->attr;
     struct type *ret_type, *type = decl->decl_spec.type;
 
     assert (type->mode == TM_FUNC);
@@ -7276,7 +7279,28 @@ static void check (node_t r, node_t context) {
   }
 }
 
-static void check_init (void) {
+static void context (node_t r) {
+  VARR_TRUNC (decl_t, decls_for_allocation, 0);
+  check (r, NULL);
+  /* Process decls in the original order: */
+  for (int i = 0; i < VARR_LENGTH (decl_t, decls_for_allocation); i++) {
+    decl_t decl = VARR_GET (decl_t, decls_for_allocation, i);
+    struct node_scope *ns = (struct node_scope *) decl->scope->attr;
+    struct type *type = decl->decl_spec.type;
+    
+    if ((type->mode == TM_BASIC || type->mode == TM_ENUM) && ! decl->addr_p) {
+      decl->reg_p = TRUE;
+      continue;
+    }
+    ns->offset = (ns->offset + type->align - 1) / type->align * type->align;
+    decl->offset = ns->offset;
+    ns->offset += type_size (type);
+    if (ns->size < ns->offset)
+      ns->size = ns->offset;
+  }
+}
+
+static void context_init (void) {
   n_i1_node = new_i_node (1, no_pos);
   check (n_i1_node, NULL);
   func_block_scope = curr_scope = NULL;
@@ -7284,20 +7308,161 @@ static void check_init (void) {
   symbol_init ();
   in_params_p = FALSE;
   HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq);
+  VARR_CREATE (decl_t, decls_for_allocation, 1024);
 }
 
-static void check_finish (void) {
+static void context_finish (void) {
   VARR_DESTROY (node_t, gotos);
   symbol_finish ();
   HTAB_DESTROY (case_t, case_tab);
+  VARR_DESTROY (decl_t, decls_for_allocation);
 }
 
-/* ---------------------------- Checker Finish -------------------------------- */
+/* ------------------------ Context Checker Finish ---------------------------- */
 
 
 /* -------------------------- MIR generator start ----------------------------- */
 
-static void gen (void) {
+static void gen (node_t r) {
+  switch (r->code) {
+  case N_LIST:
+    for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
+      gen (n);
+    break;
+  case N_IGNORE:
+    break; /* do nothing */
+  case N_I:
+  case N_L:
+    break;
+  case N_LL:
+    break;
+  case N_U:
+  case N_UL:
+    break;
+  case N_ULL:
+    break;
+  case N_F:
+    break;
+  case N_D:
+    break;
+  case N_LD:
+    break;
+  case N_CH:
+    break;
+  case N_STR:
+    break;
+  case N_ID:
+    break;
+  case N_COMMA:
+    break;
+  case N_ANDAND: case N_OROR:
+    break;
+  case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE:
+    break;
+  case N_BITWISE_NOT:
+  case N_NOT:
+    break;
+  case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC:
+    break;
+  case N_ADD: case N_SUB:
+    if (NL_NEXT (NL_HEAD (r->ops)) == NULL) { /* unary */
+      break;
+    }
+    /* Fall through: */
+  case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH:
+  case N_MUL: case N_DIV: case N_MOD:
+    break;
+  case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
+  case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
+    break;
+  case N_ASSIGN:
+  assign:
+    break;
+  case N_IND:
+    break;
+  case N_ADDR:
+    break;
+  case N_DEREF:
+    break;
+  case N_FIELD: case N_DEREF_FIELD:
+    break;
+  case N_COND:
+    break;
+  case N_ALIGNOF: case N_SIZEOF:
+    break;
+  case N_EXPR_SIZEOF:
+    break;
+  case N_CAST:
+    break;
+  case N_COMPOUND_LITERAL:
+    break;
+  case N_CALL:
+    break;
+  case N_GENERIC:
+    break;
+  case N_SPEC_DECL:
+    break;
+  case N_ST_ASSERT:
+    break;
+  case N_INIT:
+    break;
+  case N_FUNC_DEF:
+    break;
+  case N_BLOCK:
+    gen (NL_HEAD (r->ops));
+    break;
+  case N_MODULE:
+    break;
+  case N_IF: {
+    node_t expr = NL_EL (r->ops, 1);
+    node_t if_stmt = NL_NEXT (expr);
+    node_t else_stmt = NL_NEXT (if_stmt);
+ 
+    gen (if_stmt);
+    gen (else_stmt);
+    break;
+  }
+  case N_SWITCH: {
+    node_t expr = NL_EL (r->ops, 1);
+    node_t stmt = NL_NEXT (expr);
+    
+    check (stmt, r);
+    break;
+  }
+  case N_DO:
+  case N_WHILE: {
+    node_t expr = NL_EL (r->ops, 1);
+    node_t stmt = NL_NEXT (expr);
+
+    gen (stmt);
+    break;
+  }
+  case N_FOR: {
+    node_t init = NL_EL (r->ops, 1);
+    node_t cond = NL_NEXT (init);
+    node_t iter = NL_NEXT (cond);
+    node_t stmt = NL_NEXT (iter);
+
+    gen (iter);
+    gen (stmt);
+    break;
+  }
+  case N_GOTO:
+    break;
+  case N_CONTINUE:
+  case N_BREAK:
+    break;
+  case N_RETURN:
+    break;
+  case N_EXPR:
+    break;
+  default:
+    abort ();
+  }
+}
+
+static void generate_mir (node_t r) {
+  gen (r);
 }
 
 /* ------------------------- MIR generator finish ----------------------------- */
@@ -7457,14 +7622,20 @@ static void print_decl_spec (FILE *f, struct decl_spec *decl_spec) {
   print_type (f, decl_spec->type);
 }
 
-static void print_decl (FILE *f, struct decl *decl) {
+static void print_decl (FILE *f, decl_t decl) {
   if (decl == NULL)
     return;
   fprintf (f, ": ");
   print_decl_spec (f, &decl->decl_spec);
-  fprintf (f, ", offset = %llu", (unsigned long long) decl->offset);
-  if (decl->bit_offset >= 0)
-    fprintf (f, ", bit offset = %d", decl->bit_offset);
+  if (decl->addr_p)
+    fprintf (f, ", addressable");
+  if (decl->reg_p)
+    fprintf (f, ", reg");
+  else {
+    fprintf (f, ", offset = %llu", (unsigned long long) decl->offset);
+    if (decl->bit_offset >= 0)
+      fprintf (f, ", bit offset = %d", decl->bit_offset);
+  }
 }
 
 static void print_expr (FILE *f, struct expr *e) {
@@ -7554,7 +7725,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
     break;
   case N_SPEC_DECL: case N_MEMBER: case N_FUNC_DEF:
     if (attr_p)
-      print_decl (f, (struct decl *) n->attr);
+      print_decl (f, (decl_t) n->attr);
     fprintf (f, "\n");
     print_ops (f, n, indent, attr_p);
     break;
@@ -7720,7 +7891,7 @@ static void compile_init (int argc, const char *argv[],
   c_getc = getc_func; c_ungetc = ungetc_func;
   parse_init ();
   curr_scope = NULL;
-  check_init ();
+  context_init ();
   init_options (argc, argv, other_option_func);
 }
 
@@ -7753,7 +7924,7 @@ static int compile (const char *source_name) {
     if (verbose_p && n_errors)
       fprintf (stderr, "parser - FAIL\n");
     n_error_before = n_errors;
-    check (r, NULL);
+    context (r);
     if (n_errors > n_error_before) {
       if (debug_p)
 	print_node (stderr, r, 0, FALSE);
@@ -7764,7 +7935,7 @@ static int compile (const char *source_name) {
 	print_node (stderr, r, 0, TRUE);
       if (verbose_p)
 	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
-      gen ();
+      generate_mir (r);
       if (verbose_p)
 	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
     }
@@ -7776,7 +7947,7 @@ static int compile (const char *source_name) {
 
 static void compile_finish (void) {
   parse_finish ();
-  check_finish ();
+  context_finish ();
   finish_options ();
 }
 
