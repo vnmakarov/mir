@@ -236,11 +236,23 @@ static ALWAYS_INLINE int64_t *get_2iops (MIR_val_t *bp, code_t c, int64_t *p) {
   *p = *get_iop (bp, c + 1); return get_iop (bp, c);
 }
 
+static ALWAYS_INLINE int64_t *get_2isops (MIR_val_t *bp, code_t c, int32_t *p) {
+  *p = *get_iop (bp, c + 1); return get_iop (bp, c);
+}
+
 static ALWAYS_INLINE int64_t *get_3iops (MIR_val_t *bp, code_t c, int64_t *p1, int64_t *p2) {
   *p1 = *get_iop (bp, c + 1); *p2 = *get_iop (bp, c + 2); return get_iop (bp, c);
 }
 
+static ALWAYS_INLINE int64_t *get_3isops (MIR_val_t *bp, code_t c, int32_t *p1, int32_t *p2) {
+  *p1 = *get_iop (bp, c + 1); *p2 = *get_iop (bp, c + 2); return get_iop (bp, c);
+}
+
 static ALWAYS_INLINE uint64_t *get_3uops (MIR_val_t *bp, code_t c, uint64_t *p1, uint64_t *p2) {
+  *p1 = *get_uop (bp, c + 1); *p2 = *get_uop (bp, c + 2); return get_uop (bp, c);
+}
+
+static ALWAYS_INLINE uint64_t *get_3usops (MIR_val_t *bp, code_t c, uint32_t *p1, uint32_t *p2) {
   *p1 = *get_uop (bp, c + 1); *p2 = *get_uop (bp, c + 2); return get_uop (bp, c);
 }
 
@@ -271,11 +283,17 @@ static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1,
 static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp [get_i (c)].i; }
 
 #define IOP2(op) do {int64_t *r, p; r = get_2iops (bp, ops, &p); *r = op p;} while (0)
+#define IOP2S(op) do {int64_t *r; int32_t p; r = get_2isops (bp, ops, &p); *r = op p;} while (0)
 #define IOP3(op) do {int64_t *r, p1, p2; r = get_3iops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define IOP3S(op) do {int64_t *r; int32_t p1, p2; r = get_3isops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define ICMP(op) do {int64_t *r, p1, p2; r = get_3iops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define ICMPS(op) do {int64_t *r; int32_t p1, p2; r = get_3isops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BICMP(op) do {int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
+#define BICMPS(op) do {int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
 #define UCMP(op) do {uint64_t *r, p1, p2; r = get_3uops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define UCMPS(op) do {uint64_t *r; uint32_t p1, p2; r = get_3usops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BUCMP(op) do {uint64_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
+#define BUCMPS(op) do {uint32_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
 
 #define FOP2(op) do {float *r, p; r = get_2fops (bp, ops, &p); *r = op p;} while (0)
 #define FOP3(op) do {float *r, p1, p2; r = get_3fops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
@@ -287,13 +305,13 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
 #define DCMP(op) do {int64_t *r; double p1, p2; r = get_dcmp_ops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BDCMP(op) do {double op1 = *get_dop (bp, ops + 1), op2 = *get_dop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
 
-#define LD(op, val_type, mem_type) do {					\
+#define LD(op, val_type, mem_type) do {					       \
     val_type *r = get_## op (bp, ops); int64_t a = get_mem_addr (bp, ops + 1); \
-    *r = *((mem_type *) a);                                                  \
+    *r = *((mem_type *) a);                                                    \
   } while (0)
-#define ST(op, val_type, mem_type) do {					\
+#define ST(op, val_type, mem_type) do {					       \
     val_type v = *get_## op (bp, ops); int64_t a = get_mem_addr (bp, ops + 1); \
-    *((mem_type *) a) = v;                                                   \
+    *((mem_type *) a) = v;                                                     \
   } while (0)
 
 #ifdef __GNUC__
@@ -385,6 +403,8 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_MOV, 2);  {int64_t p, *r = get_2iops (bp, ops, &p); *r = p;} END_INSN;
       CASE (MIR_FMOV, 2); {float p, *r = get_2fops (bp, ops, &p); *r = p;} END_INSN;
       CASE (MIR_DMOV, 2); {double p, *r = get_2dops (bp, ops, &p); *r = p;} END_INSN;
+      CASE (MIR_S2I, 2);  {int64_t *r = get_iop (bp, ops); int32_t s = *get_iop (bp, ops + 1); *r = s;} END_INSN;
+      CASE (MIR_US2I, 2); {int64_t *r = get_iop (bp, ops); uint32_t us = *get_iop (bp, ops + 1); *r = us;} END_INSN;
       CASE (MIR_I2F, 2);  {float *r = get_fop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_I2D, 2);  {double *r = get_dop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_F2I, 2);  {int64_t *r = get_iop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;} END_INSN;
@@ -393,94 +413,130 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_D2F, 2);  {float *r = get_fop (bp, ops); double d = *get_dop (bp, ops + 1); *r = d;} END_INSN;
       
       CASE (MIR_NEG, 2);  IOP2(-); END_INSN;
+      CASE (MIR_NEGS, 2); IOP2S(-); END_INSN;
       CASE (MIR_FNEG, 2); FOP2(-); END_INSN;
       CASE (MIR_DNEG, 2); DOP2(-); END_INSN;
        
       CASE (MIR_ADD, 3);  IOP3(+); END_INSN;
+      CASE (MIR_ADDS, 3); IOP3S(+); END_INSN;
       CASE (MIR_FADD, 3); FOP3(+); END_INSN;
       CASE (MIR_DADD, 3); DOP3(+); END_INSN;
       
       CASE (MIR_SUB, 3);  IOP3(-); END_INSN; 
+      CASE (MIR_SUBS, 3); IOP3S(-); END_INSN; 
       CASE (MIR_FSUB, 3); FOP3(-); END_INSN;
       CASE (MIR_DSUB, 3); DOP3(-); END_INSN;
       
       CASE (MIR_MUL, 3);  IOP3(*); END_INSN;
+      CASE (MIR_MULS, 3); IOP3S(*); END_INSN;
       CASE (MIR_FMUL, 3); FOP3(*); END_INSN;
       CASE (MIR_DMUL, 3); DOP3(*); END_INSN;
       
-      CASE (MIR_DIV, 3);  END_INSN;
-      CASE (MIR_UDIV, 3); END_INSN;
-      CASE (MIR_FDIV, 3); END_INSN;
-      CASE (MIR_DDIV, 3); END_INSN;
+      CASE (MIR_DIV, 3);   END_INSN; // ???
+      CASE (MIR_DIVS, 3);  END_INSN; // ???
+      CASE (MIR_UDIV, 3);  END_INSN; // ???
+      CASE (MIR_UDIVS, 3); END_INSN; // ???
+      CASE (MIR_FDIV, 3);  END_INSN; // ???
+      CASE (MIR_DDIV, 3);  END_INSN; // ???
       
-      CASE (MIR_MOD, 3);  END_INSN;
-      CASE (MIR_UMOD, 3); END_INSN;
+      CASE (MIR_MOD, 3);   END_INSN; // ???
+      CASE (MIR_MODS, 3);  END_INSN; // ???
+      CASE (MIR_UMOD, 3);  END_INSN; // ???
+      CASE (MIR_UMODS, 3); END_INSN; // ???
       
-      CASE (MIR_AND, 3); IOP3(&); END_INSN;
-      CASE (MIR_OR, 3);  IOP3(|); END_INSN;
-      CASE (MIR_XOR, 3); IOP3(^); END_INSN;
-      CASE (MIR_LSH, 3); IOP3(<<); END_INSN;
+      CASE (MIR_AND, 3);  IOP3(&); END_INSN;
+      CASE (MIR_ANDS, 3); IOP3S(&); END_INSN;
+      CASE (MIR_OR, 3);   IOP3(|); END_INSN;
+      CASE (MIR_ORS, 3);  IOP3S(|); END_INSN;
+      CASE (MIR_XOR, 3);  IOP3(^); END_INSN;
+      CASE (MIR_XORS, 3); IOP3S(^); END_INSN;
+      CASE (MIR_LSH, 3);  IOP3(<<); END_INSN;
+      CASE (MIR_LSHS, 3); IOP3S(<<); END_INSN;
       
-      CASE (MIR_RSH, 3);  IOP3(>>); END_INSN;
-      CASE (MIR_URSH, 3); END_INSN;
+      CASE (MIR_RSH, 3);   IOP3(>>); END_INSN;
+      CASE (MIR_RSHS, 3);  IOP3S(>>); END_INSN;
+      CASE (MIR_URSH, 3);  END_INSN; // ???
+      CASE (MIR_URSHS, 3); END_INSN; // ???
       
       CASE (MIR_EQ, 3);  ICMP(=); END_INSN;
+      CASE (MIR_EQS, 3); ICMPS(=); END_INSN;
       CASE (MIR_FEQ, 3); FCMP(=); END_INSN; 
       CASE (MIR_DEQ, 3); DCMP(=); END_INSN;
       
       CASE (MIR_NE, 3);  ICMP(!=); END_INSN;
+      CASE (MIR_NES, 3); ICMPS(!=); END_INSN;
       CASE (MIR_FNE, 3); FCMP(!=); END_INSN;
       CASE (MIR_DNE, 3); DCMP(!=); END_INSN;
       
-      CASE (MIR_LT, 3);  ICMP(<); END_INSN;
-      CASE (MIR_ULT, 3); UCMP(<); END_INSN;
-      CASE (MIR_FLT, 3); FCMP(<); END_INSN;
-      CASE (MIR_DLT, 3); DCMP(<); END_INSN;
+      CASE (MIR_LT, 3);   ICMP(<); END_INSN;
+      CASE (MIR_LTS, 3);  ICMPS(<); END_INSN;
+      CASE (MIR_ULT, 3);  UCMP(<); END_INSN;
+      CASE (MIR_ULTS, 3); UCMPS(<); END_INSN;
+      CASE (MIR_FLT, 3);  FCMP(<); END_INSN;
+      CASE (MIR_DLT, 3);  DCMP(<); END_INSN;
       
-      CASE (MIR_LE, 3);  ICMP(<=); END_INSN;
-      CASE (MIR_ULE, 3); UCMP(<=); END_INSN;
-      CASE (MIR_FLE, 3); FCMP(<=); END_INSN;
-      CASE (MIR_DLE, 3); DCMP(<=); END_INSN;
+      CASE (MIR_LE, 3);   ICMP(<=); END_INSN;
+      CASE (MIR_LES, 3);  ICMPS(<=); END_INSN;
+      CASE (MIR_ULE, 3);  UCMP(<=); END_INSN;
+      CASE (MIR_ULES, 3); UCMPS(<=); END_INSN;
+      CASE (MIR_FLE, 3);  FCMP(<=); END_INSN;
+      CASE (MIR_DLE, 3);  DCMP(<=); END_INSN;
       
-      CASE (MIR_GT, 3);  ICMP(>); END_INSN;
-      CASE (MIR_UGT, 3); UCMP(>); END_INSN;
-      CASE (MIR_FGT, 3); FCMP(>); END_INSN;
-      CASE (MIR_DGT, 3); DCMP(>); END_INSN;
+      CASE (MIR_GT, 3);   ICMP(>); END_INSN;
+      CASE (MIR_GTS, 3);  ICMPS(>); END_INSN;
+      CASE (MIR_UGT, 3);  UCMP(>); END_INSN;
+      CASE (MIR_UGTS, 3); UCMPS(>); END_INSN;
+      CASE (MIR_FGT, 3);  FCMP(>); END_INSN;
+      CASE (MIR_DGT, 3);  DCMP(>); END_INSN;
       
-      CASE (MIR_GE, 3);  ICMP(>=); END_INSN;
-      CASE (MIR_UGE, 3); UCMP(>=); END_INSN;
-      CASE (MIR_FGE, 3); FCMP(>=); END_INSN;
-      CASE (MIR_DGE, 3); DCMP(>=); END_INSN;
+      CASE (MIR_GE, 3);   ICMP(>=); END_INSN;
+      CASE (MIR_GES, 3);  ICMPS(>=); END_INSN;
+      CASE (MIR_UGE, 3);  UCMP(>=); END_INSN;
+      CASE (MIR_UGES, 3); UCMPS(>=); END_INSN;
+      CASE (MIR_FGE, 3);  FCMP(>=); END_INSN;
+      CASE (MIR_DGE, 3);  DCMP(>=); END_INSN;
       
-      CASE (MIR_JMP, 1); pc = code + get_i (ops); END_INSN;
-      CASE (MIR_BT, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
-      CASE (MIR_BF, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
-      CASE (MIR_BEQ, 3);  BICMP (==); END_INSN;
-      CASE (MIR_FBEQ, 3); BFCMP (==); END_INSN;
-      CASE (MIR_DBEQ, 3); BDCMP (==); END_INSN;
-      CASE (MIR_BNE, 3);  BICMP (!=); END_INSN;
-      CASE (MIR_FBNE, 3); BFCMP (!=); END_INSN;
-      CASE (MIR_DBNE, 3); BDCMP (!=); END_INSN;
-      CASE (MIR_BLT, 3);  BICMP (<); END_INSN;
-      CASE (MIR_UBLT, 3); BUCMP (<); END_INSN;
-      CASE (MIR_FBLT, 3); BFCMP (<); END_INSN;
-      CASE (MIR_DBLT, 3); BDCMP (<); END_INSN;
-      CASE (MIR_BLE, 3);  BICMP (<=); END_INSN;
-      CASE (MIR_UBLE, 3); BUCMP (<=); END_INSN;
-      CASE (MIR_FBLE, 3); BFCMP (<=); END_INSN;
-      CASE (MIR_DBLE, 3); BDCMP (<=); END_INSN;
-      CASE (MIR_BGT, 3);  BICMP (>); END_INSN;
-      CASE (MIR_UBGT, 3); BUCMP (>); END_INSN;
-      CASE (MIR_FBGT, 3); BFCMP (>); END_INSN;
-      CASE (MIR_DBGT, 3); BDCMP (>); END_INSN;
-      CASE (MIR_BGE, 3);  BICMP (>=); END_INSN;
-      CASE (MIR_UBGE, 3); BUCMP (>=); END_INSN;
-      CASE (MIR_FBGE, 3); BFCMP (>=); END_INSN;
-      CASE (MIR_DBGE, 3); BDCMP (>=); END_INSN;
-      CASE (MIR_CALL, 0); END_INSN;
+      CASE (MIR_JMP, 1);   pc = code + get_i (ops); END_INSN;
+      CASE (MIR_BT, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BF, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BEQ, 3);   BICMP (==); END_INSN;
+      CASE (MIR_BEQS, 3);  BICMPS (==); END_INSN;
+      CASE (MIR_FBEQ, 3);  BFCMP (==); END_INSN;
+      CASE (MIR_DBEQ, 3);  BDCMP (==); END_INSN;
+      CASE (MIR_BNE, 3);   BICMP (!=); END_INSN;
+      CASE (MIR_BNES, 3);  BICMPS (!=); END_INSN;
+      CASE (MIR_FBNE, 3);  BFCMP (!=); END_INSN;
+      CASE (MIR_DBNE, 3);  BDCMP (!=); END_INSN;
+      CASE (MIR_BLT, 3);   BICMP (<); END_INSN;
+      CASE (MIR_BLTS, 3);  BICMPS (<); END_INSN;
+      CASE (MIR_UBLT, 3);  BUCMP (<); END_INSN;
+      CASE (MIR_UBLTS, 3); BUCMPS (<); END_INSN;
+      CASE (MIR_FBLT, 3);  BFCMP (<); END_INSN;
+      CASE (MIR_DBLT, 3);  BDCMP (<); END_INSN;
+      CASE (MIR_BLE, 3);   BICMP (<=); END_INSN;
+      CASE (MIR_BLES, 3);  BICMPS (<=); END_INSN;
+      CASE (MIR_UBLE, 3);  BUCMP (<=); END_INSN;
+      CASE (MIR_UBLES, 3); BUCMPS (<=); END_INSN;
+      CASE (MIR_FBLE, 3);  BFCMP (<=); END_INSN;
+      CASE (MIR_DBLE, 3);  BDCMP (<=); END_INSN;
+      CASE (MIR_BGT, 3);   BICMP (>); END_INSN;
+      CASE (MIR_BGTS, 3);  BICMPS (>); END_INSN;
+      CASE (MIR_UBGT, 3);  BUCMP (>); END_INSN;
+      CASE (MIR_UBGTS, 3); BUCMPS (>); END_INSN;
+      CASE (MIR_FBGT, 3);  BFCMP (>); END_INSN;
+      CASE (MIR_DBGT, 3);  BDCMP (>); END_INSN;
+      CASE (MIR_BGE, 3);   BICMP (>=); END_INSN;
+      CASE (MIR_BGES, 3);  BICMPS (>=); END_INSN;
+      CASE (MIR_UBGE, 3);  BUCMP (>=); END_INSN;
+      CASE (MIR_UBGES, 3); BUCMPS (>=); END_INSN;
+      CASE (MIR_FBGE, 3);  BFCMP (>=); END_INSN;
+      CASE (MIR_DBGE, 3);  BDCMP (>=); END_INSN;
+
+      CASE (MIR_CALL, 0);   END_INSN;
       CASE (MIR_CALL_C, 0); END_INSN;
       
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
+      CASE (MIR_RETS, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
 
