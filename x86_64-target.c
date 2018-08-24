@@ -319,10 +319,10 @@ static struct pattern patterns[] = {
   {MIR_I2D, "r r",  "F2 X 0F 2A r0 R1"},  /* cvtsi2sd r0,r1 */
   {MIR_I2D, "r md", "F2 X 0F 2A r0 m1"},  /* cvtsi2sd r0,m1 */
 
-  {MIR_F2I, "r r",  "F3 X 0F 2D r0 R1"},  /* cvtsi2ss r0,r1 */
-  {MIR_F2I, "r mf", "F3 X 0F 2D r0 m1"},  /* cvtsi2ss r0,m1 */
-  {MIR_D2I, "r r",  "F2 X 0F 2D r0 R1"},  /* cvtsi2sd r0,r1 */
-  {MIR_D2I, "r md", "F2 X 0F 2D r0 m1"},  /* cvtsi2sd r0,m1 */
+  {MIR_F2I, "r r",  "F3 X 0F 2D r0 R1"},  /* cvtss2si r0,r1 */
+  {MIR_F2I, "r mf", "F3 X 0F 2D r0 m1"},  /* cvtss2si r0,m1 */
+  {MIR_D2I, "r r",  "F2 X 0F 2D r0 R1"},  /* cvtsd2si r0,r1 */
+  {MIR_D2I, "r md", "F2 X 0F 2D r0 m1"},  /* cvtsd2si r0,m1 */
 
   {MIR_F2D, "r r",  "F3 X 0F 5A r0 R1"},  /* cvtss2sd r0,r1 */
   {MIR_F2D, "r mf", "F3 X 0F 5A r0 m1"},  /* cvtss2sd r0,m1 */
