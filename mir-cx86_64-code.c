@@ -17,6 +17,6 @@ static int x86_adjust_type_alignment (int align, struct type *type) {
   return 16;
 }
 
-static int invalid_alignment (mir_long_long align) {
+static int invalid_alignment (mir_llong align) {
   return align != 0 && align != 1 && align != 2 && align != 4 && align != 8 && align != 16;
 }

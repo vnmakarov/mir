@@ -6,7 +6,7 @@ typedef int8_t mir_schar;
 typedef int16_t mir_short;
 typedef int32_t mir_int;
 typedef int64_t mir_long;
-typedef int64_t mir_long_long;
+typedef int64_t mir_llong;
 
 #define MIR_SCHAR_MIN INT8_MIN
 #define MIR_SCHAR_MAX INT8_MAX
@@ -23,7 +23,7 @@ typedef uint8_t mir_uchar;
 typedef uint16_t mir_ushort;
 typedef uint32_t mir_uint;
 typedef uint64_t mir_ulong;
-typedef uint64_t mir_ulong_long;
+typedef uint64_t mir_ullong;
 
 #define MIR_UCHAR_MAX UINT8_MAX
 #define MIR_USHORT_MAX UINT16_MAX
@@ -37,7 +37,7 @@ typedef mir_schar mir_char;
 
 typedef float mir_float;
 typedef double mir_double;
-typedef mir_double mir_long_double;
+typedef mir_double mir_ldouble;
 
 typedef uint8_t mir_bool;
 typedef int64_t mir_ptrdiff_t;
