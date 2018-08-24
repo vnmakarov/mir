@@ -26,8 +26,8 @@ static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const c
 
 static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_alloc_error, message); }
 
+#define TEMP_REG_NAME_PREFIX "t"
 #define HARD_REG_NAME_PREFIX "hr"
-#define TEMP_REG_NAME_PREFIX "hr"
 
 /* Reserved names:
    fp - frame pointer
@@ -189,7 +189,7 @@ static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2
 static htab_hash_t str_hash (string_t str) { return mum_hash (str.str, strlen (str.str), 0x42); }
 
 static void string_init (void) {
-  string_t string;
+  static string_t string = {0, NULL};
   
   VARR_CREATE (string_t, strings, 0);
   VARR_PUSH (string_t, strings, string); /* don't use 0th string */
@@ -265,7 +265,7 @@ static htab_hash_t reg2rdn_hash (size_t rdn) {
 }
 
 static void reg_init (void) {
-  reg_desc_t rd;
+  static reg_desc_t rd = {0, NULL, MIR_I64, 0};
   
   VARR_CREATE (reg_desc_t, reg_descs, 300);
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
@@ -397,6 +397,7 @@ static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
   reg_desc_t rd;
 
   rd.name_num = name_num; rd.func = func; /* keys */
+  rd.type = MIR_I64; rd.reg = 0; /* to eliminate warnings */
   temp_rdn = VARR_LENGTH (reg_desc_t, reg_descs);
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (! HTAB_DO (size_t, namenum2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
@@ -408,8 +409,8 @@ static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
 
 void MIR_finish_func (void) {
   MIR_insn_t insn;
-  MIR_error_type_t err;
-  const char *err_msg;
+  MIR_error_type_t err = MIR_no_error; /* to eliminate warning */
+  const char *err_msg = NULL;
   
   if (curr_func == NULL)
     (*error_func) (MIR_no_func_error, "finish of non-existing function");
@@ -531,8 +532,6 @@ static MIR_insn_t new_insn1 (MIR_insn_code_t code) { return create_insn (1, code
 
 MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_insn_t insn;
-  MIR_op_mode_t mode, reg_mode;
-  int out_p;
   size_t i, insn_nops = MIR_insn_nops (code);
   
   if (nops != insn_nops)
@@ -570,6 +569,7 @@ static reg_desc_t *find_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
   reg_desc_t rd;
 
   rd.reg = reg; rd.func = func; /* keys */
+  rd.name_num = 0; rd.type = MIR_I64; /* to eliminate warnings */
   temp_rdn = VARR_LENGTH (reg_desc_t, reg_descs);
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (! HTAB_DO (size_t, reg2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
@@ -637,9 +637,17 @@ MIR_op_t MIR_new_int_op (int64_t i) {
   return op;
 }
 
+MIR_op_t MIR_new_uint_op (uint64_t u) {
+  MIR_op_t op;
+
+  init_op (&op, MIR_OP_UINT); op.u.u = u;
+  return op;
+}
+
 MIR_op_t MIR_new_float_op (float f) {
   MIR_op_t op;
 
+  assert (sizeof (float) == 4); /* IEEE single */
   init_op (&op, MIR_OP_FLOAT); op.u.f = f;
   return op;
 }
@@ -647,6 +655,7 @@ MIR_op_t MIR_new_float_op (float f) {
 MIR_op_t MIR_new_double_op (double d) {
   MIR_op_t op;
 
+  assert (sizeof (double) == 8); /* IEEE double */
   init_op (&op, MIR_OP_DOUBLE); op.u.d = d;
   return op;
 }
@@ -756,6 +765,9 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
   case MIR_OP_INT:
     fprintf (f, "%" PRId64, op.u.i);
     break;
+  case MIR_OP_UINT:
+    fprintf (f, "%" PRIu64, op.u.u);
+    break;
   case MIR_OP_FLOAT:
     fprintf (f, "%.*g", FLT_DECIMAL_DIG, op.u.f);
     break;
@@ -828,13 +840,13 @@ void MIR_output_item (FILE *f, MIR_item_t item) {
     return;
   }
   curr_output_func = func = item->u.func;
-  fprintf (f, "%s:\tfunc\t%lu, %lu, %lu", func->name, (unsigned long) func->frame_size,
+  fprintf (f, "%s:\tfunc\t%u, %u, %u", func->name, func->frame_size,
 	   func->nargs, func->nlocals);
   for (i = 0; i < func->nargs + func->nlocals; i++)
     fprintf (f, ", %s:%s", MIR_type_str (func->vars[i].type), func->vars[i].name);
-  fprintf (f, " # frame size = %lu, %lu arg%s, %lu local%s\n", (unsigned long) func->frame_size,
-	   (unsigned long) func->nargs, func->nargs == 1 ? "" : "s",
-	   (unsigned long) func->nlocals, func->nlocals == 1 ? "" : "s");
+  fprintf (f, " # frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
+	   func->nargs, func->nargs == 1 ? "" : "s",
+	   func->nlocals, func->nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn);
   fprintf (f, "\tendfunc\n");
