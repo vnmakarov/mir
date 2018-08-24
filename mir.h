@@ -38,43 +38,47 @@ typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, con
      float, or double.
    o Operand types should be what the insn expects */
 typedef enum {
+  /* Abbreviations:
+     I - 64-bit integer, S -short (32-bit), U - unsigned, F -float, D - double.  */
   /* 2 operand insns: */
   MIR_MOV, MIR_FMOV, MIR_DMOV, /* Moves */
-  MIR_I2F, MIR_I2D, /* Integer to float or double conversion */
-  MIR_F2I, MIR_D2I, /* Float or double to integer conversion */
-  MIR_F2D, MIR_D2F, /* Float <-> double conversion */
-  MIR_NEG, MIR_FNEG, MIR_DNEG, /* Changing sign */
+  /* Extensions.  Truncation is not necessary because it is just using a part. */
+  MIR_S2I, MIR_US2I,
+  MIR_I2F, MIR_I2D,                       /* Integer to float or double conversion */
+  MIR_F2I, MIR_D2I,                       /* Float or double to integer conversion */
+  MIR_F2D, MIR_D2F,                       /* Float <-> double conversion */
+  MIR_NEG,  MIR_NEGS, MIR_FNEG, MIR_DNEG, /* Changing sign */
   /* 3 operand insn: */
-  MIR_ADD, MIR_FADD, MIR_DADD, /* Addition */
-  MIR_SUB, MIR_FSUB, MIR_DSUB, /* Subtraction */
-  MIR_MUL, MIR_FMUL, MIR_DMUL, /* Multiplication */
-  MIR_DIV, MIR_UDIV, MIR_FDIV, MIR_DDIV, /* Division, U - unsigned */
-  MIR_MOD, MIR_UMOD, /* Modulo */
-  MIR_AND, MIR_OR, MIR_XOR, MIR_LSH, /* Logical */
-  MIR_RSH, MIR_URSH, /* Right signed/unsigned shift */
-  MIR_EQ, MIR_FEQ, MIR_DEQ, /* Equality */
-  MIR_NE, MIR_FNE, MIR_DNE, /* Inequality */
-  MIR_LT, MIR_ULT, MIR_FLT, MIR_DLT, /* Less then */
-  MIR_LE, MIR_ULE, MIR_FLE, MIR_DLE, /* Less or equal */
-  MIR_GT, MIR_UGT, MIR_FGT, MIR_DGT, /* Greater then */
-  MIR_GE, MIR_UGE, MIR_FGE, MIR_DGE, /* Greater or equal */
+  MIR_ADD, MIR_ADDS, MIR_FADD, MIR_DADD, /* Addition */
+  MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, /* Subtraction */
+  MIR_MUL, MIR_UMUL, MIR_MULS, MIR_UMULS, MIR_FMUL, MIR_DMUL, /* Multiplication */
+  MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_UDIVS, MIR_FDIV, MIR_DDIV, /* Division */
+  MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS, /* Modulo */
+  MIR_AND, MIR_ANDS, MIR_OR, MIR_ORS, MIR_XOR, MIR_XORS, /* Logical */
+  MIR_LSH, MIR_LSHS, MIR_RSH, MIR_RSHS, MIR_URSH, MIR_URSHS, /* Right signed/unsigned shift */
+  MIR_EQ, MIR_EQS, MIR_FEQ, MIR_DEQ, /* Equality */
+  MIR_NE, MIR_NES, MIR_FNE, MIR_DNE, /* Inequality */
+  MIR_LT, MIR_LTS, MIR_ULT, MIR_ULTS, MIR_FLT, MIR_DLT, /* Less then */
+  MIR_LE, MIR_LES, MIR_ULE, MIR_ULES, MIR_FLE, MIR_DLE, /* Less or equal */
+  MIR_GT, MIR_GTS, MIR_UGT, MIR_UGTS, MIR_FGT, MIR_DGT, /* Greater then */
+  MIR_GE, MIR_GES, MIR_UGE, MIR_UGES, MIR_FGE, MIR_DGE, /* Greater or equal */
   /* Uncoditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
   MIR_JMP, MIR_BT, MIR_BF,
   /* Compare and branch (3 operand) insns.  The first operand is the
      label. */
-  MIR_BEQ, MIR_FBEQ, MIR_DBEQ,
-  MIR_BNE, MIR_FBNE, MIR_DBNE,
-  MIR_BLT, MIR_UBLT, MIR_FBLT, MIR_DBLT,
-  MIR_BLE, MIR_UBLE, MIR_FBLE, MIR_DBLE,
-  MIR_BGT, MIR_UBGT, MIR_FBGT, MIR_DBGT,
-  MIR_BGE, MIR_UBGE, MIR_FBGE, MIR_DBGE,
+  MIR_BEQ, MIR_BEQS, MIR_FBEQ, MIR_DBEQ,
+  MIR_BNE, MIR_BNES, MIR_FBNE, MIR_DBNE,
+  MIR_BLT, MIR_BLTS, MIR_UBLT, MIR_UBLTS, MIR_FBLT, MIR_DBLT,
+  MIR_BLE, MIR_BLES, MIR_UBLE, MIR_UBLES, MIR_FBLE, MIR_DBLE,
+  MIR_BGT, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT,
+  MIR_BGE, MIR_BGES, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE,
   /* 1st operand is name or op containing func address, 2nd operands
      is immediate integer definining arguments number, 3rd and
      subsequent ops are call arguments. */
   MIR_CALL, MIR_CALL_C,
   /* 1 operand insn: */
-  MIR_RET, MIR_FRET, MIR_DRET,
+  MIR_RET, MIR_RETS, MIR_FRET, MIR_DRET,
   /* Special insns: */
   MIR_LABEL, /* One immediate operand is unique label number  */
   MIR_INVALID_INSN,
@@ -84,8 +88,8 @@ typedef enum {
 /* Data types: */
 typedef enum {
   /* Integer types of different size: */
-  MIR_I8, MIR_U8, MIR_I16, MIR_U16, MIR_I32, MIR_U32, MIR_I64,
-  MIR_F, MIR_D /* Float or double type */, MIR_T_BOUND
+  MIR_I8, MIR_U8, MIR_I16, MIR_U16, MIR_I32, MIR_U32, MIR_I64, MIR_U64,
+  MIR_F, MIR_D /* Float or double type */, MIR_BLOCK, MIR_T_BOUND
 } MIR_type_t;
 
 typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
@@ -103,7 +107,7 @@ typedef uint32_t MIR_reg_t;
 #define MIR_NON_HARD_REG MIR_MAX_REG_NUM
 
 /* Immediate in immediate moves.  */
-typedef union {int64_t i; float f; double d;} MIR_imm_t;
+typedef union {int64_t i; uint64_t u; float f; double d;} MIR_imm_t;
 
 /* Memory: mem:type[base + index * scale + disp].  It also can be
    memory with hard regs but such memory used only internally.  An
@@ -123,7 +127,7 @@ typedef const char *MIR_name_t;
 
 /* Operand mode */
 typedef enum {
-  MIR_OP_UNDEF, MIR_OP_REG, MIR_OP_HARD_REG, MIR_OP_INT, MIR_OP_FLOAT, MIR_OP_DOUBLE,
+  MIR_OP_UNDEF, MIR_OP_REG, MIR_OP_HARD_REG, MIR_OP_INT, MIR_OP_UINT, MIR_OP_FLOAT, MIR_OP_DOUBLE,
   MIR_OP_NAME, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
 } MIR_op_mode_t;
 
@@ -135,6 +139,7 @@ typedef struct {
     MIR_reg_t reg;
     MIR_reg_t hard_reg; /* Used only internally */
     int64_t i;
+    uint64_t u;
     float f;
     double d;
     MIR_name_t name; /* external or func name */
@@ -245,6 +250,7 @@ extern MIR_reg_t MIR_func_reg (const char *reg_name, MIR_func_t func);
 
 extern MIR_op_t MIR_new_reg_op (MIR_reg_t reg);
 extern MIR_op_t MIR_new_int_op (int64_t v);
+extern MIR_op_t MIR_new_uint_op (uint64_t v);
 extern MIR_op_t MIR_new_float_op (float v);
 extern MIR_op_t MIR_new_double_op (double v);
 extern MIR_op_t MIR_new_name_op (MIR_name_t name);
