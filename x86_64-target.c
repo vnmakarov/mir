@@ -216,101 +216,87 @@ struct pattern {
 // make imm always second operand (symplify for cmp and commutative op)
 // make result of cmp op always a register and memory only the 2nd operand if first is reg, but not for FP (NAN) (simplify)
 // for FP cmp first operand should be always reg (machinize)
-#define IOP(INSN_CODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
-  {INSN_CODE, "r 0 r",  "X " RRM_CODE " r0 R2"},    /* op r0,r2*/ \
-  {INSN_CODE, "r 0 m3", "X " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
-  {INSN_CODE, "m3 0 r", "X " MR_CODE " r2 m0"},     /* op m0,r2*/ \
-  {INSN_CODE, "r 0 i0", "X " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
-  {INSN_CODE, "m3 0 i0", "X " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
-  {INSN_CODE, "r 0 i2", "X " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
-  {INSN_CODE, "m3 0 i2", "X " RMI32_CODE " m0 I2"}, /* op m0,i2*/
 
-#define IOP32(INSN_CODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
-  {INSN_CODE, "r 0 r",  "Y " RRM_CODE " r0 R2"},    /* op r0,r2*/ \
-  {INSN_CODE, "r 0 m2", "Y " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
-  {INSN_CODE, "m2 0 r", "Y " MR_CODE " r2 m0"},     /* op m0,r2*/ \
-  {INSN_CODE, "r 0 i0", "Y " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
-  {INSN_CODE, "m2 0 i0", "Y " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
-  {INSN_CODE, "r 0 i2", "Y " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
-  {INSN_CODE, "m2 0 i2", "Y " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+#define IOP0(ICODE, SUFF, PREF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
+  {ICODE ## SUFF, "r 0 r",  #PREF " " RRM_CODE " r0 R2"},    /* op r0,r2*/ \
+  {ICODE ## SUFF, "r 0 m3", #PREF " " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
+  {ICODE ## SUFF, "m3 0 r", #PREF " " MR_CODE " r2 m0"},     /* op m0,r2*/ \
+  {ICODE ## SUFF, "r 0 i0", #PREF " " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
+  {ICODE ## SUFF, "m3 0 i0", #PREF " " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
+  {ICODE ## SUFF, "r 0 i2", #PREF " " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
+  {ICODE ## SUFF, "m3 0 i2", #PREF " " RMI32_CODE " m0 I2"}, /* op m0,i2*/
 
-#define FOP(INSN_CODE, OP_CODE) \
-  {INSN_CODE, "r 0 r", OP_CODE " r0 R2"}, \
-  {INSN_CODE, "r 0 mf", OP_CODE " r0 m2"},
+#define IOP(ICODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)  \
+  IOP0 (ICODE, , X, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
+  IOP0 (ICODE, S, Y, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)
 
-#define DOP(INSN_CODE, OP_CODE) \
-  {INSN_CODE, "r 0 r", OP_CODE " r0 R2"}, \
-  {INSN_CODE, "r 0 md", OP_CODE " r0 m2"},
+#define FOP(ICODE, OP_CODE) \
+  {ICODE, "r 0 r", OP_CODE " r0 R2"}, \
+  {ICODE, "r 0 mf", OP_CODE " r0 m2"},
 
-#define SHOP(INSN_CODE, CL_OP_CODE, I8_OP_CODE) \
-  {MIR_LSH, "r 0 h2", "X " CL_OP_CODE " R0 i2"},           /* sh r0,cl */ \
-  {MIR_LSH, "m3 0 h2", "X " CL_OP_CODE " m0 i2"},          /* sh m0,cl */ \
-  {MIR_LSH, "r 0 i8", "X " I8_OP_CODE " R0 i2"},           /* sh r0,i2 */ \
-  {MIR_LSH, "m3 0 i8", "X " I8_OP_CODE " m0 i2"},          /* sh m0,i2 */
+#define DOP(ICODE, OP_CODE) \
+  {ICODE, "r 0 r", OP_CODE " r0 R2"}, \
+  {ICODE, "r 0 md", OP_CODE " r0 m2"},
 
-#define SHOP32(INSN_CODE, CL_OP_CODE, I8_OP_CODE) \
-  {MIR_LSH, "r 0 h2", "Y " CL_OP_CODE " R0 i2"},           /* sh r0,cl */ \
-  {MIR_LSH, "m2 0 h2", "Y " CL_OP_CODE " m0 i2"},          /* sh m0,cl */ \
-  {MIR_LSH, "r 0 i8", "Y " I8_OP_CODE " R0 i2"},           /* sh r0,i2 */ \
-  {MIR_LSH, "m2 0 i8", "Y " I8_OP_CODE " m0 i2"},          /* sh m0,i2 */
+#define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)	                \
+  {ICODE ## SUFF, "r 0 h2", #PREF " " CL_OP_CODE " R0 i2"},  /* sh r0,cl */ \
+  {ICODE ## SUFF, "m3 0 h2", #PREF " " CL_OP_CODE " m0 i2"}, /* sh m0,cl */ \
+  {ICODE ## SUFF, "r 0 i8", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
+  {ICODE ## SUFF, "m3 0 i8", #PREF " " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
-#define CMP(INSN_CODE, SET_OPCODE) \
-  {INSN_CODE, "r r r", "X 3B r1 R2;" SET_OPCODE " R0;X 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r m3", "X 3B r1 m2;" SET_OPCODE " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r i0", "X 83 /7 R1 i2;" SET_OPCODE " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r i2", "X 81 /7 R1 I2;" SET_OPCODE " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r m3 i0", "X 83 /7 m1 i2;" SET_OPCODE " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r m3 i2", "X 81 /7 m1 I2;" SET_OPCODE " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
+#define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)  \
+  SHOP0(ICODE, , X, CL_OP_CODE, I8_OP_CODE)  \
+  SHOP0(ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
-#define CMP32(INSN_CODE, SET_OPCODE) \
-  {INSN_CODE, "r r r", "Y 3B r1 R2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r m2", "Y 3B r1 m2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},     /* cmp r1,m2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r i0", "Y 83 /7 R1 i2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r i2", "Y 81 /7 R1 I2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r m2 i0", "Y 83 /7 m1 i2;" SET_OPCODE " R0;Y 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r m2 i2", "Y 81 /7 m1 I2;" SET_OPCODE " R0;Y 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
+#define CMP0(ICODE, SUFF, PREF, SETX) \
+  {ICODE ## SUFF, "r r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
+  {ICODE ## SUFF, "r r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;setx r0; movzbl r0,r0*/ \
+  {ICODE ## SUFF, "r r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
+  {ICODE ## SUFF, "r r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
+  {ICODE ## SUFF, "r m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
+  {ICODE ## SUFF, "r m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
 
-#define FCMP(INSN_CODE, SET_OPCODE) \
-  {INSN_CODE, "r r r", "0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomiss r1,r2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r mf", "0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomiss r1,m2;setx r0; movzbl r0,r0*/
+#define CMP(ICODE, SET_OPCODE)   \
+  CMP0(ICODE, , X, SET_OPCODE)   \
+  CMP0(ICODE, S, Y, SET_OPCODE)
 
-#define FEQ(INSN_CODE, V, SET_OPCODE) \
-  {INSN_CODE, "r r r", "X C7 /0 R0 " V "; 0F 2E r1 R2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomiss r1,r2;setnp r8;cmovne r0,r8 */  \
-  {INSN_CODE, "r r mf", "X C7 /0 R0 " V "; 0F 2E r1 m2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomiss r1,m2;setnp r8;cmovne r0,r8 */ \
+#define FCMP(ICODE, SET_OPCODE) \
+  {ICODE, "r r r", "0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomiss r1,r2;setx r0; movzbl r0,r0*/ \
+  {ICODE, "r r mf", "0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomiss r1,m2;setx r0; movzbl r0,r0*/
 
-#define DEQ(INSN_CODE, V, SET_OPCODE) \
-  {INSN_CODE, "r r r", "X C7 /0 R0 " V "; 66 0F 2E r1 R2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomisd r1,r2;setnp r8;cmovne r0,r8 */ \
-  {INSN_CODE, "r r md", "X C7 /0 R0 " V ";66 0F 2E r1 m2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomisd r1,m2;setnp r8;cmovne r0,r8 */ \
+#define FEQ(ICODE, V, SET_OPCODE) \
+  {ICODE, "r r r", "X C7 /0 R0 " V "; 0F 2E r1 R2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomiss r1,r2;setnp r8;cmovne r0,r8 */  \
+  {ICODE, "r r mf", "X C7 /0 R0 " V "; 0F 2E r1 m2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomiss r1,m2;setnp r8;cmovne r0,r8 */ \
 
-#define FCMP(INSN_CODE, SET_OPCODE) \
-  {INSN_CODE, "r r r", "0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomiss r1,r2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r mf", "0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomiss r1,m2;setx r0; movzbl r0,r0*/
+#define DEQ(ICODE, V, SET_OPCODE) \
+  {ICODE, "r r r", "X C7 /0 R0 " V "; 66 0F 2E r1 R2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomisd r1,r2;setnp r8;cmovne r0,r8 */ \
+  {ICODE, "r r md", "X C7 /0 R0 " V ";66 0F 2E r1 m2; " SET_OPCODE " R0; X 0F 45 r0 H8"},  /* mov v,r0;ucomisd r1,m2;setnp r8;cmovne r0,r8 */ \
 
-#define DCMP(INSN_CODE, SET_OPCODE) \
-  {INSN_CODE, "r r r", "66 0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomisd r1,r2;setx r0; movzbl r0,r0*/ \
-  {INSN_CODE, "r r md", "66 0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomisd r1,m2;setx r0; movzbl r0,r0*/
+#define FCMP(ICODE, SET_OPCODE) \
+  {ICODE, "r r r", "0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomiss r1,r2;setx r0; movzbl r0,r0*/ \
+  {ICODE, "r r mf", "0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomiss r1,m2;setx r0; movzbl r0,r0*/
 
-#define BCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "l r r", "X 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
-  {INSN_CODE, "l r m3", "X 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
-  {INSN_CODE, "l r i0", "X 83 /7 R1 i2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "l r i2", "X 81 /7 R1 I2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "l m3 i0", "X 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
-  {INSN_CODE, "l m3 i2", "X 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
+#define DCMP(ICODE, SET_OPCODE) \
+  {ICODE, "r r r", "66 0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomisd r1,r2;setx r0; movzbl r0,r0*/ \
+  {ICODE, "r r md", "66 0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomisd r1,m2;setx r0; movzbl r0,r0*/
 
-#define BCMP32(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "l r r", "Y 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
-  {INSN_CODE, "l r m2", "Y 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
-  {INSN_CODE, "l r i0", "Y 83 /7 R1 i2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "l r i2", "Y 81 /7 R1 I2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
-  {INSN_CODE, "l m2 i0", "Y 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
-  {INSN_CODE, "l m2 i2", "Y 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
+#define BCMP0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
+  {ICODE ## SUFF, "l r r", #PREF " 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
+  {ICODE ## SUFF, "l r m3", #PREF " 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
+  {ICODE ## SUFF, "l r i0", #PREF " 83 /7 R1 i2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {ICODE ## SUFF, "l r i2", #PREF " 81 /7 R1 I2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {ICODE ## SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
+  {ICODE ## SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
 
-#define FBCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "l r r", "0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
+#define BCMP(ICODE, LONG_JUMP_OPCODE) \
+  BCMP0(ICODE, , X, LONG_JUMP_OPCODE) \
+  BCMP0(ICODE, S, Y, LONG_JUMP_OPCODE)
 
-#define DBCMP(INSN_CODE, LONG_JUMP_OPCODE) \
-  {INSN_CODE, "l r r", "66 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
+#define FBCMP(ICODE, LONG_JUMP_OPCODE)					\
+  {ICODE, "l r r", "0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
+
+#define DBCMP(ICODE, LONG_JUMP_OPCODE) \
+  {ICODE, "l r r", "66 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
 
 static struct pattern patterns[] = {
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
@@ -377,12 +363,10 @@ static struct pattern patterns[] = {
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0")
   {MIR_ADD, "r r r",  "X 8D r0 ap"},  /* lea r0,(r1,r2)*/
   {MIR_ADD, "r r i2", "X 8D r0 ap"},  /* lea r0,i2(r1)*/
-  IOP32 (MIR_ADDS, "03", "01", "83 /0", "81 /0")
   {MIR_ADDS, "r r r",  "Y 8D r0 ap"},  /* lea r0,(r1,r2)*/
   {MIR_ADDS, "r r i2", "Y 8D r0 ap"},  /* lea r0,i2(r1)*/
 
   IOP (MIR_SUB, "2B", "29", "83 /5", "81 /5")
-  IOP32 (MIR_SUBS, "2B", "29", "83 /5", "81 /5")
   
   {MIR_MUL, "r 0 r", "X 0F AF r0 R2"},    /* imul r0,r1*/
   {MIR_MUL, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/
@@ -406,25 +390,17 @@ static struct pattern patterns[] = {
   {MIR_MODS, "h1 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
   
   IOP (MIR_AND, "23", "21", "83 /4", "81 /4")
-  IOP32 (MIR_ANDS, "23", "21", "83 /4", "81 /4")
   IOP (MIR_OR, "0B", "09", "83 /1", "81 /1")
-  IOP32 (MIR_ORS, "0B", "09", "83 /1", "81 /1")
   IOP (MIR_XOR, "33", "31", "83 /6", "81 /6")
-  IOP32 (MIR_XORS, "33", "31", "83 /6", "81 /6")
 
   FOP (MIR_FADD, "F3 0F 58") DOP (MIR_DADD, "F2 0F 58") FOP (MIR_FSUB, "F3 0F 5C") DOP (MIR_DSUB, "F2 0F 5C")
   FOP (MIR_FMUL, "F3 0F 59") DOP (MIR_DMUL, "F2 0F 59") FOP (MIR_FDIV, "F3 0F 5E") DOP (MIR_DDIV, "F2 0F 5E")
   
   SHOP (MIR_LSH, "D3 /4", "C1 /4") SHOP (MIR_RSH, "D3 /7", "C1 /7") SHOP (MIR_URSH, "D3 /5", "C1 /5")
-  SHOP32 (MIR_LSHS, "D3 /4", "C1 /4") SHOP32 (MIR_RSHS, "D3 /7", "C1 /7") SHOP32 (MIR_URSHS, "D3 /5", "C1 /5")
   
   CMP(MIR_EQ, "0F 94") CMP(MIR_NE, "0F 95") CMP(MIR_LT, "0F 9C")  CMP(MIR_ULT, "0F 92")
   CMP(MIR_LE, "0F 9E") CMP(MIR_ULE, "0F 96") CMP(MIR_GT, "0F 9F") CMP(MIR_UGT, "0F 97")
   CMP(MIR_GE, "0F 9D") CMP(MIR_UGE, "0F 93")
-
-  CMP32(MIR_EQS, "0F 94") CMP32(MIR_NES, "0F 95") CMP32(MIR_LTS, "0F 9C")  CMP32(MIR_ULTS, "0F 92")
-  CMP32(MIR_LES, "0F 9E") CMP32(MIR_ULES, "0F 96") CMP32(MIR_GTS, "0F 9F") CMP32(MIR_UGTS, "0F 97")
-  CMP32(MIR_GES, "0F 9D") CMP32(MIR_UGES, "0F 93")
 
   FEQ (MIR_FEQ, "V0", "0F 9B") DEQ (MIR_DEQ, "V0", "0F 9B") FEQ (MIR_FNE, "V1", "0F 9A") DEQ (MIR_DNE, "V1", "0F 9A")
   
@@ -436,10 +412,6 @@ static struct pattern patterns[] = {
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE,  "0F 85")
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83")
-
-  BCMP32 (MIR_BEQ, "0F 84") BCMP32 (MIR_BNE,  "0F 85")
-  BCMP32 (MIR_BLT, "0F 8C") BCMP32 (MIR_UBLT, "0F 82") BCMP32 (MIR_BLE, "0F 8E") BCMP32 (MIR_UBLE, "0F 86")
-  BCMP32 (MIR_BGT, "0F 8F") BCMP32 (MIR_UBGT, "0F 87") BCMP32 (MIR_BGE, "0F 8D") BCMP32 (MIR_UBGE, "0F 83")
 
   FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLT, "0F 86")
   FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGT, "0F 83")
