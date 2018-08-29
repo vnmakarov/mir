@@ -9,7 +9,7 @@ int main (void) {
     
   HTAB_CREATE (int, htab, 4, hash, eq);
   status &= HTAB_ELS_NUM (int, htab) == 0;
-  for (iter = 0; i < 10; i ++) {
+  for (iter = 0; iter < 10; iter++) {
     for (i = 0; i < 100; i++) {
       status &= ! HTAB_DO (int, htab, i, HTAB_INSERT, tab_el);
       status &= tab_el == i;

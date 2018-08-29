@@ -81,7 +81,7 @@ static void make_2op_insns (MIR_item_t func_item) {
   MIR_op_t input, output, temp_op;
   MIR_op_mode_t mode;
   MIR_type_t type;
-  size_t i, int_num, float_num;
+  size_t i;
   int out_p;
   
   assert (func_item->func_p);
@@ -797,7 +797,7 @@ static void build_live_ranges (void) {
     VARR_PUSH (live_range_t, var_live_ranges, NULL);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
 #if MIR_GEN_DEBUG
-    fprintf (debug_file, "  ------BB%d end: point=%d\n", bb->index, curr_point);
+    fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point);
 #endif
     bitmap_clear (live_vars);
     if (bb->live_out != NULL)

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "mir-dlist.h"
+#include "mir-varr.h"
 
 #ifdef __GNUC__
 #define MIR_UNUSED __attribute__((unused))
@@ -169,13 +170,15 @@ typedef struct MIR_var {
   const char *name;
 } MIR_var_t;
 
+DEF_VARR (MIR_var_t);
+
 /* Function definition */
 typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
   uint32_t frame_size;
-  uint32_t nargs, nlocals, ntemps;
-  MIR_var_t vars[1];
+  uint32_t nargs, ntemps;
+  VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -224,9 +227,9 @@ extern int MIR_init (void);
 extern void MIR_finish (void);
 
 extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
-				    size_t nargs, size_t nlocals, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,
-				size_t nargs, size_t nlocals, ...);
+				    size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,  size_t nargs, ...);
+extern void MIR_create_func_var (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
 
 extern MIR_error_func_t MIR_get_error_func (void);

@@ -4,7 +4,6 @@ static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR 
 
-#include "mir-varr.h"
 #include "mir-htab.h"
 #include "mir-mum.h"
 #include <string.h>
@@ -53,8 +52,6 @@ static int reserved_name_p (const char *name) {
 DEF_VARR (MIR_op_t);
 
 static VARR (MIR_op_t) *temp_insn_ops;
-
-DEF_VARR (MIR_var_t);
 
 static VARR (MIR_var_t) *temp_vars;
 
@@ -341,9 +338,6 @@ static void reg_finish (void) {
   HTAB_DESTROY (size_t, reg2rdn_tab);
 }
 
-DEF_VARR (MIR_reg_t);
-static VARR (MIR_reg_t) *temp_regs;
-
 DEF_VARR (MIR_insn_t);
 static VARR (MIR_insn_t) *ret_insns;
 
@@ -361,7 +355,6 @@ int MIR_init (void) {
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
   VARR_CREATE (MIR_var_t, temp_vars, 0);
   check_and_prepare_insn_descs ();
-  VARR_CREATE (MIR_reg_t, temp_regs, 0);
   VARR_CREATE (MIR_insn_t, ret_insns, 0);
   DLIST_INIT (MIR_item_t, MIR_items);
   return TRUE;
@@ -371,7 +364,6 @@ void MIR_finish (void) {
   reg_finish ();
   string_finish ();
   VARR_DESTROY (MIR_insn_t, ret_insns);
-  VARR_DESTROY (MIR_reg_t, temp_regs);
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
@@ -383,52 +375,55 @@ MIR_error_func_t MIR_get_error_func (void) { return error_func; }
 
 void MIR_set_error_func (MIR_error_func_t func) { error_func = func; }
 
-MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
-			     size_t nargs, size_t nlocals, MIR_var_t *vars) {
+MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size, size_t nargs, MIR_var_t *vars) {
   MIR_item_t func_item = malloc (sizeof (struct MIR_item));
   MIR_func_t func;
-  size_t nvars = nargs + nlocals;
   size_t i;
   
   if (func_item == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory");
   func_item->data = NULL;
   func_item->func_p = TRUE;
-  curr_func = func_item->u.func = func
-    = malloc (sizeof (struct MIR_func)
-	      +  sizeof (MIR_var_t) * (nvars == 0 ? 0 : nvars - 1));
+  curr_func = func_item->u.func = func = malloc (sizeof (struct MIR_func));
   if (func == NULL) {
     free (func_item);
     (*error_func) (MIR_alloc_error, "Not enough memory");
   }
   func->name = string_store (name).str;
   DLIST_INIT (MIR_insn_t, func->insns);
-  func->frame_size = frame_size; func->nargs = nargs; func->nlocals = nlocals; func->ntemps = 0;
-  for (i = 0; i < nvars; i++) {
-    func->vars[i] = vars[i];
+  VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
+  func->frame_size = frame_size; func->nargs = nargs; func->ntemps = 0;
+  for (i = 0; i < nargs; i++) {
+    VARR_PUSH (MIR_var_t, func->vars, vars[i]);
     reg_create (func, i + 1, vars[i].name, vars[i].type, FALSE);
   }
-  reg_create (func, nvars + 1, "fp", MIR_I64, TRUE);
+  reg_create (func, nargs + 1, "fp", MIR_I64, TRUE);
   DLIST_APPEND (MIR_item_t, MIR_items, func_item);
   return func_item;
 }
 
-MIR_item_t MIR_new_func (const char *name, size_t frame_size,
-			 size_t nargs, size_t nlocals, ...) {
+MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...) {
   va_list argp;
   MIR_var_t var;
   size_t i;
   
-  va_start (argp, nlocals);
+  va_start (argp, nargs);
   VARR_TRUNC (MIR_var_t, temp_vars, 0);
-  for (i = 0; i < nargs + nlocals; i++) {
+  for (i = 0; i < nargs; i++) {
     var.type = va_arg (argp, MIR_type_t);
     var.name = va_arg (argp, const char *);
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
   va_end(argp);
-  return MIR_new_func_arr (name, frame_size, nargs, nlocals,
-			   VARR_ADDR (MIR_var_t, temp_vars));
+  return MIR_new_func_arr (name, frame_size, nargs, VARR_ADDR (MIR_var_t, temp_vars));
+}
+
+void MIR_create_func_var (MIR_func_t func, MIR_type_t type, const char *name) {
+  MIR_var_t var;
+  
+  var.type = type; var.name = name;
+  VARR_PUSH (MIR_var_t, func->vars, var);
+  reg_create (func, VARR_LENGTH (MIR_var_t, func->vars) + 1 /* FP */, name, type, FALSE);
 }
 
 static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
@@ -624,7 +619,7 @@ MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
   
   func->ntemps++;
   sprintf (name, "t%d", func->ntemps);
-  reg = func->nargs + func->nlocals + func->ntemps + 1; /* fp */
+  reg = VARR_LENGTH (MIR_var_t, func->vars) + func->ntemps + 1; /* fp */
   reg_create (func, reg, name, type, TRUE);
   return reg;
 }
@@ -872,20 +867,28 @@ void MIR_output_insn (FILE *f, MIR_insn_t insn) {
 void MIR_output_item (FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
-  size_t i;
+  MIR_var_t var;
+  size_t i, nlocals;
   
   if (! item->func_p) {
     fprintf (f, "%s:\textern\n", item->u.external);
     return;
   }
   curr_output_func = func = item->u.func;
-  fprintf (f, "%s:\tfunc\t%u, %u, %u", func->name, func->frame_size,
-	   func->nargs, func->nlocals);
-  for (i = 0; i < func->nargs + func->nlocals; i++)
-    fprintf (f, ", %s:%s", MIR_type_str (func->vars[i].type), func->vars[i].name);
-  fprintf (f, " # frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
-	   func->nargs, func->nargs == 1 ? "" : "s",
-	   func->nlocals, func->nlocals == 1 ? "" : "s");
+  fprintf (f, "%s:\tfunc\t%u", func->name, func->frame_size);
+  for (i = 0; i < func->nargs; i++) {
+    var = VARR_GET (MIR_var_t, func->vars, i);
+    fprintf (f, ", %s:%s", MIR_type_str (var.type), var.name);
+  }
+  fprintf (f, "\n");
+  nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
+  fprintf (f, "\tlocal\t");
+  for (i = 0; i < nlocals; i++) {
+    var = VARR_GET (MIR_var_t, func->vars, i + func->nargs);
+    fprintf (f, i == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (var.type), var.name);
+  }
+  fprintf (f, "\n# frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
+	   func->nargs, func->nargs == 1 ? "" : "s", (unsigned) nlocals, nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn);
   fprintf (f, "\tendfunc\n");
@@ -1068,7 +1071,8 @@ MIR_item_t create_mir_func_with_loop (void) {
   MIR_label_t fin, cont;
   MIR_reg_t ARG1, R2;
   
-  func = MIR_new_func ("test", 0, 1, 1, MIR_I64, "arg1", MIR_I64, "count");
+  func = MIR_new_func ("test", 0, 1, MIR_I64, "arg1");
+  MIR_create_func_var (func->u.func, MIR_I64, "count");
   ARG1 = MIR_reg ("arg1"); R2 = MIR_reg ("count");
   fin = MIR_new_label (); cont = MIR_new_label ();
   MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (R2), MIR_new_int_op (0)));
@@ -1086,7 +1090,7 @@ MIR_item_t create_mir_example2 (void) {
   MIR_item_t func;
   MIR_reg_t ARG1, ARG2;
   
-  func = MIR_new_func ("test2", 0, 2, 0, MIR_I64, "arg1", MIR_I64, "arg2");
+  func = MIR_new_func ("test2", 0, 2, MIR_I64, "arg1", MIR_I64, "arg2");
   ARG1 = MIR_reg ("arg1"); ARG2 = MIR_reg ("arg2");
   MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_mem_op (MIR_I64, 0, ARG1, ARG2, 8),
 				       MIR_new_mem_op (MIR_I64, 64, ARG1, 0, 0), MIR_new_mem_op (MIR_I64, 0, 0, ARG1, 8)));
@@ -1106,7 +1110,8 @@ MIR_item_t create_mir_example2 (void) {
 MIR_item_t create_mir_func_sieve (void) {
   MIR_read_init ();
   MIR_read_string ("\n\
-sieve: func 819000, 0, 7, i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
+sieve: func 819000\n\
+       local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
        mov flags, fp\n\
        mov iter, 0\n\
 loop:  bge fin, iter, 1000\n\

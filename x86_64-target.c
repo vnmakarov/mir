@@ -60,7 +60,8 @@ static void machinize (MIR_item_t func_item) {
   assert (func_item->func_p);
   func = func_item->u.func;
   for (i = int_num = float_num = 0; i < func->nargs; i++) {
-    MIR_type_t tp = func->vars[i].type;
+    MIR_type_t tp = VARR_GET (MIR_var_t, func->vars, i).type;
+    
     if (tp == MIR_F || tp == MIR_D) {
       switch (float_num) {
       case 0: case 1: case 2: case 3:
@@ -224,6 +225,15 @@ struct pattern {
   {INSN_CODE, "r 0 i2", "X " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
   {INSN_CODE, "m3 0 i2", "X " RMI32_CODE " m0 I2"}, /* op m0,i2*/
 
+#define IOP32(INSN_CODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
+  {INSN_CODE, "r 0 r",  "Y " RRM_CODE " r0 R2"},    /* op r0,r2*/ \
+  {INSN_CODE, "r 0 m2", "Y " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
+  {INSN_CODE, "m2 0 r", "Y " MR_CODE " r2 m0"},     /* op m0,r2*/ \
+  {INSN_CODE, "r 0 i0", "Y " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
+  {INSN_CODE, "m2 0 i0", "Y " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
+  {INSN_CODE, "r 0 i2", "Y " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
+  {INSN_CODE, "m2 0 i2", "Y " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+
 #define FOP(INSN_CODE, OP_CODE) \
   {INSN_CODE, "r 0 r", OP_CODE " r0 R2"}, \
   {INSN_CODE, "r 0 mf", OP_CODE " r0 m2"},
@@ -235,8 +245,14 @@ struct pattern {
 #define SHOP(INSN_CODE, CL_OP_CODE, I8_OP_CODE) \
   {MIR_LSH, "r 0 h2", "X " CL_OP_CODE " R0 i2"},           /* sh r0,cl */ \
   {MIR_LSH, "m3 0 h2", "X " CL_OP_CODE " m0 i2"},          /* sh m0,cl */ \
-  {MIR_LSH, "r 0 i8", "X " I8_OP_CODE " R0 i2"},          /* sh r0,i2 */ \
-  {MIR_LSH, "m3 0 i8", "X " I8_OP_CODE " m0 i2"},         /* sh m0,i2 */
+  {MIR_LSH, "r 0 i8", "X " I8_OP_CODE " R0 i2"},           /* sh r0,i2 */ \
+  {MIR_LSH, "m3 0 i8", "X " I8_OP_CODE " m0 i2"},          /* sh m0,i2 */
+
+#define SHOP32(INSN_CODE, CL_OP_CODE, I8_OP_CODE) \
+  {MIR_LSH, "r 0 h2", "Y " CL_OP_CODE " R0 i2"},           /* sh r0,cl */ \
+  {MIR_LSH, "m2 0 h2", "Y " CL_OP_CODE " m0 i2"},          /* sh m0,cl */ \
+  {MIR_LSH, "r 0 i8", "Y " I8_OP_CODE " R0 i2"},           /* sh r0,i2 */ \
+  {MIR_LSH, "m2 0 i8", "Y " I8_OP_CODE " m0 i2"},          /* sh m0,i2 */
 
 #define CMP(INSN_CODE, SET_OPCODE) \
   {INSN_CODE, "r r r", "X 3B r1 R2;" SET_OPCODE " R0;X 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
@@ -245,6 +261,14 @@ struct pattern {
   {INSN_CODE, "r r i2", "X 81 /7 R1 I2;" SET_OPCODE " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
   {INSN_CODE, "r m3 i0", "X 83 /7 m1 i2;" SET_OPCODE " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
   {INSN_CODE, "r m3 i2", "X 81 /7 m1 I2;" SET_OPCODE " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
+
+#define CMP32(INSN_CODE, SET_OPCODE) \
+  {INSN_CODE, "r r r", "Y 3B r1 R2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
+  {INSN_CODE, "r r m2", "Y 3B r1 m2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},     /* cmp r1,m2;setx r0; movzbl r0,r0*/ \
+  {INSN_CODE, "r r i0", "Y 83 /7 R1 i2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
+  {INSN_CODE, "r r i2", "Y 81 /7 R1 I2;" SET_OPCODE " R0;Y 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
+  {INSN_CODE, "r m2 i0", "Y 83 /7 m1 i2;" SET_OPCODE " R0;Y 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
+  {INSN_CODE, "r m2 i2", "Y 81 /7 m1 I2;" SET_OPCODE " R0;Y 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
 
 #define FCMP(INSN_CODE, SET_OPCODE) \
   {INSN_CODE, "r r r", "0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomiss r1,r2;setx r0; movzbl r0,r0*/ \
@@ -274,6 +298,14 @@ struct pattern {
   {INSN_CODE, "l m3 i0", "X 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
   {INSN_CODE, "l m3 i2", "X 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
 
+#define BCMP32(INSN_CODE, LONG_JUMP_OPCODE) \
+  {INSN_CODE, "l r r", "Y 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
+  {INSN_CODE, "l r m2", "Y 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
+  {INSN_CODE, "l r i0", "Y 83 /7 R1 i2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {INSN_CODE, "l r i2", "Y 81 /7 R1 I2;"   LONG_JUMP_OPCODE " l0"},  /* cmp r0,i1;jxx rel32*/ \
+  {INSN_CODE, "l m2 i0", "Y 83 /7 m1 i2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/ \
+  {INSN_CODE, "l m2 i2", "Y 81 /7 m1 I2;"  LONG_JUMP_OPCODE " l0"},  /* cmp m0,i1;jxx rel32*/
+
 #define FBCMP(INSN_CODE, LONG_JUMP_OPCODE) \
   {INSN_CODE, "l r r", "0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
 
@@ -302,7 +334,7 @@ static struct pattern patterns[] = {
 
   {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"},    /* mov m0,i8 */
   {MIR_MOV, "m1 i1", "66 Y C7 /0 m0 i1"}, /* mov m0,i16 */
-  {MIR_MOV, "m2 i2", "Y C7 /0 m0 i1"},      /* mov m0,i32 */
+  {MIR_MOV, "m2 i2", "Y C7 /0 m0 i1"},    /* mov m0,i32 */
   
   {MIR_FMOV, "r r", "F3 0F 10 r0 R1"},     /* movss r0,r1 */
   {MIR_FMOV, "r mf", "F3 0F 10 r0 m1"},    /* movss r0,m32 */
@@ -313,6 +345,11 @@ static struct pattern patterns[] = {
   {MIR_DMOV, "r md", "F2 0F 10 r0 m1"},    /* movsd r0,m32 */
   {MIR_DMOV, "r d", "F2 0F 10 r0 p1"},     /* movsd r0,m32 */
   {MIR_DMOV, "md r", "F2 0F 11 r1 m0"},    /* movsd r0,m32 */
+
+  {MIR_S2I, "r r",  "X 63 r0 R1"},        /* movsx r0,r1 */
+  {MIR_S2I, "r m2", "Y 63 r0 m1"},        /* movsz r0,m1 */
+  {MIR_US2I, "r r",  "Y 8B r0 R1"},       /* mov r0,r1 */
+  {MIR_MOV, "r m2", "Y 8B r0 m1"},        /* mov r0,m1 */
 
   {MIR_I2F, "r r",  "F3 X 0F 2A r0 R1"},  /* cvtsi2ss r0,r1 */
   {MIR_I2F, "r mf", "F3 X 0F 2A r0 m1"},  /* cvtsi2ss r0,m1 */
@@ -331,6 +368,8 @@ static struct pattern patterns[] = {
 
   {MIR_NEG, "r 0",  "X F7 /3 R1"},  /* neg r0 */
   {MIR_NEG, "m3 0", "X F7 /3 m1"},  /* neg m0 */
+  {MIR_NEGS, "r 0",  "Y F7 /3 R1"}, /* neg r0 */
+  {MIR_NEGS, "m2 0", "Y F7 /3 m1"}, /* neg m0 */
 
   {MIR_FNEG, "r 0",  "0F 57 r0 c0000000080000000"},  /* xorps r0,80000000 */
   {MIR_DNEG, "r 0",  "66 0F 57 r0 c8000000000000000"},  /* xorpd r0,0x8000000000000000 */
@@ -338,33 +377,54 @@ static struct pattern patterns[] = {
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0")
   {MIR_ADD, "r r r",  "X 8D r0 ap"},  /* lea r0,(r1,r2)*/
   {MIR_ADD, "r r i2", "X 8D r0 ap"},  /* lea r0,i2(r1)*/
+  IOP32 (MIR_ADDS, "03", "01", "83 /0", "81 /0")
+  {MIR_ADDS, "r r r",  "Y 8D r0 ap"},  /* lea r0,(r1,r2)*/
+  {MIR_ADDS, "r r i2", "Y 8D r0 ap"},  /* lea r0,i2(r1)*/
 
   IOP (MIR_SUB, "2B", "29", "83 /5", "81 /5")
+  IOP32 (MIR_SUBS, "2B", "29", "83 /5", "81 /5")
   
   {MIR_MUL, "r 0 r", "X 0F AF r0 R2"},    /* imul r0,r1*/
   {MIR_MUL, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/
   {MIR_MUL, "r r i2", "X 69 r0 R1 I2"},   /* imul r0,r1,i32*/
   {MIR_MUL, "r m3 i2", "X 69 r0 m1 I2"},  /* imul r0,m1,i32*/
   {MIR_MUL, "r r s", "X 8D r0 ap"},       /* lea r0,(,r1,s2)*/
+  {MIR_MULS, "r 0 r", "Y 0F AF r0 R2"},   /* imul r0,r1*/
+  {MIR_MULS, "r 0 m2", "Y 0F AF r0 m2"},  /* imul r0,m1*/
+  {MIR_MULS, "r r i2", "Y 69 r0 R1 I2"},  /* imul r0,r1,i32*/
+  {MIR_MULS, "r m2 i2", "Y 69 r0 m1 I2"}, /* imul r0,m1,i32*/
+  {MIR_MULS, "r r s", "Y 8D r0 ap"},      /* lea r0,(,r1,s2)*/
 
   {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
   {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
+  {MIR_DIVS, "h0 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_DIVS, "h0 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
 
   {MIR_MOD, "h1 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
   {MIR_MOD, "h1 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
+  {MIR_MODS, "h1 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_MODS, "h1 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
   
   IOP (MIR_AND, "23", "21", "83 /4", "81 /4")
+  IOP32 (MIR_ANDS, "23", "21", "83 /4", "81 /4")
   IOP (MIR_OR, "0B", "09", "83 /1", "81 /1")
-  IOP (MIR_OR, "33", "31", "83 /6", "81 /6")
+  IOP32 (MIR_ORS, "0B", "09", "83 /1", "81 /1")
+  IOP (MIR_XOR, "33", "31", "83 /6", "81 /6")
+  IOP32 (MIR_XORS, "33", "31", "83 /6", "81 /6")
 
   FOP (MIR_FADD, "F3 0F 58") DOP (MIR_DADD, "F2 0F 58") FOP (MIR_FSUB, "F3 0F 5C") DOP (MIR_DSUB, "F2 0F 5C")
   FOP (MIR_FMUL, "F3 0F 59") DOP (MIR_DMUL, "F2 0F 59") FOP (MIR_FDIV, "F3 0F 5E") DOP (MIR_DDIV, "F2 0F 5E")
   
   SHOP (MIR_LSH, "D3 /4", "C1 /4") SHOP (MIR_RSH, "D3 /7", "C1 /7") SHOP (MIR_URSH, "D3 /5", "C1 /5")
+  SHOP32 (MIR_LSHS, "D3 /4", "C1 /4") SHOP32 (MIR_RSHS, "D3 /7", "C1 /7") SHOP32 (MIR_URSHS, "D3 /5", "C1 /5")
   
   CMP(MIR_EQ, "0F 94") CMP(MIR_NE, "0F 95") CMP(MIR_LT, "0F 9C")  CMP(MIR_ULT, "0F 92")
   CMP(MIR_LE, "0F 9E") CMP(MIR_ULE, "0F 96") CMP(MIR_GT, "0F 9F") CMP(MIR_UGT, "0F 97")
   CMP(MIR_GE, "0F 9D") CMP(MIR_UGE, "0F 93")
+
+  CMP32(MIR_EQS, "0F 94") CMP32(MIR_NES, "0F 95") CMP32(MIR_LTS, "0F 9C")  CMP32(MIR_ULTS, "0F 92")
+  CMP32(MIR_LES, "0F 9E") CMP32(MIR_ULES, "0F 96") CMP32(MIR_GTS, "0F 9F") CMP32(MIR_UGTS, "0F 97")
+  CMP32(MIR_GES, "0F 9D") CMP32(MIR_UGES, "0F 93")
 
   FEQ (MIR_FEQ, "V0", "0F 9B") DEQ (MIR_DEQ, "V0", "0F 9B") FEQ (MIR_FNE, "V1", "0F 9A") DEQ (MIR_DNE, "V1", "0F 9A")
   
@@ -376,6 +436,10 @@ static struct pattern patterns[] = {
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE,  "0F 85")
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83")
+
+  BCMP32 (MIR_BEQ, "0F 84") BCMP32 (MIR_BNE,  "0F 85")
+  BCMP32 (MIR_BLT, "0F 8C") BCMP32 (MIR_UBLT, "0F 82") BCMP32 (MIR_BLE, "0F 8E") BCMP32 (MIR_UBLE, "0F 86")
+  BCMP32 (MIR_BGT, "0F 8F") BCMP32 (MIR_UBGT, "0F 87") BCMP32 (MIR_BGE, "0F 8D") BCMP32 (MIR_UBGE, "0F 83")
 
   FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLT, "0F 86")
   FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGT, "0F 83")

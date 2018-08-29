@@ -218,9 +218,6 @@ static token_t read_token (int (*get_char) (void), void (*unget_char) (int)) {
 	const char *repr;
 	char *end;
 	int next_ch, base, float_p, double_p;
-	float f;
-	double d;
-	int64_t i;
 	
 	if (ch == '+' || ch == '-') {
 	  next_ch = get_char ();
@@ -284,7 +281,6 @@ static MIR_label_t create_label_desc (const char *name) {
 DEF_VARR (MIR_op_t);
 static VARR (MIR_op_t) *insn_ops;
 
-DEF_VARR (MIR_var_t);
 static VARR (MIR_var_t) *func_vars;
 
 MIR_type_t MIR_str2type (const char *type_name) {
@@ -338,8 +334,8 @@ MIR_item_t MIR_read_string (const char *str) {
   MIR_label_t label;
   MIR_var_t var;
   size_t n;
-  int64_t i, frame_size, nargs, nlocals;
-  int func_p, end_func_p, read_p, disp_p;
+  int64_t i, frame_size, nargs;
+  int func_p, end_func_p, local_p,  read_p, disp_p;
   insn_name_t in, el;
 
   saved_error_func = MIR_get_error_func ();
@@ -372,7 +368,7 @@ MIR_item_t MIR_read_string (const char *str) {
       if (t.code == TC_NL)
 	t = read_token (get_string_char, unget_string_char); /* label_names without insn */
     }
-    end_func_p = func_p = FALSE;
+    end_func_p = func_p = local_p = FALSE;
     if (strcmp (name, "func") == 0) {
       func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
@@ -381,6 +377,12 @@ MIR_item_t MIR_read_string (const char *str) {
       end_func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
 	process_error (MIR_syntax_error, "endfunc should have no labels");
+    } else if (strcmp (name, "local") == 0) { // ???
+      local_p = TRUE;
+      if (func == NULL)
+	process_error (MIR_syntax_error, "var outside func");
+      if (VARR_LENGTH (label_name_t, label_names) != 0)
+	process_error (MIR_syntax_error, "var should have no labels");
     } else {
       in.name = name;
       if (! HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
@@ -405,7 +407,7 @@ MIR_item_t MIR_read_string (const char *str) {
 	t = read_token (get_string_char, unget_string_char);
 	read_p = FALSE;
 	if (t.code != TC_COL) {
-	  if (! end_func_p && ! func_p && MIR_branch_code_p (insn_code)
+	  if (! end_func_p && ! func_p && ! local_p && MIR_branch_code_p (insn_code)
 	      && VARR_LENGTH (MIR_op_t, insn_ops) == 0) {
 	    op = MIR_new_label_op (create_label_desc (name));
 	  } else {
@@ -414,28 +416,33 @@ MIR_item_t MIR_read_string (const char *str) {
 	  }
 	  break;
 	}
-	/* Memory or arg */
+	/* Memory, arg, or var */
 	type = MIR_str2type (name);
 	if (type == MIR_T_BOUND)
 	  process_error (MIR_syntax_error, "Unknown type");
 	else if (func_p && type != MIR_I64 && type != MIR_F && type != MIR_D)
-	  process_error (MIR_syntax_error, "wrong type for arg or local");
+	  process_error (MIR_syntax_error, "wrong type for arg");
+	else if (local_p && type != MIR_I64 && type != MIR_F && type != MIR_D)
+	  process_error (MIR_syntax_error, "wrong type for local var");
 	t = read_token (get_string_char, unget_string_char);
 	op.mode = MIR_OP_MEM;
 	op.u.mem.type = type; op.u.mem.scale = 1;
 	op.u.mem.base = op.u.mem.index = 0; op.u.mem.disp = 0;
-	if (func_p) {
+	if (func_p || local_p) {
 	  if (t.code != TC_NAME)
-	    process_error (MIR_syntax_error, "wrong arg or local");
+	    process_error (MIR_syntax_error, func_p ? "wrong arg" : "wrong local var");
 	  op.u.mem.disp = (MIR_disp_t) t.u.name;
 	  t = read_token (get_string_char, unget_string_char);
 	} else {
+	  disp_p = FALSE;
 	  if (t.code == TC_INT) {
 	    op.u.mem.disp = t.u.i;
 	    t = read_token (get_string_char, unget_string_char);
+	    disp_p = TRUE;
 	  } else if (t.code == TC_NAME) {
 	    op.u.mem.disp = (MIR_disp_t) t.u.name;
 	    t = read_token (get_string_char, unget_string_char);
+	    disp_p = TRUE;
 	  }
 	  if (t.code == TC_LEFT_PAR) {
 	    t = read_token (get_string_char, unget_string_char);
@@ -498,23 +505,19 @@ MIR_item_t MIR_read_string (const char *str) {
       if (func != NULL)
 	process_error (MIR_syntax_error, "nested func");
       op_addr = VARR_ADDR (MIR_op_t, insn_ops);
-      if ((n = VARR_LENGTH (MIR_op_t, insn_ops)) < 3)
+      if ((n = VARR_LENGTH (MIR_op_t, insn_ops)) < 1)
 	process_error (MIR_syntax_error, "too few params in func");
       if (op_addr[0].mode != MIR_OP_INT || (frame_size = op_addr[0].u.i) < 0)
 	process_error (MIR_syntax_error, "wrong frame size");
-      if (op_addr[1].mode != MIR_OP_INT || (nargs = op_addr[1].u.i) < 0)
-	process_error (MIR_syntax_error, "wrong args number");
-      if (op_addr[2].mode != MIR_OP_INT || (nlocals = op_addr[2].u.i) < 0)
-	process_error (MIR_syntax_error, "wrong local number");
-      if (nargs + nlocals != n - 3)
-	process_error (MIR_syntax_error, "discrepency in number of args and locals and number of their names");
-      for (i = 0; i < nargs + nlocals; i++) {
-	assert (op_addr[i + 3].mode == MIR_OP_MEM);
-	var.type = op_addr[i + 3].u.mem.type;
-	var.name = (const char *) op_addr[i + 3].u.mem.disp;
+      nargs = n - 1;
+      for (i = 0; i < nargs; i++) {
+	assert (op_addr[i + 1].mode == MIR_OP_MEM);
+	var.type = op_addr[i + 1].u.mem.type;
+	var.name = (const char *) op_addr[i + 1].u.mem.disp;
 	VARR_PUSH (MIR_var_t, func_vars, var);
       }
-      func = MIR_new_func_arr (VARR_GET (label_name_t, label_names, 0), frame_size, nargs, nlocals, VARR_ADDR (MIR_var_t, func_vars));
+      func = MIR_new_func_arr (VARR_GET (label_name_t, label_names, 0), frame_size, nargs,
+			       VARR_ADDR (MIR_var_t, func_vars));
       HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
       if (func == NULL)
@@ -523,6 +526,13 @@ MIR_item_t MIR_read_string (const char *str) {
 	process_error (MIR_syntax_error, "endfunc should have no params");
       func = NULL;
       MIR_finish_func ();
+    } else if (local_p) {
+      op_addr = VARR_ADDR (MIR_op_t, insn_ops);
+      n = VARR_LENGTH (MIR_op_t, insn_ops);
+      for (i = 0; i < n; i++) {
+	assert (op_addr[i].mode == MIR_OP_MEM);
+	MIR_create_func_var (func->u.func, op_addr[i].u.mem.type, (const char *) op_addr[i].u.mem.disp);
+      }
     } else {
       insn = MIR_new_insn_arr (insn_code, VARR_LENGTH (MIR_op_t, insn_ops), VARR_ADDR (MIR_op_t, insn_ops));
       if (func != NULL)
@@ -568,8 +578,9 @@ int main (void) {
   MIR_init ();
   MIR_read_init ();
   MIR_read_string ("\n\
-loop: func 0, 1, 1, i64:limit, i64:count # a comment\n\
+loop: func 0, i64:limit # a comment\n\
 \n\
+       local i64:count\n\
        mov count, 0\n\
        bge L1, count, limit\n\
 L2:    # a separate label\n\
@@ -578,7 +589,8 @@ L1:    ret count  # label with insn\n\
        endfunc\n\
   ");
   MIR_read_string ("\n\
-sieve: func 819000, 0, 7, i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
+sieve: func 819000\n\
+       local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
        sub flags, fp, 819000\n\
        mov iter, 0\n\
 loop:  bge fin, iter, 1000\n\

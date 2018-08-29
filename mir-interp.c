@@ -95,7 +95,6 @@ static void push_mem (MIR_op_t op) {
 
 static void generate_icode (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
-  MIR_op_t op;
   MIR_insn_t insn, label;
   MIR_val_t v;
   size_t i;
@@ -228,7 +227,7 @@ static ALWAYS_INLINE float get_f (MIR_val_t *v) { return v->f;}
 static ALWAYS_INLINE double get_d (MIR_val_t *v) { return v->d;}
 
 static ALWAYS_INLINE int64_t *get_iop (MIR_val_t *bp, code_t c) { return &bp [get_i (c)].i; }
-static ALWAYS_INLINE int64_t *get_uop (MIR_val_t *bp, code_t c) { return &bp [get_i (c)].u; }
+static ALWAYS_INLINE uint64_t *get_uop (MIR_val_t *bp, code_t c) { return &bp [get_i (c)].u; }
 static ALWAYS_INLINE float *get_fop (MIR_val_t *bp, code_t c) { return &bp [get_i (c)].f; }
 static ALWAYS_INLINE double *get_dop (MIR_val_t *bp, code_t c) { return &bp [get_i (c)].d; }
 
@@ -332,42 +331,66 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       MIR_val_t v;
       
       ltab [MIR_MOV] = &&L_MIR_MOV; ltab [MIR_FMOV] = &&L_MIR_FMOV; ltab [MIR_DMOV] = &&L_MIR_DMOV;
+      ltab [MIR_S2I] = &&L_MIR_S2I; ltab [MIR_US2I] = &&L_MIR_US2I;
       ltab [MIR_I2F] = &&L_MIR_I2F; ltab [MIR_I2D] = &&L_MIR_I2D;
       ltab [MIR_F2I] = &&L_MIR_F2I; ltab [MIR_D2I] = &&L_MIR_D2I;
       ltab [MIR_F2D] = &&L_MIR_F2D; ltab [MIR_D2F] = &&L_MIR_D2F;
-      ltab [MIR_NEG] = &&L_MIR_NEG; ltab [MIR_FNEG] = &&L_MIR_FNEG; ltab [MIR_DNEG] = &&L_MIR_DNEG;
-      ltab [MIR_ADD] = &&L_MIR_ADD; ltab [MIR_FADD] = &&L_MIR_FADD; ltab [MIR_DADD] = &&L_MIR_DADD;
-      ltab [MIR_SUB] = &&L_MIR_SUB; ltab [MIR_FSUB] = &&L_MIR_FSUB; ltab [MIR_DSUB] = &&L_MIR_DSUB;
-      ltab [MIR_MUL] = &&L_MIR_MUL; ltab [MIR_FMUL] = &&L_MIR_FMUL; ltab [MIR_DMUL] = &&L_MIR_DMUL;
-      ltab [MIR_DIV] = &&L_MIR_DIV; ltab [MIR_UDIV] = &&L_MIR_UDIV;
+      ltab [MIR_NEG] = &&L_MIR_NEG; ltab [MIR_NEGS] = &&L_MIR_NEGS;
+      ltab [MIR_FNEG] = &&L_MIR_FNEG; ltab [MIR_DNEG] = &&L_MIR_DNEG;
+      ltab [MIR_ADD] = &&L_MIR_ADD; ltab [MIR_ADDS] = &&L_MIR_ADDS;
+      ltab [MIR_FADD] = &&L_MIR_FADD; ltab [MIR_DADD] = &&L_MIR_DADD;
+      ltab [MIR_SUB] = &&L_MIR_SUB; ltab [MIR_SUBS] = &&L_MIR_SUBS;
+      ltab [MIR_FSUB] = &&L_MIR_FSUB; ltab [MIR_DSUB] = &&L_MIR_DSUB;
+      ltab [MIR_MUL] = &&L_MIR_MUL; ltab [MIR_UMUL] = &&L_MIR_UMUL;
+      ltab [MIR_MULS] = &&L_MIR_MULS; ltab [MIR_UMULS] = &&L_MIR_UMULS;
+      ltab [MIR_FMUL] = &&L_MIR_FMUL; ltab [MIR_DMUL] = &&L_MIR_DMUL;
+      ltab [MIR_DIV] = &&L_MIR_DIV; ltab [MIR_DIVS] = &&L_MIR_DIVS;
+      ltab [MIR_UDIV] = &&L_MIR_UDIV; ltab [MIR_UDIVS] = &&L_MIR_UDIVS;
       ltab [MIR_FDIV] = &&L_MIR_FDIV; ltab [MIR_DDIV] = &&L_MIR_DDIV;
-      ltab [MIR_MOD] = &&L_MIR_MOD; ltab [MIR_UMOD] = &&L_MIR_UMOD;
-      ltab [MIR_AND] = &&L_MIR_AND; ltab [MIR_OR] = &&L_MIR_OR;
-      ltab [MIR_XOR] = &&L_MIR_XOR; ltab [MIR_LSH] = &&L_MIR_LSH;
-      ltab [MIR_RSH] = &&L_MIR_RSH; ltab [MIR_URSH] = &&L_MIR_URSH;
-      ltab [MIR_EQ] = &&L_MIR_EQ; ltab [MIR_FEQ] = &&L_MIR_FEQ; ltab [MIR_DEQ] = &&L_MIR_DEQ;
-      ltab [MIR_NE] = &&L_MIR_NE; ltab [MIR_FNE] = &&L_MIR_FNE; ltab [MIR_DNE] = &&L_MIR_DNE;
-      ltab [MIR_LT] = &&L_MIR_LT; ltab [MIR_ULT] = &&L_MIR_ULT;
+      ltab [MIR_MOD] = &&L_MIR_MOD; ltab [MIR_MODS] = &&L_MIR_MODS;
+      ltab [MIR_UMOD] = &&L_MIR_UMOD; ltab [MIR_UMODS] = &&L_MIR_UMODS;
+      ltab [MIR_AND] = &&L_MIR_AND; ltab [MIR_ANDS] = &&L_MIR_ANDS;
+      ltab [MIR_OR] = &&L_MIR_OR; ltab [MIR_ORS] = &&L_MIR_ORS;
+      ltab [MIR_XOR] = &&L_MIR_XOR; ltab [MIR_XORS] = &&L_MIR_XORS;
+      ltab [MIR_LSH] = &&L_MIR_LSH; ltab [MIR_LSHS] = &&L_MIR_LSHS;
+      ltab [MIR_RSH] = &&L_MIR_RSH; ltab [MIR_RSHS] = &&L_MIR_RSHS;
+      ltab [MIR_URSH] = &&L_MIR_URSH;  ltab [MIR_URSHS] = &&L_MIR_URSHS;
+      ltab [MIR_EQ] = &&L_MIR_EQ; ltab [MIR_EQS] = &&L_MIR_EQS;
+      ltab [MIR_FEQ] = &&L_MIR_FEQ; ltab [MIR_DEQ] = &&L_MIR_DEQ;
+      ltab [MIR_NE] = &&L_MIR_NE; ltab [MIR_NES] = &&L_MIR_NES;
+      ltab [MIR_FNE] = &&L_MIR_FNE; ltab [MIR_DNE] = &&L_MIR_DNE;
+      ltab [MIR_LT] = &&L_MIR_LT; ltab [MIR_LTS] = &&L_MIR_LTS;
+      ltab [MIR_ULT] = &&L_MIR_ULT; ltab [MIR_ULTS] = &&L_MIR_ULTS;
       ltab [MIR_FLT] = &&L_MIR_FLT; ltab [MIR_DLT] = &&L_MIR_DLT;
-      ltab [MIR_LE] = &&L_MIR_LE; ltab [MIR_ULE] = &&L_MIR_ULE;
+      ltab [MIR_LE] = &&L_MIR_LE; ltab [MIR_LES] = &&L_MIR_LES;
+      ltab [MIR_ULE] = &&L_MIR_ULE;  ltab [MIR_ULES] = &&L_MIR_ULES;
       ltab [MIR_FLE] = &&L_MIR_FLE; ltab [MIR_DLE] = &&L_MIR_DLE;
-      ltab [MIR_GT] = &&L_MIR_GT; ltab [MIR_UGT] = &&L_MIR_UGT;
+      ltab [MIR_GT] = &&L_MIR_GT; ltab [MIR_GTS] = &&L_MIR_GTS;
+      ltab [MIR_UGT] = &&L_MIR_UGT; ltab [MIR_UGTS] = &&L_MIR_UGTS;
       ltab [MIR_FGT] = &&L_MIR_FGT; ltab [MIR_DGT] = &&L_MIR_DGT;
-      ltab [MIR_GE] = &&L_MIR_GE; ltab [MIR_UGE] = &&L_MIR_UGE;
+      ltab [MIR_GE] = &&L_MIR_GE; ltab [MIR_GES] = &&L_MIR_GES;
+      ltab [MIR_UGE] = &&L_MIR_UGE;  ltab [MIR_UGES] = &&L_MIR_UGES;
       ltab [MIR_FGE] = &&L_MIR_FGE; ltab [MIR_DGE] = &&L_MIR_DGE;
       ltab [MIR_JMP] = &&L_MIR_JMP; ltab [MIR_BT] = &&L_MIR_BT;  ltab [MIR_BF] = &&L_MIR_BF;
-      ltab [MIR_BEQ] = &&L_MIR_BEQ; ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ;
-      ltab [MIR_BNE] = &&L_MIR_BNE; ltab [MIR_FBNE] = &&L_MIR_FBNE; ltab [MIR_DBNE] = &&L_MIR_DBNE;
-      ltab [MIR_BLT] = &&L_MIR_BLT; ltab [MIR_UBLT] = &&L_MIR_UBLT;
+      ltab [MIR_BEQ] = &&L_MIR_BEQ; ltab [MIR_BEQS] = &&L_MIR_BEQS;
+      ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ;
+      ltab [MIR_BNE] = &&L_MIR_BNE; ltab [MIR_BNES] = &&L_MIR_BNES;
+      ltab [MIR_FBNE] = &&L_MIR_FBNE; ltab [MIR_DBNE] = &&L_MIR_DBNE;
+      ltab [MIR_BLT] = &&L_MIR_BLT; ltab [MIR_BLTS] = &&L_MIR_BLTS;
+      ltab [MIR_UBLT] = &&L_MIR_UBLT;  ltab [MIR_UBLTS] = &&L_MIR_UBLTS;
       ltab [MIR_FBLT] = &&L_MIR_FBLT; ltab [MIR_DBLT] = &&L_MIR_DBLT;
-      ltab [MIR_BLE] = &&L_MIR_BLE; ltab [MIR_UBLE] = &&L_MIR_UBLE;
+      ltab [MIR_BLE] = &&L_MIR_BLE; ltab [MIR_BLES] = &&L_MIR_BLES;
+      ltab [MIR_UBLE] = &&L_MIR_UBLE;  ltab [MIR_UBLES] = &&L_MIR_UBLES;
       ltab [MIR_FBLE] = &&L_MIR_FBLE; ltab [MIR_DBLE] = &&L_MIR_DBLE;
-      ltab [MIR_BGT] = &&L_MIR_BGT; ltab [MIR_UBGT] = &&L_MIR_UBGT;
+      ltab [MIR_BGT] = &&L_MIR_BGT; ltab [MIR_BGTS] = &&L_MIR_BGTS;
+      ltab [MIR_UBGT] = &&L_MIR_UBGT; ltab [MIR_UBGTS] = &&L_MIR_UBGTS;
       ltab [MIR_FBGT] = &&L_MIR_FBGT; ltab [MIR_DBGT] = &&L_MIR_DBGT;
-      ltab [MIR_BGE] = &&L_MIR_BGE; ltab [MIR_UBGE] = &&L_MIR_UBGE;
+      ltab [MIR_BGE] = &&L_MIR_BGE; ltab [MIR_BGES] = &&L_MIR_BGES;
+      ltab [MIR_UBGE] = &&L_MIR_UBGE; ltab [MIR_UBGES] = &&L_MIR_UBGES;
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL; ltab [MIR_CALL_C] = &&L_MIR_CALL_C;
-      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
+      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_RETS] = &&L_MIR_RETS;
+      ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
       ltab [IC_LDI32] = &&L_IC_LDI32; ltab [IC_LDU32] = &&L_IC_LDU32;
@@ -427,10 +450,12 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_FSUB, 3); FOP3(-); END_INSN;
       CASE (MIR_DSUB, 3); DOP3(-); END_INSN;
       
-      CASE (MIR_MUL, 3);  IOP3(*); END_INSN;
-      CASE (MIR_MULS, 3); IOP3S(*); END_INSN;
-      CASE (MIR_FMUL, 3); FOP3(*); END_INSN;
-      CASE (MIR_DMUL, 3); DOP3(*); END_INSN;
+      CASE (MIR_MUL, 3);   IOP3(*); END_INSN;
+      CASE (MIR_MULS, 3);  IOP3S(*); END_INSN;
+      CASE (MIR_UMUL, 3);  END_INSN; // ???
+      CASE (MIR_UMULS, 3); END_INSN; // ???
+      CASE (MIR_FMUL, 3);  FOP3(*); END_INSN;
+      CASE (MIR_DMUL, 3);  DOP3(*); END_INSN;
       
       CASE (MIR_DIV, 3);   END_INSN; // ???
       CASE (MIR_DIVS, 3);  END_INSN; // ???
@@ -541,11 +566,11 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
 
       CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
-      CASE (IC_LDU8, 2);  LD (iop, uint64_t, uint8_t); END_INSN;
+      CASE (IC_LDU8, 2);  LD (uop, uint64_t, uint8_t); END_INSN;
       CASE (IC_LDI16, 2); LD (iop, int64_t, int16_t); END_INSN;
-      CASE (IC_LDU16, 2); LD (iop, uint64_t, uint16_t); END_INSN;
+      CASE (IC_LDU16, 2); LD (uop, uint64_t, uint16_t); END_INSN;
       CASE (IC_LDI32, 2); LD (iop, int64_t, int32_t); END_INSN;
-      CASE (IC_LDU32, 2); LD (iop, uint64_t, uint32_t); END_INSN;
+      CASE (IC_LDU32, 2); LD (uop, uint64_t, uint32_t); END_INSN;
       CASE (IC_LDI64, 2); LD (iop, int64_t, int64_t); END_INSN;
       CASE (IC_LDF, 2); LD (fop, float, float); END_INSN;
       CASE (IC_LDD, 2); LD (dop, double, double); END_INSN;
