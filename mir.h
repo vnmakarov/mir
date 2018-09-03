@@ -7,6 +7,15 @@
 #include "mir-dlist.h"
 #include "mir-varr.h"
 
+/* Redefine MIR_IO or/and MIR_SCAN if you need the functionality they provide.  */
+#ifndef MIR_IO
+#define MIR_IO 0
+#endif
+
+#ifndef MIR_SCAN
+#define MIR_SCAN 0
+#endif
+
 #ifdef __GNUC__
 #define MIR_UNUSED __attribute__((unused))
 #else
@@ -14,10 +23,10 @@
 #endif
 
 typedef enum MIR_error_type {
-  MIR_no_error, MIR_syntax_error, MIR_alloc_error, MIR_finish_error, MIR_no_func_error,
-  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_undeclared_reg_error,
-  MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error, MIR_op_mode_error,
-  MIR_invalid_insn_error,
+  MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
+  MIR_no_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error,
+  MIR_undeclared_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error,
+  MIR_op_mode_error, MIR_invalid_insn_error,
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -271,6 +280,15 @@ extern void MIR_output (FILE *f);
 extern void MIR_output_insn (FILE *f, MIR_insn_t insn);
 
 extern void MIR_simplify_func (MIR_item_t func);
+
+#if MIR_IO
+extern void MIR_write (FILE *f);
+extern void MIR_read (FILE *f);
+#endif
+
+#if MIR_SCAN
+extern void MIR_scan_string (const char *str);
+#endif
 
 /* For internal use only:  */
 extern const char *_MIR_uniq_string (const char *str);

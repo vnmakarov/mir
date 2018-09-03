@@ -7359,6 +7359,8 @@ static op_t new_op (decl_t decl, MIR_op_t mir_op) {
 
 static op_t zero_op, one_op;
 
+static MIR_item_t curr_func;
+
 struct reg_var {
   const char *name;
   MIR_reg_t reg;
@@ -7387,13 +7389,14 @@ static void finish_reg_vars (void) {
   HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
-static reg_var_t get_reg_var (const char *reg_name) {
+static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var_t reg_var, el;
   char *str;
   
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
+  MIR_create_func_var (curr_func->u.func, t, reg_name);
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
   reg_var.name = str;
@@ -7402,8 +7405,6 @@ static reg_var_t get_reg_var (const char *reg_name) {
   VARR_PUSH (reg_var_t, all_reg_vars, reg_var);
   return reg_var;
 }
-
-static MIR_item_t curr_func;
 
 static int temp_reg_p (MIR_op_t op) {
   return op.mode == MIR_OP_REG && MIR_reg_name (op.u.reg, curr_func->u.func)[1] == '_';
@@ -7426,8 +7427,7 @@ static op_t get_new_temp (MIR_type_t t) {
   assert (t == MIR_I64 || t == MIR_U64 || t == MIR_I32 || t == MIR_U32 || t == MIR_F || t == MIR_D);
   sprintf (reg_name, t == MIR_I64 ? "I_%u" : t == MIR_U64 ? "U_%u" : t == MIR_I32 ? "i_%u"
 	   : t == MIR_U32 ? "u_%u" : t == MIR_F ? "f_%u" : "d_%u", reg_free_mark++);
-  // Adding var to func ???: MIR_new_func_reg (func, name);
-  reg = get_reg_var (reg_name).reg;
+  reg = get_reg_var (t, reg_name).reg;
   return new_op (NULL, MIR_new_reg_op (reg));
 }
 
