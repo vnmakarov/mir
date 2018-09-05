@@ -1665,7 +1665,7 @@ int main (void) {
 
 #if defined(TEST_MIR_GEN2)
 
-extern MIR_item_t create_mir_func_sieve (void);
+extern MIR_item_t create_mir_func_sieve (size_t *);
 int main (void) {
   double start_time = real_usec_time ();
   double start_execution_time;
@@ -1675,7 +1675,7 @@ int main (void) {
   
   MIR_init ();
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
-  func = create_mir_func_sieve ();
+  func = create_mir_func_sieve (NULL);
 #if MIR_GEN_DEBUG
   fprintf (stderr, "+++++++++++++MIR before simplification:\n");
   MIR_output (stderr);

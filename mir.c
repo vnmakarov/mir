@@ -2323,8 +2323,8 @@ MIR_item_t create_mir_example2 (void) {
 
 #if MIR_SCAN && (defined(BENCH_MIR_IO) || defined(TEST_MIR_IO) || defined(TEST_MIR_GEN2) || defined(TEST_MIR_INTERP2))
 
-MIR_item_t create_mir_func_sieve (void) {
-  MIR_scan_string ("\n\
+MIR_item_t create_mir_func_sieve (size_t *len) {
+  const char *str = "\n\
 sieve: func 819000\n\
        local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
        mov flags, fp\n\
@@ -2348,7 +2348,11 @@ fin3:  add iter, iter, 1\n\
        jmp loop\n\
 fin:   ret count\n\
        endfunc\n\
-");
+";
+  
+  if (len != NULL)
+    *len = strlen (str);
+  MIR_scan_string (str);
   return DLIST_TAIL (MIR_item_t, MIR_items);
 }
 
@@ -2387,12 +2391,18 @@ int main (void) {
   const char *fname = "/tmp/__tmp.mirb";
   double start_time;
   const int nfunc = 10000;
+  size_t len;
   
   MIR_init ();
 #ifdef BENCH_MIR_IO
+  start_time = real_sec_time ();
   for (int i = 0; i < nfunc; i++)
 #endif
-  create_mir_func_sieve ();
+  create_mir_func_sieve (&len);
+#ifdef BENCH_MIR_IO
+  fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f sec\n",
+	   nfunc, len / 1000000.0 * nfunc, real_sec_time () - start_time);
+#endif
 #if TEST_MIR_IO
   MIR_output (stderr);
 #endif

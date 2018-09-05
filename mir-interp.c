@@ -695,7 +695,7 @@ int main (void) {
 
 #ifdef TEST_MIR_INTERP2
 
-extern MIR_item_t create_mir_func_sieve (void);
+extern MIR_item_t create_mir_func_sieve (size_t *);
 
 int main (void) {
   MIR_item_t func;
@@ -703,7 +703,7 @@ int main (void) {
   double start_time;
     
   MIR_init ();
-  func = create_mir_func_sieve ();
+  func = create_mir_func_sieve (NULL);
 #if MIR_INTERP_DEBUG 
   fprintf (stderr, "\n++++++ SIEVE before simplification:\n");
   MIR_output (stderr);
