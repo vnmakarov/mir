@@ -2403,33 +2403,29 @@ int main (void) {
   MIR_write (f);
   fclose (f);
 #ifdef BENCH_MIR_IO
-  {
-    int i;
-    
-    f = fopen (fname, "rb");
-    assert  (f != NULL);
-    start_time = clock ();
-    for (i = 0; fgetc (f) != EOF; i++)
-      ;
-    fprintf (stderr, "Just reading %.3f MB file containing %d sieve functions: %.3f CPU sec\n",
-	     i / 1000000.0, nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
-    fclose (f);
-  }
+  f = fopen (fname, "rb");
+  assert  (f != NULL);
+  start_time = clock ();
+  for (len = 0; fgetc (f) != EOF; len++)
+    ;
+  fprintf (stderr, "Just reading MIR binary file containing %d sieve functions (%.3f MB): %.3f CPU sec\n",
+	   nfunc, len / 1000000.0, (clock () - start_time) / CLOCKS_PER_SEC);
+  fclose (f);
 #endif
   f = fopen (fname, "rb");
   assert  (f != NULL);
   start_time = clock ();
   MIR_read (f);
 #ifdef BENCH_MIR_IO
-  fprintf (stderr, "Reading and creating MIR binary %d sieve functions: %.3f CPU sec\n",
-	   nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
+  fprintf (stderr, "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec\n",
+	   nfunc, len / 1000000.0, (clock () - start_time) / CLOCKS_PER_SEC);
 #endif
   fclose (f);
 #if TEST_MIR_IO
   fprintf (stderr, "+++++++++++++After reading:\n");
   MIR_output (stderr);
 #endif
-  //remove (fname);
+  remove (fname);
   MIR_finish ();
   return 0;
 }
