@@ -25,6 +25,9 @@ scan-test:
 io-test:
 	$(CC) -g -DMIR_SCAN -DMIR_IO -DTEST_MIR_IO mir.c && ./a.out
 
+io-bench:
+	$(CC) $(CFLAGS) -DNDEBUG -DMIR_SCAN -DMIR_IO -DBENCH_MIR_IO mir.c && ./a.out
+
 interp-test:
 	$(CC) -g -D$(TARGET) -DTEST_MIR_INTERP -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out
 	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_MIR_INTERP2 -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out

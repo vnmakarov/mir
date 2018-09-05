@@ -1367,7 +1367,7 @@ static void MIR_write_item (FILE *f, MIR_item_t item) {
     put_byte (f, TAG_EOI);
     return;
   }
-  func = item->u.func;
+  curr_output_func = func = item->u.func;
   write_str (f, "func");
   write_str (f, func->name);
   write_uint (f, func->frame_size);
@@ -1689,6 +1689,7 @@ void MIR_read (FILE *f) {
 	if (func == NULL)
 	  (*error_func) (MIR_binary_io_error, "endfunc without func");
 	MIR_finish_func ();
+	func = NULL;
       } else if (strcmp (name, "local") == 0) {
 	if (func == NULL)
 	  (*error_func) (MIR_syntax_error, "local outside func");
@@ -2320,7 +2321,7 @@ MIR_item_t create_mir_example2 (void) {
 }
 #endif
 
-#if MIR_SCAN && (TEST_MIR_IO || defined(TEST_MIR_GEN2) || defined(TEST_MIR_INTERP2))
+#if MIR_SCAN && (defined(BENCH_MIR_IO) || defined(TEST_MIR_IO) || defined(TEST_MIR_GEN2) || defined(TEST_MIR_INTERP2))
 
 MIR_item_t create_mir_func_sieve (void) {
   MIR_scan_string ("\n\
@@ -2369,30 +2370,69 @@ int main (void) {
 
 #endif
 
-#if MIR_IO && defined (TEST_MIR_IO)
+#if MIR_IO && (defined (BENCH_MIR_IO) || defined (TEST_MIR_IO))
+
+#include <sys/time.h>
+
+static double
+real_sec_time(void) {
+    struct timeval  tv;
+
+    gettimeofday(&tv, NULL);
+    return tv.tv_usec / 1000000.0 + tv.tv_sec;
+}
 
 int main (void) {
   FILE *f;
-  const char *fname = "__tmp.mirb";
+  const char *fname = "/tmp/__tmp.mirb";
+  double start_time;
+  const int nfunc = 10000;
   
   MIR_init ();
+#ifdef BENCH_MIR_IO
+  for (int i = 0; i < nfunc; i++)
+#endif
   create_mir_func_sieve ();
+#if TEST_MIR_IO
   MIR_output (stderr);
+#endif
   f = fopen (fname, "wb");
   assert  (f != NULL);
   MIR_write (f);
   fclose (f);
+#ifdef BENCH_MIR_IO
+  {
+    int i;
+    
+    f = fopen (fname, "rb");
+    assert  (f != NULL);
+    start_time = real_sec_time ();
+    for (i = 0; fgetc (f) != EOF; i++)
+      ;
+    fprintf (stderr, "Just reading %.3f MB file containing %d sieve functions: %.3f sec\n",
+	     i / 1000000.0, nfunc, real_sec_time () - start_time);
+    fclose (f);
+  }
+#endif
   f = fopen (fname, "rb");
   assert  (f != NULL);
+  start_time = real_sec_time ();
   MIR_read (f);
+#ifdef BENCH_MIR_IO
+  fprintf (stderr, "Reading and creating MIR binary %d sieve functions: %.3f sec\n",
+	   nfunc, real_sec_time () - start_time);
+#endif
   fclose (f);
+#if TEST_MIR_IO
   fprintf (stderr, "+++++++++++++After reading:\n");
   MIR_output (stderr);
-  remove (fname);
+#endif
+  //remove (fname);
   MIR_finish ();
   return 0;
 }
-#endif /* MIR_IO && defined (TEST_MIR_IO) */
+
+#endif /* MIR_IO && (defined (BENCH_MIR_IO) || defined (TEST_MIR_IO)) */
 
 #if MIR_SCAN && defined (TEST_MIR_SCAN)
 
