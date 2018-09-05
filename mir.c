@@ -2376,15 +2376,7 @@ int main (void) {
 
 #if MIR_IO && (defined (BENCH_MIR_IO) || defined (TEST_MIR_IO))
 
-#include <sys/time.h>
-
-static double
-real_sec_time(void) {
-    struct timeval  tv;
-
-    gettimeofday(&tv, NULL);
-    return tv.tv_usec / 1000000.0 + tv.tv_sec;
-}
+#include <time.h>
 
 int main (void) {
   FILE *f;
@@ -2395,13 +2387,13 @@ int main (void) {
   
   MIR_init ();
 #ifdef BENCH_MIR_IO
-  start_time = real_sec_time ();
+  start_time = clock ();
   for (int i = 0; i < nfunc; i++)
 #endif
   create_mir_func_sieve (&len);
 #ifdef BENCH_MIR_IO
-  fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f sec\n",
-	   nfunc, len / 1000000.0 * nfunc, real_sec_time () - start_time);
+  fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f CPU sec\n",
+	   nfunc, len / 1000000.0 * nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
 #endif
 #if TEST_MIR_IO
   MIR_output (stderr);
@@ -2416,21 +2408,21 @@ int main (void) {
     
     f = fopen (fname, "rb");
     assert  (f != NULL);
-    start_time = real_sec_time ();
+    start_time = clock ();
     for (i = 0; fgetc (f) != EOF; i++)
       ;
-    fprintf (stderr, "Just reading %.3f MB file containing %d sieve functions: %.3f sec\n",
-	     i / 1000000.0, nfunc, real_sec_time () - start_time);
+    fprintf (stderr, "Just reading %.3f MB file containing %d sieve functions: %.3f CPU sec\n",
+	     i / 1000000.0, nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
     fclose (f);
   }
 #endif
   f = fopen (fname, "rb");
   assert  (f != NULL);
-  start_time = real_sec_time ();
+  start_time = clock ();
   MIR_read (f);
 #ifdef BENCH_MIR_IO
-  fprintf (stderr, "Reading and creating MIR binary %d sieve functions: %.3f sec\n",
-	   nfunc, real_sec_time () - start_time);
+  fprintf (stderr, "Reading and creating MIR binary %d sieve functions: %.3f CPU sec\n",
+	   nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
 #endif
   fclose (f);
 #if TEST_MIR_IO
