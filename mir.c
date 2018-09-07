@@ -2374,9 +2374,90 @@ int main (void) {
 
 #endif
 
-#if MIR_IO && (defined (BENCH_MIR_IO) || defined (TEST_MIR_IO))
+#if MIR_IO && defined (TEST_MIR_IO)
+int main (void) {
+  FILE *f;
+  const char *fname = "/tmp/__tmp.mirb";
+  
+  MIR_init ();
+  create_mir_func_sieve (NULL);
+  MIR_output (stderr);
+  f = fopen (fname, "wb");
+  assert  (f != NULL);
+  MIR_write (f);
+  fclose (f);
+  f = fopen (fname, "rb");
+  assert  (f != NULL);
+  MIR_read (f);
+  fclose (f);
+  fprintf (stderr, "+++++++++++++After reading:\n");
+  MIR_output (stderr);
+  remove (fname);
+  MIR_finish ();
+  return 0;
+}
+#endif
+
+#if MIR_IO && defined (BENCH_MIR_IO)
 
 #include <time.h>
+
+static MIR_item_t create_mir_func_sieve_api (void) {
+  MIR_item_t func;
+  MIR_reg_t iter, count, i, k, prime, temp, flags, fp;
+  MIR_label_t loop = MIR_new_label (), loop2 = MIR_new_label (), loop3 = MIR_new_label (), loop4 = MIR_new_label ();
+  MIR_label_t fin = MIR_new_label (), fin2 = MIR_new_label (), fin3 = MIR_new_label (), fin4 = MIR_new_label ();
+  MIR_label_t cont3 = MIR_new_label ();
+  
+  func = MIR_new_func ("sieve", 819000, 0, 0);
+  MIR_create_func_var (func->u.func, MIR_I64, "iter"); MIR_create_func_var (func->u.func, MIR_I64, "count");
+  MIR_create_func_var (func->u.func, MIR_I64, "i"); MIR_create_func_var (func->u.func, MIR_I64, "k");
+  MIR_create_func_var (func->u.func, MIR_I64, "prime"); MIR_create_func_var (func->u.func, MIR_I64, "temp");
+  MIR_create_func_var (func->u.func, MIR_I64, "flags");
+  iter = MIR_reg ("iter"); count = MIR_reg ("count"); i = MIR_reg ("i"); k = MIR_reg ("k");
+  prime = MIR_reg ("prime"); temp = MIR_reg ("temp"); flags = MIR_reg ("flags"); fp = MIR_reg ("fp");
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (flags), MIR_new_reg_op (fp)));
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (iter), MIR_new_int_op (0)));
+  MIR_append_insn (func, loop);
+  MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin),
+				       MIR_new_reg_op (iter), MIR_new_int_op (1000)));
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (count), MIR_new_int_op (0)));
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (i), MIR_new_int_op (0)));
+  MIR_append_insn (func, loop2);
+  MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin2),
+				       MIR_new_reg_op (i), MIR_new_int_op (819000)));
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_mem_op (MIR_U8, 0, flags, i, 1), MIR_new_int_op (1)));
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (i), MIR_new_reg_op (i), MIR_new_int_op (1)));
+  MIR_append_insn (func, MIR_new_insn (MIR_JMP, MIR_new_label_op (loop2)));
+  MIR_append_insn (func, fin2);
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_reg_op (i), MIR_new_int_op (0)));
+  MIR_append_insn (func, loop3);
+  MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin3),
+				       MIR_new_reg_op (i), MIR_new_int_op (819000)));
+  MIR_append_insn (func, MIR_new_insn (MIR_BEQ, MIR_new_label_op (cont3),
+				       MIR_new_mem_op (MIR_U8, 0, flags, i, 1), MIR_new_int_op (0)));
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (temp), MIR_new_reg_op (i), MIR_new_reg_op (i)));
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (prime), MIR_new_reg_op (temp), MIR_new_int_op (3)));
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (k), MIR_new_reg_op (i), MIR_new_reg_op (prime)));
+  MIR_append_insn (func, loop4);
+  MIR_append_insn (func, MIR_new_insn (MIR_BGE, MIR_new_label_op (fin4),
+				       MIR_new_reg_op (k), MIR_new_int_op (819000)));
+  MIR_append_insn (func, MIR_new_insn (MIR_MOV, MIR_new_mem_op (MIR_U8, 0, flags, k, 1), MIR_new_int_op (0)));
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (k), MIR_new_reg_op (k), MIR_new_reg_op (prime)));
+  MIR_append_insn (func, MIR_new_insn (MIR_JMP, MIR_new_label_op (loop4)));
+  MIR_append_insn (func, fin4);
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (count), MIR_new_reg_op (count), MIR_new_int_op (1)));
+  MIR_append_insn (func, cont3);
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (i), MIR_new_reg_op (i), MIR_new_int_op (1)));
+  MIR_append_insn (func, MIR_new_insn (MIR_JMP, MIR_new_label_op (loop3)));
+  MIR_append_insn (func, fin3);
+  MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (iter), MIR_new_reg_op (iter), MIR_new_int_op (1)));
+  MIR_append_insn (func, MIR_new_insn (MIR_JMP, MIR_new_label_op (loop)));
+  MIR_append_insn (func, fin);
+  MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (count)));
+  MIR_finish_func ();
+  return func;
+}
 
 int main (void) {
   FILE *f;
@@ -2386,23 +2467,23 @@ int main (void) {
   size_t len;
   
   MIR_init ();
-#ifdef BENCH_MIR_IO
   start_time = clock ();
   for (int i = 0; i < nfunc; i++)
-#endif
-  create_mir_func_sieve (&len);
-#ifdef BENCH_MIR_IO
-  fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f CPU sec\n",
+    create_mir_func_sieve_api ();
+  fprintf (stderr, "Creating %d sieve functions by API: %.3f CPU sec\n",
+	   nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
+  MIR_finish ();
+  MIR_init ();
+  start_time = clock ();
+  for (int i = 0; i < nfunc; i++)
+    create_mir_func_sieve (&len);
+  fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f CPU sec - API use\n",
 	   nfunc, len / 1000000.0 * nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
-#endif
-#if TEST_MIR_IO
-  MIR_output (stderr);
-#endif
   f = fopen (fname, "wb");
   assert  (f != NULL);
   MIR_write (f);
   fclose (f);
-#ifdef BENCH_MIR_IO
+  MIR_finish ();
   f = fopen (fname, "rb");
   assert  (f != NULL);
   start_time = clock ();
@@ -2411,20 +2492,14 @@ int main (void) {
   fprintf (stderr, "Just reading MIR binary file containing %d sieve functions (%.3f MB): %.3f CPU sec\n",
 	   nfunc, len / 1000000.0, (clock () - start_time) / CLOCKS_PER_SEC);
   fclose (f);
-#endif
+  MIR_init ();
   f = fopen (fname, "rb");
   assert  (f != NULL);
   start_time = clock ();
   MIR_read (f);
-#ifdef BENCH_MIR_IO
-  fprintf (stderr, "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec\n",
+  fprintf (stderr, "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec - API use\n",
 	   nfunc, len / 1000000.0, (clock () - start_time) / CLOCKS_PER_SEC);
-#endif
   fclose (f);
-#if TEST_MIR_IO
-  fprintf (stderr, "+++++++++++++After reading:\n");
-  MIR_output (stderr);
-#endif
   remove (fname);
   MIR_finish ();
   return 0;
