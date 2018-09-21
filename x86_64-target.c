@@ -1024,7 +1024,7 @@ static uint8_t *target_translate (MIR_item_t func, size_t *len) {
     } else {
       replacement = find_insn_pattern_replacement (insn);
       if (replacement == NULL) {
-	fprintf (stderr, "failure:"); MIR_output_insn (stderr, insn);
+	fprintf (stderr, "failure:"); MIR_output_insn (stderr, insn, func->u.func);
       } else {
 	assert (replacement != NULL);
 	out_insn (insn, replacement);

@@ -804,21 +804,22 @@ const char *MIR_type_str (MIR_type_t tp) {
 
 static MIR_func_t curr_output_func;
 
-void MIR_output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (tp)); }
+static void MIR_output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (tp)); }
 
-void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
+static void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
 
-void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
+static void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
 
-void MIR_output_reg (FILE *f, MIR_reg_t reg) {
+static void MIR_output_reg (FILE *f, MIR_reg_t reg) {
   fprintf (f, "%s", MIR_reg_name (reg, curr_output_func));
 }
 
-void MIR_output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
+static void MIR_output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
 
-void MIR_output_label (FILE *f, MIR_label_t label);
+static void MIR_output_label (FILE *f, MIR_label_t label);
 
-void MIR_output_op (FILE *f, MIR_op_t op) {
+void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
+  curr_output_func = func;
   switch (op.mode) {
   case MIR_OP_REG:
     MIR_output_reg (f, op.u.reg);
@@ -874,13 +875,14 @@ void MIR_output_op (FILE *f, MIR_op_t op) {
   }
 }
 
-void MIR_output_label (FILE *f, MIR_label_t label) {
-  fprintf (f, "L"); MIR_output_op (f, label->ops[0]);
+static void MIR_output_label (FILE *f, MIR_label_t label) {
+  fprintf (f, "L"); MIR_output_op (f, label->ops[0], curr_output_func);
 }
 
-void MIR_output_insn (FILE *f, MIR_insn_t insn) {
+void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func) {
   size_t i, nops;
   
+  curr_output_func = func;
   if (insn->code == MIR_LABEL) {
     MIR_output_label (f, insn); fprintf (f, ":\n");
     return;
@@ -889,12 +891,12 @@ void MIR_output_insn (FILE *f, MIR_insn_t insn) {
   nops = MIR_insn_nops (insn->code);
   for (i = 0; i < nops; i++) {
     fprintf (f, i == 0 ? "\t" : ", ");
-    MIR_output_op (f, insn->ops[i]);
+    MIR_output_op (f, insn->ops[i], func);
   }
   fprintf (f, "\n");
 }
 
-void MIR_output_item (FILE *f, MIR_item_t item) {
+static void MIR_output_item (FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
   MIR_var_t var;
@@ -920,7 +922,7 @@ void MIR_output_item (FILE *f, MIR_item_t item) {
   fprintf (f, "\n# frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
 	   func->nargs, func->nargs == 1 ? "" : "s", (unsigned) nlocals, nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
-    MIR_output_insn (f, insn);
+    MIR_output_insn (f, insn, func);
   fprintf (f, "\tendfunc\n");
 }
 
