@@ -641,10 +641,13 @@ static void add_new_bb_insns (MIR_item_t func_item) {
     } else { /* New insn: */
       assert (bb != NULL);
       bb_insn = create_bb_insn (insn, bb);
-      if (last_bb_insn == NULL)
-	DLIST_PREPEND (bb_insn_t, bb->bb_insns, bb_insn);
-      else
+      if (last_bb_insn != NULL) {
 	DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, last_bb_insn, bb_insn);
+      } else {
+	assert (DLIST_HEAD (bb_insn_t, bb->bb_insns) != NULL
+		&& DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn->code != MIR_LABEL);
+	DLIST_PREPEND (bb_insn_t, bb->bb_insns, bb_insn);
+      }
       last_bb_insn = bb_insn;
       nops = MIR_insn_nops (insn->code);
       for (i = 0; i < nops; i++) {
@@ -746,30 +749,7 @@ static VARR (bitmap_t) *var2dep_expr;
 DEF_HTAB (expr_t);
 static HTAB (expr_t) *expr_tab; /* keys: insn code and operands */
 
-static int op_eq (MIR_op_t op1, MIR_op_t op2) {
-  if (op1.mode != op2.mode)
-    return FALSE;
-  switch (op1.mode) {
-  case MIR_OP_REG: return op1.u.reg == op2.u.reg;
-  case MIR_OP_HARD_REG: return op1.u.hard_reg == op2.u.hard_reg;
-  case MIR_OP_INT: return op1.u.i == op2.u.i;
-  case MIR_OP_UINT: return op1.u.u == op2.u.u;
-  case MIR_OP_NAME: return strcmp (op1.u.name, op2.u.name) == 0;
-  case MIR_OP_MEM:
-    return (op1.u.mem.type == op2.u.mem.type && op1.u.mem.disp == op2.u.mem.disp
-	    && op1.u.mem.base == op2.u.mem.base && op1.u.mem.index == op2.u.mem.index
-	    && (op1.u.mem.index == 0 || op1.u.mem.scale == op2.u.mem.scale));
-  case MIR_OP_HARD_REG_MEM:
-    return (op1.u.hard_reg_mem.type == op2.u.hard_reg_mem.type
-	    && op1.u.hard_reg_mem.disp == op2.u.hard_reg_mem.disp
-	    && op1.u.hard_reg_mem.base == op2.u.hard_reg_mem.base
-	    && op1.u.hard_reg_mem.index == op2.u.hard_reg_mem.index
-	    && (op1.u.hard_reg_mem.index == MIR_NON_HARD_REG
-		|| op1.u.hard_reg_mem.scale == op2.u.hard_reg_mem.scale));
-  default:
-    assert (FALSE); /* we should not have all the rest operand here */
-  }
-}
+static int op_eq (MIR_op_t op1, MIR_op_t op2) { return MIR_op_eq_p (op1, op2); }
 
 static int expr_eq (expr_t e1, expr_t e2) {
   size_t i, nops;
@@ -788,33 +768,7 @@ static int expr_eq (expr_t e1, expr_t e2) {
   return TRUE;
 }
 
-static htab_hash_t add_op_hash (htab_hash_t h, MIR_op_t op) {
-  h = mum_hash_step (h, (uint64_t) op.mode);
-  switch (op.mode) {
-  case MIR_OP_REG: return mum_hash_step (h, (uint64_t) op.u.reg);
-  case MIR_OP_HARD_REG: return mum_hash_step (h, (uint64_t) op.u.hard_reg);
-  case MIR_OP_INT: return mum_hash_step (h, (uint64_t) op.u.i);
-  case MIR_OP_UINT: return mum_hash_step (h, (uint64_t) op.u.u);
-  case MIR_OP_NAME: return mum_hash_step (h, (uint64_t) op.u.i);
-  case MIR_OP_MEM:
-    h = mum_hash_step (h, (uint64_t) op.u.mem.type);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.disp);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.base);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.index);
-    if (op.u.mem.index != 0)
-      h = mum_hash_step (h, (uint64_t) op.u.mem.scale);
-  case MIR_OP_HARD_REG_MEM:
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.base);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
-    if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-      h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
-  default:
-    assert (FALSE); /* we should not have all the rest operand here */
-  }
-  return h;
-}
+static htab_hash_t add_op_hash (htab_hash_t h, MIR_op_t op) { return MIR_op_hash_step (h, op); }
 
 static htab_hash_t expr_hash (expr_t e) {
   size_t i, nops;
@@ -2752,6 +2706,11 @@ void *MIR_gen (MIR_item_t func_item) {
   void *res;
   
   assert (func_item->func_p && func_item->data == NULL);
+  MIR_simplify_func (func_item);
+#if MIR_GEN_DEBUG
+  fprintf (stderr, "+++++++++++++MIR after simplification:\n");
+  MIR_output (stderr);
+#endif
   curr_func_item = func_item;
   curr_cfg = func_item->data = gen_malloc (sizeof (struct func_cfg));
   build_func_cfg ();
@@ -2775,11 +2734,6 @@ void *MIR_gen (MIR_item_t func_item) {
 #if MIR_GEN_DEBUG
   fprintf (debug_file, "+++++++++++++MIR after 1st dead code elimination:\n");
   print_CFG (TRUE, TRUE, output_bb_live_info);
-#endif
-  MIR_simplify_func (func_item);
-#if MIR_GEN_DEBUG
-  fprintf (stderr, "+++++++++++++MIR after simplification:\n");
-  MIR_output (stderr);
 #endif
   make_2op_insns (func_item);
   machinize (func_item);

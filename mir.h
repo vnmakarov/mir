@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "mir-dlist.h"
 #include "mir-varr.h"
+#include "mir-htab.h"
 
 /* Redefine MIR_IO or/and MIR_SCAN if you need the functionality they provide.  */
 #ifndef MIR_IO
@@ -273,6 +274,8 @@ extern MIR_op_t MIR_new_name_op (MIR_name_t name);
 extern MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 				MIR_reg_t index, MIR_scale_t scale);
 extern MIR_op_t MIR_new_label_op (MIR_label_t label);
+extern int MIR_op_eq_p (MIR_op_t op1, MIR_op_t op2);
+extern htab_hash_t  MIR_op_hash_step (htab_hash_t h, MIR_op_t op);
 
 extern void MIR_append_insn (MIR_item_t func, MIR_insn_t insn);
 extern void MIR_prepend_insn (MIR_item_t func, MIR_insn_t insn);

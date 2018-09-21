@@ -8,7 +8,7 @@ all: $(OBJS)
 mir.o: mir.c $(DEPS)
 	$(CC) -c $(CFLAGS) -DMIR_IO -DMIR_SCAN -o $@ $<
 mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
-	$(CC) -c -O2 -g -o $@ $<
+	$(CC) -c -Os -g -o $@ $<
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
