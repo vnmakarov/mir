@@ -6,10 +6,10 @@
                                                    -------------------	  ----------------------- 
                                                                                      |
                                                                                      v
-           --------      -------------      ------------       -------------      -----------
-          | Assign |<---| Build Live  |<---| Build Live |<----|  Dead Code  |<---| Machinize |
-           --------     |   Ranges    |    |    Info    |     | Elimination |     -----------
-              |          -------------      ------------       -------------     
+           --------      -------------      ------------       -----------     -------------     
+          | Assign |<---| Build Live  |<---| Build Live |<---| Machinize |<---|  Dead Code  |
+           --------     |   Ranges    |    |    Info    |      -----------    | Elimination |    
+              |          -------------      ------------                       -------------     
               |
               v
            ---------     ---------     -------------      ---------------
@@ -20,12 +20,12 @@
               
 
    Simplify: Lowering MIR (in mir.c).
-   Machinize: Machine-dependent code (e.g. in x86_64-target.c)
-              transforming MIR for calls ABI, 2-op insns, etc.
    Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
    Common Sub-Expression Elimination: Reusing calculated values
    Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Dead code elimination: Removing insns with unused outputs. 
+   Machinize: Machine-dependent code (e.g. in x86_64-target.c)
+              transforming MIR for calls ABI, 2-op insns, etc.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.
    Assign: Priority-based assigning hard regs and stack slots to registers.
@@ -1713,11 +1713,26 @@ static void output_constants (bb_t bb, int in_p) {
   fprintf (debug_file, "\n");
 }
 
+static void output_min_bitmap (const char *title, bitmap_t b) {
+  size_t all_num = bitmap_bit_count (all_vars), b_num = bitmap_bit_count (b);
+  char new_title[100];
+  
+  if (all_num - b_num >= b_num) {
+    output_bitmap (title, b);
+    return;
+  }
+  assert (strlen (title) + 10 < sizeof (new_title));
+  sprintf (new_title, "%s all but", title);
+  bitmap_and_compl (temp_bitmap, all_vars, b);
+  output_bitmap (new_title, temp_bitmap);
+  return;
+}
+
 static void output_bb_ccp_info (bb_t bb) {
-  output_bitmap ("  unknown_in:", bb->ccp_unknown_in);
-  output_bitmap ("  unknown_out:", bb->ccp_unknown_out);
-  output_bitmap ("  varying_in:", bb->ccp_varying_in);
-  output_bitmap ("  varying_out:", bb->ccp_varying_out);
+  output_min_bitmap ("  unknown_in: ", bb->ccp_unknown_in);
+  output_min_bitmap ("  unknown_out:", bb->ccp_unknown_out);
+  output_min_bitmap ("  varying_in: ", bb->ccp_varying_in);
+  output_min_bitmap ("  varying_out:", bb->ccp_varying_out);
   output_constants (bb, TRUE); output_constants (bb, FALSE);
 }
 
@@ -2773,6 +2788,7 @@ void *MIR_gen (MIR_item_t func_item) {
   code = target_translate (func_item, &code_len);
 #if MIR_GEN_DEBUG
   print_code (code, code_len);
+  fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
 #endif 
   res = get_code (code, code_len);
   destroy_func_live_ranges ();
