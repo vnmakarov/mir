@@ -1037,8 +1037,8 @@ static void output_bb_cse_info (bb_t bb) {
 
 /* Conditional Constant Propagation.  */
 
-#define ccp_unknown_in in
-#define ccp_unknown_out out
+#define ccp_const_in in
+#define ccp_const_out out
 #define ccp_varying_in kill
 #define ccp_varying_out gen
 
@@ -1054,8 +1054,8 @@ static void process_const_out (size_t var) {
     return;
   if (! find_var_const (ccp_src, FALSE, var, &vc1))
     assert (FALSE);
-  if (bitmap_bit_p (ccp_dst->ccp_unknown_in, var)) { /* unknown became a constat */
-    bitmap_clear_bit_p (ccp_dst->ccp_unknown_in, var);
+  if (! bitmap_bit_p (ccp_dst->ccp_const_in, var)) { /* unknown became a constat */
+    bitmap_set_bit_p (ccp_dst->ccp_const_in, var);
     assert (! find_var_const (ccp_dst, TRUE, var, &vc2));
     insert_var_const (ccp_dst, TRUE, var, vc1.val);
     ccp_con_func_change_p = TRUE;
@@ -1068,6 +1068,7 @@ static void process_const_out (size_t var) {
       || (! vc1.val.uns_p && vc1.val.u.i != vc2.val.u.i)) { /* constant became another constant */
     delete_var_const (ccp_dst, TRUE, var);
     bitmap_set_bit_p (ccp_dst->ccp_varying_in, var);
+    bitmap_clear_bit_p (ccp_dst->ccp_const_in, var);
     ccp_con_func_change_p = TRUE;
   }
 }
@@ -1076,7 +1077,7 @@ static void process_new_varying (size_t var) {
   var_const_t vc;
   
   ccp_con_func_change_p = TRUE;
-  if (! bitmap_bit_p (ccp_dst->ccp_unknown_in, var)) { /* it was a constant */
+  if (bitmap_bit_p (ccp_dst->ccp_const_in, var)) { /* it was a constant */
     assert (find_var_const (ccp_dst, TRUE, var, &vc));
     delete_var_const (ccp_dst, TRUE, var);
   }
@@ -1091,17 +1092,14 @@ static int ccp_con_func_n (bb_t bb) {
     if (e->skipped_p)
       continue;
     ccp_src = e->src; ccp_dst = e->dst;
-    /* const_out = all - varying_out - unknown_out */
-    bitmap_and_compl (const_out, all_vars, ccp_src->ccp_varying_out);
-    bitmap_and_compl (const_out, const_out, ccp_src->ccp_unknown_out);
-    bitmap_for_each (const_out, process_const_out);
+    bitmap_for_each (ccp_src->ccp_const_out, process_const_out);
     /* new_varying = varying_out - varying_in */
     bitmap_and_compl (new_varying, ccp_src->ccp_varying_out, ccp_dst->ccp_varying_in);
     bitmap_for_each (new_varying, process_new_varying);
     /* varying_in += new_varying */
     bitmap_ior (ccp_dst->ccp_varying_in, ccp_dst->ccp_varying_in, new_varying);
-    /* unknown_in -= new_varying */
-    bitmap_and_compl (ccp_dst->ccp_unknown_in, ccp_dst->ccp_unknown_in, new_varying);
+    /* const_in -= new_varying */
+    bitmap_and_compl (ccp_dst->ccp_const_in, ccp_dst->ccp_const_in, new_varying);
   }
   return ccp_con_func_change_p;
 }
@@ -1109,33 +1107,29 @@ static int ccp_con_func_n (bb_t bb) {
 DEF_VARR (const_t);
 static VARR (const_t) *curr_ccp_vals;
 
-static bitmap_t curr_ccp_varying, curr_ccp_unknown;
+static bitmap_t curr_ccp_varying, curr_ccp_const;
 
 static void setup_curr_ccp_vals (size_t var) {
   var_const_t vc;
 
   assert (! bitmap_bit_p (ccp_dst->ccp_varying_in, var)
-	  && ! bitmap_bit_p (ccp_dst->ccp_unknown_in, var));
+	  && bitmap_bit_p (ccp_dst->ccp_const_in, var));
   if (! find_var_const (ccp_dst, TRUE, var, &vc))
     assert (FALSE);
   VARR_SET (const_t, curr_ccp_vals, var, vc.val);
 }
 
-static void update_curr_ccp_vals (size_t var) {
+static void update_curr_ccp_vals (size_t var) { /* var was or became a constant */
   var_const_t vc;
   const_t val;
 
-  if (! bitmap_bit_p (curr_ccp_varying, var) && ! bitmap_bit_p (curr_ccp_unknown, var)
-      && (bitmap_bit_p (ccp_dst->ccp_varying_out, var)
-	  || bitmap_bit_p (ccp_dst->ccp_unknown_out, var))) {
+  if (bitmap_bit_p (curr_ccp_const, var) && ! bitmap_bit_p (ccp_dst->ccp_const_out, var)) {
     assert (! find_var_const (ccp_dst, FALSE, var, &vc));
     ccp_trans_func_change_p = TRUE;
     insert_var_const (ccp_dst, FALSE, var, VARR_GET (const_t, curr_ccp_vals, var));
     return;
   }
-  if (! bitmap_bit_p (ccp_dst->ccp_varying_out, var)
-      && ! bitmap_bit_p (ccp_dst->ccp_unknown_out, var)
-      && (bitmap_bit_p (curr_ccp_varying, var) || bitmap_bit_p (curr_ccp_unknown, var))) {
+  if (bitmap_bit_p (ccp_dst->ccp_const_out, var) && ! bitmap_bit_p (curr_ccp_const, var)) {
     assert (find_var_const (ccp_dst, FALSE, var, &vc));
     ccp_trans_func_change_p = TRUE;
     delete_var_const (ccp_dst, FALSE, var);
@@ -1178,7 +1172,7 @@ static enum ccp_val_kind get_op (MIR_insn_t insn, size_t nop, const_t *val) {
   }
   if (bitmap_bit_p (curr_ccp_varying, var))
     return CCP_VARYING;
-  else if (bitmap_bit_p (curr_ccp_unknown, var))
+  else if (! bitmap_bit_p (curr_ccp_const, var))
     return CCP_UNKNOWN;
   *val = VARR_GET (const_t, curr_ccp_vals, var);
   return CCP_CONST;
@@ -1443,7 +1437,7 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   default: ccp_res = CCP_VARYING; goto non_const;
   }
   bitmap_clear_bit_p (curr_ccp_varying, var);
-  bitmap_clear_bit_p (curr_ccp_unknown, var);
+  bitmap_set_bit_p (curr_ccp_const, var);
   VARR_SET (const_t, curr_ccp_vals, var, val);
   if (res != NULL)
     *res = val;
@@ -1459,7 +1453,7 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
       continue;
     var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
     bitmap_set_bit_p (curr_ccp_varying, var);
-    bitmap_clear_bit_p (curr_ccp_unknown, var);
+    bitmap_clear_bit_p (curr_ccp_const, var);
   }
   return FALSE;
 }
@@ -1512,14 +1506,12 @@ static void setup_curr_ccp_bb_data (bb_t bb) {
   
   ccp_dst = bb;
   bitmap_copy (curr_ccp_varying, bb->ccp_varying_in);
-  bitmap_copy (curr_ccp_unknown, bb->ccp_unknown_in);
-  bitmap_and_compl (temp_bitmap, all_vars, bb->ccp_unknown_in);
-  bitmap_and_compl (temp_bitmap, temp_bitmap, bb->ccp_varying_in);
+  bitmap_copy (curr_ccp_const, bb->ccp_const_in);
   VARR_TRUNC (const_t, curr_ccp_vals, 0);
   val.uns_p = FALSE; val.u.i = 0;
   while (VARR_LENGTH (const_t, curr_ccp_vals) != get_nvars ())
     VARR_PUSH (const_t, curr_ccp_vals, val);
-  bitmap_for_each (temp_bitmap, setup_curr_ccp_vals);
+  bitmap_for_each (bb->ccp_const_in, setup_curr_ccp_vals);
 }
 
 static int ccp_trans_func (bb_t bb) {
@@ -1554,29 +1546,28 @@ static int ccp_trans_func (bb_t bb) {
     }
   }
   ccp_trans_func_change_p |= ! bitmap_equal_p (bb->ccp_varying_out, curr_ccp_varying);
-  ccp_trans_func_change_p |= ! bitmap_equal_p (bb->ccp_unknown_out, curr_ccp_unknown);
-  bitmap_and_compl (temp_bitmap, all_vars, bb->ccp_unknown_out);
-  bitmap_and_compl (temp_bitmap, temp_bitmap, bb->ccp_varying_out);
-  bitmap_and_compl (temp_bitmap2, all_vars, curr_ccp_unknown);
-  bitmap_ior_and_compl (temp_bitmap, temp_bitmap, temp_bitmap2, curr_ccp_varying);
+  ccp_trans_func_change_p |= ! bitmap_equal_p (bb->ccp_const_out, curr_ccp_const);
+  bitmap_ior (temp_bitmap, bb->ccp_const_out, curr_ccp_const);
   bitmap_for_each (temp_bitmap, update_curr_ccp_vals);
   bitmap_copy (bb->ccp_varying_out, curr_ccp_varying);
-  bitmap_copy (bb->ccp_unknown_out, curr_ccp_unknown);
+  bitmap_copy (bb->ccp_const_out, curr_ccp_const);
   return ccp_trans_func_change_p;
 }
 
 static void initiate_bb_ccp_info (bb_t bb) {
   MIR_reg_t nvars = get_nvars ();
-  int param_p;
   
-  assert (bb->ccp_unknown_in != NULL && bb->ccp_unknown_out != NULL
+  assert (bb->ccp_const_in != NULL && bb->ccp_const_out != NULL
 	  && bb->ccp_varying_in != NULL && bb->ccp_varying_out != NULL);
-  bitmap_clear (bb->ccp_unknown_in); bitmap_clear (bb->ccp_unknown_out);
+  bitmap_clear (bb->ccp_const_in); bitmap_clear (bb->ccp_const_out);
   bitmap_clear (bb->ccp_varying_in); bitmap_clear (bb->ccp_varying_out);
   for (MIR_reg_t var = 0; var < nvars; var++) {
-    param_p = var_is_reg_p (var) && var2reg (var) <= curr_func_item->u.func->nargs;
-    bitmap_set_bit_p (param_p ? bb->ccp_varying_in : bb->ccp_unknown_in, var);
-    bitmap_set_bit_p (param_p ? bb->ccp_varying_out : bb->ccp_unknown_out, var);
+    if (! var_is_reg_p (var))
+      continue;
+    if (var2reg (var) > curr_func_item->u.func->nargs)
+      break;
+    bitmap_set_bit_p (bb->ccp_varying_in, var); /* func arg */
+    bitmap_set_bit_p (bb->ccp_varying_out, var);
   }
 }
 
@@ -1729,8 +1720,8 @@ static void output_min_bitmap (const char *title, bitmap_t b) {
 }
 
 static void output_bb_ccp_info (bb_t bb) {
-  output_min_bitmap ("  unknown_in: ", bb->ccp_unknown_in);
-  output_min_bitmap ("  unknown_out:", bb->ccp_unknown_out);
+  output_min_bitmap ("  const_in: ", bb->ccp_const_in);
+  output_min_bitmap ("  const_out:", bb->ccp_const_out);
   output_min_bitmap ("  varying_in: ", bb->ccp_varying_in);
   output_min_bitmap ("  varying_out:", bb->ccp_varying_out);
   output_constants (bb, TRUE); output_constants (bb, FALSE);
@@ -1738,8 +1729,8 @@ static void output_bb_ccp_info (bb_t bb) {
 
 #endif
 
-#undef ccp_unknown_in
-#undef ccp_unknown_out
+#undef ccp_const_in
+#undef ccp_const_out
 #undef ccp_varying_in
 #undef ccp_varying_out
 
@@ -2813,7 +2804,7 @@ void MIR_init_gen (void) {
   HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq);
   HTAB_CREATE (var_const_t, var_const_tab, 1024, var_const_hash, var_const_eq);
   curr_ccp_varying = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  curr_ccp_unknown = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  curr_ccp_const = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb_to_consider = bitmap_create2 (512);
@@ -2850,7 +2841,7 @@ void MIR_finish_gen (void) {
   HTAB_DESTROY (expr_t, expr_tab);
   HTAB_DESTROY (var_const_t, var_const_tab);
   bitmap_destroy (curr_ccp_varying);
-  bitmap_destroy (curr_ccp_unknown);
+  bitmap_destroy (curr_ccp_const);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
   bitmap_destroy (bb_to_consider);

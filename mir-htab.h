@@ -196,6 +196,7 @@ static inline htab_size_t HTAB_OP (T, collisions) (HTAB (T) *htab) {	\
 #define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
 #define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
+/* It returns TRUE if the element existed in the table.  */
 #define HTAB_DO(T, V, A, EL, TAB_EL) (HTAB_OP (T, do) (V, A, EL, &(TAB_EL)))
 #define HTAB_ELS_NUM(T, V) (HTAB_OP (T, els_num) (V))
 #define HTAB_COLLISIONS(T, V) (HTAB_OP (T, collisions) (V))
