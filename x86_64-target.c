@@ -71,6 +71,7 @@ static void machinize (MIR_item_t func_item) {
 	arg_reg = XMM0_HARD_REG + float_num;
 	break;
       default:
+	arg_reg = 0;
 	assert (FALSE);
       }
       float_num++;
@@ -88,6 +89,7 @@ static void machinize (MIR_item_t func_item) {
       case 4: arg_reg = R8_HARD_REG; break;
       case 5: arg_reg = R9_HARD_REG; break;
       default:
+	arg_reg = 0;
 	assert (FALSE);
       }
       int_num++;
@@ -499,7 +501,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   MIR_reg_t hr;
   
   for (nop = 0, p = pat->pattern; *p != 0; p++) {
-    assert (nop < nops);
+    gen_assert (nop < nops);
     op = insn->ops[nop];
     switch (start_ch = *p) {
     case ' ': case '\t':
@@ -510,7 +512,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case 'h':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
       ch = *++p;
-      assert ('0' <= ch && ch <= '9');
+      gen_assert ('0' <= ch && ch <= '9');
       hr = ch - '0';
       ch = *++p;
       if ('0' <= ch && ch <= '9') hr = hr * 10 + ch - '0';
@@ -524,7 +526,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	  || (ch == '2' && ! int32_p (op.u.i)))
 	return FALSE;
       else
-	assert ('0' <= ch && ch <= '3');
+	gen_assert ('0' <= ch && ch <= '3');
       break;
     case 'f':
       if (op.mode != MIR_OP_FLOAT) return FALSE;
@@ -548,7 +550,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	u_p = ch == 'u'; s_p = ch == 's'; ch = *++p;
 	/* Fall through: */
       default:
-	assert ('0' <= ch && ch <= '3');
+	gen_assert ('0' <= ch && ch <= '3');
 	if (ch == '0') {
 	  type = u_p ? MIR_U8 : MIR_I8; type2 = u_p && s_p ? MIR_I8 : MIR_T_BOUND;
 	} else if (ch == '1') {
@@ -568,10 +570,10 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
       n = start_ch - '0';
-      assert (n < nop);
+      gen_assert (n < nop);
       original = insn->ops[n];
       if (original.mode != op.mode) return FALSE;
-      assert (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_INT
+      gen_assert (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_INT
 	      || op.mode == MIR_OP_FLOAT || op.mode == MIR_OP_DOUBLE
 	      || op.mode == MIR_OP_HARD_REG_MEM || op.mode == MIR_OP_LABEL);
       if (op.mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg) return FALSE;
@@ -587,12 +589,12 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	       && op.u.hard_reg_mem.disp != original.u.hard_reg_mem.disp) return FALSE;
       break;
     default:
-      assert (FALSE);
+      gen_assert (FALSE);
     }
     if (start_ch != ' ' && start_ch != ' ')
       nop++;
   }
-  assert (nop == nops);
+  gen_assert (nop == nops);
   return TRUE;
 }
 
@@ -624,16 +626,16 @@ static uint64_t read_hex (const char **ptr) {
   uint64_t res = 0;
   
   for (p = *ptr; (v = hex_value (*p)) >= 0; p++) {
-    assert ((res >> 60) == 0);
+    gen_assert ((res >> 60) == 0);
     res = res * 16 + v;
   }
-  assert (p != *ptr);
+  gen_assert (p != *ptr);
   *ptr = p - 1;
   return res;
 }
 
 static void setup_r (int *rex, int *r, int v) {
-  assert ((rex == NULL || *rex < 0) && *r < 0 && v >= 0 && v <= MAX_HARD_REG);
+  gen_assert ((rex == NULL || *rex < 0) && *r < 0 && v >= 0 && v <= MAX_HARD_REG);
   if (v >= 16) v -= 16;
   if (v >= 8) {
     if (rex != NULL) *rex = 1;
@@ -647,12 +649,12 @@ static void setup_reg (int *rex_reg, int *reg, int v) { setup_r (rex_reg, reg, v
 static void setup_rm (int *rex_b, int *rm, int v) { setup_r (rex_b, rm, v); }
 
 static void setup_mod (int *mod, int v) {
-  assert (*mod < 0 && v >= 0 && v <= 3);
+  gen_assert (*mod < 0 && v >= 0 && v <= 3);
   *mod = v;
 }
 
 static void setup_scale (int *scale, int v) {
-  assert (*scale < 0 && v >= 0 && v <= 3);
+  gen_assert (*scale < 0 && v >= 0 && v <= 3);
   *scale = v;
 }
 
@@ -661,9 +663,9 @@ static void setup_base (int *rex_b, int *base, int v) { setup_r (rex_b, base, v)
 static void setup_index (int *rex_i, int *index, int v) { setup_r (rex_i, index, v); }
 
 static void setup_rip_rel_addr (MIR_disp_t rip_disp, int *mod, int *rm, int64_t *disp32) {
-  assert (*mod < 0 && *rm < 0 && *disp32 < 0);
+  gen_assert (*mod < 0 && *rm < 0 && *disp32 < 0);
   setup_mod (mod, 0); setup_rm (NULL, rm, 5);
-  assert (int32_p (rip_disp));
+  gen_assert (int32_p (rip_disp));
   setup_mod (mod, 2); *disp32 = (uint32_t) rip_disp;
 }
 
@@ -671,7 +673,7 @@ static void setup_mem (MIR_mem_t mem, int *mod, int *rm, int *scale, int *base, 
 		       int *index, int *rex_x, int *disp8, int64_t *disp32) {
   MIR_disp_t disp = mem.disp;
 
-  assert (*disp8 < 0 && *disp32 < 0 && mem.index != SP_HARD_REG);
+  gen_assert (*disp8 < 0 && *disp32 < 0 && mem.index != SP_HARD_REG);
   if (mem.index == MIR_NON_HARD_REG && mem.base == MIR_NON_HARD_REG) { /* SIB: disp only */
     setup_rm (NULL, rm, 4); *disp32 = (uint32_t) disp;
     setup_base (NULL, base, BP_HARD_REG); setup_index (NULL, index, SP_HARD_REG);
@@ -795,11 +797,11 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
     for (p = insn_str; (ch = *p) != '\0' && ch != ';'; p++) {
       if ((d1 = hex_value (ch = *p)) >= 0) {
 	d2 = hex_value (ch = *++p);
-	assert (d2 >= 0);
+	gen_assert (d2 >= 0);
 	if (opcode0 == -1) opcode0 = d1 * 16 + d2;
 	else if (opcode1 == -1) opcode1 = d1 * 16 + d2;
 	else {
-	  assert (opcode2 == -1);
+	  gen_assert (opcode2 == -1);
 	  opcode2 = d1 * 16 + d2;
 	}
 	p++;
@@ -810,37 +812,37 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       case ' ': case '\t': break;
       case 'X':
 	if (opcode0 >= 0) {
-	  assert (opcode1 < 0);
+	  gen_assert (opcode1 < 0);
 	  prefix = opcode0; opcode0 = -1;
 	}
 	rex_w = 1;
 	break;
       case 'Y':
 	if (opcode0 >= 0) {
-	  assert (opcode1 < 0);
+	  gen_assert (opcode1 < 0);
 	  prefix = opcode0; opcode0 = -1;
 	}
 	rex_w = 0;
 	break;
       case 'p':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '2');
+	gen_assert ('0' <= ch && ch <= '2');
 	op = insn->ops[ch - '0'];
 	if (op.mode == MIR_OP_INT || op.mode == MIR_OP_DOUBLE) {
 	  v = op.u.i;
 	} else {
-	  assert (op.mode == MIR_OP_FLOAT);
+	  gen_assert (op.mode == MIR_OP_FLOAT);
 	  v = op.u.i; v >>= 32;
 	}
-	assert (const_ref_num < 0 && disp32 < 0);
+	gen_assert (const_ref_num < 0 && disp32 < 0);
 	const_ref_num = setup_imm_addr (v, &mod, &rm, &disp32);
 	break;
       case 'r':
       case 'R':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '2');
+	gen_assert ('0' <= ch && ch <= '2');
 	op = insn->ops[ch - '0'];
-	assert (op.mode == MIR_OP_HARD_REG);
+	gen_assert (op.mode == MIR_OP_HARD_REG);
 	if (start_ch == 'r')
 	  setup_reg (&rex_r, &reg, op.u.hard_reg);
 	else {
@@ -850,9 +852,9 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	break;
       case 'm':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '2');
+	gen_assert ('0' <= ch && ch <= '2');
 	op = insn->ops[ch - '0'];
-	assert (op.mode == MIR_OP_HARD_REG_MEM);
+	gen_assert (op.mode == MIR_OP_HARD_REG_MEM);
 	setup_mem (op.u.hard_reg_mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8, &disp32);
 	break;
       case 'a': {
@@ -861,20 +863,20 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 
 	ch = *++p;
 	op = insn->ops[1];
-	assert (op.mode == MIR_OP_HARD_REG);
+	gen_assert (op.mode == MIR_OP_HARD_REG);
 	mem.type = MIR_I8;
 	if (ch == 'p') {
 	  mem.base = op.u.hard_reg; mem.scale = 1;
 	  if (op2.mode == MIR_OP_HARD_REG) {
 	    mem.index = op2.u.hard_reg; mem.disp = 0;
 	  } else {
-	    assert (op2.mode == MIR_OP_INT);
+	    gen_assert (op2.mode == MIR_OP_INT);
 	    mem.index = MIR_NON_HARD_REG; mem.disp = op2.u.i;
 	  }
 	} else {
-	  assert (ch == 'm');
+	  gen_assert (ch == 'm');
 	  mem.index = op.u.hard_reg; mem.base = MIR_NON_HARD_REG; mem.disp = 0;
-	  assert (op2.mode == MIR_OP_INT && (op2.u.i == 1 || op2.u.i == 2 || op2.u.i == 4 || op2.u.i == 8));
+	  gen_assert (op2.mode == MIR_OP_INT && (op2.u.i == 1 || op2.u.i == 2 || op2.u.i == 4 || op2.u.i == 8));
 	  mem.scale = op2.u.i;
 	}
 	setup_mem (mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8, &disp32);
@@ -884,13 +886,13 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       case 'I':
       case 'J':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '7');
+	gen_assert ('0' <= ch && ch <= '7');
 	op = insn->ops[ch - '0'];
-	assert (op.mode == MIR_OP_INT);
+	gen_assert (op.mode == MIR_OP_INT);
 	if (start_ch == 'i') {
-	  assert (int8_p (op.u.i)); imm8 = (uint8_t) op.u.i;
+	  gen_assert (int8_p (op.u.i)); imm8 = (uint8_t) op.u.i;
 	} else if (start_ch == 'I' ) {
-	  assert (int32_p (op.u.i)); imm32 = (uint32_t) op.u.i;
+	  gen_assert (int32_p (op.u.i)); imm32 = (uint32_t) op.u.i;
 	} else {
 	  imm64_p = FALSE; imm64 = op.u.i;
 	}
@@ -899,11 +901,11 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	label_ref_t lr;
 
 	ch = *++p;
-	assert ('0' <= ch && ch <= '2');
+	gen_assert ('0' <= ch && ch <= '2');
 	op = insn->ops[ch - '0'];
-	assert (op.mode == MIR_OP_LABEL);
+	gen_assert (op.mode == MIR_OP_LABEL);
 	lr.label_val_disp = lr.next_insn_disp = 0; lr.label = op.u.label;
-	assert (label_ref_num < 0 && disp32 < 0);
+	gen_assert (label_ref_num < 0 && disp32 < 0);
 	disp32 = 0; /* To reserve the space */
 	label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
 	VARR_PUSH (label_ref_t, label_refs, lr);
@@ -911,24 +913,24 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       }
       case '/':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '7');
+	gen_assert ('0' <= ch && ch <= '7');
 	setup_reg (NULL, &reg, ch - '0');
 	break;
       case '+':
 	ch = *++p;
-	assert ('0' <= ch && ch <= '2');
+	gen_assert ('0' <= ch && ch <= '2');
 	lb = ch - '0';
 	break;
       case 'c':
 	++p;
 	v = read_hex (&p);
-	assert (const_ref_num < 0 && disp32 < 0);
+	gen_assert (const_ref_num < 0 && disp32 < 0);
 	const_ref_num = setup_imm_addr (v, &mod, &rm, &disp32);
 	break;
       case 'H':
 	++p;
 	v = read_hex (&p);
-	assert (v <= 31);
+	gen_assert (v <= 31);
 	setup_rm (&rex_b, &rm, v);
 	setup_mod (&mod, 3);
 	break;
@@ -937,13 +939,13 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	++p;
 	v = read_hex (&p);
 	if (start_ch == 'v') {
-	  assert (uint8_p (v)); imm8 = v;
+	  gen_assert (uint8_p (v)); imm8 = v;
 	} else {
-	  assert (uint32_p (v)); imm32 = v;
+	  gen_assert (uint32_p (v)); imm32 = v;
 	}
 	break;
       default:
-	assert (FALSE);
+	gen_assert (FALSE);
       }
     }
     if (prefix >= 0) put_byte (prefix);
@@ -953,11 +955,11 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       if (rex_r < 0) rex_r = 0;
       if (rex_x < 0) rex_x = 0;
       if (rex_b < 0) rex_b = 0;
-      assert (rex_w <= 1 && rex_r <= 1 && rex_x <= 1 && rex_b <= 1);
+      gen_assert (rex_w <= 1 && rex_r <= 1 && rex_x <= 1 && rex_b <= 1);
       put_byte (0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | rex_b);
     }
     
-    assert (opcode0 >= 0 && lb <= 7);
+    gen_assert (opcode0 >= 0 && lb <= 7);
     if (lb >= 0) opcode0 |= lb;
     put_byte (opcode0);
     
@@ -968,14 +970,14 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       if (mod < 0) mod = 0;
       if (reg < 0) reg = 0;
       if (rm < 0) rm = 0;
-      assert (mod <= 3 && reg <= 7 && rm <= 7);
+      gen_assert (mod <= 3 && reg <= 7 && rm <= 7);
       put_byte ((mod << 6) | (reg << 3) | rm);
     }
     if (scale >= 0 || base >= 0 || index >= 0) {
       if (scale < 0) scale = 0;
       if (base < 0) base = 0;
       if (index < 0) index = 0;
-      assert (scale <= 3 && base <= 7 && index <= 7);
+      gen_assert (scale <= 3 && base <= 7 && index <= 7);
       put_byte ((scale << 6) | (index << 3) | base);
     }
     if (const_ref_num >= 0)
@@ -998,7 +1000,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 }
 
 static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
-  assert (long_jump_opcode[0] == 0x0F && long_jump_opcode[1] > 0x10);
+  gen_assert (long_jump_opcode[0] == 0x0F && long_jump_opcode[1] > 0x10);
   return long_jump_opcode[1] - 0x10;
 }
 
@@ -1011,7 +1013,7 @@ static uint8_t *target_translate (MIR_item_t func, size_t *len) {
   MIR_insn_t insn;
   const char *replacement;
   
-  assert (func->func_p);
+  gen_assert (func->func_p);
   VARR_TRUNC (uint8_t, code, 0);
   VARR_TRUNC (uint64_t, const_pool, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);
@@ -1024,9 +1026,9 @@ static uint8_t *target_translate (MIR_item_t func, size_t *len) {
     } else {
       replacement = find_insn_pattern_replacement (insn);
       if (replacement == NULL) {
-	fprintf (stderr, "failure:"); MIR_output_insn (stderr, insn, func->u.func);
+	fprintf (stderr, "failure:"); MIR_output_insn (stderr, insn, func->u.func, TRUE);
       } else {
-	assert (replacement != NULL);
+	gen_assert (replacement != NULL);
 	out_insn (insn, replacement);
       }
     }

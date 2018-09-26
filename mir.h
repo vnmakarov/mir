@@ -284,7 +284,7 @@ extern void MIR_insert_insn_before (MIR_item_t func, MIR_insn_t before, MIR_insn
 extern void MIR_remove_insn (MIR_item_t func, MIR_insn_t insn);
 
 extern void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func);
-extern void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func);
+extern void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p);
 extern void MIR_output (FILE *f);
 
 extern void MIR_simplify_func (MIR_item_t func);

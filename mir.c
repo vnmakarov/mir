@@ -10,6 +10,13 @@ static void util_error (const char *message);
 #include <stdarg.h>
 #include <inttypes.h>
 #include <float.h>
+#include <assert.h>
+
+#ifdef NDEBUG
+static inline int mir_assert (int cond) {return 0 && cond;}
+#else
+#define mir_assert(cond) assert (cond)
+#endif
 
 #define FALSE 0
 #define TRUE 1
@@ -198,7 +205,7 @@ static void check_and_prepare_insn_descs (void) {
   
   VARR_CREATE (size_t, insn_nops, 0);
   for (i = 0; i < MIR_INSN_BOUND; i++) {
-    assert (insn_descs[i].code == i);
+    mir_assert (insn_descs[i].code == i);
     for (j = 0; insn_descs[i].op_modes[j] != MIR_OP_UNDEF; j++)
       ;
     VARR_PUSH (size_t, insn_nops, j);
@@ -333,9 +340,9 @@ static void reg_create (MIR_func_t func, MIR_reg_t reg, const char *name, MIR_ty
     (*error_func) (MIR_repeated_decl_error, "Repeated reg declaration");
   }
   htab_res = HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
-  assert (! htab_res);
+  mir_assert (! htab_res);
   htab_res = HTAB_DO (size_t, reg2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
-  assert (! htab_res);
+  mir_assert (! htab_res);
 }
 
 static void reg_finish (void) {
@@ -716,7 +723,7 @@ MIR_op_t MIR_new_uint_op (uint64_t u) {
 MIR_op_t MIR_new_float_op (float f) {
   MIR_op_t op;
 
-  assert (sizeof (float) == 4); /* IEEE single */
+  mir_assert (sizeof (float) == 4); /* IEEE single */
   init_op (&op, MIR_OP_FLOAT); op.u.f = f;
   return op;
 }
@@ -724,7 +731,7 @@ MIR_op_t MIR_new_float_op (float f) {
 MIR_op_t MIR_new_double_op (double d) {
   MIR_op_t op;
 
-  assert (sizeof (double) == 8); /* IEEE double */
+  mir_assert (sizeof (double) == 8); /* IEEE double */
   init_op (&op, MIR_OP_DOUBLE); op.u.d = d;
   return op;
 }
@@ -785,8 +792,9 @@ int MIR_op_eq_p (MIR_op_t op1, MIR_op_t op2) {
 		|| op1.u.hard_reg_mem.scale == op2.u.hard_reg_mem.scale));
   case MIR_OP_LABEL: return op1.u.label == op2.u.label;
   default:
-    assert (FALSE); /* we should not have other operands here */
+    mir_assert (FALSE); /* we should not have other operands here */
   }
+  return FALSE;
 }
 
 htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
@@ -802,12 +810,8 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
     u.d = op.u.f;
     return mum_hash_step (h, u.u);
   }
-  case MIR_OP_DOUBLE: {
-    union {double d; uint64_t u;} u;
-    
-    u.d = op.u.d;
+  case MIR_OP_DOUBLE:
     return mum_hash_step (h, (uint64_t) op.u.u);
-  }
   case MIR_OP_NAME: return mum_hash_step (h, (uint64_t) op.u.i);
   case MIR_OP_MEM:
     h = mum_hash_step (h, (uint64_t) op.u.mem.type);
@@ -825,7 +829,7 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
       h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
   case MIR_OP_LABEL: return mum_hash_step (h, (uint64_t) op.u.label);
   default:
-    assert (FALSE); /* we should not have other operands here */
+    mir_assert (FALSE); /* we should not have other operands here */
   }
   return h;
 }
@@ -945,7 +949,7 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
     MIR_output_label (f, op.u.label);
     break;
   default:
-    assert (FALSE);
+    mir_assert (FALSE);
   }
 }
 
@@ -953,12 +957,14 @@ static void MIR_output_label (FILE *f, MIR_label_t label) {
   fprintf (f, "L"); MIR_output_op (f, label->ops[0], curr_output_func);
 }
 
-void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func) {
+void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p) {
   size_t i, nops;
   
   curr_output_func = func;
   if (insn->code == MIR_LABEL) {
-    MIR_output_label (f, insn); fprintf (f, ":\n");
+    MIR_output_label (f, insn);
+    if (newline_p)
+      fprintf (f, ":\n");
     return;
   }
   fprintf (f, "\t%s", MIR_insn_name (insn->code));
@@ -967,7 +973,8 @@ void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func) {
     fprintf (f, i == 0 ? "\t" : ", ");
     MIR_output_op (f, insn->ops[i], func);
   }
-  fprintf (f, "\n");
+  if (newline_p)
+    fprintf (f, "\n");
 }
 
 static void MIR_output_item (FILE *f, MIR_item_t item) {
@@ -996,7 +1003,7 @@ static void MIR_output_item (FILE *f, MIR_item_t item) {
   fprintf (f, "\n# frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
 	   func->nargs, func->nargs == 1 ? "" : "s", (unsigned) nlocals, nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
-    MIR_output_insn (f, insn, func);
+    MIR_output_insn (f, insn, func, TRUE);
   fprintf (f, "\tendfunc\n");
 }
 
@@ -1052,10 +1059,6 @@ static void vn_finish (void) {
   HTAB_DESTROY (val_t, val_tab);
 }
 
-static void vn_clear (void) {
-  HTAB_CLEAR (val_t, val_tab);
-}
-
 static MIR_reg_t vn_add_val (MIR_func_t func, MIR_type_t type,
 			     MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
   val_t val, tab_val;
@@ -1079,7 +1082,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
   case MIR_OP_FLOAT:
   case MIR_OP_DOUBLE:
   case MIR_OP_NAME:
-    assert (! out_p);
+    mir_assert (! out_p);
     if (move_p)
       return;
     type = op->mode == MIR_OP_FLOAT ? MIR_F : op->mode == MIR_OP_FLOAT ? MIR_D : MIR_I64;
@@ -1125,10 +1128,10 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
 	base_ind_reg = base_reg != 0 ? base_reg : scale_ind_reg;
       }
       if (base_ind_reg == 0) {
-	assert (disp_reg != 0);
+	mir_assert (disp_reg != 0);
 	addr_reg = disp_reg;
       } else if (disp_reg == 0) {
-	assert (base_ind_reg != 0);
+	mir_assert (base_ind_reg != 0);
 	addr_reg = base_ind_reg;
       } else {
 	MIR_op_t base_ind_op = MIR_new_reg_op (base_ind_reg), disp_op = MIR_new_reg_op (disp_reg);
@@ -1155,7 +1158,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
   }
   default:
     /* We don't simplify code with hard regs.  */
-    assert (FALSE);
+    mir_assert (FALSE);
   }
 }
 
@@ -1180,7 +1183,7 @@ static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
   
   if (VARR_LENGTH (MIR_insn_t, ret_insns) == 1 && VARR_GET (MIR_insn_t, ret_insns, 0) == insn)
     return;
-  assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET);
+  mir_assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET);
   ret_type = ret_code == MIR_RET ? MIR_I64 : ret_code == MIR_FRET ? MIR_F : MIR_D;
   mov_code = ret_code == MIR_RET ? MIR_MOV : ret_code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
   ret_reg = _MIR_new_temp_reg (ret_type, func_item->u.func);
@@ -1193,7 +1196,7 @@ static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
   for (i = 0; i < VARR_LENGTH (MIR_insn_t, ret_insns); i++) {
     insn = VARR_GET (MIR_insn_t, ret_insns, i);
     reg_op = insn->ops[0];
-    assert (reg_op.mode == MIR_OP_REG);
+    mir_assert (reg_op.mode == MIR_OP_REG);
     MIR_insert_insn_before (func_item, insn, MIR_new_insn (mov_code, MIR_new_reg_op (ret_reg), reg_op));
     MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_JMP, MIR_new_label_op (ret_label)));
     MIR_remove_insn (func_item, insn);
@@ -1396,9 +1399,9 @@ static void write_str_tag (FILE *f, const char *str, bin_tag_t start_tag) {
     return;
   }
   ok_p = string_find (&output_strings, &output_string_tab, str, &string);
-  assert (ok_p && string.num >= 1);
+  mir_assert (ok_p && string.num >= 1);
   nb = uint_length (string.num - 1);
-  assert (nb <= 4);
+  mir_assert (nb <= 4);
   if (nb == 0)
     nb = 1;
   put_byte (f, start_tag + nb - 1);
@@ -1418,7 +1421,7 @@ static void write_lab (FILE *f, MIR_label_t lab) {
     return;
   lab_num = lab->ops[0].u.u;
   nb = uint_length (lab_num);
-  assert (nb <= 4);
+  mir_assert (nb <= 4);
   if (nb == 0)
     nb = 1;
   put_byte (f, TAG_LAB1 + nb - 1);
@@ -1474,7 +1477,7 @@ static void MIR_write_op (FILE *f, MIR_op_t op) {
     write_lab (f, op.u.label);
     break;
   default: /* ??? HARD_REG, HARD_REG_MEM */
-    assert (FALSE);
+    mir_assert (FALSE);
   }
 }
 
@@ -1583,7 +1586,7 @@ static uint64_t get_uint (FILE *f, int nb) {
 static int64_t get_int (FILE *f, int nb) {
   int sh = (8 - nb) * CHAR_BIT;
   
-  assert (0 < nb && nb <= 8);
+  mir_assert (0 < nb && nb <= 8);
   return (int64_t) (get_uint (f, nb) << sh) >> sh;
 }
 
@@ -1759,7 +1762,7 @@ static int read_operand (FILE *f, MIR_op_t *op) {
   case TAG_EOI:
     return FALSE;
   default:
-    assert (FALSE);
+    mir_assert (FALSE);
   }
   return TRUE;
 }
@@ -1938,7 +1941,7 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
     VARR_PUSH (char, temp_string, ch);
     ch = get_char ();
   }
-  assert ('0' <= ch && ch <= '9');
+  mir_assert ('0' <= ch && ch <= '9');
   if (ch == '0') {
     ch = get_char ();
     if (ch != 'x' && ch != 'X') {
@@ -1963,7 +1966,7 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
     if (hex_char_p)
       hex_p = TRUE;
   }
-  assert (*base == 16 || ! hex_p);
+  mir_assert (*base == 16 || ! hex_p);
   if (ch == '.') {
     *double_p = TRUE;
     do {
@@ -2021,7 +2024,7 @@ static void unget_string_char (int ch) {
   if (input_string_char_num == 0 || ch == EOF)
     return;
   input_string_char_num--;
-  assert (input_string[input_string_char_num] == ch);
+  mir_assert (input_string[input_string_char_num] == ch);
 }
 
 static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
@@ -2098,7 +2101,7 @@ static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
 	  token.code = TC_INT;
 	  token.u.i = sizeof (long) == sizeof (int64_t) ? strtol (repr, &end, base) : strtoll (repr, &end, base);
 	}
-	assert (*end == '\0');
+	mir_assert (*end == '\0');
 	if (errno != 0)
 	  ;
 	return token;
@@ -2365,7 +2368,7 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "wrong frame size");
       nargs = n - 1;
       for (i = 0; i < nargs; i++) {
-	assert (op_addr[i + 1].mode == MIR_OP_MEM);
+	mir_assert (op_addr[i + 1].mode == MIR_OP_MEM);
 	var.type = op_addr[i + 1].u.mem.type;
 	var.name = (const char *) op_addr[i + 1].u.mem.disp;
 	VARR_PUSH (MIR_var_t, temp_vars, var);
@@ -2384,7 +2387,7 @@ void MIR_scan_string (const char *str) {
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
       n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
       for (i = 0; i < n; i++) {
-	assert (op_addr[i].mode == MIR_OP_MEM);
+	mir_assert (op_addr[i].mode == MIR_OP_MEM);
 	MIR_create_func_var (func->u.func, op_addr[i].u.mem.type, (const char *) op_addr[i].u.mem.disp);
       }
     } else {
@@ -2523,11 +2526,11 @@ int main (void) {
   create_mir_func_sieve (NULL);
   MIR_output (stderr);
   f = fopen (fname, "wb");
-  assert  (f != NULL);
+  mir_assert (f != NULL);
   MIR_write (f);
   fclose (f);
   f = fopen (fname, "rb");
-  assert  (f != NULL);
+  mir_assert (f != NULL);
   MIR_read (f);
   fclose (f);
   fprintf (stderr, "+++++++++++++After reading:\n");
@@ -2620,12 +2623,12 @@ int main (void) {
   fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f CPU sec - API use\n",
 	   nfunc, len / 1000000.0 * nfunc, (clock () - start_time) / CLOCKS_PER_SEC);
   f = fopen (fname, "wb");
-  assert  (f != NULL);
+  mir_assert (f != NULL);
   MIR_write (f);
   fclose (f);
   MIR_finish ();
   f = fopen (fname, "rb");
-  assert  (f != NULL);
+  mir_assert (f != NULL);
   start_time = clock ();
   for (len = 0; fgetc (f) != EOF; len++)
     ;
@@ -2634,7 +2637,7 @@ int main (void) {
   fclose (f);
   MIR_init ();
   f = fopen (fname, "rb");
-  assert  (f != NULL);
+  mir_assert (f != NULL);
   start_time = clock ();
   MIR_read (f);
   fprintf (stderr, "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec - API use\n",
