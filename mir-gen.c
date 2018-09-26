@@ -1,9 +1,9 @@
 /* Optimization pipeline:
 
             ----------------      -----------      ------------------      ---------------------- 
-   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->| Conditional Constant |
-            ----------------     -----------      |    Elimination   |	  |     Propagation      |
-                                                   -------------------	  ----------------------- 
+   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Sparse Conditional  |
+            ----------------      -----------     |    Elimination   |	  | Constant Propagation |
+                                                   ------------------	   ---------------------- 
                                                                                      |
                                                                                      v
            --------      -------------      ------------       -----------     -------------     
@@ -22,7 +22,7 @@
    Simplify: Lowering MIR (in mir.c).
    Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
    Common Sub-Expression Elimination: Reusing calculated values
-   Conditional Constant Propagation: constant propagation and removing death paths of CFG
+   Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Dead code elimination: Removing insns with unused outputs. 
    Machinize: Machine-dependent code (e.g. in x86_64-target.c)
               transforming MIR for calls ABI, 2-op insns, etc.
@@ -42,7 +42,8 @@
    var - pseudo and hard register (var numbers for psedo-registers are based reg numbers + MAX_HARD_REG + 1)
    loc - hard register and stack locations (stack slot numbers start with MAX_HARD_REG + 1).
 
-   We don't use SSA becuase the optimization pipeline is short and going into / out of SSA is expensive
+   We don't use SSA because the optimization pipeline could use SSA is
+   short (2 passes) and going into / out of SSA is expensive.
 */
 
 #include <stdlib.h>
@@ -1017,7 +1018,7 @@ static void output_bb_cse_info (bb_t bb) {
 
 
 
-/* Conditional Constant Propagation.  Live info should exist.  */
+/* Sparse Conditional Constant Propagation.  Live info should exist.  */
 
 #define live_in in
 #define live_out out
@@ -1190,6 +1191,10 @@ static void process_bb_end (size_t el) {
   DLIST_APPEND (var_occ_t, def->uses, use);
 }
 
+/* Build a web of def-use with auxiliary usages and definitions at BB
+   borders to emulate SSA on which the sparse conditional propagation
+   is usually done.  We could do non-sparse CCP w/o building the web
+   but it is much slower algorithm.  */
 static void build_var_occ_web (void) {
   MIR_op_t *op, *dst_op;
   MIR_insn_t insn;
@@ -1497,6 +1502,18 @@ static enum ccp_val_kind get_3usops (MIR_insn_t insn, uint32_t *p1, uint32_t *p2
     val.uns_p = FALSE; val.u.i = p1 op p2;	  	 				\
   } while (0)
 
+static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
+  int out_p;
+  
+  if (MIR_insn_nops (insn->code) < 1)
+    return FALSE;
+  MIR_insn_op_mode (insn->code, 0, &out_p);
+  if (! out_p)
+    return FALSE;
+  *op = insn->ops[0];
+  return TRUE;
+}
+
 static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   MIR_op_t op;
   int out_p;
@@ -1584,11 +1601,7 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   if (ccp_res == CCP_UNKNOWN)
     return FALSE;
   gen_assert (ccp_res == CCP_VARYING);
-  if (MIR_insn_nops (insn->code) < 1)
-    return FALSE;
-  op = insn->ops[0]; /* Output is always zero-th operand.  */
-  MIR_insn_op_mode (insn->code, 0, &out_p);
-  if (! out_p || (op.mode != MIR_OP_HARD_REG && op.mode != MIR_OP_REG))
+  if (! get_res_op (insn, &op) || (op.mode != MIR_OP_HARD_REG && op.mode != MIR_OP_REG))
     return FALSE;
   var_occ = op.data;
   gen_assert (var_occ->def == NULL);
@@ -1650,6 +1663,10 @@ static void ccp_push_used_insns (var_occ_t def) {
       if (bb_insn->flag)
 	continue; /* already in ccp_insns */
       VARR_PUSH (bb_insn_t, ccp_insns, bb_insn);
+#if MIR_GEN_DEBUG
+      fprintf (debug_file, "           pushing bb%d insn: ", bb_insn->bb->index);
+      MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+#endif
       bb_insn->flag = TRUE;
     } else {
       struct var_occ vos;
@@ -1666,6 +1683,13 @@ static void ccp_push_used_insns (var_occ_t def) {
 	vos.place.u.bb = e->dst;
 	if (! HTAB_DO (var_occ_t, var_occ_tab, &vos, HTAB_FIND, tab_var_occ) || tab_var_occ->flag)
 	  continue; /* var_occ at the start of BB in subsequent BB is already in ccp_var_occs */
+#if MIR_GEN_DEBUG
+	fprintf (debug_file, "           pushing var%lu(%s) at start of bb%d\n",
+		 (long unsigned) vos.var,
+		 var_is_reg_p (vos.var)
+		 ? MIR_reg_name (var2reg (vos.var), curr_func_item->u.func) : "",
+		 e->dst->index);
+#endif
 	VARR_PUSH (var_occ_t, ccp_var_occs, tab_var_occ);
 	tab_var_occ->flag = TRUE;
       }
@@ -1752,6 +1776,44 @@ static void ccp_process_active_edge (edge_t e) {
   e->skipped_p = FALSE;
 }
 
+static void ccp_make_insn_update (MIR_insn_t insn) {
+  MIR_op_t op;
+  var_occ_t var_occ;
+
+  if (! ccp_insn_update (insn, NULL)) {
+#if MIR_GEN_DEBUG
+    if (get_res_op (insn, &op)) {
+      var_occ = op.data;
+      if (var_occ->val_kind == CCP_UNKNOWN) {
+	fprintf (debug_file, " -- make the result unknown");
+      } else if (var_occ->val_kind == CCP_VARYING) {
+	fprintf (debug_file, " -- keep the result varying");
+      } else {
+	gen_assert (var_occ->val_kind == CCP_CONST);
+	fprintf (debug_file, " -- keep the result a constant ");
+	print_const (debug_file, var_occ->val);
+      }
+    }
+    fprintf (debug_file, "\n");
+#endif
+  } else {
+    if (! get_res_op (insn, &op))
+      gen_assert (FALSE);
+    var_occ = op.data;
+#if MIR_GEN_DEBUG
+    if (var_occ->val_kind == CCP_VARYING) {
+      fprintf (debug_file, " -- make the result varying\n");
+    } else {
+      gen_assert (var_occ->val_kind == CCP_CONST);
+      fprintf (debug_file, " -- make the result a constant ");
+      print_const (debug_file, var_occ->val);
+      fprintf (debug_file, "\n");
+    }
+#endif
+    ccp_push_used_insns (var_occ);
+  }
+}
+
 static void ccp_process_insn (bb_insn_t bb_insn) {
   int res;
   enum ccp_val_kind ccp_res;
@@ -1761,13 +1823,15 @@ static void ccp_process_insn (bb_insn_t bb_insn) {
 
 #if MIR_GEN_DEBUG
   fprintf (debug_file, "       processing bb%d insn: ", bb_insn->bb->index);
-  MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+  MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
 #endif
   if (! MIR_branch_code_p (insn->code) || insn->code == MIR_JMP) {
-    if (ccp_insn_update (insn, NULL))
-      ccp_push_used_insns (insn->ops[0].data);
+    ccp_make_insn_update (insn);
     return;
   }
+#if MIR_GEN_DEBUG
+  fprintf (debug_file, "\n");
+#endif
   if ((ccp_res = ccp_branch_update (insn, &res)) == CCP_CONST) {
     /* Remember about an edge to exit bb.  First edge is always for
        fall through and the 2nd edge is for jump bb. */
@@ -1800,16 +1864,7 @@ static void ccp_process_bb (bb_t bb) {
     fprintf (debug_file, "         processing insn: ");
     MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
 #endif
-    if (ccp_insn_update (bb_insn->insn, NULL)) {
-#if MIR_GEN_DEBUG
-      fprintf (debug_file, " -- make the result a constant ");
-      print_const (debug_file, ((var_occ_t) bb_insn->insn->ops[0].data)->val);
-#endif
-      ccp_push_used_insns (bb_insn->insn->ops[0].data);
-    }
-#if MIR_GEN_DEBUG
-    fprintf (debug_file, "\n");
-#endif
+    ccp_make_insn_update (bb_insn->insn);
   }
   if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL
       || ! MIR_branch_code_p (bb_insn->insn->code) || bb_insn->insn->code == MIR_JMP) {
@@ -1834,13 +1889,13 @@ static void ccp_traverse (bb_t bb) {
 static int get_res_val (MIR_insn_t insn, const_t *val) {
   int out_p;
   var_occ_t var_occ;
+  MIR_op_t op;
   
-  if (MIR_insn_nops (insn->code) < 1)
+  if (! get_res_op (insn, &op))
     return FALSE;
-  MIR_insn_op_mode (insn->code, 0, &out_p);
-  if (! out_p || ! var_op_p (insn, 0))
+  if (! var_op_p (insn, 0))
     return FALSE;
-  var_occ = insn->ops[0].data;
+  var_occ = op.data;
   gen_assert (var_occ->def == NULL);
   if (var_occ->val_kind != CCP_CONST)
     return FALSE;
