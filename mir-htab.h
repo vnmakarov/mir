@@ -101,11 +101,18 @@ static inline void HTAB_OP (T, destroy) (HTAB (T) **htab) {		\
   free (*htab); *htab = NULL;						\
 }									\
 									\
-static inline void HTAB_OP (T, clear) (HTAB (T) *htab) {		\
+static inline void HTAB_OP (T, clear) (HTAB (T) *htab, void (*f) (T)) { \
   htab_ind_t *addr;							\
   htab_size_t i, size;							\
+  HTAB_EL (T) *els_addr;						\
   									\
   HTAB_ASSERT (htab != NULL, "clear", T);				\
+  if (f != NULL) {							\
+    els_addr = VARR_ADDR (HTAB_EL (T), htab->els);			\
+    size = VARR_LENGTH (HTAB_EL (T), htab->els);				\
+    for (i = 0; i < htab->els_bound; i++)				\
+      if (els_addr[i].hash != HTAB_DELETED_HASH) f (els_addr[i].el);    \
+  }									\
   htab->els_num = htab->els_start = htab->els_bound = 0;		\
   addr = VARR_ADDR (htab_ind_t, htab->entries);				\
   size = VARR_LENGTH (htab_ind_t, htab->entries);			\
@@ -195,7 +202,7 @@ static inline htab_size_t HTAB_OP (T, collisions) (HTAB (T) *htab) {	\
 
 #define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
-#define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
+#define HTAB_CLEAR(T, V, F) (HTAB_OP (T, clear) (V, F))
 /* It returns TRUE if the element existed in the table.  */
 #define HTAB_DO(T, V, A, EL, TAB_EL) (HTAB_OP (T, do) (V, A, EL, &(TAB_EL)))
 #define HTAB_ELS_NUM(T, V) (HTAB_OP (T, els_num) (V))

@@ -478,6 +478,7 @@ static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
     VARR_POP (reg_desc_t, reg_descs);
     return NULL; /* undeclared */
   }
+  VARR_POP (reg_desc_t, reg_descs);
   return &VARR_ADDR (reg_desc_t, reg_descs)[rdn];
 }
 
@@ -652,6 +653,7 @@ static reg_desc_t *find_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
     VARR_POP (reg_desc_t, reg_descs);
     (*error_func) (MIR_undeclared_reg_error, "undeclared reg");
   }
+  VARR_POP (reg_desc_t, reg_descs);
   return &VARR_ADDR (reg_desc_t, reg_descs)[rdn];
 }
 
@@ -858,10 +860,11 @@ void MIR_insert_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
-void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) { // ??? freeing
+void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) {
   if (! func_item->func_p)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_insn");
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
+  free (insn);
 }
 
 const char *MIR_type_str (MIR_type_t tp) {
@@ -2375,7 +2378,7 @@ void MIR_scan_string (const char *str) {
       }
       func = MIR_new_func_arr (VARR_GET (label_name_t, label_names, 0), frame_size, nargs,
 			       VARR_ADDR (MIR_var_t, temp_vars));
-      HTAB_CLEAR (label_desc_t, label_desc_tab);
+      HTAB_CLEAR (label_desc_t, label_desc_tab, NULL);
     } else if (end_func_p) {
       if (func == NULL)
 	process_error (MIR_syntax_error, "standalone endfunc");
