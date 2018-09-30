@@ -1,29 +1,29 @@
 /* Optimization pipeline:
 
-            ----------------      -----------      ------------------      ---------------------- 
-   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Sparse Conditional  |
-            ----------------      -----------     |    Elimination   |	  | Constant Propagation |
-                                                   ------------------	   ---------------------- 
-                                                                                     |
-                                                                                     v
-           --------      -------------      ------------       -----------     -------------     
-          | Assign |<---| Build Live  |<---| Build Live |<---| Machinize |<---|  Dead Code  |
-           --------     |   Ranges    |    |    Info    |      -----------    | Elimination |    
-              |          -------------      ------------                       -------------     
-              |
-              v
-           ---------     ---------     -------------      ---------------
-          | Rewrite |-->| Combine |-->|  Dead Code  |--->|   Generate    |-> Machine Insns
-           ---------     ---------    | Elimination |    | machine insns |
-                                       -------------      ---------------
+            ----------------      -----------      ------------------      -------------     
+   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Dead Code  |	 
+            ----------------      -----------     |    Elimination   |	  | Elimination |    
+                                                   ------------------	   -------------     
+                                                                                  |
+                                                                                  v
+    --------      -------------      ------------       -----------     ---------------------- 
+   | Assign |<---| Build Live  |<---| Build Live |<---| Machinize |<---|  Sparse Conditional  |
+    --------     |   Ranges    |    |    Info    |      -----------    | Constant Propagation |
+       |          -------------      ------------                       ---------------------- 
+       |
+       v
+    ---------     ---------     -------------      ---------------
+   | Rewrite |-->| Combine |-->|  Dead Code  |--->|   Generate    |---> Machine Insns
+    ---------     ---------    | Elimination |    | machine insns |
+                                -------------      ---------------
               
               
 
    Simplify: Lowering MIR (in mir.c).
    Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
    Common Sub-Expression Elimination: Reusing calculated values
-   Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Dead code elimination: Removing insns with unused outputs. 
+   Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Machinize: Machine-dependent code (e.g. in x86_64-target.c)
               transforming MIR for calls ABI, 2-op insns, etc.
    Building Live Info: Calculating live in and live out for the basic blocks.
