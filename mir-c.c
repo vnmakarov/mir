@@ -7169,7 +7169,7 @@ static void check (node_t r, node_t context) {
       }
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
     }
-    HTAB_CLEAR (case_t, case_tab);
+    HTAB_CLEAR (case_t, case_tab, NULL);
     curr_switch = saved_switch; curr_loop_switch = saved_loop_switch;
     break;
   }

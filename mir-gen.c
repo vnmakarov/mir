@@ -562,30 +562,23 @@ static void build_func_cfg (void) {
 static void destroy_func_cfg (void) {
   MIR_insn_t insn;
   bb_insn_t bb_insn;
-  bb_t bb, last_bb;
+  bb_t bb, next_bb;
   mv_t mv, next_mv;
   
   gen_assert (curr_func_item->func_p && curr_func_item->data != NULL);
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    bitmap_destroy (bb->in); bitmap_destroy (bb->out);
-    bitmap_destroy (bb->gen); bitmap_destroy (bb->kill);
-  }
-  last_bb = NULL;
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     bb_insn = insn->data;
-    gen_assert (bb_insn != NULL && bb_insn->bb != NULL);
-    bb = bb_insn->bb;
+    gen_assert (bb_insn != NULL);
     delete_bb_insn (bb_insn);
-    if (last_bb != bb) {
-      if (last_bb != NULL)
-	delete_bb (last_bb);
-      last_bb = bb;
-    }
   }
-  if (last_bb != NULL)
-    delete_bb (last_bb);
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
+    next_bb = DLIST_NEXT (bb_t, bb);
+    bitmap_destroy (bb->in); bitmap_destroy (bb->out);
+    bitmap_destroy (bb->gen); bitmap_destroy (bb->kill);
+    delete_bb (bb);
+  }
   for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
     next_mv = DLIST_NEXT (mv_t, mv);
     free (mv);
@@ -1010,7 +1003,7 @@ static void output_bb_cse_info (bb_t bb) {
 }
 #endif
 
-static void finish_cse (void) {
+static void cse_clear (void) {
   HTAB_CLEAR (expr_t, expr_tab, NULL);
   while (VARR_LENGTH (expr_t, exprs) != 0)
     free (VARR_POP (expr_t, exprs));
@@ -1070,6 +1063,9 @@ DEF_VARR (bb_start_occ_list_t);
 static VARR (bb_start_occ_list_t) *bb_start_occ_list_varr;
 static bb_start_occ_list_t *bb_start_occ_lists;
 
+DEF_VARR (var_occ_t);
+static VARR (var_occ_t) *var_occs;
+
 DEF_HTAB (var_occ_t);
 static HTAB (var_occ_t) *var_occ_tab;
 
@@ -1104,6 +1100,7 @@ static var_occ_t new_insn_var_occ (MIR_reg_t var, MIR_insn_t insn) {
   var_occ_t var_occ = gen_malloc (sizeof (struct var_occ));
 
   init_var_occ (var_occ, var, OCC_INSN, NULL, insn);
+  VARR_PUSH (var_occ_t, var_occs, var_occ);
   return var_occ;
 }
 
@@ -1116,6 +1113,7 @@ static var_occ_t get_bb_var_occ (MIR_reg_t var, enum place_type type, bb_t bb) {
     return var_occ;
   var_occ = gen_malloc (sizeof (struct var_occ));
   *var_occ = vos;
+  VARR_PUSH (var_occ_t, var_occs, var_occ);
   HTAB_DO (var_occ_t, var_occ_tab, var_occ, HTAB_INSERT, var_occ);
   if (type == OCC_BB_START) {
     DLIST_APPEND (var_occ_t, bb_start_occ_lists[bb->index], var_occ);
@@ -1202,10 +1200,6 @@ static void process_bb_end (size_t el) {
   DLIST_APPEND (var_occ_t, def->uses, use);
 }
 
-static void free_var_occ (var_occ_t var_occ) {
-  free (var_occ);
-}
-
 /* Build a web of def-use with auxiliary usages and definitions at BB
    borders to emulate SSA on which the sparse conditional propagation
    is usually done.  We could do non-sparse CCP w/o building the web
@@ -1220,13 +1214,10 @@ static void build_var_occ_web (void) {
   var_producer_t var_producer;
   bb_start_occ_list_t list;
   
-  HTAB_CLEAR (var_occ_t, var_occ_tab, free_var_occ);
-  VARR_TRUNC (bb_start_occ_list_t, bb_start_occ_list_varr, 0);
   DLIST_INIT (var_occ_t, list);
   while (VARR_LENGTH (bb_start_occ_list_t, bb_start_occ_list_varr) < curr_bb_index)
     VARR_PUSH (bb_start_occ_list_t, bb_start_occ_list_varr, list);
   bb_start_occ_lists = VARR_ADDR (bb_start_occ_list_t, bb_start_occ_list_varr);
-  VARR_TRUNC (var_producer_t, producer_varr, 0);
   var_producer.producer_age = var_producer.op_age = 0;
   var_producer.producer = var_producer.op_var_use = NULL;
   while (VARR_LENGTH (var_producer_t, producer_varr) < get_nvars ())
@@ -1268,8 +1259,17 @@ static void build_var_occ_web (void) {
 #undef live_in
 #undef live_out
 
+static void var_occs_clear (void) {
+  HTAB_CLEAR (var_occ_t, var_occ_tab, NULL);
+  while (VARR_LENGTH (var_occ_t, var_occs) != 0)
+    free (VARR_POP (var_occ_t, var_occs));
+  VARR_TRUNC (bb_start_occ_list_t, bb_start_occ_list_varr, 0);
+  VARR_TRUNC (var_producer_t, producer_varr, 0);
+}
+
 static void init_var_occs (void) {
   VARR_CREATE (bb_start_occ_list_t, bb_start_occ_list_varr, 256);
+  VARR_CREATE (var_occ_t, var_occs, 1024);
   curr_producer_age = curr_op_age = 0;
   VARR_CREATE (var_producer_t, producer_varr, 256);
   HTAB_CREATE (var_occ_t, var_occ_tab, 1024, var_occ_hash, var_occ_eq);
@@ -1277,6 +1277,7 @@ static void init_var_occs (void) {
 
 static void finish_var_occs (void) {
   VARR_DESTROY (bb_start_occ_list_t, bb_start_occ_list_varr);
+  VARR_DESTROY (var_occ_t, var_occs);
   VARR_DESTROY (var_producer_t, producer_varr);
   HTAB_DESTROY (var_occ_t, var_occ_tab);
 }
@@ -1284,7 +1285,6 @@ static void finish_var_occs (void) {
 static bitmap_t bb_visited;
 
 static VARR (bb_t) *ccp_bbs;
-DEF_VARR (var_occ_t);
 static VARR (var_occ_t) *ccp_var_occs;
 DEF_VARR (bb_insn_t);
 static VARR (bb_insn_t) *ccp_insns;
@@ -2036,6 +2036,10 @@ static void ccp (void) { /* conditional constant propagation */
   fprintf (stderr, "  CCP modification:\n");
 #endif
   ccp_modify ();
+}
+
+static void ccp_clear (void) {
+  var_occs_clear ();
 }
 
 static void init_ccp (void) {
@@ -3052,7 +3056,7 @@ void *MIR_gen (MIR_item_t func_item) {
   print_exprs ();
   print_CFG (TRUE, TRUE, output_bb_cse_info);
 #endif
-  finish_cse ();
+  cse_clear ();
   calculate_func_cfg_live_info ();
   dead_code_elimination (func_item);
 #if MIR_GEN_DEBUG
@@ -3064,6 +3068,7 @@ void *MIR_gen (MIR_item_t func_item) {
   fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
   print_CFG (TRUE, TRUE, NULL);
 #endif
+  ccp_clear ();
   make_2op_insns (func_item);
   machinize (func_item);
   add_new_bb_insns (func_item);
@@ -3181,6 +3186,7 @@ void MIR_finish_gen (void) {
 
 /* Test code */
 #if defined(TEST_MIR_GEN) || defined(TEST_MIR_GEN2)
+
 #include <sys/time.h>
 
 static double
@@ -3191,87 +3197,65 @@ real_usec_time(void) {
     return tv.tv_usec + tv.tv_sec * 1000000.0;
 }
 
-#endif
-
 #if defined(TEST_MIR_GEN)
-
 extern MIR_item_t create_mir_func_with_loop (void);
+#else
+extern MIR_item_t create_mir_func_sieve (size_t *);
+#endif
 int main (void) {
+  const int N = MIR_GEN_DEBUG ? 1 : 1000;
   double start_time = real_usec_time ();
   char *start_heap = sbrk (0);
   double start_execution_time;
-  MIR_item_t func;
+  MIR_item_t *funcs;
+#if defined(TEST_MIR_GEN)
   uint64_t (*fun) (uint64_t n_iter);
   uint64_t res, arg = 1000000000;
-  
-  MIR_init ();
-  fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
-#if MIR_GEN_DEBUG
-  fprintf (stderr, "+++++++++++++original MIR:\n");
-  MIR_output (stderr);
-#endif
-  fprintf (stderr, "MIR creation end -- %.0f usec\n", real_usec_time () - start_time);
-  MIR_init_gen ();
-  fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
-#if MIR_GEN_DEBUG
-  debug_file = stderr;
-#endif
-  for (int i = 0; i < 1000; i++) {
-    func = create_mir_func_with_loop ();
-    fun = MIR_gen (func);
-  }
-  fprintf (stderr, "MIR_gen end -- %.0f usec, used memory = %.1f KB\n",
-	   real_usec_time () - start_time, ((char *) sbrk (0) - start_heap) / 1000.0);
-  start_execution_time = real_usec_time ();
-  res = fun (arg);
-  fprintf (stderr, "fun (%ld) -> %ld -- call %.0f usec\n",
-	   arg, res, real_usec_time () - start_execution_time);
-  MIR_finish_gen ();
-  fprintf (stderr, "MIR_finish_gen end -- %.0f usec\n", real_usec_time () - start_time);
-  MIR_finish ();
-  fprintf (stderr, "MIR_finish end -- %.0f usec\n", real_usec_time () - start_time);
-  return 0;
-}
-
-#endif
-
-#if defined(TEST_MIR_GEN2)
-
-extern MIR_item_t create_mir_func_sieve (size_t *);
-int main (void) {
-  double start_time = real_usec_time ();
-  char *start_heap = sbrk (0);
-  double start_execution_time;
-  MIR_item_t func;
+#else
   uint64_t (*fun) (void);
   uint64_t res;
-  
+#endif
+
   MIR_init ();
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
-#if MIR_GEN_DEBUG
-  fprintf (stderr, "+++++++++++++original MIR:\n");
-  MIR_output (stderr);
+  funcs = malloc (sizeof (MIR_item_t) * N);
+  for (int i = 0; i < N; i++) {
+#if defined(TEST_MIR_GEN)
+    funcs[i] = create_mir_func_with_loop ();
+#else
+    funcs[i] = create_mir_func_sieve (NULL);
 #endif
-  fprintf (stderr, "MIR creation end -- %.0f usec\n", real_usec_time () - start_time);
+#if MIR_GEN_DEBUG
+    if (i == 0) {
+      fprintf (stderr, "+++++++++++++original MIR:\n");
+      MIR_output (stderr);
+    }
+#endif
+  }
+  fprintf (stderr, "MIR %d funcs creation end -- %.0f usec\n", N, real_usec_time () - start_time);
   MIR_init_gen ();
   fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
 #if MIR_GEN_DEBUG
   debug_file = stderr;
 #endif
-  for (int i = 0; i < 10000; i++) {
-    func = create_mir_func_sieve (NULL);
-    fun = MIR_gen (func);
-  }
-  fprintf (stderr, "MIR_gen end -- %.0f usec\n", real_usec_time () - start_time);
+  for (int i = 0; i < N; i++)
+    fun = MIR_gen (funcs[i]);
+  fprintf (stderr, "MIR_gen end (%d funcs) -- %.0f usec\n", N, real_usec_time () - start_time);
   start_execution_time = real_usec_time ();
+#if defined(TEST_MIR_GEN)
+  res = fun (arg);
+  fprintf (stderr, "fun (%ld) -> %ld",  arg, res);
+#else
   res = fun ();
-  fprintf (stderr, "sieve () -> %ld -- call %.0f usec, memory used = %.1f KB\n",
-	   res, real_usec_time () - start_execution_time,
-	   ((char *) sbrk (0) - start_heap) / 1000.0);
+  fprintf (stderr, "sieve () -> %ld", res);
+#endif
+  fprintf (stderr, " -- call %.0f usec, memory used = %.1f KB\n",
+	   real_usec_time () - start_execution_time, ((char *) sbrk (0) - start_heap) / 1000.0);
   MIR_finish_gen ();
   fprintf (stderr, "MIR_finish_gen end -- %.0f usec\n", real_usec_time () - start_time);
   MIR_finish ();
   fprintf (stderr, "MIR_finish end -- %.0f usec\n", real_usec_time () - start_time);
+  free (funcs);
   return 0;
 }
 
