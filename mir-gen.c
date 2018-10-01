@@ -2632,8 +2632,7 @@ static void rewrite (void) {
 	  && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
 	DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
 	free (bb_insn);
-	DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, insn);
-	free (insn);
+	MIR_remove_insn (curr_func_item, insn);
       }
     }
   }

@@ -14,7 +14,7 @@ mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 
 test: util-test mir-test io-test scan-test interp-test gen-test c-test
 
-bench: interp-bench gen-bench c-bench
+bench: interp-bench gen-bench io-bench c-bench
 
 mir-test:
 	$(CC) -g -DTEST_MIR mir.c && ./a.out
