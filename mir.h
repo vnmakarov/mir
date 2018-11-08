@@ -26,7 +26,7 @@
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
   MIR_no_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error,
-  MIR_undeclared_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error,
+  MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error,
   MIR_op_mode_error, MIR_invalid_insn_error,
 } MIR_error_type_t;
 
@@ -243,7 +243,7 @@ extern void MIR_finish (void);
 extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
 				    size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,  size_t nargs, ...);
-extern void MIR_create_func_var (MIR_func_t func, MIR_type_t type, const char *name);
+extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
 
 extern MIR_error_func_t MIR_get_error_func (void);
@@ -258,12 +258,9 @@ extern MIR_op_mode_t MIR_insn_op_mode (MIR_insn_code_t code, size_t nop, int *ou
 
 extern MIR_insn_t MIR_new_label (void);
 
-extern MIR_reg_t MIR_reg (const char *reg_name);
-/* The following three functions can be used only after
-   MIR_finish_func: */
+extern MIR_reg_t MIR_reg (const char *reg_name, MIR_func_t func);
 extern MIR_type_t MIR_reg_type (MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_reg_t reg, MIR_func_t func);
-extern MIR_reg_t MIR_func_reg (const char *reg_name, MIR_func_t func);
 
 extern MIR_op_t MIR_new_reg_op (MIR_reg_t reg);
 extern MIR_op_t MIR_new_int_op (int64_t v);

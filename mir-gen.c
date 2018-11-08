@@ -547,7 +547,7 @@ static void build_func_cfg (void) {
 	update_min_max_reg (op->u.mem.index);
       }
   }
-  update_min_max_reg (MIR_func_reg (FP_NAME, curr_func_item->u.func));
+  update_min_max_reg (MIR_reg (FP_NAME, curr_func_item->u.func));
   /* Add additional edges with entry and exit */
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb != entry_bb && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL)
@@ -2455,7 +2455,7 @@ static void assign (void) {
   bitmap_t bm;
   size_t profit, best_profit;
   bitmap_t *point_used_locs_addr;
-  MIR_reg_t fp_reg = MIR_func_reg (FP_NAME, curr_func_item->u.func);
+  MIR_reg_t fp_reg = MIR_reg (FP_NAME, curr_func_item->u.func);
   
   if (nregs == 0)
     return;

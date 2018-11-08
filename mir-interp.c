@@ -219,7 +219,7 @@ static void generate_icode (MIR_item_t func_item) {
   assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
   func_desc->frame_size_in_vals = (func->frame_size + sizeof (MIR_val_t) - 1) / sizeof (MIR_val_t);
-  func_desc->fp_reg = MIR_func_reg (FP_NAME, func);
+  func_desc->fp_reg = MIR_reg (FP_NAME, func);
 }
 
 static ALWAYS_INLINE int64_t get_i (MIR_val_t *v) { return v->i;}
