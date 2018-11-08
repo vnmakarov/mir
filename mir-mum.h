@@ -1,4 +1,5 @@
-/* Copyright (c) 2016 Vladimir Makarov <vmakarov@gcc.gnu.org>
+/* Copyright (c) 2016, 2017, 2018
+   Vladimir Makarov <vmakarov@gcc.gnu.org>
 
    Permission is hereby granted, free of charge, to any person
    obtaining a copy of this software and associated documentation
@@ -77,10 +78,6 @@ typedef unsigned __int64 uint64_t;
 #else
 #define _MUM_USE_INT128 0
 #endif
-#endif
-
-#if defined(__GNUC__) && ((__GNUC__ == 4) &&  (__GNUC_MINOR__ >= 9) || (__GNUC__ > 4))
-#define _MUM_FRESH_GCC
 #endif
 
 /* Here are different primes randomly generated with the equal
@@ -212,6 +209,11 @@ _mum_le32 (uint32_t v) {
 
 #define _MUM_UNROLL_FACTOR (1 << _MUM_UNROLL_FACTOR_POWER)
 
+/* Rotate V left by SH.  */
+static inline uint64_t _mum_rotl (uint64_t v, int sh) {
+  return v << sh | v >> (64 - sh);
+}
+
 static inline uint64_t _MUM_OPTIMIZE("unroll-loops")
 _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
   uint64_t result = start;
@@ -220,11 +222,14 @@ _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
   size_t i;
   size_t n;
   
+#ifdef MUM_V1
   result = _mum (result, _mum_block_start_prime);
+#endif
   while  (len > _MUM_UNROLL_FACTOR * sizeof (uint64_t)) {
     /* This loop could be vectorized when we have vector insns for
-       64x64->128-bit multiplication.  AVX2 currently only have a
-       vector insn for 4 32x32->64-bit multiplication.  */
+       64x64->128-bit multiplication.  AVX2 currently only have vector
+       insns for 4 32x32->64-bit multiplication and for 1
+       64x64->128-bit multiplication (pclmulqdq).  */
     for (i = 0; i < _MUM_UNROLL_FACTOR; i++)
       result ^= _mum (_mum_le (((uint64_t *) str)[i]), _mum_primes[i]);
     len -= _MUM_UNROLL_FACTOR * sizeof (uint64_t);
@@ -275,22 +280,15 @@ _mum_hash_aligned (uint64_t start, const void *key, size_t len) {
 /* Final randomization of H.  */
 static inline uint64_t
 _mum_final (uint64_t h) {
+#ifndef MUM_V1
+  h ^= _mum_rotl (h, 33);
+#endif
   h ^= _mum (h, _mum_finish_prime1);
+#ifdef MUM_V1
   h ^= _mum (h, _mum_finish_prime2);
+#endif
   return h;
 }
-
-#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
-
-/* We want to use AVX2 insn MULX instead of generic x86-64 MULQ where
-   it is possible.  Although on modern Intel processors MULQ takes
-   3-cycles vs. 4 for MULX, MULX permits more freedom in insn
-   scheduling as it uses less fixed registers.  */
-static inline uint64_t _MUM_TARGET("arch=haswell")
-_mum_hash_avx2 (const void * key, size_t len, uint64_t seed) {
-  return _mum_final (_mum_hash_aligned (seed + len, key, len));
-}
-#endif
 
 #ifndef _MUM_UNALIGNED_ACCESS
 #if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) \
@@ -325,7 +323,7 @@ _mum_hash_default (const void *key, size_t len, uint64_t seed) {
   uint64_t buf[_MUM_BLOCK_LEN / sizeof (uint64_t)];
   
   result = seed + len;
-  if (_MUM_UNALIGNED_ACCESS || ((size_t) str & 0x7) == 0)
+  if (((size_t) str & 0x7) == 0)
     result = _mum_hash_aligned (result, key, len);
   else {
     while (len != 0) {
@@ -376,8 +374,7 @@ mum_hash_init (uint64_t seed) {
 
 /* Process data KEY with the state H and return the updated state.  */
 static inline uint64_t
-mum_hash_step (uint64_t h, uint64_t key)
-{
+mum_hash_step (uint64_t h, uint64_t key) {
   return _mum (h, _mum_hash_step_prime) ^ _mum (key, _mum_key_step_prime);
 }
 
@@ -398,19 +395,11 @@ mum_hash64 (uint64_t key, uint64_t seed) {
    target endianess and the unroll factor.  */
 static inline uint64_t
 mum_hash (const void *key, size_t len, uint64_t seed) {
-#if defined(__x86_64__) && defined(_MUM_FRESH_GCC)
-  static int avx2_support = 0;
-
-  if (avx2_support > 0)
-    return _mum_hash_avx2 (key, len, seed);
-  else if (! avx2_support) {
-    __builtin_cpu_init ();
-    avx2_support =  __builtin_cpu_supports ("avx2") ? 1 : -1;
-    if (avx2_support > 0)
-      return _mum_hash_avx2 (key, len, seed);
-  }
-#endif
+#if _MUM_UNALIGNED_ACCESS
+  return _mum_final (_mum_hash_aligned (seed + len, key, len));
+#else
   return _mum_hash_default (key, len, seed);
+#endif
 }
 
 #endif
