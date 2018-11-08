@@ -47,10 +47,10 @@ gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_MIR_GEN2 mir.c mir-gen.c && ./a.out && size ./a.out
 
 c-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_C mir-c.c && ./a.out
+	$(CC) -g -D$(TARGET) -DTEST_MIR_C mir.c mir-c.c && ./a.out
 
 c-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C mir-c.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C mir-c.c mir.c && ./a.out && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 

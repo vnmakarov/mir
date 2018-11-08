@@ -22,7 +22,7 @@
 #error "undefined or unsupported generation target for C"
 #endif
 
-static int debug_p, verbose_p, no_prepro_p, prepro_only_p;
+static int debug_p, verbose_p, asm_p, no_prepro_p, prepro_only_p;
 /* Dirs to search include files in "" and in <>.  End mark is NULL. */
 static const char **header_dirs, **system_header_dirs;
 
@@ -292,7 +292,6 @@ typedef enum {
   T_EOA, T_EOR,     /* end of argument and macro replacement */
   T_EOP,            /* end of processing */
   T_EOU,            /* end of translation unit */
-
 } token_code_t;
 
 typedef enum {
@@ -1522,13 +1521,17 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
     } else if (uns_p) {
       if (llong_p) {
 	t->node = new_ull_node (strtoull (repr, NULL, base), t->pos);
+      } else if (long_p) {
+	t->node = new_ul_node (strtoul (repr, NULL, base), t->pos);
       } else {
-	t->node = new_ul_node (strtoul (repr, NULL, base), t->pos); /* ??? unsigned int */
+	t->node = new_u_node (strtoul (repr, NULL, base), t->pos);
       }
     } else if (llong_p) {
       t->node = new_ll_node (strtoll (repr, NULL, base), t->pos);
+    } else if (long_p) {
+      t->node = new_l_node (strtol (repr, NULL, base), t->pos);
     } else {
-      t->node = new_l_node (strtol (repr, NULL, base), t->pos); /* ??? int */
+      t->node = new_i_node (strtol (repr, NULL, base), t->pos);
     }
     if (errno) {
       error (t->pos, "number %s is out of range", repr);
@@ -5957,7 +5960,7 @@ static void get_one_node (node_t *op, struct expr **e, struct type **t) {
   (*e)->type->mode = TM_BASIC; (*e)->type->u.basic_type = TP_INT; (*e)->u.i_val = 1;
 }
 
-static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, struct expr *e2,
+static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, struct expr *e2,
 			     struct type *t1, struct type *t2) {
   struct expr *e, *te;
   struct type t, *tt;
@@ -6133,6 +6136,7 @@ static void check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, 
   default:
     assert (FALSE);
   }
+  return e;
 }
 
 DEF_HTAB (case_t);
@@ -6389,7 +6393,7 @@ static void check (node_t r, node_t context) {
     saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
     get_one_node (&op2, &e2, &t2);
-    check_assign_op (r, op1, op2, e1, e2, t1, t2);
+    e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
     goto assign;
     break;
@@ -6426,7 +6430,7 @@ static void check (node_t r, node_t context) {
   case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH:
   case N_MUL: case N_DIV: case N_MOD:
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
-    check_assign_op (r, op1, op2, e1, e2, t1, t2);
+    e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     break;
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN: {
@@ -6436,7 +6440,7 @@ static void check (node_t r, node_t context) {
     saved_expr = *e1; 
     t1 = e1->type = adjust_type (e1->type);
     t2 = e2->type = adjust_type (e2->type);
-    check_assign_op (r, op1, op2, e1, e2, t1, t2);
+    e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
     goto assign;
     break;
@@ -7392,15 +7396,16 @@ static void finish_reg_vars (void) {
 static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var_t reg_var, el;
   char *str;
+  MIR_reg_t reg;
   
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
-  MIR_create_func_var (curr_func->u.func, t, reg_name);
+  reg = MIR_new_func_reg (curr_func->u.func, t, reg_name);
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
   reg_var.name = str;
-  reg_var.reg = MIR_reg (reg_var.name);
+  reg_var.reg = reg;
   HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_INSERT, el);
   VARR_PUSH (reg_var_t, all_reg_vars, reg_var);
   return reg_var;
@@ -7503,7 +7508,7 @@ static void emit_insn (MIR_insn_t insn) {
       && insn->ops[1].u.reg == tail->ops[0].u.reg) {
     MIR_insn_op_mode (tail->code, 0, &out_p);
     if (out_p) {
-      tail->ops[0] = insn->ops[1];
+      tail->ops[0] = insn->ops[0];
       return;
     }
   }
@@ -7725,7 +7730,7 @@ static MIR_label_t continue_label, break_label;
 static void top_gen (node_t r, MIR_label_t true_label, MIR_label_t false_label) {
   int saved_reg_free_mark = reg_free_mark;
 
-  gen (r, true_label, false_label, TRUE);
+  gen (r, true_label, false_label, FALSE);
   reg_free_mark = saved_reg_free_mark; /* free used temp regs */
 }
 
@@ -7929,14 +7934,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     res = val = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     t = get_mir_type (((struct expr *) r->attr)->type);
-    res = promote (res, t);
+    //???    res = promote (res, t);
   assign:
     if (scalar_type_p (((struct expr *) r->attr)->type)) {
       t = get_op_type (var);
       t = promote_mir_int_type (t);
       op2 = promote (val, t);
       if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2 (t == MIR_F ? MIR_FMOV : t == MIR_D ? MIR_DMOV : MIR_MOV, var.mir_op, op2.mir_op);
+	emit2 (t == MIR_F ? MIR_FMOV : t == MIR_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
       } else {
 	int size, sh;
 	uint64_t mask, mask2;
@@ -7980,7 +7985,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = new_op (NULL, MIR_new_name_op (r->u.s));  // ??? string store container
     } else if (! (decl = e->lvalue_node->attr)->reg_p) {
       t = get_mir_type (e->type);
-      res = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME), 0, 1));
+      res = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
     } else {
       t = get_mir_type (e->type);
       assert (t != MIR_BLOCK);
@@ -7991,7 +7996,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       VARR_TRUNC (char, temp_string, 0);
       add_to_temp_string (prefix);
       add_to_temp_string (r->u.s);
-      res = new_op (decl, MIR_new_reg_op (MIR_reg (VARR_ADDR (char, temp_string))));
+      res = new_op (decl, MIR_new_reg_op (get_reg_var (t, VARR_ADDR (char, temp_string)).reg));
     }
     break;
   }
@@ -8122,7 +8127,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
     }
     VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
-    MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops), VARR_ADDR (MIR_op_t, ops));
+    //    MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops), VARR_ADDR (MIR_op_t, ops));
     break;
   }
   case N_GENERIC: {
@@ -8141,12 +8146,23 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_INIT:
     break; // ???
-  case N_FUNC_DEF:
+  case N_FUNC_DEF: {
+    node_t decl_specs = NL_HEAD (r->ops);
+    node_t declarator = NL_NEXT (decl_specs);
+    node_t decls = NL_NEXT (declarator);
+    node_t stmt = NL_NEXT (decls);
+    
+    assert (declarator != NULL && declarator->code == N_DECL && NL_HEAD (declarator->ops)->code == N_ID);
+    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, 819000, 0, 0);
+    gen (stmt, NULL, NULL, FALSE);
+    MIR_finish_func ();
     break; // ???
+  }
   case N_BLOCK:
     gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     break;
   case N_MODULE:
+    gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     break; // ???
   case N_IF: {
     node_t expr = NL_EL (r->ops, 1);
@@ -8318,7 +8334,7 @@ static void generate_mir (node_t r) {
 static const char *get_node_name (node_code_t code) {
 #define C(n) case N_##n: return #n;
   switch (code) {
-    C (IGNORE) C (L) C (LL) C (UL) C (ULL) C (F) C (D) C (LD) C (CH) C (STR) C (ID) C (COMMA)
+    C (IGNORE) C (I) C (L) C (LL) C (U) C (UL) C (ULL) C (F) C (D) C (LD) C (CH) C (STR) C (ID) C (COMMA)
     C (ANDAND) C (OROR) C (EQ) C (NE) C (LT) C (LE) C (GT) C (GE) C (ASSIGN) C (BITWISE_NOT)
     C (NOT) C (AND) C (AND_ASSIGN) C (OR) C (OR_ASSIGN) C (XOR) C (XOR_ASSIGN) C (LSH)
     C (LSH_ASSIGN) C (RSH) C (RSH_ASSIGN) C (ADD) C (ADD_ASSIGN) C (SUB) C (SUB_ASSIGN) C (MUL)
@@ -8629,12 +8645,14 @@ static void init_options (int argc, const char *argv[],
 			  int (*other_option_func) (int, int, const char **)) {
   const char *str;
   
-  debug_p = verbose_p = no_prepro_p = prepro_only_p = FALSE;
+  debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = FALSE;
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
   for (int i = 1; i < argc; i++) {
     if (strcmp (argv[i], "-d") == 0) {
       verbose_p = debug_p = TRUE;
+    } else if (strcmp (argv[i], "-S") == 0) {
+      asm_p = TRUE;
     } else if (strcmp (argv[i], "-v") == 0) {
       verbose_p = TRUE;
     } else if (strcmp (argv[i], "-E") == 0) {
@@ -8781,7 +8799,11 @@ static int compile (const char *source_name) {
 	print_node (stderr, r, 0, TRUE);
       if (verbose_p)
 	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
+      MIR_init ();
       generate_mir (r);
+      if (asm_p)
+	MIR_output (stderr);
+      MIR_finish ();
       if (verbose_p)
 	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
     }
