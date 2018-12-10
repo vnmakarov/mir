@@ -25,9 +25,10 @@
 
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
-  MIR_no_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error,
-  MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error,
-  MIR_op_mode_error, MIR_invalid_insn_error,
+  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_nested_func_error,
+  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_undeclared_func_reg_error,
+  MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error, MIR_op_mode_error,
+  MIR_invalid_insn_error,
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -191,14 +192,17 @@ typedef struct MIR_func {
   VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
+typedef struct MIR_module *MIR_module_t;
+
 typedef struct MIR_item *MIR_item_t;
 
 /* Definition of link of double list of MIR_item_t type elements */
 DEF_DLIST_LINK (MIR_item_t);
 
-/* MIR items (function or external): */
+/* MIR module items (function or external): */
 struct MIR_item {
   void *data;
+  MIR_module_t module;
   DLIST_LINK (MIR_item_t) item_link;
   int func_p; /* Flag of function item */
   union {
@@ -210,7 +214,21 @@ struct MIR_item {
 /* Definition of double list of MIR_item_t type elements */
 DEF_DLIST (MIR_item_t, item_link);
 
-extern DLIST (MIR_item_t) MIR_items; /* List of all items */
+/* Definition of link of double list of MIR_module_t type elements */
+DEF_DLIST_LINK (MIR_module_t);
+
+/* MIR module: */
+struct MIR_module {
+  void *data;
+  const char *name;
+  DLIST (MIR_item_t) items; /* module items */
+  DLIST_LINK (MIR_module_t) module_link;
+};
+
+/* Definition of double list of MIR_item_t type elements */
+DEF_DLIST (MIR_module_t, module_link);
+
+extern DLIST (MIR_module_t) MIR_modules; /* List of all modules */
 
 /* Use it only internally:  */
 extern MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg);
@@ -240,11 +258,13 @@ static inline int MIR_ret_code_p (MIR_insn_code_t code) {
 extern int MIR_init (void);
 extern void MIR_finish (void);
 
+extern MIR_module_t MIR_new_module (const char *name);
 extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
 				    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (const char *name, size_t frame_size,  size_t nargs, ...);
+extern MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
+extern void MIR_finish_module (void);
 
 extern MIR_error_func_t MIR_get_error_func (void);
 extern void MIR_set_error_func (MIR_error_func_t func);

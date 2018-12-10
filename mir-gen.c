@@ -2538,7 +2538,7 @@ static void assign (void) {
     if (i % 8 == 0)
       fprintf (debug_file, "\n");
     reg = breg2reg (i);
-    fprintf (debug_file, " %3u:%-2u", reg2var (reg), VARR_GET (MIR_reg_t, breg_renumber, i));
+    fprintf (debug_file, " %3u=>%-2u", reg2var (reg), VARR_GET (MIR_reg_t, breg_renumber, i));
   }
   fprintf (debug_file, "\n");
 #endif  
@@ -3264,9 +3264,11 @@ int main (void) {
 
 int main (void) {
   MIR_item_t func0, func1, func2;
+  MIR_module_t m;
   
   MIR_init ();
   MIR_scan_string ("\n\
+m1:    module\n\
 cse:   func 0, i64:i\n\
 \n\
        local i64:l, i64:j, i64:k\n\
@@ -3283,10 +3285,13 @@ L2:\n\
        add i, i, k\n\
        ret i\n\
        endfunc\n\
+       endmodule\n\
   ");
-  func0 = DLIST_TAIL (MIR_item_t, MIR_items);
+  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  func0 = DLIST_TAIL (MIR_item_t, m->items);
 #if 1
   MIR_scan_string ("\n\
+m2:    module\n\
 ccp:   func 0\n\
 \n\
        local i64:a, i64:b, i64:c\n\
@@ -3299,9 +3304,12 @@ L1:\n\
        mov c, 5\n\
 L2:    ret c\n\
        endfunc\n\
+       endmodule\n\
   ");
-  func1 = DLIST_TAIL (MIR_item_t, MIR_items);
+  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  func1 = DLIST_TAIL (MIR_item_t, m->items);
   MIR_scan_string ("\n\
+m3:     module\n\
 ccp2:   func 0\n\
 \n\
        local i64:a, i64:d, i64:f, i64:g\n\
@@ -3320,8 +3328,10 @@ L3:\n\
        mov d, 2\n\
        jmp L1\n\
        endfunc\n\
+       endmodule\n\
   ");
-  func2 = DLIST_TAIL (MIR_item_t, MIR_items);
+  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  func2 = DLIST_TAIL (MIR_item_t, m->items);
 #endif
   MIR_init_gen ();
 #if MIR_GEN_DEBUG

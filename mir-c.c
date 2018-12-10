@@ -8748,10 +8748,13 @@ static void finish_options (void) {
   VARR_DESTROY (char_ptr_t, system_headers);
 }
 
+static int curr_module_num;
+
 static void compile_init (int argc, const char *argv[],
 			  int (*getc_func) (void), void (*ungetc_func) (int),
 			  int other_option_func (int, int, const char **)) {
   n_errors = n_warnings = 0;
+  curr_module_num = 0;
   c_getc = getc_func; c_ungetc = ungetc_func;
   parse_init ();
   curr_scope = NULL;
@@ -8767,6 +8770,13 @@ real_usec_time(void) {
 
   gettimeofday(&tv, NULL);
   return tv.tv_usec + tv.tv_sec * 1000000.0;
+}
+
+static const char *get_module_name (void) {
+  static char str[50];
+
+  sprintf (str, "M%d", curr_module_num);
+  return str;
 }
 
 static int compile (const char *source_name) {
@@ -8800,9 +8810,11 @@ static int compile (const char *source_name) {
       if (verbose_p)
 	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
       MIR_init ();
+      MIR_new_module (get_module_name ());
       generate_mir (r);
       if (asm_p)
 	MIR_output (stderr);
+      MIR_finish_module ();
       MIR_finish ();
       if (verbose_p)
 	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
