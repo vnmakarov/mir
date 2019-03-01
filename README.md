@@ -141,7 +141,7 @@ ex100:    func v
 
 ## The current state of MIR project
 
-  ![Current MIR](mir1.svg)
+  ![Current MIR](mir1.png)
 
   * MIR support of **varags** (variable number of arguments), **alloca**, and **longjump** is not implemented yet
   * Binary MIR code is usually about **3 times more compact** and **4 times faster to read** than analagous MIR textual code
@@ -152,7 +152,7 @@ ex100:    func v
   * MIR to C compiler is currently about 80% implemented
 
 ## The possible future state of MIR project
-  ![Future MIR](mir.svg)
+  ![Future MIR](mir.png)
 
   * WASM to MIR and MIR to WASM translation should be pretty straitforward
     * Only small WASM runtime for WASM floating point round instructions needed to be provided for MIR
@@ -183,7 +183,7 @@ ex100:    func v
       will be less than additional time for non-SSA optimization implementation
   * Simplicity of optimizations implementation over extreme generated code performance
   * More detail **JIT compiler pipeline**:
-![MIR generator](mir-gen.svg)
+![MIR generator](mir-gen.png)
   * **Simplify**: lowering MIR
   * **Build CFG**: builing Control Flow Graph (basic blocks and CFG edges)
   * **Global Common Sub-Expression Elimination**: reusing calculated values
@@ -210,7 +210,7 @@ ex100:    func v
       3. Context pass checking context constraints and augmenting AST
       4. Generation pass producing MIR
 
-  ![MIR to C](mir2c.svg)
+  ![MIR to C](mir2c.png)
 
 ## Structure of the project code
  * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary and MIR text representation
