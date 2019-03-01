@@ -16,6 +16,8 @@
 #include <errno.h>
 #include "time.h"
 
+#include "mir.h"
+
 #ifdef __x86_64__
 #include "mir-cx86_64.h"
 #else
@@ -4640,6 +4642,7 @@ struct decl {
   mir_size_t offset; /* var offset in frame or bss */
   node_t scope; /* declaration scope */
   struct decl_spec decl_spec;
+  MIR_item_t item; /* MIR_item for some declarations */
 };
 
 typedef struct decl *decl_t;
@@ -7345,8 +7348,6 @@ static void context_finish (void) {
                                          type in scope with <scope_number>
 */
 
-#include "mir.h"
-
 struct op {
   decl_t decl;
   MIR_op_t mir_op;
@@ -7401,6 +7402,7 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
+  t = t == MIR_T_I32 || t == MIR_T_U32 ? MIR_T_I64 : t;
   reg = MIR_new_func_reg (curr_func->u.func, t, reg_name);
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
@@ -7417,8 +7419,8 @@ static int temp_reg_p (MIR_op_t op) {
 
 static MIR_type_t reg_type (MIR_reg_t reg) {
   const char *n = MIR_reg_name (reg, curr_func->u.func);
-  MIR_type_t res = (n[0] == 'I' ? MIR_I64 : n[0] == 'U' ? MIR_U64 : n[0] == 'i' ? MIR_I32
-		    : n[0] == 'u' ? MIR_U32 : n[0] == 'f' ? MIR_F : n[0] == 'd' ? MIR_D
+  MIR_type_t res = (n[0] == 'I' ? MIR_T_I64 : n[0] == 'U' ? MIR_T_U64 : n[0] == 'i' ? MIR_T_I32
+		    : n[0] == 'u' ? MIR_T_U32 : n[0] == 'f' ? MIR_T_F : n[0] == 'd' ? MIR_T_D
 		    : MIR_T_BOUND);
   
   assert (res != MIR_T_BOUND);
@@ -7429,20 +7431,20 @@ static op_t get_new_temp (MIR_type_t t) {
   static char reg_name[50];
   MIR_reg_t reg;
 
-  assert (t == MIR_I64 || t == MIR_U64 || t == MIR_I32 || t == MIR_U32 || t == MIR_F || t == MIR_D);
-  sprintf (reg_name, t == MIR_I64 ? "I_%u" : t == MIR_U64 ? "U_%u" : t == MIR_I32 ? "i_%u"
-	   : t == MIR_U32 ? "u_%u" : t == MIR_F ? "f_%u" : "d_%u", reg_free_mark++);
+  assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
+  sprintf (reg_name, t == MIR_T_I64 ? "I_%u" : t == MIR_T_U64 ? "U_%u" : t == MIR_T_I32 ? "i_%u"
+	   : t == MIR_T_U32 ? "u_%u" : t == MIR_T_F ? "f_%u" : "d_%u", reg_free_mark++);
   reg = get_reg_var (t, reg_name).reg;
   return new_op (NULL, MIR_new_reg_op (reg));
 }
 
 static MIR_type_t get_int_mir_type (size_t size) {
-  return size == 1 ? MIR_I8 : size == 2 ? MIR_I16 : size == 4 ? MIR_I32 : MIR_I64;
+  return size == 1 ? MIR_T_I8 : size == 2 ? MIR_T_I16 : size == 4 ? MIR_T_I32 : MIR_T_I64;
 }
 
 static int get_int_mir_type_size (MIR_type_t t) {
-  return (t == MIR_I8 || t == MIR_U8 ? 1 : t == MIR_I16 || t == MIR_U16 ? 2
-	  : t == MIR_I32 || t == MIR_U32 ? 4 : 8);
+  return (t == MIR_T_I8 || t == MIR_T_U8 ? 1 : t == MIR_T_I16 || t == MIR_T_U16 ? 2
+	  : t == MIR_T_I32 || t == MIR_T_U32 ? 4 : 8);
 }
 
 static MIR_type_t get_mir_type (struct type *type) {
@@ -7450,30 +7452,30 @@ static MIR_type_t get_mir_type (struct type *type) {
   int int_p = ! floating_type_p (type), signed_p = signed_integer_type_p (type);
   
   if (! scalar_type_p (type))
-    return MIR_BLOCK;
+    return MIR_T_BLOCK;
   assert (type->mode == TM_BASIC || type->mode == TM_PTR || type->mode == TM_ENUM);
   if (! int_p) {
     assert (size == 4 || size == 8);
-    return size == 4 ? MIR_F : MIR_D;
+    return size == 4 ? MIR_T_F : MIR_T_D;
   }
   assert (size <= 2 || size == 4 || size == 8);
   if (signed_p)
     return get_int_mir_type (size);
-  return size == 1 ? MIR_U8 : size == 2 ? MIR_U16 : size == 4 ? MIR_U32 : MIR_U64;
+  return size == 1 ? MIR_T_U8 : size == 2 ? MIR_T_U16 : size == 4 ? MIR_T_U32 : MIR_T_U64;
 }
 
 static MIR_type_t promote_mir_int_type (MIR_type_t t) {
-  return t == MIR_I8 || MIR_I16 ? MIR_I32 : t == MIR_U8 || MIR_U16 ? MIR_U32 : t;
+  return t == MIR_T_I8 || MIR_T_I16 ? MIR_T_I32 : t == MIR_T_U8 || MIR_T_U16 ? MIR_T_U32 : t;
 }
 
 static MIR_type_t get_op_type (op_t op) {
   switch (op.mir_op.mode) {
   case MIR_OP_MEM: return op.mir_op.u.mem.type;
   case MIR_OP_REG: return reg_type (op.mir_op.u.reg);
-  case MIR_OP_INT: return MIR_I64;
-  case MIR_OP_UINT: return MIR_U64;
-  case MIR_OP_FLOAT: return MIR_F;
-  case MIR_OP_DOUBLE: return MIR_D;
+  case MIR_OP_INT: return MIR_T_I64;
+  case MIR_OP_UINT: return MIR_T_U64;
+  case MIR_OP_FLOAT: return MIR_T_F;
+  case MIR_OP_DOUBLE: return MIR_T_D;
   default: assert (FALSE);
   }
 }
@@ -7487,7 +7489,7 @@ static int push_const_val (node_t r, op_t *res) {
     return FALSE;
   if (floating_type_p (e->type)) {
     /* MIR support only IEEE float and double */
-    *res = new_op (NULL, (get_mir_type (e->type) == MIR_F
+    *res = new_op (NULL, (get_mir_type (e->type) == MIR_T_F
 			  ? MIR_new_float_op (e->u.d_val) : MIR_new_double_op (e->u.d_val)));
   } else {
     assert (integer_type_p (e->type) || e->type->mode == TM_PTR);
@@ -7504,9 +7506,9 @@ static void emit_insn (MIR_insn_t insn) {
   
   if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
       && (tail = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) != NULL
-      && MIR_insn_nops (tail->code) > 0 && temp_reg_p (insn->ops[1]) && temp_reg_p (tail->ops[0])
+      && MIR_insn_nops (tail) > 0 && temp_reg_p (insn->ops[1]) && temp_reg_p (tail->ops[0])
       && insn->ops[1].u.reg == tail->ops[0].u.reg) {
-    MIR_insn_op_mode (tail->code, 0, &out_p);
+    MIR_insn_op_mode (tail, 0, &out_p);
     if (out_p) {
       tail->ops[0] = insn->ops[0];
       return;
@@ -7528,7 +7530,7 @@ static op_t promote (op_t op, MIR_type_t t) {
   MIR_type_t op_type;
   MIR_insn_code_t insn_code = MIR_INSN_BOUND, insn_code2 = MIR_INSN_BOUND;
   
-  assert (t == MIR_I64 || t == MIR_U64 || t == MIR_I32 || t == MIR_U32 || t == MIR_F || t == MIR_D);
+  assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
   switch (op.mir_op.mode) {
   case MIR_OP_MEM:
     op_type = op.mir_op.u.mem.type;
@@ -7536,40 +7538,40 @@ static op_t promote (op_t op, MIR_type_t t) {
   case MIR_OP_REG:
     op_type = reg_type (op.mir_op.u.reg);
   all_types:
-    if (op_type == MIR_F) goto float_val;
-    if (op_type == MIR_D) goto double_val;
-    if (t == MIR_I64) {
-      insn_code = (op_type == MIR_I32 ? MIR_S2I : op_type == MIR_U32 ? MIR_US2I
-		   : op_type == MIR_F ? MIR_F2I : op_type == MIR_D ? MIR_D2I : MIR_INSN_BOUND);
-    } else if (t == MIR_U64) {
-      insn_code = (op_type == MIR_I32 ? MIR_S2I : op_type == MIR_U32 ? MIR_US2I
-		   : op_type == MIR_F ? MIR_F2I : op_type == MIR_D ? MIR_D2I : MIR_INSN_BOUND);
-    } else if (t == MIR_I32) {
-      insn_code = op_type == MIR_F ? MIR_F2I : op_type == MIR_D ? MIR_D2I : MIR_INSN_BOUND;
-    } else if (t == MIR_U32) {
-      insn_code = op_type == MIR_F ? MIR_F2I : op_type == MIR_D ? MIR_D2I : MIR_INSN_BOUND;
-    } else if (t == MIR_F) {
-      insn_code = op_type == MIR_I32 ? MIR_S2I : op_type == MIR_U32 ? MIR_US2I : MIR_INSN_BOUND;
-      insn_code2 = (op_type == MIR_I64 || op_type == MIR_U64 ? MIR_I2F
-		    : op_type == MIR_I32 || op_type == MIR_U32 ? MIR_I2F : MIR_INSN_BOUND);
-    } else if (t == MIR_D) {
-      insn_code = op_type == MIR_I32 ? MIR_S2I : op_type == MIR_U32 ? MIR_US2I : MIR_INSN_BOUND;
-      insn_code2 = (op_type == MIR_I64 || op_type == MIR_U64 ? MIR_I2D
-		    : op_type == MIR_I32 || op_type == MIR_U32 ? MIR_I2D : MIR_INSN_BOUND);
+    if (op_type == MIR_T_F) goto float_val;
+    if (op_type == MIR_T_D) goto double_val;
+    if (t == MIR_T_I64) {
+      insn_code = (op_type == MIR_T_I32 ? MIR_S2I : op_type == MIR_T_U32 ? MIR_US2I
+		   : op_type == MIR_T_F ? MIR_F2I : op_type == MIR_T_D ? MIR_D2I : MIR_INSN_BOUND);
+    } else if (t == MIR_T_U64) {
+      insn_code = (op_type == MIR_T_I32 ? MIR_S2I : op_type == MIR_T_U32 ? MIR_US2I
+		   : op_type == MIR_T_F ? MIR_F2I : op_type == MIR_T_D ? MIR_D2I : MIR_INSN_BOUND);
+    } else if (t == MIR_T_I32) {
+      insn_code = op_type == MIR_T_F ? MIR_F2I : op_type == MIR_T_D ? MIR_D2I : MIR_INSN_BOUND;
+    } else if (t == MIR_T_U32) {
+      insn_code = op_type == MIR_T_F ? MIR_F2I : op_type == MIR_T_D ? MIR_D2I : MIR_INSN_BOUND;
+    } else if (t == MIR_T_F) {
+      insn_code = op_type == MIR_T_I32 ? MIR_S2I : op_type == MIR_T_U32 ? MIR_US2I : MIR_INSN_BOUND;
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_U64 ? MIR_I2F
+		    : op_type == MIR_T_I32 || op_type == MIR_T_U32 ? MIR_I2F : MIR_INSN_BOUND);
+    } else if (t == MIR_T_D) {
+      insn_code = op_type == MIR_T_I32 ? MIR_S2I : op_type == MIR_T_U32 ? MIR_US2I : MIR_INSN_BOUND;
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_U64 ? MIR_I2D
+		    : op_type == MIR_T_I32 || op_type == MIR_T_U32 ? MIR_I2D : MIR_INSN_BOUND);
     }
     break;
   case MIR_OP_INT: case MIR_OP_UINT:
-    insn_code = t == MIR_F ? MIR_I2F : t == MIR_D ? MIR_I2D : MIR_INSN_BOUND;
+    insn_code = t == MIR_T_F ? MIR_I2F : t == MIR_T_D ? MIR_I2D : MIR_INSN_BOUND;
     break;
   case MIR_OP_FLOAT:
   float_val:
-    insn_code = (t == MIR_I64 || t == MIR_U64 ? MIR_F2I : t == MIR_I32 || t == MIR_U32 ? MIR_F2I
-		 : t == MIR_D ? MIR_F2D : MIR_INSN_BOUND);
+    insn_code = (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_F2I : t == MIR_T_I32 || t == MIR_T_U32 ? MIR_F2I
+		 : t == MIR_T_D ? MIR_F2D : MIR_INSN_BOUND);
     break;
   case MIR_OP_DOUBLE:
   double_val:
-    insn_code = (t == MIR_I64 || t == MIR_U64  ? MIR_D2I : t == MIR_I32 || t == MIR_U32 ? MIR_D2I
-		 : t == MIR_F ? MIR_D2F : MIR_INSN_BOUND);
+    insn_code = (t == MIR_T_I64 || t == MIR_T_U64  ? MIR_D2I : t == MIR_T_I32 || t == MIR_T_U32 ? MIR_D2I
+		 : t == MIR_T_F ? MIR_D2F : MIR_INSN_BOUND);
     break;
   default:
     break;
@@ -7595,7 +7597,7 @@ static op_t force_val (op_t op) {
   if (op.decl == NULL || op.decl->bit_offset < 0)
     return op;
   assert (op.mir_op.mode == MIR_OP_MEM);
-  temp_op = get_new_temp (MIR_I64);
+  temp_op = get_new_temp (MIR_T_I64);
   emit2 (MIR_MOV, temp_op.mir_op, op.mir_op);
   size = get_int_mir_type_size (op.mir_op.u.mem.type);
   sh = op.decl->bit_offset + (64 - size * 8);
@@ -7642,37 +7644,37 @@ static MIR_insn_code_t get_mir_insn_code (node_t r) {
   
   switch (r->code) {
   case N_INC: case N_POST_INC: case N_ADD: case N_ADD_ASSIGN:
-    return (t == MIR_F ? MIR_FADD : t == MIR_D ? MIR_DADD
-	    : t == MIR_I64 || t == MIR_U64 ? MIR_ADD : MIR_ADDS);
+    return (t == MIR_T_F ? MIR_FADD : t == MIR_T_D ? MIR_DADD
+	    : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_ADD : MIR_ADDS);
   case N_DEC: case N_POST_DEC: case N_SUB: case N_SUB_ASSIGN:
-    return (t == MIR_F ? MIR_FSUB : t == MIR_D ? MIR_DSUB
-	    : t == MIR_I64 || t == MIR_U64 ? MIR_SUB : MIR_SUBS);
-  case N_MUL: case N_MUL_ASSIGN: return (t == MIR_F ? MIR_FMUL : t == MIR_D ? MIR_DMUL
-					 : t == MIR_I64 ? MIR_MUL : t == MIR_U64 ? MIR_UMUL
-					 : t == MIR_I32 ? MIR_MULS : MIR_UMULS);
-  case N_DIV: case N_DIV_ASSIGN: return (t == MIR_F ? MIR_FDIV : t == MIR_D ? MIR_DDIV
-					 : t == MIR_I64 ? MIR_DIV : t == MIR_U64 ? MIR_UDIV
-					 : t == MIR_I32 ? MIR_DIVS : MIR_UDIVS);
-  case N_MOD: case N_MOD_ASSIGN: return (t == MIR_I64 ? MIR_MOD : t == MIR_U64 ? MIR_UMOD
-					 : t == MIR_I32 ? MIR_MODS : MIR_UMODS);
-  case N_AND: case N_AND_ASSIGN: return (t == MIR_I64 || t == MIR_U64 ? MIR_AND : MIR_ANDS);
-  case N_OR: case N_OR_ASSIGN: return (t == MIR_I64 || t == MIR_U64 ? MIR_OR : MIR_ORS);
-  case N_XOR: case N_XOR_ASSIGN: return (t == MIR_I64 || t == MIR_U64 ? MIR_XOR : MIR_XORS);
-  case N_LSH: case N_LSH_ASSIGN: return (t == MIR_I64 || t == MIR_U64 ? MIR_LSH : MIR_LSHS);
-  case N_RSH: case N_RSH_ASSIGN: return (t == MIR_I64 ? MIR_RSH : t == MIR_U64 ? MIR_URSH
-					 : t == MIR_I32 ? MIR_RSHS : MIR_URSHS);
-  case N_EQ: return (t == MIR_F ? MIR_FEQ : t == MIR_D ? MIR_DEQ
-		     : t == MIR_I64 || t == MIR_U64 ? MIR_EQ : MIR_EQS);
-  case N_NE: return (t == MIR_F ? MIR_FNE : t == MIR_D ? MIR_DNE
-		     : t == MIR_I64 || t == MIR_U64 ? MIR_NE : MIR_NES);
-  case N_LT: return (t == MIR_F ? MIR_FLT : t == MIR_D ? MIR_DLT : t == MIR_I64 ? MIR_LT
-		     : t == MIR_U64 ? MIR_ULT : t == MIR_I32 ? MIR_LTS : MIR_ULTS);
-  case N_LE: return (t == MIR_F ? MIR_FLE : t == MIR_D ? MIR_DLE : t == MIR_I64 ? MIR_LE
-		     : t == MIR_U64 ? MIR_ULE : t == MIR_I32 ? MIR_LES : MIR_ULES);
-  case N_GT: return (t == MIR_F ? MIR_FGT : t == MIR_D ? MIR_DGT : t == MIR_I64 ? MIR_GT
-		     : t == MIR_U64 ? MIR_UGT : t == MIR_I32 ? MIR_GTS : MIR_UGTS);
-  case N_GE: return (t == MIR_F ? MIR_FGE : t == MIR_D ? MIR_DGE : t == MIR_I64 ? MIR_GE
-		     : t == MIR_U64 ? MIR_UGE : t == MIR_I32 ? MIR_GES : MIR_UGES);
+    return (t == MIR_T_F ? MIR_FSUB : t == MIR_T_D ? MIR_DSUB
+	    : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_SUB : MIR_SUBS);
+  case N_MUL: case N_MUL_ASSIGN: return (t == MIR_T_F ? MIR_FMUL : t == MIR_T_D ? MIR_DMUL
+					 : t == MIR_T_I64 ? MIR_MUL : t == MIR_T_U64 ? MIR_UMUL
+					 : t == MIR_T_I32 ? MIR_MULS : MIR_UMULS);
+  case N_DIV: case N_DIV_ASSIGN: return (t == MIR_T_F ? MIR_FDIV : t == MIR_T_D ? MIR_DDIV
+					 : t == MIR_T_I64 ? MIR_DIV : t == MIR_T_U64 ? MIR_UDIV
+					 : t == MIR_T_I32 ? MIR_DIVS : MIR_UDIVS);
+  case N_MOD: case N_MOD_ASSIGN: return (t == MIR_T_I64 ? MIR_MOD : t == MIR_T_U64 ? MIR_UMOD
+					 : t == MIR_T_I32 ? MIR_MODS : MIR_UMODS);
+  case N_AND: case N_AND_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_AND : MIR_ANDS);
+  case N_OR: case N_OR_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_OR : MIR_ORS);
+  case N_XOR: case N_XOR_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_XOR : MIR_XORS);
+  case N_LSH: case N_LSH_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_LSH : MIR_LSHS);
+  case N_RSH: case N_RSH_ASSIGN: return (t == MIR_T_I64 ? MIR_RSH : t == MIR_T_U64 ? MIR_URSH
+					 : t == MIR_T_I32 ? MIR_RSHS : MIR_URSHS);
+  case N_EQ: return (t == MIR_T_F ? MIR_FEQ : t == MIR_T_D ? MIR_DEQ
+		     : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_EQ : MIR_EQS);
+  case N_NE: return (t == MIR_T_F ? MIR_FNE : t == MIR_T_D ? MIR_DNE
+		     : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_NE : MIR_NES);
+  case N_LT: return (t == MIR_T_F ? MIR_FLT : t == MIR_T_D ? MIR_DLT : t == MIR_T_I64 ? MIR_LT
+		     : t == MIR_T_U64 ? MIR_ULT : t == MIR_T_I32 ? MIR_LTS : MIR_ULTS);
+  case N_LE: return (t == MIR_T_F ? MIR_FLE : t == MIR_T_D ? MIR_DLE : t == MIR_T_I64 ? MIR_LE
+		     : t == MIR_T_U64 ? MIR_ULE : t == MIR_T_I32 ? MIR_LES : MIR_ULES);
+  case N_GT: return (t == MIR_T_F ? MIR_FGT : t == MIR_T_D ? MIR_DGT : t == MIR_T_I64 ? MIR_GT
+		     : t == MIR_T_U64 ? MIR_UGT : t == MIR_T_I32 ? MIR_GTS : MIR_UGTS);
+  case N_GE: return (t == MIR_T_F ? MIR_FGE : t == MIR_T_D ? MIR_DGE : t == MIR_T_I64 ? MIR_GE
+		     : t == MIR_T_U64 ? MIR_UGE : t == MIR_T_I32 ? MIR_GES : MIR_UGES);
   default:
     assert (FALSE);
   }
@@ -7739,7 +7741,7 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
   
   assert (mem.mir_op.mode == MIR_OP_MEM && index.mir_op.mode == MIR_OP_REG);
   if (mem.mir_op.u.mem.base != 0 && mem.mir_op.u.mem.index != 0) {
-    base = get_new_temp (MIR_I64);
+    base = get_new_temp (MIR_T_I64);
     if (mem.mir_op.u.mem.scale != 1)
       emit3 (MIR_MUL, base.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.index),
 	     MIR_new_int_op (mem.mir_op.u.mem.scale));
@@ -7803,7 +7805,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_LD:
     ld = r->u.ld;
   float_val:
-    res = new_op (NULL, (get_mir_type (((struct expr *) r->attr)->type) == MIR_F
+    res = new_op (NULL, (get_mir_type (((struct expr *) r->attr)->type) == MIR_T_F
 			 ? MIR_new_float_op (ld) : MIR_new_double_op (ld)));
     break;
   case N_CH:
@@ -7866,7 +7868,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       MIR_label_t end_label = MIR_new_label ();
       MIR_label_t t_label = MIR_new_label (), f_label = MIR_new_label ();
       
-      res = get_new_temp (MIR_I64);
+      res = get_new_temp (MIR_T_I64);
       gen (NL_EL (r->ops, 1), t_label, f_label, TRUE);
       emit_insn (t_label);
       emit2 (MIR_MOV, res.mir_op, zero_op.mir_op);
@@ -7919,7 +7921,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     res = get_new_temp (t);
     val = get_new_temp (t);
     emit3 (get_mir_insn_code (r), val.mir_op, op1.mir_op, op2.mir_op);
-    emit2 (t == MIR_F ? MIR_FMOV : t == MIR_D ? MIR_DMOV : MIR_MOV, res.mir_op,
+    emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op,
 	   r->code == N_INC || r->code == N_DEC ? val.mir_op : op1.mir_op);
     goto assign;
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
@@ -7941,7 +7943,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       t = promote_mir_int_type (t);
       op2 = promote (val, t);
       if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2 (t == MIR_F ? MIR_FMOV : t == MIR_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
+	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
       } else {
 	int size, sh;
 	uint64_t mask, mask2;
@@ -7951,8 +7953,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	size = get_int_mir_type_size (var.mir_op.u.mem.type);
 	sh = size  * 8 - var.decl->bit_offset - var.decl->width;
 	mask = 0xffffffffffffffff >> (64 - var.decl->width); mask2 = ~(mask << sh);
-	temp_op1 = get_new_temp (MIR_I64);
-	temp_op2 = get_new_temp (MIR_I64);
+	temp_op1 = get_new_temp (MIR_T_I64);
+	temp_op2 = get_new_temp (MIR_T_I64);
 	emit2 (MIR_MOV, temp_op2.mir_op, var.mir_op);
 	emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
 	emit3 (MIR_AND, temp_op1.mir_op, val.mir_op, MIR_new_uint_op (mask));
@@ -7965,7 +7967,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       MIR_label_t repeat_label = MIR_new_label ();
       mir_size_t size = type_size (((struct expr *) r->attr)->type);
       assert (r->code == N_ASSIGN);
-      op1 = get_new_temp (MIR_I64);
+      op1 = get_new_temp (MIR_T_I64);
       emit2 (MIR_MOV, op1.mir_op, MIR_new_int_op (size));
       var = modify_for_block_move (var, op1);
       val = modify_for_block_move (val, op1);
@@ -7982,16 +7984,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
       assert (e->def_node != NULL && e->def_node->code == N_FUNC_DEF);
-      res = new_op (NULL, MIR_new_name_op (r->u.s));  // ??? string store container
+      res = new_op (NULL, MIR_new_ref_op (((decl_t) e->def_node->attr)->item));
     } else if (! (decl = e->lvalue_node->attr)->reg_p) {
       t = get_mir_type (e->type);
       res = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
     } else {
       t = get_mir_type (e->type);
-      assert (t != MIR_BLOCK);
+      assert (t != MIR_T_BLOCK);
       t = promote_mir_int_type (t);
-      sprintf (prefix, t == MIR_I64 ? "I%u_" : t == MIR_U64 ? "U%u_" : t == MIR_I32 ? "i%u_"
-	       : t == MIR_U32 ? "u%u_" : t == MIR_F ? "f%u_" : "d%u_",
+      sprintf (prefix, t == MIR_T_I64 ? "I%u_" : t == MIR_T_U64 ? "U%u_" : t == MIR_T_I32 ? "i%u_"
+	       : t == MIR_T_U32 ? "u%u_" : t == MIR_T_F ? "f%u_" : "d%u_",
 	       (unsigned) ((struct node_scope *) decl->scope->attr)->func_scope_num);
       VARR_TRUNC (char, temp_string, 0);
       add_to_temp_string (prefix);
@@ -8018,7 +8020,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     } else {
       op_t temp_op;
       
-      temp_op = get_new_temp (MIR_I64);
+      temp_op = get_new_temp (MIR_T_I64);
       emit3 (MIR_MUL, temp_op.mir_op, op2.mir_op, MIR_new_int_op (size));
       if (res.mir_op.u.mem.base != 0)
 	emit3 (MIR_ADD, temp_op.mir_op, temp_op.mir_op, MIR_new_reg_op (res.mir_op.u.mem.base));
@@ -8056,7 +8058,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_DEREF:
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
-    op1 = force_reg (op1, MIR_I64);
+    op1 = force_reg (op1, MIR_T_I64);
     assert (op1.mir_op.mode == MIR_OP_REG);
     t = get_mir_type (((struct expr *) r->attr)->type);
     op1.mir_op = MIR_new_mem_op (t, 0, op1.mir_op.u.reg, 0, 1);
@@ -8076,7 +8078,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       op1.mir_op = MIR_new_mem_op (t, op1.mir_op.u.mem.disp + decl->offset, op1.mir_op.u.mem.base,
 				   op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale);
     } else {
-      op1 = force_reg (op1, MIR_I64);
+      op1 = force_reg (op1, MIR_T_I64);
       assert (op1.mir_op.mode == MIR_OP_REG);
       op1.mir_op = MIR_new_mem_op (t, decl->offset, op1.mir_op.u.reg, 0, 1);
     }
@@ -8153,10 +8155,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t stmt = NL_NEXT (decls);
     
     assert (declarator != NULL && declarator->code == N_DECL && NL_HEAD (declarator->ops)->code == N_ID);
-    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, 819000, 0, 0);
+    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, MIR_T_I32, 819000, 0, 0); // ???
+    ((decl_t) r->attr)->item = curr_func;
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
-    break; // ???
+    break;
   }
   case N_BLOCK:
     gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
@@ -8296,7 +8299,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     t = get_op_type (op1);
-    emit1 (t == MIR_F ? MIR_FRET : t == MIR_D ? MIR_DRET : MIR_RET, op1.mir_op);
+    emit1 (t == MIR_T_F ? MIR_FRET : t == MIR_T_D ? MIR_DRET : MIR_RET, op1.mir_op);
     reg_free_mark = saved_reg_free_mark; /* free used temp regs */
     break;
   case N_EXPR:

@@ -17,7 +17,7 @@ const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = X
 
 static inline int hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
-  return type == MIR_F || type == MIR_D ? hard_reg >= XMM0_HARD_REG : hard_reg < XMM0_HARD_REG;
+  return type == MIR_T_F || type == MIR_T_D ? hard_reg >= XMM0_HARD_REG : hard_reg < XMM0_HARD_REG;
 }
 
 static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
@@ -57,12 +57,12 @@ static void machinize (MIR_item_t func_item) {
   MIR_op_t ret_reg_op, arg_reg_op;
   size_t i, int_num, float_num;
 
-  assert (func_item->func_p);
+  assert (func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   for (i = int_num = float_num = 0; i < func->nargs; i++) {
     MIR_type_t tp = VARR_GET (MIR_var_t, func->vars, i).type;
     
-    if (tp == MIR_F || tp == MIR_D) {
+    if (tp == MIR_T_F || tp == MIR_T_D) {
       switch (float_num) {
       case 0: case 1: case 2: case 3:
 #ifndef _WIN64
@@ -75,7 +75,7 @@ static void machinize (MIR_item_t func_item) {
 	assert (FALSE);
       }
       float_num++;
-      new_insn_code = tp == MIR_F ? MIR_FMOV : MIR_DMOV;
+      new_insn_code = tp == MIR_T_F ? MIR_FMOV : MIR_DMOV;
     } else {
       switch (int_num
 #ifdef _WIN64
@@ -123,7 +123,7 @@ static void make_prolog_epilog (MIR_item_t func_item,
   MIR_op_t sp_reg_op, fp_reg_op;
   size_t i, n, saved_hard_regs_num, overall_frame_size;
 
-  assert (func_item->func_p);
+  assert (func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
@@ -136,13 +136,13 @@ static void make_prolog_epilog (MIR_item_t func_item,
 			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
   gen_add_insn_before (func_item, anchor, new_insn); /* sp -= size of saved regs and bp */
   new_insn = MIR_new_insn (MIR_MOV,
-			   MIR_new_hard_reg_mem_op (MIR_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+			   MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			   fp_reg_op);
   gen_add_insn_before (func_item, anchor, new_insn); /* (sp) = bp */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV,
-			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+			       MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			       MIR_new_hard_reg_op (i));
       gen_add_insn_before (func_item, anchor, new_insn);  /* disp(sp) = hard reg */
     }
@@ -159,11 +159,11 @@ static void make_prolog_epilog (MIR_item_t func_item,
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (i),
-			       MIR_new_hard_reg_mem_op (MIR_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+			       MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg =  disp(sp) */
     }
   new_insn = MIR_new_insn (MIR_MOV, fp_reg_op,
-			   MIR_new_hard_reg_mem_op (MIR_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+			   MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
   gen_add_insn_before (func_item, anchor, new_insn); /* bp = (sp) */
   new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op,
 			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
@@ -494,7 +494,7 @@ static void patterns_init (void) {
 
 static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   int nop, n;
-  size_t nops = MIR_insn_nops (insn->code);
+  size_t nops = MIR_insn_nops (insn);
   const char *p;
   char ch, start_ch;
   MIR_op_t op, original;
@@ -544,21 +544,21 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
       u_p = s_p = TRUE; ch = *++p;
       switch (ch) {
-      case 'f': type = MIR_F; type2 = MIR_T_BOUND; break;
-      case 'd': type = MIR_D; type2 = MIR_T_BOUND; break;
+      case 'f': type = MIR_T_F; type2 = MIR_T_BOUND; break;
+      case 'd': type = MIR_T_D; type2 = MIR_T_BOUND; break;
       case 'u': case 's':
 	u_p = ch == 'u'; s_p = ch == 's'; ch = *++p;
 	/* Fall through: */
       default:
 	gen_assert ('0' <= ch && ch <= '3');
 	if (ch == '0') {
-	  type = u_p ? MIR_U8 : MIR_I8; type2 = u_p && s_p ? MIR_I8 : MIR_T_BOUND;
+	  type = u_p ? MIR_T_U8 : MIR_T_I8; type2 = u_p && s_p ? MIR_T_I8 : MIR_T_BOUND;
 	} else if (ch == '1') {
-	  type = u_p ? MIR_U16 : MIR_I16; type2 = u_p && s_p ? MIR_I16 : MIR_T_BOUND;
+	  type = u_p ? MIR_T_U16 : MIR_T_I16; type2 = u_p && s_p ? MIR_T_I16 : MIR_T_BOUND;
 	} else if (ch == '2') {
-	  type = u_p ? MIR_U32 : MIR_I32; type2 = u_p && s_p ? MIR_I32 : MIR_T_BOUND;
+	  type = u_p ? MIR_T_U32 : MIR_T_I32; type2 = u_p && s_p ? MIR_T_I32 : MIR_T_BOUND;
 	} else {
-	  type = MIR_I64; type2 = MIR_T_BOUND;
+	  type = MIR_T_I64; type2 = MIR_T_BOUND;
 	}
       }
       if (op.u.mem.type != type && op.u.mem.type != type2) return FALSE;
@@ -864,7 +864,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	ch = *++p;
 	op = insn->ops[1];
 	gen_assert (op.mode == MIR_OP_HARD_REG);
-	mem.type = MIR_I8;
+	mem.type = MIR_T_I8;
 	if (ch == 'p') {
 	  mem.base = op.u.hard_reg; mem.scale = 1;
 	  if (op2.mode == MIR_OP_HARD_REG) {
@@ -1013,7 +1013,7 @@ static uint8_t *target_translate (MIR_item_t func, size_t *len) {
   MIR_insn_t insn;
   const char *replacement;
   
-  gen_assert (func->func_p);
+  gen_assert (func->item_type == MIR_func_item);
   VARR_TRUNC (uint8_t, code, 0);
   VARR_TRUNC (uint64_t, const_pool, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);

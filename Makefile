@@ -7,50 +7,54 @@ all: $(OBJS)
 
 mir.o: mir.c $(DEPS)
 	$(CC) -c $(CFLAGS) -DMIR_IO -DMIR_SCAN -o $@ $<
+
 mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
 	$(CC) -c -Os -g -o $@ $<
+
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
 test: util-test mir-test io-test scan-test interp-test gen-test c-test
-
+	@echo ==============================Test is done
+      
 bench: interp-bench gen-bench io-bench c-bench
+	@echo ==============================Bench is done
 
 mir-test:
-	$(CC) -g -DTEST_MIR mir.c && ./a.out
+	$(CC) -g mir.c mir-tests/simplify.c && ./a.out
 
 scan-test:
-	$(CC) -g -DMIR_SCAN -DTEST_MIR_SCAN mir.c && ./a.out
+	$(CC) -g -DMIR_SCAN mir.c mir-tests/scan-test.c && ./a.out
 
 io-test:
-	$(CC) -g -DMIR_SCAN -DMIR_IO -DTEST_MIR_IO mir.c && ./a.out
+	$(CC) -g -DMIR_SCAN -DMIR_IO mir.c mir-tests/io.c && ./a.out
 
 io-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -DMIR_SCAN -DMIR_IO -DBENCH_MIR_IO mir.c && ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -DMIR_SCAN -DMIR_IO mir.c mir-tests/io-bench.c && ./a.out
 
 interp-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_INTERP -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out
-	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_MIR_INTERP2 -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/sieve-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/hi-interp.c -lffi && ./a.out
 
 interp-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_INTERP mir.c mir-interp.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_MIR_INTERP2 mir.c mir-interp.c \
-	  && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-tests/sieve-interp.c -lffi && ./a.out && size ./a.out
 
 gen-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_GEN -DMIR_GEN_DEBUG=1 mir.c mir-gen.c && ./a.out
-	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_MIR_GEN2 -DMIR_GEN_DEBUG=1 mir.c mir-gen.c && ./a.out
-	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_MIR_GEN3 -DMIR_GEN_DEBUG=1 mir.c mir-gen.c && ./a.out
+	$(CC) -g -D$(TARGET) -DTEST_GEN_LOOP -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test1.mir && ./a.out mir-tests/test2.mir && ./a.out mir-tests/test3.mir
 
 gen-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_GEN mir.c mir-gen.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_MIR_GEN2 mir.c mir-gen.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
 c-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_C mir.c mir-c.c && ./a.out
+	$(CC) -g -D$(TARGET) -DTEST_MIR_C -I. mir.c mir-c/mir-c.c && ./a.out -v
 
 c-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C mir-c.c mir.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C -I. mir-c/mir-c.c mir.c && ./a.out -v && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 

@@ -4,9 +4,19 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <assert.h>
 #include "mir-dlist.h"
 #include "mir-varr.h"
 #include "mir-htab.h"
+
+#ifdef NDEBUG
+static inline int mir_assert (int cond) {return 0 && cond;}
+#else
+#define mir_assert(cond) assert (cond)
+#endif
+
+#define FALSE 0
+#define TRUE 1
 
 /* Redefine MIR_IO or/and MIR_SCAN if you need the functionality they provide.  */
 #ifndef MIR_IO
@@ -26,8 +36,10 @@
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
   MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_nested_func_error,
-  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_undeclared_func_reg_error,
-  MIR_repeated_decl_error, MIR_reg_type_error, MIR_ops_num_error, MIR_op_mode_error,
+  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
+  MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error,
+  MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error,
+  MIR_op_mode_error, MIR_out_op_error,
   MIR_invalid_insn_error,
 } MIR_error_type_t;
 
@@ -85,10 +97,10 @@ typedef enum {
   MIR_BLE, MIR_BLES, MIR_UBLE, MIR_UBLES, MIR_FBLE, MIR_DBLE,
   MIR_BGT, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT,
   MIR_BGE, MIR_BGES, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE,
-  /* 1st operand is name or op containing func address, 2nd operands
-     is immediate integer definining arguments number, 3rd and
-     subsequent ops are call arguments. */
-  MIR_CALL, MIR_CALL_C,
+  /* 1st operand is a prototype, 2nd one is ref or op containing func
+     address, 3rd and subsequent ops are optional result (if result in
+     the prototype is not of void type), call arguments. */
+  MIR_CALL,
   /* 1 operand insn: */
   MIR_RET, MIR_RETS, MIR_FRET, MIR_DRET,
   /* Special insns: */
@@ -100,9 +112,18 @@ typedef enum {
 /* Data types: */
 typedef enum {
   /* Integer types of different size: */
-  MIR_I8, MIR_U8, MIR_I16, MIR_U16, MIR_I32, MIR_U32, MIR_I64, MIR_U64,
-  MIR_F, MIR_D /* Float or double type */, MIR_BLOCK, MIR_T_BOUND
+  MIR_T_I8, MIR_T_U8, MIR_T_I16, MIR_T_U16, MIR_T_I32, MIR_T_U32, MIR_T_I64, MIR_T_U64,
+  MIR_T_F, MIR_T_D /* Float or double type */, MIR_T_P /* Pointer */, MIR_T_V /* Void */,
+  MIR_T_BLOCK, MIR_T_UNDEF, MIR_T_BOUND,
 } MIR_type_t;
+
+#if UINTPTR_MAX == 0xffffffff
+#define MIR_PTR32 1
+#elif UINTPTR_MAX == 0xffffffffffffffffu
+#define MIR_PTR64 1
+#else
+#error MIR can work only for 32- or 64-bit targets
+#endif
 
 typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
 
@@ -140,8 +161,10 @@ typedef const char *MIR_name_t;
 /* Operand mode */
 typedef enum {
   MIR_OP_UNDEF, MIR_OP_REG, MIR_OP_HARD_REG, MIR_OP_INT, MIR_OP_UINT, MIR_OP_FLOAT, MIR_OP_DOUBLE,
-  MIR_OP_NAME, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
+  MIR_OP_REF, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
 } MIR_op_mode_t;
+
+typedef struct MIR_item *MIR_item_t;
 
 /* An insn operand */
 typedef struct {
@@ -154,7 +177,7 @@ typedef struct {
     uint64_t u;
     float f;
     double d;
-    MIR_name_t name; /* external or func name */
+    MIR_item_t ref;
     MIR_mem_t mem;
     MIR_mem_t hard_reg_mem; /* Used only internally */
     MIR_label_t label;
@@ -169,7 +192,8 @@ DEF_DLIST_LINK (MIR_insn_t);
 struct MIR_insn {
   void *data; /* Aux data */
   DLIST_LINK (MIR_insn_t) insn_link;
-  MIR_insn_code_t code;
+  MIR_insn_code_t code : 32;
+  unsigned int nops : 32; /* number of operands */
   MIR_op_t ops[1];
 };
 
@@ -189,25 +213,40 @@ typedef struct MIR_func {
   DLIST (MIR_insn_t) insns;
   uint32_t frame_size;
   uint32_t nargs, ntemps;
+  MIR_type_t res_type;
   VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
-typedef struct MIR_module *MIR_module_t;
+typedef struct MIR_proto {
+  const char *name;
+  MIR_type_t res_type; /* != MIR_T_UNDEF */
+  VARR (MIR_var_t) *args; /* args name can be NULL */
+} *MIR_proto_t;
 
-typedef struct MIR_item *MIR_item_t;
+typedef struct MIR_module *MIR_module_t;
 
 /* Definition of link of double list of MIR_item_t type elements */
 DEF_DLIST_LINK (MIR_item_t);
 
-/* MIR module items (function or external): */
+typedef enum {MIR_func_item, MIR_proto_item,
+	      MIR_import_item, MIR_export_item, MIR_forward_item} MIR_item_type_t;
+
+/* MIR module items (function or import): */
 struct MIR_item {
   void *data;
   MIR_module_t module;
   DLIST_LINK (MIR_item_t) item_link;
-  int func_p; /* Flag of function item */
+  MIR_item_type_t item_type; /* item type */
+  MIR_item_t forward_def; /* non-null for export/forward item */
+  void *addr; /* address of imported definition or proto object */
+  void *interpreter_call, *binary_call; /* func used for call from interpreter and binary code */
+  int export_p; /* true for export items (only func items) */
   union {
     MIR_func_t func;
-    MIR_name_t external;
+    MIR_proto_t proto;
+    MIR_name_t import;
+    MIR_name_t export;
+    MIR_name_t forward;
   } u;
 };
 
@@ -259,9 +298,15 @@ extern int MIR_init (void);
 extern void MIR_finish (void);
 
 extern MIR_module_t MIR_new_module (const char *name);
-extern MIR_item_t MIR_new_func_arr (const char *name, size_t frame_size,
-				    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (const char *name, size_t frame_size, size_t nargs, ...);
+extern MIR_item_t MIR_new_import (const char *name);
+extern MIR_item_t MIR_new_export (const char *name);
+extern MIR_item_t MIR_new_proto_arr (const char *name, MIR_type_t res_type,
+				     size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
+extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
+				    size_t frame_size, size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type,
+				size_t frame_size, size_t nargs, ...);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
 extern void MIR_finish_module (void);
@@ -273,8 +318,8 @@ extern MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t 
 extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);
 
 extern const char *MIR_insn_name (MIR_insn_code_t code);
-extern size_t MIR_insn_nops (MIR_insn_code_t code);
-extern MIR_op_mode_t MIR_insn_op_mode (MIR_insn_code_t code, size_t nop, int *out_p);
+extern size_t MIR_insn_nops (MIR_insn_t insn);
+extern MIR_op_mode_t MIR_insn_op_mode (MIR_insn_t insn, size_t nop, int *out_p);
 
 extern MIR_insn_t MIR_new_label (void);
 
@@ -287,7 +332,7 @@ extern MIR_op_t MIR_new_int_op (int64_t v);
 extern MIR_op_t MIR_new_uint_op (uint64_t v);
 extern MIR_op_t MIR_new_float_op (float v);
 extern MIR_op_t MIR_new_double_op (double v);
-extern MIR_op_t MIR_new_name_op (MIR_name_t name);
+extern MIR_op_t MIR_new_ref_op (MIR_item_t item);
 extern MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 				MIR_reg_t index, MIR_scale_t scale);
 extern MIR_op_t MIR_new_label_op (MIR_label_t label);
@@ -314,6 +359,11 @@ extern void MIR_read (FILE *f);
 #if MIR_SCAN
 extern void MIR_scan_string (const char *str);
 #endif
+
+extern MIR_item_t MIR_get_global_item (const char *name);
+extern void MIR_load_module (MIR_module_t m);
+extern void MIR_load_external (const char *name, void *addr);
+extern void MIR_link (void);
 
 /* For internal use only:  */
 extern const char *_MIR_uniq_string (const char *str);
