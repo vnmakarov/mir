@@ -24,6 +24,12 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 #define ALWAYS_INLINE inline
 #endif
 
+#ifdef __x86_64__
+#include "x86_64-interp.c"
+#else
+#error "undefined or unsupported generation target"
+#endif
+
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
@@ -637,9 +643,6 @@ get_func_desc (MIR_item_t func_item) {
   return func_item->data;
 }
 
-static MIR_val_t interp_call (MIR_item_t func_item, size_t nargs, MIR_val_t *args) {
-}
-
 #include <ffi.h>
 
 typedef ffi_type *ffi_type_ptr_t;
@@ -673,23 +676,25 @@ static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
   }
 }
 
+MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
+
 static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
   void *addr;
   
   mir_assert (func_item->item_type == MIR_func_item || func_item->item_type == MIR_import_item);
   if ((addr = func_item->addr) == NULL) {
-    MIR_val_t val = interp_call (func_item, nargs, args);
+    MIR_val_t val = MIR_interp_arr (func_item, nargs, args);
 
     if (proto->res_type != MIR_T_V)
       *res = val;
   } else {
     ffi_cif cif;
-    char *s;
     MIR_val_t rc;
     ffi_status status;
     MIR_type_t type;
     size_t nargs;
-    MIR_var_t *arg_vars;
+    union {MIR_val_t val; int16_t i16; uint16_t u16; int32_t i32; uint16_t u32;} u;
+    MIR_var_t *arg_vars = NULL;
 
     if (proto->args == NULL) {
       nargs = 0;
@@ -728,10 +733,10 @@ static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_
     switch (proto->res_type) {
     case MIR_T_I8: res->i = *(int8_t *) &rc; return;
     case MIR_T_U8: res->u = *(uint8_t *) &rc; return;
-    case MIR_T_I16: res->i = *(int16_t *) &rc; return;
-    case MIR_T_U16: res->u = *(uint16_t *) &rc; return;
-    case MIR_T_I32: res->i = *(int32_t *) &rc; return;
-    case MIR_T_U32: res->u = *(uint32_t *) &rc; return;
+    case MIR_T_I16: u.val = rc; res->i = u.i16; return;
+    case MIR_T_U16: u.val = rc; res->u = u.u16; return;
+    case MIR_T_I32: u.val = rc; res->i = u.i32; return;
+    case MIR_T_U32: u.val = rc; res->u = u.u32; return;
     case MIR_T_I64: res->i = *(int64_t *) &rc; return;
     case MIR_T_U64: res->u = *(uint64_t *) &rc; return;
     case MIR_T_F: res->f = *(float *) &rc; return;
@@ -781,6 +786,8 @@ MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
   }
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
+  if (func_desc->nregs < nargs + 1)
+    nargs = func_desc->nregs - 1;
   bp[0].i = 0;
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
@@ -788,4 +795,135 @@ MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
   va_end(argp);
   bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
   return eval (func_desc->code, bp);
+}
+
+MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
+  func_desc_t func_desc;
+  MIR_val_t *bp;
+  
+  mir_assert (func_item->item_type == MIR_func_item);
+  if (func_item->data == NULL) {
+    MIR_simplify_func (func_item);
+    generate_icode (func_item);
+  }
+  func_desc = get_func_desc (func_item);
+  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
+  if (func_desc->nregs < nargs + 1)
+    nargs = func_desc->nregs - 1;
+  bp[0].i = 0;
+  memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
+  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
+  return eval (func_desc->code, bp);
+}
+
+/* C call interface to interpreter.  It is based on knowledge of
+   common vararg implementation.  For some targets it might not
+   work.  */
+
+static MIR_item_t called_func;
+
+static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
+  size_t nargs;
+  MIR_var_t *arg_vars;
+  MIR_func_t func = func_item->u.func;
+
+  mir_assert (sizeof (int32_t) == sizeof (int));
+  nargs = func->nargs;
+  arg_vars = VARR_ADDR (MIR_var_t, func->vars);
+  if (VARR_EXPAND (MIR_val_t, args_varr, nargs))
+    args = VARR_ADDR (MIR_val_t, args_varr);
+  args[0] = a0;
+  for (size_t i = 1; i < nargs; i++) {
+    MIR_type_t type = arg_vars[i].type;
+    switch (type) {
+    case MIR_T_I8: args[i].i = (int8_t) va_arg (va, int32_t); break;
+    case MIR_T_I16: args[i].i = (int16_t) va_arg (va, int32_t); break;
+    case MIR_T_I32: args[i].i = va_arg (va, int32_t); break;
+    case MIR_T_I64: args[i].i = va_arg (va, int64_t); break;
+    case MIR_T_U8: args[i].i = (uint8_t) va_arg (va, uint32_t); break;
+    case MIR_T_U16: args[i].i = (uint16_t) va_arg (va, uint32_t); break;
+    case MIR_T_U32: args[i].i = va_arg (va, uint32_t); break;
+    case MIR_T_F: {
+      union {double d; float f;} u;
+      u.d = va_arg (va, double);
+      args[i].f = u.f;
+      break;
+    }
+    case MIR_T_D: args[i].d = va_arg (va, double); break;
+    case MIR_T_P: args[i].a = va_arg (va, void *); break;
+    default:
+      mir_assert (FALSE);
+    }
+  }
+  return MIR_interp_arr (func_item, nargs, args);
+}
+
+static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.i;}
+static float f_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.f;}
+static double d_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.d;}
+static void *a_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.a;}
+
+#define define_shim(rtype, pref, suf, partype, valsuf) \
+  rtype pref ## _shim_ ## suf (partype p, ...) {       \
+    MIR_val_t v; va_list args; v.valsuf = p; va_start (args, p); return pref ## _shim (v, args); \
+  }
+
+#define define_3shims(suf, partype, valsuf)	 \
+  define_shim (int64_t, i, suf, partype, valsuf) \
+  define_shim (float, f, suf, partype, valsuf)   \
+  define_shim (double, d, suf, partype, valsuf)  \
+  define_shim (void *, a, suf, partype, valsuf)
+  
+define_3shims (i8, int8_t, i)
+define_3shims (u8, uint8_t, i)
+define_3shims (i16, int16_t, i)
+define_3shims (u16, uint16_t, i)
+define_3shims (i32, int32_t, i)
+define_3shims (u32, uint32_t, i)
+
+define_3shims (i64, int64_t, i)
+define_3shims (f, float, f)
+define_3shims (d, double, d)
+define_3shims (a, void *, a)
+
+int64_t i_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.i; }
+float f_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.f; }
+double d_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.d; }
+void *a_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.a; }
+
+static void *get_call_shim (MIR_item_t func_item) {
+  MIR_func_t func = func_item->u.func;
+  MIR_type_t rtp = func->res_type == MIR_T_V ? MIR_T_I64 : func->res_type;
+  MIR_type_t atp = func->nargs == 0 ? MIR_T_V : VARR_GET (MIR_var_t, func->vars, 0).type;
+
+  switch (atp) {
+  case MIR_T_I8: return (rtp == MIR_T_F ? (void *) f_shim_i8 : rtp == MIR_T_D ? (void *) d_shim_i8
+			 : rtp == MIR_T_P ? (void *) a_shim_i8 : (void *) i_shim_i8);
+  case MIR_T_U8: return (rtp == MIR_T_F ? (void *) f_shim_u8 : rtp == MIR_T_D ? (void *) d_shim_u8
+			 : rtp == MIR_T_P ? (void *) a_shim_u8 : (void *) i_shim_u8);
+  case MIR_T_I16: return (rtp == MIR_T_F ? (void *) f_shim_i16 : rtp == MIR_T_D ? (void *) d_shim_i16
+			  : rtp == MIR_T_P ? (void *) a_shim_i16 : (void *) i_shim_i16);
+  case MIR_T_U16: return (rtp == MIR_T_F ? (void *) f_shim_u16 : rtp == MIR_T_D ? (void *) d_shim_u16
+			  : rtp == MIR_T_P ? (void *) a_shim_u16 : (void *) i_shim_u16);
+  case MIR_T_I32: return (rtp == MIR_T_F ? (void *) f_shim_i32 : rtp == MIR_T_D ? (void *) d_shim_i32
+			  : rtp == MIR_T_P ? (void *) a_shim_i32 : (void *) i_shim_i32);
+  case MIR_T_U32: return (rtp == MIR_T_F ? (void *) f_shim_u32 : rtp == MIR_T_D ? (void *) d_shim_u32
+			  : rtp == MIR_T_P ? (void *) a_shim_u32 : (void *) i_shim_u32);
+  case MIR_T_I64: return (rtp == MIR_T_F ? (void *) f_shim_i64 : rtp == MIR_T_D ? (void *) d_shim_i64
+			  : rtp == MIR_T_P ? (void *) a_shim_i64 : (void *) i_shim_i64);
+  case MIR_T_F: return (rtp == MIR_T_F ? (void *) f_shim_f : rtp == MIR_T_D ? (void *) d_shim_f
+			: rtp == MIR_T_P ? (void *) a_shim_f : (void *) i_shim_f);
+  case MIR_T_D: return (rtp == MIR_T_F ? (void *) f_shim_d : rtp == MIR_T_D ? (void *) d_shim_d
+			: rtp == MIR_T_P ? (void *) a_shim_d : (void *) i_shim_d);
+  case MIR_T_P: return (rtp == MIR_T_F ? (void *) f_shim_a : rtp == MIR_T_D ? (void *) d_shim_a
+			: rtp == MIR_T_P ? (void *) a_shim_a : (void *) i_shim_a);
+  case MIR_T_V: return (rtp == MIR_T_F ? (void *) f_shim_v : rtp == MIR_T_D ? (void *) d_shim_v
+			: rtp == MIR_T_P ? (void *) a_shim_v : (void *) i_shim_v);
+  default:
+    mir_assert (FALSE);
+  }
+}
+
+void MIR_set_C_interp_interface (MIR_item_t func_item) {
+  func_item->addr = get_interp_shim (func_item, &called_func, get_call_shim (func_item));
 }

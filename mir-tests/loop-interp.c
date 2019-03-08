@@ -25,10 +25,17 @@ int main (void) {
   MIR_load_module (m);
   MIR_link ();
   MIR_interp_init ();
-  val.i = n_iter;
   start_time = real_sec_time ();
+  val.i = n_iter;
+#if MIR_C_INTERFACE
+  typedef int64_t (*loop_func) (int64_t);
+  MIR_set_C_interp_interface (func);
+  int64_t res = ((loop_func) func->addr) (n_iter);
+  fprintf (stderr, "C interface test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, res, real_sec_time () - start_time);
+#else
   val = MIR_interp (func, 1, val);
   fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
+#endif
   MIR_interp_finish ();
   MIR_finish ();
   return 0;

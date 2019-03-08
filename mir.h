@@ -369,4 +369,16 @@ extern void MIR_link (void);
 extern const char *_MIR_uniq_string (const char *str);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
 
+extern uint8_t *MIR_publish_code (uint8_t *code, size_t code_len);
+
+struct MIR_code_reloc {
+  size_t offset;
+  void *value;
+};
+
+typedef struct MIR_code_reloc *MIR_code_reloc_t;
+
+extern int MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
+extern int MIR_update_code (uint8_t *base, size_t nloc, ...);
+
 #endif /* #ifndef MIR_H */

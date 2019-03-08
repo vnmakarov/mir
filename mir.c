@@ -418,6 +418,9 @@ static void init_module (MIR_module_t m, const char *name) {
   DLIST_INIT (MIR_item_t, m->items);
 }
 
+static void code_init (void);
+static void code_finish (void);
+
 int MIR_init (void) {
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++)
@@ -444,6 +447,7 @@ int MIR_init (void) {
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
   init_module (&dummy_module, "dummy");
   HTAB_CREATE (MIR_item_t, global_item_tab, 250, item_hash, item_eq);
+  code_init ();
   return TRUE;
 }
 
@@ -463,6 +467,7 @@ void MIR_finish (void) {
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
+  code_finish ();
   if (curr_func != NULL)
     (*error_func) (MIR_finish_error, "finish when function is not finished"); 
   if (curr_module != NULL)
@@ -830,15 +835,6 @@ void MIR_finish_module (void) {
   
   if (curr_module == NULL)
     (*error_func) (MIR_no_module_error, "finish of non-existing module");
-#if 0
-  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, curr_module->items);
-       item != NULL;
-       item = DLIST_NEXT (MIR_item_t, item))
-    if ((item->item_type == MIR_export_item || item->item_type == MIR_forward_item)
-	&& item == find_item (item_name (item), &module_item_tab)) {
-      (*error_func) (MIR_import_export_error, "export/forward without definition");
-    }
-#endif
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   curr_module = NULL;
 }
@@ -1633,6 +1629,86 @@ void MIR_simplify_func (MIR_item_t func_item) {
 
 const char *_MIR_uniq_string (const char * str) {
   return string_store (&strings, &string_tab, str).str;
+}
+
+
+
+#include <sys/mman.h>
+#include <unistd.h>
+
+struct code_holder {
+  uint8_t *start, *free, *bound;
+};
+
+typedef struct code_holder code_holder_t;
+
+DEF_VARR (code_holder_t);
+static VARR (code_holder_t) *code_holders;
+
+static size_t page_size;
+
+uint8_t *MIR_publish_code (uint8_t *code, size_t code_len) {
+  uint8_t *start, *mem;
+  size_t len;
+  int new_p = TRUE;
+  
+  if ((len = VARR_LENGTH (code_holder_t, code_holders)) > 0) {
+    code_holder_t *ch_ptr = VARR_ADDR (code_holder_t, code_holders) + len - 1;
+    uint8_t *free_addr = (uint8_t *) ((uint64_t) (ch_ptr->free + 15) / 16 * 16); /* align */
+    
+    if (free_addr + code_len < ch_ptr->bound) {
+      mem = free_addr;
+      ch_ptr->free = free_addr + code_len;
+      new_p = FALSE;
+      start = ch_ptr->start;
+      len = ch_ptr->bound - start;
+    }
+  }
+  if (new_p) {
+    code_holder_t ch;
+    size_t npages = (code_len + page_size - 1) / page_size;
+    
+    len = page_size * npages;
+    mem = (uint8_t *) mmap (NULL, len, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS , -1, 0);
+    if (mem == MAP_FAILED)
+      return NULL;
+    start = ch.start = ch.free = mem;
+    ch.bound = mem + len;
+    VARR_PUSH (code_holder_t, code_holders, ch);
+  }
+  memcpy (mem, code, code_len);
+  return mem;
+}
+
+int MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
+  for (size_t i = 0; i < nloc; i++)
+    memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
+}
+
+int MIR_update_code (uint8_t *base, size_t nloc, ...) {
+  va_list args;
+
+  va_start (args, nloc);
+  for (size_t i = 0; i < nloc; i++) {
+    size_t offset = va_arg (args, size_t);
+    void *value = va_arg (args, void *);
+
+    memcpy (base + offset, &value, sizeof (void *));
+  }
+  va_end (args);
+}
+
+static void code_init (void) {
+  page_size = sysconf(_SC_PAGE_SIZE);
+  VARR_CREATE (code_holder_t, code_holders, 128);
+}
+
+static void code_finish (void) {
+  while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
+    code_holder_t ch = VARR_POP (code_holder_t, code_holders);
+    munmap (ch.start, ch.bound - ch.start);
+  }
+  VARR_DESTROY (code_holder_t, code_holders);
 }
 
 

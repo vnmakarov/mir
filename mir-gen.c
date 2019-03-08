@@ -2977,28 +2977,6 @@ dead_code_elimination (MIR_item_t func) {
 
 #undef live_out
 
-
-
-#include <sys/mman.h>
-#include <unistd.h>
-
-static size_t page_size;
-
-static uint8_t *get_code (uint8_t *code, size_t code_len) {
-  uint8_t *mem;
-  size_t npages = (code_len + page_size - 1) / page_size;
-
-  mem = (uint8_t *) mmap (NULL, page_size * npages, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS , -1, 0);
-  if (mem == MAP_FAILED)
-    return NULL;
-  memcpy (mem, code, code_len);
-  if (mprotect (mem, page_size * npages, PROT_EXEC) < 0) {
-    munmap (mem, page_size * npages);
-    return NULL;
-  }
-  return mem;
-}
-
 #if MIR_GEN_DEBUG
 
 #include <sys/types.h>
@@ -3108,7 +3086,7 @@ void *MIR_gen (MIR_item_t func_item) {
   print_code (code, code_len);
   fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
 #endif 
-  res = get_code (code, code_len);
+  res = MIR_publish_code (code, code_len);
   destroy_func_live_ranges ();
   destroy_func_cfg ();
   return res;
@@ -3124,7 +3102,6 @@ void MIR_gen_init (void) {
   MIR_reg_t i;
   static hreg_def_t hreg_def = {NULL, 0, 0};
     
-  page_size = sysconf(_SC_PAGE_SIZE);
 #ifdef TEST_MIR_GEN
   fprintf (stderr, "Page size = %lu\n", (unsigned long) page_size);
 #endif

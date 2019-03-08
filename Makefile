@@ -34,11 +34,16 @@ io-bench:
 
 interp-test:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out
 	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/sieve-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-interp.c mir-tests/sieve-interp.c -lffi && ./a.out
 	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_INTERP_DEBUG=1 mir.c mir-interp.c mir-tests/hi-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-tests/args-interp.c -lffi && ./a.out
+	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_C_INTERFACE=1 mir.c mir-interp.c mir-tests/args-interp.c -lffi && ./a.out
 
 interp-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_C_INTERFACE=1 mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-tests/sieve-interp.c -lffi && ./a.out && size ./a.out
 
 gen-test:

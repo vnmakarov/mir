@@ -27,8 +27,15 @@ int main (void) {
   MIR_interp_init ();
   fprintf (stderr, "Interpreter init finish: %.3f ms\n", (real_sec_time () - start_time) * 1000.0);
   start_time = real_sec_time ();
+#if MIR_C_INTERFACE
+  typedef int64_t (*loop_func) (void);
+  MIR_set_C_interp_interface (func);
+  int64_t res = ((loop_func) func->addr) ();
+  fprintf (stderr, "C interface SIEVE -> %"PRId64 ": %.3f sec\n", res, real_sec_time () - start_time);
+#else
   val = MIR_interp (func, 0);
   fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
+#endif
   MIR_interp_finish ();
   MIR_finish ();
   return 0;
