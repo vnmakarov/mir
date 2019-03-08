@@ -1,4 +1,4 @@
-CC=gcc
+CC=gcc -std=gnu11
 CFLAGS=-Os -g
 TARGET=x86_64
 DEPS=mir.h mir-varr.h mir-dlist.h

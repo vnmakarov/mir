@@ -24,8 +24,10 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 #define ALWAYS_INLINE inline
 #endif
 
-#ifdef __x86_64__
+#if defined(__x86_64__)
 #include "x86_64-interp.c"
+#elif defined(__PPC64__)
+#include "ppc64-interp.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
@@ -647,6 +649,7 @@ get_func_desc (MIR_item_t func_item) {
 
 typedef ffi_type *ffi_type_ptr_t;
 typedef void *void_ptr_t;
+typedef union {int16_t i8; uint16_t u8; int16_t i16; uint16_t u16; int32_t i32; uint16_t u32;} int_value_t;
 
 DEF_VARR (ffi_type_ptr_t);
 static VARR (ffi_type_ptr_t) *ffi_arg_types_varr;
@@ -654,8 +657,12 @@ static VARR (ffi_type_ptr_t) *ffi_arg_types_varr;
 DEF_VARR (void_ptr_t);
 static VARR (void_ptr_t) *ffi_arg_values_varr;
 
+DEF_VARR (int_value_t);
+static VARR (int_value_t) *ffi_int_values_varr;
+
 static ffi_type_ptr_t *ffi_arg_types;
 static void_ptr_t *ffi_arg_values;
+static int_value_t *ffi_int_values;
  
 static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
   switch (type) {
@@ -689,11 +696,10 @@ static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_
       *res = val;
   } else {
     ffi_cif cif;
-    MIR_val_t rc;
     ffi_status status;
     MIR_type_t type;
     size_t nargs;
-    union {MIR_val_t val; int16_t i16; uint16_t u16; int32_t i32; uint16_t u32;} u;
+    union { ffi_arg rint; float f; double d; void *a; } u;
     MIR_var_t *arg_vars = NULL;
 
     if (proto->args == NULL) {
@@ -704,20 +710,37 @@ static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_
     }
     
     if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
+      VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
+      VARR_EXPAND (int_value_t, ffi_int_values_varr, nargs);
       ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
       ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
+      ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
     }
     
     for (size_t i = 0; i < nargs; i++) {
       type = arg_vars[i].type;
       ffi_arg_types[i] = ffi_type_ptr (type);
       switch (type) {
-      case MIR_T_I8: case MIR_T_I16: case MIR_T_I32: case MIR_T_I64:
-	ffi_arg_values[i] = &args[i].i;
+      case MIR_T_I8:
+	ffi_int_values[i].i8 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i8;
 	break;
-      case MIR_T_U8: case MIR_T_U16: case MIR_T_U32: case MIR_T_U64:
-	ffi_arg_values[i] = &args[i].u;
+      case MIR_T_I16:
+	ffi_int_values[i].i16 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i16;
 	break;
+      case MIR_T_I32:
+	ffi_int_values[i].i32 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i32;
+	break;
+      case MIR_T_U8:
+	ffi_int_values[i].u8 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u8;
+	break;
+      case MIR_T_U16:
+	ffi_int_values[i].u16 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u16;
+	break;
+      case MIR_T_U32:
+	ffi_int_values[i].u32 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u32;
+	break;
+      case MIR_T_I64: ffi_arg_values[i] = &args[i].i; break;
+      case MIR_T_U64: ffi_arg_values[i] = &args[i].u; break;
       case MIR_T_F: ffi_arg_values[i] = &args[i].f; break;
       case MIR_T_D: ffi_arg_values[i] = &args[i].d; break;
       case MIR_T_P: ffi_arg_values[i] = &args[i].a; break;
@@ -729,19 +752,19 @@ static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_
     status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
     mir_assert (status == FFI_OK);
     
-    ffi_call (&cif, addr, &rc, ffi_arg_values);
+    ffi_call (&cif, addr, &u, ffi_arg_values);
     switch (proto->res_type) {
-    case MIR_T_I8: res->i = *(int8_t *) &rc; return;
-    case MIR_T_U8: res->u = *(uint8_t *) &rc; return;
-    case MIR_T_I16: u.val = rc; res->i = u.i16; return;
-    case MIR_T_U16: u.val = rc; res->u = u.u16; return;
-    case MIR_T_I32: u.val = rc; res->i = u.i32; return;
-    case MIR_T_U32: u.val = rc; res->u = u.u32; return;
-    case MIR_T_I64: res->i = *(int64_t *) &rc; return;
-    case MIR_T_U64: res->u = *(uint64_t *) &rc; return;
-    case MIR_T_F: res->f = *(float *) &rc; return;
-    case MIR_T_D: res->d = *(double *) &rc; return;
-    case MIR_T_P: res->a = *(void **) &rc; return;
+    case MIR_T_I8: res->i = (int8_t) (u.rint); return;
+    case MIR_T_U8: res->u = (uint8_t) (u.rint); return;
+    case MIR_T_I16: res->i = (int16_t) (u.rint); return;
+    case MIR_T_U16: res->u = (uint16_t) (u.rint); return;
+    case MIR_T_I32: res->i = (int32_t) (u.rint); return;
+    case MIR_T_U32: res->u = (uint32_t) (u.rint); return;
+    case MIR_T_I64: res->i = (int64_t) (u.rint); return;
+    case MIR_T_U64: res->u = (uint64_t) (u.rint); return;
+    case MIR_T_F: res->f = u.f; return;
+    case MIR_T_D: res->d = u.d; return;
+    case MIR_T_P: res->a = u.a; return;
     case MIR_T_V: return;
     default:
       mir_assert (FALSE);
@@ -762,6 +785,8 @@ void MIR_interp_init (void) {
   ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
   VARR_CREATE (void_ptr_t, ffi_arg_values_varr, 0);
   ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
+  VARR_CREATE (int_value_t, ffi_int_values_varr, 0);
+  ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
 }
 
 void MIR_interp_finish (void) {
@@ -770,6 +795,7 @@ void MIR_interp_finish (void) {
   VARR_DESTROY (MIR_val_t, args_varr);
   VARR_DESTROY (ffi_type_ptr_t, ffi_arg_types_varr);
   VARR_DESTROY (void_ptr_t, ffi_arg_values_varr);
+  VARR_DESTROY (int_value_t, ffi_int_values_varr);
   /* Clear func descs???  */
 }
 

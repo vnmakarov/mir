@@ -1669,7 +1669,7 @@ uint8_t *MIR_publish_code (uint8_t *code, size_t code_len) {
     size_t npages = (code_len + page_size - 1) / page_size;
     
     len = page_size * npages;
-    mem = (uint8_t *) mmap (NULL, len, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS , -1, 0);
+    mem = (uint8_t *) mmap (NULL, len, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
       return NULL;
     start = ch.start = ch.free = mem;
