@@ -28,6 +28,8 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 #include "x86_64-interp.c"
 #elif defined(__PPC64__)
 #include "ppc64-interp.c"
+#elif defined(__aarch64__)
+#include "aarch64-interp.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
