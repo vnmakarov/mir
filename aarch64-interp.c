@@ -26,6 +26,5 @@ static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
   *u++ |= ((t >> 32) & 0xffff) << 5; *u++ |= ((t >> 48) & 0xffff) << 5;
   u = (uint32_t *) addr + 9; *u++ |= (h & 0xffff) << 5; *u++ |= ((h >> 16) & 0xffff) << 5;
   *u++ |= ((h >> 32) & 0xffff) << 5; *u++ |= ((h >> 48) & 0xffff) << 5;
-  sleep (3);
   return addr;
 }
