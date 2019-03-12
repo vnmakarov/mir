@@ -251,7 +251,7 @@ ex100:    func v
 
 ## MIR project competitors
   * I only see one real universal light-weight JIT competitor [**LIBJIT**](https://www.gnu.org/software/libjit/)
-  * LIBJIT is much bigger:
+  * LIBJIT is bigger:
     * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR (excluding C to MIR compiler)
-    * 420KB object file vs 110KB
+    * 420KB object file vs 170KB
   * LIBJIT has fewer optimizations: only copy propagtaion and register allocation
