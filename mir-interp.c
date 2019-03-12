@@ -312,6 +312,10 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
 #define ICMPS(op) do {int64_t *r; int32_t p1, p2; r = get_3isops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BICMP(op) do {int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
 #define BICMPS(op) do {int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
+#define UOP3(op) do {uint64_t *r, p1, p2; r = get_3uops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define UOP3S(op) do {uint64_t *r; uint32_t p1, p2; r = get_3usops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define UIOP3(op) do {uint64_t *r, p1, p2; r = get_3uops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
+#define UIOP3S(op) do {uint64_t *r; uint32_t p1, p2; r = get_3usops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define UCMP(op) do {uint64_t *r, p1, p2; r = get_3uops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define UCMPS(op) do {uint64_t *r; uint32_t p1, p2; r = get_3usops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
 #define BUCMP(op) do {uint64_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); if (op1 op op2) pc = code + get_i (ops); } while (0)
@@ -483,22 +487,22 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       
       CASE (MIR_MUL, 3);   IOP3(*); END_INSN;
       CASE (MIR_MULS, 3);  IOP3S(*); END_INSN;
-      CASE (MIR_UMUL, 3);  END_INSN; // ???
-      CASE (MIR_UMULS, 3); END_INSN; // ???
+      CASE (MIR_UMUL, 3);  UOP3(*); END_INSN;
+      CASE (MIR_UMULS, 3); UOP3S(*); END_INSN;
       CASE (MIR_FMUL, 3);  FOP3(*); END_INSN;
       CASE (MIR_DMUL, 3);  DOP3(*); END_INSN;
       
-      CASE (MIR_DIV, 3);   END_INSN; // ???
-      CASE (MIR_DIVS, 3);  END_INSN; // ???
-      CASE (MIR_UDIV, 3);  END_INSN; // ???
-      CASE (MIR_UDIVS, 3); END_INSN; // ???
-      CASE (MIR_FDIV, 3);  END_INSN; // ???
-      CASE (MIR_DDIV, 3);  END_INSN; // ???
+      CASE (MIR_DIV, 3);   IOP3(/); END_INSN;
+      CASE (MIR_DIVS, 3);  IOP3S(/); END_INSN;
+      CASE (MIR_UDIV, 3);  UOP3(/); END_INSN;
+      CASE (MIR_UDIVS, 3); UOP3S(/); END_INSN;
+      CASE (MIR_FDIV, 3);  FOP3(/); END_INSN;
+      CASE (MIR_DDIV, 3);  DOP3(/); END_INSN;
       
-      CASE (MIR_MOD, 3);   END_INSN; // ???
-      CASE (MIR_MODS, 3);  END_INSN; // ???
-      CASE (MIR_UMOD, 3);  END_INSN; // ???
-      CASE (MIR_UMODS, 3); END_INSN; // ???
+      CASE (MIR_MOD, 3);   IOP3(%); END_INSN;
+      CASE (MIR_MODS, 3);  IOP3S(%); END_INSN;
+      CASE (MIR_UMOD, 3);  UOP3(%); END_INSN;
+      CASE (MIR_UMODS, 3); IOP3S(%); END_INSN;
       
       CASE (MIR_AND, 3);  IOP3(&); END_INSN;
       CASE (MIR_ANDS, 3); IOP3S(&); END_INSN;
@@ -511,8 +515,8 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       
       CASE (MIR_RSH, 3);   IOP3(>>); END_INSN;
       CASE (MIR_RSHS, 3);  IOP3S(>>); END_INSN;
-      CASE (MIR_URSH, 3);  END_INSN; // ???
-      CASE (MIR_URSHS, 3); END_INSN; // ???
+      CASE (MIR_URSH, 3);  UIOP3(>>); END_INSN;
+      CASE (MIR_URSHS, 3); UIOP3S(>>); END_INSN;
       
       CASE (MIR_EQ, 3);  ICMP(=); END_INSN;
       CASE (MIR_EQS, 3); ICMPS(=); END_INSN;

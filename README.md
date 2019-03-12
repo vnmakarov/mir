@@ -227,17 +227,17 @@ ex100:    func v
   * The current code can be used only to familiarize future users with the project and approaches it uses
   * You can run some benchmarks and tests by `make bench` and `make test`
 
-## Current MIR Performance Data ???
+## Current MIR Performance Data
 
   * Intel i7-9700K with 16GB memory under FC29 with GCC-8.2.1 using -pipe
 
-    |                |     MIR-gen     |     MIR-interp  |     gcc -O2     |     gcc -O0     |
-    |----------------|-----------------|-----------------|-----------------|-----------------|
-    | compilation [1]| **1.0** (0.11ms)| 0.1 (0.012ms)   | **163** (17.9ms)|  157 (17.3ms)   |
-    | execution [2]  | **1.0** (3.13s) | 5.9 (18.5s)     | **0.93** (2.9s) |  2.03 (6.34s)   |
-    | code size [3]  | **1.0** (94KB)  | 0.49 (46KB)     | **271** (25.2MB)|  271 (25.2MB)   |
-    | ?startup [4]   | **1.0** (0.08ms)| 1.0 (0.08ms)    | **630** (23ms) |  910 (21ms)     |
-    | LOC [5]        | **1.0** (4.5K)  | 0.18 (0.8K)     | **329** (1480K) |  329 (1480K)    |
+    |                |     MIR-gen      |     MIR-interp  |     gcc -O2      |     gcc -O0     |
+    |----------------|------------------|-----------------|------------------|-----------------|
+    | compilation [1]| **1.0** (0.071ms)| 0.17 (0.012ms)  | **188** (13.35ms)|  180 (12.8ms)   |
+    | execution [2]  | **1.0** (3.13s)  | 5.9 (18.5s)     | **0.93** (2.9s)  |  2.03 (6.34s)   |
+    | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
+    | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
+    | LOC [5]        | **1.0** (4.2K)   | 0.26 (1.1K)     | **329** (1480K)  |  329 (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and memory File System for GCC) 100 times
 
@@ -245,9 +245,9 @@ ex100:    func v
 
    [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
 
-   [4] is based on generation of empty C file code or empty MIR module
+   [4] is based on wall time of generation of object code for empty C file or generation of empty MIR module through API
 
-   [5] is based only on files required for x86-64 C compiler
+   [5] is based only on files required for x86-64 C compiler and MIR generator and interpreter files
 
 ## MIR project competitors
   * I only see one real universal light-weight JIT competitor [**LIBJIT**](https://www.gnu.org/software/libjit/)

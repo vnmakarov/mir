@@ -1,5 +1,5 @@
 CC=gcc -std=gnu11
-CFLAGS=-Os -g
+CFLAGS=-O3 -g
 TARGET=x86_64
 DEPS=mir.h mir-varr.h mir-dlist.h
 OBJS=mir.o mir-interp.o mir-gen.o
