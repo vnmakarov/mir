@@ -19,7 +19,7 @@
 #include "mir.h"
 
 #ifdef __x86_64__
-#include "mir-cx86_64.h"
+#include "cx86_64.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -117,7 +117,7 @@ static mir_size_t raw_type_size (struct type *type) {
 }
 
 #ifdef __x86_64__
-#include "mir-cx86_64-code.c"
+#include "cx86_64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif

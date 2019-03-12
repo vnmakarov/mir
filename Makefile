@@ -56,10 +56,10 @@ gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
 c-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_C -I. mir.c mir-c/mir-c.c && ./a.out -v
+	$(CC) -g -D$(TARGET) -DTEST_MIR_C -I. mir.c c2mir/c2mir.c && ./a.out -v
 
 c-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C -I. mir-c/mir-c.c mir.c && ./a.out -v && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C -I. c2mir/c2mir.c mir.c && ./a.out -v && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 
