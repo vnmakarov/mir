@@ -14,10 +14,10 @@ mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-test: util-test mir-test io-test scan-test interp-test gen-test c-test
+test: util-test mir-test io-test scan-test interp-test gen-test c2mir-test mir2c-test
 	@echo ==============================Test is done
       
-bench: interp-bench gen-bench io-bench c-bench
+bench: interp-bench gen-bench io-bench c2mir-bench mir2c-bench
 	@echo ==============================Bench is done
 
 mir-test:
@@ -55,11 +55,17 @@ gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
-c-test:
-	$(CC) -g -D$(TARGET) -DTEST_MIR_C -I. mir.c c2mir/c2mir.c && ./a.out -v
+c2mir-test:
+	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c c2mir/c2mir.c && ./a.out -v
 
-c-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_MIR_C -I. c2mir/c2mir.c mir.c && ./a.out -v && size ./a.out
+c2mir-bench:
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. c2mir/c2mir.c mir.c && ./a.out -v && size ./a.out
+
+mir2c-test:
+	$(CC) -g -DTEST_MIR2C -DMIR_SCAN -I. mir.c mir2c/mir2c.c && ./a.out
+
+mir2c-bench:
+	$(CC) $(CFLAGS) -DNDEBUG -DTEST_MIR2C -DMIR_SCAN -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
 
 util-test: varr-test dlist-test bitmap-test htab-test
 

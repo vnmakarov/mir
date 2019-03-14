@@ -177,7 +177,7 @@ typedef struct {
     uint64_t u;
     float f;
     double d;
-    MIR_item_t ref;
+    MIR_item_t ref; /* non-export/non-forward after simplification */
     MIR_mem_t mem;
     MIR_mem_t hard_reg_mem; /* Used only internally */
     MIR_label_t label;
@@ -237,7 +237,8 @@ struct MIR_item {
   MIR_module_t module;
   DLIST_LINK (MIR_item_t) item_link;
   MIR_item_type_t item_type; /* item type */
-  MIR_item_t forward_def; /* non-null for export/forward item */
+  /* Non-null only for export/forward items.  It forms a chain to the final definition. */
+  MIR_item_t forward_def;
   void *addr; /* address of imported definition or proto object */
   void *interpreter_call, *binary_call; /* func used for call from interpreter and binary code */
   int export_p; /* true for export items (only func items) */
@@ -307,6 +308,7 @@ extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
 				    size_t frame_size, size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type,
 				size_t frame_size, size_t nargs, ...);
+extern const char *MIR_item_name (MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
 extern void MIR_finish_module (void);

@@ -370,6 +370,13 @@ DEF_VARR (char);
 static VARR (char) *temp_string; 
 #endif
 
+const char *MIR_item_name (MIR_item_t item) {
+  return (item->item_type == MIR_func_item ? item->u.func->name
+	  : item->item_type == MIR_proto_item ? item->u.proto->name
+	  : item->item_type == MIR_import_item ? item->u.import
+	  : item->item_type == MIR_export_item ? item->u.export : item->u.forward);
+}
+
 #if MIR_SCAN
 static void scan_init (void);
 static void scan_finish (void);
@@ -382,19 +389,12 @@ MIR_error_func_t MIR_get_error_func (void) { return error_func; }
 
 void MIR_set_error_func (MIR_error_func_t func) { error_func = func; }
 
-static const char *item_name (MIR_item_t item) {
-  return (item->item_type == MIR_func_item ? item->u.func->name
-	  : item->item_type == MIR_proto_item ? item->u.proto->name
-	  : item->item_type == MIR_import_item ? item->u.import
-	  : item->item_type == MIR_export_item ? item->u.export : item->u.forward);
-}
-
 DEF_HTAB (MIR_item_t);
 static HTAB (MIR_item_t) *module_item_tab;
 static HTAB (MIR_item_t) *global_item_tab;
 
-static htab_hash_t item_hash (MIR_item_t it) { return mum_hash64 ((uint64_t) item_name (it), 0); }
-static int item_eq (MIR_item_t it1, MIR_item_t it2) { return item_name (it1) == item_name (it2); }
+static htab_hash_t item_hash (MIR_item_t it) { return mum_hash64 ((uint64_t) MIR_item_name (it), 0); }
+static int item_eq (MIR_item_t it1, MIR_item_t it2) { return MIR_item_name (it1) == MIR_item_name (it2); }
 
 static MIR_item_t find_item (const char *name, HTAB (MIR_item_t) **item_tab) {
   MIR_item_t tab_item;
@@ -486,9 +486,10 @@ MIR_module_t MIR_new_module (const char *name) {
 }
 
 static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
+  int replace_p;
   MIR_item_t tab_item;
   
-  if ((tab_item = find_item (item_name (item), item_tab)) == NULL) {
+  if ((tab_item = find_item (MIR_item_name (item), item_tab)) == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
     HTAB_DO (MIR_item_t, *item_tab, item, HTAB_INSERT, item);
     return item;
@@ -501,19 +502,27 @@ static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
     break;
   case MIR_export_item:
   case MIR_forward_item:
+    replace_p = FALSE;
     if (item->item_type == MIR_import_item) {
       (*error_func) (MIR_import_export_error, "export/forward of import");
-    } else if (item->item_type == MIR_export_item || item->item_type == MIR_forward_item) {
+    } else if (item->item_type != MIR_export_item && item->item_type != MIR_forward_item) {
+      replace_p = TRUE;
+      DLIST_APPEND (MIR_item_t, curr_module->items, item);
+    } else {
       if (tab_item->item_type == item->item_type)
 	item = tab_item;
       else
 	DLIST_APPEND (MIR_item_t, curr_module->items, item);
-    } else { /* replace export/forward by its definition: */
+      if (item->item_type == MIR_export_item && tab_item->item_type == MIR_forward_item)
+	replace_p = TRUE;
+    }
+    if (replace_p) { /* replace forward by export or export/forward by its definition: */
       tab_item->forward_def = item;
+      if (tab_item->item_type == MIR_export_item)
+	item->export_p = TRUE;
       HTAB_DO (MIR_item_t, *item_tab, tab_item, HTAB_DELETE, tab_item);
       HTAB_DO (MIR_item_t, *item_tab, item, HTAB_INSERT, tab_item);
       mir_assert (item == tab_item);
-      DLIST_APPEND (MIR_item_t, curr_module->items, item);
     }
     break;
   case MIR_proto_item:
@@ -524,9 +533,11 @@ static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
       if (! tab_item->export_p) { /* just keep one export: */
 	tab_item->export_p = TRUE;
 	DLIST_APPEND (MIR_item_t, curr_module->items, item);
+	item->forward_def = tab_item;
       }
     } else if (item->item_type == MIR_forward_item) {
       DLIST_APPEND (MIR_item_t, curr_module->items, item);
+      item->forward_def = tab_item;
     } else if (item->item_type == MIR_import_item) {
       (*error_func) (MIR_import_export_error, "import of local definition");
     } else {
@@ -842,7 +853,7 @@ void MIR_finish_module (void) {
 static void replace_global (MIR_item_t item) {
   MIR_item_t tab_item;
   
-  if ((tab_item = find_item (item_name (item), &global_item_tab)) != item && tab_item != NULL)
+  if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) != item && tab_item != NULL)
     HTAB_DO (MIR_item_t, global_item_tab, tab_item, HTAB_DELETE, tab_item);
   HTAB_DO (MIR_item_t, global_item_tab, item, HTAB_INSERT, tab_item);
 }
@@ -883,7 +894,7 @@ void MIR_link (void) {
 	 item != NULL;
 	 item = DLIST_NEXT (MIR_item_t, item))
       if (item->item_type == MIR_import_item) {
-	if ((tab_item = find_item (item_name (item), &global_item_tab)) == NULL)
+	if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) == NULL)
 	  (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item");
 	item->addr = tab_item->addr;
 	item->binary_call = tab_item->binary_call;
@@ -1127,7 +1138,7 @@ int MIR_op_eq_p (MIR_op_t op1, MIR_op_t op2) {
   case MIR_OP_UINT: return op1.u.u == op2.u.u;
   case MIR_OP_FLOAT: return op1.u.f == op2.u.f;
   case MIR_OP_DOUBLE: return op1.u.d == op2.u.d;
-  case MIR_OP_REF: return strcmp (item_name (op1.u.ref), item_name (op2.u.ref)) == 0;
+  case MIR_OP_REF: return strcmp (MIR_item_name (op1.u.ref), MIR_item_name (op2.u.ref)) == 0;
   case MIR_OP_MEM:
     return (op1.u.mem.type == op2.u.mem.type && op1.u.mem.disp == op2.u.mem.disp
 	    && op1.u.mem.base == op2.u.mem.base && op1.u.mem.index == op2.u.mem.index
@@ -1161,7 +1172,7 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
   }
   case MIR_OP_DOUBLE:
     return mum_hash_step (h, (uint64_t) op.u.u);
-  case MIR_OP_REF: return mum_hash_step (h, (uint64_t) item_name (op.u.ref));
+  case MIR_OP_REF: return mum_hash_step (h, (uint64_t) MIR_item_name (op.u.ref));
   case MIR_OP_MEM:
     h = mum_hash_step (h, (uint64_t) op.u.mem.type);
     h = mum_hash_step (h, (uint64_t) op.u.mem.disp);
@@ -1295,7 +1306,7 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
     break;
   }
   case MIR_OP_REF:
-    fprintf (f, "%s", item_name (op.u.ref));
+    fprintf (f, "%s", MIR_item_name (op.u.ref));
     break;
   case MIR_OP_LABEL:
     MIR_output_label (f, op.u.label);
@@ -1468,9 +1479,13 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
   case MIR_OP_DOUBLE:
   case MIR_OP_REF:
     mir_assert (! out_p);
-    if (op->mode == MIR_OP_REF
-	&& (op->u.ref->item_type == MIR_export_item || op->u.ref->item_type == MIR_forward_item))
-      op->u.ref = op->u.ref->forward_def;
+    if (op->mode == MIR_OP_REF) {
+      for (MIR_item_t item = op->u.ref; item != NULL; item = item->forward_def)
+	if (item->item_type != MIR_export_item && item->item_type != MIR_forward_item) {
+	  op->u.ref = item;
+	  break;
+	}
+    }
     if (move_p)
       return;
     type = op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_FLOAT ? MIR_T_D : MIR_T_I64;
@@ -1944,7 +1959,7 @@ static void write_op (FILE *f, MIR_op_t op) {
     break;
   }
   case MIR_OP_REF:
-    write_str (f, item_name (op.u.ref));
+    write_str (f, MIR_item_name (op.u.ref));
     break;
   case MIR_OP_LABEL:
     write_lab (f, op.u.label);

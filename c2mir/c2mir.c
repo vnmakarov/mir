@@ -8835,7 +8835,7 @@ static void compile_finish (void) {
 }
 
 /* ------------------------- Small test example ------------------------- */
-#ifdef TEST_MIR_C
+#ifdef TEST_C2MIR
 static size_t curr_char;
 static const char *code;
 
