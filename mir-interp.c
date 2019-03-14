@@ -198,6 +198,12 @@ static void generate_icode (MIR_item_t func_item) {
       v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = get_reg (ops[1], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
       break;
+    case MIR_BFS: case MIR_BTS:
+      VARR_PUSH (MIR_insn_t, branches, insn);
+      v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
+      v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
+      v.i = get_reg (ops[1], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
+      break;
     case MIR_BEQ: case MIR_FBEQ: case MIR_DBEQ: case MIR_BNE: case MIR_FBNE: case MIR_DBNE:
     case MIR_BLT: case MIR_UBLT: case MIR_FBLT: case MIR_DBLT:
     case MIR_BLE: case MIR_UBLE: case MIR_FBLE: case MIR_DBLE:
@@ -405,7 +411,9 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       ltab [MIR_GE] = &&L_MIR_GE; ltab [MIR_GES] = &&L_MIR_GES;
       ltab [MIR_UGE] = &&L_MIR_UGE;  ltab [MIR_UGES] = &&L_MIR_UGES;
       ltab [MIR_FGE] = &&L_MIR_FGE; ltab [MIR_DGE] = &&L_MIR_DGE;
-      ltab [MIR_JMP] = &&L_MIR_JMP; ltab [MIR_BT] = &&L_MIR_BT;  ltab [MIR_BF] = &&L_MIR_BF;
+      ltab [MIR_JMP] = &&L_MIR_JMP;
+      ltab [MIR_BT] = &&L_MIR_BT; ltab [MIR_BTS] = &&L_MIR_BTS;
+      ltab [MIR_BFS] = &&L_MIR_BF; ltab [MIR_BFS] = &&L_MIR_BF;
       ltab [MIR_BEQ] = &&L_MIR_BEQ; ltab [MIR_BEQS] = &&L_MIR_BEQS;
       ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ;
       ltab [MIR_BNE] = &&L_MIR_BNE; ltab [MIR_BNES] = &&L_MIR_BNES;
@@ -559,6 +567,8 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_JMP, 1);   pc = code + get_i (ops); END_INSN;
       CASE (MIR_BT, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
       CASE (MIR_BF, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BTS, 2);    {int32_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BFS, 2);    {int32_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
       CASE (MIR_BEQ, 3);   BICMP (==); END_INSN;
       CASE (MIR_BEQS, 3);  BICMPS (==); END_INSN;
       CASE (MIR_FBEQ, 3);  BFCMP (==); END_INSN;

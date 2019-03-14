@@ -235,7 +235,7 @@ ex100:    func v
 
 ## Current MIR Performance Data
 
-  * Intel i7-9700K with 16GB memory under FC29 with GCC-8.2.1 using -pipe
+  * Intel i7-9700K with 16GB memory under FC29 with GCC-8.2.1
 
     |                |     MIR-gen      |     MIR-interp  |     gcc -O2      |     gcc -O0     |
     |----------------|------------------|-----------------|------------------|-----------------|

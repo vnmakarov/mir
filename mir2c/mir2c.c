@@ -277,7 +277,7 @@ void out_item (FILE *f, MIR_item_t item) {
 
   if (item->item_type == MIR_export_item)
     return;
-  if (item->item_type == MIR_import_item) { // ???
+  if (item->item_type == MIR_import_item) {
     fprintf (f, "extern char %s[];\n", item->u.import);
     return;
   }

@@ -282,6 +282,14 @@ struct pattern {
   {ICODE, "r r r", "66 0F 2E r1 R2; " SET_OPCODE " R0;X 0F B6 r0 R0"},  /* ucomisd r1,r2;setx r0; movzbl r0,r0*/ \
   {ICODE, "r r md", "66 0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomisd r1,m2;setx r0; movzbl r0,r0*/
 
+#define BR0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
+  {ICODE ## SUFF, "l r", #PREF " 83 /7 r1 v0;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,$0;jxx rel32*/ \
+  {ICODE ## SUFF, "l m3", #PREF " 83 /7 m1 v0;"      LONG_JUMP_OPCODE " l0"},  /* cmp m0,$0;jxx rel8*/
+
+#define BR(ICODE, LONG_JUMP_OPCODE) \
+  BCMP0(ICODE, , X, LONG_JUMP_OPCODE) \
+  BCMP0(ICODE, S, Y, LONG_JUMP_OPCODE)
+
 #define BCMP0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
   {ICODE ## SUFF, "l r r", #PREF " 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
   {ICODE ## SUFF, "l r m3", #PREF " 3B r1 m2;"      LONG_JUMP_OPCODE " l0"},  /* cmp r0,m1;jxx rel8*/  \
@@ -411,6 +419,8 @@ static struct pattern patterns[] = {
 
   {MIR_JMP, "l", "E9 l0"},
   
+  BR (MIR_BT, "0F 85") BCMP (MIR_BF,  "0F 84")
+
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE,  "0F 85")
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83")

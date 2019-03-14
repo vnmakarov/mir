@@ -1630,11 +1630,14 @@ static enum ccp_val_kind ccp_branch_update (MIR_insn_t insn, int *res) {
   const_t val;
   
   switch (insn->code) {
-  case MIR_BT: case MIR_BF:
+  case MIR_BT: case MIR_BTS: case MIR_BF: case MIR_BFS:
     if ((ccp_res = get_op (insn, 1, &val)) != CCP_CONST)
       return ccp_res;
-    *res = val.uns_p ? val.u.u != 0 : val.u.i != 0;
-    if (insn->code == MIR_BF)
+    if (insn->code == MIR_BTS || insn->code == MIR_BFS)
+      *res = val.uns_p ? (uint32_t) val.u.u != 0 : (int32_t) val.u.i != 0;
+    else
+      *res = val.uns_p ? val.u.u != 0 : val.u.i != 0;
+    if (insn->code == MIR_BF || insn->code == MIR_BFS)
       *res = ! *res;
     return CCP_CONST;
   case MIR_BEQ:  BICMP(=); break;

@@ -88,7 +88,7 @@ typedef enum {
   MIR_GE, MIR_GES, MIR_UGE, MIR_UGES, MIR_FGE, MIR_DGE, /* Greater or equal */
   /* Uncoditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
-  MIR_JMP, MIR_BT, MIR_BF,
+  MIR_JMP, MIR_BT, MIR_BTS, MIR_BF, MIR_BFS,
   /* Compare and branch (3 operand) insns.  The first operand is the
      label. */
   MIR_BEQ, MIR_BEQS, MIR_FBEQ, MIR_DBEQ,
