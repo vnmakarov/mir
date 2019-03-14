@@ -3,6 +3,12 @@
   * MIR project goal is to provide a basis to implement fast and light weight interpreters and JITs
   * Plans to try MIR light-weight JIT first for CRuby or/and MRuby implementation
 
+## Disclaimer
+   * This code is only for familiarization with the project.  There
+     is absolutely no warranty that MIR will not be changed in the
+     future and the code will work for any tests except ones given
+     here.
+  
 ## MIR
   * MIR is strongly typed
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
