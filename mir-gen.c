@@ -1422,6 +1422,11 @@ static enum ccp_val_kind get_3usops (MIR_insn_t insn, uint32_t *p1, uint32_t *p2
   return CCP_CONST;
 }
 
+#define EXT(tp) do { int64_t p;					                \
+    if ((ccp_res = get_2iops (insn, &p, TRUE)) != CCP_CONST) goto non_const; 	\
+    val.uns_p = FALSE; val.u.i = (tp) p;					\
+  } while (0)
+
 #define IOP2(op) do { int64_t p;			 			\
     if ((ccp_res = get_2iops (insn, &p, TRUE)) != CCP_CONST) goto non_const;	\
     val.uns_p = FALSE; val.u.i = op p;	  	 	 			\
@@ -1539,8 +1544,12 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   
   switch (insn->code) {
   case MIR_MOV:  IOP2(+); break;
-  case MIR_S2I:  IOP2S(+); break;
-  case MIR_US2I: UOP2S(+); break;
+  case MIR_EXT8: EXT(int8_t); break;
+  case MIR_EXT16: EXT(int16_t); break;
+  case MIR_EXT32: EXT(int32_t); break;
+  case MIR_UEXT8: EXT(uint8_t); break;
+  case MIR_UEXT16: EXT(uint16_t); break;
+  case MIR_UEXT32: EXT(uint32_t); break;
       
   case MIR_NEG:  IOP2(-); break;
   case MIR_NEGS: IOP2S(-); break;

@@ -192,13 +192,7 @@ static void generate_icode (MIR_item_t func_item) {
       v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
       break;
-    case MIR_BF: case MIR_BT:
-      VARR_PUSH (MIR_insn_t, branches, insn);
-      v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
-      v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
-      v.i = get_reg (ops[1], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
-      break;
-    case MIR_BFS: case MIR_BTS:
+    case MIR_BT: case MIR_BTS: case MIR_BF: case MIR_BFS:
       VARR_PUSH (MIR_insn_t, branches, insn);
       v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
@@ -310,6 +304,7 @@ static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1,
 
 static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp [get_i (c)].i; }
 
+#define EXT(tp) do {int64_t *r = get_iop (bp, ops); tp s = *get_iop (bp, ops + 1); *r = s;} while (0)
 #define IOP2(op) do {int64_t *r, p; r = get_2iops (bp, ops, &p); *r = op p;} while (0)
 #define IOP2S(op) do {int64_t *r; int32_t p; r = get_2isops (bp, ops, &p); *r = op p;} while (0)
 #define IOP3(op) do {int64_t *r, p1, p2; r = get_3iops (bp, ops, &p1, &p2); *r = p1 op p2; } while (0)
@@ -371,7 +366,10 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       MIR_val_t v;
       
       ltab [MIR_MOV] = &&L_MIR_MOV; ltab [MIR_FMOV] = &&L_MIR_FMOV; ltab [MIR_DMOV] = &&L_MIR_DMOV;
-      ltab [MIR_S2I] = &&L_MIR_S2I; ltab [MIR_US2I] = &&L_MIR_US2I;
+      ltab [MIR_EXT8] = &&L_MIR_EXT8; ltab [MIR_EXT16] = &&L_MIR_EXT16;
+      ltab [MIR_EXT32] = &&L_MIR_EXT32;
+      ltab [MIR_UEXT8] = &&L_MIR_UEXT8; ltab [MIR_UEXT16] = &&L_MIR_UEXT16;
+      ltab [MIR_UEXT32] = &&L_MIR_UEXT32;
       ltab [MIR_I2F] = &&L_MIR_I2F; ltab [MIR_I2D] = &&L_MIR_I2D;
       ltab [MIR_F2I] = &&L_MIR_F2I; ltab [MIR_D2I] = &&L_MIR_D2I;
       ltab [MIR_F2D] = &&L_MIR_F2D; ltab [MIR_D2F] = &&L_MIR_D2F;
@@ -469,8 +467,12 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_MOV, 2);  {int64_t p, *r = get_2iops (bp, ops, &p); *r = p;} END_INSN;
       CASE (MIR_FMOV, 2); {float p, *r = get_2fops (bp, ops, &p); *r = p;} END_INSN;
       CASE (MIR_DMOV, 2); {double p, *r = get_2dops (bp, ops, &p); *r = p;} END_INSN;
-      CASE (MIR_S2I, 2);  {int64_t *r = get_iop (bp, ops); int32_t s = *get_iop (bp, ops + 1); *r = s;} END_INSN;
-      CASE (MIR_US2I, 2); {int64_t *r = get_iop (bp, ops); uint32_t us = *get_iop (bp, ops + 1); *r = us;} END_INSN;
+      CASE (MIR_EXT8, 2); EXT (int8_t); END_INSN;
+      CASE (MIR_EXT16, 2); EXT (int16_t); END_INSN;
+      CASE (MIR_EXT32, 2); EXT (int32_t); END_INSN;
+      CASE (MIR_UEXT8, 2); EXT (uint8_t); END_INSN;
+      CASE (MIR_UEXT16, 2); EXT (uint16_t); END_INSN;
+      CASE (MIR_UEXT32, 2); EXT (uint32_t); END_INSN;
       CASE (MIR_I2F, 2);  {float *r = get_fop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_I2D, 2);  {double *r = get_dop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_F2I, 2);  {int64_t *r = get_iop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;} END_INSN;
@@ -565,10 +567,10 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_DGE, 3);  DCMP(>=); END_INSN;
       
       CASE (MIR_JMP, 1);   pc = code + get_i (ops); END_INSN;
-      CASE (MIR_BT, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
-      CASE (MIR_BF, 2);    {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
-      CASE (MIR_BTS, 2);    {int32_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
-      CASE (MIR_BFS, 2);    {int32_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BT, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BF, 2);  {int64_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BTS, 2); {int32_t cond = *get_iop (bp, ops + 1); if (cond) pc = code + get_i (ops); END_INSN; }
+      CASE (MIR_BFS, 2); {int32_t cond = *get_iop (bp, ops + 1); if (! cond) pc = code + get_i (ops); END_INSN; }
       CASE (MIR_BEQ, 3);   BICMP (==); END_INSN;
       CASE (MIR_BEQS, 3);  BICMPS (==); END_INSN;
       CASE (MIR_FBEQ, 3);  BFCMP (==); END_INSN;

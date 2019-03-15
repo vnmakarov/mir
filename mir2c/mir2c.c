@@ -135,8 +135,12 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
     fprintf (f, "  ");
   switch (insn->code) {
   case MIR_MOV: case MIR_FMOV: case MIR_DMOV: out_op2 (f, ops, NULL); break;
-  case MIR_S2I: out_op2 (f, ops, "(int64_t) (int32_t)"); break;
-  case MIR_US2I: out_op2 (f, ops, "(int64_t) (uint32_t)"); break;
+  case MIR_EXT8: out_op2 (f, ops, "(int64_t) (int8_t)"); break;
+  case MIR_EXT16: out_op2 (f, ops, "(int64_t) (int16_t)"); break;
+  case MIR_EXT32: out_op2 (f, ops, "(int64_t) (int32_t)"); break;
+  case MIR_UEXT8: out_op2 (f, ops, "(int64_t) (uint8_t)"); break;
+  case MIR_UEXT16: out_op2 (f, ops, "(int64_t) (uint16_t)"); break;
+  case MIR_UEXT32: out_op2 (f, ops, "(int64_t) (uint32_t)"); break;
   case MIR_F2I: case MIR_D2I: out_op2 (f, ops, "(int64_t)"); break;
   case MIR_I2D: case MIR_F2D: out_op2 (f, ops, "(double)"); break;
   case MIR_I2F: case MIR_D2F: out_op2 (f, ops, "(float)"); break;

@@ -66,8 +66,8 @@ typedef enum {
      I - 64-bit integer, S -short (32-bit), U - unsigned, F -float, D - double.  */
   /* 2 operand insns: */
   MIR_MOV, MIR_FMOV, MIR_DMOV, /* Moves */
-  /* Extensions.  Truncation is not necessary because it is just using a part. */
-  MIR_S2I, MIR_US2I,
+  /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
+  MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32, 
   MIR_I2F, MIR_I2D,                       /* Integer to float or double conversion */
   MIR_F2I, MIR_D2I,                       /* Float or double to integer conversion */
   MIR_F2D, MIR_D2F,                       /* Float <-> double conversion */

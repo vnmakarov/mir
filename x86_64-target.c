@@ -342,10 +342,18 @@ static struct pattern patterns[] = {
   {MIR_DMOV, "r d", "F2 0F 10 r0 p1"},     /* movsd r0,m32 */
   {MIR_DMOV, "md r", "F2 0F 11 r1 m0"},    /* movsd r0,m32 */
 
-  {MIR_S2I, "r r",  "X 63 r0 R1"},        /* movsx r0,r1 */
-  {MIR_S2I, "r m2", "Y 63 r0 m1"},        /* movsz r0,m1 */
-  {MIR_US2I, "r r",  "Y 8B r0 R1"},       /* mov r0,r1 */
-  {MIR_MOV, "r m2", "Y 8B r0 m1"},        /* mov r0,m1 */
+  {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
+  {MIR_EXT8, "r m0", "X 0F BE r0 m1"},     /* movsx r0,m1 */
+  {MIR_EXT16, "r r",  "X 0F BF r0 R1"},    /* movsx r0,r1 */
+  {MIR_EXT16, "r m1", "X 0F BF r0 m1"},    /* movsx r0,m1 */
+  {MIR_EXT32, "r r",  "X 63 r0 R1"},       /* movsx r0,r1 */
+  {MIR_EXT32, "r m2", "X 63 r0 m1"},       /* movsx r0,m1 */
+  {MIR_UEXT8, "r r",  "X 0F B6 r0 R1"},    /* movzx r0,r1 */
+  {MIR_UEXT8, "r m0",  "X 0F B6 r0 m1"},   /* movzx r0,m1 */
+  {MIR_UEXT16, "r r",  "X 0F B7 r0 R1"},   /* movzx r0,r1 */
+  {MIR_UEXT16, "r m1", "X 0F B7 r0 m1"},   /* movzx r0,m1 */
+  {MIR_UEXT32, "r r",  "Y 8B r0 R1"},      /* mov r0,r1 */
+  {MIR_UEXT32, "r m2",  "Y 8B r0 m1"},     /* mov r0,m1 */
 
   {MIR_I2F, "r r",  "F3 X 0F 2A r0 R1"},  /* cvtsi2ss r0,r1 */
   {MIR_I2F, "r mf", "F3 X 0F 2A r0 m1"},  /* cvtsi2ss r0,m1 */
