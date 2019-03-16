@@ -217,8 +217,11 @@
   
     | Insn Code               | Nops |   Description                                          |
     |-------------------------|-----:|--------------------------------------------------------|
-    | `MIR_F2I` `MIR_D2I`     | 2    | transforming floating point value into 64-bit integer  |
-    | `MIR_FNEG` `MIR_DNEG`   | 2    | changing sign of floating point value                  |
+    | `MIR_F2I`, `MIR_D2I`    | 2    | transforming floating point value into 64-bit integer  |
+    | `MIR_F2D`               | 2    | transforming single to double precision FP value       |
+    | `MIR_D2F`               | 2    | transforming double to single precision FP value       |
+    | `MIR_F2I`, `MIR_D2I`    | 2    | transforming floating point value into 64-bit integer  |
+    | `MIR_FNEG`, `MIR_DNEG`  | 2    | changing sign of floating point value                  |
     | `MIR_FADD`, `MIR_FSUB`  | 3    | **single** precision addition and subtraction          |
     | `MIR_DADD`, `MIR_DSUB`  | 3    | **double** precision addition and subtraction          |
     | `MIR_FMUL`, `MIR_FDIV`  | 3    | **single** precision multiplication and divison        |
