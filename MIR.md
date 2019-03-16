@@ -108,12 +108,13 @@
       * The arguments define address of memory as `disp + base + index * scale`
       * Integer type input memory is transformed to 64-bit integer value with sign or zero extension
         depending on signedness of the type
-      * 64-bit integer value is truncated to integer output memory type
+      * result 64-bit integer value is truncated to integer memory type
       * Memory operand has the following syntax in MIR text:
 ```
 	  <type>: <disp>
 	  <type>: [<disp>] (<base reg> [, <index reg> [, <scale> ]])
 ```
+
       * If the displacement is absent, its value is considered to be zero
       * If the scale is absent, its value is considered to be one
       * The scale value should be 1, 2, 4, or 8
