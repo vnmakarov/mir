@@ -235,9 +235,9 @@
 
     | Insn Code               | Nops |   Description                                                 |
     |-------------------------|-----:|---------------------------------------------------------------|
-    | 'MIR_JMP`               | 1    | uncontional jump to the label                                 |
-    | 'MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**  |
-    | 'MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**  |
+    | `MIR_JMP`               | 1    | uncontional jump to the label                                 |
+    | `MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**  |
+    | `MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**  |
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
     | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**     |
 
