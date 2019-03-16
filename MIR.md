@@ -80,7 +80,7 @@
 ```
     local [ <var type>:<var name> {, <var type>:<var name>} ]
 ```
-    * In MIR textual representation variable should be defined through `local` before its use
+  * In MIR textual representation variable should be defined through `local` before its use
     
 ## MIR insn operands
   * MIR insns work with operands
@@ -114,11 +114,11 @@
 	  <type>: <disp>
 	  <type>: [<disp>] (<base reg> [, <index reg> [, <scale> ]])
 ```
-	* If the displacement is absent, its value is considered to be zero
-        * If the scale is absent, its value is considered to be one
-	* The scale value should be 1, 2, 4, or 8
-    * API function `MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func)` outputs the operand
-      textual representation into given file
+      * If the displacement is absent, its value is considered to be zero
+      * If the scale is absent, its value is considered to be one
+      * The scale value should be 1, 2, 4, or 8
+  * API function `MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func)` outputs the operand
+    textual representation into given file
         
 
 ## MIR insns

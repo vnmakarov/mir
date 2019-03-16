@@ -2955,7 +2955,7 @@ void MIR_scan_string (const char *str) {
 	      if (t.code == TC_COMMA) {
 		t = scan_token (get_string_char, unget_string_char);
 		if (t.code != TC_INT)
-		  process_error (MIR_syntax_error, "wrong index");
+		  process_error (MIR_syntax_error, "wrong scale");
 		if (t.u.i != 1 && t.u.i != 2 && t.u.i != 4 && t.u.i != 8)
 		  process_error (MIR_syntax_error, "scale is not 1, 2, 4, or 8");
 		op.u.mem.scale = t.u.i;
