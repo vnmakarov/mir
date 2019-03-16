@@ -1,16 +1,20 @@
-# Medium Intermediate Representation
+# Medium Intermediate Representation (file mir.h)
   * This document describes MIR itself, API for its creation, and MIR textual representation
   * MIR textual representation is assembler like.  Each directive or insn should be put on a separate line
   * In MIR textual syntax we use
     * `[]` for optional construction
     * `{}` for repeation zero or more times
-    * `<>` for some informal construction description
+    * `<>` for some informal construction description or construction already described or will be described
   
 ## MIR program
    * MIR program consists of MIR **modules**
    * To start work with MIR program, you should first call API function `MIR_init`
    * API function `MIR_finish` should be called last.  It frees all internal data used to work with MIR program
-   * API function `MIR_output (FILE *f)` output MIR textual representation of the program into given file
+   * API function `MIR_output (FILE *f)` outputs MIR textual representation of the program into given file
+   * API function `MIR_scan_string (const char *str)` reads textual MIR representation given by a string
+   * API functions `MIR_write (FILE *f)` and `MIR_read (FILE *f)` outputs and reads **binary MIR representation**
+     to/from given file
+     * Binary MIR representation much more compact and faster to read than textual one
 
 ## MIR data type
    * MIR program works with the following **data types**:
@@ -30,7 +34,7 @@
    
 ## MIR module
   * Module is a high level entity of MIR program
-  * Module is created through API function `MIR_module (const char *name)`
+  * Module is created through API function `MIR_module_t MIR_new_module (const char *name)`
   * Module creation is finished by calling API function `MIR_finish_module`
   * You can create only one module at any given time
   * MIR module consists of **items**.  There are following **item types**:
@@ -55,14 +59,14 @@
     * A **predeclared variable** with name `fp` (type ???) contains address of the function frame
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
-  * MIR function with its arguments is created through API function `MIR_new_func (const
+  * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (const
     char *name, MIR_type_t res_type, size_t frame_size, size_t nargs,
-    ...)` or function `MIR_new_func_arr (const char *name, MIR_type_t
+    ...)` or function `MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t
     res_type, size_t frame_size, size_t nargs, MIR_var_t *arg_vars)`
     * Argument variables can be any type (except `MIR_T_V`)
       * This type only denotes how the argument value is passed
       * Any integer type argument variable has actually type `MIR_T_I64`
-  * MIR function creation is finished by calling API function `MIR_finish_func`
+  * MIR function creation is finished by calling API function `MIR_finish_func (void)`
   * You can create only one MIR function at any given time
   * MIR text function syntax looks the folowing:
 ```
@@ -71,8 +75,9 @@
                      endfun
 ```
   * Non-argument function variables are created through API function
-    `MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name)`
+    `MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name)`
     * The only permitted integer type for the variable is `MIR_T_I64` (or MIR_T_U64???)
+    * Names in form `t<number>` can not be used as they are fixed for internal purposes
     * You can create function variables even after finishing the
       function creation.  This can be used to modify function insns,
       e.g. for optimizations
@@ -86,23 +91,23 @@
   * MIR insns work with operands
   * There are following operands:
     * Signed or unsigned **64-bit integer value operands** created through API functions
-      `MIR_int_op (int64_t v)` and `MIR_uint_op (uint64_t v)`
+      `MIR_op_t MIR_int_op (int64_t v)` and `MIR_op_t MIR_uint_op (uint64_t v)`
       * In MIR text they are represented the same way as C integer numbers (e.g. octal, decimal, hexdecimal ones)
-    * **Float or double value operands** created through API functions `MIR_new_float_op (float v)`
-      and `MIR_new_double_op (double v)`
+    * **Float or double value operands** created through API functions `MIR_op_t MIR_new_float_op (float v)`
+      and `MIR_op_t MIR_new_double_op (double v)`
       * In MIR text they are represented the same way as C floating point numbers
-    * **Label operand** created through API function `MIR_new_label_op (MIR_label_t label)`
-      * Here `label` is a special insn created by API function `MIR_new_label (void)`
+    * **Label operand** created through API function `MIR_op_t MIR_new_label_op (MIR_label_t label)`
+      * Here `label` is a special insn created by API function `MIR_insn_t MIR_new_label (void)`
       * In MIR text, they are represented by unique label name
-    * **Reference operands** created through API function `MIR_new_ref_op (MIR_item_t item)`
+    * **Reference operands** created through API function `MIR_op_t MIR_new_ref_op (MIR_item_t item)`
       * In MIR text, they are represented by the corresponding item name
-    * **Register (variable) operands** created through API function `MIR_new_reg_op (MIR_reg_t reg)`
+    * **Register (variable) operands** created through API function `MIR_op_t MIR_new_reg_op (MIR_reg_t reg)`
       * In MIR text they are represented by the correspoding variable name
       * Value of type `MIR_reg_t` is returned by function `MIR_new_func_reg`
-        or can be gotten by function `MIR_reg (const char *reg_name, MIR_func_t func)`, e.g. for argument-variables
+        or can be gotten by function `MIR_reg_t MIR_reg (const char *reg_name, MIR_func_t func)`, e.g. for argument-variables
     * **Memory operands** consists of type, displacement, base
       register, index register and index scale.  Memory operand is
-      created through API function `MIR_new_mem_op (MIR_type_t type,
+      created through API function `MIR_op_t MIR_new_mem_op (MIR_type_t type,
       MIR_disp_t disp, MIR_reg_t base, MIR_reg_t index, MIR_scale_t
       scale)`
       * The arguments define address of memory as `disp + base + index * scale`
@@ -125,11 +130,11 @@
   * Most MIR insns are 3-operand insns: two inputs and one output
   * In majority cases **the first insn operand** describes where the insn result (if any) will be placed
   * Only register or memory operand can be insn output (result) operand
-  * MIR insn can be created through API functions `MIR_new_insn (MIR_insn_code_t code, ...)`
-    and `MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops)`
+  * MIR insn can be created through API functions `MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...)`
+    and `MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops)`
     * Number of operands and their types should be what is expected by the insn being created
   * You can get insn name and number of insn operands through API functions
-    `MIR_insn_name (MIR_insn_code_t code)` and `MIR_insn_nops (MIR_insn_t insn)`
+    `const char *MIR_insn_name (MIR_insn_code_t code)` and `size_t MIR_insn_nops (MIR_insn_t insn)`
   * You can add a created insn at the beginning or end of function insn list through API functions
     `MIR_prepend_insn (MIR_item_t func, MIR_insn_t insn)` and `MIR_append_insn (MIR_item_t func, MIR_insn_t insn)`
   * You can insert a created insn in the middle of function insn list through API functions
@@ -363,3 +368,66 @@ ex100:    func v
           endfunc
           endmodule
 ```
+
+## Other MIR API functions
+  * MIR API can find a lot of errors.  They are reported through a
+    error function of type `void (*MIR_error_func_t) (MIR_error_type_t
+    error_type, const char *message)`.  The function is considered to
+    never return.  To see all error types, please look at the
+    definition of error type `MIR_error_type_t` in file mir.h
+  * You can get and set up the current error function through API
+    functions `MIR_error_func_t MIR_get_error_func (void)` and `MIR_set_error_func
+    (MIR_error_func_t func)`.
+    * The default error function prints the message into stderr and call `exit (1)`
+  * MIR is pretty flexible and can describe complex insns, e.g. insns
+    whose all operands are memory.  Sometimes you need a very simple
+    form of MIR representation.  API function `MIR_simplify_func
+    (MIR_item_t func)` simplifies the function insns as much as
+    possible by adding new insns and registers resulting in a form in which:
+    * immediate, memory, reference operands can be used only in move insns
+    * memory have only base register (no displacement and index register)
+  * Before execution of MIR code (through interpreter or machine code generated by JIT),
+    you need to load and link it
+    * You can load MIR module through API function `MIR_load_module
+      (MIR_module_t m)`.  The function allocates the module data and
+      makes visible the exported module items to other module during
+      subsequent linking.  If there is already an exported item with
+      the same name, it will be not visible for linking anymore.  Such
+      visibilty mechanism permits usage of different versions of the
+      same function
+    * MIR permits to use imported items not implemented in MIR, for
+      example to use C standard function `strcmp`.  You need to inform
+      MIR about it.  API function `MIR_load_external (const char
+      *name, void *addr)` informs that imported items with given name
+      have given address (e.g. C function address or data)
+    * Imports/exports of modules loaded since the last link can be
+      linked through API function `MIR_link (void)`
+
+# MIR code execution
+  * Linked MIR code can be exectuted by an **interpreter** or machine code generated by **MIR generator**
+
+# MIR code interpretation (file mir-interp.h)
+  * Before use of the intepreter you should initialize it by API function `MIR_interp_init (void)`
+  * API function `MIR_interp_finish (void)` should be called last after any interpreter usage.  It frees all internal interpreter data
+  * The interpreter works with values represented by type `MIR_val_t` which is union `union {..., int64_t i; uint64_t u; float f; double d;}`
+  * You can execute a MIR function code by API functions `MIR_val_t
+    MIR_interp (MIR_item_t func_item, size_t nargs, ...)` and
+    `MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs,
+    MIR_val_t *vals)`
+    * Please remember that these functions simplify the MIR code function if it was not simplified yet
+  * You can execute a MIR function code also through C function call
+    mechanism.  First you need to setup the C function interface
+    through API function `MIR_set_C_interp_interface (MIR_item_t
+    func_item)`.  After that you can `func_item->addr` to call the
+    MIR function as usual C function
+    * C function interface is implemented by generation of machine
+      code specialized for MIR function.  Therefore the interface
+      works only on the same targets as MIR generator
+
+# MIR generator (file mir-gen.h)
+  * Before use of MIR generator you should initialize it by API function `MIR_gen_init (void)`
+  * API function `MIR_gen_finish (void)` should be called last after any generator usage.
+    It frees all internal generator data
+  * API function `void *MIR_gen (MIR_item_t func_item)` generates machine code of given MIR function
+    and returns the code address.  You can call the code as usual C function by using this address
+    as the called function address
