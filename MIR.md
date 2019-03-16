@@ -147,9 +147,15 @@
 ```
   * More one insn can be put on the same line by separting the insns by `;`
 
-creation, attaching,  syntax, label syntax
+### MIR move insns
+  
+    | Insn Code               | Nops |   Description                                          |
+    |-------------------------|-----:|--------------------------------------------------------|
+    | `MIR_MOV`               | 2    | move 64-bit integer values                             |
+    | `MIR_FMOV`              | 2    | move **single precision** floating point values        |
+    | `MIR_DMOV`              | 2    | move **double precision** floating point values        |
 
-## MIR integer insns
+### MIR integer insns
   * If insn has suffix `S` in insn name, the insn works with lower 32-bit part of 64-bit integer value
   * The higher part of 32-bit insn result is undefined
   * If insn has prefix `U` in insn name, the insn treats integer as unsigned integers
@@ -202,7 +208,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_GTS`, `MIR_GES`    | 3    | **32-bit signed** greater than/greater than or equal   |
     | `MIR_UGTS`, `MIR_UGES`  | 3    | **32-bit unsigned** greater than/greater than or equal |
 
-## MIR floating point insns
+### MIR floating point insns
   * If insn has prefix `F` in insn name, the insn is single precision float point insn.  Its operands should have `MIR_T_F` type
   * Otherwise, insn has prefix `D` in insn name and the insn is double precision float point insn.
     Its operands should have `MIR_T_D` type.
@@ -223,7 +229,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_FGT`, `MIR_FGE`    | 3    | **single** precision greater than/greater than or equal|
     | `MIR_DGT`, `MIR_DGE`    | 3    | **double** precision greater than/greater than or equal|
 
-## MIR branch insns
+### MIR branch insns
   * The first operand of the insn should be label
 
     | Insn Code               | Nops |   Description                                                 |
@@ -234,7 +240,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
     | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**     |
 
-## MIR integer comparison and branch insn
+### MIR integer comparison and branch insn
   * The first operand of the insn should be label.  Label will be the next executed insn if the result of comparison is non-zero
 
     | Insn Code               | Nops |   Description                                                 |
@@ -250,7 +256,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_BGTS`, `MIR_BGES`  | 3    | jump on **signed 32-bit** greater than/greater than or equal  |
     | `MIR_UBGTS`, `MIR_UBLES`| 3    | jump on **unsigned 32-bit** greater than/greater than or equal|
 
-## MIR floating point comparison and branch insn
+### MIR floating point comparison and branch insn
   * The first operand of the insn should be label.  Label will be the next executed insn if the result of comparison is non-zero
   * See comparison semantics in the corresponding comparison insns
 
@@ -263,7 +269,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_FGT`, `MIR_FGE`    | 3    | jump on **single** precision greater than/greater than or equal|
     | `MIR_DGT`, `MIR_DGE`    | 3    | jump on **double** precision greater than/less/ than or equal  |
 
-## MIR return insns
+### MIR return insns
   * Return insn should correspond to return type of the function
   * 64-bit integer value is truncated to the function return type first
   * The return value will be the function call value
@@ -274,7 +280,7 @@ creation, attaching,  syntax, label syntax
     | `MIR_FRET`              | 1    | returning **single** precision floating point value            |
     | `MIR_DRET`              | 1    | returning **double** precision floating point value            |
 
-## MIR_CALL insn
+### MIR_CALL insn
   * The only insn which has variable number of operands
   * The first operand is a prototype reference operand
   * The second operand is a called function address
