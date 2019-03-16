@@ -109,15 +109,13 @@
       * Integer type input memory is transformed to 64-bit integer value with sign or zero extension
         depending on signedness of the type
       * result 64-bit integer value is truncated to integer memory type
-      * Memory operand has the following syntax in MIR text:
+      * Memory operand has the following syntax in MIR text (absent displacement means zero one,
+        absent scale means one, scale should be 1, 2, 4, or 8):
+      
 ```
 	  <type>: <disp>
 	  <type>: [<disp>] (<base reg> [, <index reg> [, <scale> ]])
 ```
-
-      * If the displacement is absent, its value is considered to be zero
-      * If the scale is absent, its value is considered to be one
-      * The scale value should be 1, 2, 4, or 8
   * API function `MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func)` outputs the operand
     textual representation into given file
         
