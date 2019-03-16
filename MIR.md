@@ -148,7 +148,8 @@
   * More one insn can be put on the same line by separting the insns by `;`
 
 ### MIR move insns
-  
+  * There are following MIR move insns:
+
     | Insn Code               | Nops |   Description                                          |
     |-------------------------|-----:|--------------------------------------------------------|
     | `MIR_MOV`               | 2    | move 64-bit integer values                             |
