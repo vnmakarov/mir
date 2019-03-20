@@ -102,7 +102,7 @@ typedef enum {
      the prototype is not of void type), call arguments. */
   MIR_CALL,
   /* 1 operand insn: */
-  MIR_RET, MIR_RETS, MIR_FRET, MIR_DRET,
+  MIR_RET, MIR_FRET, MIR_DRET,
   /* Special insns: */
   MIR_LABEL, /* One immediate operand is unique label number  */
   MIR_INVALID_INSN,
@@ -370,6 +370,7 @@ extern void MIR_link (void);
 /* For internal use only:  */
 extern const char *_MIR_uniq_string (const char *str);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
+extern void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn);
 
 extern uint8_t *MIR_publish_code (uint8_t *code, size_t code_len);
 

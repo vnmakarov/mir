@@ -429,8 +429,7 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       ltab [MIR_UBGE] = &&L_MIR_UBGE; ltab [MIR_UBGES] = &&L_MIR_UBGES;
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL;
-      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_RETS] = &&L_MIR_RETS;
-      ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
+      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
       ltab [IC_LDI32] = &&L_IC_LDI32; ltab [IC_LDU32] = &&L_IC_LDU32;
@@ -623,7 +622,6 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       END_INSN;
       
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_RETS, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
 
@@ -705,9 +703,30 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
 
 static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
   void *addr;
-  
+  MIR_val_t val;
+  MIR_type_t type;
+  MIR_var_t *arg_vars = NULL;
+
   mir_assert (func_item->item_type == MIR_func_item || func_item->item_type == MIR_import_item);
+  if (proto->args == NULL) {
+    mir_assert (nargs == 0);
+  } else {
+    mir_assert (nargs == VARR_LENGTH (MIR_var_t, proto->args));
+    arg_vars = VARR_ADDR (MIR_var_t, proto->args);
+  }
   if ((addr = func_item->addr) == NULL) {
+    for (size_t i = 0; i < nargs; i++) {
+      type = arg_vars[i].type;
+      switch (type) {
+      case MIR_T_I8: args[i].i = (int8_t) args[i].i; break;
+      case MIR_T_I16: args[i].i = (int16_t) args[i].i; break;
+      case MIR_T_I32: args[i].i = (int32_t) args[i].i; break;
+      case MIR_T_U8: args[i].u = (uint8_t) args[i].u; break;
+      case MIR_T_U16: args[i].u = (uint16_t) args[i].u; break;
+      case MIR_T_U32: args[i].u = (uint32_t) args[i].u; break;
+      default: /* do nothing */; break;
+      }
+    }
     MIR_val_t val = MIR_interp_arr (func_item, nargs, args);
 
     if (proto->res_type != MIR_T_V)
@@ -715,18 +734,8 @@ static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_
   } else {
     ffi_cif cif;
     ffi_status status;
-    MIR_type_t type;
-    size_t nargs;
     union { ffi_arg rint; float f; double d; void *a; } u;
-    MIR_var_t *arg_vars = NULL;
-
-    if (proto->args == NULL) {
-      nargs = 0;
-    } else {
-      nargs = VARR_LENGTH (MIR_var_t, proto->args);
-      arg_vars = VARR_ADDR (MIR_var_t, proto->args);
-    }
-    
+  
     if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
       VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
       VARR_EXPAND (int_value_t, ffi_int_values_varr, nargs);

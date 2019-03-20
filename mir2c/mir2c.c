@@ -261,8 +261,7 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
     fprintf (f, ");\n");
     break;
   }
-  case MIR_RET: fprintf (f, "return (int64_t) "); out_op (f, ops[0]); fprintf (f, ";\n"); break;
-  case MIR_RETS: fprintf (f, "return (int32_t) "); out_op (f, ops[0]); fprintf (f, ";\n"); break;
+  case MIR_RET: fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n"); break;
   case MIR_FRET: case MIR_DRET:
     fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n");
     break;
@@ -337,7 +336,6 @@ void out_item (FILE *f, MIR_item_t item) {
        insn = DLIST_NEXT (MIR_insn_t, insn))
     out_insn (f, insn);
   fprintf (f, "}\n");
-
 }
 
 void MIR_module2c (FILE *f, MIR_module_t m) {

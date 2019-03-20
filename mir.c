@@ -182,7 +182,6 @@ static struct insn_desc insn_descs[] = {
   {MIR_DBGE, "dbge", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_UNDEF}},
   {MIR_CALL, "call", {MIR_OP_UNDEF}},
   {MIR_RET, "ret", {MIR_OP_INT, MIR_OP_UNDEF}},
-  {MIR_RETS, "rets", {MIR_OP_INT, MIR_OP_UNDEF}},
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_UNDEF}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_UNDEF}},
   {MIR_LABEL, "label", {MIR_OP_UNDEF}},
@@ -762,7 +761,7 @@ void MIR_finish_func (void) {
       if (insn->code == MIR_CALL && i == 0) {
 	mir_assert (insn->ops[i].mode == MIR_OP_REF
 		    && insn->ops[i].u.ref->item_type == MIR_proto_item);
-	continue; /* We checked the oeprand during insn creation -- skip the prototype */
+	continue; /* We checked the operand during insn creation -- skip the prototype */
       }
       expected_mode = MIR_insn_op_mode (insn, i, &out_p);
       can_be_out_p = TRUE;
@@ -1281,10 +1280,10 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
     fprintf (f, "%" PRIu64, op.u.u);
     break;
   case MIR_OP_FLOAT:
-    fprintf (f, "%.*g", FLT_DECIMAL_DIG, op.u.f);
+    fprintf (f, "%.*ef", FLT_DECIMAL_DIG, op.u.f);
     break;
   case MIR_OP_DOUBLE:
-    fprintf (f, "%.*g", DBL_DECIMAL_DIG, op.u.d);
+    fprintf (f, "%.*e", DBL_DECIMAL_DIG, op.u.d);
     break;
   case MIR_OP_MEM:
   case MIR_OP_HARD_REG_MEM: {
@@ -1494,7 +1493,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
     }
     if (move_p)
       return;
-    type = op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_FLOAT ? MIR_T_D : MIR_T_I64;
+    type = op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64;
     new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, *op, *op));
     MIR_insert_insn_before (func_item, insn,
 			    MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV,
@@ -1586,23 +1585,36 @@ void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn) {
 
 static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
   size_t i;
-  MIR_insn_code_t mov_code;
+  MIR_insn_code_t mov_code, ext_code;
   MIR_type_t ret_type;
   MIR_reg_t ret_reg;
   MIR_op_t reg_op;
-  MIR_insn_t ret_label, insn = DLIST_TAIL (MIR_insn_t, func_item->u.func->insns);
+  MIR_func_t func = func_item->u.func;
+  MIR_insn_t ret_label, insn = DLIST_TAIL (MIR_insn_t, func->insns);
   
   if (VARR_LENGTH (MIR_insn_t, ret_insns) == 1 && VARR_GET (MIR_insn_t, ret_insns, 0) == insn)
     return;
   mir_assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET);
   ret_type = ret_code == MIR_RET ? MIR_T_I64 : ret_code == MIR_FRET ? MIR_T_F : MIR_T_D;
   mov_code = ret_code == MIR_RET ? MIR_MOV : ret_code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
-  ret_reg = _MIR_new_temp_reg (ret_type, func_item->u.func);
+  ret_reg = _MIR_new_temp_reg (ret_type, func);
   ret_label = NULL;
   if (VARR_LENGTH (MIR_insn_t, ret_insns) != 0) {
     ret_label = MIR_new_label ();
     MIR_append_insn (func_item, ret_label);
   }
+  switch (func->res_type) {
+  case MIR_T_I8: ext_code = MIR_EXT8; break;
+  case MIR_T_U8: ext_code = MIR_UEXT8; break;
+  case MIR_T_I16: ext_code = MIR_EXT16; break;
+  case MIR_T_U16: ext_code = MIR_UEXT16; break;
+  case MIR_T_I32: ext_code = MIR_EXT32; break;
+  case MIR_T_U32: ext_code = MIR_UEXT32; break;
+  default: ext_code = MIR_INVALID_INSN; break;
+  }
+  if (ext_code != MIR_INVALID_INSN)
+    MIR_append_insn (func_item, MIR_new_insn (ext_code, MIR_new_reg_op (ret_reg),
+					      MIR_new_reg_op (ret_reg)));
   MIR_append_insn (func_item, MIR_new_insn (ret_code, MIR_new_reg_op (ret_reg)));
   for (i = 0; i < VARR_LENGTH (MIR_insn_t, ret_insns); i++) {
     insn = VARR_GET (MIR_insn_t, ret_insns, i);
@@ -1618,11 +1630,35 @@ static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
 void MIR_simplify_func (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, next_insn;
-  MIR_insn_code_t ret_code = MIR_INSN_BOUND;
+  MIR_reg_t reg;
+  MIR_insn_code_t ext_code, ret_code = MIR_INSN_BOUND;
   
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify");
   func = func_item->u.func;
+  for (size_t i = 0; i < func->nargs; i++) {
+    MIR_var_t var = VARR_GET (MIR_var_t, func->vars, i);
+    
+    mir_assert (var.type != MIR_T_V);
+    if (var.type == MIR_T_I64 || var.type == MIR_T_U64
+	|| var.type == MIR_T_F || var.type == MIR_T_D)
+      continue;
+    switch (var.type) {
+    case MIR_T_I8: ext_code = MIR_EXT8; break;
+    case MIR_T_U8: ext_code = MIR_UEXT8; break;
+    case MIR_T_I16: ext_code = MIR_EXT16; break;
+    case MIR_T_U16: ext_code = MIR_UEXT16; break;
+    case MIR_T_I32: ext_code = MIR_EXT32; break;
+    case MIR_T_U32: ext_code = MIR_UEXT32; break;
+    default: ext_code = MIR_INVALID_INSN; break;
+    }
+    if (ext_code != MIR_INVALID_INSN) {
+      MIR_reg_t reg = MIR_reg (var.name, func);
+      MIR_insn_t new_insn = MIR_new_insn (ext_code, MIR_new_reg_op (reg), MIR_new_reg_op (reg));
+      
+      MIR_prepend_insn (func_item, new_insn);
+    }
+  }
   VARR_TRUNC (MIR_insn_t, ret_insns, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
@@ -2594,6 +2630,7 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
       err_code = NON_DECIMAL_FLOAT;
     else if (ch == 'f' || ch == 'F') {
       *float_p = TRUE; *double_p = FALSE;
+      ch = get_char ();
     }
   } else if (*base == 8 && dec_p)
     err_code = WRONG_OCTAL_INT;
