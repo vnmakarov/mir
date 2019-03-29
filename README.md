@@ -256,8 +256,13 @@ ex100:    func v
    [5] is based only on files required for x86-64 C compiler and MIR generator and interpreter files
 
 ## MIR project competitors
-  * I only see one real universal light-weight JIT competitor [**LIBJIT**](https://www.gnu.org/software/libjit/)
-  * LIBJIT is bigger:
-    * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR (excluding C to MIR compiler)
-    * 420KB object file vs 170KB
-  * LIBJIT has fewer optimizations: only copy propagtaion and register allocation
+  * I only see two real universal light-weight JIT competitors
+  * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
+    * LIBJIT is bigger:
+      * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR (excluding C to MIR compiler)
+      * 420KB object file vs 170KB
+    * LIBJIT has fewer optimizations: only copy propagation and register allocation
+  * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md) is a part of runtime for .NET Core:
+    * RyuJIT is even bigger: 360K SLOC
+    * RyuJIT optimizations is basically MIR-generator optimizations plus loop invariant motion minus SCCP
+    * RyuJIT uses SSA
