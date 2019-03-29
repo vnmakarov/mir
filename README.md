@@ -158,7 +158,7 @@ ex100:    func v
   * MIR to C compiler is currently about 80% implemented
 
 ## The possible future state of MIR project
-  ![Future MIR](mir.png)
+  ![Future MIR](mirall.png)
 
   * WASM to MIR and MIR to WASM translation should be pretty straitforward
     * Only small WASM runtime for WASM floating point round instructions needed to be provided for MIR
