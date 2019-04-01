@@ -49,70 +49,198 @@ typedef enum {
   GC_INSN_BOUND
 } MIR_full_insn_code_t;
 
+static MIR_insn_code_t get_ext_code (MIR_type_t type) {
+  switch (type) {
+  case MIR_T_I8: return MIR_EXT8;
+  case MIR_T_U8: return MIR_UEXT8;
+  case MIR_T_I16: return MIR_EXT16;
+  case MIR_T_U16: return MIR_UEXT16;
+  case MIR_T_I32: return MIR_EXT32;
+  case MIR_T_U32: return MIR_UEXT32;
+  default: return MIR_INVALID_INSN;
+  }
+}
+
+static MIR_reg_t get_arg_reg (MIR_type_t arg_type,
+			      size_t *int_arg_num, size_t *fp_arg_num, MIR_insn_code_t *mov_code) {
+  MIR_reg_t arg_reg;
+  
+  if (arg_type == MIR_T_F || arg_type == MIR_T_D) {
+    switch (*fp_arg_num) {
+    case 0: case 1: case 2: case 3:
+#ifndef _WIN64
+    case 4: case 5: case 6: case 7:
+#endif
+      arg_reg = XMM0_HARD_REG + *fp_arg_num;
+      break;
+    default: arg_reg = MIR_NON_HARD_REG; break;
+    }
+    (*fp_arg_num)++;
+    *mov_code = arg_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
+  } else {
+    switch (*int_arg_num
+#ifdef _WIN64
+	    + 2
+#endif
+	    ) {
+    case 0: arg_reg = DI_HARD_REG; break;
+    case 1: arg_reg = SI_HARD_REG; break;
+#ifdef _WIN64
+    case 2: arg_reg = CX_HARD_REG; break;
+    case 3: arg_reg = DX_HARD_REG; break;
+#else
+    case 2: arg_reg = DX_HARD_REG; break;
+    case 3: arg_reg = CX_HARD_REG; break;
+#endif
+    case 4: arg_reg = R8_HARD_REG; break;
+    case 5: arg_reg = R9_HARD_REG; break;
+    default:
+      arg_reg = MIR_NON_HARD_REG; break;
+    }
+    (*int_arg_num)++;
+    *mov_code = MIR_MOV;
+  }
+  return arg_reg;
+}
+
+static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
+  MIR_func_t func = func_item->u.func;
+  MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
+  size_t nargs, nops = MIR_insn_nops (call_insn), start = proto->res_type != MIR_T_V ? 3 : 2;
+  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
+  MIR_type_t type, mem_type;
+  MIR_var_t *arg_vars = NULL;
+  MIR_reg_t arg_reg;
+  MIR_op_t arg_op, temp_op, arg_reg_op, ret_reg_op, mem_op;
+  MIR_insn_code_t new_insn_code, ext_code;
+  MIR_insn_t new_insn, prev_insn, next_insn;
+  MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
+  MIR_insn_t next_call_insn = DLIST_NEXT (MIR_insn_t, call_insn);
+  
+  if (proto->args == NULL) {
+    nargs = 0;
+  } else {
+    nargs = VARR_LENGTH (MIR_var_t, proto->args);
+    arg_vars = VARR_ADDR (MIR_var_t, proto->args);
+  }
+  mir_assert (nops - start == nargs);
+  for (size_t i = start; i < nops; i++) {
+    arg_op = call_insn->ops[i];
+    mir_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
+    type = arg_vars[i - start].type;
+    if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
+      temp_op = MIR_new_reg_op (gen_new_temp_reg (MIR_T_I64, func_item->u.func));
+      new_insn = MIR_new_insn (ext_code, temp_op, arg_op);
+      gen_add_insn_before (func_item, call_insn, new_insn);
+      call_insn->ops[i] = arg_op = temp_op;
+    }
+    if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code)) != MIR_NON_HARD_REG) {
+      /* put arguments to argument hard regs */
+      arg_reg_op = MIR_new_hard_reg_op (arg_reg);
+      new_insn = MIR_new_insn (new_insn_code, arg_reg_op, arg_op);
+      gen_add_insn_before (func_item, call_insn, new_insn);
+      call_insn->ops[i] = arg_reg_op;
+    } else { /* put arguments on the stack */
+      mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
+      new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+      mem_op = MIR_new_hard_reg_mem_op (mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+      new_insn = MIR_new_insn (new_insn_code, mem_op, arg_op);
+      mir_assert (prev_call_insn != NULL); /* call_insn should not be the first after simplification */
+      MIR_insert_insn_after (func_item, prev_call_insn, new_insn);
+      prev_insn = DLIST_PREV (MIR_insn_t, new_insn); next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+      create_new_bb_insns (func_item, prev_insn, next_insn);
+      call_insn->ops[i] = mem_op;
+      mem_size += 8;
+    }
+  }
+#if 0
+  /* vector args number for varags or no prototype calls */
+  new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (0));
+  MIR_insert_insn_before (func_item, call_insn, new_insn);
+  create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, new_insn), call_insn);
+#endif
+  if (proto->res_type != MIR_T_V) { /* assign return register to call result op */
+    ret_reg_op = call_insn->ops[2];
+    mir_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
+    if (proto->res_type == MIR_T_F) {
+      new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, MIR_new_hard_reg_op (XMM0_HARD_REG));
+    } else if (proto->res_type == MIR_T_D) {
+      new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op, MIR_new_hard_reg_op (XMM0_HARD_REG));
+    } else {
+      new_insn = MIR_new_insn (MIR_MOV, ret_reg_op, MIR_new_hard_reg_op (AX_HARD_REG));
+    }
+    MIR_insert_insn_after (func_item, call_insn, new_insn);
+    call_insn->ops[2] = new_insn->ops[1];
+    if ((ext_code = get_ext_code (func->res_type)) != MIR_INVALID_INSN) {
+      MIR_insert_insn_after (func_item, new_insn, MIR_new_insn (ext_code, ret_reg_op, ret_reg_op));
+      new_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+    }
+    create_new_bb_insns (func_item, call_insn, DLIST_NEXT (MIR_insn_t, new_insn));
+  }
+  if (mem_size != 0) { /* allocate/deallocate stack for args passed on stack */
+    new_insn = MIR_new_insn (MIR_SUB, MIR_new_hard_reg_op (SP_HARD_REG),
+			     MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
+    MIR_insert_insn_after (func_item, prev_call_insn, new_insn);
+    next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+    create_new_bb_insns (func_item, prev_call_insn, next_insn);
+    new_insn = MIR_new_insn (MIR_ADD, MIR_new_hard_reg_op (SP_HARD_REG),
+			     MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
+    MIR_insert_insn_after (func_item, call_insn, new_insn);
+    next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+    create_new_bb_insns (func_item, call_insn, next_insn);
+  }
+}
+
 static void machinize (MIR_item_t func_item) {
   MIR_func_t func;
-  MIR_insn_t insn, next_insn, new_insn;
+  MIR_type_t type, mem_type;
   MIR_insn_code_t code, new_insn_code;
+  MIR_insn_t insn, next_insn, new_insn;
   MIR_reg_t ret_reg, arg_reg;
-  MIR_op_t ret_reg_op, arg_reg_op;
-  size_t i, int_num, float_num;
+  MIR_op_t ret_reg_op, arg_reg_op, mem_op;
+  size_t i, int_arg_num, fp_arg_num, mem_size;
 
   assert (func_item->item_type == MIR_func_item);
   func = func_item->u.func;
-  for (i = int_num = float_num = 0; i < func->nargs; i++) {
-    MIR_type_t tp = VARR_GET (MIR_var_t, func->vars, i).type;
-    
-    if (tp == MIR_T_F || tp == MIR_T_D) {
-      switch (float_num) {
-      case 0: case 1: case 2: case 3:
-#ifndef _WIN64
-      case 4: case 5: case 6: case 7:
-#endif
-	arg_reg = XMM0_HARD_REG + float_num;
-	break;
-      default:
-	arg_reg = 0;
-	assert (FALSE);
-      }
-      float_num++;
-      new_insn_code = tp == MIR_T_F ? MIR_FMOV : MIR_DMOV;
+  for (i = int_arg_num = fp_arg_num = mem_size = 0; i < func->nargs; i++) {
+    /* Argument extensions is already done in simplify */
+    /* Prologue: generate arg_var = hard_reg|stack mem ... */
+    type = VARR_GET (MIR_var_t, func->vars, i).type;
+    arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code);
+    if (arg_reg != MIR_NON_HARD_REG) {
+      arg_reg_op = MIR_new_hard_reg_op (arg_reg);
+      new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), arg_reg_op);
+      MIR_prepend_insn (func_item, new_insn);
+      create_new_bb_insns (func_item, NULL, DLIST_NEXT (MIR_insn_t, new_insn));
     } else {
-      switch (int_num
-#ifdef _WIN64
-	      + 2
-#endif
-	      ) {
-      case 0: arg_reg = DI_HARD_REG; break;
-      case 1: arg_reg = SI_HARD_REG; break;
-      case 2: arg_reg = DX_HARD_REG; break;
-      case 3: arg_reg = CX_HARD_REG; break;
-      case 4: arg_reg = R8_HARD_REG; break;
-      case 5: arg_reg = R9_HARD_REG; break;
-      default:
-	arg_reg = 0;
-	assert (FALSE);
-      }
-      int_num++;
-      new_insn_code = MIR_MOV;
+      /* arg is on the stack */
+      mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
+      new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+      mem_op = MIR_new_hard_reg_mem_op (mem_type, mem_size + 16 /* old BP and ret address */,
+					HARD_REG_FRAME_POINTER, MIR_NON_HARD_REG, 1);
+      new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), mem_op);
+      MIR_prepend_insn (func_item, new_insn);
+      next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+      create_new_bb_insns (func_item, NULL, next_insn);
+      mem_size += 8;
     }
-    arg_reg_op = MIR_new_hard_reg_op (arg_reg);
-    new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), arg_reg_op);
-    MIR_prepend_insn (func_item, new_insn);
   }
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
-    if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+    if (code == MIR_CALL) {
+      machinize_call (func_item, insn);
+    } else if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+      /* In simplify we already transformed code for one return insn
+	 and added extension in return (if any).  */
       assert (insn->ops[0].mode == MIR_OP_REG);
       ret_reg = code == MIR_RET ? AX_HARD_REG :  XMM0_HARD_REG;
       ret_reg_op = MIR_new_hard_reg_op (ret_reg);
       new_insn_code = code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
       new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
-      MIR_insert_insn_before (func_item, insn, new_insn);
+      gen_add_insn_before (func_item, insn, new_insn);
       insn->ops[0] = ret_reg_op;
     }
-    //  ??? one ret and it is last insn
-    /* Remove absolute addresses */
   }
 }
 
@@ -682,7 +810,7 @@ static void setup_index (int *rex_i, int *index, int v) { setup_r (rex_i, index,
 
 static void setup_rip_rel_addr (MIR_disp_t rip_disp, int *mod, int *rm, int64_t *disp32) {
   gen_assert (*mod < 0 && *rm < 0 && *disp32 < 0);
-  setup_mod (mod, 0); setup_rm (NULL, rm, 5);
+  setup_rm (NULL, rm, 5);
   gen_assert (int32_p (rip_disp));
   setup_mod (mod, 2); *disp32 = (uint32_t) rip_disp;
 }
@@ -768,7 +896,7 @@ static size_t add_to_const_pool (uint64_t v) {
 }
 
 struct const_ref {
-  size_t pc;
+  size_t pc; /* where rel32 address should be in code */
   size_t const_num;
 };
 
