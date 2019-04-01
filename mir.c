@@ -1501,6 +1501,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
     *op = new_op;
     break;
   case MIR_OP_REG:
+  case MIR_OP_HARD_REG:
   case MIR_OP_LABEL:
     break; /* Do nothing */
   case MIR_OP_MEM: {

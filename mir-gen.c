@@ -76,8 +76,10 @@ static void *gen_malloc (size_t size) {
   return res;
 }
 
+static MIR_reg_t gen_new_temp_reg (MIR_type_t type, MIR_func_t func);
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
+static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after);
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
 
 #ifdef __x86_64__
@@ -134,7 +136,7 @@ static void make_2op_insns (MIR_item_t func_item) {
     } else {
       code = MIR_MOV; type = MIR_T_I64;
     }
-    temp_op = MIR_new_reg_op (_MIR_new_temp_reg (type, func));
+    temp_op = MIR_new_reg_op (gen_new_temp_reg (type, func));
     MIR_insert_insn_before (func_item, insn, MIR_new_insn (code, temp_op, insn->ops[1]));
     MIR_insert_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
     insn->ops[0] = insn->ops[1] = temp_op;
@@ -285,16 +287,33 @@ static void delete_bb_insn (bb_insn_t bb_insn) {
   free (bb_insn);
 }
 
-static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
-  bb_insn_t bb_insn, bb_before_insn;
+static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after) {
+  MIR_insn_t insn;
+  bb_insn_t bb_insn, new_bb_insn;
   bb_t bb;
+  
+  if (before != NULL) {
+    insn = DLIST_NEXT (MIR_insn_t, before);
+    bb_insn = before->data;
+  } else {
+    gen_assert (after != NULL);
+    insn = DLIST_HEAD (MIR_insn_t, func_item->u.func->insns);
+    bb_insn = after->data;
+  }
+  bb = bb_insn->bb;
+  for (; insn != after; insn = DLIST_NEXT (MIR_insn_t, insn), bb_insn = new_bb_insn) {
+    new_bb_insn = create_bb_insn (insn, bb);
+    if (before != NULL)
+      DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
+    else
+      DLIST_INSERT_BEFORE (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
+    before = insn;
+  }
+}
 
-  gen_assert (before != NULL);
-  bb_before_insn = before->data;
-  bb = bb_before_insn->bb;
-  bb_insn = create_bb_insn (insn, bb);
+static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
   MIR_insert_insn_before (func_item, before, insn);
-  DLIST_INSERT_BEFORE (bb_insn_t, bb->bb_insns, bb_before_insn, bb_insn);
+  create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, insn), before);
 }
 
 static void set_label_disp (MIR_insn_t insn, size_t disp) {
@@ -390,6 +409,13 @@ static void update_min_max_reg (MIR_reg_t reg) {
     curr_cfg->max_reg = reg;
 }
 
+static MIR_reg_t gen_new_temp_reg (MIR_type_t type, MIR_func_t func) {
+  MIR_reg_t reg = _MIR_new_temp_reg (type, func);
+
+  update_min_max_reg (reg);
+  return reg;
+}
+
 static MIR_reg_t reg2breg (MIR_reg_t reg) { return reg - curr_cfg->min_reg; }
 static MIR_reg_t breg2reg (MIR_reg_t breg) { return breg + curr_cfg->min_reg; }
 static MIR_reg_t reg2var (MIR_reg_t reg) { return reg2breg (reg) + MAX_HARD_REG + 1; }
@@ -416,7 +442,9 @@ static int move_p (MIR_insn_t insn) {
 static int imm_move_p (MIR_insn_t insn) {
   return ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
 	  && (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
-	  && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT));
+	  && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
+	      || insn->ops[1].mode == MIR_OP_FLOAT || insn->ops[1].mode == MIR_OP_DOUBLE
+	      || insn->ops[1].mode == MIR_OP_REF));
 }
 
 #if MIR_GEN_DEBUG
@@ -792,7 +820,7 @@ static void process_op_vars (MIR_op_t op, expr_t e) {
   case MIR_OP_HARD_REG:
     process_var (op.u.hard_reg, e);
     break;
-  case MIR_OP_INT: case MIR_OP_UINT: case MIR_OP_REF:
+  case MIR_OP_INT: case MIR_OP_UINT: case MIR_OP_FLOAT: case MIR_OP_DOUBLE: case MIR_OP_REF:
     break;
   case MIR_OP_MEM:
     if (op.u.mem.base != 0)
@@ -819,10 +847,8 @@ static expr_t add_expr (MIR_insn_t insn) {
   
   e->insn = insn; e->num = VARR_LENGTH (expr_t, exprs);
   mode = MIR_insn_op_mode (insn, 0, &out_p);
-  e->temp_reg = _MIR_new_temp_reg (mode == MIR_OP_FLOAT ? MIR_T_F
-				   : mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64,
-				   curr_func_item->u.func);
-  update_min_max_reg (e->temp_reg);
+  e->temp_reg = gen_new_temp_reg (mode == MIR_OP_FLOAT ? MIR_T_F : mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64,
+				  curr_func_item->u.func);
   VARR_PUSH (expr_t, exprs, e);
   insert_expr (e);
   nops = MIR_insn_nops (insn);
@@ -2734,9 +2760,9 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
   
   if (op.mode == MIR_OP_HARD_REG && hreg_def_ages_addr[op.u.hard_reg] == curr_bb_hreg_def_age) {
     def_insn = hreg_defs_addr[op.u.hard_reg].insn;
-    gen_assert (hreg_defs_addr[op.u.hard_reg].nop == 0);
     if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV)
       return FALSE;
+    gen_assert (hreg_defs_addr[op.u.hard_reg].nop == 0);
     insn->ops[nop] = def_insn->ops[1];
     successfull_change_p = insn_ok_p (insn);
   } else if (op.mode == MIR_OP_HARD_REG_MEM)  {
@@ -2992,6 +3018,7 @@ dead_code_elimination (MIR_item_t func) {
 #if MIR_GEN_DEBUG
 
 #include <sys/types.h>
+#include <unistd.h>
 
 static void print_code (uint8_t *code, size_t code_len) {
   size_t i;
