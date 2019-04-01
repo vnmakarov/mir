@@ -243,7 +243,7 @@ ex100:    func v
     | execution [2]  | **1.0** (3.1s)   | 5.9 (18.3s)     | **0.94** (2.9s)  |  2.05 (6.34s)   |
     | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [5]        | **1.0** (4.2K)   | 0.26 (1.1K)     | **329** (1480K)  |  329 (1480K)    |
+    | LOC [5]        | **1.0** (9.5K)   | 0.58 (5.5K)     | **155** (1480K)  |  155 (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and memory File System for GCC) 100 times
 
@@ -253,7 +253,7 @@ ex100:    func v
 
    [4] is based on wall time of generation of object code for empty C file or generation of empty MIR module through API
 
-   [5] is based only on files required for x86-64 C compiler and MIR generator and interpreter files
+   [5] is based only on files required for x86-64 C compiler and files for minimal program to create and run MIR code
 
 ## MIR project competitors
   * I only see two real universal light-weight JIT competitors
