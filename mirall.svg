@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="740.0" height="469.0" viewBox="130.0 70.0 740.0 469.0" version="1.1">
+<rect x="130.0" y="70.0" width="740.0" height="469.0" fill="rgb(255,255,255)"/>
+<g id="s68780082">
+<polygon id="s68780082" points="239.99998,260.0 739.99963,260.0 739.9999,340.0 239.99998,340.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t68780082">
+<text x="459.99994" y="312.26074" font-family="Helvetica" fill="rgb(0,0,0)" font-size="34" textLength="60.0">MIR</text>
+</g>
+</g>
+<g id="s211222915">
+<polygon id="s211222915" points="160.0,280.0 200.0,280.0 199.99998,320.0 160.0,319.99997 " fill="none" stroke-width="0.0" stroke="rgb(0,0,0)"/>
+<g id="t211222915">
+<text x="164.5" y="306.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="31.0">API</text>
+</g>
+</g>
+<g id="s219397888">
+<polygon id="s219397888" points="480.0,180.0 519.9997,180.0 519.9998,220.0 480.0,219.99995 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t219397888">
+<text x="493.4999" y="206.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="13.0">C</text>
+</g>
+</g>
+<g id="s261784377">
+<polygon id="s261784377" points="560.0,180.0 660.0,180.0 659.9984,219.99997 560.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t261784377">
+<text x="573.0" y="206.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="74.0">LLVM IR</text>
+</g>
+</g>
+<g id="s266038654">
+<polygon id="s266038654" points="380.0,180.0 439.99942,180.0 440.0,219.99997 380.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t266038654">
+<text x="382.5" y="205.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="55.0">WASM</text>
+</g>
+</g>
+<g id="s155071199">
+<polygon id="s155071199" points="580.0,100.0 619.9998,100.0 620.0,140.0 580.0,140.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t155071199">
+<text x="584.0" y="125.549805" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="32.0">C++</text>
+</g>
+</g>
+<g id="s175491884">
+<polygon id="s175491884" points="480.00003,100.0 539.9999,100.0 540.0,139.99995 480.00003,140.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t175491884">
+<text x="492.0" y="125.549805" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="36.0">Rust</text>
+</g>
+</g>
+<g id="s135731701">
+<polygon id="s135731701" points="180.0,380.0 239.99991,380.0 239.99979,439.99997 180.0,440.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t135731701">
+<text x="192.99995" y="403.1172" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="34.0">MIR</text>
+<text x="182.99995" y="429.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="54.0">binary</text>
+</g>
+</g>
+<g id="s71099274">
+<polygon id="s71099274" points="280.0,380.0 340.0,380.0 339.99994,439.9993 280.0,440.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t71099274">
+<text x="293.0" y="403.1172" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="34.0">MIR</text>
+<text x="292.5" y="429.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="35.0">text</text>
+</g>
+</g>
+<g id="s33365499">
+<polygon id="s33365499" points="620.0,380.0 659.99927,380.0 660.0,420.0 620.0,419.99966 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t33365499">
+<text x="633.5" y="406.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="13.0">C</text>
+</g>
+</g>
+<g id="s51015192">
+<polygon id="s51015192" points="360.0,460.0 440.0,460.0 439.99988,500.0 360.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t51015192">
+<text x="373.0" y="485.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="54.0">x86-64</text>
+</g>
+</g>
+<g id="s126640241">
+<polygon id="s126640241" points="460.0,460.0 539.9999,460.0 540.0,500.0 460.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t126640241">
+<text x="467.5" y="485.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="65.0">aarch64</text>
+</g>
+</g>
+<g id="s76394070">
+<polygon id="s76394070" points="260.0,460.0 340.0,460.0 339.9999,500.0 260.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t76394070">
+<text x="273.0" y="485.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="54.0">PPC64</text>
+</g>
+</g>
+<g id="s133537495">
+<polygon id="s133537495" points="560.0,460.0 640.0,460.0 639.9992,500.0 560.0,499.99997 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t133537495">
+<text x="568.5" y="485.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="63.0">MIPS64</text>
+</g>
+</g>
+<g id="s189027268">
+<polygon id="s189027268" points="180.0,160.0 240.00014,160.0 240.0002,220.0 180.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t189027268">
+<text x="193.00009" y="183.11719" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="34.0">MIR</text>
+<text x="183.00009" y="209.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="54.0">binary</text>
+</g>
+</g>
+<g id="s188060333">
+<polygon id="s188060333" points="280.0,160.0 340.0,160.0 340.0,219.99998 280.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t188060333">
+<text x="293.0" y="183.11719" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="34.0">MIR</text>
+<text x="292.5" y="209.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="35.0">text</text>
+</g>
+</g>
+<g id="s122575330">
+<polygon id="s122575330" points="640.0,120.0 679.9999,120.0 680.0,139.99997 640.0,140.0 " fill="none" stroke-width="0.0" stroke="rgb(0,0,0)"/>
+<g id="t122575330">
+<text x="652.5" y="136.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="15.0">...</text>
+</g>
+</g>
+<g id="s42684787">
+<ellipse id="s42684787" cx="549.99994" cy="390.00003" rx="49.999996" ry="30.0" fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t42684787">
+<text x="507.49994" y="395.54984" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="85.0">Interpreter</text>
+</g>
+</g>
+<g id="s169142320">
+<ellipse id="s169142320" cx="430.0" cy="410.00006" rx="50.0" ry="30.0" fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t169142320">
+<text x="385.0" y="416.38873" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="90.0">Generator</text>
+</g>
+</g>
+<g id="s247835817">
+<polygon id="s247835817" points="700.0,160.0 799.99915,160.0 800.0,220.0 700.0,219.99948 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t247835817">
+<text x="728.5" y="183.11719" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="43.0">Java</text>
+<text x="709.5" y="209.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="81.0">bytecode</text>
+</g>
+</g>
+<g id="s142357038">
+<polygon id="s142357038" points="720.0,360.0 820.0,360.0 819.9987,420.0 720.0,419.99988 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t142357038">
+<text x="748.5" y="383.1172" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="43.0">Java</text>
+<text x="729.5" y="409.66016" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="81.0">bytecode</text>
+</g>
+</g>
+<g id="s29331919">
+<polygon id="s29331919" points="720.0,120.0 780.0,120.0 779.9983,139.99997 720.0,140.0 " fill="none" stroke-width="0.0" stroke="rgb(0,0,0)"/>
+<g id="t29331919">
+<text x="742.5" y="136.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="15.0">...</text>
+</g>
+</g>
+<g id="s35149660">
+<polygon id="s35149660" points="660.0,440.0 740.0,440.0 739.9996,479.99994 660.0,480.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t35149660">
+<text x="672.5" y="465.5498" font-family="Helvetica" fill="rgb(0,0,0)" font-size="18" textLength="55.0">WASM</text>
+</g>
+</g>
+<g id="s203647589">
+<polygon id="s203647589" points="780.0,240.0 840.0,240.0 839.99994,280.0 780.0,280.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t203647589">
+<text x="795.5" y="266.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="29.0">CIL</text>
+</g>
+</g>
+<g id="s151493651">
+<polygon id="s151493651" points="780.0,300.0 839.99994,300.0 840.0,340.0 780.0,340.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t151493651">
+<text x="795.5" y="326.38867" font-family="Helvetica" fill="rgb(0,0,0)" font-size="20" textLength="29.0">CIL</text>
+</g>
+</g>
+<g id="la77415226">
+<path id="s77415226" d="M 200.0,300.0 239.99998,300.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s86581186" d="M 230.82188,307.73062 239.99998,300.0 230.82188,292.26938 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t77415226"/>
+</g>
+<g id="la172850155">
+<path id="s172850155" d="M 209.99995,380.0 239.99998,340.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s205246931" d="M 209.32233,368.01913 209.99995,380.0 221.69131,377.2959 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t172850155"/>
+</g>
+<g id="la25267528">
+<path id="s25267528" d="M 329.99994,340.0 310.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s194564368" d="M 307.1901,368.33362 310.0,380.0 321.01904,375.24808 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t25267528"/>
+</g>
+<g id="la182798305">
+<path id="s182798305" d="M 609.9992,219.99998 589.9998,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s35918857" d="M 587.18976,248.33365 589.9998,260.0 601.0188,255.24796 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t182798305"/>
+</g>
+<g id="la143415558">
+<path id="s143415558" d="M 499.9999,219.99997 489.99982,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s258831886" d="M 484.72607,249.22098 489.99982,260.0 499.72565,252.9709 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t143415558"/>
+</g>
+<g id="la126217159">
+<path id="s126217159" d="M 410.0,219.99998 409.99982,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s141015087" d="M 402.26926,250.82185 409.99982,260.0 417.73047,250.82193 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t126217159"/>
+</g>
+<g id="la80098804">
+<path id="s80098804" d="M 439.9997,199.99998 480.0,199.99997 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s27389500" d="M 449.1778,192.26936 439.9997,199.99998 449.1778,207.73059 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t80098804"/>
+</g>
+<g id="la193823005">
+<path id="s193823005" d="M 519.99976,200.0 560.0,200.00003 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s116451269" d="M 550.8219,207.73064 560.0,200.00003 550.8219,192.26941 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t193823005"/>
+</g>
+<g id="la33882002">
+<path id="s33882002" d="M 310.0,220.0 329.99982,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s42919194" d="M 318.9808,255.24805 329.99982,260.0 332.80975,248.33363 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t33882002"/>
+</g>
+<g id="la250314083">
+<path id="s250314083" d="M 210.00009,220.0 239.99998,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s214018123" d="M 228.30864,257.29587 239.99998,260.0 240.67763,248.01915 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t250314083"/>
+</g>
+<g id="la134921568">
+<path id="s134921568" d="M 489.99994,340.0 489.99994,340.0 430.00037,340.0 430.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s79540776" d="M 422.26947,370.82184 430.0,380.0 437.73068,370.82196 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t134921568"/>
+</g>
+<g id="la176558617">
+<path id="s176558617" d="M 549.99994,340.0 549.99994,360.00003 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s66927425" d="M 542.26935,350.82193 549.99994,360.00003 557.7305,350.82193 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t176558617"/>
+</g>
+<g id="la217023198">
+<path id="s217023198" d="M 300.0,460.0 394.64465,431.21326 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s2504934" d="M 306.53137,449.93317 300.0,460.0 311.0305,464.7253 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t217023198"/>
+</g>
+<g id="la26119359">
+<path id="s26119359" d="M 400.0,460.0 410.8658,437.71643 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s226524711" d="M 397.0741,448.36218 400.0,460.0 410.9712,455.1386 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t26119359"/>
+</g>
+<g id="la55463820">
+<path id="s55463820" d="M 449.13397,437.7164 499.99994,460.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s256886996" d="M 488.49112,463.39804 499.99994,460.0 494.6952,449.23618 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t55463820"/>
+</g>
+<g id="la115128021">
+<path id="s115128021" d="M 465.35535,431.21326 600.0,460.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s203508349" d="M 589.40845,465.64087 600.0,460.0 592.641,450.52133 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t115128021"/>
+</g>
+<g id="la158133994">
+<path id="s158133994" d="M 629.99994,340.0 639.99963,380.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s143457650" d="M 630.27386,372.9708 639.99963,380.0 645.2735,369.221 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t158133994"/>
+</g>
+<g id="la120141275">
+<path id="s120141275" d="M 709.99994,340.0 770.0,360.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s23909827" d="M 758.84827,364.43152 770.0,360.0 763.7375,349.76373 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t120141275"/>
+</g>
+<g id="la223795320">
+<path id="s223795320" d="M 750.0,219.99974 709.99976,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s206216768" d="M 711.0233,248.04373 709.99976,260.0 721.95605,258.97647 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t223795320"/>
+</g>
+<g id="la146729809">
+<path id="s146729809" d="M 600.0,140.0 610.0001,180.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s226300281" d="M 600.2743,172.9709 610.0001,180.0 615.27386,169.22096 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t146729809"/>
+</g>
+<g id="la111349686">
+<path id="s111349686" d="M 510.0,139.99997 585.0,180.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s103382718" d="M 573.26373,182.50201 585.0,180.0 580.5396,168.85976 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t111349686"/>
+</g>
+<g id="la251352247">
+<path id="s251352247" d="M 749.99915,139.99998 749.9996,160.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s154995487" d="M 742.26874,150.82205 749.9996,160.0 757.73,150.82173 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t251352247"/>
+</g>
+<g id="la22873124">
+<path id="s22873124" d="M 669.99994,340.0 700.0,440.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s22765164" d="M 689.9581,433.43036 700.0,440.0 704.7673,428.98758 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<g id="t22873124"/>
+</g>
+<g id="la54596563">
+<path id="s54596563" d="M 739.9998,320.0 780.0,320.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s238308405" d="M 770.8219,327.73062 780.0,320.0 770.8219,312.26938 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+</g>
+<g id="la250735376">
+<path id="s250735376" d="M 739.9997,280.0 780.0,260.0 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+<path id="s24824010" d="M 744.75165,268.98096 739.9997,280.0 751.6661,282.80994 " fill="none" stroke-width="2.0" stroke="rgb(0,0,0)"/>
+</g>
+</svg>
