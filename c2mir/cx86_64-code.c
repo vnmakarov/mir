@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 static const char *standard_includes[] = {
   "include/mirc/mirc.h",
   "include/mirc/x86-64/mirc-x86_64-linux.h"

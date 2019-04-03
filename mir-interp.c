@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>

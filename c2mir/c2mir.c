@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* C to MIR compiler.  It is a four pass compiler:
    o preprocessor pass generating tokens
    o parsing pass generating AST

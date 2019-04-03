@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 #include "mir2c.h"
 #include <float.h>
 #include <inttypes.h>

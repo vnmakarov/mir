@@ -1,3 +1,7 @@
+/* This file is part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* Typed doubly linked lists.  */
 
 #ifndef MIR_DLIST_H

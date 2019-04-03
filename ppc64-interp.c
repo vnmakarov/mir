@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* *to = from; rax = 8; jump *handler  */
 static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
   static unsigned char pattern[] =
