@@ -266,3 +266,7 @@ ex100:    func v
     * RyuJIT is even bigger: 360K SLOC
     * RyuJIT optimizations is basically MIR-generator optimizations plus loop invariant motion minus SCCP
     * RyuJIT uses SSA
+  * Other candidates:
+    * [**QBE**](https://github.com/8l/qbe): standalone+, small+ (10K LOC), SSA-, ASM generation-, MIT License
+    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-, ASM generation-, LGPL2
+    * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-, big- (70K LOC of Rust-), SSA-, Apache License
