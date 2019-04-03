@@ -1457,6 +1457,10 @@ static void vn_finish (void) {
   HTAB_DESTROY (val_t, val_tab);
 }
 
+static void vn_empty (void) {
+  HTAB_CLEAR (val_t, val_tab, NULL);
+}
+
 static MIR_reg_t vn_add_val (MIR_func_t func, MIR_type_t type,
 			     MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
   val_t val, tab_val;
@@ -1636,6 +1640,7 @@ void MIR_simplify_func (MIR_item_t func_item) {
   
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify");
+  vn_empty ();
   func = func_item->u.func;
   for (size_t i = 0; i < func->nargs; i++) {
     MIR_var_t var = VARR_GET (MIR_var_t, func->vars, i);
