@@ -165,7 +165,7 @@ typedef const char *MIR_name_t;
 /* Operand mode */
 typedef enum {
   MIR_OP_UNDEF, MIR_OP_REG, MIR_OP_HARD_REG, MIR_OP_INT, MIR_OP_UINT, MIR_OP_FLOAT, MIR_OP_DOUBLE,
-  MIR_OP_REF, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
+  MIR_OP_REF, MIR_OP_STR, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
 } MIR_op_mode_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -182,6 +182,7 @@ typedef struct {
     float f;
     double d;
     MIR_item_t ref; /* non-export/non-forward after simplification */
+    const char *str;
     MIR_mem_t mem;
     MIR_mem_t hard_reg_mem; /* Used only internally */
     MIR_label_t label;
@@ -227,13 +228,25 @@ typedef struct MIR_proto {
   VARR (MIR_var_t) *args; /* args name can be NULL */
 } *MIR_proto_t;
 
+typedef struct MIR_data {
+  const char *name; /* can be NULL */
+  MIR_type_t el_type;
+  size_t nel;
+  uint8_t els[1];
+} *MIR_data_t;
+
+typedef struct MIR_bss {
+  const char *name; /* can be NULL */
+  uint64_t len;
+} *MIR_bss_t;
+
 typedef struct MIR_module *MIR_module_t;
 
 /* Definition of link of double list of MIR_item_t type elements */
 DEF_DLIST_LINK (MIR_item_t);
 
-typedef enum {MIR_func_item, MIR_proto_item,
-	      MIR_import_item, MIR_export_item, MIR_forward_item} MIR_item_type_t;
+typedef enum {MIR_func_item, MIR_proto_item, MIR_import_item, MIR_export_item,
+	      MIR_forward_item, MIR_align_item, MIR_data_item, MIR_bss_item} MIR_item_type_t;
 
 /* MIR module items (function or import): */
 struct MIR_item {
@@ -252,6 +265,9 @@ struct MIR_item {
     MIR_name_t import;
     MIR_name_t export;
     MIR_name_t forward;
+    uint32_t align;
+    MIR_data_t data;
+    MIR_bss_t bss;
   } u;
 };
 
@@ -267,6 +283,7 @@ struct MIR_module {
   const char *name;
   DLIST (MIR_item_t) items; /* module items */
   DLIST_LINK (MIR_module_t) module_link;
+  size_t temp_items_num;  /* Used only internally */
 };
 
 /* Definition of double list of MIR_item_t type elements */
@@ -305,6 +322,12 @@ extern void MIR_finish (void);
 extern MIR_module_t MIR_new_module (const char *name);
 extern MIR_item_t MIR_new_import (const char *name);
 extern MIR_item_t MIR_new_export (const char *name);
+extern MIR_item_t MIR_new_forward (const char *name);
+extern MIR_item_t MIR_new_align (uint32_t align);
+extern MIR_item_t MIR_new_bss (const char *name, size_t len); /* name can be NULL */
+extern MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type,
+				size_t nel, const void *els); /* name can be NULL */
+extern MIR_item_t MIR_new_string_data (const char *name, const char *str); /* name can be NULL */
 extern MIR_item_t MIR_new_proto_arr (const char *name, MIR_type_t res_type,
 				     size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
@@ -339,6 +362,7 @@ extern MIR_op_t MIR_new_uint_op (uint64_t v);
 extern MIR_op_t MIR_new_float_op (float v);
 extern MIR_op_t MIR_new_double_op (double v);
 extern MIR_op_t MIR_new_ref_op (MIR_item_t item);
+extern MIR_op_t MIR_new_str_op (const char *str);
 extern MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 				MIR_reg_t index, MIR_scale_t scale);
 extern MIR_op_t MIR_new_label_op (MIR_label_t label);
@@ -355,7 +379,7 @@ extern void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func);
 extern void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p);
 extern void MIR_output (FILE *f);
 
-extern void MIR_simplify_func (MIR_item_t func);
+extern void MIR_simplify_func (MIR_item_t func, int mem_float_p);
 
 #if MIR_IO
 extern void MIR_write (FILE *f);
@@ -374,7 +398,7 @@ extern void MIR_link (void);
 /* For internal use only:  */
 extern const char *_MIR_uniq_string (const char *str);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
-extern void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn);
+extern void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
 
 extern uint8_t *MIR_publish_code (uint8_t *code, size_t code_len);
 

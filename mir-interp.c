@@ -838,7 +838,7 @@ MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
-    MIR_simplify_func (func_item);
+    MIR_simplify_func (func_item, FALSE);
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
@@ -860,7 +860,7 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
-    MIR_simplify_func (func_item);
+    MIR_simplify_func (func_item, FALSE);
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);

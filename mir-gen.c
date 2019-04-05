@@ -3100,7 +3100,7 @@ void *MIR_gen (MIR_item_t func_item) {
   void *res;
   
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
-  MIR_simplify_func (func_item);
+  MIR_simplify_func (func_item, TRUE);
 #if MIR_GEN_DEBUG
   fprintf (stderr, "+++++++++++++MIR after simplification:\n");
   MIR_output (stderr);
