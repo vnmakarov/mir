@@ -42,7 +42,8 @@
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (const char *name)`)
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (const char *name)`)
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (const char *name)`)
-    * **Prototype**: `MIR_proto_item` (``)
+    * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr` and `MIR_new_proto`
+      analogous to `MIR_new_func_arr` and `MIR_new_func` -- see below)
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (const char *name, const char *str)`)

@@ -124,10 +124,8 @@ ex100:    func v
   * `string` describes data in form of C string
   * `export` describes module functions or data which are visible outside the current module
   * `import` describes module functions or data which should be defined in other MIR modules
-  * `weak` describes functions or data which are defined in other modules or even by some C code
-  * `fcall` and `call` are MIR instruction to call functions
-    * `fcall` instruction returns result which stored into the first operand. The second oeprand is the called function.
-       The rest operands are arguments
+  * `proto` describes function prototypes
+  * `call` are MIR instruction to call functions
 
 ## Running MIR code
   * After creating MIR modules (through MIR API or reading MIR bainary or textual files), you should load the modules
