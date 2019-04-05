@@ -15,7 +15,7 @@ int main (void) {
   MIR_load_external ("pri", pri); MIR_load_external ("prf", prf); MIR_load_external ("prd", prd);
   m = create_args_module ();
   func = DLIST_TAIL (MIR_item_t, m->items);
-  MIR_simplify_func (func);
+  MIR_simplify_func (func, TRUE);
   MIR_load_module (m);
   MIR_link ();
   MIR_interp_init ();

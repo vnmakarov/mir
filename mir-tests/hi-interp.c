@@ -19,7 +19,7 @@ int main (void) {
   fprintf (stderr, "\n++++++ Hi func before simplification:\n");
   MIR_output (stderr);
 #endif
-  MIR_simplify_func (func);
+  MIR_simplify_func (func, TRUE);
 #if MIR_INTERP_DEBUG 
   fprintf (stderr, "++++++ Hi func after simplification:\n");
   MIR_output (stderr);

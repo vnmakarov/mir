@@ -17,7 +17,7 @@ int main (void) {
   MIR_output (stderr);
 #endif
   start_time = real_sec_time ();
-  MIR_simplify_func (func);
+  MIR_simplify_func (func, TRUE);
 #if MIR_INTERP_DEBUG 
   fprintf (stderr, "++++++ SIEVE after simplification:\n");
   MIR_output (stderr);

@@ -17,7 +17,7 @@ int main (void) {
   fprintf (stderr, "++++++ Loop before simplification:\n");
   MIR_output (stderr);
 #endif
-  MIR_simplify_func (func);
+  MIR_simplify_func (func, TRUE);
 #if MIR_INTERP_DEBUG 
   fprintf (stderr, "++++++ Loop after simplification:\n");
   MIR_output (stderr);
