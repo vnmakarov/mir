@@ -50,8 +50,8 @@ static void alloc_error (const char *message) { error_func (C_alloc_error, messa
 
 #include "mir-varr.h"
 #include "mir-dlist.h"
+#include "mir-hash.h"
 #include "mir-htab.h"
-#include "mir-mum.h"
 
 typedef struct node *node_t;
 
@@ -165,9 +165,9 @@ static HTAB (str_t) *str_tab;
 static HTAB (str_t) *str_key_tab;
 
 static int str_eq (str_t str1, str_t str2) { return strcmp (str1.s, str2.s) == 0; }
-static htab_hash_t str_hash (str_t str) { return mum_hash (str.s, strlen (str.s), 0x42); }
+static htab_hash_t str_hash (str_t str) { return mir_hash (str.s, strlen (str.s), 0x42); }
 static int str_key_eq (str_t str1, str_t str2) { return str1.key == str2.key; }
-static htab_hash_t str_key_hash (str_t str) { return mum_hash64 (str.key, 0x24); }
+static htab_hash_t str_key_hash (str_t str) { return mir_hash64 (str.key, 0x24); }
 
 static const char *uniq_str (const char *str);
 
@@ -1583,7 +1583,7 @@ static int macro_eq (macro_t macro1, macro_t macro2) {
 }
 
 static htab_hash_t macro_hash (macro_t macro) {
-  return mum_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
+  return mir_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
 }
 
 DEF_VARR (macro_t);
@@ -3120,9 +3120,9 @@ static int tpname_eq (tpname_t tpname1, tpname_t tpname2) {
 }
 
 static htab_hash_t tpname_hash (tpname_t tpname) {
-  return (mum_hash_finish
-	  (mum_hash_step
-	   (mum_hash_step (mum_hash_init (0x42),
+  return (mir_hash_finish
+	  (mir_hash_step
+	   (mir_hash_step (mir_hash_init (0x42),
 			   (uint64_t) tpname.id->u.s),
 	    (uint64_t) tpname.scope)));
 }
@@ -4361,10 +4361,10 @@ static int symbol_eq (symbol_t s1, symbol_t s2) {
 }
 
 static htab_hash_t symbol_hash (symbol_t s) {
-  return (mum_hash_finish
-	  (mum_hash_step
-	   (mum_hash_step
-	    (mum_hash_step (mum_hash_init (0x42), (uint64_t) s.mode),
+  return (mir_hash_finish
+	  (mir_hash_step
+	   (mir_hash_step
+	    (mir_hash_step (mir_hash_init (0x42), (uint64_t) s.mode),
 	     (uint64_t) s.id->u.s),
 	    (uint64_t) s.scope)));
 }
@@ -6157,8 +6157,8 @@ static unsigned case_hash (case_t el) {
   expr = case_expr->attr;
   assert (expr->const_p);
   if (signed_integer_type_p (expr->type))
-    return mum_hash (&expr->u.i_val, sizeof (expr->u.i_val), 0x42);
-  return mum_hash (&expr->u.u_val, sizeof (expr->u.u_val), 0x42);
+    return mir_hash (&expr->u.i_val, sizeof (expr->u.i_val), 0x42);
+  return mir_hash (&expr->u.u_val, sizeof (expr->u.u_val), 0x42);
 }
 
 static int case_eq (case_t el1, case_t el2) {
@@ -7380,7 +7380,7 @@ typedef struct reg_var reg_var_t;
 DEF_HTAB (reg_var_t);
 static HTAB (reg_var_t) *reg_var_tab;
 
-static htab_hash_t reg_var_hash (reg_var_t r) { return mum_hash (r.name, strlen (r.name), 0x42); }
+static htab_hash_t reg_var_hash (reg_var_t r) { return mir_hash (r.name, strlen (r.name), 0x42); }
 static int reg_var_eq (reg_var_t r1, reg_var_t r2) { return strcmp (r1.name, r2.name) == 0; }
 
 DEF_VARR (reg_var_t);

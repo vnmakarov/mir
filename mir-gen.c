@@ -69,7 +69,7 @@ static void util_error (const char *message);
 #include "mir-dlist.h"
 #include "mir-bitmap.h"
 #include "mir-htab.h"
-#include "mir-mum.h"
+#include "mir-hash.h"
 
 static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
@@ -777,9 +777,9 @@ static htab_hash_t add_op_hash (htab_hash_t h, MIR_op_t op) { return MIR_op_hash
 static htab_hash_t expr_hash (expr_t e) {
   size_t i, nops;
   int out_p;
-  htab_hash_t h = mum_hash_init (0x42);
+  htab_hash_t h = mir_hash_init (0x42);
   
-  h = mum_hash_step (h, (uint64_t) e->insn->code);
+  h = mir_hash_step (h, (uint64_t) e->insn->code);
   nops = MIR_insn_nops (e->insn);
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (e->insn, i, &out_p);
@@ -787,7 +787,7 @@ static htab_hash_t expr_hash (expr_t e) {
       continue;
     h = add_op_hash (h, e->insn->ops[i]);
   }
-  return mum_hash_finish (h);
+  return mir_hash_finish (h);
 }
 
 static int find_expr (MIR_insn_t insn, expr_t *e) {
@@ -1107,7 +1107,7 @@ static HTAB (var_occ_t) *var_occ_tab;
 
 static htab_hash_t var_occ_hash (var_occ_t vo) {
   gen_assert (vo->place.type != OCC_INSN);
-  return mum_hash_finish (mum_hash_step (mum_hash_step (mum_hash_step (mum_hash_init (0x54),
+  return mir_hash_finish (mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x54),
 								       (uint64_t) vo->var),
 							(uint64_t) vo->place.type),
 					 (uint64_t) vo->place.u.bb));

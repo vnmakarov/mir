@@ -8,13 +8,14 @@ static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR 
 
+#include "mir-hash.h"
 #include "mir-htab.h"
-#include "mir-mum.h"
 #include <string.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <float.h>
 #include <ctype.h>
+#include <limits.h>
 
 static MIR_error_func_t error_func;
 
@@ -227,7 +228,7 @@ static VARR (string_t) *strings;
 DEF_HTAB (string_t);
 static HTAB (string_t) *string_tab;
 
-static htab_hash_t str_hash (string_t str) { return mum_hash (str.str, strlen (str.str), 0); }
+static htab_hash_t str_hash (string_t str) { return mir_hash (str.str, strlen (str.str), 0); }
 static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2.str) == 0; }
 
 static void string_init (VARR (string_t) **strs, HTAB (string_t) **str_tab) {
@@ -294,8 +295,8 @@ static int namenum2rdn_eq (size_t rdn1, size_t rdn2) {
 static htab_hash_t namenum2rdn_hash (size_t rdn) {
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
-  return mum_hash_finish (mum_hash_step
-			  (mum_hash_step (mum_hash_init (0), (uint64_t) addr[rdn].func),
+  return mir_hash_finish (mir_hash_step
+			  (mir_hash_step (mir_hash_init (0), (uint64_t) addr[rdn].func),
 			   (uint64_t) addr[rdn].name_num));
 }
 
@@ -308,8 +309,8 @@ static int reg2rdn_eq (size_t rdn1, size_t rdn2) {
 static htab_hash_t reg2rdn_hash (size_t rdn) {
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
-  return mum_hash_finish (mum_hash_step
-			  (mum_hash_step (mum_hash_init (0), (uint64_t) addr[rdn].func),
+  return mir_hash_finish (mir_hash_step
+			  (mir_hash_step (mir_hash_init (0), (uint64_t) addr[rdn].func),
 			   addr[rdn].reg));
 }
 
@@ -421,7 +422,7 @@ DEF_HTAB (MIR_item_t);
 static HTAB (MIR_item_t) *module_item_tab;
 static HTAB (MIR_item_t) *global_item_tab;
 
-static htab_hash_t item_hash (MIR_item_t it) { return mum_hash64 ((uint64_t) MIR_item_name (it), 0); }
+static htab_hash_t item_hash (MIR_item_t it) { return mir_hash64 ((uint64_t) MIR_item_name (it), 0); }
 static int item_eq (MIR_item_t it1, MIR_item_t it2) { return MIR_item_name (it1) == MIR_item_name (it2); }
 
 static MIR_item_t find_item (const char *name, HTAB (MIR_item_t) **item_tab) {
@@ -1274,37 +1275,37 @@ int MIR_op_eq_p (MIR_op_t op1, MIR_op_t op2) {
 }
 
 htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
-  h = mum_hash_step (h, (uint64_t) op.mode);
+  h = mir_hash_step (h, (uint64_t) op.mode);
   switch (op.mode) {
-  case MIR_OP_REG: return mum_hash_step (h, (uint64_t) op.u.reg);
-  case MIR_OP_HARD_REG: return mum_hash_step (h, (uint64_t) op.u.hard_reg);
-  case MIR_OP_INT: return mum_hash_step (h, (uint64_t) op.u.i);
-  case MIR_OP_UINT: return mum_hash_step (h, (uint64_t) op.u.u);
+  case MIR_OP_REG: return mir_hash_step (h, (uint64_t) op.u.reg);
+  case MIR_OP_HARD_REG: return mir_hash_step (h, (uint64_t) op.u.hard_reg);
+  case MIR_OP_INT: return mir_hash_step (h, (uint64_t) op.u.i);
+  case MIR_OP_UINT: return mir_hash_step (h, (uint64_t) op.u.u);
   case MIR_OP_FLOAT: {
     union {double d; uint64_t u;} u;
     
     u.d = op.u.f;
-    return mum_hash_step (h, u.u);
+    return mir_hash_step (h, u.u);
   }
   case MIR_OP_DOUBLE:
-    return mum_hash_step (h, (uint64_t) op.u.u);
-  case MIR_OP_REF: return mum_hash_step (h, (uint64_t) MIR_item_name (op.u.ref));
-  case MIR_OP_STR: return mum_hash_step (h, (uint64_t) op.u.str);
+    return mir_hash_step (h, (uint64_t) op.u.u);
+  case MIR_OP_REF: return mir_hash_step (h, (uint64_t) MIR_item_name (op.u.ref));
+  case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str);
   case MIR_OP_MEM:
-    h = mum_hash_step (h, (uint64_t) op.u.mem.type);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.disp);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.base);
-    h = mum_hash_step (h, (uint64_t) op.u.mem.index);
+    h = mir_hash_step (h, (uint64_t) op.u.mem.type);
+    h = mir_hash_step (h, (uint64_t) op.u.mem.disp);
+    h = mir_hash_step (h, (uint64_t) op.u.mem.base);
+    h = mir_hash_step (h, (uint64_t) op.u.mem.index);
     if (op.u.mem.index != 0)
-      h = mum_hash_step (h, (uint64_t) op.u.mem.scale);
+      h = mir_hash_step (h, (uint64_t) op.u.mem.scale);
   case MIR_OP_HARD_REG_MEM:
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.base);
-    h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
+    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
+    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
+    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.base);
+    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
     if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-      h = mum_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
-  case MIR_OP_LABEL: return mum_hash_step (h, (uint64_t) op.u.label);
+      h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
+  case MIR_OP_LABEL: return mir_hash_step (h, (uint64_t) op.u.label);
   default:
     mir_assert (FALSE); /* we should not have other operands here */
   }
@@ -1600,12 +1601,12 @@ static HTAB (val_t) *val_tab;
 static htab_hash_t val_hash (val_t v) {
   htab_hash_t h;
 
-  h = mum_hash_step (mum_hash_init (0), (uint64_t) v.code);
-  h = mum_hash_step (h, (uint64_t) v.type);
+  h = mir_hash_step (mir_hash_init (0), (uint64_t) v.code);
+  h = mir_hash_step (h, (uint64_t) v.type);
   h = MIR_op_hash_step (h, v.op1);
   if (v.code != MIR_INSN_BOUND)
     h = MIR_op_hash_step (h, v.op2);
-  return mum_hash_finish (h);
+  return mir_hash_finish (h);
 }
 
 static int val_eq (val_t v1, val_t v2) {
@@ -1994,7 +1995,6 @@ typedef enum {
    (string)*
    ( ((label)* (insn code) (operand)* | STRN=(func|local|import|export|forward|align|<data>) ...) EOI? )*
    EOF
-   MUM_HASH
 
    where
    o VERSION and NSTR are unsigned tokens
@@ -2002,7 +2002,6 @@ typedef enum {
    o string is string number tokens
    o operand is unsigned, signed, float, double, string, label, memory tokens
    o EOI, EOF - tokens for end of insn (optional for most insns) and end of file
-   o MUM hash - unsigned hash of the all read code.
 */
 
 static int CURR_BIN_VERSION = 1;
@@ -2855,7 +2854,7 @@ typedef struct insn_name {
 } insn_name_t;
 
 static int insn_name_eq (insn_name_t in1, insn_name_t in2) { return strcmp (in1.name, in2.name) == 0; }
-static htab_hash_t insn_name_hash (insn_name_t in) { return mum_hash (in.name, strlen (in.name), 0); }
+static htab_hash_t insn_name_hash (insn_name_t in) { return mir_hash (in.name, strlen (in.name), 0); }
 
 DEF_HTAB (insn_name_t);
 static HTAB (insn_name_t) *insn_name_tab;
@@ -3141,7 +3140,7 @@ DEF_HTAB (label_desc_t);
 static HTAB (label_desc_t) *label_desc_tab;
 
 static int label_eq (label_desc_t l1, label_desc_t l2) { return strcmp (l1.name, l2.name) == 0; }
-static htab_hash_t label_hash (label_desc_t l) { return mum_hash (l.name, strlen (l.name), 0); }
+static htab_hash_t label_hash (label_desc_t l) { return mir_hash (l.name, strlen (l.name), 0); }
 
 static MIR_label_t create_label_desc (const char *name) {
   MIR_label_t label;
