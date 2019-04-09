@@ -1671,18 +1671,26 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
       curr_module = func_item->module;
       snprintf (name, sizeof (name), "%s%d", TEMP_ITEM_NAME_PREFIX, curr_module->temp_items_num);
       curr_module->temp_items_num++;
-      if (op->mode == MIR_OP_STR)
+      if (op->mode == MIR_OP_STR) {
 	item = MIR_new_string_data (name, op->u.str);
-      else if (op->mode == MIR_OP_FLOAT)
-	item = MIR_new_data (name, MIR_T_F, 1, (uint8_t *) &op->u.f);
-      else
-	item = MIR_new_data (name, MIR_T_D, 1, (uint8_t *) &op->u.d);
-      *op = MIR_new_ref_op (item);
+	*op = MIR_new_ref_op (item);
+      } else {
+	if (op->mode == MIR_OP_FLOAT)
+	  item = MIR_new_data (name, MIR_T_F, 1, (uint8_t *) &op->u.f);
+	else
+	  item = MIR_new_data (name, MIR_T_D, 1, (uint8_t *) &op->u.d);
+	type = op->mode == MIR_OP_FLOAT ? MIR_T_F : MIR_T_D;
+	*op = MIR_new_ref_op (item);
+	new_op = MIR_new_reg_op (vn_add_val (func, MIR_T_I64, MIR_INSN_BOUND, *op, *op));
+	MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_MOV, new_op, *op));
+	*op = MIR_new_mem_op (type, 0, new_op.u.reg, 0, 1);
+      }
       curr_module = m;
     }
     if (move_p)
       return;
-    type = op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64;
+    type = (op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D
+	    : op->mode == MIR_OP_MEM ? op->u.mem.type : MIR_T_I64);
     new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, *op, *op));
     MIR_insert_insn_before (func_item, insn,
 			    MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV,

@@ -928,7 +928,8 @@ static void create_av_bitmaps (void) {
 	if (! out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG))
 	  continue;
 	var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
-	if ((b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL) {
+	if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
+	    && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL) {
 	  bitmap_and_compl (bb->av_gen, bb->av_gen, b);
 	  bitmap_ior (bb->av_kill, bb->av_kill, b);
 	}
@@ -1002,7 +1003,8 @@ static void cse_modify (void) {
 	if (! out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG))
 	  continue;
 	var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
-	if ((b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL)
+	if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
+	    && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL)
 	  bitmap_and_compl (av, av, b);
       }
     }
