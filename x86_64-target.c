@@ -330,7 +330,6 @@ struct pattern {
      X - REX byte with W=1
      Y - Optional REX byte with W=0
      [0-9A-F]+ pairs of hexidecimal digits opcode
-     p[0-2] = n-operand is an immediate in memory pool and we use its address
      r[0-2] = n-th operand in ModRM:reg
      R[0-2] = n-th operand in ModRM:rm with mod == 3
      m[0-2] = n-th operand is mem
@@ -981,19 +980,6 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	}
 	rex_w = 0;
 	break;
-      case 'p':
-	ch = *++p;
-	gen_assert ('0' <= ch && ch <= '2');
-	op = insn->ops[ch - '0'];
-	if (op.mode == MIR_OP_INT || op.mode == MIR_OP_DOUBLE) {
-	  v = op.u.i;
-	} else {
-	  gen_assert (op.mode == MIR_OP_FLOAT);
-	  v = op.u.i; v >>= 32;
-	}
-	gen_assert (const_ref_num < 0 && disp32 < 0);
-	const_ref_num = setup_imm_addr (v, &mod, &rm, &disp32);
-	break;
       case 'r':
       case 'R':
 	ch = *++p;
@@ -1126,23 +1112,32 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
     }
     
     gen_assert (opcode0 >= 0 && lb <= 7);
-    if (lb >= 0) opcode0 |= lb;
+    if (lb >= 0)
+      opcode0 |= lb;
     put_byte (opcode0);
     
-    if (opcode1 >= 0) put_byte (opcode1);
-    if (opcode2 >= 0) put_byte (opcode2);
+    if (opcode1 >= 0)
+      put_byte (opcode1);
+    if (opcode2 >= 0)
+      put_byte (opcode2);
     
     if (mod >= 0 || reg >= 0 || rm >= 0) {
-      if (mod < 0) mod = 0;
-      if (reg < 0) reg = 0;
-      if (rm < 0) rm = 0;
+      if (mod < 0)
+	mod = 0;
+      if (reg < 0)
+	reg = 0;
+      if (rm < 0)
+	rm = 0;
       gen_assert (mod <= 3 && reg <= 7 && rm <= 7);
       put_byte ((mod << 6) | (reg << 3) | rm);
     }
     if (scale >= 0 || base >= 0 || index >= 0) {
-      if (scale < 0) scale = 0;
-      if (base < 0) base = 0;
-      if (index < 0) index = 0;
+      if (scale < 0)
+	scale = 0;
+      if (base < 0)
+	base = 0;
+      if (index < 0)
+	index = 0;
       gen_assert (scale <= 3 && base <= 7 && index <= 7);
       put_byte ((scale << 6) | (index << 3) | base);
     }
@@ -1150,11 +1145,16 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, code);
     if (label_ref_num >= 0)
       VARR_ADDR (label_ref_t, label_refs)[label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, code);
-    if (disp8 >= 0) put_byte (disp8);
-    if (disp32 >= 0) put_uint64 (disp32, 4);
-    if (imm8 >= 0) put_byte (imm8);
-    if (imm32 >= 0) put_uint64 (imm32, 4);
-    if (imm64_p) put_uint64 (imm64, 8);
+    if (disp8 >= 0)
+      put_byte (disp8);
+    if (disp32 >= 0)
+      put_uint64 (disp32, 4);
+    if (imm8 >= 0)
+      put_byte (imm8);
+    if (imm32 >= 0)
+      put_uint64 (imm32, 4);
+    if (imm64_p)
+      put_uint64 (imm64, 8);
 
     if (label_ref_num >= 0)
       VARR_ADDR (label_ref_t, label_refs)[label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, code);
