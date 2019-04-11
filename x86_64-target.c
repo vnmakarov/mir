@@ -311,9 +311,7 @@ struct pattern {
      r - register (we don't care about bp and sp because they are fixed and used correctly)
      h[0-31] - hard register with given number
      i[0-3] - immediate of size 8,16,32,64-bits
-     a[0-3] - reference
-     f - immediate float
-     d - immediate double
+     p[0-3] - reference
      s - immediate 1, 2, 4, or 8 (scale)
      m[0-3] - int (signed or unsigned) type memory of size 8,16,32,64-bits
      ms[0-3] - signed int type memory of size 8,16,32,64-bits
@@ -322,7 +320,9 @@ struct pattern {
      md - memory of double
      l - label which can be present by 32-bit
      [0-9] - an operand matching n-th operand (n should be less than given operand number)
-  */
+
+     Remmeber we have no float or double immediate at this stage. They are represented by
+     a reference to data item.  */
   const char *pattern;
   /* Replacement elements:
      blank - ignore
@@ -451,7 +451,7 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r i2", "X C7 /0 R0 I1"},  /* mov r0,i32 */
   {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
-  {MIR_MOV, "r a", "X B8 +0 P1"},      /* mov r0,a64 */
+  {MIR_MOV, "r p", "X B8 +0 P1"},      /* mov r0,a64 */
 
   {MIR_MOV, "m0 r", "88 r1 m0"},       /* mov m0, r1 */
   {MIR_MOV, "m1 r", "66 89 r1 m0"},    /* mov m0, r1 */
@@ -471,12 +471,10 @@ static struct pattern patterns[] = {
   
   {MIR_FMOV, "r r", "F3 Y 0F 10 r0 R1"},     /* movss r0,r1 */
   {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1"},    /* movss r0,m32 */
-  {MIR_FMOV, "r f", "F3 Y 0F 10 r0 p1"},     /* movss r0,m32 */
   {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0"},    /* movss r0,m32 */
 
   {MIR_DMOV, "r r", "F2 Y 0F 10 r0 R1"},     /* movsd r0,r1 */
   {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m32 */
-  {MIR_DMOV, "r d", "F2 Y 0F 10 r0 p1"},     /* movsd r0,m32 */
   {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m32 */
 
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
@@ -690,14 +688,8 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       else
 	gen_assert ('0' <= ch && ch <= '3');
       break;
-    case 'a':
+    case 'p':
       if (op.mode != MIR_OP_REF) return FALSE;
-      break;
-    case 'f':
-      if (op.mode != MIR_OP_FLOAT) return FALSE;
-      break;
-    case 'd':
-      if (op.mode != MIR_OP_DOUBLE) return FALSE;
       break;
     case 's':
       if (op.mode != MIR_OP_INT || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
