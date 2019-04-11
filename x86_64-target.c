@@ -306,9 +306,12 @@ struct pattern {
   MIR_insn_code_t code;
   /* Pattern elements:
      blank - ignore
+     X - match everything
+     $ - finish successfully matching
      r - register (we don't care about bp and sp because they are fixed and used correctly)
      h[0-31] - hard register with given number
      i[0-3] - immediate of size 8,16,32,64-bits
+     a[0-3] - reference
      f - immediate float
      d - immediate double
      s - immediate 1, 2, 4, or 8 (scale)
@@ -336,6 +339,7 @@ struct pattern {
      i[0-2] - n-th operand in byte immediate (should be imm of type i8)
      I[0-2] - n-th operand in 4 byte immediate (should be imm of type i32)
      J[0-2] - n-th operand in 8 byte immediate
+     P[0-2] - n-th operand in 8 byte address
      l[0-2] - n-th operand-label in 32-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
@@ -447,6 +451,7 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r i2", "X C7 /0 R0 I1"},  /* mov r0,i32 */
   {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
+  {MIR_MOV, "r a", "X B8 +0 P1"},      /* mov r0,a64 */
 
   {MIR_MOV, "m0 r", "88 r1 m0"},       /* mov m0, r1 */
   {MIR_MOV, "m1 r", "66 89 r1 m0"},    /* mov m0, r1 */
@@ -464,15 +469,15 @@ static struct pattern patterns[] = {
   {MIR_MOV, "m1 i1", "66 Y C7 /0 m0 i1"}, /* mov m0,i16 */
   {MIR_MOV, "m2 i2", "Y C7 /0 m0 i1"},    /* mov m0,i32 */
   
-  {MIR_FMOV, "r r", "F3 0F 10 r0 R1"},     /* movss r0,r1 */
-  {MIR_FMOV, "r mf", "F3 0F 10 r0 m1"},    /* movss r0,m32 */
-  {MIR_FMOV, "r f", "F3 0F 10 r0 p1"},     /* movss r0,m32 */
-  {MIR_FMOV, "mf r", "F3 0F 11 r1 m0"},    /* movss r0,m32 */
+  {MIR_FMOV, "r r", "F3 Y 0F 10 r0 R1"},     /* movss r0,r1 */
+  {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1"},    /* movss r0,m32 */
+  {MIR_FMOV, "r f", "F3 Y 0F 10 r0 p1"},     /* movss r0,m32 */
+  {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0"},    /* movss r0,m32 */
 
-  {MIR_DMOV, "r r", "F2 0F 10 r0 R1"},     /* movsd r0,r1 */
-  {MIR_DMOV, "r md", "F2 0F 10 r0 m1"},    /* movsd r0,m32 */
-  {MIR_DMOV, "r d", "F2 0F 10 r0 p1"},     /* movsd r0,m32 */
-  {MIR_DMOV, "md r", "F2 0F 11 r1 m0"},    /* movsd r0,m32 */
+  {MIR_DMOV, "r r", "F2 Y 0F 10 r0 R1"},     /* movsd r0,r1 */
+  {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m32 */
+  {MIR_DMOV, "r d", "F2 Y 0F 10 r0 p1"},     /* movsd r0,m32 */
+  {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m32 */
 
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},     /* movsx r0,m1 */
@@ -573,6 +578,9 @@ static struct pattern patterns[] = {
 
   {MIR_FBNE, "l r r", "0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "l r r", "66 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+
+  {MIR_CALL, "X r h0 $", "Y FF /2 R1"},  /* call *r1 */
+
   /* ??? Returns */
   {MIR_RET, "h0", "C3"},  /* ret */
   {MIR_FRET, "h16", "C3"}, /* ret */
@@ -656,6 +664,10 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     switch (start_ch = *p) {
     case ' ': case '\t':
       break;
+    case 'X':
+      break;
+    case '$':
+      return TRUE;
     case 'r':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
       break;
@@ -677,6 +689,9 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	return FALSE;
       else
 	gen_assert ('0' <= ch && ch <= '3');
+      break;
+    case 'a':
+      if (op.mode != MIR_OP_REF) return FALSE;
       break;
     case 'f':
       if (op.mode != MIR_OP_FLOAT) return FALSE;
@@ -1044,8 +1059,15 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	} else if (start_ch == 'I' ) {
 	  gen_assert (int32_p (op.u.i)); imm32 = (uint32_t) op.u.i;
 	} else {
-	  imm64_p = FALSE; imm64 = op.u.i;
+	  imm64_p = TRUE; imm64 = (uint64_t) op.u.i;
 	}
+	break;
+      case 'P':
+	ch = *++p;
+	gen_assert ('0' <= ch && ch <= '7');
+	op = insn->ops[ch - '0'];
+	gen_assert (op.mode == MIR_OP_REF);
+	imm64_p = TRUE; imm64 = (uint64_t) op.u.ref;
 	break;
       case 'l': {
 	label_ref_t lr;
@@ -1069,7 +1091,9 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       case '+':
 	ch = *++p;
 	gen_assert ('0' <= ch && ch <= '2');
-	lb = ch - '0';
+	op = insn->ops[ch - '0'];
+	gen_assert (op.mode == MIR_OP_HARD_REG);
+	setup_reg (&rex_b, &lb, op.u.hard_reg);
 	break;
       case 'c':
 	++p;
