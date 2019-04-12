@@ -3616,6 +3616,8 @@ static void scan_finish (void) {
   HTAB_DESTROY (insn_name_t, insn_name_tab);
 }
 
+#endif /* if MIR_SCAN */
+
 
 
 #if defined(__x86_64__)
@@ -3627,5 +3629,3 @@ static void scan_finish (void) {
 #else
 #error "undefined or unsupported generation target"
 #endif
-
-#endif /* if MIR_SCAN */
