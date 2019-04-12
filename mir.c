@@ -645,13 +645,6 @@ MIR_item_t MIR_new_forward (const char *name) {
   return new_export_import_forward (name, MIR_forward_item, "forward", FALSE);
 }
 
-MIR_item_t MIR_new_align (uint32_t align) {
-  MIR_item_t item = create_item (MIR_align_item, "align");
-  
-  item->u.align = align;
-  return item;
-}
-
 MIR_item_t MIR_new_bss (const char *name, size_t len) {
   MIR_item_t tab_item, item = create_item (MIR_bss_item, "bss");
   
@@ -1506,10 +1499,6 @@ static void output_item (FILE *f, MIR_item_t item) {
     fprintf (f, "%s:\tforward\n", item->u.forward);
     return;
   }
-  if (item->item_type == MIR_align_item) {
-    fprintf (f, "\talign\t%" PRIu32 "\n", item->u.align);
-    return;
-  }
   if (item->item_type == MIR_bss_item) {
     fprintf (f, "%s:\tbss\t%" PRIu64 "\n", item->u.bss->name, item->u.bss->len);
     return;
@@ -2011,7 +2000,7 @@ typedef enum {
    VERSION
    NSTR
    (string)*
-   ( ((label)* (insn code) (operand)* | STRN=(func|local|import|export|forward|align|<data>) ...) EOI? )*
+   ( ((label)* (insn code) (operand)* | STRN=(func|local|import|export|forward|<data>) ...) EOI? )*
    EOF
 
    where
@@ -2263,11 +2252,6 @@ static void write_item (FILE *f, MIR_item_t item) {
   if (item->item_type == MIR_forward_item) {
     write_name (f, "forward");
     write_name (f, item->u.forward);
-    return;
-  }
-  if (item->item_type == MIR_align_item) {
-    write_name (f, "align");
-    write_uint (f, item->u.align);
     return;
   }
   if (item->item_type == MIR_bss_item) {
@@ -2725,11 +2709,6 @@ void MIR_read (FILE *f) {
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
 	  (*error_func) (MIR_syntax_error, "forward should have no labels");
 	MIR_new_forward (read_name (f, "wrong forward name"));
-      } else if (strcmp (name, "align") == 0) {
-	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "align should have no labels");
-	u = read_uint (f, "wrong align");
-	MIR_new_align (u);
       } else if (strcmp (name, "nbss") == 0 || strcmp (name, "bss") == 0) {
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
 	  (*error_func) (MIR_syntax_error, "bss should have no labels");
@@ -3231,7 +3210,7 @@ void MIR_scan_string (const char *str) {
   MIR_var_t var;
   size_t n;
   int64_t i, frame_size, nargs;
-  int module_p, end_module_p, proto_p, func_p, end_func_p, export_p, import_p, forward_p, align_p;
+  int module_p, end_module_p, proto_p, func_p, end_func_p, export_p, import_p, forward_p;
   int bss_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
@@ -3264,7 +3243,7 @@ void MIR_scan_string (const char *str) {
 	t = scan_token (get_string_char, unget_string_char); /* label_names without insn */
     }
     module_p = end_module_p = proto_p = func_p = end_func_p = FALSE;
-    export_p = import_p = forward_p = align_p = bss_p = string_p = local_p = FALSE;
+    export_p = import_p = forward_p = bss_p = string_p = local_p = FALSE;
     if (strcmp (name, "module") == 0) {
       module_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
@@ -3297,10 +3276,6 @@ void MIR_scan_string (const char *str) {
       forward_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
 	process_error (MIR_syntax_error, "forward should have no labels");
-    } else if (strcmp (name, "align") == 0) {
-      align_p = TRUE;
-      if (VARR_LENGTH (label_name_t, label_names) != 0)
-	process_error (MIR_syntax_error, "align should have no labels");
     } else if (strcmp (name, "bss") == 0) {
       bss_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
@@ -3467,13 +3442,6 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "endmodule should have no params");
       MIR_finish_module ();
       module = NULL;
-    } else if (align_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
-	process_error (MIR_syntax_error, "align should have one operand");
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      if (op_addr[0].mode != MIR_OP_INT || op_addr[0].u.i < 0)
-	process_error (MIR_syntax_error, "wrong align operand type or value");
-      MIR_new_align (op_addr[0].u.i);
     } else if (bss_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
 	process_error (MIR_syntax_error, "bss should have one operand");

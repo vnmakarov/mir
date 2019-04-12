@@ -249,7 +249,7 @@ typedef struct MIR_module *MIR_module_t;
 DEF_DLIST_LINK (MIR_item_t);
 
 typedef enum {MIR_func_item, MIR_proto_item, MIR_import_item, MIR_export_item,
-	      MIR_forward_item, MIR_align_item, MIR_data_item, MIR_bss_item} MIR_item_type_t;
+	      MIR_forward_item, MIR_data_item, MIR_bss_item} MIR_item_type_t;
 
 /* MIR module items (function or import): */
 struct MIR_item {
@@ -270,7 +270,6 @@ struct MIR_item {
     MIR_name_t import;
     MIR_name_t export;
     MIR_name_t forward;
-    uint32_t align;
     MIR_data_t data;
     MIR_bss_t bss;
   } u;
@@ -328,7 +327,6 @@ extern MIR_module_t MIR_new_module (const char *name);
 extern MIR_item_t MIR_new_import (const char *name);
 extern MIR_item_t MIR_new_export (const char *name);
 extern MIR_item_t MIR_new_forward (const char *name);
-extern MIR_item_t MIR_new_align (uint32_t align);
 extern MIR_item_t MIR_new_bss (const char *name, size_t len); /* name can be NULL */
 extern MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type,
 				size_t nel, const void *els); /* name can be NULL */

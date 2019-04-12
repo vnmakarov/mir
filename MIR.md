@@ -48,7 +48,6 @@
       (`MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (const char *name, const char *str)`)
     * **Memory segement**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (const char *name, size_t len)`)
-    * **Align**: `MIR_align_item` (`MIR_item_t MIR_new_align (uint32_t align)`)
   * Names of MIR functions, imports, and prototypes should be unique in a module
   * MIR text module syntax looks the folowing:
 ```
@@ -402,10 +401,11 @@ ex100:    func v
     * You can load MIR module through API function `MIR_load_module
       (MIR_module_t m)`.  The function allocates the module data and
       makes visible the exported module items to other module during
-      subsequent linking.  If there is already an exported item with
-      the same name, it will be not visible for linking anymore.  Such
-      visibilty mechanism permits usage of different versions of the
-      same function
+      subsequent linking.  There is no guarantee that the different
+      data items created one after another will be in adjacent memory.
+      If there is already an exported item with the same name, it will
+      be not visible for linking anymore.  Such visibilty mechanism
+      permits usage of different versions of the same function
     * MIR permits to use imported items not implemented in MIR, for
       example to use C standard function `strcmp`.  You need to inform
       MIR about it.  API function `MIR_load_external (const char
