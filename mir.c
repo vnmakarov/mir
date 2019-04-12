@@ -3619,11 +3619,11 @@ static void scan_finish (void) {
 
 
 #if defined(__x86_64__)
-#include "x86_64-interp.c"
+#include "mir-x86_64.c"
 #elif defined(__PPC64__)
-#include "ppc64-interp.c"
+#include "mir-ppc64.c"
 #elif defined(__aarch64__)
-#include "aarch64-interp.c"
+#include "mir-aarch64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
