@@ -1045,7 +1045,12 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	gen_assert ('0' <= ch && ch <= '7');
 	op = insn->ops[ch - '0'];
 	gen_assert (op.mode == MIR_OP_REF);
-	imm64_p = TRUE; imm64 = (uint64_t) op.u.ref;
+	imm64_p = TRUE;
+	if (op.u.ref->item_type == MIR_data_item
+	    && op.u.ref->u.data->name != NULL && _MIR_reserved_name_p (op.u.ref->u.data->name))
+	  imm64 = (uint64_t) op.u.ref->u.data->u.els;
+	else
+	  imm64 = (uint64_t) op.u.ref->addr;
 	break;
       case 'l': {
 	label_ref_t lr;
