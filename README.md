@@ -122,6 +122,8 @@ ex100:    func v
     * When we use 32-bit instructions we take only 32-bit significant part of 64-bit operand and high 32-bit part
       of the result is machine defined (so if you write a portable MIR code consider the high 32-bit part value is undefined)
   * `string` describes data in form of C string
+     * C string can be used directly as an insn operand.  In this case the data will be added to the module and
+       the data address will be used as an operand
   * `export` describes module functions or data which are visible outside the current module
   * `import` describes module functions or data which should be defined in other MIR modules
   * `proto` describes function prototypes
