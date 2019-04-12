@@ -232,7 +232,10 @@ typedef struct MIR_data {
   const char *name; /* can be NULL */
   MIR_type_t el_type;
   size_t nel;
-  uint8_t els[1];
+  union {
+    double d; /* for alignment of temporary literals */
+    uint8_t els[1];
+  } u;
 } *MIR_data_t;
 
 typedef struct MIR_bss {
@@ -256,8 +259,10 @@ struct MIR_item {
   MIR_item_type_t item_type; /* item type */
   /* Non-null only for export/forward items.  It forms a chain to the final definition. */
   MIR_item_t forward_def;
-  void *addr; /* address of imported definition or proto object */
-  void *interpreter_call, *binary_call; /* func used for call from interpreter and binary code */
+  /* address of loaded data/bss items, function to call the function
+     item, imported definition or proto object */
+  void *addr;
+  void *interpreter_call; /* func used for call from interpreter */
   int export_p; /* true for export items (only func items) */
   union {
     MIR_func_t func;
@@ -397,10 +402,12 @@ extern void MIR_link (void);
 
 /* For internal use only:  */
 extern const char *_MIR_uniq_string (const char *str);
+extern int _MIR_reserved_name_p (const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
-extern void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
+extern size_t _MIR_type_size (MIR_type_t type);
+extern void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
 
-extern uint8_t *MIR_publish_code (uint8_t *code, size_t code_len);
+extern uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len);
 
 struct MIR_code_reloc {
   size_t offset;
@@ -409,7 +416,7 @@ struct MIR_code_reloc {
 
 typedef struct MIR_code_reloc *MIR_code_reloc_t;
 
-extern int MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
-extern int MIR_update_code (uint8_t *base, size_t nloc, ...);
+extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
+extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
 #endif /* #ifndef MIR_H */

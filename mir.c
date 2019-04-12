@@ -33,8 +33,9 @@ static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_
 /* Reserved names:
    fp - frame pointer
    t<number> - a temp reg
-   hr<number> - a hardware reg */
-static int reserved_name_p (const char *name) {
+   hr<number> - a hardware reg
+   lc<number> - a temp item */
+int _MIR_reserved_name_p (const char *name) {
   size_t i, start;
   
   if (strcmp (name, FP_NAME) == 0)
@@ -342,7 +343,7 @@ static MIR_reg_t create_func_reg (MIR_func_t func, const char *name, MIR_reg_t r
   size_t rdn, tab_rdn;
   int htab_res;
   
-  if (! any_p && reserved_name_p (name))
+  if (! any_p && _MIR_reserved_name_p (name))
     (*error_func) (MIR_reserved_name_error, "redefining a reserved name");
   rd.name_num = string_store (&strings, &string_tab, name).num;
   rd.func = func;
@@ -670,8 +671,8 @@ MIR_item_t MIR_new_bss (const char *name, size_t len) {
   return item;
 }
 
-static size_t type_size (MIR_type_t tp) {
-  switch (tp) {
+size_t _MIR_type_size (MIR_type_t type) {
+  switch (type) {
   case MIR_T_I8: return sizeof (int8_t);
   case MIR_T_U8: return sizeof (uint8_t);
   case MIR_T_I16: return sizeof (int16_t);
@@ -691,7 +692,7 @@ static size_t type_size (MIR_type_t tp) {
 MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els) {
   MIR_item_t tab_item, item = create_item (MIR_data_item, "data");
   MIR_data_t data;
-  size_t el_len = type_size (el_type);
+  size_t el_len = _MIR_type_size (el_type);
   
   item->u.data = data = malloc (sizeof (struct MIR_data) + el_len * nel);
   if (data == NULL) {
@@ -707,7 +708,7 @@ MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const
   }
   data->el_type = el_type;
   data->nel = nel;
-  memcpy (data->els, els, el_len * nel);
+  memcpy (data->u.els, els, el_len * nel);
   return item;
 }
 
@@ -970,13 +971,24 @@ static void replace_global (MIR_item_t item) {
 void MIR_load_module (MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items);
        item != NULL;
-       item = DLIST_NEXT (MIR_item_t, item))
+       item = DLIST_NEXT (MIR_item_t, item)) {
     if (item->export_p) { /* update global item table */
       mir_assert (item->item_type != MIR_export_item
 		  && item->item_type != MIR_import_item
 		  && item->item_type != MIR_forward_item);
       replace_global (item);
     }
+    if (item->item_type == MIR_bss_item) {
+      if (item->addr == NULL)
+	item->addr = malloc (item->u.bss->len);
+      memset (item->addr, 0, item->u.bss->len);
+    } else if (item->item_type == MIR_data_item) {
+      if (item->addr == NULL)
+	item->addr = malloc (item->u.data->nel * _MIR_type_size (item->u.data->el_type));
+      memmove (item->addr, item->u.data->u.els,
+	       item->u.data->nel * _MIR_type_size (item->u.data->el_type));
+    }
+  }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
 
@@ -1006,8 +1018,6 @@ void MIR_link (void) {
 	if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) == NULL)
 	  (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item");
 	item->addr = tab_item->addr;
-	item->binary_call = tab_item->binary_call;
-	item->interpreter_call = tab_item->interpreter_call;
       } else if (item->item_type == MIR_export_item) {
 	// ???;
       }
@@ -1509,23 +1519,23 @@ static void output_item (FILE *f, MIR_item_t item) {
     fprintf (f, "%s:\t%s\t", data->name, MIR_type_str (data->el_type));
     for (size_t i = 0; i < data->nel; i++)
       switch (data->el_type) {
-      case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->els)[i]); break;
-      case MIR_T_U8: fprintf (f, "%" PRIu8, ((uint8_t *) data->els)[i]); break;
-      case MIR_T_I16: fprintf (f, "%" PRId16, ((int16_t *) data->els)[i]); break;
-      case MIR_T_U16: fprintf (f, "%" PRIu16, ((uint16_t *) data->els)[i]); break;
-      case MIR_T_I32: fprintf (f, "%" PRId32, ((int32_t *) data->els)[i]); break;
-      case MIR_T_U32: fprintf (f, "%" PRIu32, ((uint32_t *) data->els)[i]); break;
-      case MIR_T_I64: fprintf (f, "%" PRId64, ((int64_t *) data->els)[i]); break;
-      case MIR_T_U64: fprintf (f, "%" PRIu64, ((uint64_t *) data->els)[i]); break;
-      case MIR_T_F: fprintf (f, "%.*ef", FLT_DECIMAL_DIG, ((float *) data->els)[i]); break;
-      case MIR_T_D: fprintf (f, "%.*e", DBL_DECIMAL_DIG, ((double *) data->els)[i]); break;
+      case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
+      case MIR_T_U8: fprintf (f, "%" PRIu8, ((uint8_t *) data->u.els)[i]); break;
+      case MIR_T_I16: fprintf (f, "%" PRId16, ((int16_t *) data->u.els)[i]); break;
+      case MIR_T_U16: fprintf (f, "%" PRIu16, ((uint16_t *) data->u.els)[i]); break;
+      case MIR_T_I32: fprintf (f, "%" PRId32, ((int32_t *) data->u.els)[i]); break;
+      case MIR_T_U32: fprintf (f, "%" PRIu32, ((uint32_t *) data->u.els)[i]); break;
+      case MIR_T_I64: fprintf (f, "%" PRId64, ((int64_t *) data->u.els)[i]); break;
+      case MIR_T_U64: fprintf (f, "%" PRIu64, ((uint64_t *) data->u.els)[i]); break;
+      case MIR_T_F: fprintf (f, "%.*ef", FLT_DECIMAL_DIG, ((float *) data->u.els)[i]); break;
+      case MIR_T_D: fprintf (f, "%.*e", DBL_DECIMAL_DIG, ((double *) data->u.els)[i]); break;
 	/* only ptr as ref ??? */
-      case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->els)[i]); break;
+      case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
-    if (data->el_type == MIR_T_U8 && data->nel != 0 && data->els[data->nel - 1] == '\0') {
+    if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
       fprintf (f, " # "); /* print possible string as a comment */
-      out_str (f, data->els);
+      out_str (f, data->u.els);
     }
     fprintf (f, "\n");
     return;
@@ -1770,7 +1780,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   }
 }
 
-void MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p) {
+void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p) {
   int out_p;
   MIR_insn_code_t code = insn->code;
   size_t i, nops = MIR_insn_nops (insn);
@@ -1878,7 +1888,7 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       VARR_PUSH (MIR_insn_t, ret_insns, insn);
     }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    MIR_simplify_insn (func_item, insn, mem_float_p);
+    _MIR_simplify_insn (func_item, insn, mem_float_p);
   }
   make_one_ret (func_item, ret_code == MIR_INSN_BOUND ? MIR_RET : ret_code);
 }
@@ -1903,7 +1913,7 @@ static VARR (code_holder_t) *code_holders;
 
 static size_t page_size;
 
-uint8_t *MIR_publish_code (uint8_t *code, size_t code_len) {
+uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
   size_t len;
   int new_p = TRUE;
@@ -1936,12 +1946,12 @@ uint8_t *MIR_publish_code (uint8_t *code, size_t code_len) {
   return mem;
 }
 
-int MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
+int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
   for (size_t i = 0; i < nloc; i++)
     memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
 }
 
-int MIR_update_code (uint8_t *base, size_t nloc, ...) {
+int _MIR_update_code (uint8_t *base, size_t nloc, ...) {
   va_list args;
 
   va_start (args, nloc);
@@ -2284,18 +2294,18 @@ static void write_item (FILE *f, MIR_item_t item) {
     write_type (f, data->el_type);
     for (i = 0; i < data->nel; i++)
       switch (data->el_type) {
-      case MIR_T_I8: write_int (f, ((int8_t *) data->els)[i]); break;
-      case MIR_T_U8: write_uint (f, ((uint8_t *) data->els)[i]); break;
-      case MIR_T_I16: write_int (f, ((int16_t *) data->els)[i]); break;
-      case MIR_T_U16: write_uint (f, ((uint16_t *) data->els)[i]); break;
-      case MIR_T_I32: write_int (f, ((int32_t *) data->els)[i]); break;
-      case MIR_T_U32: write_uint (f, ((uint32_t *) data->els)[i]); break;
-      case MIR_T_I64: write_int (f, ((int64_t *) data->els)[i]); break;
-      case MIR_T_U64: write_uint (f, ((uint64_t *) data->els)[i]); break;
-      case MIR_T_F: write_float (f, ((float *) data->els)[i]); break;
-      case MIR_T_D: write_double (f, ((double *) data->els)[i]); break;
+      case MIR_T_I8: write_int (f, ((int8_t *) data->u.els)[i]); break;
+      case MIR_T_U8: write_uint (f, ((uint8_t *) data->u.els)[i]); break;
+      case MIR_T_I16: write_int (f, ((int16_t *) data->u.els)[i]); break;
+      case MIR_T_U16: write_uint (f, ((uint16_t *) data->u.els)[i]); break;
+      case MIR_T_I32: write_int (f, ((int32_t *) data->u.els)[i]); break;
+      case MIR_T_U32: write_uint (f, ((uint32_t *) data->u.els)[i]); break;
+      case MIR_T_I64: write_int (f, ((int64_t *) data->u.els)[i]); break;
+      case MIR_T_U64: write_uint (f, ((uint64_t *) data->u.els)[i]); break;
+      case MIR_T_F: write_float (f, ((float *) data->u.els)[i]); break;
+      case MIR_T_D: write_double (f, ((double *) data->u.els)[i]); break;
 	/* only ptr as ref ??? */
-      case MIR_T_P: write_uint (f, ((uintptr_t *) data->els)[i]); break;
+      case MIR_T_P: write_uint (f, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
     put_byte (f, TAG_EOI);

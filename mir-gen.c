@@ -3201,7 +3201,7 @@ void *MIR_gen (MIR_item_t func_item) {
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
 #endif 
-  res = MIR_publish_code (code, code_len);
+  res = _MIR_publish_code (code, code_len);
   destroy_func_live_ranges ();
   destroy_func_cfg ();
   return res;
