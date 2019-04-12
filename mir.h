@@ -419,4 +419,8 @@ typedef struct MIR_code_reloc *MIR_code_reloc_t;
 extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
 extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
+extern void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler);
+extern void *_MIR_get_thunk (void);
+extern void _MIR_redirect_thunk (void *thunk, void *to);
+
 #endif /* #ifndef MIR_H */

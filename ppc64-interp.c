@@ -2,8 +2,9 @@
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+/* ??? Rewrite to ppc64 */
 /* *to = from; rax = 8; jump *handler  */
-static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
+void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
   static unsigned char pattern[] =
     {
      0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0: movabsq 0, r10 */
@@ -17,4 +18,18 @@ static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
 
   MIR_update_code (addr, 3, 2, from, 12, to, 25, handler);
   return addr;
+}
+
+/* r10=<address>; jump *r10  */
+void *_MIR_get_thunk (void) {
+  static unsigned char pattern[] =
+    {
+     0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0: movabsq 0, r10 */
+     0x41, 0xff, 0xe2, /* 40: jmpq   *%r10 */
+    };
+  return _MIR_publish_code (pattern, sizeof (pattern));
+}
+
+void _MIR_redirect_thunk (void *thunk, void *to) {
+  _MIR_update_code (thunk, 1, 2, to);
 }

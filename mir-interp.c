@@ -28,16 +28,6 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 #define ALWAYS_INLINE inline
 #endif
 
-#if defined(__x86_64__)
-#include "x86_64-interp.c"
-#elif defined(__PPC64__)
-#include "ppc64-interp.c"
-#elif defined(__aarch64__)
-#include "aarch64-interp.c"
-#else
-#error "undefined or unsupported generation target"
-#endif
-
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
@@ -982,5 +972,5 @@ static void *get_call_shim (MIR_item_t func_item) {
 }
 
 void MIR_set_C_interp_interface (MIR_item_t func_item) {
-  func_item->addr = get_interp_shim (func_item, &called_func, get_call_shim (func_item));
+  func_item->addr = _MIR_get_interp_shim (func_item, &called_func, get_call_shim (func_item));
 }

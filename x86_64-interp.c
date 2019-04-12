@@ -3,7 +3,7 @@
 */
 
 /* *to = from; rax = 8; jump *handler  */
-static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
+void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
   static unsigned char pattern[] =
     {
      0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0: movabsq 0, r10 */
@@ -20,7 +20,7 @@ static void *get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
 }
 
 /* r10=<address>; jump *r10  */
-static void *get_thunk (void) {
+void *_MIR_get_thunk (void) {
   static unsigned char pattern[] =
     {
      0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0: movabsq 0, r10 */
@@ -29,11 +29,6 @@ static void *get_thunk (void) {
   return _MIR_publish_code (pattern, sizeof (pattern));
 }
 
-static void redirect_thunk (void *thunk, void *to) {
-  static unsigned char pattern[] =
-    {
-     0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0: movabsq 0, r10 */
-     0x41, 0xff, 0xe2, /* 40: jmpq   *%r10 */
-    };
+void _MIR_redirect_thunk (void *thunk, void *to) {
   _MIR_update_code (thunk, 1, 2, to);
 }
