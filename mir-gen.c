@@ -87,7 +87,7 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
 
 #ifdef __x86_64__
-#include "x86_64-target.c"
+#include "mir-gen-x86_64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
