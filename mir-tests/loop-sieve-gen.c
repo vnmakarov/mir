@@ -41,6 +41,8 @@ int main (void) {
 #endif
   }
   fprintf (stderr, "MIR %d funcs creation end -- %.0f usec\n", N, real_usec_time () - start_time);
+  MIR_load_module (m);
+  MIR_link ();
   MIR_gen_init ();
   fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
 #if MIR_GEN_DEBUG
