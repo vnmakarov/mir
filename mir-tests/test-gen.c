@@ -34,6 +34,8 @@ void main (int argc, char *argv[]) {
   MIR_scan_string (read_file (argv[1]));
   m = DLIST_TAIL (MIR_module_t, MIR_modules);
   func = DLIST_TAIL (MIR_item_t, m->items);
+  MIR_load_module (m);
+  MIR_link ();
   MIR_gen_init ();
 #if MIR_GEN_DEBUG
   fprintf (stderr, "\n==============================%s============================\n", argv[1]);

@@ -32,3 +32,10 @@ void *_MIR_get_thunk (void) {
 void _MIR_redirect_thunk (void *thunk, void *to) {
   _MIR_update_code (thunk, 1, 2, to);
 }
+
+void *_MIR_get_thunk_func (void *thunk) {
+  void *res;
+  
+  memcpy (&res, (char *) thunk + 2, sizeof (void *));
+  return res;
+}

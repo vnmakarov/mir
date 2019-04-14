@@ -3202,6 +3202,7 @@ void *MIR_gen (MIR_item_t func_item) {
   }
 #endif 
   res = _MIR_publish_code (code, code_len);
+  _MIR_redirect_thunk (func_item->addr, res);
   destroy_func_live_ranges ();
   destroy_func_cfg ();
   return res;

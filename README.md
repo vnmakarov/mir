@@ -93,16 +93,16 @@ cont3:    add i, i, 1
           jmp loop3
 fin3:     add iter, iter, 1
           jmp loop
-fin:      rets count
+fin:      ret count
           endfunc
           endmodule
 m_ex100:  module
 format:   string "sieve (10) = %d\n"
 p_printf: proto v, p, i32
-p_seive:  proto i32, i32
+p_sieve:  proto i32, i32
           export ex100
           import sieve, printf
-ex100:    func v
+ex100:    func v, 0
           local i64:r
           call p_sieve, sieve, r, 100
           call p_printf, printf, format, r
@@ -140,10 +140,13 @@ ex100:    func v
   * Running code from above example could look the following (here `m1` and `m2` are modules `m_sieve` and `m_e100`,
     `func` is function `ex100`, `sieve` is function `sieve`):
 ```
-    MIR_load_module (m); MIR_load_external ("printf", printf); MIR_link ();
+    MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf); MIR_link ();
     MIR_gen (sieve); /* optional to generate machine code for sieve */
     MIR_interp (func, 0); /* zero here is arguments number  */
 ```
+    * If you generate code for a function, you should also generate
+      code for all called functions.  In the future a lazy automatic
+      generation of called functions will be implemented.
 
 ## The current state of MIR project
 

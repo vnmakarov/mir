@@ -257,12 +257,12 @@ struct MIR_item {
   MIR_module_t module;
   DLIST_LINK (MIR_item_t) item_link;
   MIR_item_type_t item_type; /* item type */
-  /* Non-null only for export/forward items.  It forms a chain to the final definition. */
-  MIR_item_t forward_def;
+  /* Non-null only for export/forward items and import item after
+     linking.  It forms a chain to the final definition. */
+  MIR_item_t ref_def;
   /* address of loaded data/bss items, function to call the function
      item, imported definition or proto object */
   void *addr;
-  void *interpreter_call; /* func used for call from interpreter */
   int export_p; /* true for export items (only func items) */
   union {
     MIR_func_t func;
@@ -417,8 +417,10 @@ typedef struct MIR_code_reloc *MIR_code_reloc_t;
 extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
 extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
+extern void _MIR_undefined_interface (void);
 extern void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler);
 extern void *_MIR_get_thunk (void);
 extern void _MIR_redirect_thunk (void *thunk, void *to);
+extern void *_MIR_get_thunk_func (void *thunk);
 
 #endif /* #ifndef MIR_H */

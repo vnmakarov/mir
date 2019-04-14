@@ -14,7 +14,7 @@ mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-test: util-test mir-test io-test scan-test interp-test gen-test c2mir-test mir2c-test
+test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test c2mir-test mir2c-test
 	@echo ==============================Test is done
       
 bench: interp-bench gen-bench io-bench c2mir-bench mir2c-bench
@@ -55,6 +55,9 @@ gen-test:
 gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+
+readme-example-test:
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-gen.c mir-tests/readme-example.c -lffi && ./a.out
 
 c2mir-test:
 	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c c2mir/c2mir.c && ./a.out -v

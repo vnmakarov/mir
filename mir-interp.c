@@ -95,6 +95,8 @@ static void push_mem (MIR_op_t op) {
   v.i = op.u.mem.base; VARR_PUSH (MIR_val_t, code_varr, v);
 }
 
+static void redirect_interface_to_interp (MIR_item_t func_item);
+
 static void generate_icode (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, label;
@@ -126,9 +128,17 @@ static void generate_icode (MIR_item_t func_item) {
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = ops[1].u.i; VARR_PUSH (MIR_val_t, code_varr, v);
       } else if (ops[1].mode == MIR_OP_REF) {
+	MIR_item_t item = ops[1].u.ref;
+	
+	if (item->item_type == MIR_import_item && item->ref_def != NULL && item->ref_def != NULL
+	    && _MIR_get_thunk_func (item->ref_def->addr) == _MIR_undefined_interface) {
+	  mir_assert (item->ref_def->item_type == MIR_func_item);
+	  redirect_interface_to_interp (item->ref_def);
+	  item->addr = item->ref_def->addr;
+	}
 	v = get_icode (IC_MOVP); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
-	v.a = ops[1].u.ref; VARR_PUSH (MIR_val_t, code_varr, v);
+	v.a = item->addr; VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
 	mir_assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
@@ -345,8 +355,7 @@ static VARR (MIR_val_t) *args_varr;
 
 static MIR_val_t *args;
  
-static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res,
-		  size_t nargs, MIR_val_t *args);
+static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args);
 
 static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
   code_t pc, ops;
@@ -695,101 +704,79 @@ static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
 
 MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
 
-static void call (MIR_proto_t proto, MIR_item_t func_item, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
-  void *addr;
+static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
   MIR_val_t val;
   MIR_type_t type;
   MIR_var_t *arg_vars = NULL;
+  ffi_cif cif;
+  ffi_status status;
+  union { ffi_arg rint; float f; double d; void *a; } u;
 
-  mir_assert (func_item->item_type == MIR_func_item || func_item->item_type == MIR_import_item);
   if (proto->args == NULL) {
     mir_assert (nargs == 0);
   } else {
     mir_assert (nargs == VARR_LENGTH (MIR_var_t, proto->args));
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
-  if ((addr = func_item->addr) == NULL) {
-    for (size_t i = 0; i < nargs; i++) {
-      type = arg_vars[i].type;
-      switch (type) {
-      case MIR_T_I8: args[i].i = (int8_t) args[i].i; break;
-      case MIR_T_I16: args[i].i = (int16_t) args[i].i; break;
-      case MIR_T_I32: args[i].i = (int32_t) args[i].i; break;
-      case MIR_T_U8: args[i].u = (uint8_t) args[i].u; break;
-      case MIR_T_U16: args[i].u = (uint16_t) args[i].u; break;
-      case MIR_T_U32: args[i].u = (uint32_t) args[i].u; break;
-      default: /* do nothing */; break;
-      }
-    }
-    MIR_val_t val = MIR_interp_arr (func_item, nargs, args);
-
-    if (proto->res_type != MIR_T_V)
-      *res = val;
-  } else {
-    ffi_cif cif;
-    ffi_status status;
-    union { ffi_arg rint; float f; double d; void *a; } u;
-  
-    if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
-      VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
-      VARR_EXPAND (int_value_t, ffi_int_values_varr, nargs);
-      ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
-      ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
-      ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
-    }
+  if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
+    VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
+    VARR_EXPAND (int_value_t, ffi_int_values_varr, nargs);
+    ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
+    ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
+    ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
+  }
     
-    for (size_t i = 0; i < nargs; i++) {
-      type = arg_vars[i].type;
-      ffi_arg_types[i] = ffi_type_ptr (type);
-      switch (type) {
-      case MIR_T_I8:
-	ffi_int_values[i].i8 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i8;
-	break;
-      case MIR_T_I16:
-	ffi_int_values[i].i16 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i16;
-	break;
-      case MIR_T_I32:
-	ffi_int_values[i].i32 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i32;
-	break;
-      case MIR_T_U8:
-	ffi_int_values[i].u8 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u8;
-	break;
-      case MIR_T_U16:
-	ffi_int_values[i].u16 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u16;
-	break;
-      case MIR_T_U32:
-	ffi_int_values[i].u32 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u32;
-	break;
-      case MIR_T_I64: ffi_arg_values[i] = &args[i].i; break;
-      case MIR_T_U64: ffi_arg_values[i] = &args[i].u; break;
-      case MIR_T_F: ffi_arg_values[i] = &args[i].f; break;
-      case MIR_T_D: ffi_arg_values[i] = &args[i].d; break;
-      case MIR_T_P: ffi_arg_values[i] = &args[i].a; break;
-      default:
-	mir_assert (FALSE);
-      }
-    }
-    
-    status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
-    mir_assert (status == FFI_OK);
-    
-    ffi_call (&cif, addr, &u, ffi_arg_values);
-    switch (proto->res_type) {
-    case MIR_T_I8: res->i = (int8_t) (u.rint); return;
-    case MIR_T_U8: res->u = (uint8_t) (u.rint); return;
-    case MIR_T_I16: res->i = (int16_t) (u.rint); return;
-    case MIR_T_U16: res->u = (uint16_t) (u.rint); return;
-    case MIR_T_I32: res->i = (int32_t) (u.rint); return;
-    case MIR_T_U32: res->u = (uint32_t) (u.rint); return;
-    case MIR_T_I64: res->i = (int64_t) (u.rint); return;
-    case MIR_T_U64: res->u = (uint64_t) (u.rint); return;
-    case MIR_T_F: res->f = u.f; return;
-    case MIR_T_D: res->d = u.d; return;
-    case MIR_T_P: res->a = u.a; return;
-    case MIR_T_V: return;
+  for (size_t i = 0; i < nargs; i++) {
+    type = arg_vars[i].type;
+    ffi_arg_types[i] = ffi_type_ptr (type);
+    switch (type) {
+    case MIR_T_I8:
+      ffi_int_values[i].i8 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i8;
+      break;
+    case MIR_T_I16:
+      ffi_int_values[i].i16 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i16;
+      break;
+    case MIR_T_I32:
+      ffi_int_values[i].i32 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i32;
+      break;
+    case MIR_T_U8:
+      ffi_int_values[i].u8 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u8;
+      break;
+    case MIR_T_U16:
+      ffi_int_values[i].u16 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u16;
+      break;
+    case MIR_T_U32:
+      ffi_int_values[i].u32 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u32;
+      break;
+    case MIR_T_I64: ffi_arg_values[i] = &args[i].i; break;
+    case MIR_T_U64: ffi_arg_values[i] = &args[i].u; break;
+    case MIR_T_F: ffi_arg_values[i] = &args[i].f; break;
+    case MIR_T_D: ffi_arg_values[i] = &args[i].d; break;
+    case MIR_T_P: ffi_arg_values[i] = &args[i].a; break;
     default:
       mir_assert (FALSE);
     }
+  }
+    
+  status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
+  mir_assert (status == FFI_OK);
+  
+  ffi_call (&cif, addr, &u, ffi_arg_values);
+  switch (proto->res_type) {
+  case MIR_T_I8: res->i = (int8_t) (u.rint); return;
+  case MIR_T_U8: res->u = (uint8_t) (u.rint); return;
+  case MIR_T_I16: res->i = (int16_t) (u.rint); return;
+  case MIR_T_U16: res->u = (uint16_t) (u.rint); return;
+  case MIR_T_I32: res->i = (int32_t) (u.rint); return;
+  case MIR_T_U32: res->u = (uint32_t) (u.rint); return;
+  case MIR_T_I64: res->i = (int64_t) (u.rint); return;
+  case MIR_T_U64: res->u = (uint64_t) (u.rint); return;
+  case MIR_T_F: res->f = u.f; return;
+  case MIR_T_D: res->d = u.d; return;
+  case MIR_T_P: res->a = u.a; return;
+  case MIR_T_V: return;
+  default:
+    mir_assert (FALSE);
   }
 }
 
@@ -973,4 +960,9 @@ static void *get_call_shim (MIR_item_t func_item) {
 
 void MIR_set_C_interp_interface (MIR_item_t func_item) {
   func_item->addr = _MIR_get_interp_shim (func_item, &called_func, get_call_shim (func_item));
+}
+
+static void redirect_interface_to_interp (MIR_item_t func_item) {
+  _MIR_redirect_thunk (func_item->addr,
+		       _MIR_get_interp_shim (func_item, &called_func, get_call_shim (func_item)));
 }

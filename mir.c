@@ -558,7 +558,7 @@ static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
 	replace_p = TRUE;
     }
     if (replace_p) { /* replace forward by export or export/forward by its definition: */
-      tab_item->forward_def = item;
+      tab_item->ref_def = item;
       if (tab_item->item_type == MIR_export_item)
 	item->export_p = TRUE;
       HTAB_DO (MIR_item_t, *item_tab, tab_item, HTAB_DELETE, tab_item);
@@ -576,11 +576,11 @@ static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
       if (! tab_item->export_p) { /* just keep one export: */
 	tab_item->export_p = TRUE;
 	DLIST_APPEND (MIR_item_t, curr_module->items, item);
-	item->forward_def = tab_item;
+	item->ref_def = tab_item;
       }
     } else if (item->item_type == MIR_forward_item) {
       DLIST_APPEND (MIR_item_t, curr_module->items, item);
-      item->forward_def = tab_item;
+      item->ref_def = tab_item;
     } else if (item->item_type == MIR_import_item) {
       (*error_func) (MIR_import_export_error, "import of local definition");
     } else {
@@ -606,8 +606,9 @@ static MIR_item_t create_item (MIR_item_type_t item_type, const char *item_name)
   item->data = NULL;
   item->module = curr_module;
   item->item_type = item_type;
-  item->forward_def = NULL;
+  item->ref_def = NULL;
   item->export_p = FALSE;
+  item->addr = NULL;
   return item;
 }
 
@@ -961,16 +962,14 @@ static void replace_global (MIR_item_t item) {
   HTAB_DO (MIR_item_t, global_item_tab, item, HTAB_INSERT, tab_item);
 }
 
+void _MIR_undefined_interface (void) {
+  (*error_func) (MIR_call_op_error, "undefined call interface");
+}
+
 void MIR_load_module (MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items);
        item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
-    if (item->export_p) { /* update global item table */
-      mir_assert (item->item_type != MIR_export_item
-		  && item->item_type != MIR_import_item
-		  && item->item_type != MIR_forward_item);
-      replace_global (item);
-    }
     if (item->item_type == MIR_bss_item) {
       if (item->addr == NULL)
 	item->addr = malloc (item->u.bss->len);
@@ -980,6 +979,16 @@ void MIR_load_module (MIR_module_t m) {
 	item->addr = malloc (item->u.data->nel * _MIR_type_size (item->u.data->el_type));
       memmove (item->addr, item->u.data->u.els,
 	       item->u.data->nel * _MIR_type_size (item->u.data->el_type));
+    } else if (item->item_type == MIR_func_item) {
+      if (item->addr == NULL)
+	item->addr = _MIR_get_thunk ();
+      _MIR_redirect_thunk (item->addr, _MIR_undefined_interface);
+    }
+    if (item->export_p) { /* update global item table */
+      mir_assert (item->item_type != MIR_export_item
+		  && item->item_type != MIR_import_item
+		  && item->item_type != MIR_forward_item);
+      replace_global (item);
     }
   }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
@@ -1011,6 +1020,7 @@ void MIR_link (void) {
 	if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) == NULL)
 	  (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item");
 	item->addr = tab_item->addr;
+	item->ref_def = tab_item;
       } else if (item->item_type == MIR_export_item) {
 	// ???;
       }
@@ -1656,7 +1666,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   case MIR_OP_STR:
     mir_assert (! out_p);
     if (op->mode == MIR_OP_REF) {
-      for (MIR_item_t item = op->u.ref; item != NULL; item = item->forward_def)
+      for (MIR_item_t item = op->u.ref; item != NULL; item = item->ref_def)
 	if (item->item_type != MIR_export_item && item->item_type != MIR_forward_item) {
 	  op->u.ref = item;
 	  break;
@@ -1927,7 +1937,8 @@ uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
     mem = (uint8_t *) mmap (NULL, len, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
       return NULL;
-    start = ch.start = ch.free = mem;
+    start = ch.start = mem;
+    ch.free = mem + code_len;
     ch.bound = mem + len;
     VARR_PUSH (code_holder_t, code_holders, ch);
   }
@@ -2971,8 +2982,8 @@ static token_t scan_string (int c, int get_char (void), void unget_char (int)) {
       process_error (MIR_syntax_error, "unfinished string");
     if (c == '"')
       break;
-    if ((c = get_char ()) == '\\') {
-      if (c == 'n') c = '\n';
+    if (c == '\\') {
+      if ((c = get_char ()) == 'n') c = '\n';
       else if (c == 't') c = '\t';
       else if (c == 'v') c = '\v';
       else if (c == 'a') c = '\a';
