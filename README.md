@@ -225,11 +225,13 @@ ex100:    func v, 0
  * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary and MIR text representation
  * Files `mir-dlist.h`, `mir-mp.h`, `mir-varr.h`, `mir-bitmap.h`, `mir-htab.h` contain generic code correspondingly for
    double-linked lists, memory pools, variable length arrays, bitmaps, hash tables.
-   File `mir-mum.h` is a general hash function used by hashtables
+   File `mir-hash.h` is a general, simple, high quality hash function used by hashtables
  * Files `mir-interp.h` and `mir-interp.c` contain code for intepretation of MIR code
- * Files `mir-gen.h`, `mir-gen.c`, and `x86_64-target.c` contain code for MIR JIT compiler
-   * File `x86_64-target.c` is machine dependent code of JIT compiler
- * Files `mir-c/mir-c.c` and `mir-c/mir-cx86_64.h` contains code for C to MIR compiler
+ * Files `mir-gen.h`, `mir-gen.c`, and `mir-gen-x86_64.c` contain code for MIR JIT compiler
+   * File `mir-gen-x86_64.c` is machine dependent code of JIT compiler
+ * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and JIT compiler 
+ * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
+ * Files `c2mir/c2mir.c`, `c2mir/cx86_64-code.c`, and `c2mir/cx86_64.h` contain code for C to MIR compiler
    
 ## Playing with current MIR project code
   * MIR project is far away from serious usage
