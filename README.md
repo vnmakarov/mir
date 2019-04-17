@@ -22,9 +22,9 @@
 	  * Memory operand has a **type**, **displacement**, **base** and **index** integer local variable,
 	    and integer constant as a **scale** for the index
 	    * Memory type can be 8-, 16-, 32-, 64-bit signed or unsigned integer type, float type, or double type
-	      * When inetegre memory value is used it is expanded with sign or zero promoting to 64-bit integer value first
+	      * When integer memory value is used it is expanded with sign or zero promoting to 64-bit integer value first
 	  * Label operand has name and used for control flow instructions
-	  * Reference operand is used to refer to functions and declarations in the current module, in outside MIR modules,
+	  * Reference operand is used to refer to functions and declarations in the current module, in other MIR modules,
 	    or for C external functions or declarations
 	* opcode describes what the instruction does
 	* There are **conversion instructions** for conversion between different 32- and 64-bit signed and unsigned values,
@@ -117,7 +117,7 @@ ex100:    func v, 0
   * `fp` is a reserved local varaible whose value is address of the function stack frame
   * You can write several instructions on one line if you separate them by `;`
   * The instruction result, if any, is always the first operand
-  * We use 64-bit instructions in calculations except one 32-bit instruction `rets` (suffix `s` means short or 32-bit integer)
+  * We use 64-bit instructions in calculations
   * We could use 32-bit instructions in calculations which would have sense if we use 32-bit CPU
     * When we use 32-bit instructions we take only 32-bit significant part of 64-bit operand and high 32-bit part
       of the result is machine defined (so if you write a portable MIR code consider the high 32-bit part value is undefined)
@@ -130,21 +130,21 @@ ex100:    func v, 0
   * `call` are MIR instruction to call functions
 
 ## Running MIR code
-  * After creating MIR modules (through MIR API or reading MIR bainary or textual files), you should load the modules
+  * After creating MIR modules (through MIR API or reading MIR binary or textual files), you should load the modules
     * Loading modules makes visible exported module functions and data
     * You can load external C function with `MIR_load_external`
   * After loading modules, you should link the loaded modules
-    * Linking modules resolves imported module reference and initializes data
+    * Linking modules resolves imported module references and initializes data
   * After linking, you can interpret functions from the modules or create machine code
-    for the functions with MIR JIT compiler and call this code
+    for the functions with MIR JIT compiler (generator) call this code
   * Running code from above example could look the following (here `m1` and `m2` are modules `m_sieve` and `m_e100`,
     `func` is function `ex100`, `sieve` is function `sieve`):
 ```
     MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf); MIR_link ();
-    MIR_gen (sieve); /* optional to generate machine code for sieve */
+    MIR_gen (sieve); /* optional call to generate machine code for sieve */
     MIR_interp (func, 0); /* zero here is arguments number  */
 ```
-    * If you generate code for a function, you should also generate
+    * If you generate machine code for a function, you should also generate
       code for all called functions.  In the future a lazy automatic
       generation of called functions will be implemented.
 
@@ -158,7 +158,7 @@ ex100:    func v, 0
   * The only dependency of MIR interpreter is [**libffi**](http://sourceware.org/libffi/) (foreing function interface)
     used to implement MIR call instructions
     * The dependency can go away for targets for which MIR JIT compiler is implemented
-  * MIR to C compiler is currently about 80% implemented
+  * MIR to C compiler is currently about 70% implemented
 
 ## The possible future state of MIR project
   ![Future MIR](mirall.svg)
@@ -168,7 +168,7 @@ ex100:    func v, 0
   * Implementation of Java byte code to/from MIR and LLVM IR to/from MIR compilers will be a challenge:
     * big runtime and possibly MIR extensions will be required
   * Porting GCC to MIR is possible too.  An experienced GCC developer can implement this for 6 to 12 months
-  * On my estimation porting MIR JIT compiler to aarch64, ppc64, and mips will take 2 months of work for each target
+  * On my estimation porting MIR JIT compiler to aarch64, ppc64, and mips will take 1-2 months of work for each target
   * Performance minded porting MIR JIT compiler to 32-bit targets will need an implementaion of additional
     small analysis pass to get info what 64-bit variables are used only in 32-bit instructions
     
@@ -186,7 +186,7 @@ ex100:    func v, 0
     * **sparse conditional constant propagation**
     * **dead code elimination**
     * **code selection**
-    * fast **register allocator** with implicit coalescing hard registers and stack slots for copy propagation
+    * fast **register allocator** with implicit coalescing hard registers and stack slots for copy elimination
   * **No SSA** (single static assignment form) usage for faster optimizations
     * If we implement more optimizations, SSA transition is possible when additional time for expensive in/out SSA passes
       will be less than additional time for non-SSA optimization implementation
@@ -200,7 +200,7 @@ ex100:    func v, 0
   * **Sparse Conditional Constant Propagation**: constant propagation and removing death paths of CFG
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Building Live Info**: calculating live in and live out for the basic blocks
-  * **Build Live Ranges**: valculating program point ranges for registers
+  * **Build Live Ranges**: calculating program point ranges for registers
   * **Assign**: priority-based assigning hard regs and stack slots to registers
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
   * **Combine** (code selection): merging data-depended insns into one
@@ -209,10 +209,10 @@ ex100:    func v, 0
   
 ## C to MIR compiler
   * Implemention of a small C11 (2011 ANSI C standard) to MIR compiler
-    * no optional feature: variable size arrays, complex, atomic
+    * no optional features: variable size arrays, complex, atomic
   * Minimal compiler code dependency.  No additional tools (like yacc/flex) are used
   * Simplicity of implementation over speed to make code easy to learn and maintain
-    * Four passes to divide code on manageable sub-tasks:
+    * Four passes to divide compilation on manageable sub-tasks:
       1. Preprocessor pass generating tokens
       2. Parsing pass generating AST (Abstract Syntax Tree). To be close ANSI standard grammar as soon as possible,
          [**PEG**](https://en.wikipedia.org/wiki/Parsing_expression_grammar) manual parser is used
@@ -234,7 +234,7 @@ ex100:    func v, 0
  * Files `c2mir/c2mir.c`, `c2mir/cx86_64-code.c`, and `c2mir/cx86_64.h` contain code for C to MIR compiler
    
 ## Playing with current MIR project code
-  * MIR project is far away from serious usage
+  * MIR project is far away from any serious usage
   * The current code can be used only to familiarize future users with the project and approaches it uses
   * You can run some benchmarks and tests by `make bench` and `make test`
 
@@ -250,7 +250,7 @@ ex100:    func v, 0
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
     | LOC [5]        | **1.0** (9.5K)   | 0.58 (5.5K)     | **155** (1480K)  |  155 (1480K)    |
 
-   [1] is based on wall time of compilation of sieve code (w/o any include file and memory File System for GCC) 100 times
+   [1] is based on wall time of compilation of sieve code (w/o any include file and with using memory file system for GCC) 100 times
 
    [2] is based on the best wall time of 10 runs
 
