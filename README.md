@@ -144,9 +144,10 @@ ex100:    func v, 0
     MIR_gen (sieve); /* optional call to generate machine code for sieve */
     MIR_interp (func, 0); /* zero here is arguments number  */
 ```
-    * If you generate machine code for a function, you should also generate
-      code for all called functions.  In the future a lazy automatic
-      generation of called functions will be implemented.
+
+  * If you generate machine code for a function, you should also generate
+    code for all called functions.  In the future a lazy automatic
+    generation of called functions will be implemented.
 
 ## The current state of MIR project
 
@@ -244,7 +245,7 @@ ex100:    func v, 0
 
     |                |     MIR-gen      |     MIR-interp  |     gcc -O2      |     gcc -O0     |
     |----------------|------------------|-----------------|------------------|-----------------|
-    | compilation [1]| **1.0** (0.075ms)| 0.16 (0.012ms)  | **178** (13.35ms)|  171 (12.8ms)   |
+    | compilation [1]| **1.0** (75us)   | 0.16 (12us)     | **178** (13.35ms)|  171 (12.8ms)   |
     | execution [2]  | **1.0** (3.1s)   | 5.9 (18.3s)     | **0.94** (2.9s)  |  2.05 (6.34s)   |
     | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
