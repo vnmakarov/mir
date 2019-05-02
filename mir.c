@@ -804,7 +804,7 @@ MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name) 
   
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D)
     (*error_func) (MIR_reg_type_error, "wrong type for register");
-  var.type = type; var.name = name;
+  var.type = type; var.name = string_store (&strings, &string_tab, name).str;
   VARR_PUSH (MIR_var_t, func->vars, var);
   return create_func_reg (func, name, VARR_LENGTH (MIR_var_t, func->vars) + 1 /* fp */, type, FALSE);
 }
