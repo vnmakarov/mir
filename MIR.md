@@ -309,6 +309,10 @@
   * The subsequent operands are arguments.  Their types and number and should be the same as in the prototype
     * Integer arguments are truncated according to integer prototype argument type
   
+### MIR_ALLOCA insn
+  * Reserve memory on the stack whose size is given as the 2nd operand and assign the memory address to the 1st operand
+  * The reserved memory will be aligned according target ABI
+
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
