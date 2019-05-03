@@ -107,6 +107,7 @@ typedef enum {
   MIR_CALL,
   /* 1 operand insn: */
   MIR_RET, MIR_FRET, MIR_DRET,
+  MIR_ALLOCA,
   /* Special insns: */
   MIR_LABEL, /* One immediate operand is unique label number  */
   MIR_INVALID_INSN,

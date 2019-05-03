@@ -433,6 +433,7 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL;
       ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
+      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
       ltab [IC_LDI32] = &&L_IC_LDI32; ltab [IC_LDU32] = &&L_IC_LDU32;
@@ -627,6 +628,12 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
       CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
+      CASE (MIR_ALLOCA, 1); {
+	int64_t *r, s;
+	
+	r = get_2iops (bp, ops, &s); *r = (uint64_t) alloca (s);
+      }
+      END_INSN;
 
       CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
       CASE (IC_LDU8, 2);  LD (uop, uint64_t, uint8_t); END_INSN;

@@ -194,6 +194,7 @@ static struct insn_desc insn_descs[] = {
   {MIR_RET, "ret", {MIR_OP_INT, MIR_OP_UNDEF}},
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_UNDEF}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_UNDEF}},
+  {MIR_ALLOCA, "alloca", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_UNDEF}},
   {MIR_LABEL, "label", {MIR_OP_UNDEF}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_UNDEF}},
 };

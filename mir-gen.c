@@ -891,7 +891,7 @@ static void create_exprs (void) {
       MIR_insn_t insn = bb_insn->insn;
       
       if (! MIR_branch_code_p (insn->code) && ! MIR_ret_code_p (insn->code)
-	  && insn->code != MIR_LABEL && insn->code != MIR_CALL
+	  && insn->code != MIR_LABEL && insn->code != MIR_CALL && insn->code != MIR_ALLOCA
 	  && ! move_p (insn) && ! imm_move_p (insn) && ! find_expr (insn, &e))
 	add_expr (insn);
     }
@@ -913,7 +913,7 @@ static void create_av_bitmaps (void) {
       MIR_insn_t insn = bb_insn->insn;
       
       if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code)
-	  || insn->code == MIR_LABEL || insn->code == MIR_CALL
+	  || insn->code == MIR_LABEL || insn->code == MIR_CALL || insn->code == MIR_ALLOCA
 	  || move_p (insn) ||  imm_move_p (insn))
 	continue;
       if (! find_expr (insn, &e)) {
@@ -955,7 +955,7 @@ static void cse_modify (void) {
       
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code)
-	  || insn->code == MIR_LABEL || insn->code == MIR_CALL
+	  || insn->code == MIR_LABEL || insn->code == MIR_CALL || insn->code == MIR_ALLOCA
 	  || move_p (insn) || imm_move_p (insn))
 	continue;
       if (! find_expr (insn, &e)) {
@@ -3012,7 +3012,7 @@ dead_code_elimination (MIR_item_t func) {
       }
       if (! reg_def_p)
 	dead_p = FALSE;
-      if (dead_p) {
+      if (dead_p && insn->code != MIR_CALL && insn->code != MIR_ALLOCA) {
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
 	  fprintf (debug_file, "  Removing dead insn");

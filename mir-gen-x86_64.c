@@ -280,14 +280,18 @@ static void make_prolog_epilog (MIR_item_t func_item,
     }
   overall_frame_size = ((func->frame_size + 7) / 8 + stack_slots_num) * 8; /* round */
   assert (overall_frame_size <= INT_MAX); /* ??? */
-  new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
-  gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  if (overall_frame_size != 0) {
+    new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
+    gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  }
   new_insn = MIR_new_insn (MIR_MOV, fp_reg_op, sp_reg_op);
   gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
-  gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  if (overall_frame_size != 0) {
+    new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
+    gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  }
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (i),
@@ -335,6 +339,7 @@ struct pattern {
      m[0-2] = n-th operand is mem
      ap = 2 and 3 operand forms address by plus (1st reg to base, 2nd reg to index, disp to disp)
      am = 2 and 3 operand forms address by mult (1st reg to index and mult const to scale)
+     ad<value> - forms address: 1th operand is base reg and <value> is displacement
      i[0-2] - n-th operand in byte immediate (should be imm of type i8)
      I[0-2] - n-th operand in 4 byte immediate (should be imm of type i32)
      J[0-2] - n-th operand in 8 byte immediate
@@ -343,6 +348,7 @@ struct pattern {
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
      c<value> - address of 32-bit or 64-bit constant in memory pool (we keep always 64-bit in memory pool. x86_64 is LE)
+     h<one or two digits> - hardware register with given number in reg of ModRM:reg; one bit of 8-15 in REX.R
      H<one or two digits> - hardware register with given number in rm of MOD-RM with and mod=3 (register); one bit of 8-15 in REX.B
      v<value> - 8-bit immediate with given hex value
      V<value> - 32-bit immediate with given hex value
@@ -504,6 +510,10 @@ static struct pattern patterns[] = {
   {MIR_D2F, "r r",  "F2 X 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
   {MIR_D2F, "r md", "F2 X 0F 5A r0 m1"},  /* cvtsd2ss r0,m1 */
 
+  /* lea r0, 7(r1); and r0, r0, -8; add sp, r0; mov r0, sp */
+  {MIR_ALLOCA, "r r",  "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 03 h04 R0; X 8B r0 H04"},
+  {MIR_ALLOCA, "r i2",  "X 81 /0 H04 I1; X 8B r0 H04"},  /* add sp, i2; mov r0, sp */
+  
   {MIR_NEG, "r 0",  "X F7 /3 R1"},  /* neg r0 */
   {MIR_NEG, "m3 0", "X F7 /3 m1"},  /* neg m0 */
   {MIR_NEGS, "r 0",  "Y F7 /3 R1"}, /* neg r0 */
@@ -937,6 +947,8 @@ static int setup_imm_addr (uint64_t v, int *mod, int *rm, int64_t *disp32) {
 static void out_insn (MIR_insn_t insn, const char *replacement) {
   const char *p, *insn_str;
   
+  if (insn->code == MIR_ALLOCA && insn->ops[1].mode == MIR_OP_INT)
+    insn->ops[1].u.i = (insn->ops[1].u.i + 7) & -8;
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, start_ch, d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
@@ -1016,6 +1028,10 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	    gen_assert (op2.mode == MIR_OP_INT);
 	    mem.index = MIR_NON_HARD_REG; mem.disp = op2.u.i;
 	  }
+	} else if (ch == 'd') {
+	  mem.base = op.u.hard_reg; mem.index = MIR_NON_HARD_REG; mem.scale = 1;
+	  ++p;
+	  mem.disp = read_hex (&p);
 	} else {
 	  gen_assert (ch == 'm');
 	  mem.index = op.u.hard_reg; mem.base = MIR_NON_HARD_REG; mem.disp = 0;
@@ -1083,6 +1099,12 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	v = read_hex (&p);
 	gen_assert (const_ref_num < 0 && disp32 < 0);
 	const_ref_num = setup_imm_addr (v, &mod, &rm, &disp32);
+	break;
+      case 'h':
+	++p;
+	v = read_hex (&p);
+	gen_assert (v <= 31);
+	setup_reg (&rex_r, &reg, v);
 	break;
       case 'H':
 	++p;
