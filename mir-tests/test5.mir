@@ -1,0 +1,10 @@
+ma:     module
+alloca: func i64, 0, i32:n
+        local i64:m
+	alloca m, 5
+	alloca m, 5
+	alloca m, 0
+	alloca m, n
+	ret m
+        endfunc
+        endmodule
