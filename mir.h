@@ -79,7 +79,7 @@ typedef enum {
   /* 3 operand insn: */
   MIR_ADD, MIR_ADDS, MIR_FADD, MIR_DADD, /* Addition */
   MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, /* Subtraction */
-  MIR_MUL, MIR_UMUL, MIR_MULS, MIR_UMULS, MIR_FMUL, MIR_DMUL, /* Multiplication */
+  MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, /* Multiplication */
   MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_UDIVS, MIR_FDIV, MIR_DDIV, /* Division */
   MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS, /* Modulo */
   MIR_AND, MIR_ANDS, MIR_OR, MIR_ORS, MIR_XOR, MIR_XORS, /* Logical */

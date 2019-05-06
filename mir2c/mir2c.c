@@ -156,7 +156,6 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_MUL: out_op3 (f, ops, "*"); break;
   case MIR_DIV: out_op3 (f, ops, "/"); break;
   case MIR_MOD: out_op3 (f, ops, "%"); break;
-  case MIR_UMUL: out_uop3 (f, ops, "*"); break;
   case MIR_UDIV: out_uop3 (f, ops, "/"); break;
   case MIR_UMOD: out_uop3 (f, ops, "%"); break;
   case MIR_ADDS: out_sop3 (f, ops, "+"); break;
@@ -164,7 +163,6 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_MULS: out_sop3 (f, ops, "*"); break;
   case MIR_DIVS: out_sop3 (f, ops, "/"); break;
   case MIR_MODS: out_sop3 (f, ops, "%"); break;
-  case MIR_UMULS: out_usop3 (f, ops, "*"); break;
   case MIR_UDIVS: out_usop3 (f, ops, "/"); break;
   case MIR_UMODS: out_usop3 (f, ops, "%"); break;
   case MIR_FADD: case MIR_DADD: out_fop3 (f, ops, "+"); break;

@@ -1600,8 +1600,6 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
       
   case MIR_MUL:   IOP3(*); break;
   case MIR_MULS:  IOP3S(*); break;
-  case MIR_UMUL:  UOP3(*); break;
-  case MIR_UMULS: UOP3S(*); break;
 
   case MIR_DIV:   IOP30(/); break;
   case MIR_DIVS:  IOP3S0(/); break;

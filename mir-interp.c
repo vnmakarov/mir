@@ -382,8 +382,7 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       ltab [MIR_FADD] = &&L_MIR_FADD; ltab [MIR_DADD] = &&L_MIR_DADD;
       ltab [MIR_SUB] = &&L_MIR_SUB; ltab [MIR_SUBS] = &&L_MIR_SUBS;
       ltab [MIR_FSUB] = &&L_MIR_FSUB; ltab [MIR_DSUB] = &&L_MIR_DSUB;
-      ltab [MIR_MUL] = &&L_MIR_MUL; ltab [MIR_UMUL] = &&L_MIR_UMUL;
-      ltab [MIR_MULS] = &&L_MIR_MULS; ltab [MIR_UMULS] = &&L_MIR_UMULS;
+      ltab [MIR_MUL] = &&L_MIR_MUL; ltab [MIR_MULS] = &&L_MIR_MULS;
       ltab [MIR_FMUL] = &&L_MIR_FMUL; ltab [MIR_DMUL] = &&L_MIR_DMUL;
       ltab [MIR_DIV] = &&L_MIR_DIV; ltab [MIR_DIVS] = &&L_MIR_DIVS;
       ltab [MIR_UDIV] = &&L_MIR_UDIV; ltab [MIR_UDIVS] = &&L_MIR_UDIVS;
@@ -500,8 +499,6 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       
       CASE (MIR_MUL, 3);   IOP3(*); END_INSN;
       CASE (MIR_MULS, 3);  IOP3S(*); END_INSN;
-      CASE (MIR_UMUL, 3);  UOP3(*); END_INSN;
-      CASE (MIR_UMULS, 3); UOP3S(*); END_INSN;
       CASE (MIR_FMUL, 3);  FOP3(*); END_INSN;
       CASE (MIR_DMUL, 3);  DOP3(*); END_INSN;
       

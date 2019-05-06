@@ -7654,8 +7654,7 @@ static MIR_insn_code_t get_mir_insn_code (node_t r) {
     return (t == MIR_T_F ? MIR_FSUB : t == MIR_T_D ? MIR_DSUB
 	    : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_SUB : MIR_SUBS);
   case N_MUL: case N_MUL_ASSIGN: return (t == MIR_T_F ? MIR_FMUL : t == MIR_T_D ? MIR_DMUL
-					 : t == MIR_T_I64 ? MIR_MUL : t == MIR_T_U64 ? MIR_UMUL
-					 : t == MIR_T_I32 ? MIR_MULS : MIR_UMULS);
+					 : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_MUL : MIR_MULS);
   case N_DIV: case N_DIV_ASSIGN: return (t == MIR_T_F ? MIR_FDIV : t == MIR_T_D ? MIR_DDIV
 					 : t == MIR_T_I64 ? MIR_DIV : t == MIR_T_U64 ? MIR_UDIV
 					 : t == MIR_T_I32 ? MIR_DIVS : MIR_UDIVS);

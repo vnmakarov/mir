@@ -94,9 +94,7 @@ static struct insn_desc insn_descs[] = {
   {MIR_FSUB, "fsub", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_UNDEF}},
   {MIR_DSUB, "dsub", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_UNDEF}},
   {MIR_MUL, "mul", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_UNDEF}},
-  {MIR_UMUL, "umul", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_UNDEF}},
   {MIR_MULS, "muls", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_UNDEF}},
-  {MIR_UMULS, "umuls", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_UNDEF}},
   {MIR_FMUL, "fmul", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_UNDEF}},
   {MIR_DMUL, "dmul", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_UNDEF}},
   {MIR_DIV, "div", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_UNDEF}},
@@ -1120,7 +1118,7 @@ MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
     op = va_arg (argp, MIR_op_t);
     VARR_PUSH (MIR_op_t, temp_insn_ops, op);
   }
-  va_end(argp);
+  va_end (argp);
   return MIR_new_insn_arr (code, nops, VARR_ADDR (MIR_op_t, temp_insn_ops));
 }
 
