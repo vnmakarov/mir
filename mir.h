@@ -303,7 +303,7 @@ extern MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_r
 					 MIR_reg_t index, MIR_scale_t scale);
 
 static inline int MIR_branch_code_p (MIR_insn_code_t code) {
-  return (code == MIR_JMP || code == MIR_BT || code == MIR_BF
+  return (code == MIR_JMP || code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS
 	  || code == MIR_BEQ || code == MIR_BEQS || code == MIR_FBEQ || code == MIR_DBEQ
 	  || code == MIR_BNE || code == MIR_BNES || code == MIR_FBNE || code == MIR_DBNE
 	  || code == MIR_BLT || code == MIR_BLTS || code == MIR_UBLT || code == MIR_UBLTS
