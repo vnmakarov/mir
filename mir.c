@@ -3089,11 +3089,11 @@ static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
       return scan_string (ch, get_char, unget_char);
     default:
       VARR_TRUNC (char, temp_string, 0);
-      if (isalpha (ch) || ch == '_') {
+      if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') {
 	do {
 	  VARR_PUSH (char, temp_string, ch);
 	  ch = get_char ();
-	} while (isalpha (ch) || isdigit (ch) || ch == '_');
+	} while (isalpha (ch) || isdigit (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.');
 	VARR_PUSH (char, temp_string, '\0');
 	unget_char (ch);
 	token.u.str = _MIR_uniq_string (VARR_ADDR (char, temp_string));
