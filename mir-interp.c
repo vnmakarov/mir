@@ -625,7 +625,7 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
       CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_ALLOCA, 1); {
+      CASE (MIR_ALLOCA, 2); {
 	int64_t *r, s;
 	
 	r = get_2iops (bp, ops, &s); *r = (uint64_t) alloca (s);
