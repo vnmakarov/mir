@@ -1,7 +1,7 @@
 CC=gcc -std=gnu11
 CFLAGS=-O3 -g
 TARGET=x86_64
-DEPS=mir.h mir-varr.h mir-dlist.h
+DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.c mir-hash.h
 OBJS=mir.o mir-interp.o mir-gen.o
 all: $(OBJS)
 
