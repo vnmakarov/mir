@@ -346,7 +346,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
   } while (0)
 
 #ifdef __GNUC__
-#define OPTIMIZE __attribute__((__optimize__ ("O3")))
+#define OPTIMIZE //__attribute__((__optimize__ ("O3")))
 #else
 #define OPTIMIZE
 #endif
@@ -528,10 +528,10 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
       CASE (MIR_URSH, 3);  UIOP3(>>); END_INSN;
       CASE (MIR_URSHS, 3); UIOP3S(>>); END_INSN;
       
-      CASE (MIR_EQ, 3);  ICMP(=); END_INSN;
-      CASE (MIR_EQS, 3); ICMPS(=); END_INSN;
-      CASE (MIR_FEQ, 3); FCMP(=); END_INSN; 
-      CASE (MIR_DEQ, 3); DCMP(=); END_INSN;
+      CASE (MIR_EQ, 3);  ICMP(==); END_INSN;
+      CASE (MIR_EQS, 3); ICMPS(==); END_INSN;
+      CASE (MIR_FEQ, 3); FCMP(==); END_INSN; 
+      CASE (MIR_DEQ, 3); DCMP(==); END_INSN;
       
       CASE (MIR_NE, 3);  ICMP(!=); END_INSN;
       CASE (MIR_NES, 3); ICMPS(!=); END_INSN;
