@@ -210,7 +210,7 @@ static void str_finish (void) {
 
 /* ------------------------- Parser Start ------------------------------ */
 
-/* Parser is manualy writen parser with back-tracing to keep original
+/* Parser is manually written parser with back-tracing to keep original
    grammar close to C11 standard grammar as possible.  It has a
    rudimentary syntax error recovery based on stop symbols ';' and
    '}'.  The input is parse tokens and the output is the following AST
