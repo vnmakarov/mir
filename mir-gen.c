@@ -1685,8 +1685,8 @@ static enum ccp_val_kind ccp_branch_update (MIR_insn_t insn, int *res) {
     if (insn->code == MIR_BF || insn->code == MIR_BFS)
       *res = ! *res;
     return CCP_CONST;
-  case MIR_BEQ:  BICMP(=); break;
-  case MIR_BEQS: BICMPS(=); break;
+  case MIR_BEQ:  BICMP(==); break;
+  case MIR_BEQS: BICMPS(==); break;
   case MIR_BNE:  BICMP(!=); break;
   case MIR_BNES: BICMPS(!=); break;
 
@@ -2445,7 +2445,8 @@ static void build_live_ranges (void) {
       curr_point++;
   }
 #if MIR_GEN_DEBUG
-  print_live_ranges ();
+  if (debug_file != NULL)
+    print_live_ranges ();
 #endif
 }
 
