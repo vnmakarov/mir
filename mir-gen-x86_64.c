@@ -424,12 +424,12 @@ struct pattern {
   {ICODE, "r r md", "66 0F 2E r1 m2; " SET_OPCODE " R0;X 0F B6 r0 R0"}, /* ucomisd r1,m2;setx r0; movzbl r0,r0*/
 
 #define BR0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
-  {ICODE ## SUFF, "l r", #PREF " 83 /7 r1 v0;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,$0;jxx rel32*/ \
+  {ICODE ## SUFF, "l r", #PREF " 83 /7 R1 v0;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,$0;jxx rel32*/ \
   {ICODE ## SUFF, "l m3", #PREF " 83 /7 m1 v0;"      LONG_JUMP_OPCODE " l0"},  /* cmp m0,$0;jxx rel8*/
 
 #define BR(ICODE, LONG_JUMP_OPCODE) \
-  BCMP0(ICODE, , X, LONG_JUMP_OPCODE) \
-  BCMP0(ICODE, S, Y, LONG_JUMP_OPCODE)
+  BR0(ICODE, , X, LONG_JUMP_OPCODE) \
+  BR0(ICODE, S, Y, LONG_JUMP_OPCODE)
 
 #define BCMP0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
   {ICODE ## SUFF, "l r r", #PREF " 3B r1 R2;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,r1;jxx rel32*/ \
@@ -471,8 +471,7 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r mu2", "8B r0 m1"},       /* mov r0, m1 */
 
   {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"},    /* mov m0,i8 */
-  {MIR_MOV, "m1 i1", "66 Y C7 /0 m0 i1"}, /* mov m0,i16 */
-  {MIR_MOV, "m2 i2", "Y C7 /0 m0 i1"},    /* mov m0,i32 */
+  {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1"},    /* mov m0,i32 */
   
   {MIR_FMOV, "r r", "F3 Y 0F 10 r0 R1"},     /* movss r0,r1 */
   {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1"},    /* movss r0,m32 */
@@ -510,9 +509,9 @@ static struct pattern patterns[] = {
   {MIR_D2F, "r r",  "F2 X 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
   {MIR_D2F, "r md", "F2 X 0F 5A r0 m1"},  /* cvtsd2ss r0,m1 */
 
-  /* lea r0, 7(r1); and r0, r0, -8; add sp, r0; mov r0, sp */
-  {MIR_ALLOCA, "r r",  "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 03 h04 R0; X 8B r0 H04"},
-  {MIR_ALLOCA, "r i2",  "X 81 /0 H04 I1; X 8B r0 H04"},  /* add sp, i2; mov r0, sp */
+  /* lea r0, 7(r1); and r0, r0, -8; sub sp, r0; mov r0, sp */
+  {MIR_ALLOCA, "r r",  "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 2B h04 R0; X 8B r0 H04"},
+  {MIR_ALLOCA, "r i2",  "X 81 /5 H04 I1; X 8B r0 H04"},  /* sub sp, i2; mov r0, sp */
   
   {MIR_NEG, "r 0",  "X F7 /3 R1"},  /* neg r0 */
   {MIR_NEG, "m3 0", "X F7 /3 m1"},  /* neg m0 */
@@ -571,7 +570,7 @@ static struct pattern patterns[] = {
 
   {MIR_JMP, "l", "E9 l0"},
   
-  BR (MIR_BT, "0F 85") BCMP (MIR_BF,  "0F 84")
+  BR (MIR_BT, "0F 85") BR (MIR_BF,  "0F 84")
 
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE,  "0F 85")
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
@@ -586,7 +585,8 @@ static struct pattern patterns[] = {
   {MIR_FBNE, "l r r", "0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "l r r", "66 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
 
-  {MIR_CALL, "X r h0 $", "Y FF /2 R1"},  /* call *r1 */
+  {MIR_CALL, "X r h0 $", "Y FF /2 R1"},  /* call *r1 -- function call */
+  {MIR_CALL, "X r $", "Y FF /2 R1"},     /* call *r1 -- procedure call */
 
   /* ??? Returns */
   {MIR_RET, "h0", "C3"},  /* ret */
@@ -666,6 +666,8 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   MIR_reg_t hr;
   
   for (nop = 0, p = pat->pattern; *p != 0; p++) {
+    if (insn->code == MIR_CALL && nop >= nops)
+      return FALSE;
     gen_assert (nop < nops);
     op = insn->ops[nop];
     switch (start_ch = *p) {
@@ -757,7 +759,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     default:
       gen_assert (FALSE);
     }
-    if (start_ch != ' ' && start_ch != ' ')
+    if (start_ch != ' ' && start_ch != '\t')
       nop++;
   }
   gen_assert (nop == nops);
