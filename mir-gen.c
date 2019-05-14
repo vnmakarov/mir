@@ -1562,7 +1562,19 @@ static enum ccp_val_kind get_3usops (MIR_insn_t insn, uint32_t *p1, uint32_t *p2
 
 static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
   int out_p;
+  MIR_op_t proto_op;
+  MIR_proto_t proto;
   
+  if (insn->code == MIR_CALL) {
+    proto_op = insn->ops[0];
+    mir_assert (proto_op.mode == MIR_OP_REF && proto_op.u.ref->item_type == MIR_proto_item);
+    proto = proto_op.u.ref->u.proto;
+    if (proto->res_type == MIR_T_V)
+      return FALSE;
+    mir_assert (MIR_insn_nops (insn) >= 3);
+    *op = insn->ops[2];
+    return TRUE;
+  }
   if (MIR_insn_nops (insn) < 1)
     return FALSE;
   MIR_insn_op_mode (insn, 0, &out_p);
