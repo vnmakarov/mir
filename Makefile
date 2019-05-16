@@ -1,17 +1,17 @@
 CC=gcc -std=gnu11
 CFLAGS=-O3 -g
 TARGET=x86_64
-DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.c mir-hash.h
+DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h
 OBJS=mir.o mir-interp.o mir-gen.o
 all: $(OBJS)
 
 mir.o: mir.c $(DEPS)
 	$(CC) -c $(CFLAGS) -DMIR_IO -DMIR_SCAN -o $@ $<
 
-mir-interp.o: mir-interp.c $(DEPS) mir-interp.h
+mir-interp.o: mir-interp.c $(DEPS) mir-interp.h mir-$(TARGET).c
 	$(CC) -c -Os -g -o $@ $<
 
-mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h $(TARGET)-target.c
+mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
 test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test c2mir-test mir2c-test
