@@ -42,6 +42,8 @@ static MIR_disp_t get_stack_slot_offset (MIR_reg_t slot) { /* slot is 0, 1, ... 
   return - (MIR_disp_t) (slot + 1) * sizeof (int64_t);
 }
 
+static int alloca_p;
+
 static MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
   MIR_FADD, MIR_DADD, MIR_SUB, MIR_FSUB, MIR_DSUB,
   MIR_MUL, MIR_FMUL, MIR_DMUL, MIR_DIV, MIR_UDIV, MIR_FDIV, MIR_DDIV,
@@ -229,11 +231,14 @@ static void machinize (MIR_item_t func_item) {
       mem_size += 8;
     }
   }
+  alloca_p = FALSE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
     if (code == MIR_CALL) {
       machinize_call (func_item, insn);
+    } else if (code == MIR_ALLOCA) {
+      alloca_p = TRUE;
     } else if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
       /* In simplify we already transformed code for one return insn
 	 and added extension in return (if any).  */
@@ -291,6 +296,10 @@ static void make_prolog_epilog (MIR_item_t func_item,
   if (overall_frame_size != 0) {
     new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
     gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
+  }
+  if (alloca_p) {
+    new_insn = MIR_new_insn (MIR_MOV, sp_reg_op, fp_reg_op);
+    gen_add_insn_before (func_item, anchor, new_insn);  /* sp = bp */
   }
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
