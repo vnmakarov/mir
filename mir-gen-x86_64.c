@@ -249,6 +249,21 @@ static void machinize (MIR_item_t func_item) {
       new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
       gen_add_insn_before (func_item, insn, new_insn);
       insn->ops[0] = ret_reg_op;
+    } else if (code == MIR_EQ || code == MIR_NE || code == MIR_LT || code == MIR_ULT || code == MIR_LE
+	       || code == MIR_ULE || code == MIR_GT || code == MIR_UGT || code == MIR_GE || code == MIR_UGE
+	       || code == MIR_EQS || code == MIR_NES || code == MIR_LTS || code == MIR_ULTS
+	       || code == MIR_LES || code == MIR_ULES || code == MIR_GTS || code == MIR_UGT
+	       || code == MIR_GES || code == MIR_UGES
+	       || code == MIR_FEQ || code == MIR_FNE || code == MIR_FLT || code == MIR_FLE
+	       || code == MIR_FGT || code == MIR_FGE
+	       || code == MIR_DEQ || code == MIR_DNE || code == MIR_DLT || code == MIR_DLE
+	       || code == MIR_DGT || code == MIR_DGE) {
+      /* We can access only 4 regs in setxx -- use ax as the result: */
+      MIR_op_t areg_op = MIR_new_hard_reg_op (AX_HARD_REG);
+
+      new_insn = MIR_new_insn (MIR_MOV, insn->ops[0], areg_op);
+      gen_add_insn_after (func_item, insn, new_insn);
+      insn->ops[0] = areg_op;
     }
   }
 }
