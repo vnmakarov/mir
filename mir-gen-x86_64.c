@@ -1014,13 +1014,14 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	break;
       case 'a': {
 	MIR_mem_t mem;
-	MIR_op_t op2 = insn->ops[2];
+	MIR_op_t op2;
 
 	ch = *++p;
 	op = insn->ops[1];
 	gen_assert (op.mode == MIR_OP_HARD_REG);
 	mem.type = MIR_T_I8;
 	if (ch == 'p') {
+	  op2 = insn->ops[2];
 	  mem.base = op.u.hard_reg; mem.scale = 1;
 	  if (op2.mode == MIR_OP_HARD_REG) {
 	    mem.index = op2.u.hard_reg; mem.disp = 0;
@@ -1034,6 +1035,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	  mem.disp = read_hex (&p);
 	} else {
 	  gen_assert (ch == 'm');
+	  op2 = insn->ops[2];
 	  mem.index = op.u.hard_reg; mem.base = MIR_NON_HARD_REG; mem.disp = 0;
 	  gen_assert (op2.mode == MIR_OP_INT && (op2.u.i == 1 || op2.u.i == 2 || op2.u.i == 4 || op2.u.i == 8));
 	  mem.scale = op2.u.i;
