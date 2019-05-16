@@ -665,18 +665,18 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   MIR_op_t op, original;
   MIR_reg_t hr;
   
-  for (nop = 0, p = pat->pattern; *p != 0; p++) {
+  for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
+    while (*p == ' ' || *p == '\t')
+      p++;
+    if (*p == '$')
+      return TRUE;
     if (insn->code == MIR_CALL && nop >= nops)
       return FALSE;
     gen_assert (nop < nops);
     op = insn->ops[nop];
     switch (start_ch = *p) {
-    case ' ': case '\t':
-      break;
     case 'X':
       break;
-    case '$':
-      return TRUE;
     case 'r':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
       break;
@@ -759,8 +759,6 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     default:
       gen_assert (FALSE);
     }
-    if (start_ch != ' ' && start_ch != '\t')
-      nop++;
   }
   gen_assert (nop == nops);
   return TRUE;
