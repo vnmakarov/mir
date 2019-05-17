@@ -3200,8 +3200,7 @@ static void combine (void) {
 
 #define live_out out
 
-static void
-dead_code_elimination (MIR_item_t func) {
+static void dead_code_elimination (MIR_item_t func) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
   size_t nops, i;
@@ -3408,7 +3407,6 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
-  calculate_func_cfg_live_info ();
   dead_code_elimination (func_item);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
