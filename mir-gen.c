@@ -747,11 +747,12 @@ DEF_VARR (expr_t);
 static VARR (expr_t) *exprs; /* the expr number -> expression */
 
 DEF_VARR (bitmap_t);
-/* map: var number -> bitmap of numbers of exprs with given var as an operand. */
+/* map: var number -> bitmap of numbers of exprs with given var as an input operand. */
 static VARR (bitmap_t) *var2dep_expr;
+static bitmap_t memory_exprs; /* expressions containing memory */
 
 DEF_HTAB (expr_t);
-static HTAB (expr_t) *expr_tab; /* keys: insn code and operands */
+static HTAB (expr_t) *expr_tab; /* keys: insn code and input operands */
 
 static int op_eq (MIR_op_t op1, MIR_op_t op2) { return MIR_op_eq_p (op1, op2); }
 
@@ -816,7 +817,7 @@ static void process_var (MIR_reg_t var, expr_t e) {
   bitmap_set_bit_p (b, e->num);
 }
 
-static void process_op_vars (MIR_op_t op, expr_t e) {
+static void process_cse_ops (MIR_op_t op, expr_t e) {
   switch (op.mode) { // ???
   case MIR_OP_REG:
     process_var (reg2var (op.u.reg), e);
@@ -831,12 +832,14 @@ static void process_op_vars (MIR_op_t op, expr_t e) {
       process_var (reg2var (op.u.mem.base), e);
     if (op.u.mem.index != 0)
       process_var (reg2var (op.u.mem.index), e);
+    bitmap_set_bit_p (memory_exprs, e->num);
     break;
   case MIR_OP_HARD_REG_MEM:
     if (op.u.hard_reg_mem.base != MIR_NON_HARD_REG)
       process_var (op.u.hard_reg_mem.base, e);
     if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
       process_var (op.u.hard_reg_mem.index, e);
+    bitmap_set_bit_p (memory_exprs, e->num);
     break;
   default:
     gen_assert (FALSE); /* we should not have all the rest operand here */
@@ -859,7 +862,7 @@ static expr_t add_expr (MIR_insn_t insn) {
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (insn, i, &out_p);
     if (! out_p)
-      process_op_vars (insn->ops[i], e);
+      process_cse_ops (insn->ops[i], e);
   }
   return e;
 }
@@ -912,27 +915,39 @@ static void create_av_bitmaps (void) {
       bitmap_t b;
       MIR_insn_t insn = bb_insn->insn;
       
-      if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code)
-	  || insn->code == MIR_LABEL || insn->code == MIR_CALL || insn->code == MIR_ALLOCA
-	  || move_p (insn) ||  imm_move_p (insn))
+      if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (! find_expr (insn, &e)) {
-	gen_assert (FALSE);
-	continue;
+      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)) {
+	if (! find_expr (insn, &e)) {
+	  gen_assert (FALSE);
+	  continue;
+	}
+	bitmap_set_bit_p (bb->av_gen, e->num);
       }
-      bitmap_set_bit_p (bb->av_gen, e->num);
       nops = MIR_insn_nops (insn);
-      for (i = 0; i < nops; i++) { // ??? MEM
+      for (i = 0; i < nops; i++) {
 	MIR_insn_op_mode (insn, i, &out_p);
 	op = insn->ops[i];
-	if (! out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG))
+	if (! out_p)
 	  continue;
-	var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
-	if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
-	    && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL) {
-	  bitmap_and_compl (bb->av_gen, bb->av_gen, b);
-	  bitmap_ior (bb->av_kill, bb->av_kill, b);
+	if (op.mode == MIR_OP_MEM || op.mode == MIR_OP_HARD_REG_MEM) {
+	  bitmap_and_compl (bb->av_gen, bb->av_gen, memory_exprs);
+	  bitmap_ior (bb->av_kill, bb->av_kill, memory_exprs);
+	} else if (op.mode == MIR_OP_REG || op.mode == MIR_OP_HARD_REG) {
+	  var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
+	  if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
+	      && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL) {
+	    bitmap_and_compl (bb->av_gen, bb->av_gen, b);
+	    bitmap_ior (bb->av_kill, bb->av_kill, b);
+	  }
 	}
+      }
+      if (insn->code == MIR_CALL) {
+	gen_assert (bb_insn->call_hard_reg_args != NULL);
+	bitmap_and_compl (bb->av_gen, bb->av_gen, bb_insn->call_hard_reg_args);
+	bitmap_ior (bb->av_kill, bb->av_kill, bb_insn->call_hard_reg_args);
+	bitmap_and_compl (bb->av_gen, bb->av_gen, call_used_hard_regs);
+	bitmap_ior (bb->av_kill, bb->av_kill, call_used_hard_regs);
       }
     }
   }
@@ -954,58 +969,67 @@ static void cse_modify (void) {
       MIR_insn_t new_insn, insn = bb_insn->insn;
       
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code)
-	  || insn->code == MIR_LABEL || insn->code == MIR_CALL || insn->code == MIR_ALLOCA
-	  || move_p (insn) || imm_move_p (insn))
+      if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (! find_expr (insn, &e)) {
-	gen_assert (FALSE);
-	continue;
-      }
-      if (! bitmap_bit_p (av, e->num)) {
-	bitmap_set_bit_p (av, e->num);
-	op = MIR_new_reg_op (e->temp_reg);
-	new_insn = MIR_new_insn (MIR_MOV, op, insn->ops[0]); /* result is always 0-th op */
-	new_bb_insn = create_bb_insn (new_insn, bb);
-	MIR_insert_insn_after (curr_func_item, insn, new_insn);
-	DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
-	next_bb_insn = DLIST_NEXT (bb_insn_t, new_bb_insn);
-#if MIR_GEN_DEBUG
-	if (debug_file != NULL) {
-	  fprintf (debug_file, "  adding insn ");
-	  MIR_output_insn (debug_file, new_insn, curr_func_item->u.func, TRUE);
+      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)) {
+	if (! find_expr (insn, &e)) {
+	  gen_assert (FALSE);
+	  continue;
 	}
-#endif
-      } else {
+	if (! bitmap_bit_p (av, e->num)) {
+	  bitmap_set_bit_p (av, e->num);
+	  op = MIR_new_reg_op (e->temp_reg);
+	  new_insn = MIR_new_insn (MIR_MOV, op, insn->ops[0]); /* result is always 0-th op */
+	  new_bb_insn = create_bb_insn (new_insn, bb);
+	  MIR_insert_insn_after (curr_func_item, insn, new_insn);
+	  DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
+	  next_bb_insn = DLIST_NEXT (bb_insn_t, new_bb_insn);
 #if MIR_GEN_DEBUG
-	if (debug_file != NULL) {
-	  fprintf (debug_file, "  changing insn ");
-	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, FALSE);
-	}
+	  if (debug_file != NULL) {
+	    fprintf (debug_file, "  adding insn ");
+	    MIR_output_insn (debug_file, new_insn, curr_func_item->u.func, TRUE);
+	  }
 #endif
-	op = MIR_new_reg_op (e->temp_reg);
-	new_insn = MIR_new_insn (MIR_MOV, insn->ops[0], op); /* result is always 0-th op */
-	MIR_insert_insn_before (curr_func_item, insn, new_insn);
-	MIR_remove_insn (curr_func_item, insn);
-	new_insn->data = bb_insn;
-	bb_insn->insn = new_insn;
+	} else {
 #if MIR_GEN_DEBUG
-	if (debug_file != NULL) {
-	  fprintf (debug_file, "    on insn ");
-	  MIR_output_insn (debug_file, new_insn, curr_func_item->u.func, TRUE);
-	}
+	  if (debug_file != NULL) {
+	    fprintf (debug_file, "  changing insn ");
+	    MIR_output_insn (debug_file, insn, curr_func_item->u.func, FALSE);
+	  }
 #endif
+	  op = MIR_new_reg_op (e->temp_reg);
+	  new_insn = MIR_new_insn (MIR_MOV, insn->ops[0], op); /* result is always 0-th op */
+	  MIR_insert_insn_before (curr_func_item, insn, new_insn);
+	  MIR_remove_insn (curr_func_item, insn);
+	  new_insn->data = bb_insn;
+	  bb_insn->insn = insn = new_insn;
+#if MIR_GEN_DEBUG
+	  if (debug_file != NULL) {
+	    fprintf (debug_file, "    on insn ");
+	    MIR_output_insn (debug_file, new_insn, curr_func_item->u.func, TRUE);
+	  }
+#endif
+	}
       }
       nops = MIR_insn_nops (insn);
-      for (i = 0; i < nops; i++) { // ??? MEM
+      for (i = 0; i < nops; i++) {
 	op = insn->ops[i];
 	MIR_insn_op_mode (insn, i, &out_p);
-	if (! out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG))
+	if (! out_p)
 	  continue;
-	var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
-	if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
-	    && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL)
-	  bitmap_and_compl (av, av, b);
+	if (op.mode == MIR_OP_MEM || op.mode == MIR_OP_HARD_REG_MEM) {
+	  bitmap_and_compl (av, av, memory_exprs);
+	} else if (op.mode == MIR_OP_REG || op.mode == MIR_OP_HARD_REG) {
+	  var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
+	  if (var < VARR_LENGTH (bitmap_t, var2dep_expr)
+	      && (b = VARR_GET (bitmap_t, var2dep_expr, var)) != NULL)
+	    bitmap_and_compl (av, av, b);
+	}
+      }
+      if (insn->code == MIR_CALL) {
+	gen_assert (bb_insn->call_hard_reg_args != NULL);
+	bitmap_and_compl (av, av, bb_insn->call_hard_reg_args);
+	bitmap_and_compl (av, av, call_used_hard_regs);
       }
     }
   }
@@ -1051,6 +1075,7 @@ static void cse_clear (void) {
     if (b != NULL)
       bitmap_destroy (b);
   }
+  bitmap_clear (memory_exprs);
 }
 
 #undef av_in
@@ -3236,6 +3261,7 @@ void MIR_gen_init (void) {
   VARR_CREATE (bb_t, pending, 0);
   VARR_CREATE (expr_t, exprs, 512);
   VARR_CREATE (bitmap_t, var2dep_expr, 512);
+  memory_exprs = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   init_ccp ();
   VARR_CREATE (live_range_t, var_live_ranges, 0);
   HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq);
@@ -3268,6 +3294,7 @@ void MIR_gen_init (void) {
 void MIR_gen_finish (void) {
   VARR_DESTROY (bb_t, worklist);
   VARR_DESTROY (expr_t, exprs);
+  bitmap_destroy (memory_exprs);
   VARR_DESTROY (bitmap_t, var2dep_expr);
   VARR_DESTROY (bb_t, pending);
   VARR_DESTROY (live_range_t, var_live_ranges);
