@@ -346,7 +346,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
   } while (0)
 
 #ifdef __GNUC__
-#define OPTIMIZE //__attribute__((__optimize__ ("O3")))
+#define OPTIMIZE __attribute__((__optimize__ ("O3")))
 #else
 #define OPTIMIZE
 #endif
