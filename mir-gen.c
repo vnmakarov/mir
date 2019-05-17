@@ -2091,8 +2091,8 @@ static void ccp_modify (void) {
 	fprintf (debug_file, "\n");
       }
 #endif
-      MIR_remove_insn (curr_func_item, bb_insn->insn);
       delete_bb_insn (bb_insn);
+      MIR_remove_insn (curr_func_item, insn);
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
     } else {
       insn = MIR_new_insn (MIR_JMP, bb_insn->insn->ops[0]); /* label is always 0-th op */
@@ -2749,8 +2749,7 @@ static void rewrite (void) {
       if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
 	  && insn->ops[0].mode == MIR_OP_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
 	  && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
-	DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
-	free (bb_insn);
+	delete_bb_insn (bb_insn);
 	MIR_remove_insn (curr_func_item, insn);
       }
     }
@@ -3055,9 +3054,8 @@ dead_code_elimination (MIR_item_t func) {
 	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
 	}
 #endif
+	delete_bb_insn (bb_insn);
 	MIR_remove_insn (func, insn);
-	DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
-	free (bb_insn);
 	continue;
       }
       if (insn->code == MIR_CALL)
