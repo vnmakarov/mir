@@ -85,6 +85,7 @@ static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
 static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after);
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
+static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t after);
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -387,6 +388,11 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
   MIR_insert_insn_before (func_item, before, insn);
   create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, insn), before);
+}
+
+static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn_t insn) {
+  MIR_insert_insn_after (func_item, after, insn);
+  create_new_bb_insns (func_item, after, DLIST_NEXT (MIR_insn_t, insn));
 }
 
 static void set_label_disp (MIR_insn_t insn, size_t disp) {
