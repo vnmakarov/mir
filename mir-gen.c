@@ -70,6 +70,7 @@ static void util_error (const char *message);
 #include "mir-bitmap.h"
 #include "mir-htab.h"
 #include "mir-hash.h"
+#include "mir-gen.h"
 
 static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
@@ -3325,9 +3326,16 @@ static void print_code (uint8_t *code, size_t code_len) {
 void *MIR_gen (MIR_item_t func_item) {
   uint8_t *code;
   size_t code_len;
-  void *res;
   
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
+  if (func_item->machine_code != NULL) {
+    _MIR_redirect_thunk (func_item->addr, func_item->machine_code);
+#if MIR_GEN_DEBUG
+    fprintf (stderr, "+++++++++++++The code for %s has been already generated\n",
+	     MIR_item_name (func_item));
+#endif
+    return func_item->addr;
+  }
   MIR_simplify_func (func_item, TRUE);
 #if MIR_GEN_DEBUG
   fprintf (stderr, "+++++++++++++MIR after simplification:\n");
@@ -3434,11 +3442,11 @@ void *MIR_gen (MIR_item_t func_item) {
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
 #endif 
-  res = _MIR_publish_code (code, code_len);
-  _MIR_redirect_thunk (func_item->addr, res);
+  func_item->machine_code = _MIR_publish_code (code, code_len);
+  _MIR_redirect_thunk (func_item->addr, func_item->machine_code);
   destroy_func_live_ranges ();
   destroy_func_cfg ();
-  return res;
+  return func_item->addr;
 }
 
 #if MIR_GEN_DEBUG
@@ -3517,3 +3525,5 @@ void MIR_gen_finish (void) {
   target_finish ();
   finish_dead_vars ();
 }
+
+void MIR_set_gen_interface (MIR_item_t func_item) { MIR_gen (func_item); }

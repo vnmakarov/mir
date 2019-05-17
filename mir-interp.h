@@ -14,6 +14,6 @@ extern void MIR_interp_init (void);
 extern MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...);
 extern MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
 extern void MIR_interp_finish (void);
-extern void MIR_set_C_interp_interface (MIR_item_t func_item);
+extern void MIR_set_interp_interface (MIR_item_t func_item);
 
 #endif /* #ifndef MIR_INTERP_H */

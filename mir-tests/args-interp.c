@@ -17,13 +17,13 @@ int main (void) {
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_simplify_func (func, TRUE);
   MIR_load_module (m);
-  MIR_link ();
+  MIR_link (MIR_set_interp_interface);
   MIR_interp_init ();
 #if MIR_C_INTERFACE
   typedef void (*arg_func) (int8_t, int16_t, int32_t, int64_t, float, double,
 			    uint32_t, uint8_t, uint16_t, int32_t, int64_t,
 			    float, float, float, float, float, float, float, double);
-  MIR_set_C_interp_interface (func);
+  MIR_set_interp_interface (func);
   ((arg_func) func->addr) (0x01, 0x0002, 0x00000003, 0x100000004, 1.0, 2.0,
 			   0x00000005, 0x06, 0x0007, 0x00000008, 0x100000009,
 			   3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0);
