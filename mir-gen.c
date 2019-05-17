@@ -559,7 +559,7 @@ static void build_func_cfg (void) {
       if (next_insn->code == MIR_LABEL && (label_bb_insn = next_insn->data) != NULL)
 	bb = label_bb_insn->bb;
       else
-	bb = create_bb (NULL);
+	bb = create_bb (next_insn);
       add_bb (bb);
       if (insn->code != MIR_JMP && ! MIR_ret_code_p (insn->code))
 	create_edge (prev_bb, bb);
