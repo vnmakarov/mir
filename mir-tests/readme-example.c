@@ -66,8 +66,6 @@ int main (void) {
   f1 = DLIST_TAIL (MIR_item_t, m1->items); f2 = DLIST_TAIL (MIR_item_t, m2->items);
   MIR_load_module (m2); MIR_load_module (m1);
   MIR_load_external ("printf", printf);
-  //  MIR_set_C_interp_interface (f1);
-  //  MIR_set_C_interp_interface (f2);
   MIR_interp_init ();
   MIR_link (MIR_set_interp_interface);
   MIR_gen_init ();
