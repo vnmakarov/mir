@@ -2991,12 +2991,14 @@ static int obsolete_hard_reg_op_p (MIR_op_t op, size_t def_insn_num) {
 }
 
 static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
-  MIR_insn_t def_insn;
+  MIR_insn_t def_insn = NULL;
+  bb_insn_t bb_insn = insn->data;
   MIR_op_t src_op, op = insn->ops[nop];
   size_t def_insn_num;
   int successfull_change_p = FALSE;
   
-  if (op.mode == MIR_OP_HARD_REG && hreg_def_ages_addr[op.u.hard_reg] == curr_bb_hreg_def_age) {
+  if (op.mode == MIR_OP_HARD_REG && hreg_def_ages_addr[op.u.hard_reg] == curr_bb_hreg_def_age
+      && find_bb_insn_dead_var (bb_insn, op.u.hard_reg) != NULL) {
     def_insn = hreg_defs_addr[op.u.hard_reg].insn;
     if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV)
       return FALSE;
@@ -3006,9 +3008,10 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
   } else if (op.mode == MIR_OP_HARD_REG_MEM)  {
     MIR_op_t src_op2;
     int change_p = FALSE;
-    
+
     if (!first_p && op.u.hard_reg_mem.index != MIR_NON_HARD_REG
-	&& hreg_def_ages_addr[op.u.hard_reg_mem.index] == curr_bb_hreg_def_age) {
+	&& hreg_def_ages_addr[op.u.hard_reg_mem.index] == curr_bb_hreg_def_age
+	&& find_bb_insn_dead_var (bb_insn, op.u.hard_reg_mem.index) != NULL) {
       def_insn = hreg_defs_addr[op.u.hard_reg_mem.index].insn;
       def_insn_num = hreg_defs_addr[op.u.hard_reg_mem.index].insn_num;
       gen_assert (hreg_defs_addr[op.u.hard_reg_mem.index].nop == 0);
@@ -3034,7 +3037,8 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
 	change_p = TRUE;
       }
     } else if (first_p && op.u.hard_reg_mem.base != MIR_NON_HARD_REG
-	       && hreg_def_ages_addr[op.u.hard_reg_mem.base] == curr_bb_hreg_def_age) {
+	       && hreg_def_ages_addr[op.u.hard_reg_mem.base] == curr_bb_hreg_def_age
+	       && find_bb_insn_dead_var (bb_insn, op.u.hard_reg_mem.base) != NULL) {
       def_insn = hreg_defs_addr[op.u.hard_reg_mem.base].insn;
       def_insn_num = hreg_defs_addr[op.u.hard_reg_mem.base].insn_num;
       gen_assert (hreg_defs_addr[op.u.hard_reg_mem.base].nop == 0);
@@ -3092,7 +3096,18 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
     }
   }
   if (! successfull_change_p)
-      insn->ops[nop] = op;
+    insn->ops[nop] = op;
+  else {
+    gen_assert (def_insn != NULL);
+#if MIR_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (stderr, "      deleting now dead insn ");
+      MIR_output_insn (debug_file, def_insn, curr_func_item->u.func, TRUE);
+    }
+#endif
+    delete_bb_insn (def_insn->data);
+    MIR_remove_insn (curr_func_item, def_insn);
+  }
   return successfull_change_p;
 }
 
@@ -3107,6 +3122,12 @@ static int combine_op (MIR_insn_t insn, size_t nop) {
     if (op_change_p) {
       res_op = temp_op;
       change_p = TRUE;
+#if MIR_GEN_DEBUG
+      if (debug_file != NULL) {
+	fprintf (stderr, "      changing to ");
+	MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
+      }
+#endif
     }
   }
   insn->ops[nop] = res_op;
@@ -3128,26 +3149,33 @@ static void combine (void) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns), curr_insn_num = 0;
 	 bb_insn != NULL;
 	 bb_insn = DLIST_NEXT (bb_insn_t, bb_insn), curr_insn_num++) {
-      ;
       insn = bb_insn->insn;
-      code = insn->code;
       nops = MIR_insn_nops (insn);
-      for (iter = 0; iter < 2; iter++) {
-	change_p = FALSE;
-	for (i = 0; i < nops; i++) {
-	  MIR_insn_op_mode (insn, i, &out_p);
-	  if ((! out_p || insn->ops[i].mode != MIR_OP_HARD_REG) && combine_op (insn, i))
+#if MIR_GEN_DEBUG
+      if (debug_file != NULL) {
+	fprintf (stderr, "  Processing ");
+	MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
+      }
+#endif
+
+      if ((code = insn->code) != MIR_CALL) {
+	for (iter = 0; iter < 2; iter++) {
+	  change_p = FALSE;
+	  for (i = 0; i < nops; i++) {
+	    MIR_insn_op_mode (insn, i, &out_p);
+	    if ((! out_p || insn->ops[i].mode != MIR_OP_HARD_REG) && combine_op (insn, i))
 	      change_p = TRUE;
-	}
-	if (iter == 0) {
-	  if ((new_code = commutative_insn_code (insn)) == MIR_INSN_BOUND)
-	    break;
-	  insn->code = new_code;
-	  temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
-	} else if (! change_p) {
-	  gen_assert (commutative_insn_code (insn) == code);
-	  insn->code = code;
-	  temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
+	  }
+	  if (iter == 0) {
+	    if ((new_code = commutative_insn_code (insn)) == MIR_INSN_BOUND)
+	      break;
+	    insn->code = new_code;
+	    temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
+	  } else if (! change_p) {
+	    gen_assert (commutative_insn_code (insn) == code);
+	    insn->code = code;
+	    temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
+	  }
 	}
       }
       
@@ -3161,6 +3189,7 @@ static void combine (void) {
 	  hreg_defs_addr[op->u.hard_reg].insn_num = curr_insn_num;
 	}
       }
+      clear_bb_insn_dead_vars (bb_insn); /* dead notes are outdated now -- remove them */
     }
   }
 }
@@ -3361,6 +3390,14 @@ void *MIR_gen (MIR_item_t func_item) {
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
+    print_CFG (FALSE, TRUE, NULL);
+  }
+#endif
+  calculate_func_cfg_live_info ();
+  add_bb_insn_dead_vars ();
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL) {
+    fprintf (debug_file, "+++++++++++++MIR before combine:\n");
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
