@@ -1310,6 +1310,7 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
     h = mir_hash_step (h, (uint64_t) op.u.mem.index);
     if (op.u.mem.index != 0)
       h = mir_hash_step (h, (uint64_t) op.u.mem.scale);
+    break;
   case MIR_OP_HARD_REG_MEM:
     h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
     h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
@@ -1317,6 +1318,7 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
     h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
     if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
       h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
+    break;
   case MIR_OP_LABEL: return mir_hash_step (h, (uint64_t) op.u.label);
   default:
     mir_assert (FALSE); /* we should not have other operands here */
