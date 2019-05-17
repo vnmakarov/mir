@@ -134,15 +134,17 @@ ex100:    func v, 0
     * Loading modules makes visible exported module functions and data
     * You can load external C function with `MIR_load_external`
   * After loading modules, you should link the loaded modules
-    * Linking modules resolves imported module references and initializes data
+    * Linking modules resolves imported module references, initializes data, and set up call interfaces
   * After linking, you can interpret functions from the modules or create machine code
     for the functions with MIR JIT compiler (generator) call this code
   * Running code from above example could look the following (here `m1` and `m2` are modules `m_sieve` and `m_e100`,
     `func` is function `ex100`, `sieve` is function `sieve`):
 ```
-    MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf); MIR_link ();
-    MIR_gen (sieve); /* optional call to generate machine code for sieve */
+    MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf);
+    MIR_link (MIR_set_interp_interface);
+    /* or MIR_gen (MIR_set_gen_interface); to generate and use the machine code */
     MIR_interp (func, 0); /* zero here is arguments number  */
+    /* or ((void (*) (void)) func->addr) (); to call interpreter or generated code through the interface */
 ```
 
   * If you generate machine code for a function, you should also generate
