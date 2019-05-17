@@ -264,7 +264,8 @@ struct MIR_item {
   /* address of loaded data/bss items, function to call the function
      item, imported definition or proto object */
   void *addr;
-  int export_p; /* true for export items (only func items) */
+  void *machine_code; /* address of generated machine code */
+  char export_p; /* true for export items (only func items) */
   union {
     MIR_func_t func;
     MIR_proto_t proto;
@@ -397,9 +398,11 @@ extern void MIR_scan_string (const char *str);
 extern MIR_item_t MIR_get_global_item (const char *name);
 extern void MIR_load_module (MIR_module_t m);
 extern void MIR_load_external (const char *name, void *addr);
-extern void MIR_link (void);
+extern void MIR_link (void (*set_interface) (MIR_item_t item));
 
 /* For internal use only:  */
+extern MIR_item_t _MIR_called_func;
+
 extern const char *_MIR_uniq_string (const char *str);
 extern int _MIR_reserved_name_p (const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
@@ -419,9 +422,10 @@ extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t re
 extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
 extern void _MIR_undefined_interface (void);
-extern void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler);
-extern void *_MIR_get_thunk (void);
+extern void *_MIR_get_interp_shim (void *handler);
+extern void *_MIR_get_thunk (MIR_item_t item);
 extern void _MIR_redirect_thunk (void *thunk, void *to);
-extern void *_MIR_get_thunk_func (void *thunk);
+extern void *_MIR_get_thunk_target (void *thunk);
+extern MIR_item_t _MIR_get_thunk_func (void *thunk);
 
 #endif /* #ifndef MIR_H */

@@ -130,12 +130,8 @@ static void generate_icode (MIR_item_t func_item) {
       } else if (ops[1].mode == MIR_OP_REF) {
 	MIR_item_t item = ops[1].u.ref;
 	
-	if (item->item_type == MIR_import_item && item->ref_def != NULL && item->ref_def != NULL
-	    && _MIR_get_thunk_func (item->ref_def->addr) == _MIR_undefined_interface) {
-	  mir_assert (item->ref_def->item_type == MIR_func_item);
-	  redirect_interface_to_interp (item->ref_def);
+	if (item->item_type == MIR_import_item && item->ref_def != NULL)
 	  item->addr = item->ref_def->addr;
-	}
 	v = get_icode (IC_MOVP); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.a = item->addr; VARR_PUSH (MIR_val_t, code_varr, v);
@@ -712,6 +708,7 @@ static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, M
   MIR_val_t val;
   MIR_type_t type;
   MIR_var_t *arg_vars = NULL;
+  MIR_item_t func_item;
   ffi_cif cif;
   ffi_status status;
   union { ffi_arg rint; float f; double d; void *a; } u;
@@ -858,8 +855,6 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
    common vararg implementation.  For some targets it might not
    work.  */
 
-static MIR_item_t called_func;
-
 static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
   size_t nargs;
   MIR_var_t *arg_vars;
@@ -896,10 +891,10 @@ static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
   return MIR_interp_arr (func_item, nargs, args);
 }
 
-static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.i;}
-static float f_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.f;}
-static double d_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.d;}
-static void *a_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (called_func, a0, args); return v.a;}
+static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.i;}
+static float f_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.f;}
+static double d_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.d;}
+static void *a_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.a;}
 
 #define define_shim(rtype, pref, suf, partype, valsuf) \
   rtype pref ## _shim_ ## suf (partype p, ...) {       \
@@ -924,10 +919,10 @@ define_3shims (f, float, f)
 define_3shims (d, double, d)
 define_3shims (a, void *, a)
 
-int64_t i_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.i; }
-float f_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.f; }
-double d_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.d; }
-void *a_shim_v (void) { MIR_val_t v = MIR_interp_arr (called_func, 0, NULL); return v.a; }
+int64_t i_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.i; }
+float f_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.f; }
+double d_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.d; }
+void *a_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.a; }
 
 static void *get_call_shim (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
@@ -962,11 +957,9 @@ static void *get_call_shim (MIR_item_t func_item) {
   }
 }
 
-void MIR_set_C_interp_interface (MIR_item_t func_item) {
-  func_item->addr = _MIR_get_interp_shim (func_item, &called_func, get_call_shim (func_item));
-}
-
 static void redirect_interface_to_interp (MIR_item_t func_item) {
   _MIR_redirect_thunk (func_item->addr,
-		       _MIR_get_interp_shim (func_item, &called_func, get_call_shim (func_item)));
+		       _MIR_get_interp_shim (get_call_shim (func_item)));
 }
+
+void MIR_set_interp_interface (MIR_item_t func_item) { redirect_interface_to_interp (func_item); }

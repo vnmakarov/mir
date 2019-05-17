@@ -607,7 +607,7 @@ static MIR_item_t create_item (MIR_item_type_t item_type, const char *item_name)
   item->item_type = item_type;
   item->ref_def = NULL;
   item->export_p = FALSE;
-  item->addr = NULL;
+  item->addr = item->machine_code = NULL;
   return item;
 }
 
@@ -961,7 +961,7 @@ static void replace_global (MIR_item_t item) {
   HTAB_DO (MIR_item_t, global_item_tab, item, HTAB_INSERT, tab_item);
 }
 
-void _MIR_undefined_interface (void) {
+static void undefined_interface (void) {
   (*error_func) (MIR_call_op_error, "undefined call interface");
 }
 
@@ -980,8 +980,8 @@ void MIR_load_module (MIR_module_t m) {
 	       item->u.data->nel * _MIR_type_size (item->u.data->el_type));
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL)
-	item->addr = _MIR_get_thunk ();
-      _MIR_redirect_thunk (item->addr, _MIR_undefined_interface);
+	item->addr = _MIR_get_thunk (item);
+      _MIR_redirect_thunk (item->addr, undefined_interface);
     }
     if (item->export_p) { /* update global item table */
       mir_assert (item->item_type != MIR_export_item
@@ -1006,12 +1006,12 @@ void MIR_load_external (const char *name, void *addr) {
   curr_module = saved;
 }
 
-void MIR_link (void) {
+void MIR_link (void (*set_interface) (MIR_item_t item)) {
   MIR_item_t item, tab_item, def;
   MIR_module_t m;
     
-  while (VARR_LENGTH (MIR_module_t, modules_to_link) != 0) {
-    m = VARR_POP (MIR_module_t, modules_to_link);
+  for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
+    m = VARR_GET (MIR_module_t, modules_to_link, i);
     for (item = DLIST_HEAD (MIR_item_t, m->items);
 	 item != NULL;
 	 item = DLIST_NEXT (MIR_item_t, item))
@@ -1024,6 +1024,15 @@ void MIR_link (void) {
 	// ???;
       }
   }
+  if (set_interface != NULL)
+    while (VARR_LENGTH (MIR_module_t, modules_to_link) != 0) {
+      m = VARR_POP (MIR_module_t, modules_to_link);
+      for (item = DLIST_HEAD (MIR_item_t, m->items);
+	   item != NULL;
+	   item = DLIST_NEXT (MIR_item_t, item))
+	if (item->item_type == MIR_func_item)
+	  set_interface (item);
+    }
 }
 
 const char *MIR_insn_name (MIR_insn_code_t code) {
@@ -1977,6 +1986,10 @@ static void code_finish (void) {
   }
   VARR_DESTROY (code_holder_t, code_holders);
 }
+
+/* Used by interpreter for calling through C interface and generator
+   for lazy JIT compilation. */
+MIR_item_t _MIR_called_func;
 
 
 

@@ -43,12 +43,12 @@ int main (void) {
   fprintf (stderr, "MIR %d funcs creation end -- %.0f usec\n", N, real_usec_time () - start_time);
   for (int i = 0; i < N; i++)
     MIR_load_module (funcs[i]->module);
-  MIR_link ();
   MIR_gen_init ();
   fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
 #if MIR_GEN_DEBUG
   MIR_gen_set_debug_file (stderr);
 #endif
+  MIR_link (MIR_set_gen_interface);
   for (int i = 0; i < N; i++)
     fun = MIR_gen (funcs[i]);
   fprintf (stderr, "MIR_gen end (%d funcs) -- %.0f usec\n", N, real_usec_time () - start_time);

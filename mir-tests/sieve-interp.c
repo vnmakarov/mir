@@ -23,13 +23,13 @@ int main (void) {
   MIR_output (stderr);
 #endif
   MIR_load_module (m);
-  MIR_link ();
+  MIR_link (MIR_set_interp_interface);
   MIR_interp_init ();
   fprintf (stderr, "Interpreter init finish: %.3f ms\n", (real_sec_time () - start_time) * 1000.0);
   start_time = real_sec_time ();
 #if MIR_C_INTERFACE
   typedef int64_t (*loop_func) (void);
-  MIR_set_C_interp_interface (func);
+  MIR_set_interp_interface (func);
   int64_t res = ((loop_func) func->addr) ();
   fprintf (stderr, "C interface SIEVE -> %"PRId64 ": %.3f sec\n", res, real_sec_time () - start_time);
 #else
