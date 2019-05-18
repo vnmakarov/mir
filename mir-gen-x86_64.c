@@ -408,8 +408,8 @@ struct pattern {
 #define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)	                \
   {ICODE ## SUFF, "r 0 h2", #PREF " " CL_OP_CODE " R0 i2"},  /* sh r0,cl */ \
   {ICODE ## SUFF, "m3 0 h2", #PREF " " CL_OP_CODE " m0 i2"}, /* sh m0,cl */ \
-  {ICODE ## SUFF, "r 0 i8", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
-  {ICODE ## SUFF, "m3 0 i8", #PREF " " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
+  {ICODE ## SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
+  {ICODE ## SUFF, "m3 0 i0", #PREF " " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
 #define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)  \
   SHOP0(ICODE, , X, CL_OP_CODE, I8_OP_CODE)  \
