@@ -3167,7 +3167,15 @@ static void combine (void) {
       }
 #endif
 
-      if ((code = insn->code) != MIR_CALL) {
+      if ((code = insn->code) == MIR_CALL) {
+	for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
+	  if (bitmap_bit_p (call_used_hard_regs, hr)) {
+	    hreg_def_ages_addr[hr] = curr_bb_hreg_def_age;
+	    hreg_defs_addr[hr].insn = insn;
+	    hreg_defs_addr[hr].nop = 0; /* whatever */
+	    hreg_defs_addr[hr].insn_num = curr_insn_num;
+	  }
+      } else {
 	for (iter = 0; iter < 2; iter++) {
 	  change_p = FALSE;
 	  for (i = 0; i < nops; i++) {
