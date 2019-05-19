@@ -3009,6 +3009,8 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
     def_insn = hreg_defs_addr[op.u.hard_reg].insn;
     if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV)
       return FALSE;
+    if (obsolete_hard_reg_op_p (def_insn->ops[1], hreg_defs_addr[op.u.hard_reg].insn_num))
+      return FALSE;
     gen_assert (hreg_defs_addr[op.u.hard_reg].nop == 0);
     insn->ops[nop] = def_insn->ops[1];
     successfull_change_p = insn_ok_p (insn);
