@@ -1760,8 +1760,8 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   case MIR_URSH:  UOP3(>>); break;
   case MIR_URSHS: UOP3S(>>); break;
     
-  case MIR_EQ:  ICMP(=); break;
-  case MIR_EQS: ICMPS(=); break;
+  case MIR_EQ:  ICMP(==); break;
+  case MIR_EQS: ICMPS(==); break;
   case MIR_NE:  ICMP(!=); break;
   case MIR_NES: ICMPS(!=); break;
 
