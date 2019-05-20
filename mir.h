@@ -303,18 +303,20 @@ extern MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg);
 extern MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
 					 MIR_reg_t index, MIR_scale_t scale);
 
+static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
+  return (code == MIR_FBEQ || code == MIR_DBEQ || code == MIR_FBNE || code == MIR_DBNE
+	  || code == MIR_FBLT || code == MIR_DBLT || code == MIR_FBLE || code == MIR_DBLE
+	  || code == MIR_FBGT || code == MIR_DBGT || code == MIR_FBGE || code == MIR_DBGE);
+}
+
 static inline int MIR_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_JMP || code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS
-	  || code == MIR_BEQ || code == MIR_BEQS || code == MIR_FBEQ || code == MIR_DBEQ
-	  || code == MIR_BNE || code == MIR_BNES || code == MIR_FBNE || code == MIR_DBNE
+	  || code == MIR_BEQ || code == MIR_BEQS || code == MIR_BNE || code == MIR_BNES
 	  || code == MIR_BLT || code == MIR_BLTS || code == MIR_UBLT || code == MIR_UBLTS
-	  || code == MIR_FBLT || code == MIR_DBLT
 	  || code == MIR_BLE || code == MIR_BLES || code == MIR_UBLE || code == MIR_UBLES
-	  || code == MIR_FBLE || code == MIR_DBLE
 	  || code == MIR_BGT || code == MIR_BGTS || code == MIR_UBGT || code == MIR_UBGTS
-	  || code == MIR_FBGT || code == MIR_DBGT
 	  || code == MIR_BGE || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES
-	  || code == MIR_FBGE || code == MIR_DBGE);
+	  || MIR_FP_branch_code_p (code));
 }
 
 static inline int MIR_ret_code_p (MIR_insn_code_t code) {
