@@ -1897,7 +1897,8 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       VARR_PUSH (MIR_insn_t, ret_insns, insn);
     }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL && insn->ops[0].u.label == next_insn)
+    if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL && insn->ops[0].u.label == next_insn
+	&& ! MIR_FP_branch_code_p (code) /* remember signaling NAN */)
       MIR_remove_insn (func_item, insn);
     else
       _MIR_simplify_insn (func_item, insn, mem_float_p);
