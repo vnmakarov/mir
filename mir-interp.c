@@ -16,7 +16,11 @@ static void util_error (const char *message);
 
 static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
 
-#if !defined (MIR_DIRECT_DISPATCH) && defined (__GNUC__)
+#ifndef MIR_INTERP_TRACE
+#define MIR_INTERP_TRACE 0
+#endif
+
+#if !defined (MIR_DIRECT_DISPATCH) && defined (__GNUC__) && ! MIR_INTERP_TRACE
 #define DIRECT_THREADED_DISPATCH 1
 #else
 #define DIRECT_THREADED_DISPATCH 0
@@ -33,6 +37,7 @@ typedef MIR_val_t *code_t;
 typedef struct func_desc {
   MIR_reg_t fp_reg, nregs;
   size_t frame_size_in_vals;
+  MIR_item_t func_item;
   MIR_val_t code[1];
 } *func_desc_t;
 
@@ -241,6 +246,7 @@ static void generate_icode (MIR_item_t func_item) {
   func_desc->nregs = max_nreg + 1;
   func_desc->frame_size_in_vals = (func->frame_size + sizeof (MIR_val_t) - 1) / sizeof (MIR_val_t);
   func_desc->fp_reg = MIR_reg (FP_NAME, func);
+  func_desc->func_item = func_item;
 }
 
 static ALWAYS_INLINE void *get_a (MIR_val_t *v) { return v->a;}
@@ -353,10 +359,60 @@ static MIR_val_t *args;
  
 static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args);
 
-static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
-  code_t pc, ops;
+#if MIR_INTERP_TRACE
+static int trace_insn_ident;
+
+static void trace (func_desc_t func_desc, code_t pc, size_t nops) {
+  code_t ops = pc + 1;
+  const char *name;
   
+  switch (pc->ic) {
+  case IC_LDI8: name = "LDI8"; break;
+  case IC_LDU8: name = "LDU8"; break;
+  case IC_LDI16: name = "LDI16"; break;
+  case IC_LDU16: name = "LDU16"; break;
+  case IC_LDI32: name = "LDI32"; break;
+  case IC_LDU32: name = "LDU32"; break;
+  case IC_LDI64: name = "LDI64"; break;
+  case IC_LDF: name = "LDF"; break;
+  case IC_LDD: name = "LDD"; break;
+  case IC_STI8: name = "STI8"; break;
+  case IC_STU8: name = "STU8"; break;
+  case IC_STI16: name = "STI16"; break;
+  case IC_STU16: name = "STU16"; break;
+  case IC_STI32: name = "STI32"; break;
+  case IC_STU32: name = "STU32"; break;
+  case IC_STI64: name = "STI64"; break;
+  case IC_STF: name = "STF"; break;
+  case IC_STD: name = "STD"; break;
+  case IC_MOVI: name = "MOVI"; break;
+  case IC_MOVP: name = "MOVP"; break;
+  case IC_MOVF: name = "MOVF"; break;
+  case IC_MOVD: name = "MOVD"; break;
+  default:
+    name = MIR_insn_name (pc->ic);
+    break;
+  }
+  for (int i = 0; i < trace_insn_ident; i++)
+    fprintf (stderr, " ");
+  fprintf (stderr, "%s", name);
+  for (size_t i = 0; i < nops; i++) {
+    fprintf (stderr, i == 0 ? "\t" : ", ");
+    fprintf (stderr, "%"PRId64, ops[i].i);
+  }
+  fprintf (stderr, "\n");
+}
+#endif
+
+static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
+  code_t pc, ops, code = func_desc->code;
+  
+#if MIR_INTERP_TRACE
+#define START_INSN(nops) do {trace (func_desc, pc, nops); ops = pc + 1; pc += nops + 1;} while (0)
+#else
 #define START_INSN(nops) do {ops = pc + 1; pc += nops + 1;} while (0)
+#endif
+
 #if DIRECT_THREADED_DISPATCH
   static void *ltab [IC_INSN_BOUND];
 
@@ -613,7 +669,13 @@ static MIR_val_t OPTIMIZE eval (code_t code, MIR_val_t *bp) {
 	for (size_t i = start; i < nops; i++)
 	  args[i - start] = bp [get_i (ops + i + 1)];
 	
+#if MIR_INTERP_TRACE
+	trace_insn_ident += 2;
+#endif
 	call (proto, f, res, nops - start, args);
+#if MIR_INTERP_TRACE
+	trace_insn_ident -= 2;
+#endif
 	pc += nops + 1; /* nops itself */
       }
       END_INSN;
@@ -796,6 +858,9 @@ void MIR_interp_init (void) {
   ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
   VARR_CREATE (int_value_t, ffi_int_values_varr, 0);
   ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
+#if MIR_INTERP_TRACE
+  trace_insn_ident = 0;
+#endif
 }
 
 void MIR_interp_finish (void) {
@@ -829,7 +894,7 @@ MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
     bp[i + 1] = va_arg (argp, MIR_val_t);
   va_end(argp);
   bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
-  return eval (func_desc->code, bp);
+  return eval (func_desc, bp);
 }
 
 MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
@@ -848,7 +913,7 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
   bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
-  return eval (func_desc->code, bp);
+  return eval (func_desc, bp);
 }
 
 /* C call interface to interpreter.  It is based on knowledge of
