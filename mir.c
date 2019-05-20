@@ -1897,7 +1897,10 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       VARR_PUSH (MIR_insn_t, ret_insns, insn);
     }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    _MIR_simplify_insn (func_item, insn, mem_float_p);
+    if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL && insn->ops[0].u.label == next_insn)
+      MIR_remove_insn (func_item, insn);
+    else
+      _MIR_simplify_insn (func_item, insn, mem_float_p);
   }
   make_one_ret (func_item, ret_code == MIR_INSN_BOUND ? MIR_RET : ret_code);
 }
