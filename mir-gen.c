@@ -2942,47 +2942,63 @@ static size_t *hreg_def_ages_addr;
 
 static size_t curr_bb_hreg_def_age;
 
-static MIR_insn_code_t commutative_insn_code (MIR_insn_t insn) {
-  switch (insn->code) {
+static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
+  switch (insn_code) {
   case MIR_ADD: case MIR_FADD: case MIR_DADD:
   case MIR_MUL: case MIR_FMUL: case MIR_DMUL:
   case MIR_AND: case MIR_OR: case MIR_XOR:
-  case MIR_EQ: case MIR_FEQ: case MIR_DEQ:
-  case MIR_NE: case MIR_FNE: case MIR_DNE:
-  case MIR_BEQ: case MIR_FBEQ: case MIR_DBEQ:
-  case MIR_BNE: case MIR_FBNE: case MIR_DBNE:
-    return insn->code;
+  case MIR_EQ: case MIR_EQS: case MIR_FEQ: case MIR_DEQ:
+  case MIR_NE: case MIR_NES: case MIR_FNE: case MIR_DNE:
+  case MIR_BEQ: case MIR_BEQS: case MIR_FBEQ: case MIR_DBEQ:
+  case MIR_BNE: case MIR_BNES: case MIR_FBNE: case MIR_DBNE:
+    return insn_code;
     break;
   case MIR_LT: return MIR_GT;
+  case MIR_LTS: return MIR_GTS;
   case MIR_ULT: return MIR_UGT;
+  case MIR_ULTS: return MIR_UGTS;
+  case MIR_LE: return MIR_GE;
+  case MIR_LES: return MIR_GES;
+  case MIR_ULE: return MIR_UGE;
+  case MIR_ULES: return MIR_UGES;
+  case MIR_GT: return MIR_LT;
+  case MIR_GTS: return MIR_LTS;
+  case MIR_UGT: return MIR_ULT;
+  case MIR_UGTS: return MIR_ULTS;
+  case MIR_GE: return MIR_LE;
+  case MIR_GES: return MIR_LES;
+  case MIR_UGE: return MIR_ULE;
+  case MIR_UGES: return MIR_ULES;
+  case MIR_BLT: return MIR_BGT;
+  case MIR_BLTS: return MIR_BGTS;
+  case MIR_UBLT: return MIR_UBGT;
+  case MIR_UBLTS: return MIR_UBGTS;
+  case MIR_BLE: return MIR_BGE;
+  case MIR_BLES: return MIR_BGES;
+  case MIR_UBLE: return MIR_UBGE;
+  case MIR_UBLES: return MIR_UBGES;
+  case MIR_BGT: return MIR_BLT;
+  case MIR_BGTS: return MIR_BLTS;
+  case MIR_UBGT: return MIR_UBLT;
+  case MIR_UBGTS: return MIR_UBLTS;
+  case MIR_BGE: return MIR_BLE;
+  case MIR_BGES: return MIR_BLES;
+  case MIR_UBGE: return MIR_UBLE;
+  case MIR_UBGES: return MIR_UBLES;
   case MIR_FLT: return MIR_FGT;
   case MIR_DLT: return MIR_DGT;
-  case MIR_LE: return MIR_GE;
-  case MIR_ULE: return MIR_UGE;
   case MIR_FLE: return MIR_FGE;
   case MIR_DLE: return MIR_DGE;
-  case MIR_GT: return MIR_LT;
-  case MIR_UGT: return MIR_ULT;
   case MIR_FGT: return MIR_FLT;
   case MIR_DGT: return MIR_DLT;
-  case MIR_GE: return MIR_LE;
-  case MIR_UGE: return MIR_ULE;
   case MIR_FGE: return MIR_FLE;
   case MIR_DGE: return MIR_DLE;
-  case MIR_BLT: return MIR_BGT;
-  case MIR_UBLT: return MIR_UBGT;
   case MIR_FBLT: return MIR_FBGT;
   case MIR_DBLT: return MIR_DBGT;
-  case MIR_BLE: return MIR_BGE;
-  case MIR_UBLE: return MIR_UBGE;
   case MIR_FBLE: return MIR_FBGE;
   case MIR_DBLE: return MIR_DBGE;
-  case MIR_BGT: return MIR_BLT;
-  case MIR_UBGT: return MIR_UBLT;
   case MIR_FBGT: return MIR_FBLT;
   case MIR_DBGT: return MIR_DBLT;
-  case MIR_BGE: return MIR_BLE;
-  case MIR_UBGE: return MIR_UBLE;
   case MIR_FBGE: return MIR_FBLE;
   case MIR_DBGE: return MIR_DBLE;
   default: return MIR_INSN_BOUND;
@@ -3184,12 +3200,12 @@ static void combine (void) {
 	      change_p = TRUE;
 	  }
 	  if (iter == 0) {
-	    if ((new_code = commutative_insn_code (insn)) == MIR_INSN_BOUND)
+	    if ((new_code = commutative_insn_code (insn->code)) == MIR_INSN_BOUND)
 	      break;
 	    insn->code = new_code;
 	    temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
 	  } else if (! change_p) {
-	    gen_assert (commutative_insn_code (insn) == code);
+	    gen_assert (commutative_insn_code (insn->code) == code);
 	    insn->code = code;
 	    temp_op = insn->ops[1]; insn->ops[1] = insn->ops[2]; insn->ops[2] = temp_op;
 	  }
