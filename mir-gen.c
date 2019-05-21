@@ -2874,7 +2874,7 @@ static void rewrite (void) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn;
   size_t nops, i;
-  MIR_op_t *op;
+  MIR_op_t *op, in_op, out_op;
   MIR_mem_t mem;
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg;
@@ -2892,8 +2892,12 @@ static void rewrite (void) {
 	switch (op->mode) {
 	case MIR_OP_REG:
 	  hard_reg = change_reg (op->u.reg, data_mode, out_p || first_in_p, bb_insn, out_p);
-	  if (! out_p)
+	  if (out_p) {
+	    out_op = *op;
+	  } else {
+	    in_op = *op;
 	    first_in_p = FALSE;
+	  }
 	  op->mode = MIR_OP_HARD_REG;
 	  op->u.hard_reg = hard_reg;
 	  break;
@@ -2914,6 +2918,15 @@ static void rewrite (void) {
       if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
 	  && insn->ops[0].mode == MIR_OP_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
 	  && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
+#if MIR_GEN_DEBUG
+	if (debug_file != NULL) {
+	  fprintf (stderr, "Deleting noop move ");
+	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, FALSE);
+	  fprintf (stderr, " which was ");
+	  insn->ops[0] = out_op; insn->ops[1] = in_op;
+	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
+	}
+#endif
 	delete_bb_insn (bb_insn);
 	MIR_remove_insn (curr_func_item, insn);
       }
