@@ -45,9 +45,10 @@ static MIR_disp_t get_stack_slot_offset (MIR_reg_t slot) { /* slot is 0, 1, ... 
 static int alloca_p;
 
 static MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
-  MIR_FADD, MIR_DADD, MIR_SUB, MIR_FSUB, MIR_DSUB,
-  MIR_MUL, MIR_FMUL, MIR_DMUL, MIR_DIV, MIR_UDIV, MIR_FDIV, MIR_DDIV,
-  MIR_MOD, MIR_UMOD, MIR_AND, MIR_OR, MIR_XOR, MIR_LSH, MIR_RSH, MIR_URSH,
+  MIR_FADD, MIR_DADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB,
+  MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_FDIV, MIR_DDIV,
+  MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS, MIR_AND, MIR_ANDS, MIR_OR, MIR_ORS, MIR_XOR, MIR_XORS,
+  MIR_LSH, MIR_LSHS, MIR_RSH, MIR_RSHS, MIR_URSH, MIR_URSHS,
 };
 
 typedef enum {
