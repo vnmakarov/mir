@@ -21,7 +21,7 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 #define MIR_INTERP_TRACE 0
 #endif
 
-#if !defined (MIR_DIRECT_DISPATCH) && defined (__GNUC__) && ! MIR_INTERP_TRACE
+#if !defined (MIR_DIRECT_DISPATCH) && defined (__GNUC__)
 #define DIRECT_THREADED_DISPATCH 1
 #else
 #define DIRECT_THREADED_DISPATCH 0
