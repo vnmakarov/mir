@@ -1049,6 +1049,16 @@ static size_t insn_code_nops (MIR_insn_code_t code) { /* 0 for calls */
 
 size_t MIR_insn_nops (MIR_insn_t insn) { return insn->nops; }
 
+MIR_op_mode_t _MIR_insn_code_op_mode (MIR_insn_code_t code, size_t nop, int *out_p) {
+  unsigned mode;
+
+  if (nop >= insn_code_nops (code))
+    return MIR_OP_UNDEF;
+  mode = insn_descs[code].op_modes[nop];
+  *out_p = (mode & OUTPUT_FLAG) != 0;
+  return *out_p ? mode ^ OUTPUT_FLAG : mode;
+}
+
 MIR_op_mode_t MIR_insn_op_mode (MIR_insn_t insn, size_t nop, int *out_p) {
   MIR_insn_code_t code = insn->code;
   size_t nops = MIR_insn_nops (insn);
