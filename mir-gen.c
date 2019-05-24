@@ -2889,15 +2889,15 @@ static void rewrite (void) {
       for (i = 0; i < nops; i++) {
 	op = &insn->ops[i];
 	data_mode = MIR_insn_op_mode (insn, i, &out_p);
+	if (out_p)
+	  out_op = *op;
+	else
+	  in_op = *op;
 	switch (op->mode) {
 	case MIR_OP_REG:
 	  hard_reg = change_reg (op->u.reg, data_mode, out_p || first_in_p, bb_insn, out_p);
-	  if (out_p) {
-	    out_op = *op;
-	  } else {
-	    in_op = *op;
+	  if (! out_p)
 	    first_in_p = FALSE;
-	  }
 	  op->mode = MIR_OP_HARD_REG;
 	  op->u.hard_reg = hard_reg;
 	  break;
