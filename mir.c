@@ -1909,10 +1909,27 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
     }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL && insn->ops[0].u.label == next_insn
-	&& ! MIR_FP_branch_code_p (code) /* remember signaling NAN */)
+	&& ! MIR_FP_branch_code_p (code)) { /* remember signaling NAN */
       MIR_remove_insn (func_item, insn);
-    else
+    } else if (((code == MIR_MUL || code == MIR_MULS || code == MIR_DIV || code == MIR_DIVS)
+		&& insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 1)
+	       || ((code == MIR_ADD || code == MIR_ADDS || code == MIR_SUB || code == MIR_SUBS
+		    || code == MIR_OR || code == MIR_ORS || code == MIR_XOR || code == MIR_XORS
+		    || code == MIR_LSH || code == MIR_LSHS || code == MIR_RSH || code == MIR_RSHS
+		    || code == MIR_URSH || code == MIR_URSHS)
+		   && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 0)) {
+      if (! MIR_op_eq_p (insn->ops[0], insn->ops[1]))
+	MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_MOV, insn->ops[0], insn->ops[1]));
+      MIR_remove_insn (func_item, insn);
+    } else if ((code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS)
+	       && insn->ops[1].mode == MIR_OP_INT && (insn->ops[1].u.i == 0 || insn->ops[1].u.i == 1)) {
+      if ((code == MIR_BT || code == MIR_BTS) == (insn->ops[1].u.i == 1))
+	MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_JMP, insn->ops[0]));
+      MIR_remove_insn (func_item, insn);
+      // ??? make imm always second,  what is about mem?
+    } else {
       _MIR_simplify_insn (func_item, insn, mem_float_p);
+    }
   }
   make_one_ret (func_item, ret_code == MIR_INSN_BOUND ? MIR_RET : ret_code);
 }
