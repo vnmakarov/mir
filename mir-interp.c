@@ -203,11 +203,12 @@ static void generate_icode (MIR_item_t func_item) {
       v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = get_reg (ops[1], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
       break;
-    case MIR_BEQ: case MIR_FBEQ: case MIR_DBEQ: case MIR_BNE: case MIR_FBNE: case MIR_DBNE:
-    case MIR_BLT: case MIR_UBLT: case MIR_FBLT: case MIR_DBLT:
-    case MIR_BLE: case MIR_UBLE: case MIR_FBLE: case MIR_DBLE:
-    case MIR_BGT: case MIR_UBGT: case MIR_FBGT: case MIR_DBGT:
-    case MIR_BGE: case MIR_UBGE: case MIR_FBGE: case MIR_DBGE:
+    case MIR_BEQ: case MIR_BEQS: case MIR_FBEQ: case MIR_DBEQ:
+    case MIR_BNE: case MIR_BNES: case MIR_FBNE: case MIR_DBNE:
+    case MIR_BLT: case MIR_BLTS: case MIR_UBLT: case MIR_UBLTS: case MIR_FBLT: case MIR_DBLT:
+    case MIR_BLE: case MIR_BLES: case MIR_UBLE: case MIR_UBLES: case MIR_FBLE: case MIR_DBLE:
+    case MIR_BGT: case MIR_BGTS: case MIR_UBGT: case MIR_UBGTS: case MIR_FBGT: case MIR_DBGT:
+    case MIR_BGE: case MIR_BGES: case MIR_UBGE: case MIR_UBGES: case MIR_FBGE: case MIR_DBGE:
       VARR_PUSH (MIR_insn_t, branches, insn);
       v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = 0; VARR_PUSH (MIR_val_t, code_varr, v);
