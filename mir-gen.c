@@ -2293,7 +2293,7 @@ static int live_trans_func (bb_t bb) {
   return bitmap_ior_and_compl (bb->live_in, bb->live_gen, bb->live_out, bb->live_kill);
 }
 
-static void initiate_bb_live_info (bb_t bb) {
+static void initiate_bb_live_info (bb_t bb, int moves_p) {
   MIR_insn_t insn;
   size_t nops, i, niter;
   MIR_reg_t nregs, n;
@@ -2379,7 +2379,7 @@ static void initiate_bb_live_info (bb_t bb) {
       bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
       bitmap_ior (bb->live_gen, bb->live_gen, bb_insn->call_hard_reg_args);
     }
-    if (move_p (insn)) {
+    if (moves_p && move_p (insn)) {
       mv = get_free_move ();
       mv->bb_insn = bb_insn;
       if (insn->ops[0].mode == MIR_OP_REG)
@@ -2390,13 +2390,13 @@ static void initiate_bb_live_info (bb_t bb) {
   }
 }
 
-static void initiate_live_info (void) {
+static void initiate_live_info (int moves_p) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    initiate_bb_live_info (bb);
+    initiate_bb_live_info (bb, moves_p);
 }
 
-void calculate_func_cfg_live_info (void) {
-  initiate_live_info ();
+static void calculate_func_cfg_live_info (int moves_p) {
+  initiate_live_info (moves_p);
   solve_dataflow (FALSE, live_con_func_0, live_con_func_n, live_trans_func);
 }
 
@@ -3493,7 +3493,7 @@ void *MIR_gen (MIR_item_t func_item) {
 #endif
   cse_clear ();
 #endif /* #ifndef NO_CSE */
-  calculate_func_cfg_live_info ();
+  calculate_func_cfg_live_info (FALSE);
 #ifndef NO_CSE
   dead_code_elimination (func_item);
 #if MIR_GEN_DEBUG
@@ -3522,7 +3522,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (TRUE, TRUE, output_bb_live_info);
   }
 #endif
-  calculate_func_cfg_live_info ();
+  calculate_func_cfg_live_info (TRUE);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
@@ -3538,7 +3538,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
-  calculate_func_cfg_live_info ();
+  calculate_func_cfg_live_info (FALSE);
   add_bb_insn_dead_vars ();
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
