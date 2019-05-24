@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <alloca.h>
+#include <float.h>
 #include <inttypes.h>
 
 static void util_error (const char *message);
@@ -368,43 +369,44 @@ static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, M
 #if MIR_INTERP_TRACE
 static int trace_insn_ident;
 
-static void trace (func_desc_t func_desc, code_t pc, size_t nops) {
+static void start_insn_trace (const char *name, func_desc_t func_desc, code_t pc, size_t nops) {
   code_t ops = pc + 1;
-  const char *name;
   
-  switch (pc->ic) {
-  case IC_LDI8: name = "LDI8"; break;
-  case IC_LDU8: name = "LDU8"; break;
-  case IC_LDI16: name = "LDI16"; break;
-  case IC_LDU16: name = "LDU16"; break;
-  case IC_LDI32: name = "LDI32"; break;
-  case IC_LDU32: name = "LDU32"; break;
-  case IC_LDI64: name = "LDI64"; break;
-  case IC_LDF: name = "LDF"; break;
-  case IC_LDD: name = "LDD"; break;
-  case IC_STI8: name = "STI8"; break;
-  case IC_STU8: name = "STU8"; break;
-  case IC_STI16: name = "STI16"; break;
-  case IC_STU16: name = "STU16"; break;
-  case IC_STI32: name = "STI32"; break;
-  case IC_STU32: name = "STU32"; break;
-  case IC_STI64: name = "STI64"; break;
-  case IC_STF: name = "STF"; break;
-  case IC_STD: name = "STD"; break;
-  case IC_MOVI: name = "MOVI"; break;
-  case IC_MOVP: name = "MOVP"; break;
-  case IC_MOVF: name = "MOVF"; break;
-  case IC_MOVD: name = "MOVD"; break;
-  default:
-    name = MIR_insn_name (pc->ic);
-    break;
-  }
   for (int i = 0; i < trace_insn_ident; i++)
     fprintf (stderr, " ");
   fprintf (stderr, "%s", name);
   for (size_t i = 0; i < nops; i++) {
     fprintf (stderr, i == 0 ? "\t" : ", ");
     fprintf (stderr, "%"PRId64, ops[i].i);
+  }
+}
+
+static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) {
+  int out_p;
+  MIR_op_mode_t op_mode = MIR_OP_UNDEF;
+
+  switch (code) {
+  case IC_LDI8: case IC_LDU8: case IC_LDI16: case IC_LDU16:
+  case IC_LDI32: case IC_LDU32: case IC_LDI64: case IC_MOVI: case IC_MOVP:
+    op_mode = MIR_OP_INT; break;
+  case IC_LDF: case IC_MOVF:
+    op_mode = MIR_OP_FLOAT; break;
+  case IC_LDD: case IC_MOVD:
+    op_mode = MIR_OP_DOUBLE; break;
+  case IC_STI8: case IC_STU8: case IC_STI16: case IC_STU16:
+  case IC_STI32: case IC_STU32: case IC_STI64: case IC_STF: case IC_STD:
+    break;
+  default:
+    op_mode = _MIR_insn_code_op_mode (code, 0, &out_p);
+    if (!out_p)
+      op_mode = MIR_OP_UNDEF;
+    break;
+  }
+  switch (op_mode) {
+  case MIR_OP_INT: fprintf (stderr, "\t# res = %"PRId64 " (%"PRIu64 "u, 0x%"PRIx64 ")",
+			    bp [ops[0].i].i, bp [ops[0].i].u, bp [ops[0].i].u); break;
+  case MIR_OP_FLOAT: fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, bp [ops[0].i].f); break;
+  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %%.*e", DBL_DECIMAL_DIG, bp [ops[0].i].d); break;
   }
   fprintf (stderr, "\n");
 }
@@ -414,9 +416,10 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
   code_t pc, ops, code = func_desc->code;
   
 #if MIR_INTERP_TRACE
-#define START_INSN(nops) do {trace (func_desc, pc, nops); ops = pc + 1; pc += nops + 1;} while (0)
+  MIR_insn_code_t trace_insn_code;
+#define START_INSN(v, nops) do {trace_insn_code = v; start_insn_trace (#v, func_desc, pc, nops); ops = pc + 1; pc += nops + 1;} while (0)
 #else
-#define START_INSN(nops) do {ops = pc + 1; pc += nops + 1;} while (0)
+#define START_INSN(v, nops) do {ops = pc + 1; pc += nops + 1;} while (0)
 #endif
 
 #if DIRECT_THREADED_DISPATCH
@@ -506,13 +509,24 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       v.a = ltab; return v;
     }
   
-#define CASE(value, nops) L_ ## value: START_INSN(nops)
-#define END_INSN goto *pc->a
+#define CASE(value, nops) L_ ## value: START_INSN(value, nops)
 
+#if MIR_INTERP_TRACE
+#define END_INSN finish_insn_trace (trace_insn_code, ops, bp); goto *pc->a
+#else
+#define END_INSN goto *pc->a
+#endif
+  
 #else
 
-#define CASE(value, nops) case value: START_INSN(nops)
+#define CASE(value, nops) case value: START_INSN(value, nops)
+
+#if MIR_INTERP_TRACE
+#define END_INSN finish_insn_trace (trace_insn_code, ops, bp); break
+#else
 #define END_INSN break
+#endif
+  
 #endif
   pc = code;
 
