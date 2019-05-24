@@ -1783,11 +1783,12 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
       *op = mem_op;
     } else {
       type = mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D ? mem_op.u.mem.type : MIR_T_I64;
+      code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
       new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, mem_op, mem_op));
       if (out_p)
-	new_insn = MIR_new_insn (MIR_MOV, mem_op, new_op);
+	new_insn = MIR_new_insn (code, mem_op, new_op);
       else
-	new_insn = MIR_new_insn (MIR_MOV, new_op, mem_op);
+	new_insn = MIR_new_insn (code, new_op, mem_op);
       insn = insert_op_insn (out_p, func_item, insn, new_insn);
       *op = new_op;
     }
