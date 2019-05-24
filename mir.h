@@ -409,6 +409,7 @@ extern const char *_MIR_uniq_string (const char *str);
 extern int _MIR_reserved_name_p (const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
 extern size_t _MIR_type_size (MIR_type_t type);
+extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_insn_code_t code, size_t nop, int *out_p);
 extern void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
 
 extern uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len);
