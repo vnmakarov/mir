@@ -2588,7 +2588,7 @@ static void build_live_ranges (void) {
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
 	  fprintf (debug_file, "  p%-5d", curr_point);
-	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
+	  print_bb_insn (bb_insn, TRUE);
 	}
 #endif
       nops = MIR_insn_nops (insn);
