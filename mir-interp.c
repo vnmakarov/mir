@@ -471,7 +471,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [MIR_FGE] = &&L_MIR_FGE; ltab [MIR_DGE] = &&L_MIR_DGE;
       ltab [MIR_JMP] = &&L_MIR_JMP;
       ltab [MIR_BT] = &&L_MIR_BT; ltab [MIR_BTS] = &&L_MIR_BTS;
-      ltab [MIR_BFS] = &&L_MIR_BF; ltab [MIR_BFS] = &&L_MIR_BF;
+      ltab [MIR_BF] = &&L_MIR_BF; ltab [MIR_BFS] = &&L_MIR_BFS;
       ltab [MIR_BEQ] = &&L_MIR_BEQ; ltab [MIR_BEQS] = &&L_MIR_BEQS;
       ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ;
       ltab [MIR_BNE] = &&L_MIR_BNE; ltab [MIR_BNES] = &&L_MIR_BNES;
