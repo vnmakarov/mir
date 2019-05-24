@@ -3525,6 +3525,7 @@ void *MIR_gen (MIR_item_t func_item) {
   calculate_func_cfg_live_info (TRUE);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
+    add_bb_insn_dead_vars ();
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
     print_CFG (TRUE, FALSE, output_bb_live_info);
   }
