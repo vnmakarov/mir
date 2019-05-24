@@ -2958,9 +2958,10 @@ static size_t last_mem_def_insn_num;
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
-  case MIR_ADD: case MIR_FADD: case MIR_DADD:
-  case MIR_MUL: case MIR_FMUL: case MIR_DMUL:
+  case MIR_ADD: case MIR_ADDS: case MIR_FADD: case MIR_DADD:
+  case MIR_MUL: case MIR_MULS: case MIR_FMUL: case MIR_DMUL:
   case MIR_AND: case MIR_OR: case MIR_XOR:
+  case MIR_ANDS: case MIR_ORS: case MIR_XORS:
   case MIR_EQ: case MIR_EQS: case MIR_FEQ: case MIR_DEQ:
   case MIR_NE: case MIR_NES: case MIR_FNE: case MIR_DNE:
   case MIR_BEQ: case MIR_BEQS: case MIR_FBEQ: case MIR_DBEQ:
