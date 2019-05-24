@@ -731,7 +731,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if (op.mode != MIR_OP_INT || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
       break;
     case 'm': {
-      MIR_type_t type, type2;
+      MIR_type_t type, type2, type3 = MIR_T_BOUND;
       int u_p, s_p;
       
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
@@ -750,11 +750,18 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	  type = u_p ? MIR_T_U16 : MIR_T_I16; type2 = u_p && s_p ? MIR_T_I16 : MIR_T_BOUND;
 	} else if (ch == '2') {
 	  type = u_p ? MIR_T_U32 : MIR_T_I32; type2 = u_p && s_p ? MIR_T_I32 : MIR_T_BOUND;
+#ifdef MIR_PTR32
+	  if (u_p)
+	    type3 = MIR_T_P;
+#endif
 	} else {
 	  type = MIR_T_I64; type2 = MIR_T_BOUND;
+#ifdef MIR_PTR64
+	  type3 = MIR_T_P;
+#endif
 	}
       }
-      if (op.u.mem.type != type && op.u.mem.type != type2) return FALSE;
+      if (op.u.mem.type != type && op.u.mem.type != type2 && op.u.mem.type != type3) return FALSE;
       break;
     }
     case 'l':
