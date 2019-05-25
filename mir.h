@@ -297,12 +297,6 @@ DEF_DLIST (MIR_module_t, module_link);
 
 extern DLIST (MIR_module_t) MIR_modules; /* List of all modules */
 
-/* Use it only internally:  */
-extern MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg);
-
-extern MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
-					 MIR_reg_t index, MIR_scale_t scale);
-
 static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_FBEQ || code == MIR_DBEQ || code == MIR_FBNE || code == MIR_DBNE
 	  || code == MIR_FBLT || code == MIR_DBLT || code == MIR_FBLE || code == MIR_DBLE
@@ -411,6 +405,11 @@ extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for in
 extern size_t _MIR_type_size (MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_insn_code_t code, size_t nop, int *out_p);
 extern void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
+
+extern MIR_op_t _MIR_new_hard_reg_op (MIR_reg_t hard_reg);
+
+extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+					  MIR_reg_t index, MIR_scale_t scale);
 
 extern uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len);
 

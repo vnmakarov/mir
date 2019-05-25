@@ -2853,8 +2853,8 @@ static MIR_reg_t change_reg (MIR_reg_t reg, MIR_op_mode_t data_mode, int first_p
     type = MIR_T_D; code = MIR_DMOV;
     hard_reg = first_p ? TEMP_DOUBLE_HARD_REG1 : TEMP_DOUBLE_HARD_REG2;
   }
-  hard_reg_op = MIR_new_hard_reg_op (hard_reg);
-  mem_op = MIR_new_hard_reg_mem_op (type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
+  hard_reg_op = _MIR_new_hard_reg_op (hard_reg);
+  mem_op = _MIR_new_hard_reg_mem_op (type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
   if (out_p) {
     insn = MIR_new_insn (code, mem_op, hard_reg_op);
     MIR_insert_insn_after (curr_func_item, bb_insn->insn, insn);
