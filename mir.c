@@ -1199,7 +1199,7 @@ MIR_op_t MIR_new_reg_op (MIR_reg_t reg) {
   return op;
 }
 
-MIR_op_t MIR_new_hard_reg_op (MIR_reg_t hard_reg) { /* It is used only internally */
+MIR_op_t _MIR_new_hard_reg_op (MIR_reg_t hard_reg) { /* It is used only internally */
   MIR_op_t op;
 
   init_op (&op, MIR_OP_HARD_REG); op.u.hard_reg = hard_reg;
@@ -1259,8 +1259,8 @@ MIR_op_t MIR_new_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
   return op;
 }
 
-MIR_op_t MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
-				  MIR_reg_t index, MIR_scale_t scale) {
+MIR_op_t _MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+				   MIR_reg_t index, MIR_scale_t scale) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_HARD_REG_MEM); op.u.hard_reg_mem.type = type; op.u.hard_reg_mem.disp = disp;

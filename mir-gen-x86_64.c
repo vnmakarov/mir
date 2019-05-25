@@ -143,14 +143,14 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     }
     if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code)) != MIR_NON_HARD_REG) {
       /* put arguments to argument hard regs */
-      arg_reg_op = MIR_new_hard_reg_op (arg_reg);
+      arg_reg_op = _MIR_new_hard_reg_op (arg_reg);
       new_insn = MIR_new_insn (new_insn_code, arg_reg_op, arg_op);
       gen_add_insn_before (func_item, call_insn, new_insn);
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
       mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
       new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
-      mem_op = MIR_new_hard_reg_mem_op (mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+      mem_op = _MIR_new_hard_reg_mem_op (mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (new_insn_code, mem_op, arg_op);
       mir_assert (prev_call_insn != NULL); /* call_insn should not be the first after simplification */
       MIR_insert_insn_after (func_item, prev_call_insn, new_insn);
@@ -162,7 +162,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
   }
 #if 0
   /* vector args number for varags or no prototype calls */
-  new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (0));
+  new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (0));
   MIR_insert_insn_before (func_item, call_insn, new_insn);
   create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, new_insn), call_insn);
 #endif
@@ -170,11 +170,11 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     ret_reg_op = call_insn->ops[2];
     mir_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
     if (proto->res_type == MIR_T_F) {
-      new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, MIR_new_hard_reg_op (XMM0_HARD_REG));
+      new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
     } else if (proto->res_type == MIR_T_D) {
-      new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op, MIR_new_hard_reg_op (XMM0_HARD_REG));
+      new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
     } else {
-      new_insn = MIR_new_insn (MIR_MOV, ret_reg_op, MIR_new_hard_reg_op (AX_HARD_REG));
+      new_insn = MIR_new_insn (MIR_MOV, ret_reg_op, _MIR_new_hard_reg_op (AX_HARD_REG));
     }
     MIR_insert_insn_after (func_item, call_insn, new_insn);
     call_insn->ops[2] = new_insn->ops[1];
@@ -185,13 +185,13 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     create_new_bb_insns (func_item, call_insn, DLIST_NEXT (MIR_insn_t, new_insn));
   }
   if (mem_size != 0) { /* allocate/deallocate stack for args passed on stack */
-    new_insn = MIR_new_insn (MIR_SUB, MIR_new_hard_reg_op (SP_HARD_REG),
-			     MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
+    new_insn = MIR_new_insn (MIR_SUB, _MIR_new_hard_reg_op (SP_HARD_REG),
+			     _MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
     MIR_insert_insn_after (func_item, prev_call_insn, new_insn);
     next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
     create_new_bb_insns (func_item, prev_call_insn, next_insn);
-    new_insn = MIR_new_insn (MIR_ADD, MIR_new_hard_reg_op (SP_HARD_REG),
-			     MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
+    new_insn = MIR_new_insn (MIR_ADD, _MIR_new_hard_reg_op (SP_HARD_REG),
+			     _MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
     MIR_insert_insn_after (func_item, call_insn, new_insn);
     next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
     create_new_bb_insns (func_item, call_insn, next_insn);
@@ -215,7 +215,7 @@ static void machinize (MIR_item_t func_item) {
     type = VARR_GET (MIR_var_t, func->vars, i).type;
     arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code);
     if (arg_reg != MIR_NON_HARD_REG) {
-      arg_reg_op = MIR_new_hard_reg_op (arg_reg);
+      arg_reg_op = _MIR_new_hard_reg_op (arg_reg);
       new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), arg_reg_op);
       MIR_prepend_insn (func_item, new_insn);
       create_new_bb_insns (func_item, NULL, DLIST_NEXT (MIR_insn_t, new_insn));
@@ -223,7 +223,7 @@ static void machinize (MIR_item_t func_item) {
       /* arg is on the stack */
       mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
       new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
-      mem_op = MIR_new_hard_reg_mem_op (mem_type, mem_size + 16 /* old BP and ret address */,
+      mem_op = _MIR_new_hard_reg_mem_op (mem_type, mem_size + 16 /* old BP and ret address */,
 					HARD_REG_FRAME_POINTER, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), mem_op);
       MIR_prepend_insn (func_item, new_insn);
@@ -245,7 +245,7 @@ static void machinize (MIR_item_t func_item) {
 	 and added extension in return (if any).  */
       assert (insn->ops[0].mode == MIR_OP_REG);
       ret_reg = code == MIR_RET ? AX_HARD_REG :  XMM0_HARD_REG;
-      ret_reg_op = MIR_new_hard_reg_op (ret_reg);
+      ret_reg_op = _MIR_new_hard_reg_op (ret_reg);
       new_insn_code = code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
       new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
       gen_add_insn_before (func_item, insn, new_insn);
@@ -260,7 +260,7 @@ static void machinize (MIR_item_t func_item) {
 	       || code == MIR_DEQ || code == MIR_DNE || code == MIR_DLT || code == MIR_DLE
 	       || code == MIR_DGT || code == MIR_DGE) {
       /* We can access only 4 regs in setxx -- use ax as the result: */
-      MIR_op_t areg_op = MIR_new_hard_reg_op (AX_HARD_REG);
+      MIR_op_t areg_op = _MIR_new_hard_reg_op (AX_HARD_REG);
 
       new_insn = MIR_new_insn (MIR_MOV, insn->ops[0], areg_op);
       gen_add_insn_after (func_item, insn, new_insn);
@@ -289,14 +289,14 @@ static void make_prolog_epilog (MIR_item_t func_item,
 			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
   gen_add_insn_before (func_item, anchor, new_insn); /* sp -= size of saved regs and bp */
   new_insn = MIR_new_insn (MIR_MOV,
-			   MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+			   _MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			   fp_reg_op);
   gen_add_insn_before (func_item, anchor, new_insn); /* (sp) = bp */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV,
-			       MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
-			       MIR_new_hard_reg_op (i));
+			       _MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+			       _MIR_new_hard_reg_op (i));
       gen_add_insn_before (func_item, anchor, new_insn);  /* disp(sp) = hard reg */
     }
   overall_frame_size = ((func->frame_size + 7) / 8 + stack_slots_num) * 8; /* round */
@@ -319,12 +319,12 @@ static void make_prolog_epilog (MIR_item_t func_item,
   }
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn = MIR_new_insn (MIR_MOV, MIR_new_hard_reg_op (i),
-			       MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+      new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (i),
+			       _MIR_new_hard_reg_mem_op (MIR_T_I64, ++n * 8, SP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg =  disp(sp) */
     }
   new_insn = MIR_new_insn (MIR_MOV, fp_reg_op,
-			   MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+			   _MIR_new_hard_reg_mem_op (MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
   gen_add_insn_before (func_item, anchor, new_insn); /* bp = (sp) */
   new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op,
 			   MIR_new_int_op (8 * saved_hard_regs_num + 8));
