@@ -405,13 +405,21 @@ ex100:    func v
     * You can load MIR module through API function `MIR_load_module
       (MIR_module_t m)`.  The function allocates the module data/bss
       and makes visible the exported module items to other module
-      during subsequent linking.  There is no guarantee that the
-      different data/bss items created one after another will be in
-      adjacent memory.  BSS memory is initialized by zero and data
-      memory is initialized by the corresponding data.  If there is
-      already an exported item with the same name, it will be not
-      visible for linking anymore.  Such visibility mechanism permits
-      usage of different versions of the same function
+      during subsequent linking.  There is a guarantee that the
+      different data/bss items will be in adjacent memory if the
+      data/bss items go one after another and all the data/bss items
+      except the first one are anonymous (it means they have no name).
+      Such adjacent data/bss items are called a **section**.
+      Alignment of the section is malloc alignment.  There are no any
+      memory space between data/bss in the section.  If you need to
+      provide necessary alignment of a data/bss in the section you
+      should do it yourself by putting additional anonymous data/bss
+      before given data/bss if it is necessary.  BSS memory is
+      initialized by zero and data memory is initialized by the
+      corresponding data.  If there is already an exported item with
+      the same name, it will be not visible for linking anymore.  Such
+      visibility mechanism permits usage of different versions of the
+      same function
     * MIR permits to use imported items not implemented in MIR, for
       example to use C standard function `strcmp`.  You need to inform
       MIR about it.  API function `MIR_load_external (const char
