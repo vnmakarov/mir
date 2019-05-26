@@ -965,19 +965,50 @@ static void undefined_interface (void) {
   (*error_func) (MIR_call_op_error, "undefined call interface");
 }
 
+static MIR_item_t load_bss_data_section (MIR_item_t item) {
+  MIR_item_t curr_item, last_item;
+  size_t len, section_size = 0;
+  uint8_t *addr;
+  
+  if (item->addr == NULL) {
+    /* Calculate section size: */
+    for (curr_item = item; curr_item != NULL; curr_item = DLIST_NEXT (MIR_item_t, curr_item))
+      if (curr_item->item_type == MIR_bss_item
+	  && (curr_item == item || curr_item->u.bss->name == NULL))
+	section_size += curr_item->u.bss->len;
+      else if (curr_item->item_type == MIR_data_item
+	       && (curr_item == item || curr_item->u.bss->name == NULL))
+	section_size += curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
+      else
+	break;
+    if ((item->addr = malloc (section_size)) == NULL)
+      (*error_func) (MIR_alloc_error, "Not enough memory to allocate data/bss");
+  }
+  /* Set up section memory: */
+  for (last_item = item, curr_item = item, addr = item->addr;
+       curr_item != NULL;
+       last_item = curr_item, curr_item = DLIST_NEXT (MIR_item_t, curr_item))
+    if (curr_item->item_type == MIR_bss_item
+	&& (curr_item == item || curr_item->u.bss->name == NULL)) {
+      memset (addr, 0, curr_item->u.bss->len);
+      addr += curr_item->u.bss->len;
+    } else if (curr_item->item_type == MIR_data_item
+	       && (curr_item == item || curr_item->u.bss->name == NULL)) {
+      len = curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
+      memmove (addr, curr_item->u.data->u.els, len);
+      addr += len;
+    } else {
+      break;
+    }
+  return last_item;
+}
+
 void MIR_load_module (MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items);
        item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
-    if (item->item_type == MIR_bss_item) {
-      if (item->addr == NULL)
-	item->addr = malloc (item->u.bss->len);
-      memset (item->addr, 0, item->u.bss->len);
-    } else if (item->item_type == MIR_data_item) {
-      if (item->addr == NULL)
-	item->addr = malloc (item->u.data->nel * _MIR_type_size (item->u.data->el_type));
-      memmove (item->addr, item->u.data->u.els,
-	       item->u.data->nel * _MIR_type_size (item->u.data->el_type));
+    if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item) {
+      item = load_bss_data_section (item);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL)
 	item->addr = _MIR_get_thunk (item);
