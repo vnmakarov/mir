@@ -657,7 +657,9 @@ MIR_item_t MIR_new_bss (const char *name, size_t len) {
     name = string_store (&strings, &string_tab, name).str;
   item->u.bss->name = name;
   item->u.bss->len = len;
-  if (add_item (item, &module_item_tab) != item) {
+  if (name == NULL) {
+    DLIST_APPEND (MIR_item_t, curr_module->items, item);
+  } else if (add_item (item, &module_item_tab) != item) {
     free (item);
     item = tab_item;
   }
@@ -695,7 +697,9 @@ MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const
   if (name != NULL)
     name = string_store (&strings, &string_tab, name).str;
   data->name = name;
-  if (add_item (item, &module_item_tab) != item) {
+  if (name == NULL) {
+    DLIST_APPEND (MIR_item_t, curr_module->items, item);
+  } else if (add_item (item, &module_item_tab) != item) {
     free (item);
     item = tab_item;
   }
@@ -1561,12 +1565,16 @@ static void output_item (FILE *f, MIR_item_t item) {
     return;
   }
   if (item->item_type == MIR_bss_item) {
-    fprintf (f, "%s:\tbss\t%" PRIu64 "\n", item->u.bss->name, item->u.bss->len);
+    if (item->u.bss->name != NULL)
+      fprintf (f, "%s:", item->u.bss->name);
+    fprintf (f, "\tbss\t%" PRIu64 "\n", item->u.bss->len);
     return;
   }
   if (item->item_type == MIR_data_item) {
     data = item->u.data;
-    fprintf (f, "%s:\t%s\t", data->name, MIR_type_str (data->el_type));
+    if (data->name != NULL)
+      fprintf (f, "%s:", data->name);
+    fprintf (f, "\t%s\t", MIR_type_str (data->el_type));
     for (size_t i = 0; i < data->nel; i++)
       switch (data->el_type) {
       case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
