@@ -584,7 +584,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       CASE (MIR_MOD, 3);   IOP3(%); END_INSN;
       CASE (MIR_MODS, 3);  IOP3S(%); END_INSN;
       CASE (MIR_UMOD, 3);  UOP3(%); END_INSN;
-      CASE (MIR_UMODS, 3); IOP3S(%); END_INSN;
+      CASE (MIR_UMODS, 3); UOP3S(%); END_INSN;
       
       CASE (MIR_AND, 3);  IOP3(&); END_INSN;
       CASE (MIR_ANDS, 3); IOP3S(&); END_INSN;
