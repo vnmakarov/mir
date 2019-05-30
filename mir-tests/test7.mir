@@ -1,0 +1,7 @@
+mui2d:  module
+ui2d:   func f, 0, i64:n
+        local d:r
+        ui2d r, n
+	dret r
+        endfunc
+        endmodule
