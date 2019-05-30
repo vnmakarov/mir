@@ -73,6 +73,7 @@ typedef enum {
   /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
   MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32, 
   MIR_I2F, MIR_I2D,                       /* Integer to float or double conversion */
+  MIR_UI2F, MIR_UI2D,                     /* Unsigned integer to float or double conversion */
   MIR_F2I, MIR_D2I,                       /* Float or double to integer conversion */
   MIR_F2D, MIR_D2F,                       /* Float <-> double conversion */
   MIR_NEG,  MIR_NEGS, MIR_FNEG, MIR_DNEG, /* Changing sign */
