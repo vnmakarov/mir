@@ -760,7 +760,6 @@ MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
 			     size_t frame_size, size_t nargs, MIR_var_t *vars) {
   MIR_item_t func_item, tab_item;
   MIR_func_t func;
-  size_t i;
   
   if (curr_func != NULL)
     (*error_func) (MIR_nested_func_error, "Creating function when previous function is not finished");
@@ -777,7 +776,7 @@ MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
   DLIST_INIT (MIR_insn_t, func->insns);
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
   func->frame_size = frame_size; func->nargs = nargs; func->ntemps = 0;
-  for (i = 0; i < nargs; i++) {
+  for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
     
     VARR_PUSH (MIR_var_t, func->vars, vars[i]);
