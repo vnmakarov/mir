@@ -148,6 +148,8 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_F2I: case MIR_D2I: out_op2 (f, ops, "(int64_t)"); break;
   case MIR_I2D: case MIR_F2D: out_op2 (f, ops, "(double)"); break;
   case MIR_I2F: case MIR_D2F: out_op2 (f, ops, "(float)"); break;
+  case MIR_UI2D: out_op2 (f, ops, "(double) (uint64_t)"); break;
+  case MIR_UI2F: out_op2 (f, ops, "(float) (uint64_t)"); break;
   case MIR_NEG: out_op2 (f, ops, "- (int64_t)"); break;
   case MIR_NEGS: out_op2 (f, ops, "- (int32_t)"); break;
   case MIR_FNEG: case MIR_DNEG: out_op2 (f, ops, "-"); break;
