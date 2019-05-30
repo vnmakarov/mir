@@ -198,6 +198,29 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
   }
 }
 
+static float mir_ui2f (uint64_t i) { return i; }
+static double mir_ui2d (uint64_t i) { return i; }
+static const char *UI2F = "mir.ui2f";
+static const char *UI2D = "mir.ui2d";
+static const char *UI2F_P = "mir.ui2f.p";
+static const char *UI2D_P = "mir.ui2d.p";
+
+static void get_builtin (MIR_item_t func_item, MIR_insn_code_t code,
+			 MIR_item_t *proto_item, MIR_item_t *func_import_item) {
+  switch (code) {
+  case MIR_UI2F:
+    *proto_item = _MIR_builtin_proto (func_item->module, UI2F_P, MIR_T_F, 1, MIR_T_I64);
+    *func_import_item = _MIR_builtin_func (func_item->module, UI2F, mir_ui2f);
+    break;
+  case MIR_UI2D:
+    *proto_item = _MIR_builtin_proto (func_item->module, UI2D_P, MIR_T_D, 1, MIR_T_I64);
+    *func_import_item = _MIR_builtin_func (func_item->module, UI2D, mir_ui2d);
+    break;
+  default:
+    assert (FALSE);
+  }
+}
+
 static void machinize (MIR_item_t func_item) {
   MIR_func_t func;
   MIR_type_t type, mem_type;
@@ -236,7 +259,21 @@ static void machinize (MIR_item_t func_item) {
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
-    if (code == MIR_CALL) {
+    if (code == MIR_UI2F || code == MIR_UI2D) {
+      /* Use a builtin func call: mov freg, func ref; call proto, freg, res_reg, op_reg */
+      MIR_item_t proto_item, func_import_item;
+      MIR_op_t freg_op, res_reg_op = insn->ops[0], op_reg_op = insn->ops[1], ops[4];
+      
+      get_builtin (func_item, code, &proto_item, &func_import_item);
+      assert (res_reg_op.mode == MIR_OP_REG && op_reg_op.mode == MIR_OP_REG);
+      freg_op = MIR_new_reg_op (gen_new_temp_reg (MIR_T_I64, func_item->u.func));
+      next_insn = new_insn = MIR_new_insn (MIR_MOV, freg_op, MIR_new_ref_op (func_import_item));
+      gen_add_insn_before (func_item, insn, new_insn);
+      ops[0] = MIR_new_ref_op (proto_item); ops[1] = freg_op; ops[2] = res_reg_op; ops[3] = op_reg_op;
+      new_insn = MIR_new_insn_arr (MIR_CALL, 4, ops);
+      gen_add_insn_before (func_item, insn, new_insn);
+      gen_delete_insn (func_item, insn);
+    } else if (code == MIR_CALL) {
       machinize_call (func_item, insn);
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
