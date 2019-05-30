@@ -228,23 +228,24 @@
     Its operands should have `MIR_T_D` type.
   * The result of comparison insn is a 64-bit integer value, so the result oeprand should be of integer type
   
-    | Insn Code               | Nops |   Description                                          |
-    |-------------------------|-----:|--------------------------------------------------------|
-    | `MIR_F2I`, `MIR_D2I`    | 2    | transforming floating point value into 64-bit integer  |
-    | `MIR_F2D`               | 2    | transforming single to double precision FP value       |
-    | `MIR_D2F`               | 2    | transforming double to single precision FP value       |
-    | `MIR_F2I`, `MIR_D2I`    | 2    | transforming floating point value into 64-bit integer  |
-    | `MIR_FNEG`, `MIR_DNEG`  | 2    | changing sign of floating point value                  |
-    | `MIR_FADD`, `MIR_FSUB`  | 3    | **single** precision addition and subtraction          |
-    | `MIR_DADD`, `MIR_DSUB`  | 3    | **double** precision addition and subtraction          |
-    | `MIR_FMUL`, `MIR_FDIV`  | 3    | **single** precision multiplication and divison        |
-    | `MIR_DMUL`, `MIR_DDIV`  | 3    | **double** precision multiplication and divison        |
-    | `MIR_FEQ`, `MIR_FNE`    | 3    | equality/inequality of **single** precision values     |
-    | `MIR_DEQ`, `MIR_DNE`    | 3    | equality/inequality of **double** precision values     |
-    | `MIR_FLT`, `MIR_FLE`    | 3    | **single** precision less than/less than or equal      |
-    | `MIR_DLT`, `MIR_DLE`    | 3    | **double** precision less than/less than or equal      |
-    | `MIR_FGT`, `MIR_FGE`    | 3    | **single** precision greater than/greater than or equal|
-    | `MIR_DGT`, `MIR_DGE`    | 3    | **double** precision greater than/greater than or equal|
+    | Insn Code               | Nops |   Description                                                  |
+    |-------------------------|-----:|----------------------------------------------------------------|
+    | `MIR_F2I`, `MIR_D2I`    | 2    | transforming floating point value into 64-bit integer          |
+    | `MIR_F2D`               | 2    | transforming single to double precision FP value               |
+    | `MIR_D2F`               | 2    | transforming double to single precision FP value               |
+    | `MIR_I2F`, `MIR_I2D`    | 2    | transforming floating point value into 64-bit integer          |
+    | `MIR_UI2F`, `MIR_UI2D`  | 2    | transforming floating point value into unsigned 64-bit integer |
+    | `MIR_FNEG`, `MIR_DNEG`  | 2    | changing sign of floating point value                          |
+    | `MIR_FADD`, `MIR_FSUB`  | 3    | **single** precision addition and subtraction                  |
+    | `MIR_DADD`, `MIR_DSUB`  | 3    | **double** precision addition and subtraction                  |
+    | `MIR_FMUL`, `MIR_FDIV`  | 3    | **single** precision multiplication and divison                |
+    | `MIR_DMUL`, `MIR_DDIV`  | 3    | **double** precision multiplication and divison                |
+    | `MIR_FEQ`, `MIR_FNE`    | 3    | equality/inequality of **single** precision values             |
+    | `MIR_DEQ`, `MIR_DNE`    | 3    | equality/inequality of **double** precision values             |
+    | `MIR_FLT`, `MIR_FLE`    | 3    | **single** precision less than/less than or equal              |
+    | `MIR_DLT`, `MIR_DLE`    | 3    | **double** precision less than/less than or equal              |
+    | `MIR_FGT`, `MIR_FGE`    | 3    | **single** precision greater than/greater than or equal        |
+    | `MIR_DGT`, `MIR_DGE`    | 3    | **double** precision greater than/greater than or equal        |
 
 ### MIR branch insns
   * The first operand of the insn should be label
