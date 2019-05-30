@@ -85,6 +85,7 @@ static MIR_reg_t gen_new_temp_reg (MIR_type_t type, MIR_func_t func);
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
 static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after);
+static void gen_delete_insn (MIR_item_t func_item, MIR_insn_t insn);
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
 static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t after);
 
@@ -384,6 +385,11 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
       DLIST_INSERT_BEFORE (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
     before = insn;
   }
+}
+
+static void gen_delete_insn (MIR_item_t func_item, MIR_insn_t insn) {
+  delete_bb_insn (insn->data);
+  MIR_remove_insn (curr_func_item, insn);
 }
 
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
@@ -2142,8 +2148,7 @@ static void ccp_modify (void) {
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
 	next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
 	insn = bb_insn->insn;
-	delete_bb_insn (bb_insn);
-	MIR_remove_insn (curr_func_item, insn);
+	gen_delete_insn (curr_func_item, insn);
       }
       delete_bb (bb);
       continue;
@@ -2189,8 +2194,7 @@ static void ccp_modify (void) {
 	fprintf (debug_file, "\n");
       }
 #endif
-      delete_bb_insn (bb_insn);
-      MIR_remove_insn (curr_func_item, insn);
+      gen_delete_insn (curr_func_item, insn);
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
     } else {
       insn = MIR_new_insn (MIR_JMP, bb_insn->insn->ops[0]); /* label is always 0-th op */
@@ -2927,8 +2931,7 @@ static void rewrite (void) {
 	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
 	}
 #endif
-	delete_bb_insn (bb_insn);
-	MIR_remove_insn (curr_func_item, insn);
+	gen_delete_insn (curr_func_item, insn);
       }
     }
   }
@@ -3162,8 +3165,7 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
       MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
     }
 #endif
-    delete_bb_insn (def_insn->data);
-    MIR_remove_insn (curr_func_item, def_insn);
+    gen_delete_insn (curr_func_item, def_insn);
   }
   return successfull_change_p;
 }
@@ -3253,8 +3255,7 @@ static MIR_insn_t combine_branch_and_cmp (bb_insn_t bb_insn) {
       MIR_output_insn (debug_file, new_insn, curr_func_item->u.func, TRUE);
     }
 #endif
-    delete_bb_insn (def_insn->data);
-    MIR_remove_insn (curr_func_item, def_insn);
+    gen_delete_insn (curr_func_item, def_insn);
     return new_insn;
   }
 }
@@ -3379,8 +3380,7 @@ static void dead_code_elimination (MIR_item_t func) {
 	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
 	}
 #endif
-	delete_bb_insn (bb_insn);
-	MIR_remove_insn (func, insn);
+	gen_delete_insn (func, insn);
 	continue;
       }
       if (insn->code == MIR_CALL)
