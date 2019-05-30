@@ -435,6 +435,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [MIR_UEXT8] = &&L_MIR_UEXT8; ltab [MIR_UEXT16] = &&L_MIR_UEXT16;
       ltab [MIR_UEXT32] = &&L_MIR_UEXT32;
       ltab [MIR_I2F] = &&L_MIR_I2F; ltab [MIR_I2D] = &&L_MIR_I2D;
+      ltab [MIR_UI2F] = &&L_MIR_UI2F; ltab [MIR_UI2D] = &&L_MIR_UI2D;
       ltab [MIR_F2I] = &&L_MIR_F2I; ltab [MIR_D2I] = &&L_MIR_D2I;
       ltab [MIR_F2D] = &&L_MIR_F2D; ltab [MIR_D2F] = &&L_MIR_D2F;
       ltab [MIR_NEG] = &&L_MIR_NEG; ltab [MIR_NEGS] = &&L_MIR_NEGS;
@@ -549,6 +550,8 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       CASE (MIR_UEXT32, 2); EXT (uint32_t); END_INSN;
       CASE (MIR_I2F, 2);  {float *r = get_fop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_I2D, 2);  {double *r = get_dop (bp, ops); int64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
+      CASE (MIR_UI2F, 2);  {float *r = get_fop (bp, ops); uint64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
+      CASE (MIR_UI2D, 2);  {double *r = get_dop (bp, ops); uint64_t i = *get_iop (bp, ops + 1); *r = i;} END_INSN;
       CASE (MIR_F2I, 2);  {int64_t *r = get_iop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;} END_INSN;
       CASE (MIR_D2I, 2);  {int64_t *r = get_iop (bp, ops); double d = *get_dop (bp, ops + 1); *r = d;} END_INSN;
       CASE (MIR_F2D, 2);  {double *r = get_dop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;} END_INSN;
