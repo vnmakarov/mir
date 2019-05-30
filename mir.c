@@ -420,26 +420,32 @@ void MIR_set_error_func (MIR_error_func_t func) { error_func = func; }
 
 DEF_HTAB (MIR_item_t);
 static HTAB (MIR_item_t) *module_item_tab;
-static HTAB (MIR_item_t) *global_item_tab;
 
-static htab_hash_t item_hash (MIR_item_t it) { return mir_hash64 ((uint64_t) MIR_item_name (it), 0); }
-static int item_eq (MIR_item_t it1, MIR_item_t it2) { return MIR_item_name (it1) == MIR_item_name (it2); }
+static htab_hash_t item_hash (MIR_item_t it) {
+  return mir_hash_finish (mir_hash_step
+			  (mir_hash_step (mir_hash_init (28),
+					  (uint64_t) MIR_item_name (it)), (uint64_t) it->module));
+}
+static int item_eq (MIR_item_t it1, MIR_item_t it2) {
+  return it1->module == it2->module && MIR_item_name (it1) == MIR_item_name (it2);
+}
 
-static MIR_item_t find_item (const char *name, HTAB (MIR_item_t) **item_tab) {
+static MIR_item_t find_item (const char *name, MIR_module_t module) {
   MIR_item_t tab_item;
   struct MIR_item item_s;
   struct MIR_func func_s;
   
   item_s.item_type = MIR_func_item;
   func_s.name = name;
+  item_s.module = module;
   item_s.u.func = &func_s;
-  if (HTAB_DO (MIR_item_t, *item_tab, &item_s, HTAB_FIND, tab_item))
+  if (HTAB_DO (MIR_item_t, module_item_tab, &item_s, HTAB_FIND, tab_item))
     return tab_item;
   return NULL;
 }
 
-/* Module to keep artificial items:  */
-static struct MIR_module dummy_module;
+/* Module to keep items potentially used by all modules:  */
+static struct MIR_module environment_module;
 
 static void init_module (MIR_module_t m, const char *name) {
   m->data = NULL;
@@ -479,14 +485,14 @@ int MIR_init (void) {
   scan_init ();
 #endif
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
-  init_module (&dummy_module, "dummy");
-  HTAB_CREATE (MIR_item_t, global_item_tab, 250, item_hash, item_eq);
+  init_module (&environment_module, ".environment");
+  HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq);
   code_init ();
   return TRUE;
 }
 
 void MIR_finish (void) {
-  HTAB_DESTROY (MIR_item_t, global_item_tab);
+  HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
 #if MIR_SCAN
   scan_finish ();
@@ -518,20 +524,17 @@ MIR_module_t MIR_new_module (const char *name) {
   if ((curr_module = malloc (sizeof (struct MIR_module))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory");
   init_module (curr_module, name);
-  HTAB_CREATE (MIR_item_t, module_item_tab, 50, item_hash, item_eq);
   DLIST_APPEND (MIR_module_t, MIR_modules, curr_module);
   return curr_module;
 }
 
-static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
+static MIR_item_t add_item (MIR_item_t item) {
   int replace_p;
   MIR_item_t tab_item;
   
-  /* item_tab is NULL after finishing module but we can add items for strings and floats. */
-  if (*item_tab == NULL || (tab_item = find_item (MIR_item_name (item), item_tab)) == NULL) {
+  if ((tab_item = find_item (MIR_item_name (item), item->module)) == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-    if (*item_tab != NULL)
-      HTAB_DO (MIR_item_t, *item_tab, item, HTAB_INSERT, item);
+    HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, item);
     return item;
   }
   switch (tab_item->item_type) {
@@ -560,8 +563,8 @@ static MIR_item_t add_item (MIR_item_t item, HTAB (MIR_item_t) **item_tab) {
       tab_item->ref_def = item;
       if (tab_item->item_type == MIR_export_item)
 	item->export_p = TRUE;
-      HTAB_DO (MIR_item_t, *item_tab, tab_item, HTAB_DELETE, tab_item);
-      HTAB_DO (MIR_item_t, *item_tab, item, HTAB_INSERT, tab_item);
+      HTAB_DO (MIR_item_t, module_item_tab, tab_item, HTAB_DELETE, tab_item);
+      HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
       mir_assert (item == tab_item);
     }
     break;
@@ -626,7 +629,7 @@ static MIR_item_t new_export_import_forward (const char *name, MIR_item_type_t i
     item->u.forward = uniq_name;
   if (create_only_p)
     return item;
-  if (add_item (item, &module_item_tab) != item) {
+  if (add_item (item) != item) {
     free (item);
     item = tab_item;
   }
@@ -659,7 +662,7 @@ MIR_item_t MIR_new_bss (const char *name, size_t len) {
   item->u.bss->len = len;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (item, &module_item_tab) != item) {
+  } else if (add_item (item) != item) {
     free (item);
     item = tab_item;
   }
@@ -699,7 +702,7 @@ MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const
   data->name = name;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (item, &module_item_tab) != item) {
+  } else if (add_item (item) != item) {
     free (item);
     item = tab_item;
   }
@@ -729,7 +732,7 @@ MIR_item_t MIR_new_proto_arr (const char *name, MIR_type_t res_type,
   }
   proto->name = string_store (&strings, &string_tab, name).str;
   proto->res_type = res_type;
-  tab_item = add_item (proto_item, &module_item_tab);
+  tab_item = add_item (proto_item);
   mir_assert (tab_item == proto_item);
   VARR_CREATE (MIR_var_t, proto->args, nargs);
   for (i = 0; i < nargs; i++)
@@ -769,7 +772,7 @@ MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
   }
   func->name = string_store (&strings, &string_tab, name).str;
   func->res_type = res_type;
-  tab_item = add_item (func_item, &module_item_tab);
+  tab_item = add_item (func_item);
   mir_assert (tab_item == func_item);
   DLIST_INIT (MIR_insn_t, func->insns);
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
@@ -953,16 +956,15 @@ void MIR_finish_module (void) {
   
   if (curr_module == NULL)
     (*error_func) (MIR_no_module_error, "finish of non-existing module");
-  HTAB_DESTROY (MIR_item_t, module_item_tab);
   curr_module = NULL;
 }
 
 static void replace_global (MIR_item_t item) {
   MIR_item_t tab_item;
   
-  if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) != item && tab_item != NULL)
-    HTAB_DO (MIR_item_t, global_item_tab, tab_item, HTAB_DELETE, tab_item);
-  HTAB_DO (MIR_item_t, global_item_tab, item, HTAB_INSERT, tab_item);
+  if ((tab_item = find_item (MIR_item_name (item), &environment_module)) != item && tab_item != NULL)
+    HTAB_DO (MIR_item_t, module_item_tab, tab_item, HTAB_DELETE, tab_item);
+  HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
 }
 
 static void undefined_interface (void) {
@@ -1032,10 +1034,10 @@ void MIR_load_external (const char *name, void *addr) {
   MIR_item_t item;
   MIR_module_t saved = curr_module;
 
-  curr_module = &dummy_module;
+  curr_module = &environment_module;
   /* Use import for proto representation: */
   item = new_export_import_forward (name, MIR_import_item, "import", TRUE);
-  DLIST_APPEND (MIR_item_t, dummy_module.items, item);
+  DLIST_APPEND (MIR_item_t, environment_module.items, item);
   replace_global (item);
   item->addr = addr;
   curr_module = saved;
@@ -1051,7 +1053,7 @@ void MIR_link (void (*set_interface) (MIR_item_t item)) {
 	 item != NULL;
 	 item = DLIST_NEXT (MIR_item_t, item))
       if (item->item_type == MIR_import_item) {
-	if ((tab_item = find_item (MIR_item_name (item), &global_item_tab)) == NULL)
+	if ((tab_item = find_item (MIR_item_name (item), &environment_module)) == NULL)
 	  (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item");
 	item->addr = tab_item->addr;
 	item->ref_def = tab_item;
@@ -2653,7 +2655,7 @@ static int read_operand (FILE *f, MIR_op_t *op, MIR_item_t func) {
   case TAG_REG1: case TAG_REG2: case TAG_REG3: case TAG_REG4:
     *op = MIR_new_reg_op (to_reg (attr.u, func)); break;
   case TAG_NAME1: case TAG_NAME2: case TAG_NAME3: case TAG_NAME4: {
-    MIR_item_t item = find_item (to_str (attr.u), &module_item_tab);
+    MIR_item_t item = find_item (to_str (attr.u), func->module);
 
     if (item == NULL)
       (*error_func) (MIR_binary_io_error, "not found item");
@@ -3430,7 +3432,7 @@ void MIR_scan_string (const char *str) {
 	  } else if (func_reg_p (func->u.func, name)) {
 	    op.mode = MIR_OP_REG;
 	    op.u.reg = MIR_reg (name, func->u.func);
-	  } else if ((item = find_item (name, &module_item_tab)) != NULL) {
+	  } else if ((item = find_item (name, module)) != NULL) {
 	    op = MIR_new_ref_op (item);
 	  } else {
 	    process_error (MIR_syntax_error, "undeclared name");
