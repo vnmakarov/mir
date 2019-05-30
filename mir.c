@@ -1980,6 +1980,84 @@ const char *_MIR_uniq_string (const char * str) {
   return string_store (&strings, &string_tab, str).str;
 }
 
+/* The next two function can be call any time relative to
+   load/linkage.  You can also call them many times for the same name
+   but you should always use the same prototype or/and addr for the
+   same proto/func name.  */
+MIR_item_t _MIR_builtin_proto (MIR_module_t module, const char *name,
+			       MIR_type_t res_type, size_t nargs, ...) {
+  size_t i;
+  va_list argp;
+  MIR_var_t arg;
+  MIR_item_t proto_item;
+  MIR_module_t saved_module = curr_module;
+  
+  va_start (argp, nargs);
+  VARR_TRUNC (MIR_var_t, temp_vars, 0);
+  for (i = 0; i < nargs; i++) {
+    arg.type = va_arg (argp, MIR_type_t);
+    arg.name = va_arg (argp, const char *);
+    VARR_PUSH (MIR_var_t, temp_vars, arg);
+  }
+  va_end(argp);
+  name = _MIR_uniq_string (name);
+  proto_item = find_item (name, module);
+  if (proto_item != NULL) {
+    if (proto_item->item_type == MIR_proto_item
+	&& proto_item->u.proto->res_type == res_type
+	&& VARR_LENGTH (MIR_var_t, proto_item->u.proto->args) == nargs) {
+      for (i = 0; i < nargs; i++)
+	if (VARR_GET (MIR_var_t, temp_vars, i).type
+	    != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type)
+	  break;
+      if (i >= nargs)
+	return proto_item;
+    }
+    (*error_func) (MIR_repeated_decl_error, "_MIR_builtin_proto: proto item was already defined");
+  }
+  saved_module = curr_module;
+  curr_module = module;
+  proto_item = MIR_new_proto_arr (name, res_type, nargs, VARR_ADDR (MIR_var_t, temp_vars));
+  DLIST_REMOVE (MIR_item_t, curr_module->items, proto_item);
+  DLIST_PREPEND (MIR_item_t, curr_module->items, proto_item); /* make it first in the list */
+  curr_module = saved_module;
+  return proto_item;
+}
+
+MIR_item_t _MIR_builtin_func (MIR_module_t module, const char *name, void *addr) {
+  MIR_item_t item, ref_item;
+  MIR_module_t saved_module = curr_module;
+  
+  name = _MIR_uniq_string (name);
+  if ((ref_item = find_item (name, &environment_module)) != NULL) {
+    if (ref_item->item_type != MIR_import_item || ref_item->addr != addr)
+      (*error_func) (MIR_repeated_decl_error, "_MIR_builtin_func: func has already another address");
+  } else {
+    curr_module = &environment_module;
+    /* Use import for builtin func: */
+    item = new_export_import_forward (name, MIR_import_item, "import", TRUE);
+    HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, ref_item);
+    mir_assert (item == ref_item);
+    DLIST_APPEND (MIR_item_t, environment_module.items, item);
+    ref_item->addr = addr;
+    curr_module = saved_module;
+  }
+  if ((item = find_item (name, module)) != NULL) {
+    if (item->item_type != MIR_import_item || item->addr != addr || item->ref_def != ref_item)
+      (*error_func) (MIR_repeated_decl_error,
+		     "_MIR_builtin_func: func name was already defined differently in the module");
+  } else {
+    curr_module = module;
+    item = new_export_import_forward (name, MIR_import_item, "import", FALSE);
+    DLIST_REMOVE (MIR_item_t, curr_module->items, item);
+    DLIST_PREPEND (MIR_item_t, curr_module->items, item); /* make it first in the list */
+    item->addr = ref_item->addr;
+    item->ref_def = ref_item;
+    curr_module = saved_module;
+  }
+  return item;
+}
+
 
 
 #include <sys/mman.h>
