@@ -1167,6 +1167,8 @@ MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
   MIR_op_t op;
   size_t i, nops = insn_code_nops (code);
   
+  if (code == MIR_CALL)
+    (*error_func) (MIR_call_op_error, "Use MIR_new_insn_arr for creating a call insn");
   va_start (argp, code);
   VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
   for (i = 0; i < nops; i++) {
