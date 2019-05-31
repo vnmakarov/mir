@@ -403,10 +403,16 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
     break;
   }
   switch (op_mode) {
-  case MIR_OP_INT: fprintf (stderr, "\t# res = %"PRId64 " (%"PRIu64 "u, 0x%"PRIx64 ")",
-			    bp [ops[0].i].i, bp [ops[0].i].u, bp [ops[0].i].u); break;
-  case MIR_OP_FLOAT: fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, bp [ops[0].i].f); break;
-  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %%.*e", DBL_DECIMAL_DIG, bp [ops[0].i].d); break;
+  case MIR_OP_INT: case MIR_OP_UINT:
+    fprintf (stderr, "\t# res = %"PRId64 " (%"PRIu64 "u, 0x%"PRIx64 ")",
+	     bp [ops[0].i].i, bp [ops[0].i].u, bp [ops[0].i].u);
+    break;
+  case MIR_OP_FLOAT:
+    fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, bp [ops[0].i].f);
+    break;
+  case MIR_OP_DOUBLE:
+    fprintf (stderr, "\t# res = %%.*e", DBL_DECIMAL_DIG, bp [ops[0].i].d);
+    break;
   }
   fprintf (stderr, "\n");
 }
