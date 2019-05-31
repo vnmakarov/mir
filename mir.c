@@ -990,6 +990,7 @@ void MIR_finish_func (void) {
 	  mode = MIR_OP_INT; /* just an address */
 	break;
       }
+      insn->ops[i].value_mode = mode;
       if (expected_mode != MIR_OP_UNDEF && mode != expected_mode) {
 	insn->code = MIR_INVALID_INSN;
 	if (err == MIR_no_error) {
@@ -1787,6 +1788,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   MIR_insn_t new_insn;
   MIR_func_t func = func_item->u.func;
   MIR_type_t type;
+  MIR_op_mode_t value_mode = op->value_mode;
   int move_p = code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV;
   
   if (code == MIR_CALL && nop == 0)
@@ -1911,6 +1913,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     /* We don't simplify code with hard regs.  */
     mir_assert (FALSE);
   }
+  op->value_mode = value_mode;
 }
 
 void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p) {

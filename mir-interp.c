@@ -225,6 +225,7 @@ static void generate_icode (MIR_item_t func_item) {
       v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
       if (code == MIR_CALL) {
 	v.i = nops; VARR_PUSH (MIR_val_t, code_varr, v);
+	v.a = insn; VARR_PUSH (MIR_val_t, code_varr, v);
       }
       for (i = 0; i < nops; i++) {
 	if (code == MIR_CALL && i == 0) { /* prototype ??? */
@@ -364,7 +365,8 @@ static VARR (MIR_val_t) *args_varr;
 
 static MIR_val_t *args;
  
-static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args);
+static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
+		  MIR_val_t *res, size_t nargs, MIR_val_t *args);
 
 #if MIR_INTERP_TRACE
 static int trace_insn_ident;
@@ -686,26 +688,27 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       CASE (MIR_DBGE, 3);  BDCMP (>=); END_INSN;
 
       CASE (MIR_CALL, 0); {
-	int64_t nops = get_i (ops);
-	MIR_proto_t proto = get_a (ops + 1);
-	void *f = *get_aop (bp, ops + 2);
-	size_t start = proto->res_type == MIR_T_V ? 2 : 3;
-	MIR_val_t *res = &bp [get_i (ops + 3)];
+	int64_t nops = get_i (ops); /* #args w/o nop and insn */
+	MIR_insn_t insn = get_a (ops + 1);
+	MIR_proto_t proto = get_a (ops + 2);
+	void *f = *get_aop (bp, ops + 3);
+	size_t start = proto->res_type == MIR_T_V ? 4 : 5;
+	MIR_val_t *res = &bp [get_i (ops + 4)];
 	
 	if (VARR_EXPAND (MIR_val_t, args_varr, nops))
 	  args = VARR_ADDR (MIR_val_t, args_varr);
 	
-	for (size_t i = start; i < nops; i++)
-	  args[i - start] = bp [get_i (ops + i + 1)];
+	for (size_t i = start; i < nops + 2; i++)
+	  args[i - start] = bp [get_i (ops + i)];
 	
 #if MIR_INTERP_TRACE
 	trace_insn_ident += 2;
 #endif
-	call (proto, f, res, nops - start, args);
+	call (&insn->ops[start - 2], proto, f, res, nops - start + 2, args);
 #if MIR_INTERP_TRACE
 	trace_insn_ident -= 2;
 #endif
-	pc += nops + 1; /* nops itself */
+	pc += nops + 2; /* nops itself and the call insn */
       }
       END_INSN;
       
@@ -795,20 +798,26 @@ static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
 
 MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
 
-static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
+static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
+		  MIR_val_t *res, size_t nargs, MIR_val_t *args) {
+  size_t arg_vars_num;
   MIR_val_t val;
   MIR_type_t type;
   MIR_var_t *arg_vars = NULL;
   MIR_item_t func_item;
+  MIR_op_mode_t mode;
   ffi_cif cif;
   ffi_status status;
   union { ffi_arg rint; float f; double d; void *a; } u;
 
   if (proto->args == NULL) {
-    mir_assert (nargs == 0);
+    mir_assert (nargs == 0 && ! proto->vararg_p);
+    arg_vars_num = 0;
   } else {
-    mir_assert (nargs == VARR_LENGTH (MIR_var_t, proto->args));
+    mir_assert (nargs >= VARR_LENGTH (MIR_var_t, proto->args)
+		&& (proto->vararg_p || nargs == VARR_LENGTH (MIR_var_t, proto->args)));
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
+    arg_vars_num = VARR_LENGTH (MIR_var_t, proto->args);
   }
   if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
     VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
@@ -819,6 +828,17 @@ static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, M
   }
     
   for (size_t i = 0; i < nargs; i++) {
+    if (i >= arg_vars_num) {
+      mode = insn_arg_ops[i].value_mode;
+      mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT
+		  || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE);
+      if (mode == MIR_OP_FLOAT)
+	(*MIR_get_error_func ()) (MIR_call_op_error,
+				  "passing float variadic arg (should be passed as double)");
+      ffi_arg_types[i] = (mode == MIR_OP_DOUBLE ? &ffi_type_double : &ffi_type_sint64);
+      ffi_arg_values[i] = &args[i];
+      continue;
+    }
     type = arg_vars[i].type;
     ffi_arg_types[i] = ffi_type_ptr (type);
     switch (type) {
@@ -850,7 +870,11 @@ static void call (MIR_proto_t proto, void *addr, MIR_val_t *res, size_t nargs, M
     }
   }
     
-  status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
+  if (proto->vararg_p)
+    status = ffi_prep_cif_var (&cif, FFI_DEFAULT_ABI, arg_vars_num, nargs,
+			       ffi_type_ptr (proto->res_type), ffi_arg_types);
+  else
+    status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
   mir_assert (status == FFI_OK);
   
   ffi_call (&cif, addr, &u, ffi_arg_values);

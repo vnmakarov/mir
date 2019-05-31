@@ -176,6 +176,8 @@ typedef struct MIR_item *MIR_item_t;
 typedef struct {
   void *data; /* Aux data  */
   MIR_op_mode_t mode;
+  /* Defined after MIR_func_finish.  Only MIR_OP_INT, MIR_OP_UINT, MIR_OP_FLOAT, MIR_OP_DOUBLE: */
+  MIR_op_mode_t value_mode;
   union {
     MIR_reg_t reg;
     MIR_reg_t hard_reg; /* Used only internally */
