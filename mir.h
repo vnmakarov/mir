@@ -344,8 +344,8 @@ extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
 				    size_t frame_size, size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type,
 				size_t frame_size, size_t nargs, ...);
-extern MIR_item_t MIR_new_varag_func_arr (const char *name, MIR_type_t res_type,
-					  size_t frame_size, size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
+					   size_t frame_size, size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type,
 				       size_t frame_size, size_t nargs, ...);
 extern const char *MIR_item_name (MIR_item_t item);
