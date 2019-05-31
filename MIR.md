@@ -42,8 +42,9 @@
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (const char *name)`)
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (const char *name)`)
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (const char *name)`)
-    * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr` and `MIR_new_proto`
-      analogous to `MIR_new_func_arr` and `MIR_new_func` -- see below)
+    * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
+      `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
+      `MIR_new_vararg_func` -- see below)
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (const char *name, const char *str)`)
@@ -71,11 +72,16 @@
     * Argument variables can be any type (except `MIR_T_V`)
       * This type only denotes how the argument value is passed
       * Any integer type argument variable has actually type `MIR_T_I64`
+  * MIR functions with variable number of arguments are created through API functions
+    `MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t frame_size,
+    size_t nargs, ...)` or function `MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
+    size_t frame_size, size_t nargs, MIR_var_t *arg_vars)`
+    * `nargs` and `arg_vars` define only fixed arguments
   * MIR function creation is finished by calling API function `MIR_finish_func (void)`
   * You can create only one MIR function at any given time
   * MIR text function syntax looks the folowing:
 ```
-    <function name>: func <result type>, <frame size>, [ arg-var {, <arg-var> } ]
+    <function name>: func <result type>, <frame size>, [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
                      endfun
 ```
