@@ -39,8 +39,8 @@ static inline int mir_assert (int cond) {return 0 && cond;}
 
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
-  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_nested_func_error,
-  MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
+  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_vararg_func_error,
+  MIR_nested_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
   MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error,
   MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error,
   MIR_op_mode_error, MIR_out_op_error,
@@ -221,12 +221,14 @@ typedef struct MIR_func {
   uint32_t frame_size;
   uint32_t nargs, ntemps;
   MIR_type_t res_type;
+  char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
 typedef struct MIR_proto {
   const char *name;
   MIR_type_t res_type; /* != MIR_T_UNDEF */
+  char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *args; /* args name can be NULL */
 } *MIR_proto_t;
 
@@ -333,10 +335,17 @@ extern MIR_item_t MIR_new_string_data (const char *name, const char *str); /* na
 extern MIR_item_t MIR_new_proto_arr (const char *name, MIR_type_t res_type,
 				     size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
+extern MIR_item_t MIR_new_vararg_proto_arr (const char *name, MIR_type_t res_type,
+					    size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_vararg_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
 extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
 				    size_t frame_size, size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type,
 				size_t frame_size, size_t nargs, ...);
+extern MIR_item_t MIR_new_varag_func_arr (const char *name, MIR_type_t res_type,
+					  size_t frame_size, size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type,
+				       size_t frame_size, size_t nargs, ...);
 extern const char *MIR_item_name (MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
