@@ -167,7 +167,7 @@ typedef const char *MIR_name_t;
 /* Operand mode */
 typedef enum {
   MIR_OP_UNDEF, MIR_OP_REG, MIR_OP_HARD_REG, MIR_OP_INT, MIR_OP_UINT, MIR_OP_FLOAT, MIR_OP_DOUBLE,
-  MIR_OP_REF, MIR_OP_STR, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL
+  MIR_OP_REF, MIR_OP_STR, MIR_OP_MEM, MIR_OP_HARD_REG_MEM, MIR_OP_LABEL, MIR_OP_BOUND
 } MIR_op_mode_t;
 
 typedef struct MIR_item *MIR_item_t;
