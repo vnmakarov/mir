@@ -919,7 +919,9 @@ void MIR_finish_func (void) {
 	mode = type2mode (insn->ops[i].u.mem.type);
 	break;
       case MIR_OP_HARD_REG:
+      case MIR_OP_HARD_REG_MEM:
 	mode = expected_mode;
+	mir_assert (FALSE); /* Should not be here */
 	break;
       default:
 	can_be_out_p = FALSE;
