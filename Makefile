@@ -48,8 +48,10 @@ interp-args-c:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN -DMIR_C_INTERFACE=1 mir.c mir-interp.c mir-tests/args-interp.c -lffi && ./a.out
 interp-test8:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-gen.c mir-tests/run-test.c -lffi && ./a.out -i mir-tests/test8.mir
+interp-test9:
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-gen.c mir-tests/run-test.c -lffi && ./a.out -i mir-tests/test9.mir
 
-interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8
+interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8 interp-test9
 
 interp-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out && size ./a.out
