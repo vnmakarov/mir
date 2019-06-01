@@ -195,6 +195,9 @@ static struct insn_desc insn_descs[] = {
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_BOUND}},
   {MIR_ALLOCA, "alloca", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_VA_ARG, "va_arg", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_UNDEF, MIR_OP_BOUND}},
+  {MIR_VA_START, "va_start", {MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LABEL, "label", {MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
@@ -912,6 +915,7 @@ void MIR_finish_func (void) {
   MIR_insn_t insn;
   MIR_error_type_t err = MIR_no_error; /* to eliminate warning */
   const char *err_msg = NULL;
+  MIR_insn_code_t code;
   
   if (curr_func == NULL)
     (*error_func) (MIR_no_func_error, "finish of non-existing function");
@@ -922,12 +926,17 @@ void MIR_finish_func (void) {
     MIR_op_mode_t mode, expected_mode;
     reg_desc_t *rd;
     int out_p, can_be_out_p;
-
+    
     for (i = 0; i < insn_nops; i++) {
-      if (insn->code == MIR_CALL && i == 0) {
+      code = insn->code;
+      if (code == MIR_CALL && i == 0) {
 	mir_assert (insn->ops[i].mode == MIR_OP_REF
 		    && insn->ops[i].u.ref->item_type == MIR_proto_item);
 	continue; /* We checked the operand during insn creation -- skip the prototype */
+      }
+      if (code == MIR_VA_ARG && i == 2) {
+	mir_assert (insn->ops[i].mode == MIR_OP_MEM);
+	continue; /* We checked the operand during insn creation -- skip va_arg type  */
       }
       expected_mode = MIR_insn_op_mode (insn, i, &out_p);
       can_be_out_p = TRUE;
@@ -1222,6 +1231,9 @@ MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
       i += VARR_LENGTH (MIR_var_t, proto->args);
     if (nops - 2 < i || (nops - 2 != i && ! proto->vararg_p))
       (*error_func) (MIR_call_op_error, "number of call operands does not correspond to prototype");
+  } else if (code == MIR_VA_ARG) {
+    if (ops[2].mode != MIR_OP_MEM)
+      (*error_func) (MIR_op_mode_error, "3rd operand of va_arg should be any memory with given type");
   }
   insn = create_insn (nops, code);
   insn->nops = nops;
@@ -1793,6 +1805,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   
   if (code == MIR_CALL && nop == 0)
     return; /* do nothing: it is a prototype */
+  if (code == MIR_VA_ARG && nop == 2)
+    return; /* do nothing: this operand is used as a type */
   switch (op->mode) {
   case MIR_OP_INT:
   case MIR_OP_FLOAT:

@@ -110,6 +110,8 @@ typedef enum {
   MIR_RET, MIR_FRET, MIR_DRET,
   MIR_ALLOCA,
   /* Special insns: */
+  MIR_VA_ARG, /* result is arg address, operands: va_list addr and memory */
+  MIR_VA_START, MIR_VA_END, /* operand is va_list */
   MIR_LABEL, /* One immediate operand is unique label number  */
   MIR_INVALID_INSN,
   MIR_INSN_BOUND,   /* Should be the last  */
@@ -439,6 +441,10 @@ typedef struct MIR_code_reloc *MIR_code_reloc_t;
 extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
 extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
+extern void *va_arg_builtin (void *p, uint64_t t);
+extern void va_start_interp_builtin (void *p, void *a);
+extern void va_end_interp_builtin (void *p);
+  
 extern void *_MIR_get_interp_shim (void *handler);
 extern void *_MIR_get_thunk (MIR_item_t item);
 extern void _MIR_redirect_thunk (void *thunk, void *to);

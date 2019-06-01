@@ -2,6 +2,39 @@
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+struct x86_64_va_list {
+  uint32_t gp_offset, fp_offset;
+  uint64_t *overflow_arg_area, *reg_save_area;
+};
+
+void *va_arg_builtin (void *p, uint64_t t) {
+  struct x86_64_va_list *va = p;
+  MIR_type_t type = t;
+  int fp_p = type == MIR_T_F || type == MIR_T_D;
+  void *a;
+  
+  if (fp_p && va->fp_offset <= 160) {
+    a = (char *) va->reg_save_area + va->fp_offset;
+    va->fp_offset += 16;
+  } else if (! fp_p && va->gp_offset <= 40)  {
+    a = (char *) va->reg_save_area + va->gp_offset;
+    va->gp_offset += 8;
+  } else {
+    a = va->overflow_arg_area;
+    va->overflow_arg_area++;
+  }
+  return a;
+}
+
+void va_start_interp_builtin (void *p, void *a) {
+  struct x86_64_va_list *va = p;
+  va_list *vap = a;
+  assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
+  *va = *(struct x86_64_va_list *)vap;
+}
+
+void va_end_interp_builtin (void *p) { }
+
 /* _MIR_called_func = r10; rax = 8; jump *handler  */
 void *_MIR_get_interp_shim (void *handler) {
   static unsigned char pattern[] =

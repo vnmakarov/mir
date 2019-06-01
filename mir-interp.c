@@ -231,6 +231,9 @@ static void generate_icode (MIR_item_t func_item) {
 	if (code == MIR_CALL && i == 0) { /* prototype ??? */
 	  mir_assert (ops[i].mode == MIR_OP_REF && ops[i].u.ref->item_type == MIR_proto_item);
 	  v.a = ops[i].u.ref->u.proto;
+	} else if (code == MIR_VA_ARG && i == 2) { /* type */
+	  mir_assert (ops[i].mode == MIR_OP_MEM);
+	  v.i = ops[i].u.mem.type;
 	} else {
 	  mir_assert (ops[i].mode == MIR_OP_REG);
 	  v.i = get_reg (ops[i], &max_nreg);
@@ -502,7 +505,8 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL;
       ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
-      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA;
+      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA; ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG;
+      ltab [MIR_VA_START] = &&L_MIR_VA_START; ltab [MIR_VA_END] = &&L_MIR_VA_END;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
       ltab [IC_LDI32] = &&L_IC_LDI32; ltab [IC_LDU32] = &&L_IC_LDU32;
@@ -721,6 +725,14 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
 	r = get_2iops (bp, ops, &s); *r = (uint64_t) alloca (s);
       }
       END_INSN;
+      CASE (MIR_VA_ARG, 3); {
+	int64_t *r, va, tp;
+	
+	r = get_2iops (bp, ops, &va); tp = get_i (ops + 2); *r = (uint64_t) va_arg_builtin ((void *) va, tp);
+      }
+      END_INSN;
+      CASE (MIR_VA_START, 1); { va_start_interp_builtin (bp [get_i (ops)].a, bp[-1].a); } END_INSN;
+      CASE (MIR_VA_END, 1); { va_end_interp_builtin (bp [get_i (ops)].a); } END_INSN;
 
       CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
       CASE (IC_LDU8, 2);  LD (uop, uint64_t, uint8_t); END_INSN;
@@ -926,11 +938,9 @@ void MIR_interp_finish (void) {
   /* Clear func descs???  */
 }
 
-MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
-  va_list argp;
+static MIR_val_t interp_arr_varg (MIR_item_t func_item, size_t nargs, MIR_val_t *vals, va_list va) {
   func_desc_t func_desc;
-  MIR_val_t *bp;
-  size_t i;
+  MIR_val_t *bp, res;
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
@@ -938,14 +948,50 @@ MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
-  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
+  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals + 1) * sizeof (MIR_val_t));
+  bp[0].a = va;
+  bp++;
   if (func_desc->nregs < nargs + 1)
     nargs = func_desc->nregs - 1;
   bp[0].i = 0;
+  memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
+  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
+  res = eval (func_desc, bp);
+  if (va != NULL)
+    va_end (va);
+  return res;
+}
+
+MIR_val_t MIR_interp (MIR_item_t func_item, size_t nargs, ...) {
+  va_list argp;
+  size_t i;
+  MIR_val_t res;
+  
+  if (VARR_EXPAND (MIR_val_t, args_varr, nargs))
+    args = VARR_ADDR (MIR_val_t, args_varr);
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
-    bp[i + 1] = va_arg (argp, MIR_val_t);
-  va_end(argp);
+    args[i] = va_arg (argp, MIR_val_t);
+  return interp_arr_varg (func_item, nargs, args, argp);
+}
+
+MIR_val_t MIR_interp_arr_varg (MIR_item_t func_item, size_t nargs, MIR_val_t *vals, va_list va) {
+  func_desc_t func_desc;
+  MIR_val_t *bp;
+  
+  mir_assert (func_item->item_type == MIR_func_item);
+  if (func_item->data == NULL) {
+    MIR_simplify_func (func_item, FALSE);
+    generate_icode (func_item);
+  }
+  func_desc = get_func_desc (func_item);
+  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals + 1) * sizeof (MIR_val_t));
+  bp[0].a = va;
+  bp++;
+  if (func_desc->nregs < nargs + 1)
+    nargs = func_desc->nregs - 1;
+  bp[0].i = 0;
+  memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
   bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
   return eval (func_desc, bp);
 }
@@ -954,19 +1000,7 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
   func_desc_t func_desc;
   MIR_val_t *bp;
   
-  mir_assert (func_item->item_type == MIR_func_item);
-  if (func_item->data == NULL) {
-    MIR_simplify_func (func_item, FALSE);
-    generate_icode (func_item);
-  }
-  func_desc = get_func_desc (func_item);
-  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals) * sizeof (MIR_val_t));
-  if (func_desc->nregs < nargs + 1)
-    nargs = func_desc->nregs - 1;
-  bp[0].i = 0;
-  memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
-  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
-  return eval (func_desc, bp);
+  return interp_arr_varg (func_item, nargs, vals, NULL);
 }
 
 /* C call interface to interpreter.  It is based on knowledge of
@@ -1006,7 +1040,7 @@ static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
       mir_assert (FALSE);
     }
   }
-  return MIR_interp_arr (func_item, nargs, args);
+  return interp_arr_varg (func_item, nargs, args, va);
 }
 
 static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.i;}
