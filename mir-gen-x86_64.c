@@ -346,13 +346,13 @@ static void make_prolog_epilog (MIR_item_t func_item,
   gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  if (overall_frame_size != 0) {
+  if (alloca_p) {
+    new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, fp_reg_op,
+			     MIR_new_int_op (stack_slots_num * 8 - overall_frame_size));
+    gen_add_insn_before (func_item, anchor, new_insn);  /* sp = bp - frame size */
+  } else if (overall_frame_size != 0) {
     new_insn = MIR_new_insn (MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (overall_frame_size));
     gen_add_insn_before (func_item, anchor, new_insn);  /* sp -= frame and stack slot size */
-  }
-  if (alloca_p) {
-    new_insn = MIR_new_insn (MIR_MOV, sp_reg_op, fp_reg_op);
-    gen_add_insn_before (func_item, anchor, new_insn);  /* sp = bp */
   }
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
