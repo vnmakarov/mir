@@ -376,6 +376,7 @@ struct pattern {
      $ - finish successfully matching
      r - register (we don't care about bp and sp because they are fixed and used correctly)
      h[0-31] - hard register with given number
+     z - operand is zero
      i[0-3] - immediate of size 8,16,32,64-bits
      p[0-3] - reference
      s - immediate 1, 2, 4, or 8 (scale)
@@ -512,6 +513,7 @@ struct pattern {
   {ICODE, "l r r", "66 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
 
 static struct pattern patterns[] = {
+  {MIR_MOV, "r z",  "Y 33 r0 R0"},     /* xor r0,r0 -- 32 bit xor */
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1"},     /* mov r0,m1 */
   {MIR_MOV, "m3 r", "X 89 r1 m0"},     /* mov m0,r1 */
@@ -751,6 +753,9 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if ('0' <= ch && ch <= '9') hr = hr * 10 + ch - '0';
       else --p;
       if (op.u.hard_reg != hr) return FALSE;
+      break;
+    case 'z':
+      if (op.mode != MIR_OP_INT || op.u.i != 0) return FALSE;
       break;
     case 'i':
       if (op.mode != MIR_OP_INT) return FALSE;
