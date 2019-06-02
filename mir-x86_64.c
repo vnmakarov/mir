@@ -29,6 +29,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
 void va_start_interp_builtin (void *p, void *a) {
   struct x86_64_va_list *va = p;
   va_list *vap = a;
+  
   assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
   *va = *(struct x86_64_va_list *)vap;
 }
