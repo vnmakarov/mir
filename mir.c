@@ -927,8 +927,14 @@ void MIR_finish_func (void) {
     reg_desc_t *rd;
     int out_p, can_be_out_p;
     
+    code = insn->code;
+    if (!curr_func->vararg_p && (code == MIR_VA_START || code == MIR_VA_END || code == MIR_VA_ARG)) {
+	insn->code = MIR_INVALID_INSN;
+	if (err == MIR_no_error) {
+	  err = MIR_vararg_func_error; err_msg = "va_start, va_end, or va_arg are not in vararg function";
+	}
+    }
     for (i = 0; i < insn_nops; i++) {
-      code = insn->code;
       if (code == MIR_CALL && i == 0) {
 	mir_assert (insn->ops[i].mode == MIR_OP_REF
 		    && insn->ops[i].u.ref->item_type == MIR_proto_item);
