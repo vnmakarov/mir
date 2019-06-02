@@ -2806,9 +2806,9 @@ static void assign (void) {
     if (best_loc <= MAX_HARD_REG) {
       bitmap_set_bit_p (func_assigned_hard_regs, best_loc);
     } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot */
+      best_loc = VARR_LENGTH (size_t, loc_profits);
       VARR_PUSH (size_t, loc_profits, 0);
       VARR_PUSH (size_t, loc_profit_ages, 0);
-      best_loc = VARR_LENGTH (size_t, loc_profits);
       func_stack_slots_num = best_loc - MAX_HARD_REG;
     }
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
