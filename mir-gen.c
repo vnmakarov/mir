@@ -3427,7 +3427,7 @@ static void dead_code_elimination (MIR_item_t func) {
 #include <sys/types.h>
 #include <unistd.h>
 
-static void print_code (uint8_t *code, size_t code_len) {
+static void print_code (uint8_t *code, size_t code_len, void *start_addr) {
   size_t i;
   int ch;
   char cfname[30];
@@ -3446,7 +3446,7 @@ static void print_code (uint8_t *code, size_t code_len) {
   fprintf (f, "};\n");
   fclose (f);
   sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data --adjust-vma=0x%lx -D %s.o; rm -f %s.o %s",
-	   cfname, cfname, (long) 0, cfname, cfname, cfname);
+	   cfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname);
   if ((f = popen (command, "r")) == NULL)
       return;
   while ((ch = fgetc (f)) != EOF)
@@ -3569,13 +3569,13 @@ void *MIR_gen (MIR_item_t func_item) {
   }
 #endif
   code = target_translate (func_item, &code_len);
+  func_item->machine_code = _MIR_publish_code (code, code_len);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    print_code (code, code_len);
+    print_code (code, code_len, func_item->machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
 #endif 
-  func_item->machine_code = _MIR_publish_code (code, code_len);
   _MIR_redirect_thunk (func_item->addr, func_item->machine_code);
   destroy_func_live_ranges ();
   destroy_func_cfg ();
