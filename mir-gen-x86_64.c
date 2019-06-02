@@ -517,7 +517,7 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1"},     /* mov r0,m1 */
   {MIR_MOV, "m3 r", "X 89 r1 m0"},     /* mov m0,r1 */
-  {MIR_MOV, "r i2", "X C7 /0 R0 I1"},  /* mov r0,i32 */
+  {MIR_MOV, "r i2", "Y B8 +0 I1"},     /* mov r0,i32 -- 32-bit move */
   {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
   {MIR_MOV, "r p", "X B8 +0 P1"},      /* mov r0,a64 */
@@ -542,8 +542,8 @@ static struct pattern patterns[] = {
   {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0"},    /* movss r0,m32 */
 
   {MIR_DMOV, "r r", "F2 Y 0F 10 r0 R1"},     /* movsd r0,r1 */
-  {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m32 */
-  {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m32 */
+  {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m64 */
+  {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m64 */
 
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},     /* movsx r0,m1 */
