@@ -3296,6 +3296,7 @@ static token_t scan_string (int c, int get_char (void), void unget_char (int)) {
     }
     VARR_PUSH (char, temp_string, c);
   }
+  VARR_PUSH (char, temp_string, 0);
   t.code = TC_STR;
   t.u.str = string_store (&strings, &string_tab, VARR_ADDR (char, temp_string)).str;
   return t;
