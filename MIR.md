@@ -321,7 +321,7 @@
   * The reserved memory will be aligned according target ABI
 
 ### MIR_VA_START, MIR_VA_ARG, and MIR_VA_END insns
-  * These insns are for variable number arguments functions
+  * These insns are only for variable number arguments functions
   * `MIR_VA_START` and `MIR_VA_END` have one input operand, an address
     of va_list structure (see C stdarg.h for more details).  Unlike C
     va_start, MIR_VA_START just takes one parameter
