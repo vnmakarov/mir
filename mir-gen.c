@@ -88,6 +88,7 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
 static void gen_delete_insn (MIR_item_t func_item, MIR_insn_t insn);
 static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
 static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t after);
+static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -400,6 +401,13 @@ static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_in
 static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn_t insn) {
   MIR_insert_insn_after (func_item, after, insn);
   create_new_bb_insns (func_item, after, DLIST_NEXT (MIR_insn_t, insn));
+}
+
+static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
+  bb_insn_t bb_insn = call_insn->data;
+  
+  gen_assert (call_insn->code == MIR_CALL && hard_reg <= MAX_HARD_REG);
+  bitmap_set_bit_p (bb_insn->call_hard_reg_args, hard_reg);
 }
 
 static void set_label_disp (MIR_insn_t insn, size_t disp) {
@@ -3099,7 +3107,7 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
 	       && find_bb_insn_dead_var (bb_insn, op.u.hard_reg_mem.base) != NULL) {
       def_insn = hreg_defs_addr[op.u.hard_reg_mem.base].insn;
       def_insn_num = hreg_defs_addr[op.u.hard_reg_mem.base].insn_num;
-      gen_assert (hreg_defs_addr[op.u.hard_reg_mem.base].nop == 0);
+      gen_assert (def_insn->code == MIR_CALL || hreg_defs_addr[op.u.hard_reg_mem.base].nop == 0);
       src_op = def_insn->ops[1];
       if (obsolete_hard_reg_op_p (src_op, def_insn_num))
 	;
