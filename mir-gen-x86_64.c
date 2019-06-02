@@ -209,11 +209,11 @@ static void get_builtin (MIR_item_t func_item, MIR_insn_code_t code,
 			 MIR_item_t *proto_item, MIR_item_t *func_import_item) {
   switch (code) {
   case MIR_UI2F:
-    *proto_item = _MIR_builtin_proto (func_item->module, UI2F_P, MIR_T_F, 1, MIR_T_I64);
+    *proto_item = _MIR_builtin_proto (func_item->module, UI2F_P, MIR_T_F, 1, MIR_T_I64, NULL);
     *func_import_item = _MIR_builtin_func (func_item->module, UI2F, mir_ui2f);
     break;
   case MIR_UI2D:
-    *proto_item = _MIR_builtin_proto (func_item->module, UI2D_P, MIR_T_D, 1, MIR_T_I64);
+    *proto_item = _MIR_builtin_proto (func_item->module, UI2D_P, MIR_T_D, 1, MIR_T_I64, NULL);
     *func_import_item = _MIR_builtin_func (func_item->module, UI2D, mir_ui2d);
     break;
   default:
