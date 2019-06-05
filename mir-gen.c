@@ -2517,9 +2517,12 @@ static void destroy_live_range (live_range_t lr) {
 static int make_var_dead (MIR_reg_t var, int point) {
   live_range_t lr;
 
-  if (! bitmap_clear_bit_p (live_vars, var))
-    return FALSE;
-  lr = VARR_GET (live_range_t, var_live_ranges, var); lr->finish = point;
+  if (bitmap_clear_bit_p (live_vars, var)) {
+    lr = VARR_GET (live_range_t, var_live_ranges, var); lr->finish = point;
+  } else { /* insn with unused result: result still needs a register */
+    VARR_SET (live_range_t, var_live_ranges, var,
+	      create_live_range (point, point, VARR_GET (live_range_t, var_live_ranges, var)));
+  }
   return TRUE;
 }
 
