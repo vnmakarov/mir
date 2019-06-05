@@ -2133,13 +2133,13 @@ static int get_res_val (MIR_insn_t insn, const_t *val) {
   return TRUE;
 }
 
-static void ccp_modify (void) {
+static int ccp_modify (void) {
   bb_t bb, next_bb;
   bb_insn_t bb_insn, next_bb_insn;
   const_t val;
   MIR_op_t op;
   MIR_insn_t insn;
-  int res;
+  int res, change_p = FALSE;
   
 #ifndef NDEBUG
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -2149,6 +2149,7 @@ static void ccp_modify (void) {
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
     if (! bb->flag) {
+      change_p = TRUE;
 #if MIR_GEN_DEBUG
       if (debug_file != NULL)
 	fprintf (debug_file, "  deleting unreachable bb %d and its edges\n", bb->index);
@@ -2167,6 +2168,7 @@ static void ccp_modify (void) {
       if (get_res_val (bb_insn->insn, &val) && (bb_insn->insn->code != MIR_MOV
 						|| (bb_insn->insn->ops[1].mode != MIR_OP_INT
 						    && bb_insn->insn->ops[1].mode != MIR_OP_UINT))) {
+	change_p = TRUE;
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
 	  fprintf (debug_file, "  changing insn ");
@@ -2194,6 +2196,7 @@ static void ccp_modify (void) {
     if (! MIR_branch_code_p (insn->code) || insn->code == MIR_JMP
 	|| ccp_branch_update (insn, &res) != CCP_CONST)
       continue;
+    change_p = TRUE;
     if (! res) {
 #if MIR_GEN_DEBUG
       if (debug_file != NULL) {
@@ -2222,9 +2225,10 @@ static void ccp_modify (void) {
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 0));
     }
   }
+  return change_p;
 }
 
-static void ccp (void) { /* conditional constant propagation */
+static int ccp (void) { /* conditional constant propagation */
 #if MIR_GEN_DEBUG
   fprintf (stderr, "  CCP analysis:\n");
 #endif
@@ -2258,7 +2262,7 @@ static void ccp (void) { /* conditional constant propagation */
 #if MIR_GEN_DEBUG
   fprintf (stderr, "  CCP modification:\n");
 #endif
-  ccp_modify ();
+  return ccp_modify ();
 }
 
 static void ccp_clear (void) {
@@ -3506,19 +3510,27 @@ void *MIR_gen (MIR_item_t func_item) {
   dead_code_elimination (func_item);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after 1st dead code elimination:\n");
+    fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
     print_CFG (TRUE, TRUE, output_bb_live_info);
   }
 #endif
 #endif
 #ifndef NO_CCP
-  ccp ();
+  if (ccp ()) {
 #if MIR_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
-    print_CFG (TRUE, TRUE, NULL);
-  }
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
+      print_CFG (TRUE, TRUE, NULL);
+    }
 #endif
+    dead_code_elimination (func_item);
+#if MIR_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
+      print_CFG (TRUE, TRUE, output_bb_live_info);
+    }
+#endif
+  }
 #endif /* #ifndef NO_CCP */
   ccp_clear ();
   make_2op_insns (func_item);
@@ -3565,7 +3577,7 @@ void *MIR_gen (MIR_item_t func_item) {
   dead_code_elimination (func_item);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after 2nd dead code elimination:\n");
+    fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
     print_CFG (TRUE, TRUE, output_bb_live_info);
   }
 #endif
