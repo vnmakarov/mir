@@ -1357,7 +1357,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	gen_assert (op.mode == MIR_OP_REF);
 	imm64_p = TRUE;
 	if (op.u.ref->item_type == MIR_data_item
-	    && op.u.ref->u.data->name != NULL && _MIR_reserved_name_p (op.u.ref->u.data->name))
+	    && op.u.ref->u.data->name != NULL && _MIR_reserved_ref_name_p (op.u.ref->u.data->name))
 	  imm64 = (uint64_t) op.u.ref->u.data->u.els;
 	else
 	  imm64 = (uint64_t) op.u.ref->addr;
