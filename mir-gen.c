@@ -1161,11 +1161,12 @@ static void cse (void) {
 
 #if MIR_GEN_DEBUG
 static void print_exprs (void) {
+  fprintf (debug_file, "  Expressions:\n");
   for (size_t i = 0; i < VARR_LENGTH (expr_t, exprs); i++) {
     size_t nops;
     expr_t e = VARR_GET (expr_t, exprs, i);
     
-    fprintf (debug_file, "%3d: ", i);
+    fprintf (debug_file, "  %3d: ", i);
     fprintf (debug_file, "%s _", MIR_insn_name (e->insn->code));
     nops = MIR_insn_nops (e->insn);
     for (size_t j = 1; j < nops; j++) {
@@ -3506,11 +3507,15 @@ void *MIR_gen (MIR_item_t func_item) {
   }
 #endif
 #ifndef NO_CSE
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, "+++++++++++++CSE:\n");
+#endif
   cse ();
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
     print_exprs ();
+    fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
     print_CFG (TRUE, TRUE, output_bb_cse_info);
   }
 #endif
