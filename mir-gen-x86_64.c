@@ -937,6 +937,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
   size_t nops = MIR_insn_nops (insn);
   const char *p;
   char ch, start_ch;
+  MIR_op_mode_t mode;
   MIR_op_t op, original;
   MIR_reg_t hr;
   
@@ -966,10 +967,10 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if (op.u.hard_reg != hr) return FALSE;
       break;
     case 'z':
-      if (op.mode != MIR_OP_INT || op.u.i != 0) return FALSE;
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || op.u.i != 0) return FALSE;
       break;
     case 'i':
-      if (op.mode != MIR_OP_INT) return FALSE;
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
       ch = *++p;
       if ((ch == '0' && ! int8_p (op.u.i)) || (ch == '1' && ! int16_p (op.u.i))
 	  || (ch == '2' && ! int32_p (op.u.i)))
@@ -981,7 +982,8 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       if (op.mode != MIR_OP_REF) return FALSE;
       break;
     case 's':
-      if (op.mode != MIR_OP_INT || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT)
+	  || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8)) return FALSE;
       break;
     case 'm': {
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
@@ -1025,16 +1027,19 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       n = start_ch - '0';
       gen_assert (n < nop);
       original = insn->ops[n];
-      if (original.mode != op.mode) return FALSE;
-      gen_assert (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_INT
-	      || op.mode == MIR_OP_FLOAT || op.mode == MIR_OP_DOUBLE
-	      || op.mode == MIR_OP_HARD_REG_MEM || op.mode == MIR_OP_LABEL);
-      if (op.mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg) return FALSE;
-      else if (op.mode == MIR_OP_INT && op.u.i != original.u.i) return FALSE;
-      else if (op.mode == MIR_OP_FLOAT && op.u.f != original.u.f) return FALSE;
-      else if (op.mode == MIR_OP_DOUBLE && op.u.d != original.u.d) return FALSE;
-      else if (op.mode == MIR_OP_LABEL && op.u.label != original.u.label) return FALSE;
-      else if (op.mode == MIR_OP_HARD_REG_MEM
+      mode = op.mode;
+      if (mode == MIR_OP_UINT)
+	mode = MIR_OP_INT;
+      if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT)) return FALSE;
+      gen_assert (mode == MIR_OP_HARD_REG || mode == MIR_OP_INT
+	      || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE
+	      || mode == MIR_OP_HARD_REG_MEM || mode == MIR_OP_LABEL);
+      if (mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg) return FALSE;
+      else if (mode == MIR_OP_INT && op.u.i != original.u.i) return FALSE;
+      else if (mode == MIR_OP_FLOAT && op.u.f != original.u.f) return FALSE;
+      else if (mode == MIR_OP_DOUBLE && op.u.d != original.u.d) return FALSE;
+      else if (mode == MIR_OP_LABEL && op.u.label != original.u.label) return FALSE;
+      else if (mode == MIR_OP_HARD_REG_MEM
 	       && op.u.hard_reg_mem.type != original.u.hard_reg_mem.type
 	       && op.u.hard_reg_mem.scale != original.u.hard_reg_mem.scale
 	       && op.u.hard_reg_mem.base != original.u.hard_reg_mem.base
@@ -1232,8 +1237,8 @@ static int setup_imm_addr (uint64_t v, int *mod, int *rm, int64_t *disp32) {
 static void out_insn (MIR_insn_t insn, const char *replacement) {
   const char *p, *insn_str;
   
-  if (insn->code == MIR_ALLOCA && insn->ops[1].mode == MIR_OP_INT)
-    insn->ops[1].u.i = (insn->ops[1].u.i + 7) & -8;
+  if (insn->code == MIR_ALLOCA && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
+    insn->ops[1].u.u = (insn->ops[1].u.u + 7) & -8;
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, start_ch, d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
@@ -1318,7 +1323,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	  if (op2.mode == MIR_OP_HARD_REG) {
 	    mem.index = op2.u.hard_reg; mem.disp = 0;
 	  } else {
-	    gen_assert (op2.mode == MIR_OP_INT);
+	    gen_assert (op2.mode == MIR_OP_INT || op2.mode == MIR_OP_UINT);
 	    mem.index = MIR_NON_HARD_REG; mem.disp = op2.u.i;
 	  }
 	} else if (ch == 'd') {
@@ -1329,7 +1334,8 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	  gen_assert (ch == 'm');
 	  op2 = insn->ops[2];
 	  mem.index = op.u.hard_reg; mem.base = MIR_NON_HARD_REG; mem.disp = 0;
-	  gen_assert (op2.mode == MIR_OP_INT && (op2.u.i == 1 || op2.u.i == 2 || op2.u.i == 4 || op2.u.i == 8));
+	  gen_assert ((op2.mode == MIR_OP_INT || op2.mode == MIR_OP_UINT)
+		      && (op2.u.i == 1 || op2.u.i == 2 || op2.u.i == 4 || op2.u.i == 8));
 	  mem.scale = op2.u.i;
 	}
 	setup_mem (mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8, &disp32);
@@ -1341,7 +1347,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	ch = *++p;
 	gen_assert ('0' <= ch && ch <= '7');
 	op = insn->ops[ch - '0'];
-	gen_assert (op.mode == MIR_OP_INT);
+	gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
 	if (start_ch == 'i') {
 	  gen_assert (int8_p (op.u.i)); imm8 = (uint8_t) op.u.i;
 	} else if (start_ch == 'I' ) {
