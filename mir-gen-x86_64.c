@@ -587,6 +587,7 @@ struct pattern {
      ; - insn separation
      X - REX byte with W=1
      Y - Optional REX byte with W=0
+     Z - Obligatory REX byte with W=0
      [0-9A-F]+ pairs of hexidecimal digits opcode
      r[0-2] = n-th operand in ModRM:reg
      R[0-2] = n-th operand in ModRM:rm with mod == 3
@@ -698,10 +699,10 @@ struct pattern {
   BCMP0(ICODE, S, Y, LONG_JUMP_OPCODE)
 
 #define FBCMP(ICODE, LONG_JUMP_OPCODE)					\
-  {ICODE, "l r r", "0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
+  {ICODE, "l r r", "Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
 
 #define DBCMP(ICODE, LONG_JUMP_OPCODE) \
-  {ICODE, "l r r", "66 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
+  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
 
 static struct pattern patterns[] = {
   {MIR_MOV, "r z",  "Y 33 r0 R0"},     /* xor r0,r0 -- 32 bit xor */
@@ -713,9 +714,9 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
   {MIR_MOV, "r p", "X B8 +0 P1"},      /* mov r0,a64 */
 
-  {MIR_MOV, "m0 r", "88 r1 m0"},       /* mov m0, r1 */
-  {MIR_MOV, "m1 r", "66 89 r1 m0"},    /* mov m0, r1 */
-  {MIR_MOV, "m2 r", "89 r1 m0"},       /* mov m0, r1 */
+  {MIR_MOV, "m0 r", "Z 88 r1 m0"},       /* mov m0, r1 */
+  {MIR_MOV, "m1 r", "66 Y 89 r1 m0"},    /* mov m0, r1 */
+  {MIR_MOV, "m2 r", "Y 89 r1 m0"},       /* mov m0, r1 */
 
   {MIR_MOV, "r ms0", "X 0F BE r0 m1"},  /* movsx r0, m1 */
   {MIR_MOV, "r ms1", "X 0F BF r0 m1"},  /* movsx r0, m1 */
@@ -773,8 +774,8 @@ static struct pattern patterns[] = {
   {MIR_NEGS, "r 0",  "Y F7 /3 R1"}, /* neg r0 */
   {MIR_NEGS, "m2 0", "Y F7 /3 m1"}, /* neg m0 */
 
-  {MIR_FNEG, "r 0",  "0F 57 r0 c0000000080000000"},  /* xorps r0,80000000 */
-  {MIR_DNEG, "r 0",  "66 0F 57 r0 c8000000000000000"},  /* xorpd r0,0x8000000000000000 */
+  {MIR_FNEG, "r 0",  "Y 0F 57 r0 c0000000080000000"},  /* xorps r0,80000000 */
+  {MIR_DNEG, "r 0",  "66 Y 0F 57 r0 c8000000000000000"},  /* xorpd r0,0x8000000000000000 */
 
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0")
   {MIR_ADD, "r r r",  "X 8D r0 ap"},  /* lea r0,(r1,r2)*/
@@ -819,8 +820,10 @@ static struct pattern patterns[] = {
   IOP (MIR_OR, "0B", "09", "83 /1", "81 /1")
   IOP (MIR_XOR, "33", "31", "83 /6", "81 /6")
 
-  FOP (MIR_FADD, "F3 0F 58") DOP (MIR_DADD, "F2 0F 58") FOP (MIR_FSUB, "F3 0F 5C") DOP (MIR_DSUB, "F2 0F 5C")
-  FOP (MIR_FMUL, "F3 0F 59") DOP (MIR_DMUL, "F2 0F 59") FOP (MIR_FDIV, "F3 0F 5E") DOP (MIR_DDIV, "F2 0F 5E")
+  FOP (MIR_FADD, "F3 Y 0F 58") DOP (MIR_DADD, "F2 Y 0F 58")
+  FOP (MIR_FSUB, "F3 Y 0F 5C") DOP (MIR_DSUB, "F2 Y 0F 5C")
+  FOP (MIR_FMUL, "F3 Y 0F 59") DOP (MIR_DMUL, "F2 Y 0F 59")
+  FOP (MIR_FDIV, "F3 Y 0F 5E") DOP (MIR_DDIV, "F2 Y 0F 5E")
   
   SHOP (MIR_LSH, "D3 /4", "C1 /4") SHOP (MIR_RSH, "D3 /7", "C1 /7") SHOP (MIR_URSH, "D3 /5", "C1 /5")
   
@@ -844,11 +847,11 @@ static struct pattern patterns[] = {
   FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLT, "0F 86")
   FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGT, "0F 83")
 
-  {MIR_FBEQ, "l r r", "0F 2E r1 R2; 7A v6; 0F 84 l0"},       /* ucomiss r0,r1;jp L;je rel32 L: */
-  {MIR_DBEQ, "l r r", "66 0F 2E r1 R2; 7A v6; 0F 84 l0"},    /* ucomisd r0,r1;jp L;je rel32 L: */
+  {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 l0"},       /* ucomiss r0,r1;jp L;je rel32 L: */
+  {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 l0"},    /* ucomisd r0,r1;jp L;je rel32 L: */
 
-  {MIR_FBNE, "l r r", "0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
-  {MIR_DBNE, "l r r", "66 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  {MIR_FBNE, "l r r", "Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
+  {MIR_DBNE, "l r r", "66 Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
 
   {MIR_CALL, "X r h0 $", "Y FF /2 R1"},  /* call *r1 -- function call */
   {MIR_CALL, "X r $", "Y FF /2 R1"},     /* call *r1 -- procedure call */
@@ -1234,7 +1237,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, start_ch, d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
-    int rex_w = -1, rex_r = -1, rex_x = -1, rex_b = -1;
+    int rex_w = -1, rex_r = -1, rex_x = -1, rex_b = -1, rex_0 = -1;
     int mod = -1, reg = -1, rm = -1;
     int scale = -1, index = -1, base = -1;
     int prefix = -1, disp8 = -1, imm8 = -1, lb = -1;
@@ -1273,6 +1276,13 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	  prefix = opcode0; opcode0 = -1;
 	}
 	rex_w = 0;
+	break;
+      case 'Z':
+	if (opcode0 >= 0) {
+	  gen_assert (opcode1 < 0);
+	  prefix = opcode0; opcode0 = -1;
+	}
+	rex_w = 0; rex_0 = 0;
 	break;
       case 'r':
       case 'R':
@@ -1413,7 +1423,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
     }
     if (prefix >= 0) put_byte (prefix);
     
-    if (rex_w > 0 || rex_r >= 0 || rex_x >= 0 || rex_b >= 0) {
+    if (rex_w > 0 || rex_r >= 0 || rex_x >= 0 || rex_b >= 0 || rex_0 >= 0) {
       if (rex_w < 0) rex_w = 0;
       if (rex_r < 0) rex_r = 0;
       if (rex_x < 0) rex_x = 0;
