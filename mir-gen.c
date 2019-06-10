@@ -2347,7 +2347,7 @@ static int live_trans_func (bb_t bb) {
 static void initiate_bb_live_info (bb_t bb, int moves_p) {
   MIR_insn_t insn;
   size_t nops, i, niter;
-  MIR_reg_t nregs, n;
+  MIR_reg_t nregs, n, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
   int out_p;
   mv_t mv, next_mv;
@@ -2377,7 +2377,7 @@ static void initiate_bb_live_info (bb_t bb, int moves_p) {
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
     nops = MIR_insn_nops (insn);
-    /* Process output ops on the first iteration, then input ops. */
+    /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
       for (i = 0; i < nops; i++) {
 	op = insn->ops[i];
@@ -2425,6 +2425,15 @@ static void initiate_bb_live_info (bb_t bb, int moves_p) {
 	}
       }
     }
+    get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+    if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
+      bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg1);
+      bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg1);
+    }
+    if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
+      bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg2);
+      bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg2);
+    }
     if (insn->code == MIR_CALL) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
       bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
@@ -2455,7 +2464,7 @@ static void add_bb_insn_dead_vars (void) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
   size_t nops, i;
-  MIR_reg_t var, var2;
+  MIR_reg_t var, var2, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
   int out_p, live_start1_p, live_start2_p;
   bitmap_t live;
@@ -2511,6 +2520,11 @@ static void add_bb_insn_dead_vars (void) {
 	if (live_start2_p)
 	  add_bb_insn_dead_var (bb_insn, var2);
       }
+      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
+	bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
+      if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
+	bitmap_clear_bit_p (live, early_clobbered_hard_reg2);
       if (insn->code == MIR_CALL)
 	bitmap_ior (live, live, bb_insn->call_hard_reg_args);
     }
@@ -2617,7 +2631,7 @@ static void print_live_ranges (void) {
 
 static void build_live_ranges (void) {
   MIR_insn_t insn;
-  MIR_reg_t nvars;
+  MIR_reg_t nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   size_t i, nops;
   int incr_p, out_p;
   MIR_op_t op;
@@ -2691,9 +2705,18 @@ static void build_live_ranges (void) {
 	default: /* do nothing */
 	  break;
 	}
-	if (incr_p)
-	  curr_point++;
       }
+      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
+	incr_p |= make_reg_live (early_clobbered_hard_reg1, TRUE, curr_point);
+	incr_p |= make_reg_dead (early_clobbered_hard_reg1, TRUE, curr_point);
+      }
+      if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
+	incr_p |= make_reg_live (early_clobbered_hard_reg2, TRUE, curr_point);
+	incr_p |= make_reg_dead (early_clobbered_hard_reg2, TRUE, curr_point);
+      }
+      if (incr_p)
+	curr_point++;
     }
     gen_assert (bitmap_equal_p (live_vars, bb->live_in));
     bitmap_for_each (live_vars, make_dead);
@@ -2917,7 +2940,7 @@ static MIR_reg_t change_reg (MIR_reg_t reg, MIR_op_mode_t data_mode, int first_p
     MIR_insert_insn_before (curr_func_item, bb_insn->insn, insn);
   }
   new_bb_insn = create_bb_insn (insn, bb_insn->bb);
-  if (out_p) 
+  if (out_p)
     DLIST_INSERT_AFTER (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
   else
     DLIST_INSERT_BEFORE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
