@@ -145,8 +145,8 @@ static void make_2op_insns (MIR_item_t func_item) {
       code = MIR_MOV; type = MIR_T_I64;
     }
     temp_op = MIR_new_reg_op (gen_new_temp_reg (type, func));
-    MIR_insert_insn_before (func_item, insn, MIR_new_insn (code, temp_op, insn->ops[1]));
-    MIR_insert_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
+    gen_add_insn_before (func_item, insn, MIR_new_insn (code, temp_op, insn->ops[1]));
+    gen_add_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
     insn->ops[0] = insn->ops[1] = temp_op;
   }
 }
