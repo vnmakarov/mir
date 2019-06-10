@@ -708,7 +708,7 @@ static struct pattern patterns[] = {
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1"},     /* mov r0,m1 */
   {MIR_MOV, "m3 r", "X 89 r1 m0"},     /* mov m0,r1 */
-  {MIR_MOV, "r i2", "Y B8 +0 I1"},     /* mov r0,i32 -- 32-bit move */
+  //  {MIR_MOV, "r i2", "Y B8 +0 I1"},     /* mov r0,i32 -- 32-bit move */
   {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
   {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
   {MIR_MOV, "r p", "X B8 +0 P1"},      /* mov r0,a64 */
