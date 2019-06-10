@@ -3583,6 +3583,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
+#ifndef NO_COMBINE
   combine (); /* After combine the BB live info is still valid */
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
@@ -3597,6 +3598,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (TRUE, TRUE, output_bb_live_info);
   }
 #endif
+#endif /* #ifndef NO_COMBINE */
   make_prolog_epilog (func_item, func_assigned_hard_regs, func_stack_slots_num);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
