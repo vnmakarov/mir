@@ -1642,23 +1642,23 @@ static enum ccp_val_kind get_3usops (MIR_insn_t insn, uint32_t *p1, uint32_t *p2
     val.uns_p = TRUE; val.u.u = p1 op p2;	  	 				\
   } while (0)
 
-#define IOP30(op) do { const_t val;			 					\
-    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const;	\
+#define IOP30(op) do {					 					\
+    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const0;	\
     IOP3(op);											\
   } while (0)
 
-#define IOP3S0(op) do { const_t val;			 					\
-    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const;	\
+#define IOP3S0(op) do {					 					\
+    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const0;	\
     IOP3S(op);											\
   } while (0)
 
-#define UOP30(op) do { const_t val;			 					\
-    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const;	\
+#define UOP30(op) do {					 					\
+    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const0;	\
     UOP3(op);											\
   } while (0)
 
-#define UOP3S0(op) do { const_t val;			 					\
-    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const;	\
+#define UOP3S0(op) do {					 					\
+    if ((ccp_res = get_op (insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const0;	\
     UOP3S(op);											\
   } while (0)
 
@@ -1811,6 +1811,9 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
   if (res != NULL)
     *res = val;
   return val_kind != CCP_CONST;
+ non_const0:
+  if (ccp_res == CCP_CONST && val.u.i == 0)
+    ccp_res = CCP_VARYING;
  non_const:
   if (ccp_res == CCP_UNKNOWN)
     return FALSE;
