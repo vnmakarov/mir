@@ -1269,6 +1269,17 @@ MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
   return MIR_new_insn_arr (code, nops, VARR_ADDR (MIR_op_t, temp_insn_ops));
 }
 
+MIR_insn_t MIR_copy_insn (MIR_insn_t insn) {
+  size_t size = sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (insn->nops - 1);
+  MIR_insn_t new_insn = malloc (size);
+  
+  if (new_insn == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory");
+  memcpy (new_insn, insn, size);
+  return new_insn;
+  
+}
+
 static MIR_insn_t create_label (int64_t label_num) {
   MIR_insn_t insn = new_insn1 (MIR_LABEL);
 

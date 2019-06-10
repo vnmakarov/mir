@@ -360,6 +360,7 @@ extern void MIR_set_error_func (MIR_error_func_t func);
 
 extern MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops);
 extern MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...);
+extern MIR_insn_t MIR_copy_insn (MIR_insn_t insn);
 
 extern const char *MIR_insn_name (MIR_insn_code_t code);
 extern size_t MIR_insn_nops (MIR_insn_t insn);
