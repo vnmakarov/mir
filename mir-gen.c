@@ -2933,7 +2933,7 @@ static void rewrite (void) {
 	  mem = op->u.mem;
 	  /* Always second for mov MEM[R2], R1 or mov R1, MEM[R2]. */
 	  mem.base = (op->u.mem.base == 0 ? MIR_NON_HARD_REG
-		      : change_reg (op->u.mem.base, data_mode, FALSE, bb_insn, out_p));
+		      : change_reg (op->u.mem.base, MIR_OP_INT, FALSE, bb_insn, FALSE));
 	  gen_assert (op->u.mem.index == 0);
 	  mem.index = MIR_NON_HARD_REG;
 	  op->mode = MIR_OP_HARD_REG_MEM;
