@@ -165,7 +165,7 @@ static void generate_icode (MIR_item_t func_item) {
       } else if (ops[1].mode == MIR_OP_FLOAT) {
 	v = get_icode (IC_MOVF); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
-	v.i = ops[1].u.f; VARR_PUSH (MIR_val_t, code_varr, v);
+	v.f = ops[1].u.f; VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
 	mir_assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
@@ -185,7 +185,7 @@ static void generate_icode (MIR_item_t func_item) {
       } else if (ops[1].mode == MIR_OP_DOUBLE) {
 	v = get_icode (IC_MOVD); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
-	v.i = ops[1].u.d; VARR_PUSH (MIR_val_t, code_varr, v);
+	v.d = ops[1].u.d; VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
 	mir_assert (ops[1].mode == MIR_OP_REG);
 	v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
