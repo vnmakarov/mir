@@ -1012,7 +1012,11 @@ static void create_exprs (void) {
       
       if (! MIR_branch_code_p (insn->code) && ! MIR_ret_code_p (insn->code)
 	  && insn->code != MIR_LABEL && insn->code != MIR_CALL && insn->code != MIR_ALLOCA
-	  && ! move_p (insn) && ! imm_move_p (insn) && ! find_expr (insn, &e))
+	  && ! move_p (insn) && ! imm_move_p (insn)
+	  /* After simplification we have only one store form: mem = reg.
+	     It is unprofitable to add the reg as an expression.  */
+	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM
+	  && ! find_expr (insn, &e))
 	add_expr (insn);
     }
 }
