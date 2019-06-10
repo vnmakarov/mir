@@ -3397,7 +3397,9 @@ static void dead_code_elimination (MIR_item_t func) {
       }
       if (! reg_def_p)
 	dead_p = FALSE;
-      if (dead_p && insn->code != MIR_CALL && insn->code != MIR_ALLOCA) {
+      if (dead_p && insn->code != MIR_CALL && insn->code != MIR_ALLOCA
+	  && ! (insn->ops[0].mode == MIR_OP_HARD_REG
+	        && (insn->ops[0].u.hard_reg == BP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
 	  fprintf (debug_file, "  Removing dead insn");
