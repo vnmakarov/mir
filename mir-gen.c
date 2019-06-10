@@ -1038,7 +1038,9 @@ static void create_av_bitmaps (void) {
       
       if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)) {
+      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)
+	  /* See create_expr comments: */
+	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
 	if (! find_expr (insn, &e)) {
 	  gen_assert (FALSE);
 	  continue;
@@ -1092,7 +1094,9 @@ static void cse_modify (void) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)) {
+      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)
+	  /* See create_expr comments: */
+	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
 	if (! find_expr (insn, &e)) {
 	  gen_assert (FALSE);
 	  continue;
