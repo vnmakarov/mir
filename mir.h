@@ -414,6 +414,7 @@ extern void MIR_link (void (*set_interface) (MIR_item_t item));
 extern MIR_item_t _MIR_called_func;
 
 extern const char *_MIR_uniq_string (const char *str);
+extern int _MIR_reserved_ref_name_p (const char *name);
 extern int _MIR_reserved_name_p (const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func); /* for internal use only */
 extern size_t _MIR_type_size (MIR_type_t type);

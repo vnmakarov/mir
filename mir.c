@@ -28,7 +28,11 @@ static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_
 
 #define TEMP_REG_NAME_PREFIX "t"
 #define HARD_REG_NAME_PREFIX "hr"
-#define TEMP_ITEM_NAME_PREFIX "lc"
+#define TEMP_ITEM_NAME_PREFIX ".lc"
+
+int _MIR_reserved_ref_name_p (const char *name) {
+  return strncmp (name, TEMP_ITEM_NAME_PREFIX, strlen (TEMP_ITEM_NAME_PREFIX)) == 0;
+}
 
 /* Reserved names:
    fp - frame pointer
@@ -40,12 +44,12 @@ int _MIR_reserved_name_p (const char *name) {
   
   if (strcmp (name, FP_NAME) == 0)
     return TRUE;
+  if (_MIR_reserved_ref_name_p (name))
+    return TRUE;
   if (strncmp (name, TEMP_REG_NAME_PREFIX, strlen (TEMP_REG_NAME_PREFIX)) == 0)
     start = strlen (TEMP_REG_NAME_PREFIX);
   else if (strncmp (name, HARD_REG_NAME_PREFIX, strlen (HARD_REG_NAME_PREFIX)) == 0)
     start = strlen (HARD_REG_NAME_PREFIX);
-  else if (strncmp (name, TEMP_ITEM_NAME_PREFIX, strlen (TEMP_ITEM_NAME_PREFIX)) == 0)
-    start = strlen (TEMP_ITEM_NAME_PREFIX);
   else
     return FALSE;
   for (i = start; name[i] != '\0'; i++)
