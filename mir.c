@@ -1664,7 +1664,7 @@ static void output_item (FILE *f, MIR_item_t item) {
     if (data->name != NULL)
       fprintf (f, "%s:", data->name);
     fprintf (f, "\t%s\t", MIR_type_str (data->el_type));
-    for (size_t i = 0; i < data->nel; i++)
+    for (size_t i = 0; i < data->nel; i++) {
       switch (data->el_type) {
       case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
       case MIR_T_U8: fprintf (f, "%" PRIu8, ((uint8_t *) data->u.els)[i]); break;
@@ -1680,6 +1680,9 @@ static void output_item (FILE *f, MIR_item_t item) {
       case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
+      if (i < data->nel + 1)
+	fprintf (f, ", ");
+    }
     if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
       fprintf (f, " # "); /* print possible string as a comment */
       out_str (f, data->u.els);
