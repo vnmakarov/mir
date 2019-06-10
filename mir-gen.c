@@ -645,6 +645,7 @@ static void build_func_cfg (void) {
   bb_insn_t bb_insn, label_bb_insn;
   size_t i, nops;
   MIR_op_t *op;
+  MIR_var_t var;
   bb_t bb, prev_bb, entry_bb, exit_bb;
   
   DLIST_INIT (bb_t, curr_cfg->bbs);
@@ -653,6 +654,10 @@ static void build_func_cfg (void) {
   curr_cfg->max_reg = 0;
   curr_cfg->min_reg = 0;
   curr_bb_index = 0;
+  for (i = 0; i < VARR_LENGTH (MIR_var_t, curr_func_item->u.func->vars); i++) {
+    var = VARR_GET (MIR_var_t, curr_func_item->u.func->vars, i);
+    update_min_max_reg (MIR_reg (var.name, curr_func_item->u.func));
+  }
   entry_bb = create_bb (NULL); add_bb (entry_bb);
   exit_bb = create_bb (NULL); add_bb (exit_bb);
   insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
