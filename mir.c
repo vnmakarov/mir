@@ -1695,7 +1695,7 @@ static void output_item (FILE *f, MIR_item_t item) {
       case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
-      if (i < data->nel + 1)
+      if (i + 1 < data->nel)
 	fprintf (f, ", ");
     }
     if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
