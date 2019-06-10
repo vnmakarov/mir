@@ -3417,7 +3417,7 @@ static void dead_code_elimination (MIR_item_t func) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
   size_t nops, i;
-  MIR_reg_t var;
+  MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
   int out_p, reg_def_p, dead_p;
   bitmap_t live;
@@ -3488,6 +3488,11 @@ static void dead_code_elimination (MIR_item_t func) {
 	  break;
 	}
       }
+      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
+	bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
+      if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
+	bitmap_clear_bit_p (live, early_clobbered_hard_reg2);
       if (insn->code == MIR_CALL)
 	bitmap_ior (live, live, bb_insn->call_hard_reg_args);
     }
