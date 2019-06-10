@@ -229,7 +229,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     }
     MIR_insert_insn_after (func_item, call_insn, new_insn);
     call_insn->ops[2] = new_insn->ops[1];
-    if ((ext_code = get_ext_code (func->res_type)) != MIR_INVALID_INSN) {
+    if ((ext_code = get_ext_code (proto->res_type)) != MIR_INVALID_INSN) {
       MIR_insert_insn_after (func_item, new_insn, MIR_new_insn (ext_code, ret_reg_op, ret_reg_op));
       new_insn = DLIST_NEXT (MIR_insn_t, new_insn);
     }
