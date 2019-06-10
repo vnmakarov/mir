@@ -1256,7 +1256,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	}
 	p++;
       }
-      if ((ch = *p) == 0)
+      if ((ch = *p) == 0 || ch == ';')
 	break;
       switch ((start_ch = ch = *p)) {
       case ' ': case '\t': break;
