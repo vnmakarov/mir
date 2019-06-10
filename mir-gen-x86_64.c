@@ -153,7 +153,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
   MIR_reg_t arg_reg;
   MIR_op_t arg_op, temp_op, arg_reg_op, ret_reg_op, mem_op;
   MIR_insn_code_t new_insn_code, ext_code;
-  MIR_insn_t new_insn, prev_insn, next_insn;
+  MIR_insn_t new_insn, prev_insn, next_insn, ext_insn;
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
   MIR_insn_t next_call_insn = DLIST_NEXT (MIR_insn_t, call_insn);
   
@@ -181,14 +181,16 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     }
     if (xmm_args < 8 && (type == MIR_T_F || type == MIR_T_D))
       xmm_args++;
+    ext_insn = NULL;
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = MIR_new_reg_op (gen_new_temp_reg (MIR_T_I64, func_item->u.func));
-      new_insn = MIR_new_insn (ext_code, temp_op, arg_op);
-      gen_add_insn_before (func_item, call_insn, new_insn);
+      ext_insn = MIR_new_insn (ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
     if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code)) != MIR_NON_HARD_REG) {
       /* put arguments to argument hard regs */
+      if (ext_insn != NULL)
+	gen_add_insn_before (func_item, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (arg_reg);
       new_insn = MIR_new_insn (new_insn_code, arg_reg_op, arg_op);
       gen_add_insn_before (func_item, call_insn, new_insn);
@@ -204,6 +206,8 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       create_new_bb_insns (func_item, prev_insn, next_insn);
       call_insn->ops[i] = mem_op;
       mem_size += 8;
+      if (ext_insn != NULL)
+	gen_add_insn_after (func_item, prev_call_insn, ext_insn);
     }
   }
   if (proto->vararg_p) {
