@@ -105,16 +105,16 @@ mir2c-bench:
 util-test: varr-test dlist-test bitmap-test htab-test
 
 varr-test:
-	$(CC) -g -I. tests/mir-varr-test.c && ./a.out
+	$(CC) -g -I. util-tests/mir-varr-test.c && ./a.out
 
 dlist-test:
-	$(CC) -g -I. tests/mir-dlist-test.c && ./a.out
+	$(CC) -g -I. util-tests/mir-dlist-test.c && ./a.out
 
 bitmap-test:
-	$(CC) -g -I. tests/mir-bitmap-test.c && ./a.out
+	$(CC) -g -I. util-tests/mir-bitmap-test.c && ./a.out
 
 htab-test:
-	$(CC) -g -I. tests/mir-htab-test.c && ./a.out
+	$(CC) -g -I. util-tests/mir-htab-test.c && ./a.out
 
 clean:
 	rm -f $(OBJS) ./a.out
