@@ -190,10 +190,13 @@ static struct insn_desc insn_descs[] = {
   {MIR_FBGE, "fbge", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBGE, "dbge", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
   {MIR_CALL, "call", {MIR_OP_BOUND}},
+  {MIR_INLINE, "inline", {MIR_OP_BOUND}},
   {MIR_RET, "ret", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_BOUND}},
   {MIR_ALLOCA, "alloca", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_BSTART, "bstart", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_BOUND}},
+  {MIR_BEND, "bend", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_ARG, "va_arg", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_UNDEF, MIR_OP_BOUND}},
   {MIR_VA_START, "va_start", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
@@ -384,9 +387,6 @@ DEF_VARR (MIR_module_t);
 static VARR (MIR_module_t) *modules_to_link;
 
 #if MIR_SCAN || MIR_IO
-DEF_VARR (char);
-static VARR (char) *temp_string; 
-
 DEF_VARR (uint8_t);
 static VARR (uint8_t) *data_values;
 
@@ -461,6 +461,11 @@ static void init_module (MIR_module_t m, const char *name) {
 static void code_init (void);
 static void code_finish (void);
 
+DEF_VARR (char);
+static VARR (char) *temp_string; 
+DEF_VARR (MIR_reg_t);
+static VARR (MIR_reg_t) *inline_reg_map;
+
 int MIR_init (void) {
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++)
@@ -478,8 +483,9 @@ int MIR_init (void) {
   VARR_CREATE (MIR_insn_t, ret_insns, 0);
   DLIST_INIT (MIR_module_t, MIR_modules);
   vn_init ();
-#if MIR_SCAN || MIR_IO
+  VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
+#if MIR_SCAN || MIR_IO
   VARR_CREATE (uint8_t, data_values, 512);
 #endif
 #if MIR_IO
@@ -506,8 +512,9 @@ void MIR_finish (void) {
 #endif
 #if MIR_SCAN || MIR_IO
   VARR_DESTROY (uint8_t, data_values);
-  VARR_DESTROY (char, temp_string);
 #endif
+  VARR_DESTROY (char, temp_string);
+  VARR_DESTROY (MIR_reg_t, inline_reg_map);
   reg_finish ();
   string_finish (&strings, &string_tab);
   vn_finish ();
@@ -812,6 +819,7 @@ static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
   func->nargs = nargs; func->last_temp_num = 0;
   func->vararg_p = vararg_p != 0;
+  func->n_inlines = 0;
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
     
@@ -930,10 +938,17 @@ void MIR_finish_func (void) {
 	}
     }
     for (i = 0; i < insn_nops; i++) {
-      if (code == MIR_CALL && i == 0) {
-	mir_assert (insn->ops[i].mode == MIR_OP_REF
-		    && insn->ops[i].u.ref->item_type == MIR_proto_item);
-	continue; /* We checked the operand during insn creation -- skip the prototype */
+      if (MIR_call_code_p (code)) {
+	if (i == 0) {
+	  mir_assert (insn->ops[i].mode == MIR_OP_REF
+		      && insn->ops[i].u.ref->item_type == MIR_proto_item);
+	  continue; /* We checked the operand during insn creation -- skip the prototype */
+	} else if (i == 1 && insn->ops[i].mode == MIR_OP_REF) {
+	  mir_assert (insn->ops[i].u.ref->item_type == MIR_import_item
+		      || insn->ops[i].u.ref->item_type == MIR_forward_item
+		      || insn->ops[i].u.ref->item_type == MIR_func_item);
+	  continue; /* We checked the operand during insn creation -- skip the func */
+	}
       }
       if (code == MIR_VA_ARG && i == 2) {
 	mir_assert (insn->ops[i].mode == MIR_OP_MEM);
@@ -1177,7 +1192,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_insn_t insn, size_t nop, int *out_p) {
 
   if (nop >= nops)
     return MIR_OP_BOUND;
-  if (code == MIR_CALL) {
+  if (MIR_call_code_p (code)) {
     MIR_op_t proto_op = insn->ops[0];
     MIR_proto_t proto;
 
@@ -1219,9 +1234,9 @@ MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_proto_t proto;
   size_t i = 0, insn_nops = insn_code_nops (code);
   
-  if  (code != MIR_CALL && nops != insn_nops) {
+  if  (! MIR_call_code_p (code) && nops != insn_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands");
-  } else if (code == MIR_CALL) {
+  } else if (MIR_call_code_p (code)) {
     if (nops < 2)
       (*error_func) (MIR_ops_num_error, "wrong number of call operands");
     if (ops[0].mode != MIR_OP_REF || ops[0].u.ref->item_type != MIR_proto_item)
@@ -1248,7 +1263,7 @@ MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
   MIR_op_t op;
   size_t i, nops = insn_code_nops (code);
   
-  if (code == MIR_CALL)
+  if (MIR_call_code_p (code))
     (*error_func) (MIR_call_op_error, "Use MIR_new_insn_arr for creating a call insn");
   va_start (argp, code);
   VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
@@ -1831,8 +1846,13 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   MIR_op_mode_t value_mode = op->value_mode;
   int move_p = code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV;
   
-  if (code == MIR_CALL && nop == 0)
-    return; /* do nothing: it is a prototype */
+  if (MIR_call_code_p (code)) {
+    if (nop == 0)
+      return; /* do nothing: it is a prototype */
+    if (nop == 1 && op->mode == MIR_OP_REF
+	&& (op->u.ref->item_type == MIR_import_item || op->u.ref->item_type == MIR_func_item))
+      return; /* do nothing: it is an immediate oeprand */
+  }
   if (code == MIR_VA_ARG && nop == 2)
     return; /* do nothing: this operand is used as a type */
   switch (op->mode) {
@@ -2090,6 +2110,114 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
     }
   }
   make_one_ret (func_item, ret_code == MIR_INSN_BOUND ? MIR_RET : ret_code);
+}
+
+static void set_inline_reg_map (MIR_reg_t old_reg, MIR_reg_t new_reg) {
+  while (VARR_LENGTH (MIR_reg_t, inline_reg_map) <= old_reg)
+    VARR_PUSH (MIR_reg_t, inline_reg_map, 0);
+  VARR_SET (MIR_reg_t, inline_reg_map, old_reg, new_reg);
+}
+
+/* Only simplified code should be inlined because we need already
+   extensions and one return.  */
+void MIR_inline (MIR_item_t func_item) {
+  int alloca_p;
+  size_t i, insn_nops, nargs, nvars;
+  const char *name;
+  MIR_type_t type, res_type;
+  MIR_var_t var;
+  MIR_reg_t ret_reg, old_reg, new_reg, temp_reg;
+  MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_label;
+  MIR_item_t called_func_item;
+  MIR_func_t func, called_func;
+  char buff[50];
+  
+  mir_assert (func_item->item_type == MIR_func_item);
+  func = func_item->u.func;
+  for (func_insn = DLIST_HEAD (MIR_insn_t, func->insns);
+       func_insn != NULL;
+       func_insn = next_func_insn) {
+    next_func_insn = DLIST_NEXT (MIR_insn_t, func_insn);
+    if (func_insn->code != MIR_INLINE)
+      continue;
+    call = func_insn;
+    mir_assert (call->ops[1].mode == MIR_OP_REF);
+    called_func_item = call->ops[1].u.ref;
+    while (called_func_item != NULL && called_func_item->item_type == MIR_import_item)
+      called_func_item = called_func_item->ref_def;
+    if (called_func_item == NULL || called_func_item->item_type != MIR_func_item)
+      continue;
+    called_func = called_func_item->u.func;
+    if (called_func->vararg_p)
+      continue; 
+    res_type = call->ops[0].u.ref->u.proto->res_type;
+    ret_label = MIR_new_label ();
+    MIR_insert_insn_after (func_item, call, ret_label);
+    func->n_inlines++;
+    nargs = called_func->nargs;
+    nvars = VARR_LENGTH (MIR_var_t, called_func->vars);
+    for (i = 0; i < nvars; i++) {
+      VARR_TRUNC (char, temp_string, 0);
+      sprintf (buff, ".c%d_", func->n_inlines);
+      VARR_PUSH_ARR (char, temp_string, buff, strlen (buff));
+      var = VARR_GET (MIR_var_t, called_func->vars, i);
+      type = var.type == MIR_T_F || var.type == MIR_T_D ? var.type : MIR_T_I64;
+      old_reg = MIR_reg (var.name, called_func);
+      VARR_PUSH_ARR (char, temp_string, var.name, strlen (var.name) + 1);
+      new_reg = MIR_new_func_reg (func, type, VARR_ADDR (char, temp_string));
+      set_inline_reg_map (old_reg, new_reg);
+      if (i < nargs) { /* Parameter passing */
+	new_insn = MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV,
+				 MIR_new_reg_op (new_reg), call->ops[i + (res_type == MIR_T_V ? 2 : 3)]);
+	MIR_insert_insn_before (func_item, ret_label, new_insn);
+      }
+    }
+    /* ??? No frame only alloca */
+    /* Add new insns: */
+    ret_reg = 0;
+    alloca_p = FALSE;
+    for (insn = DLIST_HEAD (MIR_insn_t, called_func->insns);
+	 insn != NULL;
+	 insn = DLIST_NEXT (MIR_insn_t, insn)) {
+      insn_nops = MIR_insn_nops (insn);
+      new_insn = MIR_copy_insn (insn);
+      mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_START && insn->code != MIR_VA_END);
+      if (insn->code == MIR_ALLOCA)
+	alloca_p = TRUE;
+      for (i = 0; i < insn_nops; i++)
+	switch (new_insn->ops[i].mode) {
+	case MIR_OP_REG:
+	  new_insn->ops[i].u.reg = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.reg);
+	  break;
+	case MIR_OP_MEM:
+	  if (insn->ops[i].u.mem.base != 0)
+	    new_insn->ops[i].u.mem.base = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.mem.base);
+	  if (insn->ops[i].u.mem.index != 0)
+	    new_insn->ops[i].u.mem.index = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.mem.index);
+	  break;
+	}
+      if (new_insn->code == MIR_RET || new_insn->code == MIR_FRET || new_insn->code == MIR_DRET) {
+	/* should be the last insn after simplification */
+	mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && new_insn->ops[0].mode == MIR_OP_REG
+		    &&  call->ops[0].mode == MIR_OP_REF && call->ops[0].u.ref->item_type == MIR_proto_item);
+	if (call->ops[0].u.ref->u.proto->res_type == MIR_T_V)
+	  continue;
+	ret_reg = new_insn->ops[0].u.reg;
+	new_insn = MIR_new_insn (new_insn->code == MIR_RET ? MIR_MOV
+				 : new_insn->code == MIR_FRET ? MIR_FMOV : MIR_DMOV,
+				 call->ops[2], MIR_new_reg_op (ret_reg));
+      }
+      MIR_insert_insn_before (func_item, ret_label, new_insn);
+    }
+    if (alloca_p) {
+      temp_reg = _MIR_new_temp_reg (MIR_T_I64, func);
+      new_insn = MIR_new_insn (MIR_BSTART, MIR_new_reg_op (temp_reg));
+      MIR_insert_insn_after (func_item, call, new_insn);
+      new_insn = MIR_new_insn (MIR_BEND, MIR_new_reg_op (temp_reg));
+      MIR_insert_insn_before (func_item, ret_label, new_insn);
+    }
+    MIR_remove_insn (func_item, call);
+  }
 }
 
 const char *_MIR_uniq_string (const char * str) {
@@ -2520,7 +2648,7 @@ static void write_insn (FILE *f, MIR_insn_t insn) {
   }
   if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
     /* first operand mode is undefined if it is a variable parameter insn */
-    mir_assert (code == MIR_CALL);
+    mir_assert (MIR_call_code_p (code));
     put_byte (f, TAG_EOI);
   }
 }
@@ -2607,7 +2735,6 @@ static void write_item (FILE *f, MIR_item_t item) {
   write_name (f, func->name);
   write_uint (f, func->vararg_p != 0);
   write_type (f, func->res_type);
-  write_uint (f, func->frame_size);
   for (i = 0; i < func->nargs; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i);
     write_type (f, var.type);
@@ -2977,7 +3104,6 @@ void MIR_read (FILE *f) {
 	if (TAG_TI8 > tag || tag > TAG_TBLOCK)
 	  (*error_func) (MIR_binary_io_error, "wrong func result type");
 	res_type = tag_type (tag);
-	u = read_uint (f, "wrong func frame size");
 	VARR_TRUNC (MIR_var_t, temp_vars, 0);
 	for (;;) {
 	  tag = read_token (f, &attr);
@@ -3104,7 +3230,7 @@ void MIR_read (FILE *f) {
 	MIR_append_insn (func, lab);
       }
       nop = insn_code_nops (insn_code);
-      mir_assert (nop != 0 || insn_code == MIR_CALL);
+      mir_assert (nop != 0 || MIR_call_code_p (insn_code));
       for (n = 0; (nop == 0 || n < nop) && read_operand (f, &op, func); n++)
 	VARR_PUSH (MIR_op_t, temp_insn_ops, op);
       if (nop != 0 && n < nop)

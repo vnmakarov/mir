@@ -343,7 +343,7 @@ static bb_insn_t create_bb_insn (MIR_insn_t insn, bb_t bb) {
   bb_insn->flag = FALSE;
   bb_insn->call_hard_reg_args = NULL;
   DLIST_INIT (dead_var_t, bb_insn->dead_vars);
-  if (insn->code == MIR_CALL)
+  if (MIR_call_code_p (insn->code))
     bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
   return bb_insn;
 }
@@ -406,7 +406,7 @@ static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
   bb_insn_t bb_insn = call_insn->data;
   
-  gen_assert (call_insn->code == MIR_CALL && hard_reg <= MAX_HARD_REG);
+  gen_assert (MIR_call_code_p (call_insn->code) && hard_reg <= MAX_HARD_REG);
   bitmap_set_bit_p (bb_insn->call_hard_reg_args, hard_reg);
 }
 
@@ -1010,7 +1010,8 @@ static void create_exprs (void) {
       MIR_insn_t insn = bb_insn->insn;
       
       if (! MIR_branch_code_p (insn->code) && ! MIR_ret_code_p (insn->code)
-	  && insn->code != MIR_LABEL && insn->code != MIR_CALL && insn->code != MIR_ALLOCA
+	  && insn->code != MIR_LABEL && ! MIR_call_code_p (insn->code)
+	  && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
 	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* After simplification we have only one store form: mem = reg.
 	     It is unprofitable to add the reg as an expression.  */
@@ -1054,7 +1055,9 @@ static void create_av_bitmaps (void) {
       
       if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)
+      if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* See create_expr comments: */
 	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
 	if (! find_expr (insn, &e)) {
@@ -1081,7 +1084,7 @@ static void create_av_bitmaps (void) {
 	  make_obsolete_var_exprs (op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg));
 	}
       }
-      if (insn->code == MIR_CALL) {
+      if (MIR_call_code_p (insn->code)) {
 	gen_assert (bb_insn->call_hard_reg_args != NULL);
 	bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs);
 	bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs);
@@ -1112,7 +1115,9 @@ static void cse_modify (void) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
 	continue;
-      if (insn->code != MIR_CALL && insn->code != MIR_ALLOCA && ! move_p (insn) && ! imm_move_p (insn)
+      if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* See create_expr comments: */
 	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
 	if (! find_expr (insn, &e)) {
@@ -1172,7 +1177,7 @@ static void cse_modify (void) {
 	  make_obsolete_var_exprs (op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg));
 	}
       }
-      if (insn->code == MIR_CALL) {
+      if (MIR_call_code_p (insn->code)) {
 	gen_assert (bb_insn->call_hard_reg_args != NULL);
 	bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs);
 	bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs);
@@ -1737,7 +1742,7 @@ static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
   MIR_op_t proto_op;
   MIR_proto_t proto;
   
-  if (insn->code == MIR_CALL) {
+  if (MIR_call_code_p (insn->code)) {
     proto_op = insn->ops[0];
     mir_assert (proto_op.mode == MIR_OP_REF && proto_op.u.ref->item_type == MIR_proto_item);
     proto = proto_op.u.ref->u.proto;
@@ -2453,7 +2458,7 @@ static void initiate_bb_live_info (bb_t bb, int moves_p) {
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg2);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg2);
     }
-    if (insn->code == MIR_CALL) {
+    if (MIR_call_code_p (insn->code)) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
       bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
       bitmap_ior (bb->live_gen, bb->live_gen, bb_insn->call_hard_reg_args);
@@ -2504,7 +2509,7 @@ static void add_bb_insn_dead_vars (void) {
 	var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (op.u.reg);
 	bitmap_clear_bit_p (live, var);
       }
-      if (insn->code == MIR_CALL)
+      if (MIR_call_code_p (insn->code))
 	bitmap_and_compl (live, live, call_used_hard_regs);
       for (i = 0; i < nops; i++) {
 	op = insn->ops[i];
@@ -2544,7 +2549,7 @@ static void add_bb_insn_dead_vars (void) {
 	bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
 	bitmap_clear_bit_p (live, early_clobbered_hard_reg2);
-      if (insn->code == MIR_CALL)
+      if (MIR_call_code_p (insn->code))
 	bitmap_ior (live, live, bb_insn->call_hard_reg_args);
     }
   }
@@ -2688,7 +2693,7 @@ static void build_live_ranges (void) {
 	else if (op.mode == MIR_OP_HARD_REG && out_p)
 	  incr_p |= make_reg_dead (op.u.hard_reg, TRUE, curr_point);
       }
-      if (insn->code == MIR_CALL) {
+      if (MIR_call_code_p (insn->code)) {
 	bitmap_for_each (call_used_hard_regs, make_dead);
 	bitmap_for_each (bb_insn->call_hard_reg_args, make_live);
 	bitmap_for_each (live_vars, make_live_through_call);
@@ -3204,7 +3209,7 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
       def_hr = op.u.hard_reg_mem.base;
       def_insn = hreg_refs_addr[def_hr].insn;
       def_insn_num = hreg_refs_addr[def_hr].insn_num;
-      gen_assert (def_insn->code == MIR_CALL || hreg_refs_addr[def_hr].nop == 0);
+      gen_assert (MIR_call_code_p (def_insn->code) || hreg_refs_addr[def_hr].nop == 0);
       gen_assert (! hreg_refs_addr[def_hr].del_p);
       src_op = def_insn->ops[1];
       if (obsolete_hard_reg_op_p (src_op, def_insn_num))
@@ -3404,7 +3409,7 @@ static void combine (void) {
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
 	setup_hreg_ref (early_clobbered_hard_reg2, insn, 0 /* whatever */, curr_insn_num, TRUE);
       VARR_TRUNC (MIR_reg_t, dead_def_regs, 0);
-      if ((code = insn->code) == MIR_CALL) {
+      if (MIR_call_code_p ((code = insn->code))) {
 	for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
 	  if (bitmap_bit_p (call_used_hard_regs, hr)) {
 	    setup_hreg_ref (hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
@@ -3512,7 +3517,8 @@ static void dead_code_elimination (MIR_item_t func) {
       }
       if (! reg_def_p)
 	dead_p = FALSE;
-      if (dead_p && insn->code != MIR_CALL && insn->code != MIR_ALLOCA
+      if (dead_p && ! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
 	  && ! (insn->ops[0].mode == MIR_OP_HARD_REG
 	        && (insn->ops[0].u.hard_reg == BP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
 #if MIR_GEN_DEBUG
@@ -3524,7 +3530,7 @@ static void dead_code_elimination (MIR_item_t func) {
 	gen_delete_insn (func, insn);
 	continue;
       }
-      if (insn->code == MIR_CALL)
+      if (MIR_call_code_p (insn->code))
 	bitmap_and_compl (live, live, call_used_hard_regs);
       for (i = 0; i < nops; i++) {
 	op = insn->ops[i];
@@ -3559,7 +3565,7 @@ static void dead_code_elimination (MIR_item_t func) {
 	bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
 	bitmap_clear_bit_p (live, early_clobbered_hard_reg2);
-      if (insn->code == MIR_CALL)
+      if (MIR_call_code_p (insn->code))
 	bitmap_ior (live, live, bb_insn->call_hard_reg_args);
     }
   }

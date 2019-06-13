@@ -103,10 +103,11 @@ typedef enum {
   /* 1st operand is a prototype, 2nd one is ref or op containing func
      address, 3rd and subsequent ops are optional result (if result in
      the prototype is not of void type), call arguments. */
-  MIR_CALL,
+  MIR_CALL, MIR_INLINE,
   /* 1 operand insn: */
   MIR_RET, MIR_FRET, MIR_DRET,
-  MIR_ALLOCA,
+  MIR_ALLOCA, /* 2 operands: result address and size  */
+  MIR_BSTART, MIR_BEND, /* block start: result address; block end: address from block start */
   /* Special insns: */
   MIR_VA_ARG, /* result is arg address, operands: va_list addr and memory */
   MIR_VA_START, MIR_VA_END, /* operand is va_list */
@@ -220,7 +221,7 @@ DEF_VARR (MIR_var_t);
 typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
-  uint32_t nargs, last_temp_num;
+  uint32_t nargs, last_temp_num, n_inlines;
   MIR_type_t res_type;
   char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *vars; /* args and locals but temps */
@@ -307,6 +308,10 @@ static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
 	  || code == MIR_FBGT || code == MIR_DBGT || code == MIR_FBGE || code == MIR_DBGE);
 }
 
+static inline int MIR_call_code_p (MIR_insn_code_t code) {
+  return code == MIR_CALL || code == MIR_INLINE;
+}
+
 static inline int MIR_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_JMP || code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS
 	  || code == MIR_BEQ || code == MIR_BEQS || code == MIR_BNE || code == MIR_BNES
@@ -391,6 +396,7 @@ extern void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func, int newl
 extern void MIR_output (FILE *f);
 
 extern void MIR_simplify_func (MIR_item_t func, int mem_float_p);
+extern void MIR_inline (MIR_item_t func_item);
 
 #if MIR_IO
 extern void MIR_write (FILE *f);
@@ -442,6 +448,9 @@ extern void *va_arg_builtin (void *p, uint64_t t);
 extern void va_start_interp_builtin (void *p, void *a);
 extern void va_end_interp_builtin (void *p);
   
+extern void *_MIR_get_bstart_builtin (void);
+extern void *_MIR_get_bend_builtin (void);
+
 extern void *_MIR_get_interp_shim (void *handler);
 extern void *_MIR_get_thunk (MIR_item_t item);
 extern void _MIR_redirect_thunk (void *thunk, void *to);

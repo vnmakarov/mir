@@ -2,6 +2,25 @@
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+void *_MIR_get_bstart_builtin (void) {
+  static unsigned char bstart_code[] =
+    {
+     0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */
+     0xc3,                         /* ret */
+    };
+  return _MIR_publish_code (bstart_code, sizeof (bstart_code));
+}
+void *_MIR_get_bend_builtin (void) {
+  static unsigned char bend_code[] =
+    {
+     0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
+     0x48, 0x89, 0xfc,       /* rsp = rdi */
+     0xff, 0xe0,             /* jmp *rax */
+    };
+  return _MIR_publish_code (bend_code, sizeof (bend_code));
+  
+}
+
 struct x86_64_va_list {
   uint32_t gp_offset, fp_offset;
   uint64_t *overflow_arg_area, *reg_save_area;
