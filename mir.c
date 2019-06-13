@@ -1048,12 +1048,23 @@ void MIR_finish_module (void) {
   curr_module = NULL;
 }
 
-static void replace_global (MIR_item_t item) {
-  MIR_item_t tab_item;
-  
-  if ((tab_item = find_item (MIR_item_name (item), &environment_module)) != item && tab_item != NULL)
-    HTAB_DO (MIR_item_t, module_item_tab, tab_item, HTAB_DELETE, tab_item);
-  HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
+static void setup_global (const char *name, void *addr, MIR_item_t def) {
+  MIR_item_t item, tab_item;
+  MIR_module_t saved = curr_module;
+
+  curr_module = &environment_module;
+  /* Use import for proto representation: */
+  item = new_export_import_forward (name, MIR_import_item, "import", TRUE);
+  if ((tab_item = find_item (MIR_item_name (item), &environment_module)) != item && tab_item != NULL) {
+    free (item);
+  } else {
+    HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
+    DLIST_APPEND (MIR_item_t, environment_module.items, item);
+    tab_item = item;
+  }
+  tab_item->addr = addr;
+  tab_item->ref_def = def;
+  curr_module = saved;
 }
 
 static void undefined_interface (void) {
@@ -1113,23 +1124,14 @@ void MIR_load_module (MIR_module_t m) {
       mir_assert (item->item_type != MIR_export_item
 		  && item->item_type != MIR_import_item
 		  && item->item_type != MIR_forward_item);
-      replace_global (item);
+      setup_global (MIR_item_name (item), item->addr, item);
     }
   }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
 
 void MIR_load_external (const char *name, void *addr) {
-  MIR_item_t item;
-  MIR_module_t saved = curr_module;
-
-  curr_module = &environment_module;
-  /* Use import for proto representation: */
-  item = new_export_import_forward (name, MIR_import_item, "import", TRUE);
-  DLIST_APPEND (MIR_item_t, environment_module.items, item);
-  replace_global (item);
-  item->addr = addr;
-  curr_module = saved;
+  setup_global (name, addr, NULL);
 }
 
 void MIR_link (void (*set_interface) (MIR_item_t item)) {
