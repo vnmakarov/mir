@@ -853,8 +853,7 @@ static struct pattern patterns[] = {
   {MIR_FBNE, "l r r", "Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "l r r", "66 Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
 
-  {MIR_CALL, "X r h0 $", "Y FF /2 R1"},  /* call *r1 -- function call */
-  {MIR_CALL, "X r $", "Y FF /2 R1"},     /* call *r1 -- procedure call */
+  {MIR_CALL, "X r $", "Y FF /2 R1"},  /* call *r1 */
 
   /* ??? Returns */
   {MIR_RET, "h0", "C3"},  /* ret */
