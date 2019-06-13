@@ -13,8 +13,8 @@ int main (int argc, char *argv[]) {
   int res;
   uint64_t (*fun_addr) (void);
   
-  if (argc != 3) {
-    fprintf (stderr, "%s: (-i|-g) <input mir file>\n", argv[0]);
+  if (argc != 2 && argc != 3) {
+    fprintf (stderr, "%s: [-i|-g] <input mir file>\n", argv[0]);
     exit (1);
   }
   interpr_p = gen_p = FALSE;
@@ -22,11 +22,11 @@ int main (int argc, char *argv[]) {
     interpr_p = TRUE;
   } else if (strcmp (argv[1], "-g") == 0) {
     gen_p = TRUE;
-  } else {
+  } else if (argc == 3) {
     fprintf (stderr, "%s: unknown option %s\n", argv[0], argv[1]);
     exit (1);
   }
-  mir_fname = argv[2];
+  mir_fname = argv[argc - 1];
   MIR_init ();
   MIR_scan_string (read_file (mir_fname));
   mir_module = DLIST_HEAD (MIR_module_t, MIR_modules);
@@ -43,6 +43,10 @@ int main (int argc, char *argv[]) {
       if (strcmp (f->u.func->name, "main") == 0)
 	main_func = f;
     }
+  if (! gen_p && ! interpr_p) {
+    fprintf (stderr, "+++++++++++++++++++After simplification:+++++++++++++++\n");
+    MIR_output (stderr);
+  }
   if (main_func == NULL) {
     fprintf (stderr, "%s: cannot execute program w/o main function\n", argv[0]);
     exit (1);
@@ -51,6 +55,11 @@ int main (int argc, char *argv[]) {
   MIR_load_external ("abort", abort);
   MIR_load_external ("exit", exit);
   MIR_load_external ("printf", printf);
+  MIR_inline (main_func);
+  if (! gen_p && ! interpr_p) {
+    fprintf (stderr, "+++++++++++++++++++After inlining:+++++++++++++++\n");
+    MIR_output (stderr);
+  }
   if (interpr_p) {
     MIR_interp_init ();
     MIR_link (MIR_set_interp_interface);
