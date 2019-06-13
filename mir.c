@@ -1729,10 +1729,14 @@ static void output_item (FILE *f, MIR_item_t item) {
     fprintf (f, ", ...");
   fprintf (f, "\n");
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
-  fprintf (f, "\tlocal\t");
   for (i = 0; i < nlocals; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i + func->nargs);
-    fprintf (f, i == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (var.type), var.name);
+    if (i % 8 == 0) {
+      if (i != 0)
+	fprintf (f, "\n");
+      fprintf (f, "\tlocal\t");
+    }
+    fprintf (f, i % 8 == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (var.type), var.name);
   }
   fprintf (f, "\n# frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
 	   func->nargs, func->nargs == 1 ? "" : "s", (unsigned) nlocals, nlocals == 1 ? "" : "s");
