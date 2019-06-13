@@ -468,7 +468,7 @@ static void make_prolog_epilog (MIR_item_t func_item,
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
   MIR_op_t sp_reg_op, fp_reg_op;
-  size_t i, n, saved_hard_regs_num, overall_frame_size;
+  size_t i, n, saved_hard_regs_num, stack_slots_size;
 
   assert (func_item->item_type == MIR_func_item);
   func = func_item->u.func;
@@ -494,13 +494,13 @@ static void make_prolog_epilog (MIR_item_t func_item,
 			   _MIR_new_hard_reg_mem_op (MIR_T_I64, -8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
 			   fp_reg_op);
   gen_add_insn_before (func_item, anchor, new_insn); /* -8(sp) = bp */
-  overall_frame_size = stack_slots_num * 8;
+  stack_slots_size = stack_slots_num * 8;
   /* Use add for matching LEA: */
   new_insn = MIR_new_insn (MIR_ADD, fp_reg_op, sp_reg_op, MIR_new_int_op (-8));
   gen_add_insn_before (func_item, anchor, new_insn);  /* bp = sp - 8 */
   /* Saving callee saved hard registers: */
   new_insn = MIR_new_insn (MIR_SUB, sp_reg_op, sp_reg_op,
-			   MIR_new_int_op (overall_frame_size + 8 + 8 * saved_hard_regs_num));
+			   MIR_new_int_op (stack_slots_size + 8 + 8 * saved_hard_regs_num));
   gen_add_insn_before (func_item, anchor, new_insn); /* sp -= size of stack slots, bp, and saved regs */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
@@ -517,7 +517,7 @@ static void make_prolog_epilog (MIR_item_t func_item,
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (! call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (i),
-			       _MIR_new_hard_reg_mem_op (MIR_T_I64, (n++ - saved_hard_regs_num) * 8 - overall_frame_size,
+			       _MIR_new_hard_reg_mem_op (MIR_T_I64, (n++ - saved_hard_regs_num) * 8 - stack_slots_size,
 							 SP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (func_item, anchor, new_insn);  /* hard reg = disp(sp) */
     }
