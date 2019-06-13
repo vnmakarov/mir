@@ -245,6 +245,7 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_FBLE: case MIR_DBLE: out_bfcmp (f, ops, "<="); break;
   case MIR_FBGT: case MIR_DBGT: out_bfcmp (f, ops, ">"); break;
   case MIR_FBGE: case MIR_DBGE: out_bfcmp (f, ops, ">="); break;
+  case MIR_ALLOCA: out_op (f, ops[0]); fprintf (f, " = alloca ("); out_op (f, ops[1]); fprintf (f, ");\n"); break;
   case MIR_CALL: case MIR_INLINE: {
     MIR_proto_t proto;
     size_t start = 2;
@@ -322,7 +323,6 @@ void out_item (FILE *f, MIR_item_t item) {
 	     var.name);
   }
   fprintf (f, ") {\n");
-  fprintf (f, "  uint8_t _frame[%lu];\n  int64_t fp = (int64_t) _frame;\n", curr_func->frame_size);
   for (i = 0; i < curr_func->nargs; i++) {
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
     mir_assert (var.type != MIR_T_V);
