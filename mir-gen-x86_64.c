@@ -153,19 +153,19 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
   if (proto->args == NULL) {
     nargs = 0;
   } else {
-    mir_assert (nops >= VARR_LENGTH (MIR_var_t, proto->args)
+    gen_assert (nops >= VARR_LENGTH (MIR_var_t, proto->args)
 		&& (proto->vararg_p || nops - start == VARR_LENGTH (MIR_var_t, proto->args)));
     nargs = VARR_LENGTH (MIR_var_t, proto->args);
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
   for (size_t i = start; i < nops; i++) {
     arg_op = call_insn->ops[i];
-    mir_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
+    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else {
       mode = call_insn->ops[i].value_mode; // ??? smaller ints
-      mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT
+      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT
 		  || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE);
       if (mode == MIR_OP_FLOAT)
 	(*MIR_get_error_func ()) (MIR_call_op_error,
@@ -193,7 +193,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
       mem_op = _MIR_new_hard_reg_mem_op (mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (new_insn_code, mem_op, arg_op);
-      mir_assert (prev_call_insn != NULL); /* call_insn should not be the first after simplification */
+      gen_assert (prev_call_insn != NULL); /* call_insn should not be the first after simplification */
       MIR_insert_insn_after (func_item, prev_call_insn, new_insn);
       prev_insn = DLIST_PREV (MIR_insn_t, new_insn); next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
       create_new_bb_insns (func_item, prev_insn, next_insn);
@@ -208,15 +208,9 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (xmm_args));
     gen_add_insn_before (func_item, call_insn, new_insn);
   }
-#if 0
-  /* vector args number for varags or no prototype calls */
-  new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (0));
-  MIR_insert_insn_before (func_item, call_insn, new_insn);
-  create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, new_insn), call_insn);
-#endif
   if (proto->res_type != MIR_T_V) { /* assign return register to call result op */
     ret_reg_op = call_insn->ops[2];
-    mir_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
+    gen_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
     if (proto->res_type == MIR_T_F) {
       new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
     } else if (proto->res_type == MIR_T_D) {
