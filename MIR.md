@@ -313,10 +313,24 @@
   * The subsequent operands are arguments.  Their types and number and should be the same as in the prototype
     * Integer arguments are truncated according to integer prototype argument type
   
+### MIR_INLINE insn
+  * This insn is analogous to `MIR_CALL` but after linking this insn
+    will be changed by inlined function body if it is possible
+  * Calls of vararg functions are never inlined
+  
 ### MIR_ALLOCA insn
   * Reserve memory on the stack whose size is given as the 2nd operand and assign the memory address to the 1st operand
   * The reserved memory will be aligned according target ABI
 
+### MIR_BSTART and MIR_BEND insns
+  * MIR users can use them implement blocks with automatic
+    deallocation of memory allocated by `MIR_ALLOCA` inside the
+    blocks.  But mostly these insns are used to implement call
+    inlining of functions using alloca
+  * The both insns use one operand
+  * The first insn saves the stack pointer in the operand
+  * The second insn restores stack pointer from the operand
+  
 ### MIR_VA_START, MIR_VA_ARG, and MIR_VA_END insns
   * These insns are only for variable number arguments functions
   * `MIR_VA_START` and `MIR_VA_END` have one input operand, an address

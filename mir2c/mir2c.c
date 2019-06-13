@@ -245,7 +245,7 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_FBLE: case MIR_DBLE: out_bfcmp (f, ops, "<="); break;
   case MIR_FBGT: case MIR_DBGT: out_bfcmp (f, ops, ">"); break;
   case MIR_FBGE: case MIR_DBGE: out_bfcmp (f, ops, ">="); break;
-  case MIR_CALL: {
+  case MIR_CALL: case MIR_INLINE: {
     MIR_proto_t proto;
     size_t start = 2;
     

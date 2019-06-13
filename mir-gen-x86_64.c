@@ -150,6 +150,8 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
   MIR_insn_t next_call_insn = DLIST_NEXT (MIR_insn_t, call_insn);
   
+  if (call_insn->code == MIR_INLINE)
+    call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -157,6 +159,12 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
 		&& (proto->vararg_p || nops - start == VARR_LENGTH (MIR_var_t, proto->args)));
     nargs = VARR_LENGTH (MIR_var_t, proto->args);
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
+  }
+  if (call_insn->ops[1].mode != MIR_OP_REG && call_insn->ops[1].mode != MIR_OP_HARD_REG) {
+    temp_op = MIR_new_reg_op (gen_new_temp_reg (MIR_T_I64, func_item->u.func));
+    new_insn = MIR_new_insn (MIR_MOV, temp_op, call_insn->ops[1]);
+    call_insn->ops[1] = temp_op;
+    gen_add_insn_before (func_item, call_insn, new_insn);
   }
   for (size_t i = start; i < nops; i++) {
     arg_op = call_insn->ops[i];
@@ -390,7 +398,7 @@ static void machinize (MIR_item_t func_item) {
       new_insn = MIR_new_insn_arr (MIR_CALL, 5, ops);
       gen_add_insn_before (func_item, insn, new_insn);
       gen_delete_insn (func_item, insn);
-    } else if (code == MIR_CALL) {
+    } else if (MIR_call_code_p (code)) {
       machinize_call (func_item, insn);
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
@@ -736,8 +744,11 @@ static struct pattern patterns[] = {
   {MIR_D2F, "r md", "F2 X 0F 5A r0 m1"},  /* cvtsd2ss r0,m1 */
 
   /* lea r0, 7(r1); and r0, r0, -8; sub sp, r0; mov r0, sp */
-  {MIR_ALLOCA, "r r",  "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 2B h04 R0; X 8B r0 H04"},
-  {MIR_ALLOCA, "r i2",  "X 81 /5 H04 I1; X 8B r0 H04"},  /* sub sp, i2; mov r0, sp */
+  {MIR_ALLOCA, "r r", "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 2B h04 R0; X 8B r0 H04"},
+  {MIR_ALLOCA, "r i2", "X 81 /5 H04 I1; X 8B r0 H04"},  /* sub sp, i2; mov r0, sp */
+  
+  {MIR_BSTART, "r", "X 8B r0 H4"}, /* r0 = sp */
+  {MIR_BEND, "r", "X 8B h4 R0"},   /* sp = r0 */
   
   {MIR_NEG, "r 0",  "X F7 /3 R1"},  /* neg r0 */
   {MIR_NEG, "m3 0", "X F7 /3 m1"},  /* neg m0 */
@@ -915,7 +926,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       p++;
     if (*p == '$')
       return TRUE;
-    if (insn->code == MIR_CALL && nop >= nops)
+    if (MIR_call_code_p (insn->code) && nop >= nops)
       return FALSE;
     gen_assert (nop < nops);
     op = insn->ops[nop];

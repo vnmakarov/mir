@@ -53,7 +53,7 @@ typedef enum {
   IC_LDI8 = MIR_INSN_BOUND, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64,
   IC_LDF, IC_LDD,
   IC_STI8, IC_STU8, IC_STI16, IC_STU16, IC_STI32, IC_STU32, IC_STI64,
-  IC_STF, IC_STD, IC_MOVI, IC_MOVP, IC_MOVF, IC_MOVD,
+  IC_STF, IC_STD, IC_MOVI, IC_MOVP, IC_MOVF, IC_MOVD, IC_IMM_CALL,
   IC_INSN_BOUND
 } MIR_full_insn_code_t;
 
@@ -108,6 +108,7 @@ static void push_mem (MIR_op_t op) {
 static void redirect_interface_to_interp (MIR_item_t func_item);
 
 static void generate_icode (MIR_item_t func_item) {
+  int imm_call_p;
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, label;
   MIR_val_t v;
@@ -221,15 +222,25 @@ static void generate_icode (MIR_item_t func_item) {
       v.i = get_reg (ops[2], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
       break;
     default:
-      v = get_icode (code); VARR_PUSH (MIR_val_t, code_varr, v);
-      if (code == MIR_CALL) {
+      imm_call_p = FALSE;
+      if (MIR_call_code_p (code))
+	imm_call_p = (ops[1].mode == MIR_OP_REF
+		      && (ops[1].u.ref->item_type == MIR_import_item
+			  || ops[1].u.ref->item_type == MIR_func_item));
+      v = get_icode (imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code);
+      VARR_PUSH (MIR_val_t, code_varr, v);
+      if (MIR_call_code_p (code)) {
 	v.i = nops; VARR_PUSH (MIR_val_t, code_varr, v);
 	v.a = insn; VARR_PUSH (MIR_val_t, code_varr, v);
       }
       for (i = 0; i < nops; i++) {
-	if (code == MIR_CALL && i == 0) { /* prototype ??? */
+	if (i == 0 && MIR_call_code_p (code)) { /* prototype ??? */
 	  mir_assert (ops[i].mode == MIR_OP_REF && ops[i].u.ref->item_type == MIR_proto_item);
 	  v.a = ops[i].u.ref->u.proto;
+	} else if (i == 1 && imm_call_p) {
+	  mir_assert (ops[i].u.ref->item_type == MIR_import_item
+		      || ops[i].u.ref->item_type == MIR_func_item);
+	  v.a = ops[i].u.ref->addr;
 	} else if (code == MIR_VA_ARG && i == 2) { /* type */
 	  mir_assert (ops[i].mode == MIR_OP_MEM);
 	  v.i = ops[i].u.mem.type;
@@ -398,6 +409,8 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
   case IC_STI8: case IC_STU8: case IC_STI16: case IC_STU16:
   case IC_STI32: case IC_STU32: case IC_STI64: case IC_STF: case IC_STD:
     break;
+  case IC_IMM_CALL:
+    break;
   default:
     op_mode = _MIR_insn_code_op_mode (code, 0, &out_p);
     if (!out_p)
@@ -419,6 +432,34 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
   fprintf (stderr, "\n");
 }
 #endif
+
+static void *(*bstart_builtin) (void);
+static void (*bend_builtin) (void *);
+
+static code_t call_insn_execute (code_t pc, MIR_val_t *bp, code_t ops, int imm_p) {
+  int64_t nops = get_i (ops); /* #args w/o nop and insn */
+  MIR_insn_t insn = get_a (ops + 1);
+  MIR_proto_t proto = get_a (ops + 2);
+  void *f = imm_p ? get_a (ops + 3) : *get_aop (bp, ops + 3);
+  size_t start = proto->res_type == MIR_T_V ? 4 : 5;
+  MIR_val_t *res = &bp [get_i (ops + 4)];
+  
+  if (VARR_EXPAND (MIR_val_t, args_varr, nops))
+    args = VARR_ADDR (MIR_val_t, args_varr);
+  
+  for (size_t i = start; i < nops + 2; i++)
+    args[i - start] = bp [get_i (ops + i)];
+  
+#if MIR_INTERP_TRACE
+  trace_insn_ident += 2;
+#endif
+  call (&insn->ops[start - 2], proto, f, res, nops - start + 2, args);
+#if MIR_INTERP_TRACE
+  trace_insn_ident -= 2;
+#endif
+  pc += nops + 2; /* nops itself and the call insn */
+  return pc;
+}
 
 static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
   code_t pc, ops, code = func_desc->code;
@@ -500,9 +541,10 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [MIR_BGE] = &&L_MIR_BGE; ltab [MIR_BGES] = &&L_MIR_BGES;
       ltab [MIR_UBGE] = &&L_MIR_UBGE; ltab [MIR_UBGES] = &&L_MIR_UBGES;
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
-      ltab [MIR_CALL] = &&L_MIR_CALL;
+      ltab [MIR_CALL] = &&L_MIR_CALL; ltab [MIR_INLINE] = &&L_MIR_INLINE;
       ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET; ltab [MIR_DRET] = &&L_MIR_DRET;
-      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA; ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG;
+      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA; ltab [MIR_BSTART] = &&L_MIR_BSTART;
+      ltab [MIR_BEND] = &&L_MIR_BEND; ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG;
       ltab [MIR_VA_START] = &&L_MIR_VA_START; ltab [MIR_VA_END] = &&L_MIR_VA_END;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
@@ -516,6 +558,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [IC_STF] = &&L_IC_STF; ltab [IC_STD] = &&L_IC_STD;
       ltab [IC_MOVI] = &&L_IC_MOVI; ltab [IC_MOVP] = &&L_IC_MOVP;
       ltab [IC_MOVF] = &&L_IC_MOVF; ltab [IC_MOVD] = &&L_IC_MOVD;
+      ltab [IC_IMM_CALL] = &&L_IC_IMM_CALL;
       v.a = ltab; return v;
     }
   
@@ -688,30 +731,9 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       CASE (MIR_FBGE, 3);  BFCMP (>=); END_INSN;
       CASE (MIR_DBGE, 3);  BDCMP (>=); END_INSN;
 
-      CASE (MIR_CALL, 0); {
-	int64_t nops = get_i (ops); /* #args w/o nop and insn */
-	MIR_insn_t insn = get_a (ops + 1);
-	MIR_proto_t proto = get_a (ops + 2);
-	void *f = *get_aop (bp, ops + 3);
-	size_t start = proto->res_type == MIR_T_V ? 4 : 5;
-	MIR_val_t *res = &bp [get_i (ops + 4)];
-	
-	if (VARR_EXPAND (MIR_val_t, args_varr, nops))
-	  args = VARR_ADDR (MIR_val_t, args_varr);
-	
-	for (size_t i = start; i < nops + 2; i++)
-	  args[i - start] = bp [get_i (ops + i)];
-	
-#if MIR_INTERP_TRACE
-	trace_insn_ident += 2;
-#endif
-	call (&insn->ops[start - 2], proto, f, res, nops - start + 2, args);
-#if MIR_INTERP_TRACE
-	trace_insn_ident -= 2;
-#endif
-	pc += nops + 2; /* nops itself and the call insn */
-      }
-      END_INSN;
+      CASE (MIR_CALL, 0); pc = call_insn_execute (pc, bp, ops, FALSE); END_INSN;
+      CASE (IC_IMM_CALL, 0); pc = call_insn_execute (pc, bp, ops, TRUE); END_INSN;
+      CASE (MIR_INLINE, 0); mir_assert (FALSE); END_INSN; /* should be not here */
       
       CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
       CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
@@ -722,6 +744,13 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
 	r = get_2iops (bp, ops, &s); *r = (uint64_t) alloca (s);
       }
       END_INSN;
+      CASE (MIR_BSTART, 1); {
+	void **p = get_aop (bp, ops);
+
+	*p = bstart_builtin ();
+      }
+      END_INSN;
+      CASE (MIR_BEND, 1); { bend_builtin (*get_aop (bp, ops)); } END_INSN;
       CASE (MIR_VA_ARG, 3); {
 	int64_t *r, va, tp;
 	
@@ -923,6 +952,8 @@ void MIR_interp_init (void) {
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
+  bstart_builtin = _MIR_get_bstart_builtin ();
+  bend_builtin = _MIR_get_bend_builtin ();
 }
 
 void MIR_interp_finish (void) {
