@@ -223,7 +223,7 @@ typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
   uint32_t frame_size;
-  uint32_t nargs, ntemps;
+  uint32_t nargs, last_temp_num;
   MIR_type_t res_type;
   char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *vars; /* args and locals but temps */
