@@ -1,5 +1,5 @@
 ma:     module
-alloca: func i64, 0, i32:n
+alloca: func i64, i32:n
         local i64:m
 	alloca m, 5
 	alloca m, 5

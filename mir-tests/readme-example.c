@@ -6,9 +6,9 @@ static void create_program (void) {
   const char *str = "\n\
 m_sieve:  module\n\
           export sieve\n\
-sieve:    func i32, 819000, i32:N\n\
+sieve:    func i32, i32:N\n\
           local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
-          mov flags, fp\n\
+          alloca flags, 819000\n\
           mov iter, 0\n\
 loop:     bge fin, iter, N\n\
           mov count, 0;  mov i, 0\n\
@@ -36,7 +36,7 @@ p_printf: proto v, p, i32\n\
 p_sieve:  proto i32, i32\n\
           export ex100\n\
           import sieve, printf\n\
-ex100:    func v, 0\n\
+ex100:    func v\n\
           local i64:r\n\
           call p_sieve, sieve, r, 100\n\
           call p_printf, printf, format, r\n\

@@ -4,7 +4,7 @@ m:		module
 exit_p:		proto  v, i64
 printf_p:	proto  v, p, ...
 		import printf, exit
-fun:		func v, 0, i64:double_p, ...
+fun:		func v, i64:double_p, ...
 		local i64:va, i64:a
 		alloca va, 24 # .va_list_size ???
 		va_start va
@@ -20,7 +20,7 @@ double:
                 ret 0
 endfunc
 fun_p:	        proto  v, i64, ...
-main:		func v, 0
+main:		func v
 		local i64:i, d:r
 		mov i, 42
 		dmov r, 4.2

@@ -5,7 +5,7 @@ MIR_item_t create_mir_func_with_loop (MIR_module_t *m) {
   
   if (m != NULL)
     *m = MIR_new_module ("m");
-  func = MIR_new_func ("loop", MIR_T_I64, 0, 1, MIR_T_I64, "arg1");
+  func = MIR_new_func ("loop", MIR_T_I64, 1, MIR_T_I64, "arg1");
   R2 = MIR_new_func_reg (func->u.func, MIR_T_I64, "count");
   ARG1 = MIR_reg ("arg1", func->u.func);
   fin = MIR_new_label (); cont = MIR_new_label ();

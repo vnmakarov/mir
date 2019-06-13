@@ -4,9 +4,9 @@ MIR_item_t create_mir_func_sieve (size_t *len, MIR_module_t *m_res) {
   MIR_module_t m;
   const char *str = "\n\
 m_sieve: module\n\
-sieve:   func i64, 819000\n\
+sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
-         mov flags, fp\n\
+         alloca flags, 819000\n\
          mov iter, 0\n\
 loop:    bge fin, iter, 1000\n\
          mov count, 0;  mov i, 0\n\

@@ -4,7 +4,7 @@ m_hi:    module\n\
 proto:	 proto i32, i32:ch\n\
 	 import print\n\
          export hi\n\
-hi:      func i32, 819000\n\
+hi:      func i32\n\
          local i64:h, i64:i, i64:exc, i64:nl, i64:r, i64:temp\n\
          mov h, 104\n\
          call proto, print, r, h\n\
