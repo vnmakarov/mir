@@ -36,7 +36,6 @@ int _MIR_reserved_ref_name_p (const char *name) {
 
 /* Reserved names:
    fp - frame pointer
-   t<number> - a temp reg
    hr<number> - a hardware reg
    lc<number> - a temp item */
 int _MIR_reserved_name_p (const char *name) {
