@@ -1123,9 +1123,13 @@ static void cse_modify (void) {
 	op = MIR_new_reg_op (e->temp_reg);
 	type = MIR_reg_type (e->temp_reg, curr_func_item->u.func);
 	move_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+#ifdef NDEBUG
+	MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
+	gen_assert (out_p);
+#endif
 	if (! bitmap_bit_p (av, e->num)) {
 	  bitmap_set_bit_p (av, e->num);
-	  new_insn = MIR_new_insn (move_code, op, insn->ops[0]); /* result is always 0-th op */
+	  new_insn = MIR_new_insn (move_code, op, insn->ops[0]);
 	  new_bb_insn = create_bb_insn (new_insn, bb);
 	  MIR_insert_insn_after (curr_func_item, insn, new_insn);
 	  DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
@@ -1139,7 +1143,7 @@ static void cse_modify (void) {
 	  }
 #endif
 	} else {
-	  new_insn = MIR_new_insn (move_code, insn->ops[0], op); /* result is always 0-th op */
+	  new_insn = MIR_new_insn (move_code, insn->ops[0], op);
 	  gen_add_insn_after (curr_func_item, insn, new_insn);
 #if MIR_GEN_DEBUG
 	  if (debug_file != NULL) {
@@ -1830,7 +1834,15 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
       
   default: ccp_res = CCP_VARYING; goto non_const;
   }
-  var_occ = insn->ops[0].data; /* If insn has a result, it is always zero-th operand.  */
+#ifdef NDEBUG
+  {
+    int out_p;
+
+    MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
+    gen_assert (out_p);
+  }
+#endif
+  var_occ = insn->ops[0].data;
   val_kind = var_occ->val_kind;
   gen_assert (var_occ->def == NULL && (val_kind == CCP_UNKNOWN || val_kind == CCP_CONST));
   var_occ->val_kind = CCP_CONST;
@@ -2211,7 +2223,15 @@ static int ccp_modify (void) {
 	}
 #endif
 	op = val.uns_p ? MIR_new_uint_op (val.u.u) : MIR_new_int_op (val.u.i);
-	insn = MIR_new_insn (MIR_MOV, bb_insn->insn->ops[0], op); /* result is always 0-th op */
+#ifdef NDEBUG
+	{
+	  int out_p;
+	  
+	  MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
+	  gen_assert (out_p);
+	}
+#endif
+	insn = MIR_new_insn (MIR_MOV, bb_insn->insn->ops[0], op);
 	MIR_insert_insn_before (curr_func_item, bb_insn->insn, insn);
 	MIR_remove_insn (curr_func_item, bb_insn->insn);
 	insn->data = bb_insn;
