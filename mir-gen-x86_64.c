@@ -581,8 +581,9 @@ struct pattern {
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
      c<value> - address of 32-bit or 64-bit constant in memory pool (we keep always 64-bit in memory pool. x86_64 is LE)
-     h<one or two digits> - hardware register with given number in reg of ModRM:reg; one bit of 8-15 in REX.R
-     H<one or two digits> - hardware register with given number in rm of MOD-RM with and mod=3 (register); one bit of 8-15 in REX.B
+     h<one or two hex digits> - hardware register with given number in reg of ModRM:reg; one bit of 8-15 in REX.R
+     H<one or two hex digits> - hardware register with given number in rm of MOD-RM with and mod=3 (register);
+                                one bit of 8-15 in REX.B
      v<value> - 8-bit immediate with given hex value
      V<value> - 32-bit immediate with given hex value
   */
