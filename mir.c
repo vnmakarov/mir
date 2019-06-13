@@ -21,7 +21,7 @@ static MIR_error_func_t error_func;
 
 static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *message) {
   fprintf (stderr, "%s\n", message);
-  exit (0);
+  exit (1);
 }
 
 static void MIR_NO_RETURN util_error (const char *message) { (*error_func) (MIR_alloc_error, message); }
