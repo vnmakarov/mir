@@ -55,8 +55,6 @@ typedef enum MIR_error_type {
 
 typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *message);
 
-#define FP_NAME "fp"
-
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
 
@@ -222,7 +220,6 @@ DEF_VARR (MIR_var_t);
 typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
-  uint32_t frame_size;
   uint32_t nargs, last_temp_num;
   MIR_type_t res_type;
   char vararg_p; /* flag of variable number of arguments */
@@ -343,13 +340,11 @@ extern MIR_item_t MIR_new_vararg_proto_arr (const char *name, MIR_type_t res_typ
 					    size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_vararg_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
 extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
-				    size_t frame_size, size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type,
-				size_t frame_size, size_t nargs, ...);
+				    size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type, size_t nargs, ...);
 extern MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
-					   size_t frame_size, size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type,
-				       size_t frame_size, size_t nargs, ...);
+					   size_t nargs, MIR_var_t *vars);
+extern MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t nargs, ...);
 extern const char *MIR_item_name (MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);

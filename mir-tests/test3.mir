@@ -1,5 +1,5 @@
 m3:    module
-ccp2:  func i64, 0
+ccp2:  func i64
        local i64:a, i64:d, i64:f, i64:g
        mov a, 3
        mov d, 2

@@ -6,7 +6,7 @@ int main (void) {
   MIR_init ();
   MIR_scan_string ("\n\
 m_loop: module\n\
-loop:   func i64, 0, i64:limit # a comment\n\
+loop:   func i64, i64:limit # a comment\n\
 \n\
         local i64:count\n\
         mov count, 0\n\
@@ -19,9 +19,9 @@ L1:     ret count  # label with insn\n\
   ");
   MIR_scan_string ("\n\
 m_sieve: module\n\
-sieve:   func i64, 819000\n\
+sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
-         sub flags, fp, 819000\n\
+         alloca flags, 819000\n\
          mov iter, 0\n\
 loop:    bge fin, iter, 1000\n\
          mov count, 0;  mov i, 0\n\

@@ -62,26 +62,23 @@
   * Function has a **frame**, a stack memory reserved for each function invocation
   * Function has **local variables** (sometimes called **registers**), a part of which are **arguments**
     * A variable should have an unique name in the function
-    * A **predeclared variable** with name `fp` (type ???) contains address of the function frame
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (const
-    char *name, MIR_type_t res_type, size_t frame_size, size_t nargs,
-    ...)` or function `MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t
-    res_type, size_t frame_size, size_t nargs, MIR_var_t *arg_vars)`
+    char *name, MIR_type_t res_type, size_t nargs, ...)`
+    or function `MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *arg_vars)`
     * Argument variables can be any type (except `MIR_T_V`)
       * This type only denotes how the argument value is passed
       * Any integer type argument variable has actually type `MIR_T_I64`
   * MIR functions with variable number of arguments are created through API functions
-    `MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t frame_size,
-    size_t nargs, ...)` or function `MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
-    size_t frame_size, size_t nargs, MIR_var_t *arg_vars)`
+    `MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t nargs, ...)`
+    or function `MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *arg_vars)`
     * `nargs` and `arg_vars` define only fixed arguments
   * MIR function creation is finished by calling API function `MIR_finish_func (void)`
   * You can create only one MIR function at any given time
   * MIR text function syntax looks the folowing:
 ```
-    <function name>: func <result type>, <frame size>, [ arg-var {, <arg-var> } [, ...]]
+    <function name>: func <result type>, [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
                      endfun
 ```
@@ -334,7 +331,7 @@
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
 ```
   MIR_module_t m = MIR_new_module ("m");
-  MIR_item_t func = MIR_new_func ("loop", MIR_T_I64, 0, 1, MIR_T_I64, "arg1");
+  MIR_item_t func = MIR_new_func ("loop", MIR_T_I64, 1, MIR_T_I64, "arg1");
   MIR_reg_t COUNT = MIR_new_func_reg (func->u.func, MIR_T_I64, "count");
   MIR_reg_t ARG1 = MIR_reg ("arg1", func->u.func);
   MIR_label_t fin = MIR_new_label (), cont = MIR_new_label ();
@@ -359,9 +356,9 @@
 ```
 m_sieve:  module
           export sieve
-sieve:    func i32, 819000, i32:N
+sieve:    func i32, i32:N
           local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags
-          mov flags, fp
+          alloca flags, 819000
           mov iter, 0
 loop:     bge fin, iter, N
           mov count, 0;  mov i, 0

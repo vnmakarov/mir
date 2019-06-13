@@ -2,7 +2,7 @@ m:		module
 exit_p:		proto  v, i64
 printf_p:	proto  v, p, ...
 		import printf, exit
-main:		func v, 0
+main:		func v
 		local i64:i, d:r
 		mov i, 42
 		dmov r, 4.2

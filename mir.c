@@ -41,8 +41,6 @@ int _MIR_reserved_ref_name_p (const char *name) {
 int _MIR_reserved_name_p (const char *name) {
   size_t i, start;
   
-  if (strcmp (name, FP_NAME) == 0)
-    return TRUE;
   if (_MIR_reserved_ref_name_p (name))
     return TRUE;
   else if (strncmp (name, HARD_REG_NAME_PREFIX, strlen (HARD_REG_NAME_PREFIX)) == 0)
@@ -792,7 +790,7 @@ MIR_item_t MIR_new_vararg_proto (const char *name, MIR_type_t res_type, size_t n
 }
 
 static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
-				size_t frame_size, size_t nargs, int vararg_p, MIR_var_t *vars) {
+				size_t nargs, int vararg_p, MIR_var_t *vars) {
   MIR_item_t func_item, tab_item;
   MIR_func_t func;
   
@@ -812,7 +810,7 @@ static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
   mir_assert (tab_item == func_item);
   DLIST_INIT (MIR_insn_t, func->insns);
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
-  func->frame_size = frame_size; func->nargs = nargs; func->last_temp_num = 0;
+  func->nargs = nargs; func->last_temp_num = 0;
   func->vararg_p = vararg_p != 0;
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
@@ -821,22 +819,19 @@ static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
     create_func_reg (func, vars[i].name, i + 1,
 		     type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64, FALSE);
   }
-  create_func_reg (func, "fp", nargs + 1, MIR_T_I64, TRUE);
   return func_item;
 }
 
-MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
-			     size_t frame_size, size_t nargs, MIR_var_t *vars) {
-  return new_func_arr (name, res_type, frame_size, nargs, FALSE, vars);
+MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *vars) {
+  return new_func_arr (name, res_type, nargs, FALSE, vars);
 }
 
-MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
-				    size_t frame_size, size_t nargs, MIR_var_t *vars) {
-  return new_func_arr (name, res_type, frame_size, nargs, TRUE, vars);
+MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *vars) {
+  return new_func_arr (name, res_type, nargs, TRUE, vars);
 }
 
 static MIR_item_t new_func (const char *name, MIR_type_t res_type,
-			    size_t frame_size, size_t nargs, int vararg_p, va_list argp) {
+			    size_t nargs, int vararg_p, va_list argp) {
   MIR_var_t var;
   size_t i;
   
@@ -846,26 +841,25 @@ static MIR_item_t new_func (const char *name, MIR_type_t res_type,
     var.name = va_arg (argp, const char *);
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
-  return new_func_arr (name, res_type, frame_size, nargs, vararg_p, VARR_ADDR (MIR_var_t, temp_vars));
+  return new_func_arr (name, res_type, nargs, vararg_p, VARR_ADDR (MIR_var_t, temp_vars));
 }
 
-MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type, size_t frame_size, size_t nargs, ...) {
+MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type, size_t nargs, ...) {
   va_list argp;
   MIR_item_t func_item;
   
   va_start (argp, nargs);
-  func_item = new_func (name, res_type, frame_size, nargs, FALSE, argp);
+  func_item = new_func (name, res_type, nargs, FALSE, argp);
   va_end (argp);
   return func_item;
 }
 
-MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type,
-				size_t frame_size, size_t nargs, ...) {
+MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t nargs, ...) {
   va_list argp;
   MIR_item_t func_item;
   
   va_start (argp, nargs);
-  func_item = new_func (name, res_type, frame_size, nargs, TRUE, argp);
+  func_item = new_func (name, res_type, nargs, TRUE, argp);
   va_end (argp);
   return func_item;
 }
@@ -877,7 +871,7 @@ MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name) 
     (*error_func) (MIR_reg_type_error, "wrong type for register");
   var.type = type; var.name = string_store (&strings, &string_tab, name).str;
   VARR_PUSH (MIR_var_t, func->vars, var);
-  return create_func_reg (func, name, VARR_LENGTH (MIR_var_t, func->vars) + 1 /* fp */, type, FALSE);
+  return create_func_reg (func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
 }
 
 static reg_desc_t *find_rd_by_name_num (size_t name_num, MIR_func_t func) {
@@ -1726,7 +1720,7 @@ static void output_item (FILE *f, MIR_item_t item) {
     return;
   }
   curr_output_func = func = item->u.func;
-  fprintf (f, "%s:\tfunc\t%s, %u", func->name, MIR_type_str (func->res_type), func->frame_size);
+  fprintf (f, "%s:\tfunc\t%s", func->name, MIR_type_str (func->res_type));
   for (i = 0; i < func->nargs; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i);
     fprintf (f, ", %s:%s", MIR_type_str (var.type), var.name);
@@ -1744,7 +1738,7 @@ static void output_item (FILE *f, MIR_item_t item) {
     }
     fprintf (f, i % 8 == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (var.type), var.name);
   }
-  fprintf (f, "\n# frame size = %u, %u arg%s, %u local%s\n", func->frame_size,
+  fprintf (f, "\n# %u arg%s, %u local%s\n",
 	   func->nargs, func->nargs == 1 ? "" : "s", (unsigned) nlocals, nlocals == 1 ? "" : "s");
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     MIR_output_insn (f, insn, func, TRUE);
@@ -2996,10 +2990,10 @@ void MIR_read (FILE *f) {
 	  VARR_PUSH (MIR_var_t, temp_vars, var);
 	}
 	if (vararg_p)
-	  func = MIR_new_vararg_func_arr (name, res_type, u, VARR_LENGTH (MIR_var_t, temp_vars),
+	  func = MIR_new_vararg_func_arr (name, res_type, VARR_LENGTH (MIR_var_t, temp_vars),
 					  VARR_ADDR (MIR_var_t, temp_vars));
 	else
-	  func = MIR_new_func_arr (name, res_type, u, VARR_LENGTH (MIR_var_t, temp_vars),
+	  func = MIR_new_func_arr (name, res_type, VARR_LENGTH (MIR_var_t, temp_vars),
 				   VARR_ADDR (MIR_var_t, temp_vars));
       } else if (strcmp (name, "endfunc") == 0) {
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -3521,7 +3515,7 @@ void MIR_scan_string (const char *str) {
   MIR_label_t label;
   MIR_var_t var;
   size_t n;
-  int64_t i, frame_size, nargs;
+  int64_t i, nargs;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
   int bss_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
@@ -3839,26 +3833,24 @@ void MIR_scan_string (const char *str) {
       if (func != NULL)
 	process_error (MIR_syntax_error, "nested func");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      if ((n = VARR_LENGTH (MIR_op_t, temp_insn_ops)) < 2)
+      if ((n = VARR_LENGTH (MIR_op_t, temp_insn_ops)) < 1)
 	process_error (MIR_syntax_error, "too few params in func");
       if (op_addr[0].mode != MIR_OP_MEM || (const char *) op_addr[0].u.mem.disp != NULL)
 	process_error (MIR_syntax_error, "wrong func result type");
       type = op_addr[0].u.mem.type;
-      if (op_addr[1].mode != MIR_OP_INT || (frame_size = op_addr[1].u.i) < 0)
-	process_error (MIR_syntax_error, "wrong frame size");
-      nargs = n - 2;
+      nargs = n - 1;
       for (i = 0; i < nargs; i++) {
-	if (op_addr[i + 2].mode != MIR_OP_MEM || (const char *) op_addr[i + 2].u.mem.disp == NULL)
+	if (op_addr[i + 1].mode != MIR_OP_MEM || (const char *) op_addr[i + 1].u.mem.disp == NULL)
 	  process_error (MIR_syntax_error, "wrong func arg");
-	var.type = op_addr[i + 2].u.mem.type;
-	var.name = (const char *) op_addr[i + 2].u.mem.disp;
+	var.type = op_addr[i + 1].u.mem.type;
+	var.name = (const char *) op_addr[i + 1].u.mem.disp;
 	VARR_PUSH (MIR_var_t, temp_vars, var);
       }
       if (dots_p)
-	func = MIR_new_vararg_func_arr (VARR_GET (label_name_t, label_names, 0), type, frame_size, nargs,
+	func = MIR_new_vararg_func_arr (VARR_GET (label_name_t, label_names, 0), type, nargs,
 					VARR_ADDR (MIR_var_t, temp_vars));
       else
-	func = MIR_new_func_arr (VARR_GET (label_name_t, label_names, 0), type, frame_size, nargs,
+	func = MIR_new_func_arr (VARR_GET (label_name_t, label_names, 0), type, nargs,
 				 VARR_ADDR (MIR_var_t, temp_vars));
       HTAB_CLEAR (label_desc_t, label_desc_tab, NULL);
     } else if (end_func_p) {

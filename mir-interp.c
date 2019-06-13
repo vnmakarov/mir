@@ -36,8 +36,7 @@ static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_fun
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
-  MIR_reg_t fp_reg, nregs;
-  size_t frame_size_in_vals;
+  MIR_reg_t nregs;
   MIR_item_t func_item;
   MIR_val_t code[1];
 } *func_desc_t;
@@ -255,8 +254,6 @@ static void generate_icode (MIR_item_t func_item) {
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr), VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   mir_assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
-  func_desc->frame_size_in_vals = (func->frame_size + sizeof (MIR_val_t) - 1) / sizeof (MIR_val_t);
-  func_desc->fp_reg = MIR_reg (FP_NAME, func);
   func_desc->func_item = func_item;
 }
 
@@ -948,14 +945,13 @@ static MIR_val_t interp_arr_varg (MIR_item_t func_item, size_t nargs, MIR_val_t 
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
-  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals + 1) * sizeof (MIR_val_t));
+  bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
   bp[0].a = va;
   bp++;
   if (func_desc->nregs < nargs + 1)
     nargs = func_desc->nregs - 1;
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
-  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
   res = eval (func_desc, bp);
   if (va != NULL)
     va_end (va);
@@ -985,14 +981,13 @@ MIR_val_t MIR_interp_arr_varg (MIR_item_t func_item, size_t nargs, MIR_val_t *va
     generate_icode (func_item);
   }
   func_desc = get_func_desc (func_item);
-  bp = alloca ((func_desc->nregs + func_desc->frame_size_in_vals + 1) * sizeof (MIR_val_t));
+  bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
   bp[0].a = va;
   bp++;
   if (func_desc->nregs < nargs + 1)
     nargs = func_desc->nregs - 1;
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
-  bp[func_desc->fp_reg].i = (int64_t) (bp + func_desc->nregs); /* frame address */
   return eval (func_desc, bp);
 }
 

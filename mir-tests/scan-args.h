@@ -6,7 +6,7 @@ p_prf: proto v, f\n\
 p_prd: proto v, d\n\
        import pri, prf, prd\n\
        export f\n\
-f:     func i64, 0, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i7, i32:i8, i64:i9, f:f2, f:f3, f:f4, f:f5, f:f6, f:f7, f:f8, d:d2\n\
+f:     func i64, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i7, i32:i8, i64:i9, f:f2, f:f3, f:f4, f:f5, f:f6, f:f7, f:f8, d:d2\n\
        call p_pri, pri, i1\n\
        call p_pri, pri, i2\n\
        call p_pri, pri, i3\n\

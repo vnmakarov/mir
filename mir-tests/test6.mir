@@ -1,5 +1,5 @@
 mui2f:  module
-ui2f:   func f, 0, i64:n
+ui2f:   func f, i64:n
         local f:r
         ui2f r, n
 	fret r
