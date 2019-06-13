@@ -46,8 +46,6 @@ int _MIR_reserved_name_p (const char *name) {
     return TRUE;
   if (_MIR_reserved_ref_name_p (name))
     return TRUE;
-  if (strncmp (name, TEMP_REG_NAME_PREFIX, strlen (TEMP_REG_NAME_PREFIX)) == 0)
-    start = strlen (TEMP_REG_NAME_PREFIX);
   else if (strncmp (name, HARD_REG_NAME_PREFIX, strlen (HARD_REG_NAME_PREFIX)) == 0)
     start = strlen (HARD_REG_NAME_PREFIX);
   else
@@ -815,7 +813,7 @@ static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
   mir_assert (tab_item == func_item);
   DLIST_INIT (MIR_insn_t, func->insns);
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
-  func->frame_size = frame_size; func->nargs = nargs; func->ntemps = 0;
+  func->frame_size = frame_size; func->nargs = nargs; func->last_temp_num = 0;
   func->vararg_p = vararg_p != 0;
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
@@ -1292,10 +1290,19 @@ MIR_insn_t MIR_new_label (void) { return create_label (++curr_label_num); }
 
 MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
   static char name[30];
-  
-  func->ntemps++;
-  sprintf (name, "t%d", func->ntemps);
-  return create_func_reg (func, name, VARR_LENGTH (MIR_var_t, func->vars) + func->ntemps + 1 /* fp */, type, TRUE);
+  string_t string;
+
+  if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D)
+    (*error_func) (MIR_reg_type_error, "wrong type for temporary register");
+  for (;;) {
+    func->last_temp_num++;
+    if (func->last_temp_num == 0)
+      (*error_func) (MIR_unique_reg_error, "out of unique regs");
+    sprintf (name, "t%d", func->last_temp_num);
+    string = string_store (&strings, &string_tab, name);
+    if (find_rd_by_name_num (string.num, func) == NULL)
+      return MIR_new_func_reg (func, type, string.str);
+  }
 }
 
 static reg_desc_t *get_func_rd_by_name (const char *reg_name, MIR_func_t func) {
