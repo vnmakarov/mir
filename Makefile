@@ -14,10 +14,10 @@ mir-interp.o: mir-interp.c $(DEPS) mir-interp.h mir-$(TARGET).c
 mir-gen.o: mir-gen.c $(DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test c2mir-test mir2c-test
+test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test
 	@echo ==============================Test is done
       
-bench: interp-bench gen-bench io-bench c2mir-bench mir2c-bench
+bench: interp-bench gen-bench io-bench mir2c-bench c2mir-bench
 	@echo ==============================Bench is done
 
 mir-test:
