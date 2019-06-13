@@ -971,11 +971,10 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
     case 'i':
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
       ch = *++p;
+      gen_assert ('0' <= ch && ch <= '3');
       if ((ch == '0' && ! int8_p (op.u.i)) || (ch == '1' && ! int16_p (op.u.i))
 	  || (ch == '2' && ! int32_p (op.u.i)))
 	return FALSE;
-      else
-	gen_assert ('0' <= ch && ch <= '3');
       break;
     case 'p':
       if (op.mode != MIR_OP_REF) return FALSE;
