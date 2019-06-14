@@ -7386,17 +7386,19 @@ static htab_hash_t reg_var_hash (reg_var_t r) { return mir_hash (r.name, strlen 
 static int reg_var_eq (reg_var_t r1, reg_var_t r2) { return strcmp (r1.name, r2.name) == 0; }
 
 DEF_VARR (reg_var_t);
-static VARR (reg_var_t) *all_reg_vars;
 static int reg_free_mark;
 
 static void init_reg_vars (void) {
   reg_free_mark = 0;
-  VARR_CREATE (reg_var_t, all_reg_vars, 64);
   HTAB_CREATE (reg_var_t, reg_var_tab, 128, reg_var_hash, reg_var_eq);
 }
 
+static void finish_curr_func_reg_vars (void) {
+  reg_free_mark = 0;
+  HTAB_CLEAR (reg_var_t, reg_var_tab, NULL);
+}
+
 static void finish_reg_vars (void) {
-  VARR_DESTROY (reg_var_t, all_reg_vars);
   HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
@@ -7415,7 +7417,6 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var.name = str;
   reg_var.reg = reg;
   HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_INSERT, el);
-  VARR_PUSH (reg_var_t, all_reg_vars, reg_var);
   return reg_var;
 }
 
@@ -8167,6 +8168,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (81900)));
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
+    finish_curr_func_reg_vars ();
     break;
   }
   case N_BLOCK:
