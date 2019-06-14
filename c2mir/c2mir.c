@@ -91,6 +91,7 @@ struct func_type {
   unsigned int dots_p : 1;
   struct type *ret_type;
   node_t param_list; /* w/o N_DOTS */
+  MIR_item_t proto_item;
 };
 
 enum type_mode {
@@ -148,6 +149,9 @@ static void reg_memory_finish (void) {
 static void reg_memory_init (void) {
   VARR_CREATE (void_ptr_t, reg_memory, 4096);
 }
+
+DEF_VARR (node_t);
+static VARR (node_t) *call_nodes;
 
 static int char_is_signed_p (void) {
   return MIR_CHAR_MAX == MIR_SCHAR_MAX;
@@ -4397,7 +4401,6 @@ static void symbol_finish (void) {
   HTAB_DESTROY (symbol_t, symbol_tab);
 }
 
-DEF_VARR (node_t);
 static VARR (node_t) *gotos;
 
 static node_t func_block_scope;
@@ -5413,6 +5416,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       type->mode = TM_FUNC; type->pos_node = n;
       type->u.func_type = func_type = reg_malloc (sizeof (struct func_type));
       func_type->ret_type = NULL;
+      func_type->proto_item = NULL;
       if ((func_type->dots_p = last != NULL && last->code == N_DOTS))
 	NL_REMOVE (param_list->ops, last);
       if (! func_def_p)
@@ -6821,6 +6825,7 @@ static void check (node_t r, node_t context) {
     node_t param_list, start_param, param, arg_list, arg;
     struct decl_spec *decl_spec;
     
+    VARR_PUSH (node_t, call_nodes, r);
     op1 = NL_HEAD (r->ops);
     check (op1, r); e1 = op1->attr; t1 = e1->type;
     if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
@@ -7302,6 +7307,7 @@ static void check (node_t r, node_t context) {
 
 static void context (node_t r) {
   VARR_TRUNC (decl_t, decls_for_allocation, 0);
+  VARR_TRUNC (node_t, call_nodes, 0);
   check (r, NULL);
   /* Process decls in the original order: */
   for (int i = 0; i < VARR_LENGTH (decl_t, decls_for_allocation); i++) {
@@ -8341,10 +8347,55 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   return res;
 }
 
+static void generate_mir_protos (void) {
+  VARR (MIR_var_t) *vars;
+  node_t call, func, declarator, id, first_param, p;
+  struct type *type;
+  struct func_type *func_type;
+  struct decl_spec *decl_spec_ptr;
+  MIR_var_t var;
+  char buf[30];
+  int n = 0;
+  
+  VARR_CREATE (MIR_var_t, vars, 64);
+  for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
+    call = VARR_GET (node_t, call_nodes, i);
+    assert (call->code == N_CALL);
+    func = NL_HEAD (call->ops); type = ((struct expr *) func->attr)->type;
+    assert (type->mode == TM_PTR && type->u.ptr_type->mode == TM_FUNC);
+    set_type_layout (type);
+    func_type = type->u.ptr_type->u.func_type;
+    first_param = NL_HEAD (func_type->param_list->ops);
+    VARR_TRUNC (MIR_var_t, vars, 0);
+    if (first_param != NULL && ! void_param_p (first_param)) {
+      for (p = first_param; p != NULL; p = NL_NEXT (p)) {
+	if (p->code == N_TYPE) {
+	  var.name = NULL;
+	  decl_spec_ptr = p->attr;
+	} else {
+	  declarator = NL_EL (p->ops, 1);
+	  assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
+	  id = NL_HEAD (declarator->ops);
+	  var.name = id->u.s;
+	  decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
+	}
+	var.type = get_mir_type (decl_spec_ptr->type);
+      }
+    }
+    set_type_layout (func_type->ret_type);
+    sprintf (buf, "proto%d", n++);
+    func_type->proto_item = ((func_type->dots_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr)
+			     (buf, get_mir_type (func_type->ret_type),
+			      VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
+  }
+  VARR_DESTROY (MIR_var_t, vars);
+}
+
 static void generate_mir (node_t r) {
   zero_op = new_op (NULL, MIR_new_int_op (0));
   one_op = new_op (NULL, MIR_new_int_op (1));
   init_reg_vars ();
+  generate_mir_protos ();
   VARR_CREATE (MIR_op_t, ops, 32);
   top_gen (r, NULL, NULL);
   finish_reg_vars ();
@@ -8784,6 +8835,7 @@ static void compile_init (int argc, const char *argv[],
   curr_scope = NULL;
   context_init ();
   init_options (argc, argv, other_option_func);
+  VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
 }
 
 #include <sys/time.h>
@@ -8853,6 +8905,7 @@ static void compile_finish (void) {
   parse_finish ();
   context_finish ();
   finish_options ();
+  VARR_DESTROY (node_t, call_nodes);
 }
 
 /* ------------------------- Small test example ------------------------- */
