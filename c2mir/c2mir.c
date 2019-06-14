@@ -7385,7 +7385,6 @@ static HTAB (reg_var_t) *reg_var_tab;
 static htab_hash_t reg_var_hash (reg_var_t r) { return mir_hash (r.name, strlen (r.name), 0x42); }
 static int reg_var_eq (reg_var_t r1, reg_var_t r2) { return strcmp (r1.name, r2.name) == 0; }
 
-DEF_VARR (reg_var_t);
 static int reg_free_mark;
 
 static void init_reg_vars (void) {
