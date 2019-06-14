@@ -101,7 +101,7 @@ c2mir-test:
 	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c c2mir/c2mir.c && ./a.out -S
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. c2mir/c2mir.c mir.c && ./a.out -v && size ./a.out -v
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. c2mir/c2mir.c mir.c && ./a.out -v && size ./a.out
 
 mir2c-test:
 	$(CC) -g -DTEST_MIR2C -DMIR_SCAN -I. mir.c mir2c/mir2c.c && ./a.out
