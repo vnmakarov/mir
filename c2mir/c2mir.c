@@ -5968,7 +5968,7 @@ static void get_one_node (node_t *op, struct expr **e, struct type **t) {
 }
 
 static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, struct expr *e2,
-			     struct type *t1, struct type *t2) {
+				     struct type *t1, struct type *t2) {
   struct expr *e, *te;
   struct type t, *tt;
 
@@ -7344,6 +7344,8 @@ static void context_finish (void) {
 
 /* -------------------------- MIR generator start ----------------------------- */
 
+#define FP_NAME "fp"
+
 /* New attribute for non-empty label LIST is a MIR label.  */
 
 /* MIR var naming:
@@ -8156,10 +8158,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t declarator = NL_NEXT (decl_specs);
     node_t decls = NL_NEXT (declarator);
     node_t stmt = NL_NEXT (decls);
+    MIR_reg_t fp_reg;
     
     assert (declarator != NULL && declarator->code == N_DECL && NL_HEAD (declarator->ops)->code == N_ID);
-    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, MIR_T_I32, 819000, 0, 0); // ???
+    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, MIR_T_I32, 0, 0); // ???
     ((decl_t) r->attr)->item = curr_func;
+    fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
+    MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (81900)));
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
     break;
