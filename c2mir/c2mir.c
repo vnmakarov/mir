@@ -7817,7 +7817,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     ll = r->u.ch;
     goto int_val;
   case N_STR:
-    break; // ???
+    res = new_op (NULL, MIR_new_str_op (r->u.s)); // ??? what to do with decl and str in initializer
+    break;
   case N_COMMA:
     gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
     res = gen (NL_EL (r->ops, 1), true_label, false_label, TRUE);
