@@ -1576,8 +1576,20 @@ static void out_str (FILE *f, const char *str) {
       fprintf (f, "\"");
     else if (isprint (str[i]))
       fprintf (f, "%c", str[i]);
+    else if (str[i] == '\n')
+      fprintf (f, "\\n");
+    else if (str[i] == '\t')
+      fprintf (f, "\\t");
+    else if (str[i] == '\v')
+      fprintf (f, "\\v");
+    else if (str[i] == '\a')
+      fprintf (f, "\\a");
+    else if (str[i] == '\b')
+      fprintf (f, "\\b");
+    else if (str[i] == '\f')
+      fprintf (f, "\\f");
     else
-      fprintf (f, "\\%3o", str[i]);
+      fprintf (f, "\\%03o", str[i]);
   fprintf (f, "\"");
 }
 
