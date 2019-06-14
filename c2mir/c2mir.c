@@ -8129,20 +8129,34 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_COMPOUND_LITERAL:
     break; // ???
-  case N_CALL: { // result ???
-    node_t args = NL_EL (r->ops, 1);
-    size_t nargs = 0;
+  case N_CALL: { // proto ???
+    node_t func, args = NL_EL (r->ops, 1);
+    size_t ops_start;
+    struct type *func_type, *type = ((struct expr *) r->attr)->type;
+    MIR_item_t proto_item;
     
-    op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
-    VARR_TRUNC (MIR_op_t, ops, 0);
+    ops_start = VARR_LENGTH (MIR_op_t, ops);
+    func = NL_HEAD (r->ops);
+    func_type = ((struct expr *) func->attr)->type;
+    assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
+    func_type = func_type->u.ptr_type;
+    proto_item = func_type->u.func_type->proto_item;
+    VARR_PUSH (MIR_op_t, ops, MIR_new_ref_op (proto_item));
+    op1 = gen (func, NULL, NULL, TRUE);
     VARR_PUSH (MIR_op_t, ops, op1.mir_op);
-    VARR_PUSH (MIR_op_t, ops, op1.mir_op); /* Container for number of args */
-    for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg), nargs++) {
+    if (type->mode != TM_BASIC || type->u.basic_type != TP_VOID) {
+      t = get_mir_type (type);
+      res = get_new_temp (t);
+      VARR_PUSH (MIR_op_t, ops, res.mir_op);
+    }
+    for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
       op2 = gen (arg, NULL, NULL, TRUE);
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
     }
-    VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
-    //    MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops), VARR_ADDR (MIR_op_t, ops));
+    // VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
+    MIR_append_insn (curr_func, MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
+						  VARR_ADDR (MIR_op_t, ops) + ops_start));
+    VARR_TRUNC (MIR_op_t, ops, ops_start);
     break;
   }
   case N_GENERIC: {
