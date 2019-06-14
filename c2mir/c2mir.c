@@ -8129,7 +8129,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_COMPOUND_LITERAL:
     break; // ???
-  case N_CALL: { // proto ???
+  case N_CALL: {
     node_t func, args = NL_EL (r->ops, 1);
     size_t ops_start;
     struct type *func_type, *type = ((struct expr *) r->attr)->type;
@@ -8169,13 +8169,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     res = promote (op1, t);
     break;
   }
-  case N_SPEC_DECL: { // ???
+  case N_SPEC_DECL: {
     node_t specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (specs);
     node_t id;
     
     decl = (decl_t) r->attr;
-    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
+    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) { // ??? export
       id = NL_HEAD (declarator->ops);
       decl->item = MIR_new_import (id->u.s);
     }
