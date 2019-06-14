@@ -6245,6 +6245,7 @@ static void check (node_t r, node_t context) {
   }
   case N_ID: {
     node_t aux_node = NULL;
+    decl_t decl;
     
     op1 = find_def (S_REGULAR, r, curr_scope, &aux_node);
     e = create_expr (r);
@@ -6254,16 +6255,16 @@ static void check (node_t r, node_t context) {
     } else if (op1->code == N_IGNORE) {
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
-      decl_t decl = op1->attr;
-      
+      decl = op1->attr;
       if (decl->decl_spec.typedef_p) {
 	error (r->pos, "typedef name %s as an operand", r->u.s);
       }
       *e->type = *decl->decl_spec.type;
-      e->lvalue_node = op1;
+      if (decl->decl_spec.linkage != N_EXTERN) { // ??? definition and external linkage
+	e->lvalue_node = op1;
+      }
     } else if (op1->code == N_FUNC_DEF) {
-      decl_t decl = op1->attr;
-
+      decl = op1->attr;
       assert (decl->decl_spec.type->mode == TM_FUNC);
       *e->type = *decl->decl_spec.type;
     } else {
@@ -7989,7 +7990,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     e = r->attr;
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
-      assert (e->def_node != NULL && e->def_node->code == N_FUNC_DEF);
+      assert (e->def_node != NULL);
       res = new_op (NULL, MIR_new_ref_op (((decl_t) e->def_node->attr)->item));
     } else if (! (decl = e->lvalue_node->attr)->reg_p) {
       t = get_mir_type (e->type);
@@ -8148,8 +8149,18 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     res = promote (op1, t);
     break;
   }
-  case N_SPEC_DECL:
-    break; // ???
+  case N_SPEC_DECL: { // ???
+    node_t specs = NL_HEAD (r->ops);
+    node_t declarator = NL_NEXT (specs);
+    node_t id;
+    
+    decl = (decl_t) r->attr;
+    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
+      id = NL_HEAD (declarator->ops);
+      decl->item = MIR_new_import (id->u.s);
+    }
+    break;
+  }
   case N_ST_ASSERT: /* do nothing */
     break;
   case N_INIT:
