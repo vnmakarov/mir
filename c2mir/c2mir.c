@@ -11,11 +11,16 @@
    The compiler implements C11 standard w/o C11 optional features:
    atomic, complex, variable size arrays. */
 
+#ifdef TEST_C2MIR
+#define _GNU_SOURCE /* for mempcpy */
+#endif
+
 #include <assert.h>
 #include <string.h>
 #include <ctype.h>
 #include <float.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
 #include "time.h"
@@ -8899,13 +8904,11 @@ static int compile (const char *source_name) {
 	print_node (stderr, r, 0, TRUE);
       if (verbose_p)
 	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
-      MIR_init ();
       MIR_new_module (get_module_name ());
       generate_mir (r);
       if (asm_p)
 	MIR_output (stderr);
       MIR_finish_module ();
-      MIR_finish ();
       if (verbose_p)
 	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
     }
@@ -8948,6 +8951,7 @@ static void t_ungetc (int c) {
 
 static const char *source_name;
 static VARR (char) *input;
+static int interp_exec_p,  gen_exec_p;
 
 static int other_option_func (int i, int argc, const char *argv[]) {
   FILE *f = NULL;
@@ -8955,6 +8959,10 @@ static int other_option_func (int i, int argc, const char *argv[]) {
   
   if (strcmp (argv[i], "-i") == 0) {
     f = stdin; source_name = "<stdin>";
+  } else if (strcmp (argv[i], "-ei") == 0) {
+    interp_exec_p = TRUE;
+  } else if (strcmp (argv[i], "-eg") == 0) {
+    gen_exec_p = TRUE;
   } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
     code = argv[++i]; source_name = "<command-line>";
   } else if (*argv[i] != '-') {
@@ -8978,10 +8986,15 @@ static int other_option_func (int i, int argc, const char *argv[]) {
   return i;
 }
 
+#include <math.h> /* for abs */
+#include "mir-interp.h"
+#include "mir-gen.h"
+
 int main (int argc, const char *argv[]) {
   int ok_p;
   
   code = NULL; source_name = NULL;
+  interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
   curr_char = 0;
   compile_init (argc, argv, t_getc, t_ungetc, other_option_func);
@@ -9008,13 +9021,67 @@ int main (int argc, const char *argv[]) {
 "  return count;\n"
 "}\n"
 "\n"
-"void main (void) {\n"
+"int main (void) {\n"
 "  printf (\"%d\\n\", sieve ());\n"
+"  return 0;\n"
 "}\n";
     source_name = "<example>";
   }
   assert (source_name != NULL);
-  ok_p = compile (source_name);
+  MIR_init ();
+  if ((ok_p = compile (source_name)) && (interp_exec_p || gen_exec_p)) {
+    MIR_val_t val;
+    int res;
+    MIR_module_t module;
+    MIR_item_t func, main_func = NULL;
+    uint64_t (*fun_addr) (void);
+    double start_time;
+    
+    module = DLIST_HEAD (MIR_module_t, MIR_modules);
+    assert (module != NULL && DLIST_NEXT (MIR_module_t, module) == NULL);
+    for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL; func =  DLIST_NEXT (MIR_item_t, func))
+      if (func->item_type == MIR_func_item && strcmp (func->u.func->name, "main") == 0)
+	main_func = func;
+    if (main_func == NULL) {
+      fprintf (stderr, "%s: cannot execute program w/o main function\n", source_name);
+      ok_p = FALSE;
+    } else {
+      MIR_load_module (module);
+      MIR_load_external ("abort", abort); MIR_load_external ("exit", exit);
+      MIR_load_external ("memcmp", memcmp); MIR_load_external ("mempcpy", mempcpy);
+      MIR_load_external ("strcpy", strcpy); MIR_load_external ("strcmp", strcmp);
+      MIR_load_external ("strncmp", strncmp); MIR_load_external ("strlen", strlen);
+      MIR_load_external ("strchr", strchr); MIR_load_external ("malloc", malloc);
+      MIR_load_external ("printf", printf); MIR_load_external ("sprintf", sprintf);
+      MIR_load_external ("abs", abs);
+      if (interp_exec_p) {
+	MIR_interp_init ();
+	MIR_link (MIR_set_interp_interface);
+	start_time = real_usec_time ();
+	val = MIR_interp (main_func, 0);
+	if (verbose_p) {
+	  fprintf (stderr, "  execution       -- %.0f msec\n", (real_usec_time () - start_time) / 1000.0);
+	  fprintf (stderr, "exit code %s: %lu\n", source_name, val.i);
+	}
+	MIR_interp_finish ();
+      } else {
+	MIR_gen_init ();
+#if MIR_GEN_DEBUG
+	MIR_gen_set_debug_file (stderr);
+#endif
+	MIR_link (MIR_set_gen_interface);
+	fun_addr = MIR_gen (main_func);
+	start_time = real_usec_time ();
+	res = fun_addr ();
+	if (verbose_p) {
+	  fprintf (stderr, "  execution       -- %.0f msec\n", (real_usec_time () - start_time) / 1000.0);
+	  fprintf (stderr, "%s exit code: %d\n", source_name, res);
+	}
+	MIR_gen_finish ();
+      }
+    }
+  }
+  MIR_finish ();
   compile_finish ();
   VARR_DESTROY (char, input);
   return ! ok_p;
