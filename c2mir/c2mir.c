@@ -8169,13 +8169,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     res = promote (op1, t);
     break;
   }
-  case N_SPEC_DECL: {
+  case N_SPEC_DECL: { // ??? export and defintion with external declaration
     node_t specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (specs);
     node_t id;
     
     decl = (decl_t) r->attr;
-    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) { // ??? export
+    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
       id = NL_HEAD (declarator->ops);
       decl->item = MIR_new_import (id->u.s);
     }
