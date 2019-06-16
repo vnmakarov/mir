@@ -8196,7 +8196,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, MIR_T_I32, 0, 0); // ???
     ((decl_t) r->attr)->item = curr_func;
     fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
-    MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (81900)));
+    MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (819000)));
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
     finish_curr_func_reg_vars ();
