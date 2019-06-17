@@ -3379,7 +3379,7 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
     else {
       VARR_PUSH (char, temp_string, 'e');
       if (ch == '+' || ch == '-') {
-	VARR_PUSH (char, temp_string, '-');
+	VARR_PUSH (char, temp_string, ch);
 	ch = get_char ();
 	if (! isdigit (ch))
 	  err_code = ABSENT_EXPONENT;
