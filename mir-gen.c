@@ -2835,7 +2835,9 @@ static bitmap_t func_assigned_hard_regs;
 
 static void assign (void) {
   MIR_reg_t loc, best_loc, i, reg, breg, var, nregs = get_nregs ();
-  int j;
+  MIR_type_t type;
+  int slots_num;
+  int j, k;
   live_range_t lr;
   bitmap_t bm;
   size_t profit, best_profit;
@@ -2872,7 +2874,7 @@ static void assign (void) {
   }
   func_stack_slots_num = 0;
   bitmap_clear (func_assigned_hard_regs);
-  for (i = 0; i < nregs; i++) {
+  for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
     breg = VARR_GET (MIR_reg_t, sorted_bregs, i);
     if (VARR_GET (MIR_reg_t, breg_renumber, breg) != MIR_NON_HARD_REG)
       continue;
@@ -2885,13 +2887,21 @@ static void assign (void) {
     curr_age++;
     setup_loc_profits (breg);
     best_loc = MIR_NON_HARD_REG; best_profit = 0;
+    type = MIR_reg_type (reg, curr_func_item->u.func);
     for (loc = 0; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
-      if ((loc <= MAX_HARD_REG
-	   && (fixed_hard_reg_p (loc)
-	       || ! hard_reg_type_ok_p (loc, MIR_reg_type (reg, curr_func_item->u.func))
-	       || (call_used_hard_reg_p (loc) && curr_breg_infos[breg].calls_num > 0)))
-	  || bitmap_bit_p (conflict_locs, loc))
+      if (loc <= MAX_HARD_REG && ! hard_reg_type_ok_p (loc, type))
 	continue;
+      slots_num = locs_num (loc, type);
+      for (k = 0; k < slots_num; k++)
+	if ((loc + k <= MAX_HARD_REG
+	     && (fixed_hard_reg_p (loc + k)
+		 || (call_used_hard_reg_p (loc + k) && curr_breg_infos[breg].calls_num > 0)))
+	    || bitmap_bit_p (conflict_locs, loc + k))
+	 break;
+      if (k < slots_num)
+	continue;
+      if (loc > MAX_HARD_REG && loc % slots_num != 0)
+	continue; /* we align stack slots according to the type size */
       profit = VARR_GET (size_t, loc_profit_ages, loc) != curr_age ? 0 : VARR_GET (size_t, loc_profits, loc);
       if (best_loc == MIR_NON_HARD_REG || best_profit < profit) {
 	best_loc = loc;
@@ -2900,18 +2910,23 @@ static void assign (void) {
       if (best_loc != MIR_NON_HARD_REG && loc == MAX_HARD_REG)
 	break;
     }
+    slots_num = locs_num (best_loc, type);
     if (best_loc <= MAX_HARD_REG) {
-      bitmap_set_bit_p (func_assigned_hard_regs, best_loc);
-    } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot */
-      best_loc = VARR_LENGTH (size_t, loc_profits);
-      VARR_PUSH (size_t, loc_profits, 0);
-      VARR_PUSH (size_t, loc_profit_ages, 0);
+      for (k = 0; k < slots_num; k++)
+	bitmap_set_bit_p (func_assigned_hard_regs, best_loc + k);
+    } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
+      for (k = 0; k < slots_num; k++) {
+	best_loc = VARR_LENGTH (size_t, loc_profits);
+	VARR_PUSH (size_t, loc_profits, 0);
+	VARR_PUSH (size_t, loc_profit_ages, 0);
+      }
       func_stack_slots_num = best_loc - MAX_HARD_REG;
     }
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
-	bitmap_set_bit_p (point_used_locs_addr[j], best_loc);
+	for (k = 0; k < slots_num; k++)
+	  bitmap_set_bit_p (point_used_locs_addr[j], best_loc + k);
   }
   for (i = 0; i <= curr_point; i++)
     bitmap_destroy (VARR_POP (bitmap_t, point_used_locs));
