@@ -54,8 +54,11 @@ interp-test9:
 interp-test10:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-gen.c mir-tests/run-test.c -lffi && ./a.out -i mir-tests/test10.mir
 
+interp-test11:
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-interp.c mir-gen.c mir-tests/run-test.c -lffi && ./a.out -i mir-tests/test11.mir
+
 interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8\
-             interp-test9 interp-test10
+             interp-test9 interp-test10 interp-test11
 
 interp-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-interp.c mir-tests/loop-interp.c -lffi && ./a.out && size ./a.out
