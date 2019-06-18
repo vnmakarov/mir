@@ -3683,7 +3683,7 @@ void *MIR_gen (MIR_item_t func_item) {
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
-    print_CFG (TRUE, TRUE, output_bb_live_info);
+    print_CFG (FALSE, TRUE, NULL);
   }
 #endif
   calculate_func_cfg_live_info (TRUE);
