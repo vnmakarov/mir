@@ -638,14 +638,14 @@ struct pattern {
   CMP0(ICODE, S, Y, SET_OPCODE)
 
 #define FEQ(ICODE, V, SET_OPCODE) \
-  /*xor %eax,%eax;ucomiss r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax:  */ \
-  {ICODE, "r r r", "33 h0 H0; 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2"}, \
-  {ICODE, "r r md", "33 h0 H0; 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2"},
+  /*xor %eax,%eax;ucomiss r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
+  {ICODE, "r r r", "33 h0 H0; 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"}, \
+  {ICODE, "r r md", "33 h0 H0; 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
 
 #define DEQ(ICODE, V, SET_OPCODE) \
-  /*xor %eax,%eax;ucomisd r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax:  */ \
-  {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2"}, \
-  {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2"},
+  /*xor %eax,%eax;ucomisd r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
+  {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"}, \
+  {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
 
 #define FCMP(ICODE, SET_OPCODE) \
   /*xor %eax,%eax;ucomiss r1,r2;setx az; mov %rax,r0:  */ \
