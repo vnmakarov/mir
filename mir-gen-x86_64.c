@@ -78,8 +78,9 @@ static MIR_disp_t get_stack_slot_offset (MIR_type_t type, MIR_reg_t slot) { /* s
 static int alloca_p;
 
 static MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
-  MIR_FADD, MIR_DADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB,
-  MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_FDIV, MIR_DDIV,
+  MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, MIR_LDSUB,
+  MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_LDMUL,
+  MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_FDIV, MIR_DDIV, MIR_LDDIV,
   MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS, MIR_AND, MIR_ANDS, MIR_OR, MIR_ORS, MIR_XOR, MIR_XORS,
   MIR_LSH, MIR_LSHS, MIR_RSH, MIR_RSHS, MIR_URSH, MIR_URSHS,
 };
@@ -185,7 +186,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
     } else {
       mode = call_insn->ops[i].value_mode; // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
-		  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE); // ???
+		  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
 	(*MIR_get_error_func ()) (MIR_call_op_error,
 				  "passing float variadic arg (should be passed as double)");
@@ -264,10 +265,16 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
 
 static float mir_ui2f (uint64_t i) { return i; }
 static double mir_ui2d (uint64_t i) { return i; }
+static long double mir_ui2ld (uint64_t i) { return i; }
+static int64_t mir_ld2i (long double ld) { return ld; }
 static const char *UI2F = "mir.ui2f";
 static const char *UI2D = "mir.ui2d";
+static const char *UI2LD = "mir.ui2ld";
+static const char *LD2I = "mir.ld2i";
 static const char *UI2F_P = "mir.ui2f.p";
 static const char *UI2D_P = "mir.ui2d.p";
+static const char *UI2LD_P = "mir.ui2ld.p";
+static const char *LD2I_P = "mir.ld2i.p";
 
 static const char *VA_ARG_P = "mir.va_arg.p";
 static const char *VA_ARG = "mir.va_arg";
@@ -282,6 +289,14 @@ static void get_builtin (MIR_item_t func_item, MIR_insn_code_t code,
   case MIR_UI2D:
     *proto_item = _MIR_builtin_proto (func_item->module, UI2D_P, MIR_T_D, 1, MIR_T_I64, NULL);
     *func_import_item = _MIR_builtin_func (func_item->module, UI2D, mir_ui2d);
+    break;
+  case MIR_UI2LD:
+    *proto_item = _MIR_builtin_proto (func_item->module, UI2LD_P, MIR_T_LD, 1, MIR_T_I64, NULL);
+    *func_import_item = _MIR_builtin_func (func_item->module, UI2LD, mir_ui2ld);
+    break;
+  case MIR_LD2I:
+    *proto_item = _MIR_builtin_proto (func_item->module, LD2I_P, MIR_T_I64, 1, MIR_T_LD, NULL);
+    *func_import_item = _MIR_builtin_func (func_item->module, LD2I, mir_ld2i);
     break;
   case MIR_VA_ARG:
     *proto_item = _MIR_builtin_proto (func_item->module, VA_ARG_P, MIR_T_I64,
@@ -342,7 +357,7 @@ static void machinize (MIR_item_t func_item) {
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
-    if (code == MIR_UI2F || code == MIR_UI2D) {
+    if (code == MIR_UI2F || code == MIR_UI2D || code == MIR_UI2LD || code == MIR_LD2I) {
       /* Use a builtin func call: mov freg, func ref; call proto, freg, res_reg, op_reg */
       MIR_item_t proto_item, func_import_item;
       MIR_op_t freg_op, res_reg_op = insn->ops[0], op_reg_op = insn->ops[1], ops[4];
@@ -631,6 +646,9 @@ struct pattern {
   {ICODE, "r 0 r", OP_CODE " r0 R2"}, \
   {ICODE, "r 0 md", OP_CODE " r0 m2"},
 
+#define LDOP(ICODE, OP_CODE) \
+  {ICODE, "mld mld mld", "DB /5 m1; DB /5 m2; " OP_CODE "; DB /7 m0"}, /* fld m1; fld m2; op; fstp m0 */
+
 #define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)	                \
   {ICODE ## SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0"},  /* sh r0,cl */ \
   {ICODE ## SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0"}, /* sh m0,cl */ \
@@ -663,6 +681,10 @@ struct pattern {
   {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"}, \
   {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
 
+#define LDEQ(ICODE, V, SET_OPCODE) \
+  /*fld m2;fld m1;xor %eax,%eax;fucomip st,st(1);fstp %st;mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
+  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF E9; DD D8; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
+
 #define FCMP(ICODE, SET_OPCODE) \
   /*xor %eax,%eax;ucomiss r1,r2;setx az; mov %rax,r0:  */ \
   {ICODE, "r r r", "33 h0 H0; Y 0F 2E r1 R2; " SET_OPCODE " H0;X 8B r0 H0"}, \
@@ -672,6 +694,10 @@ struct pattern {
   /*xor %eax,%eax;ucomisd r1,r2;setx az; mov %rax,r0:  */ \
   {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2F r1 R2; " SET_OPCODE " H0;X 8B r0 H0"}, \
   {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2F r1 m2; " SET_OPCODE " H0;X 8B r0 H0"},
+
+#define LDCMP(ICODE, SET_OPCODE) \
+  /*fld m2;fld m1;xor %eax,%eax;fcomip st,st(1);fstp %st;setx az; mov %rax,r0:  */ \
+  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF F1; DD D8; " SET_OPCODE " H0;X 8B r0 H0"},
 
 #define BR0(ICODE, SUFF, PREF, LONG_JUMP_OPCODE)			\
   {ICODE ## SUFF, "l r", #PREF " 83 /7 R1 v0;"       LONG_JUMP_OPCODE " l0"},  /* cmp r0,$0;jxx rel32*/ \
@@ -694,10 +720,14 @@ struct pattern {
   BCMP0(ICODE, S, Y, LONG_JUMP_OPCODE)
 
 #define FBCMP(ICODE, LONG_JUMP_OPCODE)					\
-  {ICODE, "l r r", "Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel8*/
+  {ICODE, "l r r", "Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomiss r0,r1;jxx rel32*/
 
 #define DBCMP(ICODE, LONG_JUMP_OPCODE) \
-  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel8*/
+  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" LONG_JUMP_OPCODE " l0"},  /* ucomisd r0,r1;jxx rel32*/
+
+#define LDBCMP(ICODE, LONG_JUMP_OPCODE) \
+  /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel32*/ \
+  {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JUMP_OPCODE " l0"},
 
 static struct pattern patterns[] = {
   {MIR_MOV, "r z",  "Y 33 r0 R0"},     /* xor r0,r0 -- 32 bit xor */
@@ -732,6 +762,9 @@ static struct pattern patterns[] = {
   {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m64 */
   {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m64 */
 
+  {MIR_LDMOV, "mld h32", "DB /7 m0"},             /* fstp m0 */
+  {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"},   /* fld m1; fstp m0 */
+
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},     /* movsx r0,m1 */
   {MIR_EXT16, "r r",  "X 0F BF r0 R1"},    /* movsx r0,r1 */
@@ -749,6 +782,7 @@ static struct pattern patterns[] = {
   {MIR_I2F, "r mf", "F3 X 0F 2A r0 m1"},  /* cvtsi2ss r0,m1 */
   {MIR_I2D, "r r",  "F2 X 0F 2A r0 R1"},  /* cvtsi2sd r0,r1 */
   {MIR_I2D, "r md", "F2 X 0F 2A r0 m1"},  /* cvtsi2sd r0,m1 */
+  {MIR_I2LD, "mld r", "X 89 r1 mt; DF /5 mt; DB /7 m0"}, /* mov -16(sp), r1, fild -16(sp); fstp m0 */
 
   {MIR_F2I, "r r",  "F3 X 0F 2C r0 R1"},  /* cvttss2si r0,r1 */
   {MIR_F2I, "r mf", "F3 X 0F 2C r0 m1"},  /* cvttss2si r0,m1 */
@@ -757,9 +791,17 @@ static struct pattern patterns[] = {
 
   {MIR_F2D, "r r",  "F3 X 0F 5A r0 R1"},  /* cvtss2sd r0,r1 */
   {MIR_F2D, "r mf", "F3 X 0F 5A r0 m1"},  /* cvtss2sd r0,m1 */
+  {MIR_LD2D, "r mld", "DB /5 m1; DD /3 mt; F2 Y 0F 10 r0 mt"},  /* fld m1; fstpl -16(sp); movsd r0, -16(sp) */
+
   {MIR_D2F, "r r",  "F2 X 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
   {MIR_D2F, "r md", "F2 X 0F 5A r0 m1"},  /* cvtsd2ss r0,m1 */
+  {MIR_LD2F, "r mld", "DB /5 m1; D9 /3 mt; F3 Y 0F 10 r0 mt"},  /* fld m1; fstps -16(sp); movss r0, -16(sp) */
 
+  {MIR_F2LD, "mld r", "F3 Y 0F 11 r1 mt; D9 /0 mt; DB /7 m0"},  /* movss -16(sp), r1; flds -16(sp); fstp m0 */
+  {MIR_F2LD, "mld mf", "D9 /0 m1; DB /7 m0"},                   /* flds m1; fstp m0 */
+  {MIR_D2LD, "mld r", "F2 Y 0F 11 r1 mt; DD /0 mt; DB /7 m0"},  /* movsd -16(sp), r1; fldl -16(sp); fstp m0 */
+  {MIR_D2LD, "mld md", "DD /0 m1; DB /7 m0"},                   /* fldl m1; fstp m0 */
+  
   /* lea r0, 7(r1); and r0, r0, -8; sub sp, r0; mov r0, sp */
   {MIR_ALLOCA, "r r", "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 2B h04 R0; X 8B r0 H04"},
   {MIR_ALLOCA, "r i2", "X 81 /5 H04 I1; X 8B r0 H04"},  /* sub sp, i2; mov r0, sp */
@@ -772,8 +814,9 @@ static struct pattern patterns[] = {
   {MIR_NEGS, "r 0",  "Y F7 /3 R1"}, /* neg r0 */
   {MIR_NEGS, "m2 0", "Y F7 /3 m1"}, /* neg m0 */
 
-  {MIR_FNEG, "r 0",  "Y 0F 57 r0 c0000000080000000"},  /* xorps r0,80000000 */
-  {MIR_DNEG, "r 0",  "66 Y 0F 57 r0 c8000000000000000"},  /* xorpd r0,0x8000000000000000 */
+  {MIR_FNEG, "r 0",  "Y 0F 57 r0 c0000000080000000"},    /* xorps r0,80000000 */
+  {MIR_DNEG, "r 0",  "66 Y 0F 57 r0 c8000000000000000"}, /* xorpd r0,0x8000000000000000 */
+  {MIR_LDNEG, "mld mld",  "DB /5 m1; D9 E0; DB /7 m0"},  /* fld m1; fchs; fstp m0 */
 
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0")
   {MIR_ADD, "r r r",  "X 8D r0 ap"},  /* lea r0,(r1,r2)*/
@@ -823,16 +866,21 @@ static struct pattern patterns[] = {
   FOP (MIR_FMUL, "F3 Y 0F 59") DOP (MIR_DMUL, "F2 Y 0F 59")
   FOP (MIR_FDIV, "F3 Y 0F 5E") DOP (MIR_DDIV, "F2 Y 0F 5E")
   
+  LDOP (MIR_LDADD, "DE C1") LDOP (MIR_LDSUB, "DE E9") LDOP (MIR_LDMUL, "DE C9") LDOP (MIR_LDDIV, "DE F9")
+  
   SHOP (MIR_LSH, "D3 /4", "C1 /4") SHOP (MIR_RSH, "D3 /7", "C1 /7") SHOP (MIR_URSH, "D3 /5", "C1 /5")
   
   CMP(MIR_EQ, "0F 94") CMP(MIR_NE, "0F 95") CMP(MIR_LT, "0F 9C")  CMP(MIR_ULT, "0F 92")
   CMP(MIR_LE, "0F 9E") CMP(MIR_ULE, "0F 96") CMP(MIR_GT, "0F 9F") CMP(MIR_UGT, "0F 97")
   CMP(MIR_GE, "0F 9D") CMP(MIR_UGE, "0F 93")
 
-  FEQ (MIR_FEQ, "V0", "0F 9B") DEQ (MIR_DEQ, "V0", "0F 9B") FEQ (MIR_FNE, "V1", "0F 9A") DEQ (MIR_DNE, "V1", "0F 9A")
+  FEQ (MIR_FEQ, "V0", "0F 9B") DEQ (MIR_DEQ, "V0", "0F 9B") LDEQ (MIR_LDEQ, "V0", "0F 9B")
+  FEQ (MIR_FNE, "V1", "0F 9A") DEQ (MIR_DNE, "V1", "0F 9A") LDEQ (MIR_LDNE, "V1", "0F 9A")
   
-  FCMP (MIR_FLT, "0F 92") DCMP (MIR_DLT, "0F 92") FCMP (MIR_FLE, "0F 96") DCMP (MIR_DLE, "0F 96")
-  FCMP (MIR_FGT, "0F 97") DCMP (MIR_DGT, "0F 97") FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93")
+  FCMP (MIR_FLT, "0F 92") DCMP (MIR_DLT, "0F 92") LDCMP (MIR_LDLT, "0F 92")
+  FCMP (MIR_FLE, "0F 96") DCMP (MIR_DLE, "0F 96") LDCMP (MIR_LDLE, "0F 96")
+  FCMP (MIR_FGT, "0F 97") DCMP (MIR_DGT, "0F 97") LDCMP (MIR_LDGT, "0F 97")
+  FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93") LDCMP (MIR_LDGE, "0F 93")
 
   {MIR_JMP, "l", "E9 l0"},
   
@@ -842,14 +890,20 @@ static struct pattern patterns[] = {
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86")
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83")
 
-  FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLT, "0F 86")
-  FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGT, "0F 83")
+  FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82") LDBCMP (MIR_LDBLT, "0F 82")
+  FBCMP (MIR_FBLE, "0F 86") DBCMP (MIR_DBLE, "0F 86") LDBCMP (MIR_LDBLE, "0F 86")
+  FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87") LDBCMP (MIR_LDBGT, "0F 87")
+  FBCMP (MIR_FBGE, "0F 83") DBCMP (MIR_DBGE, "0F 83") LDBCMP (MIR_LDBGE, "0F 83")
 
   {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 l0"},       /* ucomiss r0,r1;jp L;je rel32 L: */
   {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 l0"},    /* ucomisd r0,r1;jp L;je rel32 L: */
+  /* fld m2;fld m1;fucomip st,st1;fstp st;jp L;je rel32 L: */
+  {MIR_LDBEQ, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 l0"},
 
   {MIR_FBNE, "l r r", "Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "l r r", "66 Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
+  {MIR_LDBNE, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A l0; 0F 85 l0"},
 
   {MIR_CALL, "X r $", "Y FF /2 R1"},  /* call *r1 */
 
@@ -857,6 +911,7 @@ static struct pattern patterns[] = {
   {MIR_RET, "h0", "C3"},  /* ret */
   {MIR_FRET, "h16", "C3"}, /* ret */
   {MIR_DRET, "h16", "C3"}, /* ret */
+  {MIR_LDRET, "mld", "DB /5 m0;  C3"}, /* fld m0; ret */
 };
 
 static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
@@ -866,10 +921,12 @@ static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_r
   if (code == MIR_DIV || code == MIR_UDIV || code == MIR_DIVS || code == MIR_UDIVS
       || code == MIR_MOD || code == MIR_UMOD || code == MIR_MODS || code == MIR_UMODS) {
     *hr1 = DX_HARD_REG;
-  } else if (code == MIR_FEQ || code == MIR_FNE || code == MIR_DEQ || code == MIR_DNE) {
+  } else if (code == MIR_FEQ || code == MIR_FNE || code == MIR_DEQ || code == MIR_DNE
+	     || code == MIR_LDEQ || code == MIR_LDNE) {
     *hr1 = AX_HARD_REG; *hr2 = DX_HARD_REG;
   } else if (code == MIR_FLT || code == MIR_FLE || code == MIR_FGT || code == MIR_FGE
-	     || code == MIR_DLT || code == MIR_DLE || code == MIR_DGT || code == MIR_DGE) {
+	     || code == MIR_DLT || code == MIR_DLE || code == MIR_DGT || code == MIR_DGE
+	     || code == MIR_LDLT || code == MIR_LDLE || code == MIR_LDGT || code == MIR_LDGE) {
     *hr1 = AX_HARD_REG;
   }
 }
