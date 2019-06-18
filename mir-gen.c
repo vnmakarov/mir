@@ -2944,7 +2944,8 @@ static void assign (void) {
 #endif  
 }
 
-static MIR_reg_t change_reg (MIR_reg_t reg, MIR_op_mode_t data_mode, int first_p, bb_insn_t bb_insn, int out_p) {
+static MIR_reg_t change_reg (MIR_op_t *mem_op, MIR_reg_t reg,
+			     MIR_op_mode_t data_mode, int first_p, bb_insn_t bb_insn, int out_p) {
   MIR_reg_t loc = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (reg));
   MIR_reg_t hard_reg;
   MIR_disp_t offset;
@@ -2952,13 +2953,13 @@ static MIR_reg_t change_reg (MIR_reg_t reg, MIR_op_mode_t data_mode, int first_p
   MIR_type_t type;
   MIR_insn_t insn;
   bb_insn_t new_bb_insn;
-  MIR_op_t hard_reg_op, mem_op;
+  MIR_op_t hard_reg_op;
   
   gen_assert (loc != MIR_NON_HARD_REG);
   if (loc <= MAX_HARD_REG)
     return loc;
-  offset = get_stack_slot_offset (loc - MAX_HARD_REG - 1);
-  gen_assert (data_mode == MIR_OP_INT || data_mode == MIR_OP_FLOAT || data_mode == MIR_OP_DOUBLE);
+  gen_assert (data_mode == MIR_OP_INT || data_mode == MIR_OP_FLOAT
+	      || data_mode == MIR_OP_DOUBLE || data_mode == MIR_OP_LDOUBLE);
   if (data_mode == MIR_OP_INT) {
     type = MIR_T_I64; code = MIR_MOV;
     hard_reg = first_p ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
@@ -2969,13 +2970,16 @@ static MIR_reg_t change_reg (MIR_reg_t reg, MIR_op_mode_t data_mode, int first_p
     type = MIR_T_D; code = MIR_DMOV;
     hard_reg = first_p ? TEMP_DOUBLE_HARD_REG1 : TEMP_DOUBLE_HARD_REG2;
   }
+  offset = get_stack_slot_offset (type, loc - MAX_HARD_REG - 1);
+  *mem_op = _MIR_new_hard_reg_mem_op (type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
+  if (hard_reg == MIR_NON_HARD_REG)
+    return hard_reg;
   hard_reg_op = _MIR_new_hard_reg_op (hard_reg);
-  mem_op = _MIR_new_hard_reg_mem_op (type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
   if (out_p) {
-    insn = MIR_new_insn (code, mem_op, hard_reg_op);
+    insn = MIR_new_insn (code, *mem_op, hard_reg_op);
     MIR_insert_insn_after (curr_func_item, bb_insn->insn, insn);
   } else {
-    insn = MIR_new_insn (code, hard_reg_op, mem_op);
+    insn = MIR_new_insn (code, hard_reg_op, *mem_op);
     MIR_insert_insn_before (curr_func_item, bb_insn->insn, insn);
   }
   new_bb_insn = create_bb_insn (insn, bb_insn->bb);
@@ -2990,7 +2994,7 @@ static void rewrite (void) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn;
   size_t nops, i;
-  MIR_op_t *op, in_op, out_op;
+  MIR_op_t *op, in_op, out_op, mem_op;
   MIR_mem_t mem;
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg;
@@ -3011,17 +3015,25 @@ static void rewrite (void) {
 	  in_op = *op;
 	switch (op->mode) {
 	case MIR_OP_REG:
-	  hard_reg = change_reg (op->u.reg, data_mode, out_p || first_in_p, bb_insn, out_p);
+	  hard_reg = change_reg (&mem_op, op->u.reg, data_mode, out_p || first_in_p, bb_insn, out_p);
 	  if (! out_p)
 	    first_in_p = FALSE;
-	  op->mode = MIR_OP_HARD_REG;
-	  op->u.hard_reg = hard_reg;
+	  if (hard_reg == MIR_NON_HARD_REG) {
+	    *op = mem_op;
+	  } else {
+	    op->mode = MIR_OP_HARD_REG;
+	    op->u.hard_reg = hard_reg;
+	  }
 	  break;
 	case MIR_OP_MEM:
 	  mem = op->u.mem;
 	  /* Always second for mov MEM[R2], R1 or mov R1, MEM[R2]. */
-	  mem.base = (op->u.mem.base == 0 ? MIR_NON_HARD_REG
-		      : change_reg (op->u.mem.base, MIR_OP_INT, FALSE, bb_insn, FALSE));
+	  if (op->u.mem.base == 0) {
+	    mem.base = MIR_NON_HARD_REG;
+	  } else {
+	    mem.base = change_reg (&mem_op, op->u.mem.base, MIR_OP_INT, FALSE, bb_insn, FALSE);
+	    gen_assert (mem.base != MIR_NON_HARD_REG); /* we can always use GP regs */
+	  }
 	  gen_assert (op->u.mem.index == 0);
 	  mem.index = MIR_NON_HARD_REG;
 	  op->mode = MIR_OP_HARD_REG_MEM;
