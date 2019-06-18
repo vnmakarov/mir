@@ -68,6 +68,7 @@ static struct insn_desc insn_descs[] = {
   {MIR_MOV, "mov", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FMOV, "fmov", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DMOV, "dmov", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDMOV, "ldmov", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_EXT8, "ext8", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_EXT16, "ext16", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_EXT32, "ext32", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
@@ -76,34 +77,46 @@ static struct insn_desc insn_descs[] = {
   {MIR_UEXT32, "uext32", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_I2F, "i2f", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_I2D, "i2d", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_I2LD, "i2ld", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UI2F, "ui2f", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UI2D, "ui2d", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_UI2LD, "ui2ld", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_F2I, "f2i", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_D2I, "d2i", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LD2I, "ld2i", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_F2D, "f2d", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
+  {MIR_F2LD, "f2ld", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_D2F, "d2f", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_D2LD, "d2ld", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LD2F, "ld2f", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
+  {MIR_LD2D, "ld2d", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_NEG, "neg", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_NEGS, "negs", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FNEG, "fneg", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DNEG, "dneg", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDNEG, "ldneg", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_ADD, "add", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ADDS, "adds", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FADD, "fadd", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DADD, "dadd", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDADD, "ldadd", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_SUB, "sub", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_SUBS, "subs", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FSUB, "fsub", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DSUB, "dsub", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDSUB, "ldsub", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_MUL, "mul", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_MULS, "muls", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FMUL, "fmul", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DMUL, "dmul", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDMUL, "ldmul", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_DIV, "div", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_DIVS, "divs", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UDIV, "udiv", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UDIVS, "udivs", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FDIV, "fdiv", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DDIV, "ddiv", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDDIV, "lddiv", {MIR_OP_LDOUBLE | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_MOD, "mod", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_MODS, "mods", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UMOD, "umod", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
@@ -124,34 +137,40 @@ static struct insn_desc insn_descs[] = {
   {MIR_EQS, "eqs", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FEQ, "feq", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DEQ, "deq", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDEQ, "ldeq", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_NE, "ne", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_NES, "nes", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FNE, "fne", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DNE, "dne", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDNE, "ldne", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_LT, "lt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LTS, "lts", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ULT, "ult", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ULTS, "ults", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FLT, "flt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DLT, "dlt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDLT, "ldlt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_LE, "le", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LES, "les", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ULE, "ule", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ULES, "ules", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FLE, "fle", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DLE, "dle", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDLE, "ldle", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_GT, "gt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_GTS, "gts", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UGT, "ugt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UGTS, "ugts", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FGT, "fgt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DGT, "dgt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDGT, "ldgt", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_GE, "ge", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_GES, "ges", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UGE, "uge", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UGES, "uges", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FGE, "fge", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DGE, "dge", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDGE, "ldge", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_JMP, "jmp", {MIR_OP_LABEL, MIR_OP_BOUND}},
   {MIR_BT, "bt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BTS, "bts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_BOUND}},
@@ -161,39 +180,46 @@ static struct insn_desc insn_descs[] = {
   {MIR_BEQS, "beqs", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBEQ, "fbeq", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBEQ, "dbeq", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBEQ, "ldbeq", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_BNE, "bne", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BNES, "bnes", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBNE, "fbne", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBNE, "dbne", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBNE, "ldbne", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_BLT, "blt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BLTS, "blts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBLT, "ublt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBLTS, "ublts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBLT, "fblt", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBLT, "dblt", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBLT, "ldblt", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_BLE, "ble", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BLES, "bles", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBLE, "uble", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBLES, "ubles", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBLE, "fble", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBLE, "dble", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBLE, "ldble", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_BGT, "bgt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BGTS, "bgts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBGT, "ubgt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBGTS, "ubgts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBGT, "fbgt", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBGT, "dbgt", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBGT, "ldbgt", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_BGE, "bge", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BGES, "bges", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBGE, "ubge", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_UBGES, "ubges", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FBGE, "fbge", {MIR_OP_LABEL, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DBGE, "dbge", {MIR_OP_LABEL, MIR_OP_DOUBLE, MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDBGE, "ldbge", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_CALL, "call", {MIR_OP_BOUND}},
   {MIR_INLINE, "inline", {MIR_OP_BOUND}},
   {MIR_RET, "ret", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FRET, "fret", {MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DRET, "dret", {MIR_OP_DOUBLE, MIR_OP_BOUND}},
+  {MIR_LDRET, "ldret", {MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_ALLOCA, "alloca", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BSTART, "bstart", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_BOUND}},
   {MIR_BEND, "bend", {MIR_OP_INT, MIR_OP_BOUND}},
@@ -221,7 +247,8 @@ static void check_and_prepare_insn_descs (void) {
 }
 
 static MIR_op_mode_t type2mode (MIR_type_t type) {
-  return type == MIR_T_F ? MIR_OP_FLOAT : type == MIR_T_D ? MIR_OP_DOUBLE : MIR_OP_INT;
+  return (type == MIR_T_F ? MIR_OP_FLOAT : type == MIR_T_D ? MIR_OP_DOUBLE
+	  : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
 }
 
 typedef struct string {
@@ -692,6 +719,7 @@ size_t _MIR_type_size (MIR_type_t type) {
   case MIR_T_U64: return sizeof (uint64_t);
   case MIR_T_F: return sizeof (float);
   case MIR_T_D: return sizeof (double);
+  case MIR_T_LD: return sizeof (long double);
   case MIR_T_P: return sizeof (void *);
   case MIR_T_V: return 1;
   default: mir_assert (FALSE);
@@ -825,7 +853,7 @@ static MIR_item_t new_func_arr (const char *name, MIR_type_t res_type,
     
     VARR_PUSH (MIR_var_t, func->vars, vars[i]);
     create_func_reg (func, vars[i].name, i + 1,
-		     type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64, FALSE);
+		     type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64, FALSE);
   }
   return func_item;
 }
@@ -875,7 +903,7 @@ MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t na
 MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name) {
   MIR_var_t var;
   
-  if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D)
+  if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     (*error_func) (MIR_reg_type_error, "wrong type for register");
   var.type = type; var.name = string_store (&strings, &string_tab, name).str;
   VARR_PUSH (MIR_var_t, func->vars, var);
@@ -1302,7 +1330,7 @@ MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
   static char name[30];
   string_t string;
 
-  if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D)
+  if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     (*error_func) (MIR_reg_type_error, "wrong type for temporary register");
   for (;;) {
     func->last_temp_num++;
@@ -1392,6 +1420,14 @@ MIR_op_t MIR_new_double_op (double d) {
   return op;
 }
 
+MIR_op_t MIR_new_ldouble_op (long double ld) {
+  MIR_op_t op;
+
+  mir_assert (sizeof (long double) == 16); /* machine-defined 80- or 128-bit FP  */
+  init_op (&op, MIR_OP_LDOUBLE); op.u.ld = ld;
+  return op;
+}
+
 MIR_op_t MIR_new_ref_op (MIR_item_t item) {
   MIR_op_t op;
 
@@ -1441,6 +1477,7 @@ int MIR_op_eq_p (MIR_op_t op1, MIR_op_t op2) {
   case MIR_OP_UINT: return op1.u.u == op2.u.u;
   case MIR_OP_FLOAT: return op1.u.f == op2.u.f;
   case MIR_OP_DOUBLE: return op1.u.d == op2.u.d;
+  case MIR_OP_LDOUBLE: return op1.u.ld == op2.u.ld;
   case MIR_OP_REF: return strcmp (MIR_item_name (op1.u.ref), MIR_item_name (op2.u.ref)) == 0;
   case MIR_OP_STR: return strcmp (op1.u.str, op2.u.str) == 0;
   case MIR_OP_MEM:
@@ -1475,7 +1512,13 @@ htab_hash_t MIR_op_hash_step (htab_hash_t h, MIR_op_t op) {
     return mir_hash_step (h, u.u);
   }
   case MIR_OP_DOUBLE:
-    return mir_hash_step (h, (uint64_t) op.u.u);
+    return mir_hash_step (h, op.u.u);
+  case MIR_OP_LDOUBLE: {
+    union {long double ld; uint64_t u[2];} u;
+    
+    u.ld = op.u.ld;
+    return mir_hash_step (mir_hash_step (h, u.u[0]), u.u[1]);
+  }
   case MIR_OP_REF: return mir_hash_step (h, (uint64_t) MIR_item_name (op.u.ref));
   case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str);
   case MIR_OP_MEM:
@@ -1544,6 +1587,7 @@ const char *MIR_type_str (MIR_type_t tp) {
   case MIR_T_U64: return "u64";
   case MIR_T_F: return "f";
   case MIR_T_D: return "d";
+  case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
   case MIR_T_V: return "v";
   default:
@@ -1613,6 +1657,9 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
     break;
   case MIR_OP_DOUBLE:
     fprintf (f, "%.*e", DBL_DECIMAL_DIG, op.u.d);
+    break;
+  case MIR_OP_LDOUBLE:
+    fprintf (f, "%.*Le", LDBL_DECIMAL_DIG, op.u.ld);
     break;
   case MIR_OP_MEM:
   case MIR_OP_HARD_REG_MEM: {
@@ -1720,6 +1767,7 @@ static void output_item (FILE *f, MIR_item_t item) {
       case MIR_T_U64: fprintf (f, "%" PRIu64, ((uint64_t *) data->u.els)[i]); break;
       case MIR_T_F: fprintf (f, "%.*ef", FLT_DECIMAL_DIG, ((float *) data->u.els)[i]); break;
       case MIR_T_D: fprintf (f, "%.*e", DBL_DECIMAL_DIG, ((double *) data->u.els)[i]); break;
+      case MIR_T_LD: fprintf (f, "%.*Le", LDBL_DECIMAL_DIG, ((long double *) data->u.els)[i]); break;
 	/* only ptr as ref ??? */
       case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
@@ -1858,7 +1906,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   MIR_func_t func = func_item->u.func;
   MIR_type_t type;
   MIR_op_mode_t value_mode = op->value_mode;
-  int move_p = code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV;
+  int move_p = code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV || code == MIR_LDMOV;
   
   if (MIR_call_code_p (code)) {
     if (nop == 0)
@@ -1873,6 +1921,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
   case MIR_OP_INT:
   case MIR_OP_FLOAT:
   case MIR_OP_DOUBLE:
+  case MIR_OP_LDOUBLE:
   case MIR_OP_REF:
   case MIR_OP_STR:
     mir_assert (! out_p);
@@ -1883,7 +1932,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 	  break;
 	}
     } else if (op->mode == MIR_OP_STR
-	       || (mem_float_p && (op->mode == MIR_OP_FLOAT || op->mode == MIR_OP_DOUBLE))) {
+	       || (mem_float_p && (op->mode == MIR_OP_FLOAT
+				   || op->mode == MIR_OP_DOUBLE || op->mode == MIR_OP_LDOUBLE))) {
       char name [30];
       MIR_item_t item;
       MIR_module_t m = curr_module;
@@ -1897,9 +1947,11 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
       } else {
 	if (op->mode == MIR_OP_FLOAT)
 	  item = MIR_new_data (name, MIR_T_F, 1, (uint8_t *) &op->u.f);
-	else
+	else if (op->mode == MIR_OP_DOUBLE)
 	  item = MIR_new_data (name, MIR_T_D, 1, (uint8_t *) &op->u.d);
-	type = op->mode == MIR_OP_FLOAT ? MIR_T_F : MIR_T_D;
+	else
+	  item = MIR_new_data (name, MIR_T_LD, 1, (uint8_t *) &op->u.ld);
+	type = op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_LD;
 	*op = MIR_new_ref_op (item);
 	new_op = MIR_new_reg_op (vn_add_val (func, MIR_T_I64, MIR_INSN_BOUND, *op, *op));
 	MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_MOV, new_op, *op));
@@ -1910,10 +1962,12 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     if (move_p)
       return;
     type = (op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D
+	    : op->mode == MIR_OP_LDOUBLE ? MIR_T_LD 
 	    : op->mode == MIR_OP_MEM ? op->u.mem.type : MIR_T_I64);
     new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, *op, *op));
     MIR_insert_insn_before (func_item, insn,
-			    MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV,
+			    MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
+					  : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
 					  new_op, *op));
     *op = new_op;
     break;
@@ -1973,8 +2027,9 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
     } else {
-      type = mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D ? mem_op.u.mem.type : MIR_T_I64;
-      code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+      type = (mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D || mem_op.u.mem.type == MIR_T_LD
+	      ? mem_op.u.mem.type : MIR_T_I64);
+      code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV;
       new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, mem_op, mem_op));
       if (out_p)
 	new_insn = MIR_new_insn (code, mem_op, new_op);
@@ -2014,9 +2069,11 @@ static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
   
   if (VARR_LENGTH (MIR_insn_t, ret_insns) == 1 && VARR_GET (MIR_insn_t, ret_insns, 0) == insn)
     return;
-  mir_assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET);
-  ret_type = ret_code == MIR_RET ? MIR_T_I64 : ret_code == MIR_FRET ? MIR_T_F : MIR_T_D;
-  mov_code = ret_code == MIR_RET ? MIR_MOV : ret_code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
+  mir_assert (ret_code == MIR_RET || ret_code == MIR_FRET || ret_code == MIR_DRET || ret_code == MIR_LDRET);
+  ret_type = (ret_code == MIR_RET ? MIR_T_I64 : ret_code == MIR_FRET ? MIR_T_F
+	      : ret_code == MIR_DRET ? MIR_T_D :  MIR_T_LD);
+  mov_code = (ret_code == MIR_RET ? MIR_MOV : ret_code == MIR_FRET ? MIR_FMOV
+	      : ret_code == MIR_DRET ? MIR_DMOV : MIR_LDMOV);
   ret_reg = _MIR_new_temp_reg (ret_type, func);
   ret_label = NULL;
   if (VARR_LENGTH (MIR_insn_t, ret_insns) != 0) {
@@ -2062,7 +2119,7 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
     
     mir_assert (var.type != MIR_T_V);
     if (var.type == MIR_T_I64 || var.type == MIR_T_U64
-	|| var.type == MIR_T_F || var.type == MIR_T_D)
+	|| var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
       continue;
     switch (var.type) {
     case MIR_T_I8: ext_code = MIR_EXT8; break;
@@ -2085,14 +2142,15 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
     MIR_insn_code_t code = insn->code;
     MIR_op_t temp_op;
     
-    if ((code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV)
+    if ((code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV || code == MIR_LDMOV)
 	&& insn->ops[0].mode == MIR_OP_MEM && insn->ops[1].mode == MIR_OP_MEM) {
       temp_op = MIR_new_reg_op (_MIR_new_temp_reg (code == MIR_MOV ? MIR_T_I64
-						   : code == MIR_FMOV ? MIR_T_F : MIR_T_D, func));
+						   : code == MIR_FMOV ? MIR_T_F
+						   : code == MIR_DMOV ? MIR_T_D : MIR_T_LD, func));
       MIR_insert_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
       insn->ops[0] = temp_op;
     }
-    if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+    if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET || code == MIR_LDRET) {
       if (ret_code == MIR_INSN_BOUND)
 	ret_code = code;
       else if (ret_code != code)
@@ -2175,13 +2233,14 @@ void MIR_inline (MIR_item_t func_item) {
       sprintf (buff, ".c%d_", func->n_inlines);
       VARR_PUSH_ARR (char, temp_string, buff, strlen (buff));
       var = VARR_GET (MIR_var_t, called_func->vars, i);
-      type = var.type == MIR_T_F || var.type == MIR_T_D ? var.type : MIR_T_I64;
+      type = var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD ? var.type : MIR_T_I64;
       old_reg = MIR_reg (var.name, called_func);
       VARR_PUSH_ARR (char, temp_string, var.name, strlen (var.name) + 1);
       new_reg = MIR_new_func_reg (func, type, VARR_ADDR (char, temp_string));
       set_inline_reg_map (old_reg, new_reg);
       if (i < nargs) { /* Parameter passing */
-	new_insn = MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV,
+	new_insn = MIR_new_insn (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
+				 : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
 				 MIR_new_reg_op (new_reg), call->ops[i + (res_type == MIR_T_V ? 2 : 3)]);
 	MIR_insert_insn_before (func_item, ret_label, new_insn);
       }
@@ -2210,15 +2269,16 @@ void MIR_inline (MIR_item_t func_item) {
 	    new_insn->ops[i].u.mem.index = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.mem.index);
 	  break;
 	}
-      if (new_insn->code == MIR_RET || new_insn->code == MIR_FRET || new_insn->code == MIR_DRET) {
+      if (new_insn->code == MIR_RET || new_insn->code == MIR_FRET
+	  || new_insn->code == MIR_DRET || new_insn->code == MIR_LDRET) {
 	/* should be the last insn after simplification */
 	mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && new_insn->ops[0].mode == MIR_OP_REG
 		    &&  call->ops[0].mode == MIR_OP_REF && call->ops[0].u.ref->item_type == MIR_proto_item);
 	if (call->ops[0].u.ref->u.proto->res_type == MIR_T_V)
 	  continue;
 	ret_reg = new_insn->ops[0].u.reg;
-	new_insn = MIR_new_insn (new_insn->code == MIR_RET ? MIR_MOV
-				 : new_insn->code == MIR_FRET ? MIR_FMOV : MIR_DMOV,
+	new_insn = MIR_new_insn (new_insn->code == MIR_RET ? MIR_MOV : new_insn->code == MIR_FRET ? MIR_FMOV
+				 : new_insn->code == MIR_DRET ? MIR_DMOV : MIR_LDMOV,
 				 call->ops[2], MIR_new_reg_op (ret_reg));
       }
       MIR_insert_insn_before (func_item, ret_label, new_insn);
@@ -2414,7 +2474,7 @@ MIR_item_t _MIR_called_func;
 typedef enum {
   TAG_U0, TAG_U1, TAG_U2, TAG_U3, TAG_U4, TAG_U5, TAG_U6, TAG_U7, TAG_U8,
   TAG_I1, TAG_I2, TAG_I3, TAG_I4, TAG_I5, TAG_I6, TAG_I7, TAG_I8,
-  TAG_F, TAG_D, /* 4 and 8 bytes for floating point numbers */
+  TAG_F, TAG_D, TAG_LD, /* 4, 8, 16 bytes for floating point numbers */
   TAG_REG1, TAG_REG2, TAG_REG3, TAG_REG4, /* Reg string number in 1, 2, 3, 4 bytes */
   TAG_NAME1, TAG_NAME2, TAG_NAME3, TAG_NAME4, /* Name string number in 1, 2, 3, 4 bytes */
   TAG_STR1, TAG_STR2, TAG_STR3, TAG_STR4, /* String number in 1, 2, 3, 4 bytes */
@@ -2513,6 +2573,16 @@ static void put_double (FILE *f, double d) {
   put_uint (f, u.d, sizeof (uint64_t));
 }
 
+static void put_ldouble (FILE *f, long double ld) {
+  union {uint64_t u[2]; long double ld;} u;
+
+  if (f == NULL)
+    return;
+  u.ld = ld;
+  put_uint (f, u.u[0], sizeof (uint64_t));
+  put_uint (f, u.u[1], sizeof (uint64_t));
+}
+
 /* Write binary MIR */
 
 static void write_int (FILE *f, int64_t i) {
@@ -2550,6 +2620,13 @@ static void write_double (FILE *f, double d) {
     return;
   put_byte (f, TAG_D);
   put_double (f, d);
+}
+
+static void write_ldouble (FILE *f, long double ld) {
+  if (f == NULL)
+    return;
+  put_byte (f, TAG_LD);
+  put_ldouble (f, ld);
 }
 
 static void write_str_tag (FILE *f, const char *str, bin_tag_t start_tag) {
@@ -2607,6 +2684,9 @@ static void write_op (FILE *f, MIR_op_t op) {
     break;
   case MIR_OP_DOUBLE:
     write_double (f, op.u.d);
+    break;
+  case MIR_OP_LDOUBLE:
+    write_ldouble (f, op.u.ld);
     break;
   case MIR_OP_MEM: {
     bin_tag_t tag;
@@ -2723,6 +2803,7 @@ static void write_item (FILE *f, MIR_item_t item) {
       case MIR_T_U64: write_uint (f, ((uint64_t *) data->u.els)[i]); break;
       case MIR_T_F: write_float (f, ((float *) data->u.els)[i]); break;
       case MIR_T_D: write_double (f, ((double *) data->u.els)[i]); break;
+      case MIR_T_LD: write_ldouble (f, ((long double *) data->u.els)[i]); break;
 	/* only ptr as ref ??? */
       case MIR_T_P: write_uint (f, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
@@ -2816,6 +2897,7 @@ typedef union {
   int64_t i;
   float f;
   double d;
+  long double ld;
   MIR_type_t t;
   MIR_reg_t reg;
 } token_attr_t;
@@ -2847,6 +2929,14 @@ static double get_double (FILE *f) {
 
   u.u = get_uint (f, sizeof (uint64_t));
   return u.d;
+}
+
+static long double get_ldouble (FILE *f) {
+  union {uint64_t u[2]; long double ld;} u;
+
+  u.u[0] = get_uint (f, sizeof (uint64_t));
+  u.u[1] = get_uint (f, sizeof (uint64_t));
+  return u.ld;
 }
 
 typedef char *char_ptr_t;
@@ -2931,7 +3021,8 @@ static bin_tag_t read_token (FILE *f, token_attr_t *attr) {
   case TAG_I1: case TAG_I2: case TAG_I3: case TAG_I4: case TAG_I5: case TAG_I6: case TAG_I7: case TAG_I8:
     attr->i = get_int (f, c - TAG_I1 + 1); break;
   case TAG_F: attr->f = get_float (f); break;
-  case TAG_D: attr->f = get_double (f); break;
+  case TAG_D: attr->d = get_double (f); break;
+  case TAG_LD: attr->ld = get_ldouble (f); break;
   case TAG_REG1: case TAG_REG2: case TAG_REG3: case TAG_REG4:
     attr->u = get_uint (f, c - TAG_REG1 + 1); break;
   case TAG_NAME1: case TAG_NAME2: case TAG_NAME3: case TAG_NAME4:
@@ -2990,6 +3081,7 @@ static int read_operand (FILE *f, MIR_op_t *op, MIR_item_t func) {
     *op = MIR_new_int_op (attr.i); break;
   case TAG_F: *op = MIR_new_float_op (attr.f); break;
   case TAG_D: *op = MIR_new_double_op (attr.d); break;
+  case TAG_LD: *op = MIR_new_ldouble_op (attr.ld); break;
   case TAG_REG1: case TAG_REG2: case TAG_REG3: case TAG_REG4:
     *op = MIR_new_reg_op (to_reg (attr.u, func)); break;
   case TAG_NAME1: case TAG_NAME2: case TAG_NAME3: case TAG_NAME4: {
@@ -3212,6 +3304,11 @@ void MIR_read (FILE *f) {
 	      (*error_func) (MIR_binary_io_error, "data type does not correspond value type");
 	    push_data ((uint8_t *) &attr.d, sizeof (double));
 	    break;
+	  case TAG_LD:
+	    if (type != MIR_T_LD)
+	      (*error_func) (MIR_binary_io_error, "data type does not correspond value type");
+	    push_data ((uint8_t *) &attr.ld, sizeof (long double));
+	    break;
 	    /* ??? ptr */
 	  default:
 	    (*error_func) (MIR_binary_io_error, "wrong data value");
@@ -3301,7 +3398,8 @@ static htab_hash_t insn_name_hash (insn_name_t in) { return mir_hash (in.name, s
 DEF_HTAB (insn_name_t);
 static HTAB (insn_name_t) *insn_name_tab;
 
-enum token_code { TC_INT, TC_FLOAT, TC_DOUBLE, TC_NAME, TC_STR, TC_NL, TC_EOF, TC_LEFT_PAR, TC_RIGHT_PAR, TC_COMMA, TC_SEMICOL, TC_COL };
+enum token_code { TC_INT, TC_FLOAT, TC_DOUBLE, TC_LDOUBLE, TC_NAME, TC_STR,
+		  TC_NL, TC_EOF, TC_LEFT_PAR, TC_RIGHT_PAR, TC_COMMA, TC_SEMICOL, TC_COL };
 
 typedef struct token {
   enum token_code code;
@@ -3309,6 +3407,7 @@ typedef struct token {
     int64_t i;
     float f;
     double d;
+    long double ld;
     const char *name;
     const char *str;
   } u;
@@ -3327,12 +3426,12 @@ static void MIR_NO_RETURN process_error (enum MIR_error_type error_type, const c
    BASE, FLOAT_P, DOUBLE_P.  Put number representation (0x or 0X
    prefix is removed) into TEMP_STRING.  */
 static void scan_number (int ch, int get_char (void), void unget_char (int),
-			 int *base, int *float_p, int *double_p) {
+			 int *base, int *float_p, int *double_p, int *ldouble_p) {
   enum scan_number_code {NUMBER_OK, ABSENT_EXPONENT, NON_DECIMAL_FLOAT, WRONG_OCTAL_INT} err_code = NUMBER_OK;
   int dec_p, hex_p, hex_char_p;
   
   *base = 10;
-  *double_p = *float_p = FALSE;
+  *ldouble_p = *double_p = *float_p = FALSE;
   if (ch == '+' || ch == '-') {
     VARR_PUSH (char, temp_string, ch);
     ch = get_char ();
@@ -3398,6 +3497,9 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
     else if (ch == 'f' || ch == 'F') {
       *float_p = TRUE; *double_p = FALSE;
       ch = get_char ();
+    } else if (ch == 'l' || ch == 'L') {
+      *ldouble_p = TRUE; *double_p = FALSE;
+      ch = get_char ();
     }
   } else if (*base == 8 && dec_p)
     err_code = WRONG_OCTAL_INT;
@@ -3405,8 +3507,7 @@ static void scan_number (int ch, int get_char (void), void unget_char (int),
   unget_char (ch);
 }
 
-static token_t scan_string (int c, int get_char (void), void unget_char (int)) {
-  token_t t;
+static void scan_string (token_t *t, int c, int get_char (void), void unget_char (int)) {
   int ch_code;
 
   mir_assert (c == '\"');
@@ -3459,9 +3560,8 @@ static token_t scan_string (int c, int get_char (void), void unget_char (int)) {
     VARR_PUSH (char, temp_string, c);
   }
   VARR_PUSH (char, temp_string, 0);
-  t.code = TC_STR;
-  t.u.str = string_store (&strings, &string_tab, VARR_ADDR (char, temp_string)).str;
-  return t;
+  t->code = TC_STR;
+  t->u.str = string_store (&strings, &string_tab, VARR_ADDR (char, temp_string)).str;
 }
 
 static const char *input_string;
@@ -3483,16 +3583,15 @@ static void unget_string_char (int ch) {
   mir_assert (input_string[input_string_char_num] == ch);
 }
 
-static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
+static void scan_token (token_t *token, int (*get_char) (void), void (*unget_char) (int)) {
   int ch;
-  token_t token;
   
   for (;;) {
     ch = get_char ();
     switch (ch) {
     case EOF:
-      token.code = TC_EOF;
-      return token;
+      token->code = TC_EOF;
+      return;
     case ' ': case '\t':
       break;
     case '#':
@@ -3501,28 +3600,26 @@ static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
       /* Fall through: */
     case '\n':
       curr_line_num++;
-      token.code = TC_NL;
-      return token;
-      break;
+      token->code = TC_NL;
+      return;
     case '(':
-      token.code = TC_LEFT_PAR;
-      return token;
-      break;
+      token->code = TC_LEFT_PAR;
+      return;
     case ')':
-      token.code = TC_RIGHT_PAR;
-      return token;
-      break;
+      token->code = TC_RIGHT_PAR;
+      return;
     case ',':
-      token.code = TC_COMMA;
-      return token;
+      token->code = TC_COMMA;
+      return;
     case ';':
-      token.code = TC_SEMICOL;
-      return token;
+      token->code = TC_SEMICOL;
+      return;
     case ':':
-      token.code = TC_COL;
-      return token;
+      token->code = TC_COL;
+      return;
     case '"':
-      return scan_string (ch, get_char, unget_char);
+      scan_string (token, ch, get_char, unget_char);
+      return;
     default:
       VARR_TRUNC (char, temp_string, 0);
       if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') {
@@ -3532,13 +3629,13 @@ static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
 	} while (isalpha (ch) || isdigit (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.');
 	VARR_PUSH (char, temp_string, '\0');
 	unget_char (ch);
-	token.u.str = _MIR_uniq_string (VARR_ADDR (char, temp_string));
-	token.code = TC_NAME;
-	return token;
+	token->u.str = _MIR_uniq_string (VARR_ADDR (char, temp_string));
+	token->code = TC_NAME;
+	return;
       } else if (ch == '+' || ch == '-' || isdigit (ch)) {
 	const char *repr;
 	char *end;
-	int next_ch, base, float_p, double_p;
+	int next_ch, base, float_p, double_p, ldouble_p;
 	
 	if (ch == '+' || ch == '-') {
 	  next_ch = get_char ();
@@ -3546,23 +3643,26 @@ static token_t scan_token (int (*get_char) (void), void (*unget_char) (int)) {
 	    process_error (MIR_syntax_error, "no number after a sign");
 	  unget_char (next_ch);
 	}
-	scan_number (ch, get_char, unget_char, &base, &float_p, &double_p);
+	scan_number (ch, get_char, unget_char, &base, &float_p, &double_p, &ldouble_p);
 	repr = VARR_ADDR (char, temp_string);
 	errno = 0;
 	if (float_p) {
-	  token.code = TC_FLOAT;
-	  token.u.f = strtof (repr, &end);
+	  token->code = TC_FLOAT;
+	  token->u.f = strtof (repr, &end);
 	} else if (double_p) {
-	  token.code = TC_DOUBLE;
-	  token.u.d = strtod (repr, &end);
+	  token->code = TC_DOUBLE;
+	  token->u.d = strtod (repr, &end);
+	} else if (ldouble_p) {
+	  token->code = TC_LDOUBLE;
+	  token->u.ld = strtold (repr, &end);
 	} else {
-	  token.code = TC_INT;
-	  token.u.i = sizeof (long) == sizeof (int64_t) ? strtol (repr, &end, base) : strtoll (repr, &end, base);
+	  token->code = TC_INT;
+	  token->u.i = sizeof (long) == sizeof (int64_t) ? strtol (repr, &end, base) : strtoll (repr, &end, base);
 	}
 	mir_assert (*end == '\0');
 	if (errno != 0)
 	  ;
-	return token;
+	return;
       } else {
 	process_error (MIR_syntax_error, "wrong char");
       }
@@ -3608,6 +3708,8 @@ MIR_type_t MIR_str2type (const char *type_name) {
     return MIR_T_F;
   if (strcmp (type_name, "d") == 0)
     return MIR_T_D;
+  if (strcmp (type_name, "ld") == 0)
+    return MIR_T_LD;
   if (strcmp (type_name, "p") == 0)
     return MIR_T_P;
   if (strcmp (type_name, "v") == 0)
@@ -3633,7 +3735,7 @@ MIR_type_t MIR_str2type (const char *type_name) {
      insn : {label ':'}* [ code [ {op / ','} ] ]
      label : name
      code : name
-     op : name | int | float | double | mem | str
+     op : name | int | float | double | long double | mem | str
      mem : type ':' addr
      addr : disp
           | [ disp ] '(' sib ')'
@@ -3666,27 +3768,27 @@ void MIR_scan_string (const char *str) {
   for (;;) {
     if (setjmp (error_jmp_buf)) {
       while (t.code != TC_NL && t.code != EOF)
-	t = scan_token (get_string_char, unget_string_char);
+	scan_token (&t, get_string_char, unget_string_char);
       if (t.code == TC_EOF)
 	break;
     }
     VARR_TRUNC (label_name_t, label_names, 0);
-    t = scan_token (get_string_char, unget_string_char);
+    scan_token (&t, get_string_char, unget_string_char);
     while (t.code == TC_NL)
-      t = scan_token (get_string_char, unget_string_char);
+      scan_token (&t, get_string_char, unget_string_char);
     if (t.code == TC_EOF)
       break;
     for (;;) { /* label_names */
       if (t.code != TC_NAME)
 	process_error (MIR_syntax_error, "insn should start with label or insn name");
       name = t.u.name;
-      t = scan_token (get_string_char, unget_string_char);
+      scan_token (&t, get_string_char, unget_string_char);
       if (t.code != TC_COL)
 	break;
       VARR_PUSH (label_name_t, label_names, name);
-      t = scan_token (get_string_char, unget_string_char);
+      scan_token (&t, get_string_char, unget_string_char);
       if (t.code == TC_NL)
-	t = scan_token (get_string_char, unget_string_char); /* label_names without insn */
+	scan_token (&t, get_string_char, unget_string_char); /* label_names without insn */
     }
     module_p = end_module_p = proto_p = func_p = end_func_p = FALSE;
     export_p = import_p = forward_p = bss_p = string_p = local_p = FALSE;
@@ -3761,7 +3863,7 @@ void MIR_scan_string (const char *str) {
       switch (t.code) {
       case TC_NAME: {
 	name = t.u.name;
-	t = scan_token (get_string_char, unget_string_char);
+	scan_token (&t, get_string_char, unget_string_char);
 	if ((func_p || proto_p) && strcmp (name, "...") == 0) {
 	  dots_p = TRUE;
 	  break;
@@ -3796,56 +3898,56 @@ void MIR_scan_string (const char *str) {
 	type = MIR_str2type (name);
 	if (type == MIR_T_BOUND)
 	  process_error (MIR_syntax_error, "Unknown type");
-	else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D)
+	else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
 	  process_error (MIR_syntax_error, "wrong type for local var");
 	op.mode = MIR_OP_MEM;
 	op.u.mem.type = type; op.u.mem.scale = 1;
 	op.u.mem.base = op.u.mem.index = 0; op.u.mem.disp = 0;
 	if (proto_p || func_p || local_p) {
 	  if (t.code == TC_COL) {
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	    if (t.code != TC_NAME)
 	      process_error (MIR_syntax_error, func_p ? "wrong arg" : "wrong local var");
 	    op.u.mem.disp = (MIR_disp_t) t.u.name;
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	  }
 	} else {
-	  t = scan_token (get_string_char, unget_string_char);
+	  scan_token (&t, get_string_char, unget_string_char);
 	  disp_p = FALSE;
 	  if (t.code == TC_INT) {
 	    op.u.mem.disp = t.u.i;
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	    disp_p = TRUE;
 	  } else if (t.code == TC_NAME) {
 	    op.u.mem.disp = (MIR_disp_t) t.u.name;
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	    disp_p = TRUE;
 	  }
 	  if (t.code == TC_LEFT_PAR) {
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	    if (t.code == TC_NAME) {
 	      op.u.mem.base = MIR_reg (t.u.name, func->u.func);
-	      t = scan_token (get_string_char, unget_string_char);
+	      scan_token (&t, get_string_char, unget_string_char);
 	    }
 	    if (t.code == TC_COMMA) {
-	      t = scan_token (get_string_char, unget_string_char);
+	      scan_token (&t, get_string_char, unget_string_char);
 	      if (t.code != TC_NAME)
 		process_error (MIR_syntax_error, "wrong index");
 	      op.u.mem.index = MIR_reg (t.u.name, func->u.func);
-	      t = scan_token (get_string_char, unget_string_char);
+	      scan_token (&t, get_string_char, unget_string_char);
 	      if (t.code == TC_COMMA) {
-		t = scan_token (get_string_char, unget_string_char);
+		scan_token (&t, get_string_char, unget_string_char);
 		if (t.code != TC_INT)
 		  process_error (MIR_syntax_error, "wrong scale");
 		if (t.u.i != 1 && t.u.i != 2 && t.u.i != 4 && t.u.i != 8)
 		  process_error (MIR_syntax_error, "scale is not 1, 2, 4, or 8");
 		op.u.mem.scale = t.u.i;
-		t = scan_token (get_string_char, unget_string_char);
+		scan_token (&t, get_string_char, unget_string_char);
 	      }
 	    }  
 	    if (t.code != TC_RIGHT_PAR)
 	      process_error (MIR_syntax_error, "wrong memory op");
-	    t = scan_token (get_string_char, unget_string_char);
+	    scan_token (&t, get_string_char, unget_string_char);
 	  } else if (! disp_p)
 	    process_error (MIR_syntax_error, "wrong memory");
 	}
@@ -3863,6 +3965,10 @@ void MIR_scan_string (const char *str) {
 	op.mode = MIR_OP_DOUBLE;
 	op.u.d = t.u.d;
 	break;
+      case TC_LDOUBLE:
+	op.mode = MIR_OP_LDOUBLE;
+	op.u.ld = t.u.ld;
+	break;
       case TC_STR:
 	op.mode = MIR_OP_STR;
 	op.u.str = t.u.str;
@@ -3875,10 +3981,10 @@ void MIR_scan_string (const char *str) {
       if (push_op_p)
 	VARR_PUSH (MIR_op_t, temp_insn_ops, op);
       if (read_p)
-	t = scan_token (get_string_char, unget_string_char);
+	scan_token (&t, get_string_char, unget_string_char);
       if (t.code != TC_COMMA)
 	break;
-      t = scan_token (get_string_char, unget_string_char);
+      scan_token (&t, get_string_char, unget_string_char);
     }
     if (t.code != TC_NL && t.code != TC_EOF && t.code != TC_SEMICOL)
       process_error (MIR_syntax_error, "wrong insn end");
@@ -3934,6 +4040,7 @@ void MIR_scan_string (const char *str) {
 	case MIR_T_U64: v.u64 = op_addr[i].u.u; push_data ((uint8_t *) &v.u64, sizeof (uint64_t)); break;
 	case MIR_T_F: push_data ((uint8_t *) &op_addr[i].u.f, sizeof (float)); break;
 	case MIR_T_D: push_data ((uint8_t *) &op_addr[i].u.d, sizeof (double)); break;
+	case MIR_T_LD: push_data ((uint8_t *) &op_addr[i].u.ld, sizeof (long double)); break;
 	  /* ptr ??? */
 	default:
 	  process_error (MIR_syntax_error, "wrong data clause");
