@@ -4,39 +4,15 @@
 
 #include <limits.h>
 
-/* Stack layout (sp refers to the last reserved stack slot address)
-   from higher address to lower address memory:
-
-   | ...           |  prev func stack frame
-   |---------------|
-   | return pc     |  value of sp before prologue = start sp hard reg
-   |---------------|
-   | reg save area |  176 bytes optional area for vararg func reg save area
-   |---------------|
-   | old bp        |  bp for previous func stack frame; new bp refers for here
-   |---------------|
-   | slots assigned|  can be absent for small functions (known only after RA)
-   |   to pseudos  |  
-   |---------------|
-   | saved regs    |  callee saved regs used in the func (known only after RA)
-   |---------------|
-   | alloca areas  |  optional
-   |---------------|
-   | slots for     |  dynamically allocated/deallocated by caller
-   |  passing args |
-
- */
-
-static const int reg_save_area_size = 176;
-
 enum {
   AX_HARD_REG = 0, CX_HARD_REG, DX_HARD_REG, BX_HARD_REG, SP_HARD_REG, BP_HARD_REG, SI_HARD_REG, DI_HARD_REG,
   R8_HARD_REG, R9_HARD_REG, R10_HARD_REG, R11_HARD_REG, R12_HARD_REG, R13_HARD_REG, R14_HARD_REG, R15_HARD_REG, 
   XMM0_HARD_REG, XMM1_HARD_REG, XMM2_HARD_REG, XMM3_HARD_REG, XMM4_HARD_REG, XMM5_HARD_REG, XMM6_HARD_REG, XMM7_HARD_REG, 
-  XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG, XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG, 
+  XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG, XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG,
+  ST0_HARD_REG,
 };
 
-static const MIR_reg_t MAX_HARD_REG = XMM15_HARD_REG;
+static const MIR_reg_t MAX_HARD_REG = ST0_HARD_REG;
 static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
 static int locs_num (MIR_reg_t loc, MIR_type_t type) { return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1; }
@@ -45,9 +21,13 @@ static int locs_num (MIR_reg_t loc, MIR_type_t type) { return loc > MAX_HARD_REG
 const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
 const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM8_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM9_HARD_REG;
 const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM9_HARD_REG;
+const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_HARD_REG, TEMP_LDOUBLE_HARD_REG2 = MIR_NON_HARD_REG;
 
 static inline int hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
+  /* For LD we need x87 stack regs and it is too complicated so no hard register allocation for LD: */
+  if (type == MIR_T_LD)
+    return FALSE;
   return type == MIR_T_F || type == MIR_T_D ? hard_reg >= XMM0_HARD_REG : hard_reg < XMM0_HARD_REG;
 }
 
@@ -56,7 +36,8 @@ static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
   return (hard_reg == BP_HARD_REG || hard_reg == SP_HARD_REG
 	  || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
 	  || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
-	  || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2);
+	  || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
+	  || hard_reg == ST0_HARD_REG);
 }
 
 static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
@@ -1021,12 +1002,13 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	mode = MIR_OP_INT;
       if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT)) return FALSE;
       gen_assert (mode == MIR_OP_HARD_REG || mode == MIR_OP_INT
-	      || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE
+	      || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE
 	      || mode == MIR_OP_HARD_REG_MEM || mode == MIR_OP_LABEL);
       if (mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg) return FALSE;
       else if (mode == MIR_OP_INT && op.u.i != original.u.i) return FALSE;
       else if (mode == MIR_OP_FLOAT && op.u.f != original.u.f) return FALSE;
       else if (mode == MIR_OP_DOUBLE && op.u.d != original.u.d) return FALSE;
+      else if (mode == MIR_OP_LDOUBLE && op.u.ld != original.u.ld) return FALSE;
       else if (mode == MIR_OP_LABEL && op.u.label != original.u.label) return FALSE;
       else if (mode == MIR_OP_HARD_REG_MEM
 	       && op.u.hard_reg_mem.type != original.u.hard_reg_mem.type
