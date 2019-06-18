@@ -72,9 +72,9 @@ void ex100 (void) {
 ```
 m_sieve:  module
           export sieve
-sieve:    func i32, 819000, i32:N
+sieve:    func i32, i32:N
           local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags
-          mov flags, fp
+          alloca flags, 819000
           mov iter, 0
 loop:     bge fin, iter, N
           mov count, 0;  mov i, 0
