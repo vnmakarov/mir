@@ -570,7 +570,8 @@ static void output_out_edges (bb_t bb) {
 static void output_live_element (size_t nel) {
   fprintf (debug_file, "%3lu", (unsigned long) nel);
   if (var_is_reg_p (nel))
-    fprintf (debug_file, "(%s)", MIR_reg_name (var2reg (nel), curr_func_item->u.func));
+    fprintf (debug_file, "(%s:%s)", MIR_type_str (MIR_reg_type (var2reg (nel), curr_func_item->u.func)),
+	     MIR_reg_name (var2reg (nel), curr_func_item->u.func));
 }
 
 static void output_bitmap (const char *head, bitmap_t bm) {
@@ -2644,7 +2645,8 @@ static void print_live_ranges (void) {
       continue;
     fprintf (debug_file, "%lu", i);
     if (var_is_reg_p (i))
-      fprintf (debug_file, " (%s)", MIR_reg_name (var2reg (i), curr_func_item->u.func));
+      fprintf (debug_file, " (%s:%s)", MIR_type_str (MIR_reg_type (var2reg (i), curr_func_item->u.func)),
+	       MIR_reg_name (var2reg (i), curr_func_item->u.func));
     fprintf (debug_file, ":");
     for (; lr != NULL; lr = lr->next)
       fprintf (debug_file, " [%d..%d]", lr->start, lr->finish);
