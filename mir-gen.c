@@ -1762,7 +1762,7 @@ static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
   return TRUE;
 }
 
-static int ccp_insn_update (MIR_insn_t insn, const_t *res) {
+static int ccp_insn_update (MIR_insn_t insn, const_t *res) { // ??? should we do CCP for FP too
   MIR_op_t op;
   int out_p;
   enum ccp_val_kind ccp_res;
@@ -1909,7 +1909,7 @@ static enum ccp_val_kind ccp_branch_update (MIR_insn_t insn, int *res) {
   case MIR_UBGES: BUCMPS(>=); break;
       
   default:
-    gen_assert (FALSE);
+    return CCP_VARYING; // ??? should we do CCP for FP BCMP too
   }
   *res = val.u.i;
   return CCP_CONST;
