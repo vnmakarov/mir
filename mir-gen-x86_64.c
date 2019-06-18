@@ -556,10 +556,11 @@ struct pattern {
      mu[0-3] - unsigned int type memory of size 8,16,32,64-bits
      mf - memory of float
      md - memory of double
+     mld - memory of long double
      l - label which can be present by 32-bit
      [0-9] - an operand matching n-th operand (n should be less than given operand number)
 
-     Remmeber we have no float or double immediate at this stage. They are represented by
+     Remmeber we have no float or (long) double immediate at this stage. They are represented by
      a reference to data item.  */
   const char *pattern;
   /* Replacement elements:
@@ -572,6 +573,7 @@ struct pattern {
      r[0-2] = n-th operand in ModRM:reg
      R[0-2] = n-th operand in ModRM:rm with mod == 3
      m[0-2] = n-th operand is mem
+     mt = temp memory in red zone (-16(sp))
      ap = 2 and 3 operand forms address by plus (1st reg to base, 2nd reg to index, disp to disp)
      am = 2 and 3 operand forms address by mult (1st reg to index and mult const to scale)
      ad<value> - forms address: 1th operand is base reg and <value> is displacement
@@ -976,6 +978,11 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
       switch (ch) {
       case 'f': type = MIR_T_F; type2 = MIR_T_BOUND; break;
       case 'd': type = MIR_T_D; type2 = MIR_T_BOUND; break;
+      case 'l':
+	 ch = *++p;
+	 gen_assert (ch == 'd');
+	 type = MIR_T_LD; type2 = MIR_T_BOUND;
+	 break;
       case 'u': case 's':
 	u_p = ch == 'u'; s_p = ch == 's'; ch = *++p;
 	/* Fall through: */
@@ -1286,10 +1293,16 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
 	break;
       case 'm':
 	ch = *++p;
-	gen_assert ('0' <= ch && ch <= '2');
-	op = insn->ops[ch - '0'];
-	gen_assert (op.mode == MIR_OP_HARD_REG_MEM);
-	setup_mem (op.u.hard_reg_mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8, &disp32);
+	if (ch == 't') { /* -16(%rsp) */
+	  setup_rm (NULL, &rm, 4);
+	  setup_index (NULL, &index, SP_HARD_REG); setup_base (&rex_b, &base, SP_HARD_REG);
+	  setup_mod (&mod, 1); disp8 = (uint8_t) -16;
+	} else {
+	  gen_assert ('0' <= ch && ch <= '2');
+	  op = insn->ops[ch - '0'];
+	  gen_assert (op.mode == MIR_OP_HARD_REG_MEM);
+	  setup_mem (op.u.hard_reg_mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8, &disp32);
+	}
 	break;
       case 'a': {
 	MIR_mem_t mem;
