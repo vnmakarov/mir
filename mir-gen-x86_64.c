@@ -46,8 +46,33 @@ static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
 	    || (hard_reg >= R12_HARD_REG && hard_reg <= R15_HARD_REG));
 }
 
-static MIR_disp_t get_stack_slot_offset (MIR_reg_t slot) { /* slot is 0, 1, ... */
-  return -(MIR_disp_t) (slot + 1) * 8;
+/* Stack layout (sp refers to the last reserved stack slot address)
+   from higher address to lower address memory:
+
+   | ...           |  prev func stack frame (start address should be aligned to 16 bytes)
+   |---------------|
+   | return pc     |  value of sp before prologue = start sp hard reg
+   |---------------|
+   | reg save area |  176 bytes optional area for vararg func reg save area
+   |---------------|
+   | old bp        |  bp for previous func stack frame; new bp refers for here
+   |---------------|
+   | slots assigned|  can be absent for small functions (known only after RA)
+   |   to pseudos  |  
+   |---------------|
+   | saved regs    |  callee saved regs used in the func (known only after RA)
+   |---------------|
+   | alloca areas  |  optional
+   |---------------|
+   | slots for     |  dynamically allocated/deallocated by caller
+   |  passing args |
+
+ */
+
+static const int reg_save_area_size = 176;
+
+static MIR_disp_t get_stack_slot_offset (MIR_type_t type, MIR_reg_t slot) { /* slot is 0, 1, ... */
+  return -(MIR_disp_t) (slot + (type == MIR_T_LD ? 2 : 1)) * 8;
 }
 
 static int alloca_p;
@@ -80,7 +105,10 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type,
 			      size_t *int_arg_num, size_t *fp_arg_num, MIR_insn_code_t *mov_code) {
   MIR_reg_t arg_reg;
   
-  if (arg_type == MIR_T_F || arg_type == MIR_T_D) {
+  if (arg_type == MIR_T_LD) {
+    arg_reg = MIR_NON_HARD_REG;
+    *mov_code = MIR_LDMOV;
+  } else if (arg_type == MIR_T_F || arg_type == MIR_T_D) {
     switch (*fp_arg_num) {
     case 0: case 1: case 2: case 3:
 #ifndef _WIN64
@@ -156,12 +184,12 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       type = arg_vars[i - start].type;
     } else {
       mode = call_insn->ops[i].value_mode; // ??? smaller ints
-      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT
-		  || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE);
+      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
+		  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE); // ???
       if (mode == MIR_OP_FLOAT)
 	(*MIR_get_error_func ()) (MIR_call_op_error,
 				  "passing float variadic arg (should be passed as double)");
-      type = mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64;
+      type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     if (xmm_args < 8 && (type == MIR_T_F || type == MIR_T_D))
       xmm_args++;
@@ -180,8 +208,9 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       gen_add_insn_before (func_item, call_insn, new_insn);
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
-      mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
-      new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+      mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
+      new_insn_code = (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
+		       : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (new_insn_code, mem_op, arg_op);
       gen_assert (prev_call_insn != NULL); /* call_insn should not be the first after simplification */
@@ -189,7 +218,7 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       prev_insn = DLIST_PREV (MIR_insn_t, new_insn); next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
       create_new_bb_insns (func_item, prev_insn, next_insn);
       call_insn->ops[i] = mem_op;
-      mem_size += 8;
+      mem_size += type == MIR_T_LD ? 16 : 8;
       if (ext_insn != NULL)
 	gen_add_insn_after (func_item, prev_call_insn, ext_insn);
     }
@@ -206,6 +235,8 @@ static void machinize_call (MIR_item_t func_item, MIR_insn_t call_insn) {
       new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
     } else if (proto->res_type == MIR_T_D) {
       new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
+    } else if (proto->res_type == MIR_T_LD) {
+      new_insn = MIR_new_insn (MIR_LDMOV, ret_reg_op, _MIR_new_hard_reg_op (ST0_HARD_REG));
     } else {
       new_insn = MIR_new_insn (MIR_MOV, ret_reg_op, _MIR_new_hard_reg_op (AX_HARD_REG));
     }
