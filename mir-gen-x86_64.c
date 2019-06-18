@@ -39,6 +39,8 @@ enum {
 static const MIR_reg_t MAX_HARD_REG = XMM15_HARD_REG;
 static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
+static int locs_num (MIR_reg_t loc, MIR_type_t type) { return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1; }
+
 /* Hard regs not used in machinized code, preferably call used ones. */
 const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
 const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM8_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM9_HARD_REG;
