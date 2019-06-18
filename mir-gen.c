@@ -141,6 +141,8 @@ static void make_2op_insns (MIR_item_t func_item) {
       code = MIR_FMOV; type = MIR_T_F;
     } else if (mode == MIR_OP_DOUBLE) {
       code = MIR_DMOV; type = MIR_T_D;
+    } else if (mode == MIR_OP_LDOUBLE) {
+      code = MIR_LDMOV; type = MIR_T_LD;
     } else {
       code = MIR_MOV; type = MIR_T_I64;
     }
@@ -528,17 +530,19 @@ static MIR_reg_t get_nvars (void) {
 }
 
 static int move_p (MIR_insn_t insn) {
-  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
+  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV
+	   || insn->code == MIR_DMOV || insn->code == MIR_LDMOV)
 	  && (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
 	  && (insn->ops[1].mode == MIR_OP_REG || insn->ops[1].mode == MIR_OP_HARD_REG));
 }
 
 static int imm_move_p (MIR_insn_t insn) {
-  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
+  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV
+	   || insn->code == MIR_DMOV || insn->code == MIR_LDMOV)
 	  && (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
 	  && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
 	      || insn->ops[1].mode == MIR_OP_FLOAT || insn->ops[1].mode == MIR_OP_DOUBLE
-	      || insn->ops[1].mode == MIR_OP_REF));
+	      || insn->ops[1].mode == MIR_OP_LDOUBLE || insn->ops[1].mode == MIR_OP_REF));
 }
 
 #if MIR_GEN_DEBUG
@@ -942,7 +946,8 @@ static void process_cse_ops (MIR_op_t op, expr_t e) {
   case MIR_OP_HARD_REG:
     process_var (op.u.hard_reg, e);
     break;
-  case MIR_OP_INT: case MIR_OP_UINT: case MIR_OP_FLOAT: case MIR_OP_DOUBLE: case MIR_OP_REF:
+  case MIR_OP_INT: case MIR_OP_UINT:
+  case MIR_OP_FLOAT: case MIR_OP_DOUBLE:  case MIR_OP_LDOUBLE: case MIR_OP_REF:
     break;
   case MIR_OP_MEM:
     if (op.u.mem.base != 0)
@@ -971,7 +976,8 @@ static expr_t add_expr (MIR_insn_t insn) {
   
   e->insn = insn; e->num = VARR_LENGTH (expr_t, exprs);
   mode = MIR_insn_op_mode (insn, 0, &out_p);
-  e->temp_reg = gen_new_temp_reg (mode == MIR_OP_FLOAT ? MIR_T_F : mode == MIR_OP_DOUBLE ? MIR_T_D : MIR_T_I64,
+  e->temp_reg = gen_new_temp_reg (mode == MIR_OP_FLOAT ? MIR_T_F : mode == MIR_OP_DOUBLE ? MIR_T_D
+				  : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64,
 				  curr_func_item->u.func);
   VARR_PUSH (expr_t, exprs, e);
   insert_expr (e);
@@ -1127,7 +1133,8 @@ static void cse_modify (void) {
 	}
 	op = MIR_new_reg_op (e->temp_reg);
 	type = MIR_reg_type (e->temp_reg, curr_func_item->u.func);
-	move_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+	move_code = (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
+		     : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
 #ifdef NDEBUG
 	MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
 	gen_assert (out_p);
@@ -2966,9 +2973,12 @@ static MIR_reg_t change_reg (MIR_op_t *mem_op, MIR_reg_t reg,
   } else if (data_mode == MIR_OP_FLOAT) {
     type = MIR_T_F; code = MIR_FMOV;
     hard_reg = first_p ? TEMP_FLOAT_HARD_REG1 : TEMP_FLOAT_HARD_REG2;
-  } else {
+  } else if (data_mode == MIR_OP_DOUBLE) {
     type = MIR_T_D; code = MIR_DMOV;
     hard_reg = first_p ? TEMP_DOUBLE_HARD_REG1 : TEMP_DOUBLE_HARD_REG2;
+  } else {
+    type = MIR_T_LD; code = MIR_LDMOV;
+    hard_reg = first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
   }
   offset = get_stack_slot_offset (type, loc - MAX_HARD_REG - 1);
   *mem_op = _MIR_new_hard_reg_mem_op (type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
@@ -3043,7 +3053,8 @@ static void rewrite (void) {
 	  break;
 	}
       }
-      if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
+      if ((insn->code == MIR_MOV || insn->code == MIR_FMOV
+	   || insn->code == MIR_DMOV || insn->code == MIR_LDMOV)
 	  && insn->ops[0].mode == MIR_OP_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
 	  && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
 #if MIR_GEN_DEBUG
@@ -3089,14 +3100,14 @@ static VARR (MIR_reg_t) *dead_def_regs;
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
-  case MIR_ADD: case MIR_ADDS: case MIR_FADD: case MIR_DADD:
-  case MIR_MUL: case MIR_MULS: case MIR_FMUL: case MIR_DMUL:
+  case MIR_ADD: case MIR_ADDS: case MIR_FADD: case MIR_DADD: case MIR_LDADD:
+  case MIR_MUL: case MIR_MULS: case MIR_FMUL: case MIR_DMUL: case MIR_LDMUL:
   case MIR_AND: case MIR_OR: case MIR_XOR:
   case MIR_ANDS: case MIR_ORS: case MIR_XORS:
-  case MIR_EQ: case MIR_EQS: case MIR_FEQ: case MIR_DEQ:
-  case MIR_NE: case MIR_NES: case MIR_FNE: case MIR_DNE:
-  case MIR_BEQ: case MIR_BEQS: case MIR_FBEQ: case MIR_DBEQ:
-  case MIR_BNE: case MIR_BNES: case MIR_FBNE: case MIR_DBNE:
+  case MIR_EQ: case MIR_EQS: case MIR_FEQ: case MIR_DEQ: case MIR_LDEQ:
+  case MIR_NE: case MIR_NES: case MIR_FNE: case MIR_DNE: case MIR_LDNE:
+  case MIR_BEQ: case MIR_BEQS: case MIR_FBEQ: case MIR_DBEQ: case MIR_LDBEQ:
+  case MIR_BNE: case MIR_BNES: case MIR_FBNE: case MIR_DBNE: case MIR_LDBNE:
     return insn_code;
     break;
   case MIR_LT: return MIR_GT;
@@ -3133,20 +3144,28 @@ static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   case MIR_UBGES: return MIR_UBLES;
   case MIR_FLT: return MIR_FGT;
   case MIR_DLT: return MIR_DGT;
+  case MIR_LDLT: return MIR_LDGT;
   case MIR_FLE: return MIR_FGE;
   case MIR_DLE: return MIR_DGE;
+  case MIR_LDLE: return MIR_LDGE;
   case MIR_FGT: return MIR_FLT;
   case MIR_DGT: return MIR_DLT;
+  case MIR_LDGT: return MIR_LDLT;
   case MIR_FGE: return MIR_FLE;
   case MIR_DGE: return MIR_DLE;
+  case MIR_LDGE: return MIR_LDLE;
   case MIR_FBLT: return MIR_FBGT;
   case MIR_DBLT: return MIR_DBGT;
+  case MIR_LDBLT: return MIR_LDBGT;
   case MIR_FBLE: return MIR_FBGE;
   case MIR_DBLE: return MIR_DBGE;
+  case MIR_LDBLE: return MIR_LDBGE;
   case MIR_FBGT: return MIR_FBLT;
   case MIR_DBGT: return MIR_DBLT;
+  case MIR_LDBGT: return MIR_LDBLT;
   case MIR_FBGE: return MIR_FBLE;
   case MIR_DBGE: return MIR_DBLE;
+  case MIR_LDBGE: return MIR_LDBLE;
   default: return MIR_INSN_BOUND;
   }
 }
@@ -3197,7 +3216,8 @@ static int substitute_op_p (MIR_insn_t insn, size_t nop, int first_p) {
       return FALSE;
     gen_assert (! hreg_refs_addr[def_hr].del_p);
     def_insn = hreg_refs_addr[def_hr].insn;
-    if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV)
+    if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV
+	&& def_insn->code != MIR_DMOV && def_insn->code != MIR_LDMOV)
       return FALSE;
     if (obsolete_op_p (def_insn->ops[1], hreg_refs_addr[def_hr].insn_num))
       return FALSE; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
@@ -3346,16 +3366,22 @@ static MIR_insn_code_t get_combined_br_code (int true_p, MIR_insn_code_t cmp_cod
     /* Cannot revert in the false case for IEEE754: */
   case MIR_FEQ: return true_p ? MIR_FBEQ : MIR_INSN_BOUND;
   case MIR_DEQ: return true_p ? MIR_DBEQ : MIR_INSN_BOUND;
+  case MIR_LDEQ: return true_p ? MIR_LDBEQ : MIR_INSN_BOUND;
   case MIR_FNE: return true_p ? MIR_FBNE : MIR_INSN_BOUND;
   case MIR_DNE: return true_p ? MIR_DBNE : MIR_INSN_BOUND;
+  case MIR_LDNE: return true_p ? MIR_LDBNE : MIR_INSN_BOUND;
   case MIR_FLT: return true_p ? MIR_FBLT : MIR_INSN_BOUND;
   case MIR_DLT: return true_p ? MIR_DBLT : MIR_INSN_BOUND;
+  case MIR_LDLT: return true_p ? MIR_LDBLT : MIR_INSN_BOUND;
   case MIR_FLE: return true_p ? MIR_FBLE : MIR_INSN_BOUND;
   case MIR_DLE: return true_p ? MIR_DBLE : MIR_INSN_BOUND;
+  case MIR_LDLE: return true_p ? MIR_LDBLE : MIR_INSN_BOUND;
   case MIR_FGT: return true_p ? MIR_FBGT : MIR_INSN_BOUND;
   case MIR_DGT: return true_p ? MIR_DBGT : MIR_INSN_BOUND;
+  case MIR_LDGT: return true_p ? MIR_LDBGT : MIR_INSN_BOUND;
   case MIR_FGE: return true_p ? MIR_FBGE : MIR_INSN_BOUND;
   case MIR_DGE: return true_p ? MIR_DBGE : MIR_INSN_BOUND;
+  case MIR_LDGE: return true_p ? MIR_LDBGE : MIR_INSN_BOUND;
   default: return MIR_INSN_BOUND;
   }
 }
