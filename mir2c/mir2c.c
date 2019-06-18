@@ -20,6 +20,7 @@ static void out_type (FILE *f, MIR_type_t t) {
   case MIR_T_U64: fprintf (f, "uint64_t"); break;
   case MIR_T_F: fprintf (f, "float"); break;
   case MIR_T_D: fprintf (f, "double"); break;
+  case MIR_T_LD: fprintf (f, "long double"); break;
   case MIR_T_P: fprintf (f, "void *"); break;
   default: mir_assert (FALSE);
   }
@@ -30,8 +31,9 @@ static void out_op (FILE *f, MIR_op_t op) {
   case MIR_OP_REG: fprintf (f, "%s", MIR_reg_name (op.u.reg, curr_func)); break;
   case MIR_OP_INT: fprintf (f, "%"PRId64, op.u.i); break;
   case MIR_OP_UINT: fprintf (f, "%"PRIu64, op.u.u); break;
-  case MIR_OP_FLOAT: fprintf (f, "%.*g", FLT_DECIMAL_DIG, op.u.f); break;
+  case MIR_OP_FLOAT: fprintf (f, "%.*gf", FLT_DECIMAL_DIG, op.u.f); break;
   case MIR_OP_DOUBLE: fprintf (f, "%.*g", DBL_DECIMAL_DIG, op.u.d); break;
+  case MIR_OP_LDOUBLE: fprintf (f, "%.*lgl", LDBL_DECIMAL_DIG, op.u.d); break;
   case MIR_OP_REF: fprintf (f, "%s", MIR_item_name (op.u.ref)); break;
   case MIR_OP_MEM: {
     MIR_reg_t no_reg = 0;
@@ -145,14 +147,16 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_UEXT8: out_op2 (f, ops, "(int64_t) (uint8_t)"); break;
   case MIR_UEXT16: out_op2 (f, ops, "(int64_t) (uint16_t)"); break;
   case MIR_UEXT32: out_op2 (f, ops, "(int64_t) (uint32_t)"); break;
-  case MIR_F2I: case MIR_D2I: out_op2 (f, ops, "(int64_t)"); break;
-  case MIR_I2D: case MIR_F2D: out_op2 (f, ops, "(double)"); break;
-  case MIR_I2F: case MIR_D2F: out_op2 (f, ops, "(float)"); break;
+  case MIR_F2I: case MIR_D2I: case MIR_LD2I: out_op2 (f, ops, "(int64_t)"); break;
+  case MIR_I2D: case MIR_F2D: case MIR_LD2D: out_op2 (f, ops, "(double)"); break;
+  case MIR_I2F: case MIR_D2F: case MIR_LD2F: out_op2 (f, ops, "(float)"); break;
+  case MIR_I2LD: case MIR_D2LD: case MIR_F2LD: out_op2 (f, ops, "(long double)"); break;
   case MIR_UI2D: out_op2 (f, ops, "(double) (uint64_t)"); break;
   case MIR_UI2F: out_op2 (f, ops, "(float) (uint64_t)"); break;
+  case MIR_UI2LD: out_op2 (f, ops, "(long double) (uint64_t)"); break;
   case MIR_NEG: out_op2 (f, ops, "- (int64_t)"); break;
   case MIR_NEGS: out_op2 (f, ops, "- (int32_t)"); break;
-  case MIR_FNEG: case MIR_DNEG: out_op2 (f, ops, "-"); break;
+  case MIR_FNEG: case MIR_DNEG: case MIR_LDNEG: out_op2 (f, ops, "-"); break;
   case MIR_ADD: out_op3 (f, ops, "+"); break;
   case MIR_SUB: out_op3 (f, ops, "-"); break;
   case MIR_MUL: out_op3 (f, ops, "*"); break;
@@ -167,10 +171,10 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_MODS: out_sop3 (f, ops, "%"); break;
   case MIR_UDIVS: out_usop3 (f, ops, "/"); break;
   case MIR_UMODS: out_usop3 (f, ops, "%"); break;
-  case MIR_FADD: case MIR_DADD: out_fop3 (f, ops, "+"); break;
-  case MIR_FSUB: case MIR_DSUB: out_fop3 (f, ops, "-"); break;
-  case MIR_FMUL: case MIR_DMUL: out_fop3 (f, ops, "*"); break;
-  case MIR_FDIV: case MIR_DDIV: out_fop3 (f, ops, "/"); break;
+  case MIR_FADD: case MIR_DADD: case MIR_LDADD: out_fop3 (f, ops, "+"); break;
+  case MIR_FSUB: case MIR_DSUB: case MIR_LDSUB: out_fop3 (f, ops, "-"); break;
+  case MIR_FMUL: case MIR_DMUL: case MIR_LDMUL: out_fop3 (f, ops, "*"); break;
+  case MIR_FDIV: case MIR_DDIV: case MIR_LDDIV: out_fop3 (f, ops, "/"); break;
   case MIR_AND: out_op3 (f, ops, "&"); break;
   case MIR_OR: out_op3 (f, ops, "|"); break;
   case MIR_XOR: out_op3 (f, ops, "^"); break;
@@ -203,12 +207,12 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_ULES: out_usop3 (f, ops, "<="); break;
   case MIR_UGTS: out_usop3 (f, ops, ">"); break;
   case MIR_UGES: out_usop3 (f, ops, ">="); break;
-  case MIR_FEQ: case MIR_DEQ: out_fop3 (f, ops, "=="); break;
-  case MIR_FNE: case MIR_DNE: out_fop3 (f, ops, "!="); break;
-  case MIR_FLT: case MIR_DLT: out_fop3 (f, ops, "<"); break;
-  case MIR_FLE: case MIR_DLE: out_fop3 (f, ops, "<="); break;
-  case MIR_FGT: case MIR_DGT: out_fop3 (f, ops, ">"); break;
-  case MIR_FGE: case MIR_DGE: out_fop3 (f, ops, ">="); break;
+  case MIR_FEQ: case MIR_DEQ: case MIR_LDEQ: out_fop3 (f, ops, "=="); break;
+  case MIR_FNE: case MIR_DNE: case MIR_LDNE: out_fop3 (f, ops, "!="); break;
+  case MIR_FLT: case MIR_DLT: case MIR_LDLT: out_fop3 (f, ops, "<"); break;
+  case MIR_FLE: case MIR_DLE: case MIR_LDLE: out_fop3 (f, ops, "<="); break;
+  case MIR_FGT: case MIR_DGT: case MIR_LDGT: out_fop3 (f, ops, ">"); break;
+  case MIR_FGE: case MIR_DGE: case MIR_LDGE: out_fop3 (f, ops, ">="); break;
   case MIR_JMP: out_jmp (f, ops[0]); break;
   case MIR_BT:
     fprintf (f, "if ((int64_t) "); out_op (f, ops[1]); fprintf (f, ") ");
@@ -239,12 +243,12 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_UBLES: out_buscmp (f, ops, "<="); break;
   case MIR_UBGTS: out_buscmp (f, ops, ">"); break;
   case MIR_UBGES: out_buscmp (f, ops, ">="); break;
-  case MIR_FBEQ: case MIR_DBEQ: out_bfcmp (f, ops, "=="); break;
-  case MIR_FBNE: case MIR_DBNE: out_bfcmp (f, ops, "!="); break;
-  case MIR_FBLT: case MIR_DBLT: out_bfcmp (f, ops, "<"); break;
-  case MIR_FBLE: case MIR_DBLE: out_bfcmp (f, ops, "<="); break;
-  case MIR_FBGT: case MIR_DBGT: out_bfcmp (f, ops, ">"); break;
-  case MIR_FBGE: case MIR_DBGE: out_bfcmp (f, ops, ">="); break;
+  case MIR_FBEQ: case MIR_DBEQ: case MIR_LDBEQ: out_bfcmp (f, ops, "=="); break;
+  case MIR_FBNE: case MIR_DBNE: case MIR_LDBNE: out_bfcmp (f, ops, "!="); break;
+  case MIR_FBLT: case MIR_DBLT: case MIR_LDBLT: out_bfcmp (f, ops, "<"); break;
+  case MIR_FBLE: case MIR_DBLE: case MIR_LDBLE: out_bfcmp (f, ops, "<="); break;
+  case MIR_FBGT: case MIR_DBGT: case MIR_LDBGT: out_bfcmp (f, ops, ">"); break;
+  case MIR_FBGE: case MIR_DBGE: case MIR_LDBGE: out_bfcmp (f, ops, ">="); break;
   case MIR_ALLOCA: out_op (f, ops[0]); fprintf (f, " = alloca ("); out_op (f, ops[1]); fprintf (f, ");\n"); break;
   case MIR_CALL: case MIR_INLINE: {
     MIR_proto_t proto;
@@ -267,7 +271,7 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
     break;
   }
   case MIR_RET: fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n"); break;
-  case MIR_FRET: case MIR_DRET:
+  case MIR_FRET: case MIR_DRET: case MIR_LDRET:
     fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n");
     break;
   case MIR_LABEL:
@@ -319,14 +323,14 @@ void out_item (FILE *f, MIR_item_t item) {
     if (i != 0)
       fprintf (f, ", ");
     var = VARR_GET (MIR_var_t, curr_func->vars, i); out_type (f, var.type);
-    fprintf (f, var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D ? " %s" : " _%s",
-	     var.name);
+    fprintf (f, var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD
+	     ? " %s" : " _%s", var.name);
   }
   fprintf (f, ") {\n");
   for (i = 0; i < curr_func->nargs; i++) {
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
     mir_assert (var.type != MIR_T_V);
-    if (var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D)
+    if (var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
       continue;
     fprintf (f, "  int64_t %s = _%s;\n", var.name, var.name);
   }
