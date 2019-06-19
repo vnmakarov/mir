@@ -449,8 +449,8 @@ struct MIR_code_reloc {
 
 typedef struct MIR_code_reloc *MIR_code_reloc_t;
 
-extern int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
-extern int _MIR_update_code (uint8_t *base, size_t nloc, ...);
+extern void _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs);
+extern void _MIR_update_code (uint8_t *base, size_t nloc, ...);
 
 extern void *va_arg_builtin (void *p, uint64_t t);
 extern void va_start_interp_builtin (void *p, void *a);
