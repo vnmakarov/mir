@@ -2,7 +2,7 @@
 #include "../mir-gen.h"
 #include "test-read.h"
 
-void main (int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
   MIR_item_t func;
   MIR_module_t m;
 
