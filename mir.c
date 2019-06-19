@@ -722,7 +722,9 @@ size_t _MIR_type_size (MIR_type_t type) {
   case MIR_T_LD: return sizeof (long double);
   case MIR_T_P: return sizeof (void *);
   case MIR_T_V: return 1;
-  default: mir_assert (FALSE);
+  default:
+    mir_assert (FALSE);
+    return 1;
   }
 }
 
@@ -1777,7 +1779,7 @@ static void output_item (FILE *f, MIR_item_t item) {
     }
     if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
       fprintf (f, " # "); /* print possible string as a comment */
-      out_str (f, data->u.els);
+      out_str (f, (char *) data->u.els);
     }
     fprintf (f, "\n");
     return;
@@ -1939,7 +1941,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
       MIR_module_t m = curr_module;
       
       curr_module = func_item->module;
-      snprintf (name, sizeof (name), "%s%d", TEMP_ITEM_NAME_PREFIX, curr_module->temp_items_num);
+      snprintf (name, sizeof (name), "%s%lu", TEMP_ITEM_NAME_PREFIX, (unsigned long) curr_module->temp_items_num);
       curr_module->temp_items_num++;
       if (op->mode == MIR_OP_STR) {
 	item = MIR_new_string_data (name, op->u.str);
@@ -2267,6 +2269,8 @@ void MIR_inline (MIR_item_t func_item) {
 	    new_insn->ops[i].u.mem.base = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.mem.base);
 	  if (insn->ops[i].u.mem.index != 0)
 	    new_insn->ops[i].u.mem.index = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.mem.index);
+	  break;
+	default: /* do nothing */
 	  break;
 	}
       if (new_insn->code == MIR_RET || new_insn->code == MIR_FRET
