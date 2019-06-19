@@ -581,7 +581,7 @@ static void output_live_element (size_t nel) {
 static void output_bitmap (const char *head, bitmap_t bm) {
   if (bm == NULL || bitmap_empty_p (bm))
     return;
-  fprintf (debug_file, head);
+  fprintf (debug_file, "%s", head);
   bitmap_for_each (bm, output_live_element);
   fprintf (debug_file, "\n");
 }
@@ -1208,7 +1208,7 @@ static void print_exprs (void) {
     size_t nops;
     expr_t e = VARR_GET (expr_t, exprs, i);
     
-    fprintf (debug_file, "  %3d: ", i);
+    fprintf (debug_file, "  %3lu: ", (unsigned long) i);
     fprintf (debug_file, "%s _", MIR_insn_name (e->insn->code));
     nops = MIR_insn_nops (e->insn);
     for (size_t j = 1; j < nops; j++) {
@@ -1936,7 +1936,7 @@ static void ccp_push_used_insns (var_occ_t def) {
       VARR_PUSH (bb_insn_t, ccp_insns, bb_insn);
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
-	  fprintf (debug_file, "           pushing bb%d insn: ", bb_insn->bb->index);
+	  fprintf (debug_file, "           pushing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
 	  MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
 	}
 #endif
@@ -1958,11 +1958,11 @@ static void ccp_push_used_insns (var_occ_t def) {
 	  continue; /* var_occ at the start of BB in subsequent BB is already in ccp_var_occs */
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL)
-	  fprintf (debug_file, "           pushing var%lu(%s) at start of bb%d\n",
+	  fprintf (debug_file, "           pushing var%lu(%s) at start of bb%lu\n",
 		   (long unsigned) vos.var,
 		   var_is_reg_p (vos.var)
 		   ? MIR_reg_name (var2reg (vos.var), curr_func_item->u.func) : "",
-		   e->dst->index);
+		   (unsigned long) e->dst->index);
 #endif
 	VARR_PUSH (var_occ_t, ccp_var_occs, tab_var_occ);
 	tab_var_occ->flag = TRUE;
@@ -1977,12 +1977,12 @@ static void ccp_process_bb_start_var_occ (var_occ_t var_occ, bb_t bb, int from_b
     
 #if MIR_GEN_DEBUG
   if (debug_file != NULL)
-    fprintf (debug_file, "       %sprocessing var%lu(%s) at start of bb%d:",
+    fprintf (debug_file, "       %sprocessing var%lu(%s) at start of bb%lu:",
 	     from_bb_process_p ? "  " : "",
 	     (long unsigned) var_occ->var,
 	     var_is_reg_p (var_occ->var)
 	     ? MIR_reg_name (var2reg (var_occ->var), curr_func_item->u.func) : "",
-	     var_occ->place.u.bb->index);
+	     (unsigned long) var_occ->place.u.bb->index);
 #endif
   gen_assert (var_occ->place.type == OCC_BB_START && bb == var_occ->place.u.bb);
   if (var_occ->val_kind == CCP_VARYING) {
@@ -2047,7 +2047,8 @@ static void ccp_process_active_edge (edge_t e) {
   if (e->skipped_p && ! e->dst->flag) {
 #if MIR_GEN_DEBUG
     if (debug_file != NULL)
-      fprintf (debug_file, "         Make edge bb%d->bb%d active\n", e->src->index, e->dst->index);
+      fprintf (debug_file, "         Make edge bb%lu->bb%lu active\n",
+	       (unsigned long) e->src->index, (unsigned long) e->dst->index);
 #endif
     e->dst->flag = TRUE; /* just activated edge whose dest is not in ccp_bbs */
     VARR_PUSH (bb_t, ccp_bbs, e->dst);
@@ -2106,7 +2107,7 @@ static void ccp_process_insn (bb_insn_t bb_insn) {
 
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    fprintf (debug_file, "       processing bb%d insn: ", bb_insn->bb->index);
+    fprintf (debug_file, "       processing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
     MIR_output_insn (debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
   }
 #endif
@@ -2136,7 +2137,7 @@ static void ccp_process_bb (bb_t bb) {
   
 #if MIR_GEN_DEBUG
   if (debug_file != NULL)
-    fprintf (debug_file, "       processing bb%d\n", bb->index);
+    fprintf (debug_file, "       processing bb%lu\n", (unsigned long) bb->index);
 #endif
   for (var_occ_t var_occ = DLIST_HEAD (var_occ_t, bb_start_occ_lists[bb->index]);
        var_occ != NULL;
@@ -2211,7 +2212,7 @@ static int ccp_modify (void) {
       change_p = TRUE;
 #if MIR_GEN_DEBUG
       if (debug_file != NULL)
-	fprintf (debug_file, "  deleting unreachable bb %d and its edges\n", bb->index);
+	fprintf (debug_file, "  deleting unreachable bb%lu and its edges\n", (unsigned long) bb->index);
 #endif
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
 	next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
