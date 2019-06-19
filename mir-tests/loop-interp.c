@@ -9,7 +9,7 @@ int main (void) {
   MIR_item_t func;
   MIR_val_t val;
   double start_time;
-  const int64_t n_iter = 1000000000;
+  const int64_t n_iter = 100000000;
     
   MIR_init ();
   func = create_mir_func_with_loop (&m);

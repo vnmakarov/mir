@@ -18,7 +18,7 @@ int main (void) {
   MIR_item_t *funcs;
 #if defined(TEST_GEN_LOOP)
   uint64_t (*fun) (uint64_t n_iter);
-  uint64_t res, arg = 1000000000;
+  uint64_t res, arg = 100000000;
 #else
   uint64_t (*fun) (void);
   uint64_t res;
