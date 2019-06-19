@@ -2430,12 +2430,12 @@ uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
   return mem;
 }
 
-int _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
+void _MIR_update_code_arr (uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
   for (size_t i = 0; i < nloc; i++)
     memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
 }
 
-int _MIR_update_code (uint8_t *base, size_t nloc, ...) {
+void _MIR_update_code (uint8_t *base, size_t nloc, ...) {
   va_list args;
 
   va_start (args, nloc);
