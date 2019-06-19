@@ -3904,9 +3904,7 @@ void MIR_scan_string (const char *str) {
 	  process_error (MIR_syntax_error, "Unknown type");
 	else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
 	  process_error (MIR_syntax_error, "wrong type for local var");
-	op.mode = MIR_OP_MEM;
-	op.u.mem.type = type; op.u.mem.scale = 1;
-	op.u.mem.base = op.u.mem.index = 0; op.u.mem.disp = 0;
+	op = MIR_new_mem_op (type, 0, 0, 0, 1);
 	if (proto_p || func_p || local_p) {
 	  if (t.code == TC_COL) {
 	    scan_token (&t, get_string_char, unget_string_char);
