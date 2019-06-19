@@ -9010,7 +9010,7 @@ int main (int argc, const char *argv[]) {
 "  int i, k, prime, count, iter;\n"
 "  char flags[SieveSize];\n"
 "\n"
-"  for (iter = 0; iter < 1000; iter++) {\n"
+"  for (iter = 0; iter < 100; iter++) {\n"
 "    count = 0;\n"
 "    for (i = 0; i < SieveSize; i++)\n"
 "      flags[i] = 1;\n"
