@@ -8,7 +8,7 @@ sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
          alloca flags, 819000\n\
          mov iter, 0\n\
-loop:    bge fin, iter, 1000\n\
+loop:    bge fin, iter, 100\n\
          mov count, 0;  mov i, 0\n\
 loop2:   bge fin2, i, 819000\n\
          mov u8:(flags, i), 1;  add i, i, 1\n\
