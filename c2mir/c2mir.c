@@ -7483,7 +7483,7 @@ static MIR_type_t get_mir_type (struct type *type) {
 }
 
 static MIR_type_t promote_mir_int_type (MIR_type_t t) {
-  return t == MIR_T_I8 || MIR_T_I16 ? MIR_T_I32 : t == MIR_T_U8 || MIR_T_U16 ? MIR_T_U32 : t;
+  return t == MIR_T_I8 || t == MIR_T_I16 ? MIR_T_I32 : t == MIR_T_U8 || t == MIR_T_U16 ? MIR_T_U32 : t;
 }
 
 static MIR_type_t get_op_type (op_t op) {
