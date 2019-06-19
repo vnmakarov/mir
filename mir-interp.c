@@ -61,7 +61,7 @@ typedef enum {
 static void **dispatch_label_tab;
 #endif
 
-static MIR_val_t get_icode (MIR_full_insn_code_t code) {
+static MIR_val_t get_icode (int code) {
   MIR_val_t v;
 
 #if DIRECT_THREADED_DISPATCH
@@ -88,6 +88,7 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
 #endif
   case MIR_T_I64: return load_p ? IC_LDI64 : IC_STI64;
   default: mir_assert (FALSE);
+    return load_p ? IC_LDI64 : IC_STI64;
   }
 }
 
@@ -406,7 +407,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
     *((mem_type *) a) = v;                                                     \
   } while (0)
 
-#ifdef __GNUC__
+#if defined(__GNUC__) && ! defined(__clang__)
 #define OPTIMIZE __attribute__((__optimize__ ("O3")))
 #else
 #define OPTIMIZE
@@ -944,6 +945,7 @@ static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
   case MIR_T_V: return &ffi_type_void;
   default:
     mir_assert (FALSE);
+    return &ffi_type_void;
   }
 }
 
@@ -1267,6 +1269,7 @@ static void *get_call_shim (MIR_item_t func_item) {
 			: rtp == MIR_T_P ? (void *) a_shim_v : (void *) i_shim_v);
   default:
     mir_assert (FALSE);
+    return NULL;
   }
 }
 
