@@ -7494,7 +7494,9 @@ static MIR_type_t get_op_type (op_t op) {
   case MIR_OP_UINT: return MIR_T_U64;
   case MIR_OP_FLOAT: return MIR_T_F;
   case MIR_OP_DOUBLE: return MIR_T_D;
-  default: assert (FALSE);
+  default:
+    assert (FALSE);
+    return MIR_T_I64;
   }
 }
 
@@ -7694,6 +7696,7 @@ static MIR_insn_code_t get_mir_insn_code (node_t r) {
 		     : t == MIR_T_U64 ? MIR_UGE : t == MIR_T_I32 ? MIR_GES : MIR_UGES);
   default:
     assert (FALSE);
+    return MIR_INSN_BOUND;
   }
 }
 
@@ -7709,6 +7712,7 @@ static MIR_insn_code_t get_compare_branch_code (MIR_insn_code_t code) {
     B (EQ) B (NE) BCMP (LT) BCMP (LE) BCMP (GT) BCMP (GE)
   default:
     assert (FALSE);
+    return MIR_INSN_BOUND;
   }
 #undef B
 #undef BCMP
