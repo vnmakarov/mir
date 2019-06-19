@@ -1206,15 +1206,10 @@ static void *a_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_cal
   define_shim (long double, ld, suf, partype, valsuf) \
   define_shim (void *, a, suf, partype, valsuf)
   
-define_3shims (i8, int8_t, i)
-define_3shims (u8, uint8_t, i)
-define_3shims (i16, int16_t, i)
-define_3shims (u16, uint16_t, i)
 define_3shims (i32, int32_t, i)
 define_3shims (u32, uint32_t, i)
 
 define_3shims (i64, int64_t, i)
-define_3shims (f, float, f)
 define_3shims (d, double, d)
 define_3shims (ld, long double, ld)
 define_3shims (a, void *, a)
@@ -1231,30 +1226,20 @@ static void *get_call_shim (MIR_item_t func_item) {
   MIR_type_t atp = func->nargs == 0 ? MIR_T_V : VARR_GET (MIR_var_t, func->vars, 0).type;
 
   switch (atp) {
-  case MIR_T_I8: return (rtp == MIR_T_F ? (void *) f_shim_i8 : rtp == MIR_T_D ? (void *) d_shim_i8
-			 : rtp == MIR_T_LD ? (void *) ld_shim_i8
-			 : rtp == MIR_T_P ? (void *) a_shim_i8 : (void *) i_shim_i8);
-  case MIR_T_U8: return (rtp == MIR_T_F ? (void *) f_shim_u8 : rtp == MIR_T_D ? (void *) d_shim_u8
-			 : rtp == MIR_T_LD ? (void *) ld_shim_u8
-			 : rtp == MIR_T_P ? (void *) a_shim_u8 : (void *) i_shim_u8);
-  case MIR_T_I16: return (rtp == MIR_T_F ? (void *) f_shim_i16 : rtp == MIR_T_D ? (void *) d_shim_i16
-			  : rtp == MIR_T_LD ? (void *) ld_shim_i16
-			  : rtp == MIR_T_P ? (void *) a_shim_i16 : (void *) i_shim_i16);
-  case MIR_T_U16: return (rtp == MIR_T_F ? (void *) f_shim_u16 : rtp == MIR_T_D ? (void *) d_shim_u16
-			  : rtp == MIR_T_LD ? (void *) d_shim_u16
-			  : rtp == MIR_T_P ? (void *) a_shim_u16 : (void *) i_shim_u16);
+  case MIR_T_I8:
+  case MIR_T_I16:
   case MIR_T_I32: return (rtp == MIR_T_F ? (void *) f_shim_i32 : rtp == MIR_T_D ? (void *) d_shim_i32
 			  : rtp == MIR_T_LD ? (void *) ld_shim_i32
 			  : rtp == MIR_T_P ? (void *) a_shim_i32 : (void *) i_shim_i32);
+  case MIR_T_U8:
+  case MIR_T_U16:
   case MIR_T_U32: return (rtp == MIR_T_F ? (void *) f_shim_u32 : rtp == MIR_T_D ? (void *) d_shim_u32
 			  : rtp == MIR_T_LD ? (void *) ld_shim_u32
 			  : rtp == MIR_T_P ? (void *) a_shim_u32 : (void *) i_shim_u32);
   case MIR_T_I64: return (rtp == MIR_T_F ? (void *) f_shim_i64 : rtp == MIR_T_D ? (void *) d_shim_i64
 			  : rtp == MIR_T_LD ? (void *) ld_shim_i64
 			  : rtp == MIR_T_P ? (void *) a_shim_i64 : (void *) i_shim_i64);
-  case MIR_T_F: return (rtp == MIR_T_F ? (void *) f_shim_f : rtp == MIR_T_D ? (void *) d_shim_f
-			: rtp == MIR_T_LD ? (void *) ld_shim_f
-			: rtp == MIR_T_P ? (void *) a_shim_f : (void *) i_shim_f);
+  case MIR_T_F:
   case MIR_T_D: return (rtp == MIR_T_F ? (void *) f_shim_d : rtp == MIR_T_D ? (void *) d_shim_d
 			: rtp == MIR_T_LD ? (void *) ld_shim_d
 			: rtp == MIR_T_P ? (void *) a_shim_d : (void *) i_shim_d);
