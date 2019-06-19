@@ -4115,7 +4115,7 @@ void MIR_scan_string (const char *str) {
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
       n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
       for (i = 0; i < n; i++) {
-	if (op_addr[0].mode != MIR_OP_MEM || (const char *) op_addr[0].u.mem.disp == NULL)
+	if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
 	  process_error (MIR_syntax_error, "wrong local var");
 	MIR_new_func_reg (func->u.func, op_addr[i].u.mem.type, (const char *) op_addr[i].u.mem.disp);
       }
