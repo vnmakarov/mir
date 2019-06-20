@@ -1184,6 +1184,10 @@ static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
   return interp_arr_varg (func_item, nargs, args, va);
 }
 
+#if INT_MAX != INT32_MAX
+#error rework interpreter shims
+#endif
+
 static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.i;}
 static float f_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.f;}
 static double d_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.d;}
