@@ -431,13 +431,14 @@ static void machinize (MIR_item_t func_item) {
       machinize_call (func_item, insn);
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
-    } else if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET) {
+    } else if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET || code == MIR_LDRET) {
       /* In simplify we already transformed code for one return insn
 	 and added extension in return (if any).  */
       assert (insn->ops[0].mode == MIR_OP_REG);
-      ret_reg = code == MIR_RET ? AX_HARD_REG :  XMM0_HARD_REG;
+      ret_reg = code == MIR_RET ? AX_HARD_REG : code == MIR_LDRET ? ST0_HARD_REG : XMM0_HARD_REG;
       ret_reg_op = _MIR_new_hard_reg_op (ret_reg);
-      new_insn_code = code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV : MIR_DMOV;
+      new_insn_code = (code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV
+		       : code == MIR_LDRET ? MIR_LDMOV : MIR_DMOV);
       new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
       gen_add_insn_before (func_item, insn, new_insn);
       insn->ops[0] = ret_reg_op;
@@ -763,6 +764,7 @@ static struct pattern patterns[] = {
   {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m64 */
 
   {MIR_LDMOV, "mld h32", "DB /7 m0"},             /* fstp m0 */
+  {MIR_LDMOV, "h32 mld", "DB /5 m1"},             /* fld m1 */
   {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"},   /* fld m1; fstp m0 */
 
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
@@ -911,7 +913,7 @@ static struct pattern patterns[] = {
   {MIR_RET, "h0", "C3"},  /* ret */
   {MIR_FRET, "h16", "C3"}, /* ret */
   {MIR_DRET, "h16", "C3"}, /* ret */
-  {MIR_LDRET, "mld", "DB /5 m0;  C3"}, /* fld m0; ret */
+  {MIR_LDRET, "h32", "C3"}, /* ret */
 };
 
 static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
