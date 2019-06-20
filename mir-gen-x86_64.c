@@ -342,15 +342,16 @@ static void machinize (MIR_item_t func_item) {
     } else {
       /* arg is on the stack */
       stack_arg_func_p = TRUE;
-      mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
-      new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV;
+      mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
+      new_insn_code = (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
+		       : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (mem_type, mem_size + 8 /* ret */ + start_sp_from_bp_offset,
 					 BP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (new_insn_code, MIR_new_reg_op (i + 1), mem_op);
       MIR_prepend_insn (func_item, new_insn);
       next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
       create_new_bb_insns (func_item, NULL, next_insn);
-      mem_size += 8;
+      mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }
   alloca_p = FALSE;
