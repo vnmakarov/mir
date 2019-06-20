@@ -1044,7 +1044,7 @@ static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
   case MIR_T_U64: res->u = (uint64_t) (u.rint); return;
   case MIR_T_F: res->f = u.f; return;
   case MIR_T_D: res->d = u.d; return;
-  case MIR_T_LD: res->d = u.ld; return;
+  case MIR_T_LD: res->ld = u.ld; return;
   case MIR_T_P: res->a = u.a; return;
   case MIR_T_V: return;
   default:
