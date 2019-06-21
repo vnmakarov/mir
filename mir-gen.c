@@ -28,7 +28,7 @@
    Common Sub-Expression Elimination: Reusing calculated values
    Dead code elimination: Removing insns with unused outputs. 
    Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
-   Machinize: Machine-dependent code (e.g. in x86_64-target.c)
+   Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.
@@ -37,7 +37,7 @@
    Combine (code selection): Merging data-depended insns into one.
    Dead code elimination: Removing insns with unused outputs. 
    Generate machine insns: Machine-dependent code (e.g. in
-                           x86_64-target.c) creating machine insns.
+                           mir-gen-x86_64.c) creating machine insns.
 
    Terminology:
    reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP_MEM)
@@ -84,11 +84,13 @@ static void *gen_malloc (size_t size) {
 static MIR_reg_t gen_new_temp_reg (MIR_type_t type, MIR_func_t func);
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
-static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after);
-static void gen_delete_insn (MIR_item_t func_item, MIR_insn_t insn);
-static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t before);
-static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t insn, MIR_insn_t after);
+static void create_new_bb_insns (MIR_insn_t before, MIR_insn_t after);
+static void gen_delete_insn (MIR_insn_t insn);
+static void gen_add_insn_before (MIR_insn_t insn, MIR_insn_t before);
+static void gen_add_insn_after (MIR_insn_t insn, MIR_insn_t after);
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
+
+static MIR_item_t curr_func_item;
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -107,7 +109,7 @@ static FILE *debug_file;
 #define DEFAULT_INIT_BITMAP_BITS_NUM 256
 static bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, all_vars;
 
-static void make_2op_insns (MIR_item_t func_item) {
+static void make_2op_insns (void) {
   MIR_func_t func;
   MIR_insn_t insn, next_insn;
   MIR_insn_code_t code;
@@ -117,8 +119,8 @@ static void make_2op_insns (MIR_item_t func_item) {
   size_t i;
   int out_p;
   
-  gen_assert (func_item->item_type == MIR_func_item);
-  func = func_item->u.func;
+  gen_assert (curr_func_item->item_type == MIR_func_item);
+  func = curr_func_item->u.func;
   for (i = 0; i < sizeof (two_op_insn_codes) / sizeof (MIR_insn_code_t); i++)
     bitmap_set_bit_p (insn_to_consider, two_op_insn_codes[i]);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
@@ -147,8 +149,8 @@ static void make_2op_insns (MIR_item_t func_item) {
       code = MIR_MOV; type = MIR_T_I64;
     }
     temp_op = MIR_new_reg_op (gen_new_temp_reg (type, func));
-    gen_add_insn_before (func_item, insn, MIR_new_insn (code, temp_op, insn->ops[1]));
-    gen_add_insn_after (func_item, insn, MIR_new_insn (code, insn->ops[0], temp_op));
+    gen_add_insn_before (insn, MIR_new_insn (code, temp_op, insn->ops[1]));
+    gen_add_insn_after (insn, MIR_new_insn (code, insn->ops[0], temp_op));
     insn->ops[0] = insn->ops[1] = temp_op;
   }
 }
@@ -278,7 +280,6 @@ struct func_cfg {
 };
 
 static bitmap_t call_used_hard_regs;
-static MIR_item_t curr_func_item;
 static func_cfg_t curr_cfg;
 
 static DLIST (dead_var_t) free_dead_vars;
@@ -366,7 +367,7 @@ static void delete_bb_insn (bb_insn_t bb_insn) {
   free (bb_insn);
 }
 
-static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t after) {
+static void create_new_bb_insns (MIR_insn_t before, MIR_insn_t after) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, new_bb_insn;
   bb_t bb;
@@ -376,7 +377,7 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
     bb_insn = before->data;
   } else {
     gen_assert (after != NULL);
-    insn = DLIST_HEAD (MIR_insn_t, func_item->u.func->insns);
+    insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
     bb_insn = after->data;
   }
   bb = bb_insn->bb;
@@ -390,19 +391,19 @@ static void create_new_bb_insns (MIR_item_t func_item, MIR_insn_t before, MIR_in
   }
 }
 
-static void gen_delete_insn (MIR_item_t func_item, MIR_insn_t insn) {
+static void gen_delete_insn (MIR_insn_t insn) {
   delete_bb_insn (insn->data);
   MIR_remove_insn (curr_func_item, insn);
 }
 
-static void gen_add_insn_before (MIR_item_t func_item, MIR_insn_t before, MIR_insn_t insn) {
-  MIR_insert_insn_before (func_item, before, insn);
-  create_new_bb_insns (func_item, DLIST_PREV (MIR_insn_t, insn), before);
+static void gen_add_insn_before (MIR_insn_t before, MIR_insn_t insn) {
+  MIR_insert_insn_before (curr_func_item, before, insn);
+  create_new_bb_insns (DLIST_PREV (MIR_insn_t, insn), before);
 }
 
-static void gen_add_insn_after (MIR_item_t func_item, MIR_insn_t after, MIR_insn_t insn) {
-  MIR_insert_insn_after (func_item, after, insn);
-  create_new_bb_insns (func_item, after, DLIST_NEXT (MIR_insn_t, insn));
+static void gen_add_insn_after (MIR_insn_t after, MIR_insn_t insn) {
+  MIR_insert_insn_after (curr_func_item, after, insn);
+  create_new_bb_insns (after, DLIST_NEXT (MIR_insn_t, insn));
 }
 
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
@@ -745,15 +746,15 @@ static void destroy_func_cfg (void) {
   curr_func_item->data = NULL;
 }
 
-static void add_new_bb_insns (MIR_item_t func_item) {
+static void add_new_bb_insns (void) {
   MIR_func_t func;
   size_t i, nops;
   MIR_op_t op;
   bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
   bb_insn_t bb_insn, last_bb_insn = NULL;
   
-  gen_assert (func_item->item_type == MIR_func_item);
-  func = func_item->u.func;
+  gen_assert (curr_func_item->item_type == MIR_func_item);
+  func = curr_func_item->u.func;
   for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, func->insns);
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
@@ -1156,7 +1157,7 @@ static void cse_modify (void) {
 #endif
 	} else {
 	  new_insn = MIR_new_insn (move_code, insn->ops[0], op);
-	  gen_add_insn_after (curr_func_item, insn, new_insn);
+	  gen_add_insn_after (insn, new_insn);
 #if MIR_GEN_DEBUG
 	  if (debug_file != NULL) {
 	    fprintf (debug_file, "  adding insn ");
@@ -2217,7 +2218,7 @@ static int ccp_modify (void) {
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
 	next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
 	insn = bb_insn->insn;
-	gen_delete_insn (curr_func_item, insn);
+	gen_delete_insn (insn);
       }
       delete_bb (bb);
       continue;
@@ -2273,7 +2274,7 @@ static int ccp_modify (void) {
 	fprintf (debug_file, "\n");
       }
 #endif
-      gen_delete_insn (curr_func_item, insn);
+      gen_delete_insn (insn);
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
     } else {
       insn = MIR_new_insn (MIR_JMP, bb_insn->insn->ops[0]); /* label is always 0-th op */
@@ -2838,6 +2839,7 @@ static void setup_loc_profits (MIR_reg_t breg) {
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
 }
 
+/* Slots num for variables.  Some variable can take several slots. */
 static size_t func_stack_slots_num;
 static bitmap_t func_assigned_hard_regs;
 
@@ -3067,7 +3069,7 @@ static void rewrite (void) {
 	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
 	}
 #endif
-	gen_delete_insn (curr_func_item, insn);
+	gen_delete_insn (insn);
       }
     }
   }
@@ -3509,7 +3511,7 @@ static void combine (void) {
 	   substitution of the def insn 'r0 = ... r0 ...'.  We still
 	   need valid entry for def her to find obsolete definiton,
 	   e.g. "hr1 = hr0; hr0 = ...; hr0 = ... (deleted); ...= ...hr1..." */
-	gen_delete_insn (curr_func_item, def_insn);
+	gen_delete_insn (def_insn);
 	hreg_refs_addr[hr].del_p = TRUE; /* to exclude repetitive deletion */
       }
       for (iter = 0; iter < 2; iter++) {
@@ -3540,7 +3542,7 @@ static void combine (void) {
 
 #define live_out out
 
-static void dead_code_elimination (MIR_item_t func) {
+static void dead_code_elimination (void) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
   size_t nops, i;
@@ -3583,7 +3585,7 @@ static void dead_code_elimination (MIR_item_t func) {
 	  MIR_output_insn (debug_file, insn, curr_func_item->u.func, TRUE);
 	}
 #endif
-	gen_delete_insn (func, insn);
+	gen_delete_insn (insn);
 	continue;
       }
       if (MIR_call_code_p (insn->code))
@@ -3707,7 +3709,7 @@ void *MIR_gen (MIR_item_t func_item) {
 #endif /* #ifndef NO_CSE */
   calculate_func_cfg_live_info (FALSE);
 #ifndef NO_CSE
-  dead_code_elimination (func_item);
+  dead_code_elimination ();
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
@@ -3723,7 +3725,7 @@ void *MIR_gen (MIR_item_t func_item) {
       print_CFG (TRUE, TRUE, NULL);
     }
 #endif
-    dead_code_elimination (func_item);
+    dead_code_elimination ();
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
@@ -3733,9 +3735,9 @@ void *MIR_gen (MIR_item_t func_item) {
   }
 #endif /* #ifndef NO_CCP */
   ccp_clear ();
-  make_2op_insns (func_item);
-  machinize (func_item);
-  add_new_bb_insns (func_item);
+  make_2op_insns ();
+  machinize ();
+  add_new_bb_insns ();
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
@@ -3775,7 +3777,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
-  dead_code_elimination (func_item);
+  dead_code_elimination ();
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
@@ -3783,14 +3785,14 @@ void *MIR_gen (MIR_item_t func_item) {
   }
 #endif
 #endif /* #ifndef NO_COMBINE */
-  make_prolog_epilog (func_item, func_assigned_hard_regs, func_stack_slots_num);
+  make_prolog_epilog (func_assigned_hard_regs, func_stack_slots_num);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
     print_CFG (FALSE, TRUE, NULL);
   }
 #endif
-  code = target_translate (func_item, &code_len);
+  code = target_translate (&code_len);
   func_item->machine_code = _MIR_publish_code (code, code_len);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
