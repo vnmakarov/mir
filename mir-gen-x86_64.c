@@ -806,8 +806,8 @@ static struct pattern patterns[] = {
   {MIR_D2LD, "mld r", "F2 Y 0F 11 r1 mt; DD /0 mt; DB /7 m0"},  /* movsd -16(sp), r1; fldl -16(sp); fstp m0 */
   {MIR_D2LD, "mld md", "DD /0 m1; DB /7 m0"},                   /* fldl m1; fstp m0 */
   
-  /* lea r0, 7(r1); and r0, r0, -8; sub sp, r0; mov r0, sp */
-  {MIR_ALLOCA, "r r", "Y 8D r0 ad7; X 81 /4 R0 VFFFFFFF8; X 2B h04 R0; X 8B r0 H04"},
+  /* lea r0, 15(r1); and r0, r0, -16; sub sp, r0; mov r0, sp */
+  {MIR_ALLOCA, "r r", "Y 8D r0 adF; X 81 /4 R0 VFFFFFFF0; X 2B h04 R0; X 8B r0 H04"},
   {MIR_ALLOCA, "r i2", "X 81 /5 H04 I1; X 8B r0 H04"},  /* sub sp, i2; mov r0, sp */
   
   {MIR_BSTART, "r", "X 8B r0 H4"}, /* r0 = sp */
@@ -1301,7 +1301,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
   const char *p, *insn_str;
   
   if (insn->code == MIR_ALLOCA && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
-    insn->ops[1].u.u = (insn->ops[1].u.u + 7) & -8;
+    insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, start_ch, d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
