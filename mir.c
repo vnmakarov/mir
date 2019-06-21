@@ -1021,45 +1021,27 @@ void MIR_finish_func (void) {
       switch (insn->ops[i].mode) {
       case MIR_OP_REG:
 	rd = find_rd_by_reg (insn->ops[i].u.reg, curr_func);
-	if (rd == NULL) {
-	  insn->code = MIR_INVALID_INSN;
-	  (*error_func) (MIR_undeclared_func_reg_error, "undeclared func reg");
-	}
-	mir_assert (insn->ops[i].u.reg == rd->reg);
+	mir_assert (rd != NULL && insn->ops[i].u.reg == rd->reg);
 	mode = type2mode (rd->type);
 	break;
       case MIR_OP_MEM:
 	if (insn->ops[i].u.mem.base != 0) {
 	  rd = find_rd_by_reg (insn->ops[i].u.mem.base, curr_func);
-	  if (rd == NULL) {
+	  mir_assert (rd != NULL && insn->ops[i].u.mem.base == rd->reg);
+	  if (type2mode (rd->type) != MIR_OP_INT) {
 	    insn->code = MIR_INVALID_INSN;
 	    if (err == MIR_no_error) {
-	      err = MIR_undeclared_func_reg_error; err_msg = "undeclared func reg";
-	    }
-	  } else {
-	    mir_assert (insn->ops[i].u.mem.base == rd->reg);
-	    if (type2mode (rd->type) != MIR_OP_INT) {
-	      insn->code = MIR_INVALID_INSN;
-	      if (err == MIR_no_error) {
-		err = MIR_reg_type_error; err_msg = "base reg of non-integer type";
-	      }
+	      err = MIR_reg_type_error; err_msg = "base reg of non-integer type";
 	    }
 	  }
 	}
 	if (insn->ops[i].u.mem.index != 0) {
 	  rd = find_rd_by_reg (insn->ops[i].u.mem.index, curr_func);
-	  if (rd == NULL) {
+	  mir_assert (rd != NULL && insn->ops[i].u.mem.index == rd->reg);
+	  if (type2mode (rd->type) != MIR_OP_INT) {
 	    insn->code = MIR_INVALID_INSN;
 	    if (err == MIR_no_error) {
-	      err = MIR_undeclared_func_reg_error; err_msg = "undeclared func reg";
-	    }
-	  } else {
-	    mir_assert (insn->ops[i].u.mem.index == rd->reg);
-	    if (type2mode (rd->type) != MIR_OP_INT) {
-	      insn->code = MIR_INVALID_INSN;
-	      if (err == MIR_no_error) {
-		err = MIR_reg_type_error; err_msg = "index reg of non-integer type";
-	      }
+	      err = MIR_reg_type_error; err_msg = "index reg of non-integer type";
 	    }
 	  }
 	}
@@ -1391,8 +1373,6 @@ static reg_desc_t *get_func_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
   reg_desc_t *rd;
   
   rd = find_rd_by_reg (reg, func);
-  if (rd == NULL)
-    (*error_func) (MIR_undeclared_func_reg_error, "undeclared func reg");
   return rd;
 }
 
