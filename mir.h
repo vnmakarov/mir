@@ -53,7 +53,7 @@ typedef enum MIR_error_type {
 #define MIR_NO_RETURN
 #endif
 
-typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *message);
+typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *format, ...);
 
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
