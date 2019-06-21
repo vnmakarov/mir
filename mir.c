@@ -19,8 +19,13 @@ static void util_error (const char *message);
 
 static MIR_error_func_t error_func;
 
-static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *message) {
-  fprintf (stderr, "%s\n", message);
+static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
+  va_list ap;
+
+  va_start (ap, format);
+  vfprintf (stderr, format, ap);
+  fprintf (stderr, "\n");
+  va_end (ap);
   exit (1);
 }
 
