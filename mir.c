@@ -1207,15 +1207,19 @@ void MIR_link (void (*set_interface) (MIR_item_t item)) {
     }
 }
 
+static const char *insn_name (MIR_insn_code_t code) {
+  return code < 0 || code >= MIR_INSN_BOUND ? "" : insn_descs[code].name;
+}
+
 const char *MIR_insn_name (MIR_insn_code_t code) {
-  if (code >= MIR_INSN_BOUND)
-    (*error_func) (MIR_wrong_param_value_error, "MIR_insn_name");
+  if (code < 0 || code >= MIR_INSN_BOUND)
+    (*error_func) (MIR_wrong_param_value_error, "MIR_insn_name: wrong insn code %d", (int) code);
   return insn_descs[code].name;
 }
 
 static size_t insn_code_nops (MIR_insn_code_t code) { /* 0 for calls */
-  if (code >= MIR_INSN_BOUND)
-    (*error_func) (MIR_wrong_param_value_error, "insn_code_nops");
+  if (code < 0 || code >= MIR_INSN_BOUND)
+    (*error_func) (MIR_wrong_param_value_error, "insn_code_nops: wrong insn code %d", (int) code);
   return VARR_GET (size_t, insn_nops, code);
 }
 
