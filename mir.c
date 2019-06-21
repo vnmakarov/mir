@@ -571,6 +571,33 @@ MIR_module_t MIR_new_module (const char *name) {
   return curr_module;
 }
 
+static const char *type_str (MIR_type_t tp) {
+  switch (tp) {
+  case MIR_T_I8: return "i8";
+  case MIR_T_U8: return "u8";
+  case MIR_T_I16: return "i16";
+  case MIR_T_U16: return "u16";
+  case MIR_T_I32: return "i32";
+  case MIR_T_U32: return "u32";
+  case MIR_T_I64: return "i64";
+  case MIR_T_U64: return "u64";
+  case MIR_T_F: return "f";
+  case MIR_T_D: return "d";
+  case MIR_T_LD: return "ld";
+  case MIR_T_P: return "p";
+  case MIR_T_V: return "v";
+  default: return "";
+  }
+}
+
+const char *MIR_type_str (MIR_type_t tp) {
+  const char *str = type_str (tp);
+  
+  if (strcmp (str, "") == 0)
+    (*error_func) (MIR_wrong_param_value_error, "MIR_type_str");
+  return str;
+}
+
 static MIR_item_t add_item (MIR_item_t item) {
   int replace_p;
   MIR_item_t tab_item;
@@ -1580,26 +1607,6 @@ void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) {
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_insn");
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
   free (insn);
-}
-
-const char *MIR_type_str (MIR_type_t tp) {
-  switch (tp) {
-  case MIR_T_I8: return "i8";
-  case MIR_T_U8: return "u8";
-  case MIR_T_I16: return "i16";
-  case MIR_T_U16: return "u16";
-  case MIR_T_I32: return "i32";
-  case MIR_T_U32: return "u32";
-  case MIR_T_I64: return "i64";
-  case MIR_T_U64: return "u64";
-  case MIR_T_F: return "f";
-  case MIR_T_D: return "d";
-  case MIR_T_LD: return "ld";
-  case MIR_T_P: return "p";
-  case MIR_T_V: return "v";
-  default:
-    (*error_func) (MIR_wrong_param_value_error, "MIR_type_str");
-  }
 }
 
 static MIR_func_t curr_output_func;
