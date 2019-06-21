@@ -283,7 +283,7 @@ static void generate_icode (MIR_item_t func_item) {
   func_item->data = func_desc = malloc (sizeof (struct func_desc)
 					+ VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   if (func_desc == NULL)
-    (*MIR_get_error_func ()) (MIR_alloc_error, "no memory");
+    (*MIR_get_error_func ()) (MIR_alloc_error, "no memory for interpreter code");
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr), VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   mir_assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
