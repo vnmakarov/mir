@@ -254,6 +254,7 @@ static void machinize_call (MIR_insn_t call_insn) {
     create_new_bb_insns (call_insn, DLIST_NEXT (MIR_insn_t, new_insn));
   }
   if (mem_size != 0) { /* allocate/deallocate stack for args passed on stack */
+    mem_size = (mem_size + 15) / 16 * 16; /* make it of several 16 bytes */
     new_insn = MIR_new_insn (MIR_SUB, _MIR_new_hard_reg_op (SP_HARD_REG),
 			     _MIR_new_hard_reg_op (SP_HARD_REG), MIR_new_int_op (mem_size));
     MIR_insert_insn_after (curr_func_item, prev_call_insn, new_insn);
