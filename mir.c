@@ -3431,8 +3431,10 @@ typedef struct token {
 
 static jmp_buf error_jmp_buf;
 
+static size_t curr_lno;
+
 static void MIR_NO_RETURN process_error (enum MIR_error_type error_type, const char *message) {
-  (*error_func) (error_type, message);
+  (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
   longjmp (error_jmp_buf, TRUE);
 }
 
@@ -3589,6 +3591,8 @@ static int get_string_char (void) {
   if (ch == '\0')
     return EOF;
   input_string_char_num++;
+  if (ch == '\n')
+    curr_lno++;
   return ch;
 }
 
@@ -3597,6 +3601,8 @@ static void unget_string_char (int ch) {
     return;
   input_string_char_num--;
   mir_assert (input_string[input_string_char_num] == ch);
+  if (ch == '\n')
+    curr_lno--;
 }
 
 static void scan_token (token_t *token, int (*get_char) (void), void (*unget_char) (int)) {
@@ -3778,6 +3784,7 @@ void MIR_scan_string (const char *str) {
   int bss_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
+  curr_lno = 1;
   input_string = str;
   input_string_char_num = 0;
   t.code = TC_NL;
