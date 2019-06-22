@@ -23,7 +23,7 @@ int main (void) {
   MIR_output (stderr);
 #endif
   MIR_load_module (m);
-  MIR_link (MIR_set_interp_interface);
+  MIR_link (MIR_set_interp_interface, NULL);
   MIR_interp_init ();
   start_time = real_sec_time ();
   val.i = n_iter;

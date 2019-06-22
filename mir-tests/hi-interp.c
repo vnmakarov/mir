@@ -25,7 +25,7 @@ int main (void) {
   MIR_output (stderr);
 #endif
   MIR_load_module (m);
-  MIR_link (MIR_set_interp_interface);
+  MIR_link (MIR_set_interp_interface, NULL);
   MIR_interp_init ();
   val = MIR_interp (func, 0);
   fprintf (stderr, "func hi returns %ld\n", (long) val.i);

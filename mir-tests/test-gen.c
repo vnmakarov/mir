@@ -15,7 +15,7 @@ int main (int argc, char *argv[]) {
   m = DLIST_TAIL (MIR_module_t, MIR_modules);
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_load_module (m);
-  MIR_link (NULL);
+  MIR_link (NULL, NULL);
   MIR_gen_init ();
 #if MIR_GEN_DEBUG
   fprintf (stderr, "\n==============================%s============================\n", argv[1]);

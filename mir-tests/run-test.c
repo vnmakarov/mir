@@ -62,7 +62,7 @@ int main (int argc, char *argv[]) {
   }
   if (interpr_p) {
     MIR_interp_init ();
-    MIR_link (MIR_set_interp_interface);
+    MIR_link (MIR_set_interp_interface, NULL);
     val = MIR_interp (main_func, 0);
     fprintf (stderr, "%s: %lu\n", mir_fname, val.i);
     MIR_interp_finish ();
@@ -71,7 +71,7 @@ int main (int argc, char *argv[]) {
 #if MIR_GEN_DEBUG
     MIR_gen_set_debug_file (stderr);
 #endif
-    MIR_link (MIR_set_gen_interface);
+    MIR_link (MIR_set_gen_interface, NULL);
     fun_addr = MIR_gen (main_func);
     res = fun_addr ();
     fprintf (stderr, "%s: %d\n", mir_fname, res);
