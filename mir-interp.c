@@ -79,11 +79,11 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
   case MIR_T_I16: return load_p ? IC_LDI16 : IC_STI16;
   case MIR_T_U16: return load_p ? IC_LDU16 : IC_STU16;
   case MIR_T_I32: return load_p ? IC_LDI32 : IC_STI32;
-#ifdef MIR_PTR32
+#if MIR_PTR32
   case MIR_T_P:
 #endif
   case MIR_T_U32: return load_p ? IC_LDU32 : IC_STU32;
-#ifdef MIR_PTR64
+#if MIR_PTR64
   case MIR_T_P:
 #endif
   case MIR_T_I64: return load_p ? IC_LDI64 : IC_STI64;

@@ -1067,13 +1067,13 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 	  type = u_p ? MIR_T_U16 : MIR_T_I16; type2 = u_p && s_p ? MIR_T_I16 : MIR_T_BOUND;
 	} else if (ch == '2') {
 	  type = u_p ? MIR_T_U32 : MIR_T_I32; type2 = u_p && s_p ? MIR_T_I32 : MIR_T_BOUND;
-#ifdef MIR_PTR32
+#if MIR_PTR32
 	  if (u_p)
 	    type3 = MIR_T_P;
 #endif
 	} else {
 	  type = MIR_T_I64; type2 = MIR_T_BOUND;
-#ifdef MIR_PTR64
+#if MIR_PTR64
 	  type3 = MIR_T_P;
 #endif
 	}

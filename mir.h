@@ -126,7 +126,9 @@ typedef enum {
 
 #if UINTPTR_MAX == 0xffffffff
 #define MIR_PTR32 1
+#define MIR_PTR64 0
 #elif UINTPTR_MAX == 0xffffffffffffffffu
+#define MIR_PTR32 0
 #define MIR_PTR64 1
 #else
 #error MIR can work only for 32- or 64-bit targets
