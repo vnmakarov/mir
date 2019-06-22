@@ -3058,8 +3058,7 @@ static void rewrite (void) {
       }
       if ((insn->code == MIR_MOV || insn->code == MIR_FMOV
 	   || insn->code == MIR_DMOV || insn->code == MIR_LDMOV)
-	  && insn->ops[0].mode == MIR_OP_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
-	  && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
+	  && MIR_op_eq_p (insn->ops[0], insn->ops[1])) {
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
 	  fprintf (stderr, "Deleting noop move ");
