@@ -1182,9 +1182,10 @@ void MIR_load_external (const char *name, void *addr) {
   setup_global (name, addr, NULL);
 }
 
-void MIR_link (void (*set_interface) (MIR_item_t item)) {
+void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (const char *)) {
   MIR_item_t item, tab_item, def;
   MIR_module_t m;
+  void *addr;
     
   for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
     m = VARR_GET (MIR_module_t, modules_to_link, i);
@@ -1192,8 +1193,13 @@ void MIR_link (void (*set_interface) (MIR_item_t item)) {
 	 item != NULL;
 	 item = DLIST_NEXT (MIR_item_t, item))
       if (item->item_type == MIR_import_item) {
-	if ((tab_item = find_item (MIR_item_name (item), &environment_module)) == NULL)
-	  (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item %s", MIR_item_name (item));
+	if ((tab_item = find_item (item->u.import, &environment_module)) == NULL) {
+	  if (import_resolver == NULL || (addr = import_resolver (item->u.import)) == NULL)
+	    (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item %s", item->u.import);
+	  MIR_load_external (item->u.import, addr);
+	  tab_item = find_item (item->u.import, &environment_module);
+	  mir_assert (tab_item != NULL);
+	}
 	item->addr = tab_item->addr;
 	item->ref_def = tab_item;
       } else if (item->item_type == MIR_export_item) {

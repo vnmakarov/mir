@@ -67,7 +67,7 @@ int main (void) {
   MIR_load_module (m2); MIR_load_module (m1);
   MIR_load_external ("printf", printf);
   MIR_interp_init ();
-  MIR_link (MIR_set_interp_interface);
+  MIR_link (MIR_set_interp_interface, NULL);
   MIR_gen_init ();
   MIR_gen (f1);
   MIR_interp (f2, 0);

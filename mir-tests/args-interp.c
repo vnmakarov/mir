@@ -17,7 +17,7 @@ int main (void) {
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_simplify_func (func, TRUE);
   MIR_load_module (m);
-  MIR_link (MIR_set_interp_interface);
+  MIR_link (MIR_set_interp_interface, NULL);
   MIR_interp_init ();
 #if MIR_C_INTERFACE
   typedef void (*arg_func) (int8_t, int16_t, int32_t, int64_t, float, double,

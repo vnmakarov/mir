@@ -9060,7 +9060,7 @@ int main (int argc, const char *argv[]) {
       MIR_load_external ("abs", abs);
       if (interp_exec_p) {
 	MIR_interp_init ();
-	MIR_link (MIR_set_interp_interface);
+	MIR_link (MIR_set_interp_interface, NULL);
 	start_time = real_usec_time ();
 	val = MIR_interp (main_func, 0);
 	if (verbose_p) {
@@ -9073,7 +9073,7 @@ int main (int argc, const char *argv[]) {
 #if MIR_GEN_DEBUG
 	MIR_gen_set_debug_file (stderr);
 #endif
-	MIR_link (MIR_set_gen_interface);
+	MIR_link (MIR_set_gen_interface, NULL);
 	fun_addr = MIR_gen (main_func);
 	start_time = real_usec_time ();
 	res = fun_addr ();

@@ -420,7 +420,7 @@ extern void MIR_scan_string (const char *str);
 extern MIR_item_t MIR_get_global_item (const char *name);
 extern void MIR_load_module (MIR_module_t m);
 extern void MIR_load_external (const char *name, void *addr);
-extern void MIR_link (void (*set_interface) (MIR_item_t item));
+extern void MIR_link (void (*set_interface) (MIR_item_t item), void * (*import_resolver) (const char *));
 
 /* For internal use only:  */
 extern MIR_item_t _MIR_called_func;

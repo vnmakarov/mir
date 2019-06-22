@@ -23,7 +23,7 @@ int main (void) {
   MIR_output (stderr);
 #endif
   MIR_load_module (m);
-  MIR_link (MIR_set_interp_interface);
+  MIR_link (MIR_set_interp_interface, NULL);
   MIR_interp_init ();
   fprintf (stderr, "Interpreter init finish: %.3f ms\n", (real_sec_time () - start_time) * 1000.0);
   start_time = real_sec_time ();
