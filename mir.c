@@ -2107,9 +2107,11 @@ static void make_one_ret (MIR_item_t func_item, MIR_insn_code_t ret_code) {
   }
 }
 
+static int64_t natural_alignment (int64_t s) { return s <= 2 ? s : s <= 4 ? 4 : s <= 8 ? 8 : 16; }
+
 void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
   MIR_func_t func = func_item->u.func;
-  MIR_insn_t insn, next_insn;
+  MIR_insn_t insn, next_insn, new_insn;
   MIR_reg_t reg;
   MIR_insn_code_t ext_code, ret_code = MIR_INSN_BOUND;
   
@@ -2162,6 +2164,35 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       VARR_PUSH (MIR_insn_t, ret_insns, insn);
     }
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    if (code == MIR_ALLOCA
+	&& (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT)) { /* consolidate allocas */
+      int64_t size, overall_size, align, max_align;
+      
+      size = insn->ops[1].u.i;
+      overall_size = size <= 0 ? 1 : size;
+      max_align = align = natural_alignment (overall_size);
+      overall_size = (overall_size + align - 1) / align * align;
+      while (next_insn != NULL && next_insn->code == MIR_ALLOCA
+	     && (next_insn->ops[1].mode == MIR_OP_INT || next_insn->ops[1].mode == MIR_OP_UINT)
+	     && ! MIR_op_eq_p (insn->ops[0], next_insn->ops[0])) {
+	size = next_insn->ops[1].u.i;
+	size = size <= 0 ? 1 : size;
+	align = natural_alignment (size);
+	size = (size + align - 1) / align * align;
+	if (max_align < align) {
+	  max_align = align;
+	  overall_size = (overall_size + align - 1) / align * align;
+	}
+	new_insn = MIR_new_insn (MIR_PTR32 ? MIR_ADDS : MIR_ADD, next_insn->ops[0],
+				 insn->ops[0], MIR_new_int_op (overall_size));
+	overall_size += size;
+	MIR_insert_insn_before (func_item, next_insn, new_insn);
+	MIR_remove_insn (func_item, next_insn);
+	next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+      }
+      insn->ops[1].u.i = overall_size;
+      next_insn = DLIST_NEXT (MIR_insn_t, insn); /* to process the current and new insns */
+    }
     if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL && insn->ops[0].u.label == next_insn
 	&& ! MIR_FP_branch_code_p (code)) { /* remember signaling NAN */
       MIR_remove_insn (func_item, insn);
