@@ -306,17 +306,14 @@
     | `MIR_DBGT`, `MIR_DBGE`    | 3    | jump on **double** precision greater than/less/ than or equal  |
     | `MIR_LDBGT`, `MIR_LDBGE`  | 3    | jump on **long double** greater than/less/ than or equal       |
 
-### MIR return insns
-  * Return insn should correspond to return type of the function
+### MIR return insn
+  * Return insn operand should correspond to return type of the function
   * 64-bit integer value is truncated to the function return type first
   * The return value will be the function call value
 
     | Insn Code               | Nops |   Description                                                  |
     |-------------------------|-----:|----------------------------------------------------------------|
-    | `MIR_RET`               | 1    | returning integer value                                        |
-    | `MIR_FRET`              | 1    | returning **single** precision floating point value            |
-    | `MIR_DRET`              | 1    | returning **double** precision floating point value            |
-    | `MIR_LDRET`             | 1    | returning **long double** floating point value                 |
+    | `MIR_RET`               | 1    | returning integer/float/double/long double value               |
 
 ### MIR_CALL insn
   * The only insn which has variable number of operands
