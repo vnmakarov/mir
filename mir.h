@@ -105,7 +105,7 @@ typedef enum {
      the prototype is not of void type), call arguments. */
   MIR_CALL, MIR_INLINE,
   /* 1 operand insn: */
-  MIR_RET, MIR_FRET, MIR_DRET, MIR_LDRET,
+  MIR_RET,
   MIR_ALLOCA, /* 2 operands: result address and size  */
   MIR_BSTART, MIR_BEND, /* block start: result address; block end: address from block start */
   /* Special insns: */
@@ -328,10 +328,6 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
 	  || code == MIR_BGT || code == MIR_BGTS || code == MIR_UBGT || code == MIR_UBGTS
 	  || code == MIR_BGE || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES
 	  || MIR_FP_branch_code_p (code));
-}
-
-static inline int MIR_ret_code_p (MIR_insn_code_t code) {
-  return (code == MIR_RET || code == MIR_FRET || code == MIR_DRET || code == MIR_LDRET);
 }
 
 /* Use only the following API to create MIR code.  */

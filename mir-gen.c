@@ -676,15 +676,14 @@ static void build_func_cfg (void) {
       add_new_bb_insn (insn, bb);
     nops = MIR_insn_nops (insn);
     if (next_insn != NULL
-	&& (MIR_branch_code_p (insn->code)
-	    || MIR_ret_code_p (insn->code) || next_insn->code == MIR_LABEL)) {
+	&& (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
       if (next_insn->code == MIR_LABEL && (label_bb_insn = next_insn->data) != NULL)
 	bb = label_bb_insn->bb;
       else
 	bb = create_bb (next_insn);
       add_bb (bb);
-      if (insn->code != MIR_JMP && ! MIR_ret_code_p (insn->code))
+      if (insn->code != MIR_JMP && insn->code != MIR_RET)
 	create_edge (prev_bb, bb);
     }
     for (i = 0; i < nops; i++)
@@ -760,7 +759,7 @@ static void add_new_bb_insns (void) {
        insn = DLIST_NEXT (MIR_insn_t, insn))
     if (insn->data != NULL) {
       bb = (last_bb_insn = insn->data)->bb;
-      if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code)) {
+      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET) {
 	bb = DLIST_NEXT (bb_t, bb);
 	last_bb_insn = NULL;
       }
@@ -1017,7 +1016,7 @@ static void create_exprs (void) {
       expr_t e;
       MIR_insn_t insn = bb_insn->insn;
       
-      if (! MIR_branch_code_p (insn->code) && ! MIR_ret_code_p (insn->code)
+      if (! MIR_branch_code_p (insn->code) && insn->code != MIR_RET
 	  && insn->code != MIR_LABEL && ! MIR_call_code_p (insn->code)
 	  && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
 	  && ! move_p (insn) && ! imm_move_p (insn)
@@ -1061,7 +1060,7 @@ static void create_av_bitmaps (void) {
       bitmap_t b;
       MIR_insn_t insn = bb_insn->insn;
       
-      if (MIR_branch_code_p (bb_insn->insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
+      if (MIR_branch_code_p (bb_insn->insn->code) || insn->code == MIR_RET || insn->code == MIR_LABEL)
 	continue;
       if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
 	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
@@ -1121,7 +1120,7 @@ static void cse_modify (void) {
       MIR_insn_t new_insn, insn = bb_insn->insn;
       
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (MIR_branch_code_p (insn->code) || MIR_ret_code_p (insn->code) || insn->code == MIR_LABEL)
+      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_LABEL)
 	continue;
       if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
 	  && insn->code != MIR_BSTART && insn->code != MIR_BEND

@@ -591,8 +591,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       ltab [MIR_UBGE] = &&L_MIR_UBGE; ltab [MIR_UBGES] = &&L_MIR_UBGES;
       ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE; ltab [MIR_LDBGE] = &&L_MIR_LDBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL; ltab [MIR_INLINE] = &&L_MIR_INLINE;
-      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_FRET] = &&L_MIR_FRET;
-      ltab [MIR_DRET] = &&L_MIR_DRET; ltab [MIR_LDRET] = &&L_MIR_LDRET;
+      ltab [MIR_RET] = &&L_MIR_RET;
       ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA; ltab [MIR_BSTART] = &&L_MIR_BSTART;
       ltab [MIR_BEND] = &&L_MIR_BEND; ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG;
       ltab [MIR_VA_START] = &&L_MIR_VA_START; ltab [MIR_VA_END] = &&L_MIR_VA_END;
@@ -844,10 +843,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
       CASE (IC_IMM_CALL, 0); pc = call_insn_execute (pc, bp, ops, TRUE); END_INSN;
       CASE (MIR_INLINE, 0); mir_assert (FALSE); END_INSN; /* should be not here */
       
-      CASE (MIR_RET, 1);  return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_FRET, 1); return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_DRET, 1); return bp [get_i (ops)]; END_INSN;
-      CASE (MIR_LDRET, 1); return bp [get_i (ops)]; END_INSN;
+      CASE (MIR_RET, 1); return bp [get_i (ops)]; END_INSN;
       CASE (MIR_ALLOCA, 2); {
 	int64_t *r, s;
 	

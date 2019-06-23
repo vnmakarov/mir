@@ -271,9 +271,6 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
     break;
   }
   case MIR_RET: fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n"); break;
-  case MIR_FRET: case MIR_DRET: case MIR_LDRET:
-    fprintf (f, "return "); out_op (f, ops[0]); fprintf (f, ";\n");
-    break;
   case MIR_LABEL:
     mir_assert (ops[0].mode == MIR_OP_INT);
     fprintf (f, "l%"PRId64 ":\n", ops[0].u.i);
