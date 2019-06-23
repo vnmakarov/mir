@@ -2,6 +2,6 @@ mui2f:  module
 ui2f:   func f, i64:n
         local f:r
         ui2f r, n
-	fret r
+	ret r
         endfunc
         endmodule

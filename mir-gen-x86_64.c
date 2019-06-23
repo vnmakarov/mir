@@ -321,7 +321,7 @@ static int start_sp_from_bp_offset;
 
 static void machinize (void) {
   MIR_func_t func;
-  MIR_type_t type, mem_type;
+  MIR_type_t type, mem_type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn;
   MIR_reg_t ret_reg, arg_reg;
@@ -433,14 +433,16 @@ static void machinize (void) {
       machinize_call (insn);
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
-    } else if (code == MIR_RET || code == MIR_FRET || code == MIR_DRET || code == MIR_LDRET) {
+    } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn
 	 and added extension in return (if any).  */
       assert (insn->ops[0].mode == MIR_OP_REG);
-      ret_reg = code == MIR_RET ? AX_HARD_REG : code == MIR_LDRET ? ST0_HARD_REG : XMM0_HARD_REG;
+      res_type = curr_func_item->u.func->res_type;
+      new_insn_code = (res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV
+		       : res_type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      ret_reg = (res_type == MIR_T_F || res_type == MIR_T_D ? XMM0_HARD_REG
+		 : res_type == MIR_T_LD ? ST0_HARD_REG : AX_HARD_REG);
       ret_reg_op = _MIR_new_hard_reg_op (ret_reg);
-      new_insn_code = (code == MIR_RET ? MIR_MOV : code == MIR_FRET ? MIR_FMOV
-		       : code == MIR_LDRET ? MIR_LDMOV : MIR_DMOV);
       new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
       gen_add_insn_before (insn, new_insn);
       insn->ops[0] = ret_reg_op;
@@ -912,10 +914,9 @@ static struct pattern patterns[] = {
   {MIR_CALL, "X r $", "Y FF /2 R1"},  /* call *r1 */
 
   /* ??? Returns */
-  {MIR_RET, "h0", "C3"},  /* ret */
-  {MIR_FRET, "h16", "C3"}, /* ret */
-  {MIR_DRET, "h16", "C3"}, /* ret */
-  {MIR_LDRET, "h32", "C3"}, /* ret */
+  {MIR_RET, "h0", "C3"},  /* ret ax */
+  {MIR_RET, "h16", "C3"}, /* ret xmm0 */
+  {MIR_RET, "h32", "C3"}, /* ret st0 */
 };
 
 static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {

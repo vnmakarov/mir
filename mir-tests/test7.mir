@@ -1,7 +1,7 @@
 mui2d:  module
-ui2d:   func f, i64:n
+ui2d:   func d, i64:n
         local d:r
         ui2d r, n
-	dret r
+	ret r
         endfunc
         endmodule
