@@ -15,7 +15,7 @@ MIR_item_t create_mir_func_with_loop (MIR_module_t *m) {
   MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (R2), MIR_new_reg_op (R2), MIR_new_int_op (1)));
   MIR_append_insn (func, MIR_new_insn (MIR_BLT, MIR_new_label_op (cont), MIR_new_reg_op (R2), MIR_new_reg_op (ARG1)));
   MIR_append_insn (func, fin);
-  MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (R2)));
+  MIR_append_insn (func, MIR_new_ret_insn (1, MIR_new_reg_op (R2)));
   MIR_finish_func ();
   if (m != NULL)
     MIR_finish_module ();
