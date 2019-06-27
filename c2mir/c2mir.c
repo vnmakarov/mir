@@ -8344,12 +8344,12 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
     if (NL_EL (r->ops, 1) == NULL) {
-      emit1 (MIR_RET, zero_op.mir_op);
+      emit_insn (MIR_new_ret_insn (1, zero_op.mir_op));
       break;
     }
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     t = get_op_type (op1);
-    emit1 (MIR_RET, op1.mir_op);
+    emit_insn (MIR_new_ret_insn (1, op1.mir_op));
     reg_free_mark = saved_reg_free_mark; /* free used temp regs */
     break;
   case N_EXPR:

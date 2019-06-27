@@ -1327,21 +1327,40 @@ MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   return insn;
 }
 
-MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
-  va_list argp;
-  MIR_op_t op;
-  size_t i, nops = code == MIR_RET ? 1 : insn_code_nops (code);
-  
-  if (MIR_call_code_p (code))
-    (*error_func) (MIR_call_op_error, "Use only MIR_new_insn_arr for creating a call insn");
-  va_start (argp, code);
+static MIR_insn_t new_insn (MIR_insn_code_t code, size_t nops, va_list argp) {
   VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
-  for (i = 0; i < nops; i++) {
-    op = va_arg (argp, MIR_op_t);
+  for (size_t i = 0; i < nops; i++) {
+    MIR_op_t op = va_arg (argp, MIR_op_t);
+
     VARR_PUSH (MIR_op_t, temp_insn_ops, op);
   }
   va_end (argp);
   return MIR_new_insn_arr (code, nops, VARR_ADDR (MIR_op_t, temp_insn_ops));
+}
+
+MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...) {
+  va_list argp;
+  size_t nops = insn_code_nops (code);
+  
+  if (MIR_call_code_p (code) || code == MIR_RET)
+    (*error_func) (MIR_call_op_error,
+		   "Use only MIR_new_insn_arr or MIR_new_{call,ret}_insn for creating a call/ret insn");
+  va_start (argp, code);
+  return new_insn (code, nops, argp);
+}
+
+MIR_insn_t MIR_new_call_insn (size_t nops, ...) {
+  va_list argp;
+
+  va_start (argp, nops);
+  return new_insn (MIR_CALL, nops, argp);
+}
+
+MIR_insn_t MIR_new_ret_insn (size_t nops, ...) {
+  va_list argp;
+
+  va_start (argp, nops);
+  return new_insn (MIR_RET, nops, argp);
 }
 
 MIR_insn_t MIR_copy_insn (MIR_insn_t insn) {
@@ -2106,7 +2125,7 @@ static void make_one_ret (MIR_item_t func_item) {
   if (ext_code != MIR_INVALID_INSN)
     MIR_append_insn (func_item, MIR_new_insn (ext_code, MIR_new_reg_op (ret_reg),
 					      MIR_new_reg_op (ret_reg)));
-  MIR_append_insn (func_item, MIR_new_insn (MIR_RET, MIR_new_reg_op (ret_reg)));
+  MIR_append_insn (func_item, MIR_new_ret_insn (1, MIR_new_reg_op (ret_reg)));
   for (i = 0; i < VARR_LENGTH (MIR_insn_t, ret_insns); i++) {
     insn = VARR_GET (MIR_insn_t, ret_insns, i);
     reg_op = insn->ops[0];
@@ -2782,9 +2801,9 @@ static void write_insn (FILE *f, MIR_insn_t insn) {
   for (i = 0; i < nops; i++) {
     write_op (f, insn->ops[i]);
   }
-  if (insn_descs[code].op_modes[0] == MIR_OP_BOUND && code != MIR_RET) {
-    /* first operand mode is undefined if it is a variable parameter insn */
-    mir_assert (MIR_call_code_p (code));
+  if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
+    /* first operand mode is undefined if it is a variable operand insn */
+    mir_assert (MIR_call_code_p (code) || code == MIR_RET);
     put_byte (f, TAG_EOI);
   }
 }
@@ -3393,8 +3412,8 @@ void MIR_read (FILE *f) {
 	lab = to_lab (VARR_GET (uint64_t, insn_label_string_nums, i));
 	MIR_append_insn (func, lab);
       }
-      nop = insn_code == MIR_RET ? 1 : insn_code_nops (insn_code);
-      mir_assert (nop != 0 || MIR_call_code_p (insn_code));
+      nop = insn_code_nops (insn_code);
+      mir_assert (nop != 0 || MIR_call_code_p (insn_code) || insn_code == MIR_RET);
       for (n = 0; (nop == 0 || n < nop) && read_operand (f, &op, func); n++)
 	VARR_PUSH (MIR_op_t, temp_insn_ops, op);
       if (nop != 0 && n < nop)

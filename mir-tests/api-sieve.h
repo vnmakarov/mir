@@ -52,7 +52,7 @@ static MIR_item_t create_mir_func_sieve_api (MIR_module_t *m_res) {
   MIR_append_insn (func, MIR_new_insn (MIR_ADD, MIR_new_reg_op (iter), MIR_new_reg_op (iter), MIR_new_int_op (1)));
   MIR_append_insn (func, MIR_new_insn (MIR_JMP, MIR_new_label_op (loop)));
   MIR_append_insn (func, fin);
-  MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (count)));
+  MIR_append_insn (func, MIR_new_ret_insn (1, MIR_new_reg_op (count)));
   MIR_finish_func ();
   MIR_finish_module ();
   return func;
