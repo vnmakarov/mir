@@ -1143,18 +1143,17 @@ MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals) {
 /* C call interface to interpreter.  It is based on knowledge of
    common vararg implementation.  For some targets it might not
    work.  */
-static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
+static void interp (MIR_item_t func_item, va_list va, MIR_val_t *results) {
   size_t nargs;
+  MIR_val_t res;
   MIR_var_t *arg_vars;
   MIR_func_t func = func_item->u.func;
 
-  mir_assert (sizeof (int32_t) == sizeof (int));
   nargs = func->nargs;
   arg_vars = VARR_ADDR (MIR_var_t, func->vars);
   if (VARR_EXPAND (MIR_val_t, args_varr, nargs))
     args = VARR_ADDR (MIR_val_t, args_varr);
-  args[0] = a0;
-  for (size_t i = 1; i < nargs; i++) {
+  for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = arg_vars[i].type;
     switch (type) {
     case MIR_T_I8: args[i].i = (int8_t) va_arg (va, int32_t); break;
@@ -1177,90 +1176,13 @@ static MIR_val_t interp (MIR_item_t func_item, MIR_val_t a0, va_list va) {
       mir_assert (FALSE);
     }
   }
-  return interp_arr_varg (func_item, nargs, args, va);
-}
-
-#if INT_MAX != INT32_MAX
-#error rework interpreter shims
-#endif
-
-static int64_t i_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.i;}
-static float f_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.f;}
-static double d_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.d;}
-static long double ld_shim (MIR_val_t a0, va_list args) {
-  MIR_val_t v = interp (_MIR_called_func, a0, args);
-
-  return v.ld;
-}
-static void *a_shim (MIR_val_t a0, va_list args) {MIR_val_t v = interp (_MIR_called_func, a0, args); return v.a;}
-
-#define define_shim(rtype, pref, suf, partype, valsuf) \
-  rtype pref ## _shim_ ## suf (partype p, ...) {       \
-    MIR_val_t v; va_list args; v.valsuf = p; va_start (args, p); return pref ## _shim (v, args); \
-  }
-
-#define define_3shims(suf, partype, valsuf)	      \
-  define_shim (int64_t, i, suf, partype, valsuf)      \
-  define_shim (float, f, suf, partype, valsuf)        \
-  define_shim (double, d, suf, partype, valsuf)       \
-  define_shim (long double, ld, suf, partype, valsuf) \
-  define_shim (void *, a, suf, partype, valsuf)
-  
-define_3shims (i32, int32_t, i)
-define_3shims (u32, uint32_t, i)
-
-define_3shims (i64, int64_t, i)
-define_3shims (d, double, d)
-define_3shims (ld, long double, ld)
-define_3shims (a, void *, a)
-
-int64_t i_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.i; }
-float f_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.f; }
-double d_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.d; }
-long double ld_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.ld; }
-void *a_shim_v (void) { MIR_val_t v = MIR_interp_arr (_MIR_called_func, 0, NULL); return v.a; }
-
-static void *get_call_shim (MIR_item_t func_item) {
-  MIR_func_t func = func_item->u.func;
-  MIR_type_t rtp = func->res_type == MIR_T_V ? MIR_T_I64 : func->res_type;
-  MIR_type_t atp = func->nargs == 0 ? MIR_T_V : VARR_GET (MIR_var_t, func->vars, 0).type;
-
-  switch (atp) {
-  case MIR_T_I8:
-  case MIR_T_I16:
-  case MIR_T_I32: return (rtp == MIR_T_F ? (void *) f_shim_i32 : rtp == MIR_T_D ? (void *) d_shim_i32
-			  : rtp == MIR_T_LD ? (void *) ld_shim_i32
-			  : rtp == MIR_T_P ? (void *) a_shim_i32 : (void *) i_shim_i32);
-  case MIR_T_U8:
-  case MIR_T_U16:
-  case MIR_T_U32: return (rtp == MIR_T_F ? (void *) f_shim_u32 : rtp == MIR_T_D ? (void *) d_shim_u32
-			  : rtp == MIR_T_LD ? (void *) ld_shim_u32
-			  : rtp == MIR_T_P ? (void *) a_shim_u32 : (void *) i_shim_u32);
-  case MIR_T_I64: return (rtp == MIR_T_F ? (void *) f_shim_i64 : rtp == MIR_T_D ? (void *) d_shim_i64
-			  : rtp == MIR_T_LD ? (void *) ld_shim_i64
-			  : rtp == MIR_T_P ? (void *) a_shim_i64 : (void *) i_shim_i64);
-  case MIR_T_F:
-  case MIR_T_D: return (rtp == MIR_T_F ? (void *) f_shim_d : rtp == MIR_T_D ? (void *) d_shim_d
-			: rtp == MIR_T_LD ? (void *) ld_shim_d
-			: rtp == MIR_T_P ? (void *) a_shim_d : (void *) i_shim_d);
-  case MIR_T_LD: return (rtp == MIR_T_F ? (void *) f_shim_ld : rtp == MIR_T_D ? (void *) d_shim_ld
-			 : rtp == MIR_T_LD ? (void *) ld_shim_ld
-			 : rtp == MIR_T_P ? (void *) a_shim_ld : (void *) i_shim_ld);
-  case MIR_T_P: return (rtp == MIR_T_F ? (void *) f_shim_a : rtp == MIR_T_D ? (void *) d_shim_a
-			: rtp == MIR_T_LD ? (void *) ld_shim_a
-			: rtp == MIR_T_P ? (void *) a_shim_a : (void *) i_shim_a);
-  case MIR_T_V: return (rtp == MIR_T_F ? (void *) f_shim_v : rtp == MIR_T_D ? (void *) d_shim_v
-			: rtp == MIR_T_LD ? (void *) ld_shim_v
-			: rtp == MIR_T_P ? (void *) a_shim_v : (void *) i_shim_v);
-  default:
-    mir_assert (FALSE);
-    return NULL;
-  }
+  res = interp_arr_varg (func_item, nargs, args, va);
+  if (func->res_type != MIR_T_V)
+    results[0] = res;
 }
 
 static void redirect_interface_to_interp (MIR_item_t func_item) {
-  _MIR_redirect_thunk (func_item->addr,
-		       _MIR_get_interp_shim (get_call_shim (func_item)));
+  _MIR_redirect_thunk (func_item->addr, _MIR_get_interp_shim (func_item, interp));
 }
 
 void MIR_set_interp_interface (MIR_item_t func_item) { redirect_interface_to_interp (func_item); }

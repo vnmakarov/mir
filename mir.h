@@ -459,7 +459,8 @@ extern void va_end_interp_builtin (void *p);
 extern void *_MIR_get_bstart_builtin (void);
 extern void *_MIR_get_bend_builtin (void);
 
-extern void *_MIR_get_interp_shim (void *handler);
+extern void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types);
+extern void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_item_t item);
 extern void _MIR_redirect_thunk (void *thunk, void *to);
 extern void *_MIR_get_thunk_target (void *thunk);

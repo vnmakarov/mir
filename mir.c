@@ -415,8 +415,9 @@ DLIST (MIR_module_t) MIR_modules; /* List of all modules */
 DEF_VARR (MIR_module_t);
 static VARR (MIR_module_t) *modules_to_link;
 
-#if MIR_SCAN || MIR_IO
 DEF_VARR (uint8_t);
+
+#if MIR_SCAN || MIR_IO
 static VARR (uint8_t) *data_values;
 
 static void push_data (uint8_t *els, size_t size) {
@@ -2505,9 +2506,13 @@ void _MIR_update_code (uint8_t *base, size_t nloc, ...) {
   va_end (args);
 }
 
+static void machine_init (void);
+static void machine_finish (void);
+
 static void code_init (void) {
   page_size = sysconf(_SC_PAGE_SIZE);
   VARR_CREATE (code_holder_t, code_holders, 128);
+  machine_init ();
 }
 
 static void code_finish (void) {
@@ -2516,6 +2521,7 @@ static void code_finish (void) {
     munmap (ch.start, ch.bound - ch.start);
   }
   VARR_DESTROY (code_holder_t, code_holders);
+  machine_finish ();
 }
 
 /* Used by interpreter for calling through C interface and generator
