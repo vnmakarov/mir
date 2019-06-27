@@ -2333,10 +2333,13 @@ void MIR_inline (MIR_item_t func_item) {
 	}
       if (new_insn->code == MIR_RET) {
 	/* should be the last insn after simplification */
-	mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && new_insn->ops[0].mode == MIR_OP_REG
-		    &&  call->ops[0].mode == MIR_OP_REF && call->ops[0].u.ref->item_type == MIR_proto_item);
-	if (res_type == MIR_T_V)
+	mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL
+		    && call->ops[0].mode == MIR_OP_REF && call->ops[0].u.ref->item_type == MIR_proto_item);
+	if (res_type == MIR_T_V) {
+	  mir_assert (insn_nops == 0);
 	  continue;
+	}
+	mir_assert (insn_nops == 1 && new_insn->ops[0].mode == MIR_OP_REG);
 	ret_reg = new_insn->ops[0].u.reg;
 	new_insn = MIR_new_insn (res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV
 				 : res_type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
