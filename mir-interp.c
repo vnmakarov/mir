@@ -13,6 +13,8 @@ static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
 
 #include "mir-varr.h"
+#include "mir-hash.h"
+#include "mir-htab.h"
 #include "mir-interp.h"
 
 static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
@@ -254,11 +256,12 @@ static void generate_icode (MIR_item_t func_item) {
       if (MIR_call_code_p (code)) {
 	v.i = nops; VARR_PUSH (MIR_val_t, code_varr, v);
 	v.a = insn; VARR_PUSH (MIR_val_t, code_varr, v);
+	v.a = NULL; VARR_PUSH (MIR_val_t, code_varr, v); /* for ffi interface */
       }
       for (i = 0; i < nops; i++) {
 	if (i == 0 && MIR_call_code_p (code)) { /* prototype ??? */
 	  mir_assert (ops[i].mode == MIR_OP_REF && ops[i].u.ref->item_type == MIR_proto_item);
-	  v.a = ops[i].u.ref->u.proto;
+	  v.a = ops[i].u.ref;
 	} else if (i == 1 && imm_call_p) {
 	  mir_assert (ops[i].u.ref->item_type == MIR_import_item
 		      || ops[i].u.ref->item_type == MIR_func_item);
@@ -417,8 +420,8 @@ static VARR (MIR_val_t) *args_varr;
 
 static MIR_val_t *args;
  
-static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
-		  MIR_val_t *res, size_t nargs, MIR_val_t *args);
+static void call (MIR_op_t *insn_arg_ops, code_t ffi_address_ptr, MIR_item_t proto_item,
+		  void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args);
 
 #if MIR_INTERP_TRACE
 static int trace_insn_ident;
@@ -483,27 +486,28 @@ static void *(*bstart_builtin) (void);
 static void (*bend_builtin) (void *);
 
 static code_t call_insn_execute (code_t pc, MIR_val_t *bp, code_t ops, int imm_p) {
-  int64_t nops = get_i (ops); /* #args w/o nop and insn */
+  int64_t nops = get_i (ops); /* #args w/o nop, insn, and ff interface address */
   MIR_insn_t insn = get_a (ops + 1);
-  MIR_proto_t proto = get_a (ops + 2);
-  void *f = imm_p ? get_a (ops + 3) : *get_aop (bp, ops + 3);
-  size_t start = proto->res_type == MIR_T_V ? 4 : 5;
-  MIR_val_t *res = &bp [get_i (ops + 4)];
+  MIR_item_t proto_item = get_a (ops + 3);
+  void *f = imm_p ? get_a (ops + 4) : *get_aop (bp, ops + 4);
+  size_t start = proto_item->u.proto->res_type == MIR_T_V ? 5 : 6;
+  MIR_val_t *res = &bp [get_i (ops + 5)];
   
   if (VARR_EXPAND (MIR_val_t, args_varr, nops))
     args = VARR_ADDR (MIR_val_t, args_varr);
   
-  for (size_t i = start; i < nops + 2; i++)
+  for (size_t i = start; i < nops + 3; i++)
     args[i - start] = bp [get_i (ops + i)];
   
 #if MIR_INTERP_TRACE
   trace_insn_ident += 2;
 #endif
-  call (&insn->ops[start - 2], proto, f, res, nops - start + 2, args);
+  call (&insn->ops[proto_item->u.proto->res_type == MIR_T_V ? 2 : 3], ops + 2, proto_item,
+	f, res, nops - start + 3, args);
 #if MIR_INTERP_TRACE
   trace_insn_ident -= 2;
 #endif
-  pc += nops + 2; /* nops itself and the call insn */
+  pc += nops + 3; /* nops itself, the call insn, add ff interface address */
   return pc;
 }
 
@@ -905,60 +909,73 @@ get_func_desc (MIR_item_t func_item) {
   return func_item->data;
 }
 
-#include <ffi.h>
-
-typedef ffi_type *ffi_type_ptr_t;
-typedef void *void_ptr_t;
-typedef union {int16_t i8; uint16_t u8; int16_t i16; uint16_t u16; int32_t i32; uint16_t u32;} int_value_t;
-
-DEF_VARR (ffi_type_ptr_t);
-static VARR (ffi_type_ptr_t) *ffi_arg_types_varr;
-
-DEF_VARR (void_ptr_t);
-static VARR (void_ptr_t) *ffi_arg_values_varr;
-
-DEF_VARR (int_value_t);
-static VARR (int_value_t) *ffi_int_values_varr;
-
-static ffi_type_ptr_t *ffi_arg_types;
-static void_ptr_t *ffi_arg_values;
-static int_value_t *ffi_int_values;
- 
-static ffi_type_ptr_t ffi_type_ptr (MIR_type_t type) {
-  switch (type) {
-  case MIR_T_I8: return &ffi_type_sint8;
-  case MIR_T_U8: return &ffi_type_uint8;
-  case MIR_T_I16: return &ffi_type_sint16;
-  case MIR_T_U16: return &ffi_type_uint16;
-  case MIR_T_I32: return &ffi_type_sint32;
-  case MIR_T_U32: return &ffi_type_uint32;
-  case MIR_T_I64: return &ffi_type_sint64;
-  case MIR_T_U64: return &ffi_type_uint64;
-  case MIR_T_F: return &ffi_type_float;
-  case MIR_T_D: return &ffi_type_double;
-  case MIR_T_LD: return &ffi_type_longdouble;
-  case MIR_T_P: return &ffi_type_pointer;
-  case MIR_T_V: return &ffi_type_void;
-  default:
-    mir_assert (FALSE);
-    return &ffi_type_void;
-  }
-}
-
 MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs, MIR_val_t *vals);
 
-static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
-		  MIR_val_t *res, size_t nargs, MIR_val_t *args) {
-  size_t arg_vars_num;
+static VARR (MIR_val_t) *call_res_args_varr;
+static MIR_val_t *call_res_args;
+ 
+DEF_VARR (MIR_type_t)
+static VARR (MIR_type_t) *call_arg_types_varr;
+static MIR_type_t *call_arg_types;
+ 
+struct ff_interface {
+  size_t nres, nargs;
+  MIR_type_t *res_types, *arg_types;
+  void *interface_addr;
+};
+
+typedef struct ff_interface *ff_interface_t;
+
+DEF_HTAB (ff_interface_t);
+static HTAB (ff_interface_t) *ff_interface_tab;
+
+static htab_hash_t ff_interface_hash (ff_interface_t i) {
+  return mir_hash_finish (mir_hash_step
+			  (mir_hash_step
+			   (mir_hash_step (mir_hash_init (0), i->nres), i->nargs),
+			   mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres,
+				     mir_hash (i->arg_types, sizeof (MIR_type_t) * i->nargs, 42))));
+}
+
+static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2) {
+  return (i1->nres == i2->nres && i1->nargs == i2->nargs
+	  && memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) == 0
+	  && memcmp (i1->arg_types, i2->arg_types, sizeof (MIR_type_t) * i1->nargs) == 0);
+}
+
+static void ff_interface_clear (ff_interface_t ffi) { free (ffi); }
+
+static void *get_ff_interface (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types) {
+  struct ff_interface ffi_s;
+  ff_interface_t tab_ffi, ffi;
+  int htab_res;
+  
+  ffi_s.nres = nres; ffi_s.nargs = nargs; ffi_s.res_types = res_types; ffi_s.arg_types = arg_types;
+  if (HTAB_DO (ff_interface_t, ff_interface_tab, &ffi_s, HTAB_FIND, tab_ffi))
+    return tab_ffi->interface_addr;
+  ffi = malloc (sizeof (struct ff_interface) + sizeof (MIR_type_t) * (nres + nargs));
+  ffi->nres = nres; ffi->nargs = nargs;
+  ffi->res_types = (MIR_type_t *) ((char *) ffi + sizeof (struct ff_interface));
+  ffi->arg_types = ffi->res_types + nres;
+  memcpy (ffi->res_types, res_types, sizeof (MIR_type_t) * nres);
+  memcpy (ffi->arg_types, arg_types, sizeof (MIR_type_t) * nargs);
+  ffi->interface_addr = _MIR_get_ff_call (nres, res_types, nargs, call_arg_types);
+  htab_res = HTAB_DO (ff_interface_t, ff_interface_tab, ffi, HTAB_INSERT, tab_ffi);
+  mir_assert (! htab_res && ffi == tab_ffi);
+  return ffi->interface_addr;
+}
+
+static void call (MIR_op_t *insn_arg_ops, code_t ffi_address_ptr, MIR_item_t proto_item,
+		  void *addr, MIR_val_t *res, size_t nargs, MIR_val_t *args) {
+  size_t i, arg_vars_num, nres;
   MIR_val_t val;
   MIR_type_t type;
   MIR_var_t *arg_vars = NULL;
   MIR_item_t func_item;
+  MIR_proto_t proto = proto_item->u.proto;
   MIR_op_mode_t mode;
-  ffi_cif cif;
-  ffi_status status;
-  union { ffi_arg rint; float f; double d; long double ld; void *a; } u;
-
+  void *ff_interface_addr;
+  
   if (proto->args == NULL) {
     mir_assert (nargs == 0 && ! proto->vararg_p);
     arg_vars_num = 0;
@@ -968,81 +985,68 @@ static void call (MIR_op_t *insn_arg_ops, MIR_proto_t proto, void *addr,
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
     arg_vars_num = VARR_LENGTH (MIR_var_t, proto->args);
   }
-  if (VARR_EXPAND (void_ptr_t, ffi_arg_values_varr, nargs)) {
-    VARR_EXPAND (ffi_type_ptr_t, ffi_arg_types_varr, nargs);
-    VARR_EXPAND (int_value_t, ffi_int_values_varr, nargs);
-    ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
-    ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
-    ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
+  nres = proto->res_type == MIR_T_V ? 0 : 1;
+  if (VARR_EXPAND (MIR_val_t, call_res_args_varr, nargs + nres)
+      || VARR_EXPAND (MIR_type_t, call_arg_types_varr, nargs + nres)) {
+    call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
+    call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
   }
-    
-  for (size_t i = 0; i < nargs; i++) {
-    if (i >= arg_vars_num) {
+  if ((ff_interface_addr = ffi_address_ptr->a) == NULL) {
+    for (i = 0; i < nargs; i++) {
+      if (i < arg_vars_num) {
+	call_arg_types[i] = arg_vars[i].type;
+	continue;
+      }
       mode = insn_arg_ops[i].value_mode;
       mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
 		  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
 	(*MIR_get_error_func ()) (MIR_call_op_error,
 				  "passing float variadic arg (should be passed as double)");
-      ffi_arg_types[i] = (mode == MIR_OP_DOUBLE ? &ffi_type_double
-			  : mode == MIR_OP_LDOUBLE ? &ffi_type_longdouble : &ffi_type_sint64);
-      ffi_arg_values[i] = &args[i];
+      call_arg_types[i] = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
+    }
+    ff_interface_addr = ffi_address_ptr->a = get_ff_interface (nres, &proto->res_type, nargs, call_arg_types);
+  }
+  
+  for (i = 0; i < nargs; i++) {
+    if (i >= arg_vars_num) {
+      call_res_args[i + nres] = args[i];
       continue;
     }
     type = arg_vars[i].type;
-    ffi_arg_types[i] = ffi_type_ptr (type);
     switch (type) {
-    case MIR_T_I8:
-      ffi_int_values[i].i8 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i8;
-      break;
-    case MIR_T_I16:
-      ffi_int_values[i].i16 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i16;
-      break;
-    case MIR_T_I32:
-      ffi_int_values[i].i32 = args[i].i; ffi_arg_values[i] = &ffi_int_values[i].i32;
-      break;
-    case MIR_T_U8:
-      ffi_int_values[i].u8 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u8;
-      break;
-    case MIR_T_U16:
-      ffi_int_values[i].u16 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u16;
-      break;
-    case MIR_T_U32:
-      ffi_int_values[i].u32 = args[i].u; ffi_arg_values[i] = &ffi_int_values[i].u32;
-      break;
-    case MIR_T_I64: ffi_arg_values[i] = &args[i].i; break;
-    case MIR_T_U64: ffi_arg_values[i] = &args[i].u; break;
-    case MIR_T_F: ffi_arg_values[i] = &args[i].f; break;
-    case MIR_T_D: ffi_arg_values[i] = &args[i].d; break;
-    case MIR_T_LD: ffi_arg_values[i] = &args[i].ld; break;
-    case MIR_T_P: ffi_arg_values[i] = &args[i].a; break;
+    case MIR_T_I8: call_res_args[i + nres].i = (int8_t) (args[i].i); break;
+    case MIR_T_U8: call_res_args[i + nres].u = (uint8_t) (args[i].i); break;
+    case MIR_T_I16: call_res_args[i + nres].i = (int16_t) (args[i].i); break;
+    case MIR_T_U16: call_res_args[i + nres].u = (uint16_t) (args[i].i); break;
+    case MIR_T_I32: call_res_args[i + nres].i = (int32_t) (args[i].i); break;
+    case MIR_T_U32: call_res_args[i + nres].u = (uint32_t) (args[i].i); break;
+    case MIR_T_I64: call_res_args[i + nres].i = (int64_t) (args[i].i); break;
+    case MIR_T_U64: call_res_args[i + nres].u = (uint64_t) (args[i].i); break;
+    case MIR_T_F: call_res_args[i + nres].f = args[i].f; break;
+    case MIR_T_D: call_res_args[i + nres].d = args[i].d; break;
+    case MIR_T_LD: call_res_args[i + nres].ld = args[i].ld; break;
+    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) args[i].a; break;
     default:
       mir_assert (FALSE);
     }
   }
-    
-  if (proto->vararg_p)
-    status = ffi_prep_cif_var (&cif, FFI_DEFAULT_ABI, arg_vars_num, nargs,
-			       ffi_type_ptr (proto->res_type), ffi_arg_types);
-  else
-    status = ffi_prep_cif (&cif, FFI_DEFAULT_ABI, nargs, ffi_type_ptr (proto->res_type), ffi_arg_types);
-  mir_assert (status == FFI_OK);
-  
-  ffi_call (&cif, addr, &u, ffi_arg_values);
-  switch (proto->res_type) {
-  case MIR_T_I8: res->i = (int8_t) (u.rint); return;
-  case MIR_T_U8: res->u = (uint8_t) (u.rint); return;
-  case MIR_T_I16: res->i = (int16_t) (u.rint); return;
-  case MIR_T_U16: res->u = (uint16_t) (u.rint); return;
-  case MIR_T_I32: res->i = (int32_t) (u.rint); return;
-  case MIR_T_U32: res->u = (uint32_t) (u.rint); return;
-  case MIR_T_I64: res->i = (int64_t) (u.rint); return;
-  case MIR_T_U64: res->u = (uint64_t) (u.rint); return;
-  case MIR_T_F: res->f = u.f; return;
-  case MIR_T_D: res->d = u.d; return;
-  case MIR_T_LD: res->ld = u.ld; return;
-  case MIR_T_P: res->a = u.a; return;
-  case MIR_T_V: return;
+  ((void (*) (void *, void *)) ff_interface_addr) (addr, call_res_args); /* call */
+  for (i = 0; i < nres; i++)
+    switch (proto->res_type) {
+    case MIR_T_I8: res[i].i = (int8_t) (call_res_args[i].i); return;
+    case MIR_T_U8: res[i].u = (uint8_t) (call_res_args[i].i); return;
+    case MIR_T_I16: res[i].i = (int16_t) (call_res_args[i].i); return;
+    case MIR_T_U16: res[i].u = (uint16_t) (call_res_args[i].i); return;
+    case MIR_T_I32: res[i].i = (int32_t) (call_res_args[i].i); return;
+    case MIR_T_U32: res[i].u = (uint32_t) (call_res_args[i].i); return;
+    case MIR_T_I64: res[i].i = (int64_t) (call_res_args[i].i); return;
+    case MIR_T_U64: res[i].u = (uint64_t) (call_res_args[i].i); return;
+    case MIR_T_F: res[i].f = call_res_args[i].f; return;
+    case MIR_T_D: res[i].d = call_res_args[i].d; return;
+    case MIR_T_LD: res[i].ld = call_res_args[i].ld; return;
+    case MIR_T_P: res[i].a = call_res_args[i].a; return;
+    case MIR_T_V: return;
   default:
     mir_assert (FALSE);
   }
@@ -1057,12 +1061,11 @@ void MIR_interp_init (void) {
   VARR_CREATE (MIR_val_t, code_varr, 0);
   VARR_CREATE (MIR_val_t, args_varr, 0);
   args = VARR_ADDR (MIR_val_t, args_varr);
-  VARR_CREATE (ffi_type_ptr_t, ffi_arg_types_varr, 0);
-  ffi_arg_types = VARR_ADDR (ffi_type_ptr_t, ffi_arg_types_varr);
-  VARR_CREATE (void_ptr_t, ffi_arg_values_varr, 0);
-  ffi_arg_values = VARR_ADDR (void_ptr_t, ffi_arg_values_varr);
-  VARR_CREATE (int_value_t, ffi_int_values_varr, 0);
-  ffi_int_values = VARR_ADDR (int_value_t, ffi_int_values_varr);
+  VARR_CREATE (MIR_val_t, call_res_args_varr, 0);
+  VARR_CREATE (MIR_type_t, call_arg_types_varr, 0);
+  call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
+  call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
+  HTAB_CREATE (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash, ff_interface_eq);
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
@@ -1074,9 +1077,10 @@ void MIR_interp_finish (void) {
   VARR_DESTROY (MIR_insn_t, branches);
   VARR_DESTROY (MIR_val_t, code_varr);
   VARR_DESTROY (MIR_val_t, args_varr);
-  VARR_DESTROY (ffi_type_ptr_t, ffi_arg_types_varr);
-  VARR_DESTROY (void_ptr_t, ffi_arg_values_varr);
-  VARR_DESTROY (int_value_t, ffi_int_values_varr);
+  VARR_DESTROY (MIR_val_t, call_res_args_varr);
+  VARR_DESTROY (MIR_type_t, call_arg_types_varr);
+  HTAB_CLEAR (ff_interface_t, ff_interface_tab, ff_interface_clear);
+  HTAB_DESTROY (ff_interface_t, ff_interface_tab);
   /* Clear func descs???  */
 }
 
