@@ -511,7 +511,7 @@ static MIR_val_t OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp) {
   code_t pc, ops, code = func_desc->code;
   
 #if MIR_INTERP_TRACE
-  MIR_insn_code_t trace_insn_code;
+  MIR_full_insn_code_t trace_insn_code;
 #define START_INSN(v, nops) do {trace_insn_code = v; start_insn_trace (#v, func_desc, pc, nops); ops = pc + 1; pc += nops + 1;} while (0)
 #else
 #define START_INSN(v, nops) do {ops = pc + 1; pc += nops + 1;} while (0)
