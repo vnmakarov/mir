@@ -3,20 +3,18 @@
 */
 
 void *_MIR_get_bstart_builtin (void) {
-  static unsigned char bstart_code[] =
-    {
-     0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */
-     0xc3,                         /* ret */
-    };
+  static uint8_t bstart_code[] = {
+    0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */
+    0xc3,                         /* ret */
+  };
   return _MIR_publish_code (bstart_code, sizeof (bstart_code));
 }
 void *_MIR_get_bend_builtin (void) {
-  static unsigned char bend_code[] =
-    {
-     0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
-     0x48, 0x89, 0xfc,       /* rsp = rdi */
-     0xff, 0xe0,             /* jmp *rax */
-    };
+  static uint8_t bend_code[] = {
+    0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
+    0x48, 0x89, 0xfc,       /* rsp = rdi */
+    0xff, 0xe0,             /* jmp *rax */
+  };
   return _MIR_publish_code (bend_code, sizeof (bend_code));
   
 }
@@ -35,7 +33,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   if (fp_p && va->fp_offset <= 160) {
     a = (char *) va->reg_save_area + va->fp_offset;
     va->fp_offset += 16;
-  } else if (! fp_p && va->gp_offset <= 40)  {
+  } else if (! fp_p && type != MIR_T_LD && va->gp_offset <= 40)  {
     a = (char *) va->reg_save_area + va->gp_offset;
     va->gp_offset += 8;
   } else {
