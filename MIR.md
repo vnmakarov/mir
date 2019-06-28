@@ -46,7 +46,8 @@
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (const char *name)`)
     * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
       `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
-      `MIR_new_vararg_func` -- see below)
+      `MIR_new_vararg_func` -- see below).  The only difference is that
+      two or more prototype argument names can be the same
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (const char *name, const char *str)`)
@@ -67,20 +68,25 @@
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (const
-    char *name, MIR_type_t res_type, size_t nargs, ...)`
-    or function `MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *arg_vars)`
+    char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
+    or function `MIR_item_t MIR_new_func_arr (const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, MIR_var_t *arg_vars)`
     * Argument variables can be any type (except `MIR_T_V`)
       * This type only denotes how the argument value is passed
       * Any integer type argument variable has actually type `MIR_T_I64`
   * MIR functions with variable number of arguments are created through API functions
-    `MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t nargs, ...)`
-    or function `MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type, size_t nargs, MIR_var_t *arg_vars)`
+    `MIR_item_t MIR_new_vararg_func (const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
+    or function `MIR_item_t MIR_new_vararg_func_arr (const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, MIR_var_t *arg_vars)`
     * `nargs` and `arg_vars` define only fixed arguments
+    * MIR functions can have more one result but possible number of results
+      and combination of their types are machine-defined.  For example, for x86-64
+      the function can have upto six results and return two integer
+      values, two float or double values, and two long double values
+      in any combination
   * MIR function creation is finished by calling API function `MIR_finish_func (void)`
   * You can create only one MIR function at any given time
-  * MIR text function syntax looks the folowing:
+  * MIR text function syntax looks the folowing (arg-var always has a name besides type):
 ```
-    <function name>: func <result type>, [ arg-var {, <arg-var> } [, ...]]
+    <function name>: func [<result type> {, <result_type>}] [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
                      endfun
 ```
@@ -321,8 +327,8 @@
   * The second operand is a called function address
     * The prototype should correspond MIR function definition if function address represents a MIR function
     * The prototype should correspond C function definition if the address is C function address
-  * If the prototype has non-void return type, the next operand is an
-    output operand which will contain the result value of the function
+  * If the prototype has *N* return types, the next *N* operands are
+    output operands which will contain the result values of the function
     call
   * The subsequent operands are arguments.  Their types and number and should be the same as in the prototype
     * Integer arguments are truncated according to integer prototype argument type
@@ -410,8 +416,8 @@ fin:      rets count
           endmodule
 m_ex100:  module
 format:   string "sieve (10) = %d\n"
-p_printf: proto v, p, i32
-p_seive:  proto i32, i32
+p_printf: proto p:fmt, i32:v
+p_seive:  proto i32, i32:iter
           export ex100
           import sieve, printf
 ex100:    func v
