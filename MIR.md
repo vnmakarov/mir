@@ -86,7 +86,7 @@
   * You can create only one MIR function at any given time
   * MIR text function syntax looks the folowing (arg-var always has a name besides type):
 ```
-    <function name>: func [<result type> {, <result_type>}] [ arg-var {, <arg-var> } [, ...]]
+    <function name>: func {<result type>, } [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
                      endfun
 ```
@@ -496,10 +496,12 @@ ex100:    func v
   * Before use of the intepreter you should initialize it by API function `MIR_interp_init (void)`
   * API function `MIR_interp_finish (void)` should be called last after any interpreter usage.  It frees all internal interpreter data
   * The interpreter works with values represented by type `MIR_val_t` which is union `union {..., int64_t i; uint64_t u; float f; double d; long double d;}`
-  * You can execute a MIR function code by API functions `MIR_val_t
-    MIR_interp (MIR_item_t func_item, size_t nargs, ...)` and
-    `MIR_val_t MIR_interp_arr (MIR_item_t func_item, size_t nargs,
+  * You can execute a MIR function code by API functions `void
+    MIR_interp (MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...)` and
+    `void MIR_interp_arr (MIR_item_t func_item, MIR_val_t *results, size_t nargs,
     MIR_val_t *vals)`
+    * The function results are returned through parameter `results`.  You should pass
+      a container of enough size to return all function results.
     * Please remember that these functions simplify the MIR code function if it was not simplified yet
   * You can execute a MIR function code also through C function call
     mechanism.  First you need to setup the C function interface

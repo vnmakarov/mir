@@ -146,7 +146,7 @@ ex100:    func v, 0
     MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf);
     MIR_link (MIR_set_interp_interface);
     /* or MIR_gen (MIR_set_gen_interface); to generate and use the machine code */
-    MIR_interp (func, 0); /* zero here is arguments number  */
+    MIR_interp (func, &result, 0); /* zero here is arguments number  */
     /* or ((void (*) (void)) func->addr) (); to call interpreter or generated code through the interface */
 ```
 
