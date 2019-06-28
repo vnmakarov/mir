@@ -3033,7 +3033,7 @@ static void rewrite (void) {
 	op = &insn->ops[i];
 	data_mode = MIR_insn_op_mode (insn, i, &out_p);
 	if (out_p)
-	  out_op = *op;
+	  out_op = *op; /* we don't care about multiple call outputs here */
 	else
 	  in_op = *op;
 	switch (op->mode) {
@@ -3476,11 +3476,13 @@ static void combine (void) {
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
 	setup_hreg_ref (early_clobbered_hard_reg2, insn, 0 /* whatever */, curr_insn_num, TRUE);
       VARR_TRUNC (MIR_reg_t, dead_def_regs, 0);
-      if (MIR_call_code_p ((code = insn->code))) {
+      if (MIR_call_code_p (code = insn->code)) {
 	for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
 	  if (bitmap_bit_p (call_used_hard_regs, hr)) {
 	    setup_hreg_ref (hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
 	  }
+      } else if (code == MIR_RET) {
+	/* ret is transformed in machinize and should be not modified after that */
       } else if ((new_insn = combine_branch_and_cmp (bb_insn)) != NULL) {
 	insn = new_insn;
 	nops = MIR_insn_nops (insn);
