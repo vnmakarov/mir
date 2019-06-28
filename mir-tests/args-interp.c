@@ -32,7 +32,7 @@ int main (void) {
   v[6].i = 0x00000005; v[7].i = 0x06; v[8].i = 0x0007; v[9].i = 0x00000008; v[10].i = 0x200000009;
   v[11].f = 3.0; v[12].f = 4.0; v[13].f = 5.0; v[14].f = 6.0; v[15].f = 7.0; v[16].f = 8.0; v[17].f = 9.0;
   v[18].d = 10.0;
-  v[0] = MIR_interp_arr (func, 19, v);
+  MIR_interp_arr (func, &v[0], 19, v);
 #endif
   MIR_interp_finish ();
   MIR_finish ();

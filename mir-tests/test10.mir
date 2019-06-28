@@ -1,8 +1,8 @@
 # test for inlining and correct work of bstart and bend
 m:		module
 		import exit, printf
-printf_p:	proto  v, p, ...
-exit_p:		proto  v, i64
+printf_p:	proto  p:fmt, ...
+exit_p:		proto  i64:code
 add:		func i32, i32:a, i32:b
                 local i64:p
 		alloca p, 8192
@@ -10,8 +10,8 @@ add:		func i32, i32:a, i32:b
                 adds a, a, i32:(p)
                 ret a
                 endfunc
-add_p:	        proto  i32, i32, i32
-main:		func v
+add_p:	        proto  i32, i32:a1, i32:a2
+main:		func
 		local i64:r, i64:iter
 		mov iter, 0
 loop:     	inline add_p, add, r, 4, 2

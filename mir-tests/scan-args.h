@@ -1,9 +1,9 @@
 MIR_module_t create_args_module (void) {
   const char *str = "\n\
 m:     module\n\
-p_pri: proto v, i64\n\
-p_prf: proto v, f\n\
-p_prd: proto v, d\n\
+p_pri: proto i64:v\n\
+p_prf: proto f:v\n\
+p_prd: proto d:v\n\
        import pri, prf, prd\n\
        export f\n\
 f:     func i64, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i7, i32:i8, i64:i9, f:f2, f:f3, f:f4, f:f5, f:f6, f:f7, f:f8, d:d2\n\

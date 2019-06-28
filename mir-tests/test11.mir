@@ -1,8 +1,8 @@
 # test for long doubles
 m:		module
 		import printf, abort
-printf_p:	proto  v, p, ...
-abort_p:	proto  v
+printf_p:	proto  p:fmt, ...
+abort_p:	proto
 main:		func i64
 		local d:s, ld:l, ld:l1, ld:l2, ld:r, i64:i, f:f, d:d
 		call printf_p, printf, "10.15: double = %.25E, long double = %.25LE\n", 10.15, 10.15L

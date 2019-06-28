@@ -2,10 +2,12 @@ MIR_item_t create_mir_func_with_loop (MIR_module_t *m) {
   MIR_item_t func;
   MIR_label_t fin, cont;
   MIR_reg_t ARG1, R2;
+  MIR_type_t res_type;
   
   if (m != NULL)
     *m = MIR_new_module ("m");
-  func = MIR_new_func ("loop", MIR_T_I64, 1, MIR_T_I64, "arg1");
+  res_type = MIR_T_I64;
+  func = MIR_new_func ("loop", 1, &res_type, 1, MIR_T_I64, "arg1");
   R2 = MIR_new_func_reg (func->u.func, MIR_T_I64, "count");
   ARG1 = MIR_reg ("arg1", func->u.func);
   fin = MIR_new_label (); cont = MIR_new_label ();

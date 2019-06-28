@@ -2,6 +2,7 @@ static MIR_item_t create_mir_func_sieve_api (MIR_module_t *m_res) {
   MIR_item_t func;
   MIR_module_t m;
   MIR_reg_t iter, count, i, k, prime, temp, flags;
+  MIR_type_t res_type;
   MIR_label_t loop = MIR_new_label (), loop2 = MIR_new_label (), loop3 = MIR_new_label (), loop4 = MIR_new_label ();
   MIR_label_t fin = MIR_new_label (), fin2 = MIR_new_label (), fin3 = MIR_new_label (), fin4 = MIR_new_label ();
   MIR_label_t cont3 = MIR_new_label ();
@@ -9,7 +10,8 @@ static MIR_item_t create_mir_func_sieve_api (MIR_module_t *m_res) {
   m = MIR_new_module ("m_sieve");
   if (m_res != NULL)
     *m_res = m;
-  func = MIR_new_func ("sieve", MIR_T_I64, 0);
+  res_type = MIR_T_I64;
+  func = MIR_new_func ("sieve", 1, &res_type, 0);
   iter = MIR_new_func_reg (func->u.func, MIR_T_I64, "iter"); count = MIR_new_func_reg (func->u.func, MIR_T_I64, "count");
   i = MIR_new_func_reg (func->u.func, MIR_T_I64, "i"); k = MIR_new_func_reg (func->u.func, MIR_T_I64, "k");
   prime = MIR_new_func_reg (func->u.func, MIR_T_I64, "prime"); temp = MIR_new_func_reg (func->u.func, MIR_T_I64, "temp");

@@ -33,7 +33,7 @@ int main (void) {
   int64_t res = ((loop_func) func->addr) ();
   fprintf (stderr, "C interface SIEVE -> %"PRId64 ": %.3f sec\n", res, real_sec_time () - start_time);
 #else
-  val = MIR_interp (func, 0);
+  MIR_interp (func, &val, 0);
   fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
 #endif
   MIR_interp_finish ();
