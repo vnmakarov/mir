@@ -8199,10 +8199,12 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t declarator = NL_NEXT (decl_specs);
     node_t decls = NL_NEXT (declarator);
     node_t stmt = NL_NEXT (decls);
+    MIR_type_t res_type;
     MIR_reg_t fp_reg;
     
     assert (declarator != NULL && declarator->code == N_DECL && NL_HEAD (declarator->ops)->code == N_ID);
-    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, MIR_T_I32, 0, 0); // ???
+    res_type = MIR_T_I32;
+    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, 1, &res_type, 0, 0); // ???
     ((decl_t) r->attr)->item = curr_func;
     fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
     MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (819000)));
@@ -8376,6 +8378,7 @@ static void generate_mir_protos (void) {
   struct type *type;
   struct func_type *func_type;
   struct decl_spec *decl_spec_ptr;
+  MIR_type_t ret_type;
   MIR_var_t var;
   char buf[30];
   int n = 0;
@@ -8393,7 +8396,7 @@ static void generate_mir_protos (void) {
     if (first_param != NULL && ! void_param_p (first_param)) {
       for (p = first_param; p != NULL; p = NL_NEXT (p)) {
 	if (p->code == N_TYPE) {
-	  var.name = NULL;
+	  var.name = "p";
 	  decl_spec_ptr = p->attr;
 	} else {
 	  declarator = NL_EL (p->ops, 1);
@@ -8403,12 +8406,14 @@ static void generate_mir_protos (void) {
 	  decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
 	}
 	var.type = get_mir_type (decl_spec_ptr->type);
+	VARR_PUSH (MIR_var_t, vars, var);
       }
     }
     set_type_layout (func_type->ret_type);
     sprintf (buf, "proto%d", n++);
+    ret_type = get_mir_type (func_type->ret_type);
     func_type->proto_item = ((func_type->dots_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr)
-			     (buf, get_mir_type (func_type->ret_type),
+			     (buf, 1, &ret_type,
 			      VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
   }
   VARR_DESTROY (MIR_var_t, vars);
@@ -9062,7 +9067,7 @@ int main (int argc, const char *argv[]) {
 	MIR_interp_init ();
 	MIR_link (MIR_set_interp_interface, NULL);
 	start_time = real_usec_time ();
-	val = MIR_interp (main_func, 0);
+	MIR_interp (main_func, &val, 0);
 	if (verbose_p) {
 	  fprintf (stderr, "  execution       -- %.0f msec\n", (real_usec_time () - start_time) / 1000.0);
 	  fprintf (stderr, "exit code %s: %lu\n", source_name, val.i);
