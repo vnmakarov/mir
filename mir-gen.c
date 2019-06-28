@@ -128,7 +128,7 @@ static void make_2op_insns (void) {
     code = insn->code;
     if (! bitmap_bit_p (insn_to_consider, code))
       continue;
-    gen_assert (MIR_insn_nops (insn) > 2);
+    gen_assert (MIR_insn_nops (insn) > 2 && ! MIR_call_code_p (code) && code != MIR_RET);
     mode = MIR_insn_op_mode (insn, 0, &out_p);
     gen_assert (out_p && mode == MIR_insn_op_mode (insn, 1, &out_p) && ! out_p);
     output = insn->ops[0];
