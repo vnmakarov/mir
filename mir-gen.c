@@ -974,6 +974,7 @@ static expr_t add_expr (MIR_insn_t insn) {
   MIR_op_mode_t mode;
   expr_t e = gen_malloc (sizeof (struct expr));
   
+  gen_assert (! MIR_call_code_p (insn->code) && insn->code != MIR_RET);
   e->insn = insn; e->num = VARR_LENGTH (expr_t, exprs);
   mode = MIR_insn_op_mode (insn, 0, &out_p);
   e->temp_reg = gen_new_temp_reg (mode == MIR_OP_FLOAT ? MIR_T_F : mode == MIR_OP_DOUBLE ? MIR_T_D
