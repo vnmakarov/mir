@@ -243,7 +243,7 @@ void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_ty
     } else if (res_types[i] == MIR_T_LD && n_fregs < 2) {
       gen_st80 (i * sizeof (long double));
     } else {
-      (*error_func) (MIR_call_op_error, "x86-64 can not handle this combination of return values");
+      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
     }
   }
   push_insns (epilog, sizeof (epilog));
@@ -280,8 +280,8 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
   static uint8_t fxch_pat[] = {0xd9, 0xc9}; /* fxch */
   uint8_t *addr;
   uint32_t imm, n, n_iregs, n_xregs, n_fregs, offset;
-  uint32_t nres = func_item->u.func->res_type == MIR_T_V ? 0 : 1;
-  MIR_type_t *results = &func_item->u.func->res_type;
+  uint32_t nres = func_item->u.func->nres;
+  MIR_type_t *results = func_item->u.func->res_types;
   
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (push_rbx, sizeof (push_rbx));
@@ -316,7 +316,7 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
       memcpy (addr + 3, &offset, sizeof (uint32_t));
       n_iregs++;
     } else {
-      (*error_func) (MIR_call_op_error, "x86-64 can not handle this combination of return values");
+      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
     }
     offset += 16;
   }
