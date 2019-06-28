@@ -139,13 +139,16 @@
         
 
 ## MIR insns
-  * All MIR insns (but call one) expects fixed number of operands
+  * All MIR insns (but call or ret one) expects fixed number of operands
   * Most MIR insns are 3-operand insns: two inputs and one output
   * In majority cases **the first insn operand** describes where the insn result (if any) will be placed
   * Only register or memory operand can be insn output (result) operand
   * MIR insn can be created through API functions `MIR_insn_t MIR_new_insn (MIR_insn_code_t code, ...)`
     and `MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops)`
     * Number of operands and their types should be what is expected by the insn being created
+    * You can not use `MIR_new_insn` for creation of call and ret insns as these insns have variable number of operands.
+      To create such insns you should use `MIR_new_insn_arr` or special functions
+      `MIR_insn_t MIR_new_call_insn (size_t nops, ...)` and `MIR_insn_t MIR_new_ret_insn (size_t nops, ...)`
   * You can get insn name and number of insn operands through API functions
     `const char *MIR_insn_name (MIR_insn_code_t code)` and `size_t MIR_insn_nops (MIR_insn_t insn)`
   * You can add a created insn at the beginning or end of function insn list through API functions
@@ -307,16 +310,13 @@
     | `MIR_LDBGT`, `MIR_LDBGE`  | 3    | jump on **long double** greater than/less/ than or equal       |
 
 ### MIR return insn
-  * Return insn operand should correspond to return type of the function
-  * 64-bit integer value is truncated to the function return type first
-  * The return value will be the function call value
-
-    | Insn Code               | Nops |   Description                                                  |
-    |-------------------------|-----:|----------------------------------------------------------------|
-    | `MIR_RET`               | 1    | returning integer/float/double/long double value               |
+  * Return insn has zero or more operands
+  * Return insn operands should correspond to return types of the function
+  * 64-bit integer value is truncated to the corresponding function return type first
+  * The return values will be the function call values
 
 ### MIR_CALL insn
-  * The only insn which has variable number of operands
+  * The insn has variable number of operands
   * The first operand is a prototype reference operand
   * The second operand is a called function address
     * The prototype should correspond MIR function definition if function address represents a MIR function
@@ -374,7 +374,7 @@
   MIR_append_insn (func, MIR_new_insn (MIR_BLT, MIR_new_label_op (cont),
                                        MIR_new_reg_op (COUNT), MIR_new_reg_op (ARG1)));
   MIR_append_insn (func, fin);
-  MIR_append_insn (func, MIR_new_insn (MIR_RET, MIR_new_reg_op (COUNT)));
+  MIR_append_insn (func, MIR_new_ret_insn (1, MIR_new_reg_op (COUNT)));
   MIR_finish_func ();
   MIR_finish_module ();
 ```
