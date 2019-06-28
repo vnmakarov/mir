@@ -39,7 +39,7 @@ static inline int mir_assert (int cond) {return 0 && cond;}
 
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
-  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_vararg_func_error,
+  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_func_error, MIR_vararg_func_error,
   MIR_nested_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
   MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_unique_reg_error,
   MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error, MIR_ret_error,
