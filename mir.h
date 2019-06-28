@@ -226,15 +226,16 @@ DEF_VARR (MIR_var_t);
 typedef struct MIR_func {
   const char *name;
   DLIST (MIR_insn_t) insns;
-  uint32_t nargs, last_temp_num, n_inlines;
-  MIR_type_t res_type;
+  uint32_t nres, nargs, last_temp_num, n_inlines;
+  MIR_type_t *res_types;
   char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
 typedef struct MIR_proto {
   const char *name;
-  MIR_type_t res_type; /* != MIR_T_UNDEF */
+  uint32_t nres;
+  MIR_type_t *res_types; /* != MIR_T_UNDEF */
   char vararg_p; /* flag of variable number of arguments */
   VARR (MIR_var_t) *args; /* args name can be NULL */
 } *MIR_proto_t;
@@ -342,18 +343,22 @@ extern MIR_item_t MIR_new_bss (const char *name, size_t len); /* name can be NUL
 extern MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type,
 				size_t nel, const void *els); /* name can be NULL */
 extern MIR_item_t MIR_new_string_data (const char *name, const char *str); /* name can be NULL */
-extern MIR_item_t MIR_new_proto_arr (const char *name, MIR_type_t res_type,
+extern MIR_item_t MIR_new_proto_arr (const char *name, size_t nres, MIR_type_t *res_types,
 				     size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
-extern MIR_item_t MIR_new_vararg_proto_arr (const char *name, MIR_type_t res_type,
+extern MIR_item_t MIR_new_proto (const char *name, size_t nres, MIR_type_t *res_types,
+				 size_t nargs, ...);
+extern MIR_item_t MIR_new_vararg_proto_arr (const char *name, size_t nres, MIR_type_t *res_types,
 					    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_vararg_proto (const char *name, MIR_type_t res_type, size_t nargs, ...);
-extern MIR_item_t MIR_new_func_arr (const char *name, MIR_type_t res_type,
+extern MIR_item_t MIR_new_vararg_proto (const char *name, size_t nres, MIR_type_t *res_types,
+					size_t nargs, ...);
+extern MIR_item_t MIR_new_func_arr (const char *name, size_t nres, MIR_type_t *res_types,
 				    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (const char *name, MIR_type_t res_type, size_t nargs, ...);
-extern MIR_item_t MIR_new_vararg_func_arr (const char *name, MIR_type_t res_type,
+extern MIR_item_t MIR_new_func (const char *name, size_t nres, MIR_type_t *res_types,
+				size_t nargs, ...);
+extern MIR_item_t MIR_new_vararg_func_arr (const char *name, size_t nres, MIR_type_t *res_types,
 					   size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_vararg_func (const char *name, MIR_type_t res_type, size_t nargs, ...);
+extern MIR_item_t MIR_new_vararg_func (const char *name, size_t nres, MIR_type_t *res_types,
+				       size_t nargs, ...);
 extern const char *MIR_item_name (MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_func_t func, MIR_type_t type, const char *name);
 extern void MIR_finish_func (void);
@@ -437,7 +442,7 @@ extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_
 					  MIR_reg_t index, MIR_scale_t scale);
 
 extern MIR_item_t _MIR_builtin_proto (MIR_module_t module, const char *name,
-				      MIR_type_t res_type, size_t nargs, ...);
+				      size_t nres, MIR_type_t *res_types, size_t nargs, ...);
 extern MIR_item_t _MIR_builtin_func (MIR_module_t module, const char *name, void *addr);
 
 extern uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len);
