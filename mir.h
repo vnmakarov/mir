@@ -42,7 +42,7 @@ typedef enum MIR_error_type {
   MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_vararg_func_error,
   MIR_nested_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
   MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_unique_reg_error,
-  MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error,
+  MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error, MIR_ret_error,
   MIR_op_mode_error, MIR_out_op_error,
   MIR_invalid_insn_error,
 } MIR_error_type_t;
