@@ -1429,10 +1429,10 @@ static void process_bb_end (size_t el) {
    is usually done.  We could do non-sparse CCP w/o building the web
    but it is much slower algorithm.  */
 static void build_var_occ_web (void) {
-  MIR_op_t *op, *dst_op;
+  MIR_op_t *op;
   MIR_insn_t insn;
   size_t i, nops;
-  int out_p, dst_var_p;
+  int out_p;
   MIR_reg_t dst_var;
   var_occ_t var_occ;
   var_producer_t var_producer;
@@ -1455,24 +1455,22 @@ static void build_var_occ_web (void) {
       curr_op_age++;
       insn = bb_insn->insn;
       nops = MIR_insn_nops (insn);
-      dst_var_p = FALSE;
-      for (i = 0; i < nops; i++) {
+      for (i = 0; i < nops; i++) { /* process inputs */
+	MIR_insn_op_mode (insn, i, &out_p);
+	op = &insn->ops[i];
+	if (! out_p)
+	  process_op_use (op, bb_insn);
+      }
+      for (i = 0; i < nops; i++) { /* process outputs */
 	MIR_insn_op_mode (insn, i, &out_p);
 	op = &insn->ops[i];
 	if (out_p && (op->mode == MIR_OP_REG || op->mode == MIR_OP_HARD_REG)) {
-	  gen_assert (! dst_var_p); /* Any MIR insn has one output at most */
-	  dst_op = op;
-	  dst_var_p = TRUE;
-	  continue;
+	  dst_var = op->mode == MIR_OP_HARD_REG ? op->u.hard_reg : reg2var (op->u.reg);
+	  producers[dst_var].producer_age = curr_producer_age;
+	  producers[dst_var].op_age = curr_op_age;
+	  producers[dst_var].producer = var_occ = new_insn_var_occ (dst_var, insn);
+	  op->data = producers[dst_var].producer;
 	}
-	process_op_use (op, bb_insn);
-      }
-      if (dst_var_p) {
-	dst_var = dst_op->mode == MIR_OP_HARD_REG ? dst_op->u.hard_reg : reg2var (dst_op->u.reg);
-	producers[dst_var].producer_age = curr_producer_age;
-	producers[dst_var].op_age = curr_op_age;
-	producers[dst_var].producer = var_occ = new_insn_var_occ (dst_var, insn);
-	dst_op->data = producers[dst_var].producer;
       }
     }
     ccp_end_bb = bb;
@@ -1746,7 +1744,7 @@ static enum ccp_val_kind get_3usops (MIR_insn_t insn, uint32_t *p1, uint32_t *p2
     val.uns_p = FALSE; val.u.i = p1 op p2;	  	 				\
   } while (0)
 
-static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
+static int get_ccp_res_op (MIR_insn_t insn, int out_num, MIR_op_t *op) {
   int out_p;
   MIR_op_t proto_op;
   MIR_proto_t proto;
@@ -1755,13 +1753,12 @@ static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
     proto_op = insn->ops[0];
     mir_assert (proto_op.mode == MIR_OP_REF && proto_op.u.ref->item_type == MIR_proto_item);
     proto = proto_op.u.ref->u.proto;
-    if (proto->res_type == MIR_T_V)
+    if (out_num >= proto->nres)
       return FALSE;
-    mir_assert (MIR_insn_nops (insn) >= 3);
-    *op = insn->ops[2];
+    *op = insn->ops[out_num + 2];
     return TRUE;
   }
-  if (MIR_insn_nops (insn) < 1)
+  if (out_num > 0 || MIR_insn_nops (insn) < 1)
     return FALSE;
   MIR_insn_op_mode (insn, 0, &out_p);
   if (! out_p)
@@ -1772,7 +1769,7 @@ static int get_res_op (MIR_insn_t insn, MIR_op_t *op) {
 
 static int ccp_insn_update (MIR_insn_t insn, const_t *res) { // ??? should we do CCP for FP too
   MIR_op_t op;
-  int out_p;
+  int out_p, change_p;
   enum ccp_val_kind ccp_res;
   const_t val;
   var_occ_t var_occ;
@@ -1870,13 +1867,17 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) { // ??? should we do
   if (ccp_res == CCP_UNKNOWN)
     return FALSE;
   gen_assert (ccp_res == CCP_VARYING);
-  if (! get_res_op (insn, &op) || (op.mode != MIR_OP_HARD_REG && op.mode != MIR_OP_REG))
-    return FALSE;
-  var_occ = op.data;
-  gen_assert (var_occ->def == NULL);
-  val_kind = var_occ->val_kind;
-  var_occ->val_kind = CCP_VARYING;
-  return val_kind != CCP_VARYING;
+  change_p = FALSE;
+  for (int i = 0; get_ccp_res_op (insn, i, &op); i++) {
+    if (op.mode != MIR_OP_HARD_REG && op.mode != MIR_OP_REG)
+      continue;
+    var_occ = op.data;
+    gen_assert (var_occ->def == NULL);
+    if (var_occ->val_kind != CCP_VARYING)
+      change_p = TRUE;
+    var_occ->val_kind = CCP_VARYING;
+  }
+  return change_p;
 }
 
 static enum ccp_val_kind ccp_branch_update (MIR_insn_t insn, int *res) {
@@ -2058,13 +2059,16 @@ static void ccp_process_active_edge (edge_t e) {
 }
 
 static void ccp_make_insn_update (MIR_insn_t insn) {
+  int i, def_p;
   MIR_op_t op;
   var_occ_t var_occ;
 
   if (! ccp_insn_update (insn, NULL)) {
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
-      if (get_res_op (insn, &op)) {
+      if (MIR_call_code_p (insn->code)) {
+	fprintf (debug_file, " -- keep all results varying");
+      } else if (get_ccp_res_op (insn, 0, &op) && var_op_p (insn, 0)) {
 	var_occ = op.data;
 	if (var_occ->val_kind == CCP_UNKNOWN) {
 	  fprintf (debug_file, " -- make the result unknown");
@@ -2080,12 +2084,18 @@ static void ccp_make_insn_update (MIR_insn_t insn) {
     }
 #endif
   } else {
-    if (! get_res_op (insn, &op))
-      gen_assert (FALSE);
-    var_occ = op.data;
+    def_p = FALSE;
+    for (i = 0; get_ccp_res_op (insn, i, &op); i++)
+      if (var_op_p (insn, i)) {
+	def_p = TRUE;
+	var_occ = op.data;
+	ccp_push_used_insns (var_occ);
+      }
 #if MIR_GEN_DEBUG
-    if (debug_file != NULL) {
-      if (var_occ->val_kind == CCP_VARYING) {
+    if (debug_file != NULL && def_p) {
+      if (MIR_call_code_p (insn->code)) {
+	fprintf (debug_file, " -- make all results varying");
+      } else if (var_occ->val_kind == CCP_VARYING) {
 	fprintf (debug_file, " -- make the result varying\n");
       } else {
 	gen_assert (var_occ->val_kind == CCP_CONST);
@@ -2095,7 +2105,6 @@ static void ccp_make_insn_update (MIR_insn_t insn) {
       }
     }
 #endif
-    ccp_push_used_insns (var_occ);
   }
 }
 
@@ -2177,13 +2186,13 @@ static void ccp_traverse (bb_t bb) {
       ccp_traverse (e->dst); /* visit unvisited active edge destination */
 }
 
-static int get_res_val (MIR_insn_t insn, const_t *val) {
+static int get_ccp_res_val (MIR_insn_t insn, const_t *val) {
   int out_p;
   var_occ_t var_occ;
   MIR_op_t op;
   
-  if (! get_res_op (insn, &op))
-    return FALSE;
+  if (MIR_call_code_p (insn->code) || ! get_ccp_res_op (insn, 0, &op))
+    return FALSE; /* call results always produce varying values */
   if (! var_op_p (insn, 0))
     return FALSE;
   var_occ = op.data;
@@ -2226,9 +2235,10 @@ static int ccp_modify (void) {
     bb->flag = FALSE; /* reset for the future use */
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (get_res_val (bb_insn->insn, &val) && (bb_insn->insn->code != MIR_MOV
-						|| (bb_insn->insn->ops[1].mode != MIR_OP_INT
-						    && bb_insn->insn->ops[1].mode != MIR_OP_UINT))) {
+      if (get_ccp_res_val (bb_insn->insn, &val) && (bb_insn->insn->code != MIR_MOV
+						    || (bb_insn->insn->ops[1].mode != MIR_OP_INT
+							&& bb_insn->insn->ops[1].mode != MIR_OP_UINT))) {
+	gen_assert (! MIR_call_code_p (bb_insn->insn->code));
 	change_p = TRUE;
 #if MIR_GEN_DEBUG
 	if (debug_file != NULL) {
