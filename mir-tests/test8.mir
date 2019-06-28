@@ -1,6 +1,6 @@
 m:		module
-exit_p:		proto  v, i64
-printf_p:	proto  v, p, ...
+exit_p:		proto  i64:v
+printf_p:	proto  p:fmt, ...
 		import printf, exit
 main:		func v
 		local i64:i, d:r

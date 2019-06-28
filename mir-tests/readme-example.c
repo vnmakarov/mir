@@ -32,11 +32,11 @@ fin:      ret count\n\
           endmodule\n\
 m_ex100:  module\n\
 format:   string \"sieve (10) = %d\\n\"\n\
-p_printf: proto v, p, i32\n\
-p_sieve:  proto i32, i32\n\
+p_printf: proto p:fmt, i32:r\n\
+p_sieve:  proto i32, i32:N\n\
           export ex100\n\
           import sieve, printf\n\
-ex100:    func v\n\
+ex100:    func\n\
           local i64:r\n\
           call p_sieve, sieve, r, 100\n\
           call p_printf, printf, format, r\n\
@@ -70,7 +70,7 @@ int main (void) {
   MIR_link (MIR_set_interp_interface, NULL);
   MIR_gen_init ();
   MIR_gen (f1);
-  MIR_interp (f2, 0);
+  MIR_interp (f2, NULL, 0);
   MIR_gen_finish ();
   MIR_interp_finish ();
   MIR_finish ();

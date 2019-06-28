@@ -63,7 +63,7 @@ int main (int argc, char *argv[]) {
   if (interpr_p) {
     MIR_interp_init ();
     MIR_link (MIR_set_interp_interface, NULL);
-    val = MIR_interp (main_func, 0);
+    MIR_interp (main_func, &val, 0);
     fprintf (stderr, "%s: %lu\n", mir_fname, val.i);
     MIR_interp_finish ();
   } else if (gen_p) {

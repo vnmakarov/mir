@@ -33,7 +33,7 @@ int main (void) {
   int64_t res = ((loop_func) func->addr) (n_iter);
   fprintf (stderr, "C interface test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, res, real_sec_time () - start_time);
 #else
-  val = MIR_interp (func, 1, val);
+  MIR_interp (func, &val, 1, val);
   fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
 #endif
   MIR_interp_finish ();
