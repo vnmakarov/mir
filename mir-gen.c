@@ -3586,8 +3586,8 @@ static void dead_code_elimination (void) {
       }
       if (! reg_def_p)
 	dead_p = FALSE;
-      if (dead_p && ! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
-	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
+      if (dead_p && ! MIR_call_code_p (insn->code) && insn->code != MIR_RET
+	  && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
 	  && ! (insn->ops[0].mode == MIR_OP_HARD_REG
 	        && (insn->ops[0].u.hard_reg == BP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
 #if MIR_GEN_DEBUG
