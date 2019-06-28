@@ -98,8 +98,8 @@ fin:      ret count
           endmodule
 m_ex100:  module
 format:   string "sieve (10) = %d\n"
-p_printf: proto v, p, i32
-p_sieve:  proto i32, i32
+p_printf: proto p:fmt, i32:result
+p_sieve:  proto i32, i32:iter
           export ex100
           import sieve, printf
 ex100:    func v, 0
@@ -114,7 +114,10 @@ ex100:    func v, 0
     integer argument and returning 32-bit signed integer value), stack
     frame size (819000) and function argument `N` which will be local
     variable of 64-bit signed integer type
-  * `fp` is a reserved local varaible whose value is address of the function stack frame
+    * Function results are described first by their types and have no names.
+      Parameters always have names and go after the result description
+    * Function my have more one result but possible number and combination
+      of result types are machine defined
   * You can write several instructions on one line if you separate them by `;`
   * The instruction result, if any, is always the first operand
   * We use 64-bit instructions in calculations
@@ -126,7 +129,7 @@ ex100:    func v, 0
        the data address will be used as an operand
   * `export` describes module functions or data which are visible outside the current module
   * `import` describes module functions or data which should be defined in other MIR modules
-  * `proto` describes function prototypes
+  * `proto` describes function prototypes.  Its syntax is the same as `func` syntax
   * `call` are MIR instruction to call functions
 
 ## Running MIR code
