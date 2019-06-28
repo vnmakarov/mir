@@ -154,7 +154,7 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type,
 static void machinize_call (MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
-  size_t nargs, nops = MIR_insn_nops (call_insn), start = proto->res_type != MIR_T_V ? 3 : 2;
+  size_t nargs, nops = MIR_insn_nops (call_insn), start = proto->nres + 2;
   size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0, xmm_args = 0;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
@@ -165,6 +165,7 @@ static void machinize_call (MIR_insn_t call_insn) {
   MIR_insn_t new_insn, prev_insn, next_insn, ext_insn;
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
   MIR_insn_t next_call_insn = DLIST_NEXT (MIR_insn_t, call_insn);
+  uint32_t n_iregs, n_xregs, n_fregs;
   
   if (call_insn->code == MIR_INLINE)
     call_insn->code = MIR_CALL;
@@ -233,21 +234,31 @@ static void machinize_call (MIR_insn_t call_insn) {
     new_insn = MIR_new_insn (MIR_MOV, _MIR_new_hard_reg_op (AX_HARD_REG), MIR_new_int_op (xmm_args));
     gen_add_insn_before (call_insn, new_insn);
   }
-  if (proto->res_type != MIR_T_V) { /* assign return register to call result op */
-    ret_reg_op = call_insn->ops[2];
+  n_iregs = n_xregs = n_fregs = 0;
+  for (size_t i = 0; i < proto->nres; i++) {
+    ret_reg_op = call_insn->ops[i + 2];
     gen_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
-    if (proto->res_type == MIR_T_F) {
-      new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
-    } else if (proto->res_type == MIR_T_D) {
-      new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op, _MIR_new_hard_reg_op (XMM0_HARD_REG));
-    } else if (proto->res_type == MIR_T_LD) {
+    if (proto->res_types[i] == MIR_T_F && n_xregs < 2) {
+      new_insn = MIR_new_insn (MIR_FMOV, ret_reg_op,
+			       _MIR_new_hard_reg_op (n_xregs == 0? XMM0_HARD_REG : XMM1_HARD_REG));
+      n_xregs++;
+    } else if (proto->res_types[i] == MIR_T_D && n_xregs < 2) {
+      new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op,
+			       _MIR_new_hard_reg_op (n_xregs == 0? XMM0_HARD_REG : XMM1_HARD_REG));
+      n_xregs++;
+    } else if (proto->res_types[i] == MIR_T_LD && n_fregs < 2) { // ???
       new_insn = MIR_new_insn (MIR_LDMOV, ret_reg_op, _MIR_new_hard_reg_op (ST0_HARD_REG));
+      n_fregs++;
+    } else if (n_iregs < 2) {
+      new_insn = MIR_new_insn (MIR_MOV, ret_reg_op,
+			       _MIR_new_hard_reg_op (n_iregs == 0 ? AX_HARD_REG : DX_HARD_REG));
+      n_iregs++;
     } else {
-      new_insn = MIR_new_insn (MIR_MOV, ret_reg_op, _MIR_new_hard_reg_op (AX_HARD_REG));
+      (*MIR_get_error_func ()) (MIR_ret_error, "x86-64 can not handle this combination of return values");
     }
     MIR_insert_insn_after (curr_func_item, call_insn, new_insn);
-    call_insn->ops[2] = new_insn->ops[1];
-    if ((ext_code = get_ext_code (proto->res_type)) != MIR_INVALID_INSN) {
+    call_insn->ops[i + 2] = new_insn->ops[1];
+    if ((ext_code = get_ext_code (proto->res_types[i])) != MIR_INVALID_INSN) {
       MIR_insert_insn_after (curr_func_item, new_insn, MIR_new_insn (ext_code, ret_reg_op, ret_reg_op));
       new_insn = DLIST_NEXT (MIR_insn_t, new_insn);
     }
@@ -285,26 +296,32 @@ static const char *VA_ARG_P = "mir.va_arg.p";
 static const char *VA_ARG = "mir.va_arg";
 
 static void get_builtin (MIR_insn_code_t code, MIR_item_t *proto_item, MIR_item_t *func_import_item) {
+  MIR_type_t res_type;
   switch (code) {
   case MIR_UI2F:
-    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2F_P, MIR_T_F, 1, MIR_T_I64, NULL);
+    res_type = MIR_T_F;
+    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2F_P, 1, &res_type, 1, MIR_T_I64, "v");
     *func_import_item = _MIR_builtin_func (curr_func_item->module, UI2F, mir_ui2f);
     break;
   case MIR_UI2D:
-    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2D_P, MIR_T_D, 1, MIR_T_I64, NULL);
+    res_type = MIR_T_D;
+    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2D_P, 1, &res_type, 1, MIR_T_I64, "v");
     *func_import_item = _MIR_builtin_func (curr_func_item->module, UI2D, mir_ui2d);
     break;
   case MIR_UI2LD:
-    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2LD_P, MIR_T_LD, 1, MIR_T_I64, NULL);
+    res_type = MIR_T_LD;
+    *proto_item = _MIR_builtin_proto (curr_func_item->module, UI2LD_P, 1, &res_type, 1, MIR_T_I64, "v");
     *func_import_item = _MIR_builtin_func (curr_func_item->module, UI2LD, mir_ui2ld);
     break;
   case MIR_LD2I:
-    *proto_item = _MIR_builtin_proto (curr_func_item->module, LD2I_P, MIR_T_I64, 1, MIR_T_LD, NULL);
+    res_type = MIR_T_I64;
+    *proto_item = _MIR_builtin_proto (curr_func_item->module, LD2I_P, 1, &res_type, 1, MIR_T_LD, "v");
     *func_import_item = _MIR_builtin_func (curr_func_item->module, LD2I, mir_ld2i);
     break;
   case MIR_VA_ARG:
-    *proto_item = _MIR_builtin_proto (curr_func_item->module, VA_ARG_P, MIR_T_I64,
-				      2, MIR_T_I64, NULL, MIR_T_I64, NULL);
+    res_type = MIR_T_I64;
+    *proto_item = _MIR_builtin_proto (curr_func_item->module, VA_ARG_P, 1, &res_type,
+				      2, MIR_T_I64, "va", MIR_T_I64, "type");
     *func_import_item = _MIR_builtin_func (curr_func_item->module, VA_ARG, va_arg_builtin);
     break;
   default:
@@ -436,16 +453,29 @@ static void machinize (void) {
     } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn
 	 and added extension in return (if any).  */
-      assert (insn->ops[0].mode == MIR_OP_REG);
-      res_type = curr_func_item->u.func->res_type;
-      new_insn_code = (res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV
-		       : res_type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
-      ret_reg = (res_type == MIR_T_F || res_type == MIR_T_D ? XMM0_HARD_REG
-		 : res_type == MIR_T_LD ? ST0_HARD_REG : AX_HARD_REG);
-      ret_reg_op = _MIR_new_hard_reg_op (ret_reg);
-      new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[0]);
-      gen_add_insn_before (insn, new_insn);
-      insn->ops[0] = ret_reg_op;
+      uint32_t n_iregs = 0, n_xregs = 0, n_fregs = 0;
+
+      assert (curr_func_item->u.func->nres == MIR_insn_nops (insn));
+      for (size_t i = 0; i < curr_func_item->u.func->nres; i++) {
+	assert (insn->ops[i].mode == MIR_OP_REG);
+	res_type = curr_func_item->u.func->res_types[i];
+	if ((res_type == MIR_T_F || res_type == MIR_T_D) && n_xregs < 2) {
+	  new_insn_code = res_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
+	  ret_reg = n_xregs++ == 0? XMM0_HARD_REG : XMM1_HARD_REG;
+	} else if (res_type == MIR_T_LD && n_fregs < 2) { // ???
+	  new_insn_code = MIR_LDMOV; ret_reg = ST0_HARD_REG;
+	  n_fregs++;
+	} else if (n_iregs < 2) {
+	  new_insn_code = MIR_MOV;
+	  ret_reg = n_iregs++ == 0 ? AX_HARD_REG : DX_HARD_REG;
+	} else {
+	  (*MIR_get_error_func ()) (MIR_ret_error, "x86-64 can not handle this combination of return values");
+	}
+	ret_reg_op = _MIR_new_hard_reg_op (ret_reg);
+	new_insn = MIR_new_insn (new_insn_code, ret_reg_op, insn->ops[i]);
+	gen_add_insn_before (insn, new_insn);
+	insn->ops[i] = ret_reg_op;
+      }
     } else if (code == MIR_LSH || code == MIR_RSH || code == MIR_URSH
 	       || code == MIR_LSHS || code == MIR_RSHS || code == MIR_URSHS) {
       /* We can access only cl as shift register: */
@@ -914,9 +944,7 @@ static struct pattern patterns[] = {
   {MIR_CALL, "X r $", "Y FF /2 R1"},  /* call *r1 */
 
   /* ??? Returns */
-  {MIR_RET, "h0", "C3"},  /* ret ax */
-  {MIR_RET, "h16", "C3"}, /* ret xmm0 */
-  {MIR_RET, "h32", "C3"}, /* ret st0 */
+  {MIR_RET, "$", "C3"},  /* ret ax, dx, xmm0, xmm1, st0  */
 };
 
 static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
