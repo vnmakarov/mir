@@ -133,3 +133,12 @@ clean:
 	rm -f $(OBJS) ./a.out
 
 realclean: clean
+
+sloc:
+	@echo -n 'C2MIR: ' && wc -l c2mir/c2mir.c | awk '{last=$$1} END {print last}'
+	@echo -n 'ADT: ' && wc -l $(DEPS) mir-bitmap.h mir-mp.h | awk '{last=$$1} END {print last}'
+	@echo -n 'MIR API: ' && wc -l mir.[ch] | awk '{last=$$1} END {print last}'
+	@echo -n 'MIR Interpreter: ' && wc -l mir-interp.[ch] | awk '{last=$$1} END {print last}'
+	@echo -n 'MIR Generator: ' && wc -l mir-gen.[ch] | awk '{last=$$1} END {print last}'
+	@echo -n 'Machine dependent code: ' && wc -l mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
+	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c $(DEPS) mir-bitmap.h mir-mp.h mir.[ch] mir-interp.[ch] mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
