@@ -257,7 +257,9 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
     mir_assert (insn->nops >= 2
 		&& ops[0].mode == MIR_OP_REF && ops[0].u.ref->item_type == MIR_proto_item);
     proto = ops[0].u.ref->u.proto;
-    if (proto->res_type != MIR_T_V) {
+    if (proto->nres > 1) {
+      (*MIR_get_error_func ()) (MIR_call_op_error, " can not translate multiple results functions into C");
+    } else if (proto->nres == 1) {
       out_op (f, ops[2]); fprintf (f, " = ");
       start = 3;
     }
@@ -296,7 +298,14 @@ void out_item (FILE *f, MIR_item_t item) {
   if (item->item_type == MIR_proto_item) {
     MIR_proto_t proto = item->u.proto;
     
-    fprintf (f, "typedef "); out_type (f, proto->res_type); fprintf (f, " (*%s) (", proto->name); 
+    fprintf (f, "typedef ");
+    if (proto->nres == 0)
+      fprintf (f, "void");
+    else if (proto->nres == 1)
+      out_type (f, proto->res_types[0]);
+    else
+      (*MIR_get_error_func ()) (MIR_func_error, "Multiple result functions can not be called in C");
+    fprintf (f, " (*%s) (", proto->name); 
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
       if (i != 0)
@@ -313,7 +322,13 @@ void out_item (FILE *f, MIR_item_t item) {
   if (! item->export_p)
     fprintf (f, "static ");
   curr_func = item->u.func;
-  out_type (f, curr_func->res_type); fprintf (f, " %s (", curr_func->name);
+  if (curr_func->nres == 0)
+    fprintf (f, "void");
+  else if (curr_func->nres == 1)
+    out_type (f, curr_func->res_types[0]);
+  else
+    (*MIR_get_error_func ()) (MIR_func_error, "Multiple result functions can not be represented in C");
+  fprintf (f, " %s (", curr_func->name);
   if (curr_func->nargs == 0)
     fprintf (f, "void");
   for (i = 0; i < curr_func->nargs; i++) {
