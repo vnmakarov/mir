@@ -341,7 +341,6 @@ void out_item (FILE *f, MIR_item_t item) {
   fprintf (f, ") {\n");
   for (i = 0; i < curr_func->nargs; i++) {
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
-    mir_assert (var.type != MIR_T_V);
     if (var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
       continue;
     fprintf (f, "  int64_t %s = _%s;\n", var.name, var.name);

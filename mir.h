@@ -121,7 +121,7 @@ typedef enum {
   /* Integer types of different size: */
   MIR_T_I8, MIR_T_U8, MIR_T_I16, MIR_T_U16, MIR_T_I32, MIR_T_U32, MIR_T_I64, MIR_T_U64,
   MIR_T_F, MIR_T_D, MIR_T_LD /* Float or (long) double type */, MIR_T_P /* Pointer */,
-  MIR_T_V /* Void */, MIR_T_BLOCK, MIR_T_UNDEF, MIR_T_BOUND,
+  MIR_T_UNDEF, MIR_T_BOUND,
 } MIR_type_t;
 
 #if UINTPTR_MAX == 0xffffffff
