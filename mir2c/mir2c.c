@@ -249,7 +249,9 @@ static void out_insn (FILE *f, MIR_insn_t insn) {
   case MIR_FBLE: case MIR_DBLE: case MIR_LDBLE: out_bfcmp (f, ops, "<="); break;
   case MIR_FBGT: case MIR_DBGT: case MIR_LDBGT: out_bfcmp (f, ops, ">"); break;
   case MIR_FBGE: case MIR_DBGE: case MIR_LDBGE: out_bfcmp (f, ops, ">="); break;
-  case MIR_ALLOCA: out_op (f, ops[0]); fprintf (f, " = alloca ("); out_op (f, ops[1]); fprintf (f, ");\n"); break;
+  case MIR_ALLOCA:
+    out_op (f, ops[0]); fprintf (f, " = alloca ("); out_op (f, ops[1]); fprintf (f, ");\n");
+    break;
   case MIR_CALL: case MIR_INLINE: {
     MIR_proto_t proto;
     size_t start = 2;
@@ -305,7 +307,7 @@ void out_item (FILE *f, MIR_item_t item) {
       out_type (f, proto->res_types[0]);
     else
       (*MIR_get_error_func ()) (MIR_func_error, "Multiple result functions can not be called in C");
-    fprintf (f, " (*%s) (", proto->name); 
+    fprintf (f, " (*%s) (", proto->name);
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
       if (i != 0)

@@ -139,7 +139,9 @@ static void gen_mov (uint32_t offset, uint32_t reg, int ld_p) {
 
 static void gen_movxmm (uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
   static uint8_t ld_xmm_reg_pat[] = { 0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */ };
-  static uint8_t st_xmm_reg_pat[] = { 0xf2, 0x0f, 0x11, 0x83, 0, 0, 0, 0 /* movs[sd] %xmm, <offset>(%rbx) */ };
+  static uint8_t st_xmm_reg_pat[] = {
+    0xf2, 0x0f, 0x11, 0x83, 0, 0, 0, 0 /* movs[sd] %xmm, <offset>(%rbx) */
+  };
   uint8_t *addr = push_insns (ld_p ? ld_xmm_reg_pat : st_xmm_reg_pat,
 			      ld_p ? sizeof (ld_xmm_reg_pat) : sizeof (st_xmm_reg_pat));
   memcpy (addr + 4, &offset, sizeof (uint32_t));

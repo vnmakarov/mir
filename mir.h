@@ -69,7 +69,7 @@ typedef enum {
   /* 2 operand insns: */
   MIR_MOV, MIR_FMOV, MIR_DMOV, MIR_LDMOV, /* Moves */
   /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
-  MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32, 
+  MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32,
   MIR_I2F, MIR_I2D, MIR_I2LD,             /* Integer to float or (long) double conversion */
   MIR_UI2F, MIR_UI2D, MIR_UI2LD,          /* Unsigned integer to float or (long) double conversion */
   MIR_F2I, MIR_D2I, MIR_LD2I,             /* Float or (long) double to integer conversion */

@@ -4,16 +4,16 @@
 
 /* Optimization pipeline:
 
-            ----------------      -----------      ------------------      -------------     
-   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Dead Code  |	 
-            ----------------      -----------     |    Elimination   |	  | Elimination |    
-                                                   ------------------	   -------------     
+            ----------------      -----------      ------------------      -------------
+   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Dead Code  |
+            ----------------      -----------     |    Elimination   |	  | Elimination |
+                                                   ------------------	   -------------
                                                                                   |
                                                                                   v
-    --------      -------------      ------------       -----------     ---------------------- 
+    --------      -------------      ------------       -----------     ----------------------
    | Assign |<---| Build Live  |<---| Build Live |<---| Machinize |<---|  Sparse Conditional  |
     --------     |   Ranges    |    |    Info    |      -----------    | Constant Propagation |
-       |          -------------      ------------                       ---------------------- 
+       |          -------------      ------------                       ----------------------
        |
        v
     ---------     ---------     -------------      ---------------
@@ -26,7 +26,7 @@
    Simplify: Lowering MIR (in mir.c).
    Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
    Common Sub-Expression Elimination: Reusing calculated values
-   Dead code elimination: Removing insns with unused outputs. 
+   Dead code elimination: Removing insns with unused outputs.
    Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.
@@ -35,7 +35,7 @@
    Assign: Priority-based assigning hard regs and stack slots to registers.
    Rewrite: Transform MIR according to the assign using reserved hard regs.
    Combine (code selection): Merging data-depended insns into one.
-   Dead code elimination: Removing insns with unused outputs. 
+   Dead code elimination: Removing insns with unused outputs.
    Generate machine insns: Machine-dependent code (e.g. in
                            mir-gen-x86_64.c) creating machine insns.
 
@@ -72,7 +72,9 @@ static void util_error (const char *message);
 #include "mir-hash.h"
 #include "mir-gen.h"
 
-static void MIR_NO_RETURN util_error (const char *message) { (*MIR_get_error_func ()) (MIR_alloc_error, message); }
+static void MIR_NO_RETURN util_error (const char *message) {
+  (*MIR_get_error_func ()) (MIR_alloc_error, message);
+}
 
 static void *gen_malloc (size_t size) {
   void *res = malloc (size);
@@ -814,7 +816,7 @@ solve_dataflow (int forward_p, void (*con_func_0) (bb_t), int (*con_func_n) (bb_
     VARR_TRUNC (bb_t, pending, 0);
     addr = VARR_ADDR (bb_t, worklist);
     qsort (addr, VARR_LENGTH (bb_t, worklist), sizeof (bb),
-	   forward_p ? rpost_cmp : post_cmp); 
+	   forward_p ? rpost_cmp : post_cmp);
     bitmap_clear (bb_to_consider);
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
       int changed_p = iter == 0;
@@ -1364,7 +1366,7 @@ static var_occ_t get_var_def (MIR_reg_t var, bb_t bb) {
   var_occ_t var_occ;
   
   if (producers[var].producer_age == curr_producer_age) {
-    var_occ = producers[var].producer; 
+    var_occ = producers[var].producer;
   } else { /* use w/o a producer insn in the block */
     producers[var].producer = var_occ = get_bb_var_occ (var, OCC_BB_START, bb);
     producers[var].producer_age = curr_producer_age;
@@ -1790,8 +1792,8 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) { // ??? should we do
   case MIR_ADD:  IOP3(+); break;
   case MIR_ADDS: IOP3S(+); break;
       
-  case MIR_SUB:  IOP3(-); break; 
-  case MIR_SUBS: IOP3S(-); break; 
+  case MIR_SUB:  IOP3(-); break;
+  case MIR_SUBS: IOP3S(-); break;
       
   case MIR_MUL:   IOP3(*); break;
   case MIR_MULS:  IOP3S(*); break;
@@ -2842,10 +2844,11 @@ static void setup_loc_profit_from_op (MIR_op_t op) {
 
 static void setup_loc_profits (MIR_reg_t breg) {
   mv_t mv;
+  reg_info_t *info = &curr_breg_infos[breg];
   
-  for (mv = DLIST_HEAD (dst_mv_t, curr_breg_infos[breg].dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
+  for (mv = DLIST_HEAD (dst_mv_t, info->dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
-  for (mv = DLIST_HEAD (src_mv_t, curr_breg_infos[breg].src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
+  for (mv = DLIST_HEAD (src_mv_t, info->src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
 }
 
@@ -2961,7 +2964,7 @@ static void assign (void) {
     }
     fprintf (debug_file, "\n");
   }
-#endif  
+#endif
 }
 
 static MIR_reg_t change_reg (MIR_op_t *mem_op, MIR_reg_t reg,
@@ -3666,7 +3669,8 @@ static void print_code (uint8_t *code, size_t code_len, void *start_addr) {
   }
   fprintf (f, "};\n");
   fclose (f);
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data --adjust-vma=0x%lx -D %s.o; rm -f %s.o %s",
+  sprintf (command,
+	   "gcc -c -o %s.o %s 2>&1 && objdump --section=.data --adjust-vma=0x%lx -D %s.o; rm -f %s.o %s",
 	   cfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname);
   if ((f = popen (command, "r")) == NULL)
       return;
@@ -3674,7 +3678,7 @@ static void print_code (uint8_t *code, size_t code_len, void *start_addr) {
     fprintf (debug_file, "%c", ch);
   pclose (f);
 }
-#endif 
+#endif
 
 void *MIR_gen (MIR_item_t func_item) {
   uint8_t *code;
@@ -3810,7 +3814,7 @@ void *MIR_gen (MIR_item_t func_item) {
     print_code (code, code_len, func_item->machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
-#endif 
+#endif
   _MIR_redirect_thunk (func_item->addr, func_item->machine_code);
   destroy_func_live_ranges ();
   destroy_func_cfg ();

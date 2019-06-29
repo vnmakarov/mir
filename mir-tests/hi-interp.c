@@ -15,12 +15,12 @@ int main (void) {
   MIR_load_external ("print", print);
   m = create_hi_module ();
   func = DLIST_TAIL (MIR_item_t, m->items);
-#if MIR_INTERP_DEBUG 
+#if MIR_INTERP_DEBUG
   fprintf (stderr, "\n++++++ Hi func before simplification:\n");
   MIR_output (stderr);
 #endif
   MIR_simplify_func (func, TRUE);
-#if MIR_INTERP_DEBUG 
+#if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Hi func after simplification:\n");
   MIR_output (stderr);
 #endif
