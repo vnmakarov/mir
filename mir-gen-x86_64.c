@@ -5,17 +5,23 @@
 #include <limits.h>
 
 enum {
-  AX_HARD_REG = 0, CX_HARD_REG, DX_HARD_REG, BX_HARD_REG, SP_HARD_REG, BP_HARD_REG, SI_HARD_REG, DI_HARD_REG,
-  R8_HARD_REG, R9_HARD_REG, R10_HARD_REG, R11_HARD_REG, R12_HARD_REG, R13_HARD_REG, R14_HARD_REG, R15_HARD_REG, 
-  XMM0_HARD_REG, XMM1_HARD_REG, XMM2_HARD_REG, XMM3_HARD_REG, XMM4_HARD_REG, XMM5_HARD_REG, XMM6_HARD_REG, XMM7_HARD_REG, 
-  XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG, XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG,
+  AX_HARD_REG = 0, CX_HARD_REG, DX_HARD_REG, BX_HARD_REG,
+  SP_HARD_REG, BP_HARD_REG, SI_HARD_REG, DI_HARD_REG,
+  R8_HARD_REG, R9_HARD_REG, R10_HARD_REG, R11_HARD_REG,
+  R12_HARD_REG, R13_HARD_REG, R14_HARD_REG, R15_HARD_REG,
+  XMM0_HARD_REG, XMM1_HARD_REG, XMM2_HARD_REG, XMM3_HARD_REG,
+  XMM4_HARD_REG, XMM5_HARD_REG, XMM6_HARD_REG, XMM7_HARD_REG,
+  XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG,
+  XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG,
   ST0_HARD_REG,
 };
 
 static const MIR_reg_t MAX_HARD_REG = ST0_HARD_REG;
 static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
-static int locs_num (MIR_reg_t loc, MIR_type_t type) { return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1; }
+static int locs_num (MIR_reg_t loc, MIR_type_t type) {
+  return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1;
+}
 
 /* Hard regs not used in machinized code, preferably call used ones. */
 const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
@@ -59,7 +65,7 @@ static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
    |     area      |  optional area for vararg func reg save area
    |---------------|
    | slots assigned|  can be absent for small functions (known only after RA)
-   |   to pseudos  |  
+   |   to pseudos  |
    |---------------|
    | saved regs    |  callee saved regs used in the func (known only after RA)
    |---------------|
@@ -646,8 +652,10 @@ struct pattern {
      l[0-2] - n-th operand-label in 32-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
-     c<value> - address of 32-bit or 64-bit constant in memory pool (we keep always 64-bit in memory pool. x86_64 is LE)
-     h<one or two hex digits> - hardware register with given number in reg of ModRM:reg; one bit of 8-15 in REX.R
+     c<value> - address of 32-bit or 64-bit constant in memory pool (we keep always 64-bit
+                in memory pool. x86_64 is LE)
+     h<one or two hex digits> - hardware register with given number in reg of ModRM:reg;
+                                 one bit of 8-15 in REX.R
      H<one or two hex digits> - hardware register with given number in rm of MOD-RM with and mod=3 (register);
                                 one bit of 8-15 in REX.B
      v<value> - 8-bit immediate with given hex value
@@ -657,7 +665,8 @@ struct pattern {
 };
 
 // make imm always second operand (symplify for cmp and commutative op)
-// make result of cmp op always a register and memory only the 2nd operand if first is reg, but not for FP (NAN) (simplify)
+// make result of cmp op always a register and memory only the 2nd operand if first is reg,
+// but not for FP (NAN) (simplify)
 // for FP cmp first operand should be always reg (machinize)
 
 #define IOP0(ICODE, SUFF, PREF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
@@ -685,22 +694,23 @@ struct pattern {
   {ICODE, "mld mld mld", "DB /5 m1; DB /5 m2; " OP_CODE "; DB /7 m0"}, /* fld m1; fld m2; op; fstp m0 */
 
 #define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)	                \
-  {ICODE ## SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0"},  /* sh r0,cl */ \
-  {ICODE ## SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0"}, /* sh m0,cl */ \
-  {ICODE ## SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
+  {ICODE ## SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0"},  /* sh r0,cl */ 	\
+  {ICODE ## SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0"}, /* sh m0,cl */ 	\
+  {ICODE ## SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ 	\
   {ICODE ## SUFF, "m3 0 i0", #PREF " " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
 #define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)  \
   SHOP0(ICODE, , X, CL_OP_CODE, I8_OP_CODE)  \
   SHOP0(ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
-#define CMP0(ICODE, SUFF, PREF, SETX) \
-  {ICODE ## SUFF, "r r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},      /* cmp r1,r2;setx r0; movzbl r0,r0*/ \
-  {ICODE ## SUFF, "r r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;setx r0; movzbl r0,r0*/ \
-  {ICODE ## SUFF, "r r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {ICODE ## SUFF, "r r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;setx r0; movzbl r0,r0*/ \
-  {ICODE ## SUFF, "r m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/ \
-  {ICODE ## SUFF, "r m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;setx r0; movzbl r0,r0*/
+/* cmp ...; setx r0; movzbl r0,r0: */
+#define CMP0(ICODE, SUFF, PREF, SETX)								 \
+  {ICODE ## SUFF, "r r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},      /* cmp r1,r2;...*/ \
+  {ICODE ## SUFF, "r r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
+  {ICODE ## SUFF, "r r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+  {ICODE ## SUFF, "r r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+  {ICODE ## SUFF, "r m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
+  {ICODE ## SUFF, "r m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
 
 #define CMP(ICODE, SET_OPCODE)   \
   CMP0(ICODE, , X, SET_OPCODE)   \
@@ -717,8 +727,10 @@ struct pattern {
   {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
 
 #define LDEQ(ICODE, V, SET_OPCODE) \
-  /*fld m2;fld m1;xor %eax,%eax;fucomip st,st(1);fstp %st;mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
-  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF E9; DD D8; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
+  /*fld m2;fld m1;xor %eax,%eax;fucomip st,st(1);fstp %st;mov V,%edx;		\
+    set[n]p r0;cmovne %rdx,%rax;mov %rax,r0: */ 				\
+  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF E9; DD D8; BA " V "; "	\
+                       SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
 
 #define FCMP(ICODE, SET_OPCODE) \
   /*xor %eax,%eax;ucomiss r1,r2;setx az; mov %rax,r0:  */ \
@@ -1247,7 +1259,7 @@ static void setup_mem (MIR_mem_t mem, int *mod, int *rm, int *scale, int *base, 
     }
   } else if (mem.base == MIR_NON_HARD_REG) { /* SIB: index with scale only */
     setup_rm (NULL, rm, 4);
-    setup_index (rex_x, index, mem.index); setup_base (NULL, base, BP_HARD_REG); 
+    setup_index (rex_x, index, mem.index); setup_base (NULL, base, BP_HARD_REG);
     setup_mod (mod, 0); *disp32 = (uint32_t) disp;
     setup_scale (scale, mem.scale == 1 ? 0 : mem.scale == 2 ? 1 : mem.scale == 4 ? 2 : 3);
   } else { /* SIB: base and index */

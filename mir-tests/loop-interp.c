@@ -13,12 +13,12 @@ int main (void) {
     
   MIR_init ();
   func = create_mir_func_with_loop (&m);
-#if MIR_INTERP_DEBUG 
+#if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Loop before simplification:\n");
   MIR_output (stderr);
 #endif
   MIR_simplify_func (func, TRUE);
-#if MIR_INTERP_DEBUG 
+#if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Loop after simplification:\n");
   MIR_output (stderr);
 #endif

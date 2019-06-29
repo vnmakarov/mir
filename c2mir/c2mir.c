@@ -40,7 +40,7 @@ static const char **header_dirs, **system_header_dirs;
 static const int max_nested_includes = 32;
 
 #define MIR_VARR_ERROR alloc_error
-#define MIR_HTAB_ERROR MIR_VARR_ERROR 
+#define MIR_HTAB_ERROR MIR_VARR_ERROR
 
 #define FALSE 0
 #define TRUE 1
@@ -539,38 +539,22 @@ static const char *get_token_name (int token_code) {
   const char *s;
   
   switch (token_code) {
-  case T_NUMBER:
-    return "number";
-  case T_CH:
-    return "char constant";
-  case T_STR:
-    return "string";
-  case T_ID:
-    return "identifier";
-  case T_ASSIGN:
-    return "assign op";
-  case T_DIVOP:
-    return "/ or %";
-  case T_ADDOP:
-    return "+ or -";
-  case T_SH:
-    return "shift op";
-  case T_CMP:
-    return "comparison op";
-  case T_EQNE:
-    return "equality op";
-  case T_ANDAND:
-    return "&&";
-  case T_OROR:
-    return "||";
-  case T_INCDEC:
-    return "++ or --";
-  case T_ARROW:
-    return "->";
-  case T_UNOP:
-    return "unary op";
-  case T_DOTS:
-    return "...";
+  case T_NUMBER: return "number";
+  case T_CH: return "char constant";
+  case T_STR: return "string";
+  case T_ID: return "identifier";
+  case T_ASSIGN: return "assign op";
+  case T_DIVOP: return "/ or %";
+  case T_ADDOP: return "+ or -";
+  case T_SH: return "shift op";
+  case T_CMP: return "comparison op";
+  case T_EQNE: return "equality op";
+  case T_ANDAND: return "&&";
+  case T_OROR: return "||";
+  case T_INCDEC: return "++ or --";
+  case T_ARROW: return "->";
+  case T_UNOP: return "unary op";
+  case T_DOTS: return "...";
   default:
     if ((s = find_str_by_key (token_code)) != NULL) // ???
       return s;
@@ -798,32 +782,15 @@ static int set_string_val (token_t t, VARR (char) *temp) {
     }
     curr_c = str[++i];
     switch (curr_c) {
-    case 'a':
-      curr_c = '\a';
-      break;
-    case 'b':
-      curr_c = '\b';
-      break;
-    case 'n':
-      curr_c = '\n';
-      break;
-    case 'f':
-      curr_c = '\f';
-      break;
-    case 'r':
-      curr_c = '\r';
-      break;
-    case 't':
-      curr_c = '\t';
-      break;
-    case 'v':
-      curr_c = '\v';
-      break;
-    case '\\': case '\'': case '\?': case '\"':
-      break;
-    case '\n':
-      lns_num++;
-      break;
+    case 'a': curr_c = '\a'; break;
+    case 'b': curr_c = '\b'; break;
+    case 'n': curr_c = '\n'; break;
+    case 'f': curr_c = '\f'; break;
+    case 'r': curr_c = '\r'; break;
+    case 't': curr_c = '\t'; break;
+    case 'v': curr_c = '\v'; break;
+    case '\\': case '\'': case '\?': case '\"': break;
+    case '\n': lns_num++; break;
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
       unsigned long v = curr_c;
 
@@ -1053,7 +1020,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     case '<': case '>':
       pos = cs->pos; curr_c = cs_get ();
       if (curr_c == start_c) {
-	curr_c = cs_get (); 
+	curr_c = cs_get ();
 	if (curr_c == '=') {
 	  if (start_c == '<')
 	    return new_token (pos, "<<=", T_ASSIGN, N_LSH_ASSIGN);
@@ -1166,20 +1133,13 @@ static token_t get_next_pptoken_1 (int header_p) {
 
       }
       assert (FALSE);
-    case ';':
-      return new_token (cs->pos, ";", curr_c, N_IGNORE);
-    case '?':
-      return new_token (cs->pos, "?", curr_c, N_IGNORE);
-    case '(':
-      return new_token (cs->pos, "(", curr_c, N_IGNORE);
-    case ')':
-      return new_token (cs->pos, ")", curr_c, N_IGNORE);
-    case '{':
-      return new_token (cs->pos, "{", curr_c, N_IGNORE);
-    case '}':
-      return new_token (cs->pos, "}", curr_c, N_IGNORE);
-    case ']':
-      return new_token (cs->pos, "]", curr_c, N_IGNORE);
+    case ';': return new_token (cs->pos, ";", curr_c, N_IGNORE);
+    case '?': return new_token (cs->pos, "?", curr_c, N_IGNORE);
+    case '(': return new_token (cs->pos, "(", curr_c, N_IGNORE);
+    case ')': return new_token (cs->pos, ")", curr_c, N_IGNORE);
+    case '{': return new_token (cs->pos, "{", curr_c, N_IGNORE);
+    case '}': return new_token (cs->pos, "}", curr_c, N_IGNORE);
+    case ']': return new_token (cs->pos, "]", curr_c, N_IGNORE);
     case EOF: {
       pos_t pos = cs->pos;
       
@@ -1214,10 +1174,8 @@ static token_t get_next_pptoken_1 (int header_p) {
 	cs_unget (curr_c);
 	return new_token (cs->pos, "#", '#', N_IGNORE);
       }
-    case ',':
-      return new_token (cs->pos, ",", ',', N_COMMA);
-    case '[':
-      return new_token (cs->pos, "[", '[', N_IND);
+    case ',': return new_token (cs->pos, ",", ',', N_COMMA);
+    case '[': return new_token (cs->pos, "[", '[', N_IND);
     case '.':
       pos = cs->pos;
       curr_c = cs_get ();
@@ -1450,7 +1408,8 @@ static void destringify (const char *repr, VARR (char) *to) {
       VARR_PUSH (char, to, repr[i]);
 }
 
-static token_t token_stringify (token_t t, VARR (token_t) *ts) { // ts - vector, t defines pos. for empty vector
+/* TS - vector, T defines position for empty vector */
+static token_t token_stringify (token_t t, VARR (token_t) *ts) {
   int i;
   
   if (VARR_LENGTH (token_t, ts) != 0)
@@ -2285,7 +2244,7 @@ static int process_pragma (token_t t) {
   }
   t2 = t1;
   t1 = get_next_pptoken ();
-  VARR_PUSH (token_t, temp_tokens, t1); 
+  VARR_PUSH (token_t, temp_tokens, t1);
   if (t1->code == ' ' || t1->code == '\n') {
     t1 = get_next_pptoken ();
     VARR_PUSH (token_t, temp_tokens, t1);
@@ -2335,7 +2294,7 @@ static void move_tokens (VARR (token_t) *to, VARR (token_t) *from) {
 static void reverse_move_tokens (VARR (token_t) *to, VARR (token_t) *from) {
   VARR_TRUNC (token_t, to, 0);
   while (VARR_LENGTH (token_t, from) != 0)
-    VARR_PUSH (token_t, to, VARR_POP (token_t, from)); 
+    VARR_PUSH (token_t, to, VARR_POP (token_t, from));
 }
 
 static void processing (int ignore_directive_p);
@@ -2775,36 +2734,18 @@ static struct val eval (node_t tree) {
     else
       res.u.i_val = tree->u.ch;
     break;
-  case N_I:
-  case N_L:
-    res.uns_p = FALSE; res.u.i_val = tree->u.l;
-    break;
-  case N_LL:
-    res.uns_p = FALSE; res.u.i_val = tree->u.ll;
-    break;
-  case N_U:
-  case N_UL:
-    res.uns_p = TRUE; res.u.u_val = tree->u.ul;
-    break;
-  case N_ULL:
-    res.uns_p = TRUE; res.u.u_val = tree->u.ull;
-    break;
-  case N_BITWISE_NOT:
-    UNOP (~); break;
-  case N_NOT:
-    UNOP (!); break;
-  case N_EQ:
-    BINOP (==); break;
-  case N_NE:
-    BINOP (!=); break;
-  case N_LT:
-    BINOP (<); break;
-  case N_LE:
-    BINOP (<=); break;
-  case N_GT:
-    BINOP (>); break;
-  case N_GE:
-    BINOP (>=); break;
+  case N_I: case N_L: res.uns_p = FALSE; res.u.i_val = tree->u.l; break;
+  case N_LL: res.uns_p = FALSE; res.u.i_val = tree->u.ll; break;
+  case N_U: case N_UL: res.uns_p = TRUE; res.u.u_val = tree->u.ul; break;
+  case N_ULL: res.uns_p = TRUE; res.u.u_val = tree->u.ull; break;
+  case N_BITWISE_NOT: UNOP (~); break;
+  case N_NOT: UNOP (!); break;
+  case N_EQ: BINOP (==); break;
+  case N_NE: BINOP (!=); break;
+  case N_LT: BINOP (<); break;
+  case N_LE: BINOP (<=); break;
+  case N_GT: BINOP (>); break;
+  case N_GE: BINOP (>=); break;
   case N_ADD:
     if (NL_EL (tree->ops, 1) == NULL) {
       UNOP (+);
@@ -2819,18 +2760,12 @@ static struct val eval (node_t tree) {
       BINOP (-);
     }
     break;
-  case N_AND:
-    BINOP (&); break;
-  case N_OR:
-    BINOP (|); break;
-  case N_XOR:
-    BINOP (^); break;
-  case N_LSH:
-    BINOP (<<); break;
-  case N_RSH:
-    BINOP (>>); break;
-  case N_MUL:
-    BINOP (*); break;
+  case N_AND: BINOP (&); break;
+  case N_OR: BINOP (|); break;
+  case N_XOR: BINOP (^); break;
+  case N_LSH: BINOP (<<); break;
+  case N_RSH: BINOP (>>); break;
+  case N_MUL: BINOP (*); break;
   case N_DIV: case N_MOD: {
     int zero_p;
     
@@ -2932,7 +2867,7 @@ static void processing (int ignore_directive_p) {
 	out_token (new_token (t->pos, "1", T_NUMBER, N_IGNORE));
       } else if (strcmp (t->repr, "__STDC_VERSION__") == 0) {
 	out_token (new_token (t->pos, "201112L", T_NUMBER, N_IGNORE)); // ???
-      } else if (strcmp (t->repr, "__FILE__") == 0) { 
+      } else if (strcmp (t->repr, "__FILE__") == 0) {
 	stringify (t->pos.fname, temp_string);
 	VARR_PUSH (char, temp_string, '\0');
 	out_token (new_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR, N_IGNORE));
@@ -3549,7 +3484,7 @@ D (type_spec) {
     return &err_node;
   } else if (MP (T_ATOMIC, pos)) { /* atomic-type-specifier */
     PT ('('); P (type_name); PT (')');
-    error (pos, "Atomic types are not supported"); 
+    error (pos, "Atomic types are not supported");
   } else if ((struct_p = MP (T_STRUCT, pos)) || MP (T_UNION, pos)) {
     /* struct-or-union-specifier, struct-or-union */
     if (! MN (T_ID, op1)) {
@@ -3768,7 +3703,7 @@ D (direct_declarator) {
 	P (type_qual_list); tql = r;
 	if (! static_p && M (T_STATIC)) {
 	  static_p = TRUE;
-	}	
+	}
       }
       if (static_p) {
 	P (assign_expr); ae = r;
@@ -3805,7 +3740,7 @@ D (pointer) {
   if (C ('*')) {
     P (pointer);
   } else {
-    r = new_node (N_LIST); 
+    r = new_node (N_LIST);
   }
   op_append (r, op);
   return r;
@@ -4677,38 +4612,22 @@ struct switch_attr {
 
 static int basic_type_size (enum basic_type bt) {
   switch (bt) {
-  case TP_BOOL:
-    return sizeof (mir_bool);
-  case TP_CHAR:
-    return sizeof (mir_char);
-  case TP_SCHAR:
-    return sizeof (mir_schar);
-  case TP_UCHAR:
-    return sizeof (mir_uchar);
-  case TP_SHORT:
-    return sizeof (mir_short);
-  case TP_USHORT:
-    return sizeof (mir_ushort);
-  case TP_INT:
-    return sizeof (mir_int);
-  case TP_UINT:
-    return sizeof (mir_uint);
-  case TP_LONG:
-    return sizeof (mir_long);
-  case TP_ULONG:
-    return sizeof (mir_ulong);
-  case TP_LLONG:
-    return sizeof (mir_llong);
-  case TP_ULLONG:
-    return sizeof (mir_ullong);
-  case TP_FLOAT:
-    return sizeof (mir_float);
-  case TP_DOUBLE:
-    return sizeof (mir_double);
-  case TP_LDOUBLE:
-    return sizeof (mir_ldouble);
-  case TP_VOID:
-    return 1; // ???
+  case TP_BOOL: return sizeof (mir_bool);
+  case TP_CHAR: return sizeof (mir_char);
+  case TP_SCHAR: return sizeof (mir_schar);
+  case TP_UCHAR: return sizeof (mir_uchar);
+  case TP_SHORT: return sizeof (mir_short);
+  case TP_USHORT: return sizeof (mir_ushort);
+  case TP_INT: return sizeof (mir_int);
+  case TP_UINT: return sizeof (mir_uint);
+  case TP_LONG: return sizeof (mir_long);
+  case TP_ULONG: return sizeof (mir_ulong);
+  case TP_LLONG: return sizeof (mir_llong);
+  case TP_ULLONG: return sizeof (mir_ullong);
+  case TP_FLOAT: return sizeof (mir_float);
+  case TP_DOUBLE: return sizeof (mir_double);
+  case TP_LDOUBLE: return sizeof (mir_ldouble);
+  case TP_VOID: return 1; // ???
   default:
     abort ();
   }
@@ -4929,17 +4848,13 @@ static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode)
   for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
     switch (n->code) {
       /* Type qualifiers: */
-    case N_CONST:
-      tq->const_p = TRUE;
-      break;
+    case N_CONST: tq->const_p = TRUE; break;
     case N_RESTRICT:
       tq->restrict_p = TRUE;
       if (tmode != TM_PTR && tmode != TM_UNDEF)
 	error (n->pos, "restrict requires a pointer");
       break;
-    case N_VOLATILE:
-      tq->volatile_p = TRUE;
-      break;
+    case N_VOLATILE: tq->volatile_p = TRUE; break;
     case N_ATOMIC:
       tq->atomic_p = TRUE;
       if (tmode == TM_ARR)
@@ -5541,7 +5456,7 @@ static void check_labels (node_t labels, node_t target) {
 	case_attr->case_target_node = target;
 	if (default_p)
 	  DLIST_INSERT_BEFORE (case_t, switch_attr->case_labels, tail, case_attr);
-	else 
+	else
 	  DLIST_APPEND (case_t, switch_attr->case_labels, case_attr);
       }
     }
@@ -5982,8 +5897,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
   struct type t, *tt;
 
   switch (r->code) {
-  case N_AND: case N_OR: case N_XOR:
-  case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN:
+  case N_AND: case N_OR: case N_XOR: case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN:
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! integer_type_p (t1) || ! integer_type_p (t2)) {
@@ -6006,8 +5920,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
       }
     }
     break;
-  case N_LSH: case N_RSH: 
-  case N_LSH_ASSIGN: case N_RSH_ASSIGN: 
+  case N_LSH: case N_RSH: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (! integer_type_p (t1) || ! integer_type_p (t2)) {
@@ -6107,8 +6020,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
     }
     break;
   }
-  case N_MUL: case N_DIV: case N_MOD:
-  case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
+  case N_MUL: case N_DIV: case N_MOD: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (r->code == N_MOD && (! integer_type_p (t1) || ! integer_type_p (t2))) {
@@ -6373,8 +6285,7 @@ static void check (node_t r, node_t context) {
       error (r->pos, "invalid types of comparison operands");
     }
     break;
-  case N_BITWISE_NOT:
-  case N_NOT:
+  case N_BITWISE_NOT: case N_NOT:
     process_unop (r, &op1, &e1, &t1, r);
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
@@ -6434,7 +6345,7 @@ static void check (node_t r, node_t context) {
 	  e->type->u.basic_type = t.u.basic_type;
 	  if (e1->const_p) {
 	    convert_value (e1, &t);
-	    if (signed_integer_type_p (&t)) 
+	    if (signed_integer_type_p (&t))
 	      e->u.i_val = (r->code == N_ADD ? +e1->u.i_val : -e1->u.i_val);
 	    else
 	      e->u.u_val = (r->code == N_ADD ? +e1->u.u_val : -e1->u.u_val);
@@ -6454,7 +6365,7 @@ static void check (node_t r, node_t context) {
     struct expr saved_expr;
     
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, NULL);
-    saved_expr = *e1; 
+    saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
     t2 = e2->type = adjust_type (e2->type);
     e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
@@ -7449,7 +7360,8 @@ static op_t get_new_temp (MIR_type_t t) {
   static char reg_name[50];
   MIR_reg_t reg;
 
-  assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
+  assert (t == MIR_T_I64 || t == MIR_T_U64
+	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
   sprintf (reg_name, t == MIR_T_I64 ? "I_%u" : t == MIR_T_U64 ? "U_%u" : t == MIR_T_I32 ? "i_%u"
 	   : t == MIR_T_U32 ? "u_%u" : t == MIR_T_F ? "f_%u" : "d_%u", reg_free_mark++);
   reg = get_reg_var (t, reg_name).reg;
@@ -7550,7 +7462,8 @@ static op_t promote (op_t op, MIR_type_t t) {
   MIR_type_t op_type;
   MIR_insn_code_t insn_code = MIR_INSN_BOUND, insn_code2 = MIR_INSN_BOUND;
   
-  assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
+  assert (t == MIR_T_I64 || t == MIR_T_U64
+	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
   switch (op.mir_op.mode) {
   case MIR_OP_MEM:
     op_type = op.mir_op.u.mem.type;
@@ -7799,8 +7712,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_IGNORE:
     break; /* do nothing */
-  case N_I:
-  case N_L:
+  case N_I: case N_L:
     ll = r->u.l;
     goto int_val;
   case N_LL:
@@ -7808,8 +7720,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   int_val:
     res = new_op (NULL, MIR_new_int_op (ll));
     break;
-  case N_U:
-  case N_UL:
+  case N_U: case N_UL:
     ull = r->u.ul;
     goto uint_val;
   case N_ULL:
@@ -7863,7 +7774,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	emit_insn (f_label);
 	emit2 (MIR_MOV, res.mir_op, zero_op.mir_op);
 	emit_insn (end_label);
-      }      
+      }
     } else if (true_label != NULL) {
       int true_p;
       
@@ -7916,8 +7827,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       break;
     }
     /* Fall through: */
-  case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH:
-  case N_MUL: case N_DIV: case N_MOD:
+  case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH: case N_MUL: case N_DIV: case N_MOD:
     if (gen_bin_op (r, &op1, &op2, &res, NULL)) {
       emit3 (get_mir_insn_code (r), res.mir_op, op1.mir_op, op2.mir_op);
     }
@@ -8091,7 +8001,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     e = r->attr;
     def_node = e->lvalue_node;
-    assert (def_node != NULL && def_node->code == N_MEMBER); 
+    assert (def_node != NULL && def_node->code == N_MEMBER);
     decl = def_node->attr;
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, r->code == N_DEREF_FIELD);
     t = get_mir_type (decl->decl_spec.type);
@@ -8495,9 +8405,7 @@ static void print_qual (FILE *f, struct type_qual type_qual) {
 
 static void print_type (FILE *f, struct type *type) {
   switch (type->mode) {
-  case TM_UNDEF:
-    fprintf (f, "undef type mode");
-    break;
+  case TM_UNDEF: fprintf (f, "undef type mode"); break;
   case TM_BASIC:
     switch (type->u.basic_type) {
     case TP_UNDEF: fprintf (f, "undef type"); break;
@@ -8521,20 +8429,14 @@ static void print_type (FILE *f, struct type *type) {
       assert (FALSE);
     }
     break;
-  case TM_ENUM:
-    fprintf (f, "enum node %lu", type->u.tag_type->uid);
-    break;
+  case TM_ENUM: fprintf (f, "enum node %lu", type->u.tag_type->uid); break;
   case TM_PTR:
     fprintf (f, "ptr (");
     print_type (f, type->u.ptr_type);
     fprintf (f, ")");
     break;
-  case TM_STRUCT:
-    fprintf (f, "struct node %lu", type->u.tag_type->uid);
-    break;
-  case TM_UNION:
-    fprintf (f, "union node %lu", type->u.tag_type->uid);
-    break;
+  case TM_STRUCT: fprintf (f, "struct node %lu", type->u.tag_type->uid); break;
+  case TM_UNION: fprintf (f, "union node %lu", type->u.tag_type->uid); break;
   case TM_ARR:
     fprintf (f, "array [%s", type->u.arr_type->static_p ? "static " : "");
     print_qual (f, type->u.arr_type->ind_type_qual);
@@ -8728,7 +8630,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
       fprintf (f, ": target node %lu\n", ((node_t) n->attr)->uid);
     print_ops (f, n, indent, attr_p);
     break;
-  case N_ENUM_CONST: 
+  case N_ENUM_CONST:
     if (attr_p)
       fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
     print_ops (f, n, indent, attr_p);

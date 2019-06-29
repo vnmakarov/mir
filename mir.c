@@ -6,7 +6,7 @@
 
 static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
-#define MIR_HTAB_ERROR MIR_VARR_ERROR 
+#define MIR_HTAB_ERROR MIR_VARR_ERROR
 
 #include "mir-hash.h"
 #include "mir-htab.h"
@@ -376,7 +376,8 @@ static int func_reg_p (MIR_func_t func, const char *name) {
   return res;
 }
 
-static MIR_reg_t create_func_reg (MIR_func_t func, const char *name, MIR_reg_t reg, MIR_type_t type, int any_p) {
+static MIR_reg_t create_func_reg (MIR_func_t func, const char *name,
+				  MIR_reg_t reg, MIR_type_t type, int any_p) {
   reg_desc_t rd;
   size_t rdn, tab_rdn;
   int htab_res;
@@ -497,7 +498,7 @@ static void code_init (void);
 static void code_finish (void);
 
 DEF_VARR (char);
-static VARR (char) *temp_string; 
+static VARR (char) *temp_string;
 DEF_VARR (MIR_reg_t);
 static VARR (MIR_reg_t) *inline_reg_map;
 
@@ -565,7 +566,7 @@ void MIR_finish (void) {
   if (curr_func != NULL)
     (*error_func) (MIR_finish_error, "finish when function %s is not finished", curr_func->name);
   if (curr_module != NULL)
-    (*error_func) (MIR_finish_error, "finish when module %s is not finished", curr_module->name); 
+    (*error_func) (MIR_finish_error, "finish when module %s is not finished", curr_module->name);
 }
 
 MIR_module_t MIR_new_module (const char *name) {
@@ -1895,7 +1896,7 @@ void MIR_output (FILE *f) {
     output_module (f, module);
 }
 
-static MIR_insn_t insert_op_insn (int out_p, MIR_item_t func_item, 
+static MIR_insn_t insert_op_insn (int out_p, MIR_item_t func_item,
 				  MIR_insn_t anchor, MIR_insn_t insn) {
   if (! out_p) {
     MIR_insert_insn_before (func_item, anchor, insn);
@@ -1996,7 +1997,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
       MIR_module_t m = curr_module;
       
       curr_module = func_item->module;
-      snprintf (name, sizeof (name), "%s%lu", TEMP_ITEM_NAME_PREFIX, (unsigned long) curr_module->temp_items_num);
+      snprintf (name, sizeof (name), "%s%lu",
+		TEMP_ITEM_NAME_PREFIX, (unsigned long) curr_module->temp_items_num);
       curr_module->temp_items_num++;
       if (op->mode == MIR_OP_STR) {
 	item = MIR_new_string_data (name, op->u.str);
@@ -2019,7 +2021,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     if (move_p)
       return;
     type = (op->mode == MIR_OP_FLOAT ? MIR_T_F : op->mode == MIR_OP_DOUBLE ? MIR_T_D
-	    : op->mode == MIR_OP_LDOUBLE ? MIR_T_LD 
+	    : op->mode == MIR_OP_LDOUBLE ? MIR_T_LD
 	    : op->mode == MIR_OP_MEM ? op->u.mem.type : MIR_T_I64);
     new_op = MIR_new_reg_op (vn_add_val (func, type, MIR_INSN_BOUND, *op, *op));
     MIR_insert_insn_before (func_item, insn,
@@ -2055,7 +2057,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 	MIR_op_t ind_op = MIR_new_reg_op (op->u.mem.index), scale_op = MIR_new_int_op (op->u.mem.scale);
 
 	scale_ind_reg = vn_add_val (func, MIR_T_I64, MIR_MUL, ind_op, scale_op);
-	insn = insert_op_insn (after_p, func_item, insn, MIR_new_insn (MIR_MUL, MIR_new_reg_op (scale_ind_reg), ind_op, scale_op));
+	insn = insert_op_insn (after_p, func_item, insn,
+			       MIR_new_insn (MIR_MUL, MIR_new_reg_op (scale_ind_reg), ind_op, scale_op));
       }
       if (base_reg != 0 && scale_ind_reg != 0) {
 	MIR_op_t base_op = MIR_new_reg_op (base_reg), ind_op = MIR_new_reg_op (scale_ind_reg);
@@ -2076,7 +2079,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 	MIR_op_t base_ind_op = MIR_new_reg_op (base_ind_reg), disp_op = MIR_new_reg_op (disp_reg);
 	
 	addr_reg = vn_add_val (func, MIR_T_I64, MIR_ADD, base_ind_op, disp_op);
-	insn = insert_op_insn (after_p, func_item, insn, MIR_new_insn (MIR_ADD, MIR_new_reg_op (addr_reg), base_ind_op, disp_op));
+	insn = insert_op_insn (after_p, func_item, insn,
+			       MIR_new_insn (MIR_ADD, MIR_new_reg_op (addr_reg), base_ind_op, disp_op));
       }
     }
     mem_op.u.mem.base = addr_reg;
@@ -2803,7 +2807,7 @@ static void write_op (FILE *f, MIR_op_t op) {
     if (op.u.mem.disp != 0) {
       if (op.u.mem.base != 0)
 	tag = op.u.mem.index != 0 ? TAG_MEM_DISP_BASE_INDEX : TAG_MEM_DISP_BASE;
-      else  
+      else
 	tag = op.u.mem.index != 0 ? TAG_MEM_DISP_INDEX : TAG_MEM_DISP;
     } else if (op.u.mem.base != 0) {
       tag = op.u.mem.index != 0 ? TAG_MEM_BASE_INDEX : TAG_MEM_BASE;
@@ -3054,7 +3058,7 @@ static long double get_ldouble (FILE *f) {
 
 typedef char *char_ptr_t;
 DEF_VARR (char_ptr_t);
-static VARR (char_ptr_t) *bin_strings; 
+static VARR (char_ptr_t) *bin_strings;
 
 static const char *to_str (uint64_t str_num) {
   if (str_num >= VARR_LENGTH (char_ptr_t, bin_strings))
@@ -4088,7 +4092,7 @@ void MIR_scan_string (const char *str) {
 		op.u.mem.scale = t.u.i;
 		scan_token (&t, get_string_char, unget_string_char);
 	      }
-	    }  
+	    }
 	    if (t.code != TC_RIGHT_PAR)
 	      process_error (MIR_syntax_error, "wrong memory op");
 	    scan_token (&t, get_string_char, unget_string_char);
