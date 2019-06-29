@@ -7470,7 +7470,7 @@ static MIR_type_t get_mir_type (struct type *type) {
   int int_p = ! floating_type_p (type), signed_p = signed_integer_type_p (type);
   
   if (! scalar_type_p (type))
-    return MIR_T_BLOCK;
+    return MIR_T_UNDEF;
   assert (type->mode == TM_BASIC || type->mode == TM_PTR || type->mode == TM_ENUM);
   if (! int_p) {
     assert (size == 4 || size == 8);
@@ -8012,7 +8012,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
     } else {
       t = get_mir_type (e->type);
-      assert (t != MIR_T_BLOCK);
+      assert (t != MIR_T_UNDEF);
       t = promote_mir_int_type (t);
       sprintf (prefix, t == MIR_T_I64 ? "I%u_" : t == MIR_T_U64 ? "U%u_" : t == MIR_T_I32 ? "i%u_"
 	       : t == MIR_T_U32 ? "u%u_" : t == MIR_T_F ? "f%u_" : "d%u_",

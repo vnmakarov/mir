@@ -593,7 +593,6 @@ static const char *type_str (MIR_type_t tp) {
   case MIR_T_D: return "d";
   case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
-  case MIR_T_V: return "v";
   default: return "";
   }
 }
@@ -759,7 +758,6 @@ size_t _MIR_type_size (MIR_type_t type) {
   case MIR_T_D: return sizeof (double);
   case MIR_T_LD: return sizeof (long double);
   case MIR_T_P: return sizeof (void *);
-  case MIR_T_V: return 1;
   default:
     mir_assert (FALSE);
     return 1;
@@ -2187,7 +2185,6 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
   for (size_t i = 0; i < func->nargs; i++) {
     MIR_var_t var = VARR_GET (MIR_var_t, func->vars, i);
     
-    mir_assert (var.type != MIR_T_V);
     if (var.type == MIR_T_I64 || var.type == MIR_T_U64
 	|| var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
       continue;
@@ -3839,8 +3836,6 @@ MIR_type_t MIR_str2type (const char *type_name) {
     return MIR_T_LD;
   if (strcmp (type_name, "p") == 0)
     return MIR_T_P;
-  if (strcmp (type_name, "v") == 0)
-    return MIR_T_V;
   if (strcmp (type_name, "i32") == 0)
     return MIR_T_I32;
   if (strcmp (type_name, "u32") == 0)

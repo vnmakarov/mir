@@ -1055,7 +1055,6 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
     case MIR_T_D: res->d = call_res_args[i].d; return;
     case MIR_T_LD: res->ld = call_res_args[i].ld; return;
     case MIR_T_P: res->a = call_res_args[i].a; return;
-    case MIR_T_V: return;
   default:
     mir_assert (FALSE);
     }
