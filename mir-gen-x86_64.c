@@ -810,9 +810,11 @@ static struct pattern patterns[] = {
   {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"},    /* movsd r0,m64 */
   {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"},    /* movsd r0,m64 */
 
-  {MIR_LDMOV, "mld h32", "DB /7 m0"},             /* fstp m0 */
-  {MIR_LDMOV, "h32 mld", "DB /5 m1"},             /* fld m1 */
-  {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"},   /* fld m1; fstp m0 */
+  {MIR_LDMOV, "mld h32", "DB /7 m0"},          /* only for ret and calls in given order: fstp m0 */
+  {MIR_LDMOV, "h32 mld", "DB /5 m1"},          /* only for ret and calls in given order: fld m1 */
+  {MIR_LDMOV, "mld h33", "D9 C9; DB /7 m0"},   /* only for ret and calls in given order: fxch; fstp m0 */
+  {MIR_LDMOV, "h33 mld", "DB /5 m1; D9 C9"},   /* only for ret and calls in given order: fld m1; fxch */
+  {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"},/* fld m1; fstp m0 */
 
   {MIR_EXT8, "r r",  "X 0F BE r0 R1"},     /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},     /* movsx r0,m1 */
