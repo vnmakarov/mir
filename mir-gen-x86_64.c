@@ -13,10 +13,10 @@ enum {
   XMM4_HARD_REG, XMM5_HARD_REG, XMM6_HARD_REG, XMM7_HARD_REG,
   XMM8_HARD_REG, XMM9_HARD_REG, XMM10_HARD_REG, XMM11_HARD_REG,
   XMM12_HARD_REG, XMM13_HARD_REG, XMM14_HARD_REG, XMM15_HARD_REG,
-  ST0_HARD_REG,
+  ST0_HARD_REG, ST1_HARD_REG,
 };
 
-static const MIR_reg_t MAX_HARD_REG = ST0_HARD_REG;
+static const MIR_reg_t MAX_HARD_REG = ST1_HARD_REG;
 static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
 static int locs_num (MIR_reg_t loc, MIR_type_t type) {
@@ -43,7 +43,7 @@ static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
 	  || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
 	  || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
 	  || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
-	  || hard_reg == ST0_HARD_REG);
+	  || hard_reg == ST0_HARD_REG || hard_reg == ST1_HARD_REG);
 }
 
 static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
@@ -252,8 +252,9 @@ static void machinize_call (MIR_insn_t call_insn) {
       new_insn = MIR_new_insn (MIR_DMOV, ret_reg_op,
 			       _MIR_new_hard_reg_op (n_xregs == 0? XMM0_HARD_REG : XMM1_HARD_REG));
       n_xregs++;
-    } else if (proto->res_types[i] == MIR_T_LD && n_fregs < 2) { // ???
-      new_insn = MIR_new_insn (MIR_LDMOV, ret_reg_op, _MIR_new_hard_reg_op (ST0_HARD_REG));
+    } else if (proto->res_types[i] == MIR_T_LD && n_fregs < 2) {
+      new_insn = MIR_new_insn (MIR_LDMOV, ret_reg_op,
+			       _MIR_new_hard_reg_op (n_fregs == 0 ? ST0_HARD_REG : ST1_HARD_REG));
       n_fregs++;
     } else if (n_iregs < 2) {
       new_insn = MIR_new_insn (MIR_MOV, ret_reg_op,
@@ -469,7 +470,7 @@ static void machinize (void) {
 	  new_insn_code = res_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
 	  ret_reg = n_xregs++ == 0? XMM0_HARD_REG : XMM1_HARD_REG;
 	} else if (res_type == MIR_T_LD && n_fregs < 2) { // ???
-	  new_insn_code = MIR_LDMOV; ret_reg = ST0_HARD_REG;
+	  new_insn_code = MIR_LDMOV; ret_reg = n_fregs == 0 ? ST0_HARD_REG : ST1_HARD_REG;
 	  n_fregs++;
 	} else if (n_iregs < 2) {
 	  new_insn_code = MIR_MOV;
@@ -955,8 +956,7 @@ static struct pattern patterns[] = {
 
   {MIR_CALL, "X r $", "Y FF /2 R1"},  /* call *r1 */
 
-  /* ??? Returns */
-  {MIR_RET, "$", "C3"},  /* ret ax, dx, xmm0, xmm1, st0  */
+  {MIR_RET, "$", "C3"},  /* ret ax, dx, xmm0, xmm1, st0, st1  */
 };
 
 static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
