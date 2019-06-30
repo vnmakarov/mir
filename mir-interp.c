@@ -1161,18 +1161,18 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
   for (i = 0; i < nres; i++) {
     res = &bp [get_i (res_ops + i)];
     switch (proto->res_types[i]) {
-    case MIR_T_I8: res->i = (int8_t) (call_res_args[i].i); return;
-    case MIR_T_U8: res->u = (uint8_t) (call_res_args[i].i); return;
-    case MIR_T_I16: res->i = (int16_t) (call_res_args[i].i); return;
-    case MIR_T_U16: res->u = (uint16_t) (call_res_args[i].i); return;
-    case MIR_T_I32: res->i = (int32_t) (call_res_args[i].i); return;
-    case MIR_T_U32: res->u = (uint32_t) (call_res_args[i].i); return;
-    case MIR_T_I64: res->i = (int64_t) (call_res_args[i].i); return;
-    case MIR_T_U64: res->u = (uint64_t) (call_res_args[i].i); return;
-    case MIR_T_F: res->f = call_res_args[i].f; return;
-    case MIR_T_D: res->d = call_res_args[i].d; return;
-    case MIR_T_LD: res->ld = call_res_args[i].ld; return;
-    case MIR_T_P: res->a = call_res_args[i].a; return;
+    case MIR_T_I8: res->i = (int8_t) (call_res_args[i].i); break;
+    case MIR_T_U8: res->u = (uint8_t) (call_res_args[i].i); break;
+    case MIR_T_I16: res->i = (int16_t) (call_res_args[i].i); break;
+    case MIR_T_U16: res->u = (uint16_t) (call_res_args[i].i); break;
+    case MIR_T_I32: res->i = (int32_t) (call_res_args[i].i); break;
+    case MIR_T_U32: res->u = (uint32_t) (call_res_args[i].i); break;
+    case MIR_T_I64: res->i = (int64_t) (call_res_args[i].i); break;
+    case MIR_T_U64: res->u = (uint64_t) (call_res_args[i].i); break;
+    case MIR_T_F: res->f = call_res_args[i].f; break;
+    case MIR_T_D: res->d = call_res_args[i].d; break;
+    case MIR_T_LD: res->ld = call_res_args[i].ld; break;
+    case MIR_T_P: res->a = call_res_args[i].a; break;
   default:
     mir_assert (FALSE);
     }
