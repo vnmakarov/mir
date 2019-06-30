@@ -1,0 +1,21 @@
+mc:       module
+	  import printf
+p_printf: proto p:fmt, ...
+f0:       func i64:a                              # no return value
+     	  call p_printf, printf, "arg=%ld\n", a
+      	  ret
+	  endfunc
+p_f0:     proto i64:a
+fn:       func i64, f, d, ld, i64, ld             # multiple return values
+	  ret 42, 4.2f, 2.4, 44.22l, 24, 444.222l
+	  endfunc
+p_fn:	  proto i64, f, d, ld, i64, ld
+main:  	  func i64
+	  local i64:i, f:f, d:d, ld:ld, i64:i2, ld:ld2, d:fd
+	  call p_f0, f0, 42
+	  call p_fn, fn, i, f, d, ld, i2, ld2
+	  f2d fd, f
+     	  call p_printf, printf, "i=%ld, f=%e, d=%e, ld=%Le, i2=%ld, ld2=%Le\n", i, fd, d, ld, i2, ld2
+	  ret 0
+	  endfunc
+          endmodule
