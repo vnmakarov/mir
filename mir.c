@@ -891,6 +891,7 @@ static MIR_item_t new_func_arr (const char *name, size_t nres, MIR_type_t *res_t
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
   func->nargs = nargs; func->last_temp_num = 0;
   func->vararg_p = vararg_p != 0;
+  func->expr_p = FALSE;
   func->n_inlines = 0;
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
@@ -990,6 +991,7 @@ static reg_desc_t *find_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
 }
 
 void MIR_finish_func (void) {
+  int expr_p = TRUE;
   MIR_insn_t insn;
   MIR_error_type_t err = MIR_no_error; /* to eliminate warning */
   const char *err_msg = NULL;
@@ -997,6 +999,8 @@ void MIR_finish_func (void) {
   
   if (curr_func == NULL)
     (*error_func) (MIR_no_func_error, "finish of non-existing function");
+  if (curr_func->vararg_p || curr_func->nargs != 0 || curr_func->nres != 1)
+    expr_p = FALSE;
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func->insns);
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
@@ -1014,7 +1018,8 @@ void MIR_finish_func (void) {
     } else if (code == MIR_RET && insn_nops != curr_func->nres && err == MIR_no_error) {
       err = MIR_vararg_func_error;
       err_msg = "number of operands in return does not correspond number of function returns";
-    }
+    } else if (MIR_call_code_p (code))
+      expr_p = FALSE;
     for (i = 0; i < insn_nops; i++) {
       if (MIR_call_code_p (code)) {
 	if (i == 0) {
@@ -1049,6 +1054,7 @@ void MIR_finish_func (void) {
 	mode = type2mode (rd->type);
 	break;
       case MIR_OP_MEM:
+	expr_p = FALSE;
 	if (insn->ops[i].u.mem.base != 0) {
 	  rd = find_rd_by_reg (insn->ops[i].u.mem.base, curr_func);
 	  mir_assert (rd != NULL && insn->ops[i].u.mem.base == rd->reg);
@@ -1073,6 +1079,7 @@ void MIR_finish_func (void) {
 	break;
       case MIR_OP_HARD_REG:
       case MIR_OP_HARD_REG_MEM:
+	expr_p = FALSE;
 	mode = expected_mode;
 	mir_assert (FALSE); /* Should not be here */
 	break;
@@ -1103,6 +1110,7 @@ void MIR_finish_func (void) {
       curr_func = NULL;
       (*error_func) (err, err_msg);
     }
+  curr_func->expr_p = expr_p;
   curr_func = NULL;
 }
 

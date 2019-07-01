@@ -229,6 +229,7 @@ typedef struct MIR_func {
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
   char vararg_p; /* flag of variable number of arguments */
+  char expr_p;   /* flag of that the func can be used as load expression */
   VARR (MIR_var_t) *vars; /* args and locals but temps */
 } *MIR_func_t;
 
