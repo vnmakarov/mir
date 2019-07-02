@@ -2897,8 +2897,6 @@ static void write_item (FILE *f, MIR_item_t item) {
       write_name (f, "nbss");
       write_name (f, item->u.bss->name);
     }
-    write_name (f, "bss");
-    write_name (f, item->u.bss->name);
     write_uint (f, item->u.bss->len);
     return;
   }
