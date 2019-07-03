@@ -58,8 +58,11 @@ interp-test11:
 interp-test12:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test12.mir
 
+interp-test13:
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test13.mir
+
 interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8\
-             interp-test9 interp-test10 interp-test11 interp-test12
+             interp-test9 interp-test10 interp-test11 interp-test12 interp-test13
 
 interp-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
@@ -96,7 +99,10 @@ gen-test11:
 gen-test12:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/run-test.c -DMIR_GEN_DEBUG=1 && ./a.out -g mir-tests/test12.mir
 
-gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12
+gen-test13:
+	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test13.mir
+
+gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13
 	$(CC) -g -D$(TARGET) -DTEST_GEN_LOOP -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 	$(CC) -g -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 
