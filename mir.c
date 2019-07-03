@@ -4040,7 +4040,7 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "forward should have no labels");
     } else if (strcmp (name, "bss") == 0) {
       bss_p = TRUE;
-      if (VARR_LENGTH (label_name_t, label_names) != 1)
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
 	process_error (MIR_syntax_error, "at most one label should be used for bss");
     } else if (strcmp (name, "expr") == 0) {
       expr_p = TRUE;
@@ -4051,7 +4051,7 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "at most one label should be used for data");
     } else if (strcmp (name, "string") == 0) {
       string_p = TRUE;
-      if (VARR_LENGTH (label_name_t, label_names) != 1)
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
 	process_error (MIR_syntax_error, "at most one label should be used for string");
     } else if (strcmp (name, "local") == 0) {
       local_p = TRUE;
