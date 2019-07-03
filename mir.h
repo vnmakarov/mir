@@ -434,6 +434,23 @@ extern void MIR_load_module (MIR_module_t m);
 extern void MIR_load_external (const char *name, void *addr);
 extern void MIR_link (void (*set_interface) (MIR_item_t item), void * (*import_resolver) (const char *));
 
+/* Interpreters: */
+typedef union {
+  MIR_insn_code_t ic;
+  void *a;
+  int64_t i;
+  uint64_t u;
+  float f;
+  double d;
+  long double ld;
+} MIR_val_t;
+
+extern void MIR_interp (MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...);
+extern void MIR_interp_arr (MIR_item_t func_item, MIR_val_t *results, size_t nargs, MIR_val_t *vals);
+extern void MIR_interp_arr_varg (MIR_item_t func_item, MIR_val_t *results,
+				 size_t nargs, MIR_val_t *vals, va_list va);
+extern void MIR_set_interp_interface (MIR_item_t func_item);
+
 /* For internal use only:  */
 extern MIR_item_t _MIR_called_func;
 

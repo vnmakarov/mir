@@ -1,4 +1,4 @@
-#include "../mir-interp.h"
+#include "../mir.h"
 #include "scan-sieve.h"
 #include "real-time.h"
 
@@ -24,7 +24,6 @@ int main (void) {
 #endif
   MIR_load_module (m);
   MIR_link (MIR_set_interp_interface, NULL);
-  MIR_interp_init ();
   fprintf (stderr, "Interpreter init finish: %.3f ms\n", (real_sec_time () - start_time) * 1000.0);
   start_time = real_sec_time ();
 #if MIR_C_INTERFACE
@@ -36,7 +35,6 @@ int main (void) {
   MIR_interp (func, &val, 0);
   fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
 #endif
-  MIR_interp_finish ();
   MIR_finish ();
   return 0;
 }

@@ -1,6 +1,5 @@
 #include <string.h>
 #include "../mir.h"
-#include "../mir-interp.h"
 #include "../mir-gen.h"
 #include "test-read.h"
 
@@ -61,11 +60,9 @@ int main (int argc, char *argv[]) {
     MIR_output (stderr);
   }
   if (interpr_p) {
-    MIR_interp_init ();
     MIR_link (MIR_set_interp_interface, NULL);
     MIR_interp (main_func, &val, 0);
     fprintf (stderr, "%s: %lu\n", mir_fname, val.i);
-    MIR_interp_finish ();
   } else if (gen_p) {
     MIR_gen_init ();
 #if MIR_GEN_DEBUG
