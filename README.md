@@ -14,34 +14,42 @@
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
   * MIR consists of **modules**
     * Each module can contain **functions** and some declarations and data
-    * Each function has **signature** (parameter and return types), (currently) fixed size **stack frame**, **local variables** (including function arguments) and **instructions**
+    * Each function has **signature** (parameters and return types), (currently) **local variables**
+      (including function arguments) and **instructions**
       * Each local variable has **type** which can be only 64-bit integer, float, or double
       * Each instruction has **opcode** and **operands**
-        * Operand can be a local variable (or a function argument), **immediate**, **memory**, **label**, or **reference**
+        * Operand can be a local variable
+	  (or a function argument), **immediate**, **memory**, **label**, or **reference**
           * Immediate operand can be 64-bit integer, float or double value
 	  * Memory operand has a **type**, **displacement**, **base** and **index** integer local variable,
 	    and integer constant as a **scale** for the index
-	    * Memory type can be 8-, 16-, 32-, 64-bit signed or unsigned integer type, float type, or double type
-	      * When integer memory value is used it is expanded with sign or zero promoting to 64-bit integer value first
+	    * Memory type can be 8-, 16-, 32-, 64-bit signed or unsigned integer type,
+	      float type, or double type
+	      * When integer memory value is used it is expanded with sign or zero promoting
+	        to 64-bit integer value first
 	  * Label operand has name and used for control flow instructions
-	  * Reference operand is used to refer to functions and declarations in the current module, in other MIR modules,
-	    or for C external functions or declarations
+	  * Reference operand is used to refer to functions and declarations in the current module,
+	    in other MIR modules, or for C external functions or declarations
 	* opcode describes what the instruction does
-	* There are **conversion instructions** for conversion between different 32- and 64-bit signed and unsigned values,
-	  float and double values
-	* There are **arithmetic instructions** (addition, subtraction, multiplication, division, modulo) working
-          on 32- and 64-bit signed and unsigned values, float and double values
-	* There are **logical instructions** (and, or, xor, different shifts) working on 32- and 64-bit signed and unsigned values
-	* There are **comparison instructions**  working on 32- and 64-bit signed and unsigned values, float and double values
-	* There are **branch insns** (uncoditional jump, and jump on zero or non-zero value) which take a label
-	  as one their operand
-	* There are **combined comparison and branch instructions** taking a label as one operand and two 32- and 64-bit
+	* There are **conversion instructions** for conversion between different
+	  32- and 64-bit signed and unsigned values, float and double values
+	* There are **arithmetic instructions** (addition, subtraction, multiplication, division,
+	  modulo) working on 32- and 64-bit signed and unsigned values, float and double values
+	* There are **logical instructions** (and, or, xor, different shifts) working on
+	  32- and 64-bit signed and unsigned values
+	* There are **comparison instructions**  working on 32- and 64-bit
 	  signed and unsigned values, float and double values
+	* There are **branch insns** (uncoditional jump, and jump on zero or non-zero value)
+	  which take a label as one their operand
+	* There are **combined comparison and branch instructions** taking a label as one operand
+	  and two 32- and 64-bit signed and unsigned values, float and double values
 	* There are **function and procedural call instructions**
-	* There are **return instructions** working on 32- and 64-bit ineteger values, float and double values
+	* There are **return instructions** working on 32- and 64-bit
+	  integer values, float and double values
 
 ## MIR Example
-  * You can create MIR through **API** consisting functions for creation of modules, functions, instructions, operands etc
+  * You can create MIR through **API** consisting functions for creation of modules,
+    functions, instructions, operands etc
   * You can also create MIR from MIR **binary** or **text** file
   * The best way to get a feel about MIR is to use textual MIR representation
   * Example of sieve on C
@@ -122,32 +130,35 @@ ex100:    func v, 0
   * The instruction result, if any, is always the first operand
   * We use 64-bit instructions in calculations
   * We could use 32-bit instructions in calculations which would have sense if we use 32-bit CPU
-    * When we use 32-bit instructions we take only 32-bit significant part of 64-bit operand and high 32-bit part
-      of the result is machine defined (so if you write a portable MIR code consider the high 32-bit part value is undefined)
+    * When we use 32-bit instructions we take only 32-bit significant part of 64-bit operand
+      and high 32-bit part of the result is machine defined (so if you write a portable MIR code
+      consider the high 32-bit part value is undefined)
   * `string` describes data in form of C string
-     * C string can be used directly as an insn operand.  In this case the data will be added to the module and
-       the data address will be used as an operand
+     * C string can be used directly as an insn operand.  In this case the data will be added
+       to the module and the data address will be used as an operand
   * `export` describes module functions or data which are visible outside the current module
   * `import` describes module functions or data which should be defined in other MIR modules
   * `proto` describes function prototypes.  Its syntax is the same as `func` syntax
   * `call` are MIR instruction to call functions
 
 ## Running MIR code
-  * After creating MIR modules (through MIR API or reading MIR binary or textual files), you should load the modules
+  * After creating MIR modules (through MIR API or reading MIR binary or textual files),
+    you should load the modules
     * Loading modules makes visible exported module functions and data
     * You can load external C function with `MIR_load_external`
   * After loading modules, you should link the loaded modules
-    * Linking modules resolves imported module references, initializes data, and set up call interfaces
+    * Linking modules resolves imported module references, initializes data,
+      and set up call interfaces
   * After linking, you can interpret functions from the modules or create machine code
     for the functions with MIR JIT compiler (generator) call this code
-  * Running code from above example could look the following (here `m1` and `m2` are modules `m_sieve` and `m_e100`,
-    `func` is function `ex100`, `sieve` is function `sieve`):
+  * Running code from above example could look the following (here `m1` and `m2` are modules
+    `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
 ```
     MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf);
     MIR_link (MIR_set_interp_interface);
     /* or MIR_gen (MIR_set_gen_interface); to generate and use the machine code */
     MIR_interp (func, &result, 0); /* zero here is arguments number  */
-    /* or ((void (*) (void)) func->addr) (); to call interpreter or generated code through the interface */
+    /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
 
   * If you generate machine code for a function, you should also generate
@@ -158,8 +169,10 @@ ex100:    func v, 0
 
   ![Current MIR](mir1.svg)
 
-  * MIR support of **varargs** (variable number of arguments), **alloca**, and **longjump** is not implemented yet
-  * Binary MIR code is usually about **3 times more compact** and **4 times faster to read** than analagous MIR textual code
+  * MIR support of **varargs** (variable number of arguments), **alloca**, and **longjump**
+    is not implemented yet
+  * Binary MIR code is usually about **3 times more compact** and **4 times faster to read**
+    than analagous MIR textual code
   * MIR interpreter is about 6-10 times slower than code generated by MIR JIT compiler
   * MIR to C compiler is currently about 70% implemented
 
@@ -167,13 +180,17 @@ ex100:    func v, 0
   ![Future MIR](mirall.svg)
 
   * WASM to MIR and MIR to WASM translation should be pretty straitforward
-    * Only small WASM runtime for WASM floating point round instructions needed to be provided for MIR
-  * Implementation of Java byte code to/from MIR and LLVM IR to/from MIR compilers will be a challenge:
+    * Only small WASM runtime for WASM floating point round insns needed to be provided for MIR
+  * Implementation of Java byte code to/from MIR and LLVM IR to/from MIR compilers
+    will be a challenge:
     * big runtime and possibly MIR extensions will be required
-  * Porting GCC to MIR is possible too.  An experienced GCC developer can implement this for 6 to 12 months
-  * On my estimation porting MIR JIT compiler to aarch64, ppc64, and mips will take 1-2 months of work for each target
-  * Performance minded porting MIR JIT compiler to 32-bit targets will need an implementaion of additional
-    small analysis pass to get info what 64-bit variables are used only in 32-bit instructions
+  * Porting GCC to MIR is possible too.  An experienced GCC developer can implement this
+    for 6 to 12 months
+  * On my estimation porting MIR JIT compiler to aarch64, ppc64, and mips will take
+    1-2 months of work for each target
+  * Performance minded porting MIR JIT compiler to 32-bit targets will need an implementaion of
+    additional small analysis pass to get info what 64-bit variables are used only
+    in 32-bit instructions
     
 ## MIR JIT compiler
   * Compiler **Performance Goals** relative to GCC -O2:
@@ -189,10 +206,12 @@ ex100:    func v, 0
     * **sparse conditional constant propagation**
     * **dead code elimination**
     * **code selection**
-    * fast **register allocator** with implicit coalescing hard registers and stack slots for copy elimination
+    * fast **register allocator** with implicit coalescing hard registers and stack slots
+      for copy elimination
   * **No SSA** (single static assignment form) usage for faster optimizations
-    * If we implement more optimizations, SSA transition is possible when additional time for expensive in/out SSA passes
-      will be less than additional time for non-SSA optimization implementation
+    * If we implement more optimizations, SSA transition is possible when additional time for 
+      expensive in/out SSA passes will be less than additional time for non-SSA optimization
+      implementation
   * Simplicity of optimizations implementation over extreme generated code performance
   * More detail **JIT compiler pipeline**:
 ![MIR generator](mir-gen.svg)
@@ -200,7 +219,8 @@ ex100:    func v, 0
   * **Build CFG**: builing Control Flow Graph (basic blocks and CFG edges)
   * **Global Common Sub-Expression Elimination**: reusing calculated values
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Sparse Conditional Constant Propagation**: constant propagation and removing death paths of CFG
+  * **Sparse Conditional Constant Propagation**: constant propagation
+    and removing death paths of CFG
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Building Live Info**: calculating live in and live out for the basic blocks
   * **Build Live Ranges**: calculating program point ranges for registers
@@ -217,28 +237,35 @@ ex100:    func v, 0
   * Simplicity of implementation over speed to make code easy to learn and maintain
     * Four passes to divide compilation on manageable sub-tasks:
       1. Preprocessor pass generating tokens
-      2. Parsing pass generating AST (Abstract Syntax Tree). To be close ANSI standard grammar as soon as possible,
-         [**PEG**](https://en.wikipedia.org/wiki/Parsing_expression_grammar) manual parser is used
+      2. Parsing pass generating AST (Abstract Syntax Tree). To be close ANSI standard grammar
+         as soon as possible, [**PEG**](https://en.wikipedia.org/wiki/Parsing_expression_grammar)
+         manual parser is used
       3. Context pass checking context constraints and augmenting AST
       4. Generation pass producing MIR
 
   ![MIR to C](mir2c.svg)
 
 ## Structure of the project code
- * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary and MIR text representation
- * Files `mir-dlist.h`, `mir-mp.h`, `mir-varr.h`, `mir-bitmap.h`, `mir-htab.h` contain generic code correspondingly for
-   double-linked lists, memory pools, variable length arrays, bitmaps, hash tables.
-   File `mir-hash.h` is a general, simple, high quality hash function used by hashtables
- * Files `mir-interp.h` and `mir-interp.c` contain code for intepretation of MIR code
+ * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary
+   and MIR text representation
+ * Files `mir-dlist.h`, `mir-mp.h`, `mir-varr.h`, `mir-bitmap.h`, `mir-htab.h` contain generic code
+   correspondingly for double-linked lists, memory pools, variable length arrays, bitmaps,
+   hash tables.  File `mir-hash.h` is a general, simple, high quality hash function used
+   by hashtables
+ * File `mir-interp.c` contains code for interpretation of MIR code.  It is included in `mir.c`
+   and never compiled separately
  * Files `mir-gen.h`, `mir-gen.c`, and `mir-gen-x86_64.c` contain code for MIR JIT compiler
    * File `mir-gen-x86_64.c` is machine dependent code of JIT compiler
- * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and JIT compiler 
+ * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
+   JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
- * Files `c2mir/c2mir.c`, `c2mir/cx86_64-code.c`, and `c2mir/cx86_64.h` contain code for C to MIR compiler
+ * Files `c2mir/c2mir.c`, `c2mir/cx86_64-code.c`, and `c2mir/cx86_64.h` contain code for
+   C to MIR compiler
    
 ## Playing with current MIR project code
   * MIR project is far away from any serious usage
-  * The current code can be used only to familiarize future users with the project and approaches it uses
+  * The current code can be used only to familiarize future users with the project
+    and approaches it uses
   * You can run some benchmarks and tests by `make bench` and `make test`
 
 ## Current MIR Performance Data
@@ -253,28 +280,37 @@ ex100:    func v, 0
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
     | LOC [5]        | **1.0** (9.5K)   | 0.58 (5.5K)     | **155** (1480K)  |  155 (1480K)    |
 
-   [1] is based on wall time of compilation of sieve code (w/o any include file and with using memory file system for GCC) 100 times
+   [1] is based on wall time of compilation of sieve code (w/o any include file and with
+   using memory file system for GCC) 100 times
 
    [2] is based on the best wall time of 10 runs
 
    [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
 
-   [4] is based on wall time of generation of object code for empty C file or generation of empty MIR module through API
+   [4] is based on wall time of generation of object code for empty C file or generation of empty
+   MIR module through API
 
-   [5] is based only on files required for x86-64 C compiler and files for minimal program to create and run MIR code
+   [5] is based only on files required for x86-64 C compiler and files for minimal program to create
+   and run MIR code
 
 ## MIR project competitors
   * I only see two real universal light-weight JIT competitors
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
-      * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR (excluding C to MIR compiler)
+      * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR
+        (excluding C to MIR compiler)
       * 420KB object file vs 170KB
     * LIBJIT has fewer optimizations: only copy propagation and register allocation
-  * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md) is a part of runtime for .NET Core:
+  * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md)
+    is a part of runtime for .NET Core:
     * RyuJIT is even bigger: 360K SLOC
-    * RyuJIT optimizations is basically MIR-generator optimizations plus loop invariant motion minus SCCP
+    * RyuJIT optimizations is basically MIR-generator optimizations plus loop invariant motion
+      minus SCCP
     * RyuJIT uses SSA
   * Other candidates:
-    * [**QBE**](https://github.com/8l/qbe): standalone+, small+ (10K LOC), SSA-, ASM generation-, MIT License
-    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-, ASM generation-, LGPL2
-    * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-, big- (70K LOC of Rust-), SSA-, Apache License
+    * [**QBE**](https://github.com/8l/qbe): standalone+, small+ (10K LOC), SSA-, ASM generation-,
+      MIT License
+    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-,
+      ASM generation-, LGPL2
+    * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-,
+      big- (70K LOC of Rust-), SSA-, Apache License
