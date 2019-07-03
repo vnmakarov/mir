@@ -1,7 +1,7 @@
-CC=clang -std=gnu11 -Wno-abi
+CC=gcc -std=gnu11 -Wno-abi
 CFLAGS=-O3 -g
 TARGET=x86_64
-MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c x86-64.c
+MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 OBJS=mir.o mir-gen.o
 all: $(OBJS)
