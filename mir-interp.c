@@ -1,25 +1,8 @@
 /* This file is a part of MIR project.
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   
+   File contains MIR interpreter which is an obligatory part of MIR API.
 */
-
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <alloca.h>
-#include <float.h>
-#include <inttypes.h>
-
-static void util_error (const char *message);
-#define MIR_VARR_ERROR util_error
-
-#include "mir-varr.h"
-#include "mir-hash.h"
-#include "mir-htab.h"
-#include "mir-interp.h"
-
-static void MIR_NO_RETURN util_error (const char *message) {
-  (*MIR_get_error_func ()) (MIR_alloc_error, message);
-}
 
 #ifndef MIR_INTERP_TRACE
 #define MIR_INTERP_TRACE 0
@@ -96,7 +79,6 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
 DEF_VARR (MIR_val_t);
 static VARR (MIR_val_t) *code_varr;
 
-DEF_VARR (MIR_insn_t);
 static VARR (MIR_insn_t) *branches;
 
 static void push_mem (MIR_op_t op) {
@@ -293,6 +275,18 @@ static void generate_icode (MIR_item_t func_item) {
   mir_assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
   func_desc->func_item = func_item;
+}
+
+static void finish_func_interpretation (MIR_item_t func_item) {
+  mir_assert (func_item->item_type == MIR_func_item);
+  if (func_item->data == NULL)
+    return;
+  for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, func_item->u.func->insns);
+       insn != NULL;
+       insn = DLIST_NEXT (MIR_insn_t, insn))
+    insn->data = NULL; /* it was used for interpretation preparation */
+  free (func_item->data);
+  func_item->data = NULL;
 }
 
 static ALWAYS_INLINE void *get_a (MIR_val_t *v) { return v->a;}
@@ -1037,7 +1031,6 @@ get_func_desc (MIR_item_t func_item) {
 static VARR (MIR_val_t) *call_res_args_varr;
 static MIR_val_t *call_res_args;
  
-DEF_VARR (MIR_type_t)
 static VARR (MIR_type_t) *call_arg_types_varr;
 static MIR_type_t *call_arg_types;
  
@@ -1176,7 +1169,7 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
   }
 }
 
-void MIR_interp_init (void) {
+static void interp_init (void) {
 #if DIRECT_THREADED_DISPATCH
   MIR_val_t v;
   eval (NULL, NULL, &v);
@@ -1198,7 +1191,7 @@ void MIR_interp_init (void) {
   bend_builtin = _MIR_get_bend_builtin ();
 }
 
-void MIR_interp_finish (void) {
+static void interp_finish (void) {
   VARR_DESTROY (MIR_insn_t, branches);
   VARR_DESTROY (MIR_val_t, code_varr);
   VARR_DESTROY (MIR_val_t, args_varr);

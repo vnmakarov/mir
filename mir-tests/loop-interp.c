@@ -1,4 +1,4 @@
-#include "../mir-interp.h"
+#include "../mir.h"
 #include "api-loop.h"
 #include "real-time.h"
 
@@ -24,7 +24,6 @@ int main (void) {
 #endif
   MIR_load_module (m);
   MIR_link (MIR_set_interp_interface, NULL);
-  MIR_interp_init ();
   start_time = real_sec_time ();
   val.i = n_iter;
 #if MIR_C_INTERFACE
@@ -36,7 +35,6 @@ int main (void) {
   MIR_interp (func, &val, 1, val);
   fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
 #endif
-  MIR_interp_finish ();
   MIR_finish ();
   return 0;
 }

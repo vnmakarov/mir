@@ -17,6 +17,10 @@ static void util_error (const char *message);
 #include <ctype.h>
 #include <limits.h>
 
+static void interp_init (void);
+static void finish_func_interpretation (MIR_item_t func_item);
+static void interp_finish (void);
+
 static MIR_error_func_t error_func;
 
 static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
@@ -537,10 +541,12 @@ int MIR_init (void) {
   init_module (&environment_module, ".environment");
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq);
   code_init ();
+  interp_init ();
   return TRUE;
 }
 
 void MIR_finish (void) {
+  interp_finish ();
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
 #if MIR_SCAN
@@ -4363,3 +4369,7 @@ static void scan_finish (void) {
 #else
 #error "undefined or unsupported generation target"
 #endif
+
+
+
+#include "mir-interp.c"

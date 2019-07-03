@@ -1,5 +1,5 @@
+#include "../mir.h"
 #include <inttypes.h>
-#include "../mir-interp.h"
 #include "scan-args.h"
 
 static void pri (int64_t c) { printf ("%"PRIx64 "\n", c); }
@@ -18,7 +18,6 @@ int main (void) {
   MIR_simplify_func (func, TRUE);
   MIR_load_module (m);
   MIR_link (MIR_set_interp_interface, NULL);
-  MIR_interp_init ();
 #if MIR_C_INTERFACE
   typedef void (*arg_func) (int8_t, int16_t, int32_t, int64_t, float, double,
 			    uint32_t, uint8_t, uint16_t, int32_t, int64_t,
@@ -34,7 +33,6 @@ int main (void) {
   v[18].d = 10.0;
   MIR_interp_arr (func, &v[0], 19, v);
 #endif
-  MIR_interp_finish ();
   MIR_finish ();
   return 0;
 }

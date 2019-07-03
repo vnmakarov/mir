@@ -1,4 +1,4 @@
-#include "../mir-interp.h"
+#include "../mir.h"
 #include "scan-hi.h"
 
 static int32_t print (int32_t c) {
@@ -26,10 +26,8 @@ int main (void) {
 #endif
   MIR_load_module (m);
   MIR_link (MIR_set_interp_interface, NULL);
-  MIR_interp_init ();
   MIR_interp (func, &val, 0);
   fprintf (stderr, "func hi returns %ld\n", (long) val.i);
-  MIR_interp_finish ();
   MIR_finish ();
   return 0;
 }

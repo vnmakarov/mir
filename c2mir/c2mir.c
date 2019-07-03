@@ -8898,7 +8898,6 @@ static int other_option_func (int i, int argc, const char *argv[]) {
 }
 
 #include <math.h> /* for abs */
-#include "mir-interp.h"
 #include "mir-gen.h"
 
 int main (int argc, const char *argv[]) {
@@ -8966,7 +8965,6 @@ int main (int argc, const char *argv[]) {
       MIR_load_external ("printf", printf); MIR_load_external ("sprintf", sprintf);
       MIR_load_external ("abs", abs);
       if (interp_exec_p) {
-	MIR_interp_init ();
 	MIR_link (MIR_set_interp_interface, NULL);
 	start_time = real_usec_time ();
 	MIR_interp (main_func, &val, 0);
@@ -8974,7 +8972,6 @@ int main (int argc, const char *argv[]) {
 	  fprintf (stderr, "  execution       -- %.0f msec\n", (real_usec_time () - start_time) / 1000.0);
 	  fprintf (stderr, "exit code %s: %lu\n", source_name, val.i);
 	}
-	MIR_interp_finish ();
       } else {
 	MIR_gen_init ();
 #if MIR_GEN_DEBUG

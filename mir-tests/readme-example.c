@@ -1,5 +1,4 @@
 #include "../mir.h"
-#include "../mir-interp.h"
 #include "../mir-gen.h"
 
 static void create_program (void) {
@@ -66,13 +65,11 @@ int main (void) {
   f1 = DLIST_TAIL (MIR_item_t, m1->items); f2 = DLIST_TAIL (MIR_item_t, m2->items);
   MIR_load_module (m2); MIR_load_module (m1);
   MIR_load_external ("printf", printf);
-  MIR_interp_init ();
   MIR_link (MIR_set_interp_interface, NULL);
   MIR_gen_init ();
   MIR_gen (f1);
   MIR_interp (f2, NULL, 0);
   MIR_gen_finish ();
-  MIR_interp_finish ();
   MIR_finish ();
   fprintf (stderr, "MIR_finish end -- %.0f usec\n", real_usec_time () - start_time);
   return 0;
