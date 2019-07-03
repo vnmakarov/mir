@@ -1,4 +1,4 @@
-CC=gcc -std=gnu11
+CC=clang -std=gnu11 -Wno-abi
 CFLAGS=-O3 -g
 TARGET=x86_64
 DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h
