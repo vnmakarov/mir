@@ -438,7 +438,8 @@ const char *MIR_item_name (MIR_item_t item) {
 	  : item->item_type == MIR_import_item ? item->u.import
 	  : item->item_type == MIR_export_item ? item->u.export
 	  : item->item_type == MIR_forward_item ? item->u.forward
-	  : item->item_type == MIR_bss_item ? item->u.bss->name : item->u.data->name);
+	  : item->item_type == MIR_bss_item ? item->u.bss->name
+	  : item->item_type == MIR_data_item ? item->u.data->name : item->u.expr_data->name);
 }
 
 #if MIR_IO
@@ -652,6 +653,7 @@ static MIR_item_t add_item (MIR_item_t item) {
     break;
   case MIR_bss_item:
   case MIR_data_item:
+  case MIR_expr_data_item:
   case MIR_func_item:
     if (item->item_type == MIR_export_item) {
       if (! tab_item->export_p) { /* just keep one export: */
@@ -792,6 +794,34 @@ MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const
 
 MIR_item_t MIR_new_string_data (const char *name, const char *str) {
   return MIR_new_data (name, MIR_T_U8, strlen (str) + 1, str);
+}
+
+MIR_item_t MIR_new_expr_data (const char *name, MIR_item_t expr_item) {
+  MIR_item_t tab_item, item = create_item (MIR_expr_data_item, "expr data");
+  MIR_expr_data_t expr_data;
+  
+  item->u.expr_data = expr_data = malloc (sizeof (struct MIR_expr_data));
+  if (expr_data == NULL) {
+    free (item);
+    (*error_func) (MIR_alloc_error,
+		   "Not enough memory for creation of expr data %s", name == NULL ? "" : name);
+  }
+  if (expr_item->item_type != MIR_func_item || expr_item->u.func->vararg_p
+      || expr_item->u.func->nargs != 0 || expr_item->u.func->nres != 1)
+    (*error_func) (MIR_binary_io_error,
+		   "%s can not be an expr which should be non-argument, one result function",
+		   MIR_item_name (expr_item));
+  if (name != NULL)
+    name = string_store (&strings, &string_tab, name).str;
+  expr_data->name = name;
+  expr_data->expr_item = expr_item;
+  if (name == NULL) {
+    DLIST_APPEND (MIR_item_t, curr_module->items, item);
+  } else if (add_item (item) != item) {
+    free (item);
+    item = tab_item;
+  }
+  return item;
 }
 
 static MIR_item_t new_proto_arr (const char *name, size_t nres, MIR_type_t *res_types,
@@ -1809,6 +1839,7 @@ static void output_item (FILE *f, MIR_item_t item) {
   MIR_proto_t proto;
   MIR_var_t var;
   MIR_data_t data;
+  MIR_expr_data_t expr_data;
   size_t i, nlocals;
   
   if (item->item_type == MIR_export_item) {
@@ -1828,6 +1859,12 @@ static void output_item (FILE *f, MIR_item_t item) {
       fprintf (f, "%s:", item->u.bss->name);
     fprintf (f, "\tbss\t%" PRIu64 "\n", item->u.bss->len);
     return;
+  }
+  if (item->item_type == MIR_expr_data_item) {
+    expr_data = item->u.expr_data;
+    if (expr_data->name != NULL)
+      fprintf (f, "%s:", expr_data->name);
+    fprintf (f, "\texpr\t%s", MIR_item_name (expr_data->expr_item));
   }
   if (item->item_type == MIR_data_item) {
     data = item->u.data;
@@ -2900,6 +2937,16 @@ static void write_item (FILE *f, MIR_item_t item) {
     write_uint (f, item->u.bss->len);
     return;
   }
+  if (item->item_type == MIR_expr_data_item) {
+    if (item->u.expr_data->name == NULL) {
+      write_name (f, "expr");
+    } else {
+      write_name (f, "nexpr");
+      write_name (f, item->u.expr_data->name);
+    }
+    write_name (f, MIR_item_name (item->u.expr_data->expr_item));
+    return;
+  }
   if (item->item_type == MIR_data_item) {
     MIR_data_t data = item->u.data;
     
@@ -3374,6 +3421,17 @@ void MIR_read (FILE *f) {
 	  (*error_func) (MIR_syntax_error, "bss %s should have no labels", name == NULL ? "" : name);
 	u = read_uint (f, "wrong bss len");
 	MIR_new_bss (name, u);
+      } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
+	const char *func_name;
+	MIR_item_t item;
+	
+	name = strcmp (name, "nexpr") == 0 ? read_name (f, "wrong expr name") : NULL;
+	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
+	  (*error_func) (MIR_syntax_error, "expr %s should have no labels", name == NULL ? "" : name);
+	func_name = read_name (f, "wrong expr func name");
+	if ((item = find_item (func_name, module)) == NULL || item->item_type != MIR_func_item)
+	  (*error_func) (MIR_binary_io_error, "expr refers to non-function %s", func_name);
+	MIR_new_expr_data (name, item);
       } else if (strcmp (name, "ndata") == 0 || strcmp (name, "data") == 0) {
 	MIR_type_t type;
 	size_t nel;
@@ -3914,7 +3972,7 @@ void MIR_scan_string (const char *str) {
   size_t n;
   int64_t i, nargs;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
-  int bss_p, string_p, local_p, push_op_p, read_p, disp_p;
+  int bss_p, expr_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
   curr_lno = 1;
@@ -3947,7 +4005,7 @@ void MIR_scan_string (const char *str) {
 	scan_token (&t, get_string_char, unget_string_char); /* label_names without insn */
     }
     module_p = end_module_p = proto_p = func_p = end_func_p = FALSE;
-    export_p = import_p = forward_p = bss_p = string_p = local_p = FALSE;
+    export_p = import_p = forward_p = bss_p = expr_p = string_p = local_p = FALSE;
     if (strcmp (name, "module") == 0) {
       module_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
@@ -3984,6 +4042,10 @@ void MIR_scan_string (const char *str) {
       bss_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
 	process_error (MIR_syntax_error, "at most one label should be used for bss");
+    } else if (strcmp (name, "expr") == 0) {
+      expr_p = TRUE;
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
+	process_error (MIR_syntax_error, "at most one label should be used for expr");
     } else if ((data_type = MIR_str2type (name)) != MIR_T_BOUND) {
       if (VARR_LENGTH (label_name_t, label_names) > 1)
 	process_error (MIR_syntax_error, "at most one label should be used for data");
@@ -4040,7 +4102,7 @@ void MIR_scan_string (const char *str) {
 		     && MIR_branch_code_p (insn_code)
 		     && VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0) {
 	    op = MIR_new_label_op (create_label_desc (name));
-	  } else if (func_reg_p (func->u.func, name)) {
+	  } else if (! expr_p && func_reg_p (func->u.func, name)) {
 	    op.mode = MIR_OP_REG;
 	    op.u.reg = MIR_reg (name, func->u.func);
 	  } else if ((item = find_item (name, module)) != NULL) {
@@ -4163,6 +4225,14 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "wrong bss operand type or value");
       name = VARR_LENGTH (label_name_t, label_names) == 0 ? NULL : VARR_GET (label_name_t, label_names, 0);
       MIR_new_bss (name, op_addr[0].u.i);
+    } else if (expr_p) {
+      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
+	process_error (MIR_syntax_error, "expr should have one operand");
+      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      if (op_addr[0].mode != MIR_OP_REF || op_addr[0].u.ref->item_type != MIR_func_item)
+	process_error (MIR_syntax_error, "wrong expr operand");
+      name = VARR_LENGTH (label_name_t, label_names) == 0 ? NULL : VARR_GET (label_name_t, label_names, 0);
+      MIR_new_expr_data (name, op_addr[0].u.ref);
     } else if (string_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
 	process_error (MIR_syntax_error, "string should have one operand");
