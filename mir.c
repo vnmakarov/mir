@@ -1185,7 +1185,7 @@ static void undefined_interface (void) {
 
 static MIR_item_t load_bss_data_section (MIR_item_t item) {
   const char *name;
-  MIR_item_t curr_item, last_item;
+  MIR_item_t curr_item, last_item, expr_item;
   size_t len, section_size = 0;
   uint8_t *addr;
   
@@ -1196,9 +1196,18 @@ static MIR_item_t load_bss_data_section (MIR_item_t item) {
 	  && (curr_item == item || curr_item->u.bss->name == NULL))
 	section_size += curr_item->u.bss->len;
       else if (curr_item->item_type == MIR_data_item
-	       && (curr_item == item || curr_item->u.bss->name == NULL))
+	       && (curr_item == item || curr_item->u.data->name == NULL))
 	section_size += curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
-      else
+      else if (curr_item->item_type == MIR_expr_data_item
+	       && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
+	expr_item = curr_item->u.expr_data->expr_item;
+	if (expr_item->item_type != MIR_func_item
+	    || ! expr_item->u.func->expr_p || expr_item->u.func->nres != 1)
+	  (*error_func) (MIR_binary_io_error,
+			 "%s can not be an expr which should be a func w/o calls and memory ops",
+			 MIR_item_name (expr_item));
+	section_size += _MIR_type_size (expr_item->u.func->res_types[0]);
+      } else
 	break;
     if ((item->addr = malloc (section_size)) == NULL) {
       name = MIR_item_name (item);
@@ -1219,6 +1228,12 @@ static MIR_item_t load_bss_data_section (MIR_item_t item) {
       len = curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
       memmove (addr, curr_item->u.data->u.els, len);
       addr += len;
+    } else if (curr_item->item_type == MIR_expr_data_item
+	       && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
+      expr_item = curr_item->u.expr_data->expr_item;
+      len = _MIR_type_size (expr_item->u.func->res_types[0]);
+      curr_item->u.expr_data->load_addr = addr;
+      addr += len;
     } else {
       break;
     }
@@ -1229,7 +1244,8 @@ void MIR_load_module (MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items);
        item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
-    if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item) {
+    if (item->item_type == MIR_bss_item
+	|| item->item_type == MIR_data_item || item->item_type == MIR_expr_data_item) {
       item = load_bss_data_section (item);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL)
@@ -1251,10 +1267,15 @@ void MIR_load_external (const char *name, void *addr) {
 }
 
 void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (const char *)) {
-  MIR_item_t item, tab_item, def;
+  MIR_item_t item, tab_item, def, expr_item;
+  MIR_type_t type;
+  MIR_val_t res;
   MIR_module_t m;
   void *addr;
-    
+  union {
+    int8_t i8; int16_t i16; int32_t i32; int64_t i64; float f; double d; long double ld; void *a;
+  } v;
+  
   for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
     m = VARR_GET (MIR_module_t, modules_to_link, i);
     for (item = DLIST_HEAD (MIR_item_t, m->items);
@@ -1274,14 +1295,40 @@ void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (c
 	// ???;
       }
   }
+  for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
+    m = VARR_GET (MIR_module_t, modules_to_link, i);
+    for (item = DLIST_HEAD (MIR_item_t, m->items);
+	 item != NULL;
+	 item = DLIST_NEXT (MIR_item_t, item)) {
+      if (item->item_type != MIR_expr_data_item)
+	continue;
+      expr_item = item->u.expr_data->expr_item;
+      MIR_interp (expr_item, &res, 0);
+      type = expr_item->u.func->res_types[0];
+      switch (type) {
+      case MIR_T_I8: case MIR_T_U8: v.i8 = (int8_t) res.i; break;
+      case MIR_T_I16: case MIR_T_U16: v.i16 = (int16_t) res.i; break;
+      case MIR_T_I32: case MIR_T_U32: v.i32 = (int32_t) res.i; break;
+      case MIR_T_I64: case MIR_T_U64: v.i64 = (int64_t) res.i; break;
+      case MIR_T_F: v.f = res.f; break;
+      case MIR_T_D: v.d = res.d; break;
+      case MIR_T_LD: v.ld = res.ld; break;
+      case MIR_T_P: v.a = res.a; break;
+      default: assert (FALSE); break;
+      }
+      memcpy (item->u.expr_data->load_addr, &v, _MIR_type_size (expr_item->u.func->res_types[0]));
+    }
+  }
   if (set_interface != NULL)
     while (VARR_LENGTH (MIR_module_t, modules_to_link) != 0) {
       m = VARR_POP (MIR_module_t, modules_to_link);
       for (item = DLIST_HEAD (MIR_item_t, m->items);
 	   item != NULL;
 	   item = DLIST_NEXT (MIR_item_t, item))
-	if (item->item_type == MIR_func_item)
+	if (item->item_type == MIR_func_item) {
+	  finish_func_interpretation (item); /* in case if it was used for expr data */
 	  set_interface (item);
+	}
     }
 }
 
