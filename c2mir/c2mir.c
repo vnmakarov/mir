@@ -7334,7 +7334,7 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
-  t = t == MIR_T_I32 || t == MIR_T_U32 ? MIR_T_I64 : t;
+  t = t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_U64 ? MIR_T_I64 : t;
   reg = MIR_new_func_reg (curr_func->u.func, t, reg_name);
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
