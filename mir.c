@@ -1183,7 +1183,7 @@ static void undefined_interface (void) {
   (*error_func) (MIR_call_op_error, "undefined call interface");
 }
 
-static MIR_item_t load_bss_data_section (MIR_item_t item) {
+static MIR_item_t load_bss_data_section (MIR_item_t item, int first_only_p) {
   const char *name;
   MIR_item_t curr_item, last_item, expr_item;
   size_t len, section_size = 0;
@@ -1191,7 +1191,9 @@ static MIR_item_t load_bss_data_section (MIR_item_t item) {
   
   if (item->addr == NULL) {
     /* Calculate section size: */
-    for (curr_item = item; curr_item != NULL; curr_item = DLIST_NEXT (MIR_item_t, curr_item))
+    for (curr_item = item;
+	 curr_item != NULL && curr_item->addr == NULL;
+	 curr_item = first_only_p ? NULL : DLIST_NEXT (MIR_item_t, curr_item))
       if (curr_item->item_type == MIR_bss_item
 	  && (curr_item == item || curr_item->u.bss->name == NULL))
 	section_size += curr_item->u.bss->len;
@@ -1217,8 +1219,8 @@ static MIR_item_t load_bss_data_section (MIR_item_t item) {
   }
   /* Set up section memory: */
   for (last_item = item, curr_item = item, addr = item->addr;
-       curr_item != NULL;
-       last_item = curr_item, curr_item = DLIST_NEXT (MIR_item_t, curr_item))
+       curr_item != NULL && (curr_item == item || curr_item->addr == NULL);
+       last_item = curr_item, curr_item = first_only_p ? NULL : DLIST_NEXT (MIR_item_t, curr_item))
     if (curr_item->item_type == MIR_bss_item
 	&& (curr_item == item || curr_item->u.bss->name == NULL)) {
       memset (addr, 0, curr_item->u.bss->len);
@@ -1246,7 +1248,7 @@ void MIR_load_module (MIR_module_t m) {
        item = DLIST_NEXT (MIR_item_t, item)) {
     if (item->item_type == MIR_bss_item
 	|| item->item_type == MIR_data_item || item->item_type == MIR_expr_data_item) {
-      item = load_bss_data_section (item);
+      item = load_bss_data_section (item, FALSE);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL)
 	item->addr = _MIR_get_thunk (item);
