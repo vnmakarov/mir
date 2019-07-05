@@ -1896,15 +1896,15 @@ static void output_item (FILE *f, MIR_item_t item) {
   size_t i, nlocals;
   
   if (item->item_type == MIR_export_item) {
-    fprintf (f, "%s:\texport\n", item->u.export);
+    fprintf (f, "\texport\t%s\n", item->u.export);
     return;
   }
   if (item->item_type == MIR_import_item) {
-    fprintf (f, "%s:\timport\n", item->u.import);
+    fprintf (f, "\timport\t%s\n", item->u.import);
     return;
   }
   if (item->item_type == MIR_forward_item) {
-    fprintf (f, "%s:\tforward\n", item->u.forward);
+    fprintf (f, "\tforward\t%s\n", item->u.forward);
     return;
   }
   if (item->item_type == MIR_bss_item) {
