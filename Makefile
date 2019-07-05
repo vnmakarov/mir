@@ -114,10 +114,10 @@ readme-example-test:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/readme-example.c && ./a.out
 
 c2mir-test:
-	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c mir-gen.c c2mir/c2mir.c && ./a.out -S -v -ei
+	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c && ./a.out -v -eg && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
 
 mir2c-test:
 	$(CC) -g -DTEST_MIR2C -DMIR_SCAN -I. mir.c mir2c/mir2c.c && ./a.out
