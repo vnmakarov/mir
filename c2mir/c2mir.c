@@ -8957,7 +8957,7 @@ int main (int argc, const char *argv[]) {
   }
   assert (source_name != NULL);
   MIR_init ();
-  if ((ok_p = compile (source_name)) && (interp_exec_p || gen_exec_p)) {
+  if ((ok_p = compile (source_name)) && ! prepro_only_p && (interp_exec_p || gen_exec_p)) {
     MIR_val_t val;
     int res;
     MIR_module_t module;
