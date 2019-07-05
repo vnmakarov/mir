@@ -1224,7 +1224,7 @@ static MIR_item_t load_bss_data_section (MIR_item_t item) {
       memset (addr, 0, curr_item->u.bss->len);
       addr += curr_item->u.bss->len;
     } else if (curr_item->item_type == MIR_data_item
-	       && (curr_item == item || curr_item->u.bss->name == NULL)) {
+	       && (curr_item == item || curr_item->u.data->name == NULL)) {
       len = curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
       memmove (addr, curr_item->u.data->u.els, len);
       addr += len;
