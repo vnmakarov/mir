@@ -8141,15 +8141,23 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t declarator = NL_NEXT (decl_specs);
     node_t decls = NL_NEXT (declarator);
     node_t stmt = NL_NEXT (decls);
+    struct node_scope *ns = stmt->attr;
+    decl_t decl = r->attr;
     MIR_type_t res_type;
     MIR_reg_t fp_reg;
     
-    assert (declarator != NULL && declarator->code == N_DECL && NL_HEAD (declarator->ops)->code == N_ID);
-    res_type = MIR_T_I32;
-    curr_func = MIR_new_func (NL_HEAD (declarator->ops)->u.s, 1, &res_type, 0, 0); // ???
-    ((decl_t) r->attr)->item = curr_func;
-    fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
-    MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg), MIR_new_int_op (819000)));
+    assert (declarator != NULL && declarator->code == N_DECL
+	    && NL_HEAD (declarator->ops)->code == N_ID);
+    assert (decl->decl_spec.type->mode == TM_FUNC);
+    collect_func_types (decl->decl_spec.type->u.func_type, &res_type, vars);
+    curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s, 1, &res_type,
+				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
+    decl->item = curr_func;
+    if (ns->size != 0) {
+      fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
+      MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg),
+						MIR_new_int_op (ns->size)));
+    }
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
     finish_curr_func_reg_vars ();
