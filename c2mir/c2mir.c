@@ -8827,7 +8827,7 @@ static int compile (const char *source_name) {
 	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
       MIR_new_module (get_module_name ());
       generate_mir (r);
-      if (asm_p)
+      if (asm_p && n_errors == 0)
 	MIR_output (stderr);
       MIR_finish_module ();
       if (verbose_p)
