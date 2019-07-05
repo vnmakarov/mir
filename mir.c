@@ -2116,6 +2116,8 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 	MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_MOV, new_op, *op));
 	*op = MIR_new_mem_op (type, 0, new_op.u.reg, 0, 1);
       }
+      if (func_item->addr != NULL) /* The function was already loaded: we should load new data */
+	load_bss_data_section (item, TRUE);
       curr_module = m;
     }
     if (move_p)
