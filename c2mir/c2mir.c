@@ -1333,13 +1333,14 @@ static token_t get_next_pptoken_1 (int header_p) {
 	  break;
 	VARR_PUSH (char, symbol_text, curr_c);
       }
+      VARR_PUSH (char, symbol_text, curr_c);
       if (curr_c == stop) {
 	if (stop == '\'' && VARR_LENGTH (char, symbol_text) == 1)
 	  error (pos, "empty character");
       } else {
 	error (pos, "unterminated %s", stop == '"' ? "string" : "char");
+	VARR_PUSH (char, symbol_text, stop);
       }
-      VARR_PUSH (char, symbol_text, curr_c);
       VARR_PUSH (char, symbol_text, '\0');
       t = (stop == '\"' ? new_node_token (pos, VARR_ADDR (char, symbol_text), T_STR,
 					  new_str_node (N_STR, NULL, pos))
@@ -4639,7 +4640,8 @@ static int basic_type_align (enum basic_type bt) {
 
 static int type_align (struct type *type) {
   assert (type->align >= 0);
-  return type->align; }
+  return type->align;
+}
 
 static void aux_set_type_align (struct type *type) {
   /* Should be called only from set_type_layout. */
