@@ -8915,8 +8915,51 @@ static int other_option_func (int i, int argc, const char *argv[]) {
   return i;
 }
 
-#include <math.h> /* for abs */
 #include "mir-gen.h"
+#include <dlfcn.h>
+
+static void fancy_abort (void) {
+  fprintf (stderr, "Test failed\n");
+  abort ();
+}
+
+static int fancy_printf (const char *fmt, ...) {
+  abort ();
+}
+
+static struct lib { char *name; void *handler; } libs[] = {
+  {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}
+};
+
+static void close_libs (void) {
+  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++)
+    if (libs[i].handler != NULL)
+      dlclose (libs[i].handler);
+}
+
+static void open_libs (void) {
+  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++)
+    if ((libs[i].handler = dlopen (libs[i].name, RTLD_LAZY)) == NULL) {
+      fprintf (stderr, "can not open lib %s\n", libs[i].name);
+      close_libs ();
+      exit (1);
+    }
+}
+
+static void *import_resolver (const char *name) {
+  void *sym = NULL;
+  
+  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++) {
+    if ((sym = dlsym (libs[i].handler, name)) != NULL)
+      break;
+  }
+  if (sym == NULL) {
+    fprintf (stderr, "can not load symbol %s\n", name);
+    close_libs ();
+    exit (1);
+  }
+  return sym;
+}
 
 int main (int argc, const char *argv[]) {
   int ok_p;
@@ -8974,16 +9017,11 @@ int main (int argc, const char *argv[]) {
       fprintf (stderr, "%s: cannot execute program w/o main function\n", source_name);
       ok_p = FALSE;
     } else {
+      open_libs ();
       MIR_load_module (module);
-      MIR_load_external ("abort", abort); MIR_load_external ("exit", exit);
-      MIR_load_external ("memcmp", memcmp); MIR_load_external ("mempcpy", mempcpy);
-      MIR_load_external ("strcpy", strcpy); MIR_load_external ("strcmp", strcmp);
-      MIR_load_external ("strncmp", strncmp); MIR_load_external ("strlen", strlen);
-      MIR_load_external ("strchr", strchr); MIR_load_external ("malloc", malloc);
-      MIR_load_external ("printf", printf); MIR_load_external ("sprintf", sprintf);
-      MIR_load_external ("abs", abs);
+      MIR_load_external ("abort", fancy_abort);
       if (interp_exec_p) {
-	MIR_link (MIR_set_interp_interface, NULL);
+	MIR_link (MIR_set_interp_interface, import_resolver);
 	start_time = real_usec_time ();
 	MIR_interp (main_func, &val, 0);
 	if (verbose_p) {
@@ -8995,7 +9033,7 @@ int main (int argc, const char *argv[]) {
 #if MIR_GEN_DEBUG
 	MIR_gen_set_debug_file (stderr);
 #endif
-	MIR_link (MIR_set_gen_interface, NULL);
+	MIR_link (MIR_set_gen_interface, import_resolver);
 	fun_addr = MIR_gen (main_func);
 	start_time = real_usec_time ();
 	res = fun_addr ();
@@ -9008,6 +9046,7 @@ int main (int argc, const char *argv[]) {
     }
   }
   MIR_finish ();
+  close_libs ();
   compile_finish ();
   VARR_DESTROY (char, input);
   return ! ok_p;
