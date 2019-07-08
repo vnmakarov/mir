@@ -304,6 +304,7 @@ typedef enum {
   T_NO_MACRO_IDENT, /* ??? */
   T_DBLNO,          /* ## */
   T_PLM, T_RDBLNO,  /* placemarker, ## in replacement list */
+  T_BOA,            /* begin of argument */
   T_EOA, T_EOR,     /* end of argument and macro replacement */
   T_EOP,            /* end of processing */
   T_EOU,            /* end of translation unit */
@@ -1451,8 +1452,9 @@ static token_t token_stringify (token_t t, VARR (token_t) *ts) {
 }
 
 static token_t pptoken2token (token_t t, int id2kw_p) {
-  assert (t->code != T_HEADER && t->code != T_EOA && t->code != T_EOR && t->code != T_EOP
-	  && t->code != T_EOF && t->code != T_EOU && t->code != T_PLM && t->code != T_RDBLNO);
+  assert (t->code != T_HEADER && t->code != T_BOA && t->code != T_EOA
+	  && t->code != T_EOR && t->code != T_EOP && t->code != T_EOF
+	  && t->code != T_EOU && t->code != T_PLM && t->code != T_RDBLNO);
   if (t->code == T_ID && id2kw_p) {
     str_t str = str_add (t->repr, T_STR, 0, FALSE);
     
@@ -2042,7 +2044,8 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
       t = get_next_pptoken ();
       pop_macro_call ();
     }
-    if (t->code == T_EOF || t->code == T_EOU || t->code == T_EOR || t->code == T_EOA)
+    if (t->code == T_EOF || t->code == T_EOU
+	|| t->code == T_EOR || t->code == T_BOA || t->code == T_EOA)
       break;
     if (level == 0 && t->code == ')' )
       break;
@@ -2107,14 +2110,21 @@ static void add_token (VARR (token_t) *to, token_t t) {
     VARR_PUSH (token_t, to, t);
 }
 
-static void add_replacement_tokens (VARR (token_t) *to, VARR (token_t) *from) {
-  for (int i = 0; i < VARR_LENGTH (token_t, from); i++)
+static void add_arg_tokens (VARR (token_t) *to, VARR (token_t) *from) {
+  int start;
+  
+  for (start = VARR_LENGTH (token_t, from) - 1; start >= 0; start--)
+    if (VARR_GET (token_t, from, start)->code == T_BOA)
+      break;
+  assert (start >= 0);
+  for (size_t i = start + 1; i < VARR_LENGTH (token_t, from); i++)
     add_token (to, VARR_GET (token_t, from, i));
+  VARR_TRUNC (token_t, from, start);
 }
 
 static void add_tokens (VARR (token_t) *to, VARR (token_t) *from) {
   for (size_t i = 0; i < VARR_LENGTH (token_t, from); i++)
-    add_token (to, VARR_GET (token_t, from , i));
+    add_token (to, VARR_GET (token_t, from, i));
 }
 
 static void del_tokens (VARR (token_t) *tokens, int from, int len) {
@@ -2221,6 +2231,7 @@ static void process_replacement (macro_call_t mc) {
 	} else {
 	  unget_next_pptoken (new_token (t->pos, "", T_EOA, N_IGNORE));
 	  push_back (arg);
+	  unget_next_pptoken (new_token (t->pos, "", T_BOA, N_IGNORE));
 	  return;
 	}
       }
@@ -2870,8 +2881,7 @@ static void processing (int ignore_directive_p) {
       continue;
     } else if (t->code == T_EOA) { /* arg end: add the result to repl_buffer */
       mc = VARR_LAST (macro_call_t, macro_call_stack);
-      add_replacement_tokens (mc->repl_buffer, output_buffer);
-      VARR_TRUNC (token_t, output_buffer, 0);
+      add_arg_tokens (mc->repl_buffer, output_buffer);
       process_replacement (mc);
       continue;
     } else if (t->code != T_ID) {
