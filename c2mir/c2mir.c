@@ -2208,7 +2208,10 @@ static void process_replacement (macro_call_t mc) {
 		   || (mc->repl_pos < m_repl_len && m_repl[mc->repl_pos]->code == T_RDBLNO)
 		   || (mc->repl_pos + 1 < m_repl_len && m_repl[mc->repl_pos + 1]->code == T_RDBLNO
 		       && m_repl[mc->repl_pos]->code == ' ')) {
-	  if (VARR_LENGTH (token_t, arg) == 0) {
+	  if (VARR_LENGTH (token_t, arg) == 0
+	      || (VARR_LENGTH (token_t, arg) == 1
+		  && (VARR_GET (token_t, arg, 0)->code == ' '
+		      || VARR_GET (token_t, arg, 0)->code == '\n'))) {
 	    t = new_token (t->pos, "", T_PLM, N_IGNORE);
 	    copy_p = FALSE;
 	  } else {
