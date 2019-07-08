@@ -640,9 +640,9 @@ static stream_t new_stream (FILE *f, const char *fname) {
 
 static void add_stream (FILE *f, const char *fname) {
   assert (fname != NULL);
-  if (cs != NULL && cs->f !=  NULL && cs->f != stdin) {
+  if (cs != NULL && cs->f != NULL && cs->f != stdin) {
     fgetpos (cs->f, &cs->fpos);
-    fclose (cs->f);
+    fclose (cs->f); cs->f = NULL;
   }
   cs = new_stream (f, fname);
   VARR_PUSH (stream_t, streams, cs);
@@ -1134,17 +1134,22 @@ static token_t get_next_pptoken_1 (int header_p) {
     case EOF: {
       pos_t pos = cs->pos;
       
+      assert (eof_s != cs);
       if (eof_s != NULL)
 	free_stream (eof_s);
-      if (cs->f != stdin && cs->f != NULL)
-	fclose (cs->f);
+      if (cs->f != stdin && cs->f != NULL) {
+	fclose (cs->f); cs->f = NULL;
+      }
       eof_s = VARR_POP (stream_t, streams);
       if (VARR_LENGTH (stream_t, streams) == 0) {
 	return new_token (pos, "<EOU>", T_EOU, N_IGNORE);
       }
       cs = VARR_LAST (stream_t, streams);
-      if (cs->fname != NULL && VARR_LENGTH (stream_t, streams) > 1) {
-	cs->f = fopen (cs->fname, "r");
+      if (cs->f == NULL && cs->fname != NULL && VARR_LENGTH (stream_t, streams) > 1) {
+	if ((cs->f = fopen (cs->fname, "r")) == NULL) {
+	  fprintf (stderr, "cannot reopen file %s -- good bye\n", cs->fname);
+	  exit (1); // ???
+	}
 	fsetpos (cs->f, &cs->fpos);
       }
       return new_token (cs->pos, "<EOF>", T_EOF, N_IGNORE);
