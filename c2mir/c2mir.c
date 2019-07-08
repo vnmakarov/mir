@@ -726,16 +726,18 @@ static int get_line (void) { /* translation phase 1 and 2 */
 }
 
 static int cs_get (void) {
-  if (VARR_LENGTH (char, cs->ln) > 0) {
-    cs->pos.ln_pos++;
-    return VARR_POP (char, cs->ln);
-  }
-  if (cs->fname != NULL && get_line ()) {
+  for (;;) {
+    if (VARR_LENGTH (char, cs->ln) == 2 && VARR_GET (char, cs->ln, 1) == '\\') {
+      assert (VARR_GET (char, cs->ln, 0) == '\n');
+    } else if (VARR_LENGTH (char, cs->ln) > 0) {
+      cs->pos.ln_pos++;
+      return VARR_POP (char, cs->ln);
+    }
+    if (cs->fname == NULL || ! get_line ())
+      return EOF;
     assert (VARR_LENGTH (char, cs->ln) > 0);
-    cs->pos.ln_pos = 0;
-    return VARR_POP (char, cs->ln);
+    cs->pos.ln_pos = 0; cs->pos.lno++;
   }
-  return EOF;
 }
   
 static void cs_unget (int c) {
@@ -765,8 +767,8 @@ static void remove_string_stream (void) {
 
 static VARR (char) *symbol_text, *temp_string;
 
-static int set_string_val (token_t t, VARR (char) *temp) {
-  int i, str_len, curr_c, lns_num = 0;
+static void set_string_val (token_t t, VARR (char) *temp) {
+  int i, str_len, curr_c;
   const char *str;
 
   assert (t->code == T_STR || t->code == T_CH);
@@ -790,7 +792,6 @@ static int set_string_val (token_t t, VARR (char) *temp) {
     case 't': curr_c = '\t'; break;
     case 'v': curr_c = '\v'; break;
     case '\\': case '\'': case '\?': case '\"': break;
-    case '\n': lns_num++; break;
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
       unsigned long v = curr_c;
 
@@ -841,7 +842,6 @@ static int set_string_val (token_t t, VARR (char) *temp) {
     error (t->pos, "empty char constant");
   else
     t->node->u.ch = VARR_GET (char, temp, 0);
-  return lns_num;
 }
 
 static token_t new_id_token (pos_t pos, const char *id_str) {
@@ -904,15 +904,6 @@ static token_t get_next_pptoken_1 (int header_p) {
 	if (curr_c == '/')
 	  comment_char = -1;
 	break;
-      case '\\':
-	curr_c = cs_get ();
-	if (curr_c == '\n') {
-	  cs->pos.lno++; cs->pos.ln_pos = 0;
-	  continue;
-	}
-	cs_unget (curr_c);
-	curr_c = '\\';
-	/* fall through */
       default:
 	if (comment_char < 0)
 	  goto end_ws;
@@ -1318,7 +1309,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     }
     case '\'': case '\"': { /* ??? unicode and wchar */
       token_t t;
-      int lns_num, stop = curr_c;
+      int stop = curr_c;
       
       pos = cs->pos;
       VARR_PUSH (char, symbol_text, curr_c);
@@ -1345,9 +1336,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       t = (stop == '\"' ? new_node_token (pos, VARR_ADDR (char, symbol_text), T_STR,
 					  new_str_node (N_STR, NULL, pos))
 	   : new_node_token (pos, VARR_ADDR (char, symbol_text), T_CH, new_ch_node (' ', pos)));
-      if ((lns_num = set_string_val (t, symbol_text)) !=  0) {
-	cs->pos.lno += lns_num; cs->pos.ln_pos = 0;
-      }
+      set_string_val (t, symbol_text);
       return t;
     }
     default:
