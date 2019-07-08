@@ -403,6 +403,13 @@ static node_t new_node (node_code_t nc) {
   return n;
 }
 
+static node_t copy_node (node_t n) {
+  node_t r = new_node (n->code);
+  
+  r->pos = n->pos;
+  return r;
+}
+
 static node_t new_pos_node (node_code_t nc, pos_t p) { return add_pos (new_node (nc), p); }
 static node_t new_node1 (node_code_t nc, node_t op1) { return op_append (new_node (nc), op1); }
 static node_t new_pos_node1 (node_code_t nc, pos_t p, node_t op1) {
@@ -511,6 +518,14 @@ static token_t new_token (pos_t pos, const char *repr, int token_code, node_code
   token->code = token_code; token->processed_p = FALSE;
   token->pos = pos; token->repr = repr;
   token->node_code = node_code; token->node = NULL;
+  return token;
+}
+
+static token_t copy_token (token_t t) {
+  token_t token = new_token (t->pos, t->repr, t->code, t->node_code);
+
+  if (t->node != NULL)
+    token->node = copy_node (t->node);
   return token;
 }
 
@@ -1849,6 +1864,12 @@ static void push_back (VARR (token_t) *tokens) {
     unget_next_pptoken (VARR_GET (token_t, tokens, i));
 }
 
+static void copy_and_push_back (VARR (token_t) *tokens) {
+  for (int i = (int) VARR_LENGTH (token_t, tokens) - 1; i >= 0;  i--) {
+    unget_next_pptoken (copy_token (VARR_GET (token_t, tokens, i)));
+  }
+}
+
 static int file_found_p (const char *name) {
   FILE *f;
   
@@ -2150,7 +2171,7 @@ static void process_replacement (macro_call_t mc) {
   macro_t m;
   token_t t, *m_repl;
   VARR (token_t) *arg;
-  int i, m_repl_len, sharp_pos;
+  int i, m_repl_len, sharp_pos, copy_p;
   
   m = mc->macro; sharp_pos = -1;
   m_repl = VARR_ADDR (token_t, m->replacement);
@@ -2165,6 +2186,7 @@ static void process_replacement (macro_call_t mc) {
       return;
     }
     t = m_repl[mc->repl_pos++];
+    copy_p = TRUE;
     if (t->code == T_ID) {
       i = find_param (m->params, t->repr);
       if (i >= 0) {
@@ -2179,6 +2201,7 @@ static void process_replacement (macro_call_t mc) {
 	      && (VARR_LAST (token_t, arg)->code == ' ' || VARR_LAST (token_t, arg)->code == '\n'))
 	    VARR_POP (token_t, arg);
 	  t = token_stringify (mc->macro->id, arg);
+	  copy_p = FALSE;
 	} else if ((mc->repl_pos >= 2 && m_repl[mc->repl_pos - 2]->code == T_RDBLNO)
 		   || (mc->repl_pos >= 3 && m_repl[mc->repl_pos - 2]->code == ' '
 		       && m_repl[mc->repl_pos - 3]->code == T_RDBLNO)
@@ -2187,6 +2210,7 @@ static void process_replacement (macro_call_t mc) {
 		       && m_repl[mc->repl_pos]->code == ' ')) {
 	  if (VARR_LENGTH (token_t, arg) == 0) {
 	    t = new_token (t->pos, "", T_PLM, N_IGNORE);
+	    copy_p = FALSE;
 	  } else {
 	    add_tokens (mc->repl_buffer, arg);
 	    continue;
@@ -2202,6 +2226,8 @@ static void process_replacement (macro_call_t mc) {
     } else if (t->code != ' ') {
       sharp_pos = -1;
     }
+    if (copy_p)
+      t = copy_token (t);
     add_token (mc->repl_buffer, t);
   }
 }
@@ -2887,8 +2913,9 @@ static void processing (int ignore_directive_p) {
     }
     if (m->params == NULL) { /* macro without parameters */
       unget_next_pptoken (new_token (t->pos, "", T_EOR, N_IGNORE));
-      push_back (do_concat (m->replacement));
       mc = new_macro_call (m);
+      add_tokens (mc->repl_buffer, m->replacement);
+      copy_and_push_back (do_concat (mc->repl_buffer));
       m->ignore_p = TRUE;
       VARR_PUSH (macro_call_t, macro_call_stack, mc);
     } else { /* macro with parameters */
