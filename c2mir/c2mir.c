@@ -1387,6 +1387,23 @@ static token_t get_next_include_pptoken (void) {
   return get_next_pptoken_1 (TRUE);
 }
 
+#ifdef C2MIR_PREPRO_DEBUG
+static const char *get_token_str (token_t t) {
+  switch (t->code) {
+  case T_EOF: return "EOF";
+  case T_DBLNO: return "DBLNO";
+  case T_PLM: return "PLM";
+  case T_RDBLNO: return "RDBLNO";
+  case T_BOA: return "BOA";
+  case T_EOA: return "EOA";
+  case T_EOR: return "EOR";
+  case T_EOP: return "EOP";
+  case T_EOU: return "EOU";
+  default: return t->repr;
+  }
+}
+#endif
+
 static void unget_next_pptoken (token_t t) {
   VARR_PUSH (token_t, buffered_tokens, t);
 }
@@ -1861,15 +1878,48 @@ static void define (void) {
   }
 }
 
+#ifdef C2MIR_PREPRO_DEBUG
+static void print_output_buffer (void) {
+  fprintf (stderr, "output buffer:");
+  for (size_t i = 0; i < (int) VARR_LENGTH (token_t, output_buffer); i++) {
+    fprintf (stderr, " <%s>",  get_token_str (VARR_GET (token_t, output_buffer, i)));
+  }
+  fprintf (stderr, "\n");
+}
+#endif
+
 static void push_back (VARR (token_t) *tokens) {
-  for (int i = (int) VARR_LENGTH (token_t, tokens) - 1; i >= 0;  i--)
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "# push back (macro call depth %d):",
+	   VARR_LENGTH (macro_call_t, macro_call_stack));
+#endif
+  for (int i = (int) VARR_LENGTH (token_t, tokens) - 1; i >= 0;  i--) {
+#ifdef C2MIR_PREPRO_DEBUG
+    fprintf (stderr, " <%s>",  get_token_str (VARR_GET (token_t, tokens, i)));
+#endif
     unget_next_pptoken (VARR_GET (token_t, tokens, i));
+  }
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "\no");
+  print_output_buffer ();
+#endif
 }
 
 static void copy_and_push_back (VARR (token_t) *tokens) {
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "# copy & push back (macro call depth %d):",
+	   VARR_LENGTH (macro_call_t, macro_call_stack));
+#endif
   for (int i = (int) VARR_LENGTH (token_t, tokens) - 1; i >= 0;  i--) {
+#ifdef C2MIR_PREPRO_DEBUG
+    fprintf (stderr, " <%s>",  get_token_str (VARR_GET (token_t, tokens, i)));
+#endif
     unget_next_pptoken (copy_token (VARR_GET (token_t, tokens, i)));
   }
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "\n");
+  print_output_buffer ();
+#endif
 }
 
 static int file_found_p (const char *name) {
@@ -2021,6 +2071,9 @@ static void pop_macro_call (void) {
   macro_call_t mc;
 
   mc = VARR_POP (macro_call_t, macro_call_stack);
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "finish macro %s\n", mc->macro->id->repr);
+#endif
   mc->macro->ignore_p = FALSE;
   free_macro_call (mc);
 }
@@ -2038,10 +2091,19 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
   VARR_CREATE (token_t, arg, 16);
   params_len = VARR_LENGTH (token_t, m->params);
   va_p = params_len == 1 && VARR_GET (token_t, m->params, 0)->code == T_DOTS;
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "# finding args of macro %s call:\n#    arg 0:", m->id->repr);
+#endif
   for (;;) {
     t = get_next_pptoken ();
+#ifdef C2MIR_PREPRO_DEBUG
+    fprintf (stderr, " <%s>%s", get_token_str (t), t->processed_p ? "*" : "");
+#endif
     if (t->code == T_EOR) {
       t = get_next_pptoken ();
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, " <%s>", get_token_str (t), t->processed_p ? "*" : "");
+#endif
       pop_macro_call ();
     }
     if (t->code == T_EOF || t->code == T_EOU
@@ -2051,6 +2113,9 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
       break;
     if (level == 0 && ! va_p && t->code == ',') {
       VARR_PUSH (token_arr_t, args, arg);
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, "\n#    arg %d:", VARR_LENGTH (token_arr_t, args));
+#endif
       VARR_CREATE (token_t, arg, 16);
       if (VARR_LENGTH (token_arr_t, args) == params_len - 1
 	  && strcmp (VARR_GET (token_t, m->params, params_len - 1)->repr, "...") == 0)
@@ -2063,6 +2128,9 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
 	level++;
     }
   }
+#ifdef C2MIR_PREPRO_DEBUG
+  fprintf (stderr, "\n");
+#endif
   if (t->code != ')')
     error (t->pos, "unfinished call of macro %s", m->id->repr);
   VARR_PUSH (token_arr_t, args, arg);
@@ -2190,7 +2258,13 @@ static void process_replacement (macro_call_t mc) {
     if (mc->repl_pos >= m_repl_len) {
       t = get_next_pptoken ();
       unget_next_pptoken (t);
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, "# push back <%s>\n", get_token_str (t));
+#endif
       unget_next_pptoken (new_token (t->pos, "", T_EOR, N_IGNORE));
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, "# push back <EOR>: mc=%lx\n", mc);
+#endif
       push_back (do_concat (mc->repl_buffer));
       m->ignore_p = TRUE;
       return;
@@ -2230,8 +2304,14 @@ static void process_replacement (macro_call_t mc) {
 	  }
 	} else {
 	  unget_next_pptoken (new_token (t->pos, "", T_EOA, N_IGNORE));
+#ifdef C2MIR_PREPRO_DEBUG
+	  fprintf (stderr, "# push back <EOA> for macro %s call\n", mc->macro->id->repr);
+#endif
 	  push_back (arg);
 	  unget_next_pptoken (new_token (t->pos, "", T_BOA, N_IGNORE));
+#ifdef C2MIR_PREPRO_DEBUG
+	  fprintf (stderr, "# push back <BOA> for macro %s call\n", mc->macro->id->repr);
+#endif
 	  return;
 	}
       }
@@ -2882,6 +2962,9 @@ static void processing (int ignore_directive_p) {
     } else if (t->code == T_EOA) { /* arg end: add the result to repl_buffer */
       mc = VARR_LAST (macro_call_t, macro_call_stack);
       add_arg_tokens (mc->repl_buffer, output_buffer);
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, "adding processed arg to output buffer\n");
+#endif
       process_replacement (mc);
       continue;
     } else if (t->code != T_ID) {
@@ -2926,6 +3009,9 @@ static void processing (int ignore_directive_p) {
     }
     if (m->params == NULL) { /* macro without parameters */
       unget_next_pptoken (new_token (t->pos, "", T_EOR, N_IGNORE));
+#ifdef C2MIR_PREPRO_DEBUG
+      fprintf (stderr, "# push back <EOR>\n");
+#endif
       mc = new_macro_call (m);
       add_tokens (mc->repl_buffer, m->replacement);
       copy_and_push_back (do_concat (mc->repl_buffer));
