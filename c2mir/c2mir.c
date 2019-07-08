@@ -1656,7 +1656,7 @@ static const char *varg = "__VA_ARGS__";
 static token_t if_id; /* last processed token #if or #elif: used for error messages */
 static char date_str[100], time_str[100];
 
-static VARR (token_t) *buffer;
+static VARR (token_t) *output_buffer;
 
 DEF_VARR (macro_call_t);
 static VARR (macro_call_t) *macro_call_stack;
@@ -1678,7 +1678,7 @@ static void pre_init (void) {
     strftime (time_str, sizeof (time_str), "\"%H:%M:%S\"", tm);
   }
   VARR_CREATE (token_t, temp_tokens, 128);
-  VARR_CREATE (token_t, buffer, 2048);
+  VARR_CREATE (token_t, output_buffer, 2048);
   init_macros ();
   VARR_CREATE (ifstate_t, ifs, 512);
   VARR_CREATE (macro_call_t, macro_call_stack, 512);
@@ -1686,7 +1686,7 @@ static void pre_init (void) {
 
 static void pre_finish (void) {
   VARR_DESTROY (token_t, temp_tokens);
-  VARR_DESTROY (token_t, buffer);
+  VARR_DESTROY (token_t, output_buffer);
   finish_macros ();
   while (VARR_LENGTH (ifstate_t, ifs) != 0)
     pop_ifstate ();
@@ -2263,14 +2263,14 @@ static int process_pragma (token_t t) {
 }
 
 static void flush_buffer (void) {
-  for (size_t i = 0; i < VARR_LENGTH (token_t, buffer); i++)
-    pre_out_token_func (VARR_GET (token_t, buffer, i));
-  VARR_TRUNC (token_t, buffer, 0);
+  for (size_t i = 0; i < VARR_LENGTH (token_t, output_buffer); i++)
+    pre_out_token_func (VARR_GET (token_t, output_buffer, i));
+  VARR_TRUNC (token_t, output_buffer, 0);
 }
 
 static void out_token (token_t t) {
   if (no_out_p || VARR_LENGTH (macro_call_t, macro_call_stack) != 0) {
-    VARR_PUSH (token_t, buffer, t);
+    VARR_PUSH (token_t, output_buffer, t);
     return;
   }
   flush_buffer ();
@@ -2421,7 +2421,7 @@ static void process_directive (void) {
       no_out_p = TRUE;
       processing (TRUE);
       no_out_p = FALSE;
-      reverse_move_tokens (temp_buffer, buffer);
+      reverse_move_tokens (temp_buffer, output_buffer);
       i = 0;
       if (VARR_LENGTH (token_t, temp_buffer) != 0 && VARR_GET (token_t, temp_buffer, 0)->code == ' ')
 	i++;
@@ -2446,7 +2446,7 @@ static void process_directive (void) {
     no_out_p = 1;
     processing (TRUE);
     no_out_p = 0;
-    move_tokens (temp_buffer, buffer);
+    move_tokens (temp_buffer, output_buffer);
     pos = check_line_directive_args (temp_buffer);
     if (pos.lno < 0) {
       error (t->pos, "wrong #line");
@@ -2650,7 +2650,7 @@ static struct val eval_expr (VARR (token_t) *expr_buffer, token_t if_token) {
       del_tokens (expr_buffer, i + 1, j - i);
     }
   }
-  assert (VARR_LENGTH (token_t, buffer) == 0
+  assert (VARR_LENGTH (token_t, output_buffer) == 0
 	  && VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && ! no_out_p);
   /* macro substitution */
   unget_next_pptoken (new_token (if_token->pos, "", T_EOP, N_IGNORE));
@@ -2658,7 +2658,7 @@ static struct val eval_expr (VARR (token_t) *expr_buffer, token_t if_token) {
   no_out_p = TRUE;
   processing (TRUE);
   no_out_p = FALSE;
-  reverse_move_tokens (expr_buffer, buffer);
+  reverse_move_tokens (expr_buffer, output_buffer);
   VARR_CREATE (token_t, temp_buffer, VARR_LENGTH (token_t, expr_buffer));
   for (i = j = 0; i < VARR_LENGTH (token_t, expr_buffer); i++) {
     int change_p = TRUE;
@@ -2847,8 +2847,8 @@ static void processing (int ignore_directive_p) {
       continue;
     } else if (t->code == T_EOA) { /* arg end: add the result to repl_buffer */
       mc = VARR_LAST (macro_call_t, macro_call_stack);
-      add_replacement_tokens (mc->repl_buffer, buffer);
-      VARR_TRUNC (token_t, buffer, 0);
+      add_replacement_tokens (mc->repl_buffer, output_buffer);
+      VARR_TRUNC (token_t, output_buffer, 0);
       process_replacement (mc);
       continue;
     } else if (t->code != T_ID) {
