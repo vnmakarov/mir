@@ -4823,13 +4823,14 @@ static int int_bit_size (struct type *type) {
 }
 
 static int void_ptr_p (struct type *type) {
-  return (type->mode == TM_PTR
-	  && type->u.ptr_type->mode == TM_BASIC && type->u.ptr_type->u.basic_type == TP_VOID);
+  return (type->mode == TM_PTR && type->u.ptr_type->mode == TM_BASIC
+	  && type->u.ptr_type->u.basic_type == TP_VOID);
 }
 
 static int null_const_p (struct expr *expr, struct type *type) {
-  return  (void_ptr_p (type) && expr->const_p && expr->u.u_val == 0
-	   && type_qual_eq_p (&type->type_qual, &zero_type_qual));
+  return  ((integer_type_p (type) && expr->const_p && expr->u.u_val == 0)
+	   || (void_ptr_p (type) && expr->const_p && expr->u.u_val == 0
+	       && type_qual_eq_p (&type->type_qual, &zero_type_qual)));
 }
 
 static void convert_value (struct expr *e, struct type *t) {
@@ -6256,15 +6257,16 @@ static void check (node_t r, node_t context) {
   case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE:
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r); e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
-    if (t1->mode == TM_PTR && t2->mode == TM_PTR) {
+    if ((r->code == N_EQ || r->code == N_NE)
+	&& ((t1->mode == TM_PTR && null_const_p (e2, t2))
+	    || (t2->mode == TM_PTR && null_const_p (e1, t1))))
+      ;
+    else if (t1->mode == TM_PTR && t2->mode == TM_PTR) {
       if (! compatible_types_p (t1, t2, TRUE)
 	  && ((r->code != N_EQ && r->code != N_NE)
-	      || (! void_ptr_p (t1) && ! void_ptr_p (t2)
-		  && ! null_const_p (e1, t1) && ! null_const_p (e2, t2)))) {
+	      || (! void_ptr_p (t1) && ! void_ptr_p (t2)))) {
 	error (r->pos, "incompatible pointer types in comparison");
-      } else if ((t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p)
-		 && ((r->code != N_EQ && r->code != N_NE)
-		     || ! (null_const_p (e1, t1) || null_const_p (e2, t2)))) {
+      } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
 	error (r->pos, "pointer to atomic type as a comparison operand");
       } else if (e1->const_p && e2->const_p) {
 	e->const_p = TRUE;
@@ -6506,7 +6508,7 @@ static void check (node_t r, node_t context) {
     node_t op3;
     struct expr *e3;
     struct type *t3;
-    int v = 0, first_p;
+    int v = 0;
     
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
     op3 = NL_NEXT (op2); check (op3, r);
@@ -6546,6 +6548,12 @@ static void check (node_t r, node_t context) {
 	       && (t3->mode == TM_STRUCT || t3->mode == TM_UNION)
 	       && t2->u.tag_type == t3->u.tag_type) {
       *e->type = *t2;
+    } else if ((t2->mode == TM_PTR && null_const_p (e3, t3))
+	       || (t3->mode == TM_PTR && null_const_p (e2, t2))) {
+      e->type->mode = TM_PTR; e->type->pos_node = r;
+      e->type->u.ptr_type = create_type (NULL);
+      e->type->u.ptr_type->pos_node = r;
+      e->type->u.ptr_type->mode = TM_BASIC; e->type->u.ptr_type->u.basic_type = TP_VOID;
     } else if (t2->mode != TM_PTR && t3->mode != TM_PTR) {
       error (r->pos, "incompatible types in true and false parts of cond-expression");
       break;
@@ -6559,11 +6567,11 @@ static void check (node_t r, node_t context) {
 	  && ! null_const_p (e2, t2) && ! null_const_p (e3, t3)) {
 	error (r->pos, "pointer to atomic type in true or false parts of cond-expression");
       }
-    } else if ((first_p = void_ptr_p (t2)) || void_ptr_p (t3)) {
+    } else if (void_ptr_p (t2) || void_ptr_p (t3)) {
       e->type->mode = TM_PTR; e->type->pos_node = r;
       e->type->u.ptr_type = create_type (NULL);
       e->type->u.ptr_type->pos_node = r;
-      if (first_p && null_const_p (e2, t2)) {
+      if (null_const_p (e2, t2)) {
 	e->type->u.ptr_type = e2->type->u.ptr_type;
       } else if (null_const_p (e3, t3)) {
 	e->type->u.ptr_type = e3->type->u.ptr_type;
