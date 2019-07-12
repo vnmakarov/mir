@@ -17,6 +17,21 @@
 #define __SIZEOF_SIZE_T__ 8
 
 /* Some GCC predefined macros: */
+#define __SIZE_TYPE__         unsigned long
+#define __PTRDIFF_TYPE__      long
+#define __INTMAX_TYPE__       long
+#define __UINTMAX_TYPE__      unsigned long
+#define __INT8_TYPE__         signed char
+#define __INT16_TYPE__        short
+#define __INT32_TYPE__        int
+#define __INT64_TYPE__        long
+#define __UINT8_TYPE__        unsigned char
+#define __UINT16_TYPE__       unsigned short
+#define __UINT32_TYPE__       unsigned int
+#define __UINT64_TYPE__       unsigned long
+#define __INTPTR_TYPE__       long
+#define __UINTPTR_TYPE__      unsigned long
+
 #define __INT8_MAX__      127
 #define __INT16_MAX__     32767
 #define __INT32_MAX__     2147483647
