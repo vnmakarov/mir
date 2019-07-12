@@ -3144,6 +3144,7 @@ static void tpname_finish (void) {
 } while (0)
 
 #define PE(f, l) do {if ((r = (f) (no_err_p)) == &err_node) goto l; } while (0)
+#define PAE(f, a, l) do {if ((r = (f) (no_err_p, a)) == &err_node) goto l; } while (0)
 #define PTE(t, pos, l) do {if (! MP(t, pos)) goto l; } while (0)
 
 typedef node_t (*nonterm_func_t) (int);
@@ -3384,7 +3385,7 @@ D (assign_expr) { return right_op (no_err_p, T_ASSIGN, '=', cond_expr, assign_ex
 D (expr) { return right_op (no_err_p, ',', -1, assign_expr, expr); }
 
 /* Declarations; */
-D (declaration_specs); D (sc_spec); D (type_spec); D (struct_declaration_list);
+DA (declaration_specs); D (sc_spec); D (type_spec); D (struct_declaration_list);
 D (struct_declaration); D (spec_qual_list); D (type_qual); D (func_spec); D (align_spec);
 D (declarator); D (direct_declarator); D (pointer); D (type_qual_list); D (param_type_list);
 D (id_list); D (abstract_declarator); D (direct_abstract_declarator); D (typedef_name);
@@ -3397,7 +3398,8 @@ D (declaration) {
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
   } else {
-    P (declaration_specs); spec = r; list = new_node (N_LIST);
+    PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL); spec = r;
+    list = new_node (N_LIST);
     if (C (';')) {
       op_append (list, new_node3 (N_SPEC_DECL, spec, new_node (N_IGNORE), new_node (N_IGNORE)));
     } else { /* init-declarator-list */
@@ -3429,12 +3431,13 @@ D (declaration) {
   return r;
 }
 
-D (declaration_specs) {
+DA (declaration_specs) {
   node_t list, r;
-  int first_p;
+  int first_p, type_spec_p = FALSE;
+  pos_t pos = curr_token->pos;
   
   list = new_node (N_LIST);
-  for (first_p = TRUE;; first_p = FALSE) {
+  for (first_p = arg == NULL;; first_p = FALSE) {
     if (C (T_ALIGNAS)) {
       P (align_spec);
     } else if ((r = TRY (sc_spec)) != &err_node) {
@@ -3442,9 +3445,17 @@ D (declaration_specs) {
     } else if ((r = TRY (func_spec)) != &err_node) {
     } else if (first_p) {
       P (type_spec);
+      type_spec_p = TRUE;
     } else if ((r = TRY (type_spec)) != &err_node) {
+      type_spec_p = TRUE;
     } else
       break;
+    op_append (list, r);
+  }
+  if (! type_spec_p && arg != NULL) {
+    if (pedantic_p)
+      warning (pos, "type defaults to int");
+    r = new_pos_node (N_INT, pos);
     op_append (list, r);
   }
   return list;
@@ -3785,7 +3796,7 @@ D (param_type_list) {
   
   list = new_node (N_LIST);
   for (;;) { /* parameter-list, parameter-declaration */
-    P (declaration_specs); op1 = r;
+    PA (declaration_specs, NULL); op1 = r;
     if ((op2 = TRY (declarator)) != &err_node) {
       r = new_pos_node3 (N_SPEC_DECL, op2->pos, op1, op2, new_node (N_IGNORE));
     } else if (! C (',') && ! C (')')) {
@@ -4136,7 +4147,7 @@ D (transl_unit) {
   while (! C (T_EOF)) { /* external-declaration */
     if ((r = TRY (declaration)) != &err_node) {
     } else {
-      PE (declaration_specs, err); ds = r;
+      PAE (declaration_specs, (node_t) 1, err); ds = r;
       PE (declarator, err); d = r;
       dl = new_node (N_LIST);
       d->u.scope = curr_scope; curr_scope = d;
