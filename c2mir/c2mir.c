@@ -3952,6 +3952,8 @@ D (initializer_list) {
     op_append (list, new_node2 (N_INIT, list2, r));
     if (! M (','))
       break;
+    if (C ('}'))
+      break;
   }
   return list;
 }
