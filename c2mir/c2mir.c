@@ -8155,7 +8155,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t id;
     
     decl = (decl_t) r->attr;
-    if (declarator != NULL && decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
+    if (declarator != NULL && declarator->code != N_IGNORE
+	&& decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
       id = NL_HEAD (declarator->ops);
       decl->item = MIR_new_import (id->u.s);
     }
