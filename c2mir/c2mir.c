@@ -408,6 +408,7 @@ static node_t copy_node (node_t n) {
   node_t r = new_node (n->code);
   
   r->pos = n->pos;
+  r->u = n->u;
   return r;
 }
 
