@@ -310,6 +310,8 @@ typedef enum {
   T_EOU,            /* end of translation unit */
 } token_code_t;
 
+static token_code_t FIRST_KW = T_BOOL, LAST_KW = T_WHILE;
+
 typedef enum {
   N_IGNORE, N_I, N_L, N_LL, N_U, N_UL, N_ULL, N_F, N_D, N_LD, N_CH, N_STR, N_ID, N_COMMA, N_ANDAND,
   N_OROR, N_EQ, N_NE, N_LT, N_LE, N_GT, N_GE, N_ASSIGN, N_BITWISE_NOT, N_NOT, N_AND, N_AND_ASSIGN,
@@ -3431,6 +3433,48 @@ D (declaration) {
   return r;
 }
 
+D (attr) {
+  node_t r;
+
+  if (C (')') || C  (',')) /* empty */
+    return NULL;
+  if (FIRST_KW <= curr_token->code && curr_token->code <= LAST_KW)
+    PT (curr_token->code);
+  else
+    PT (T_ID);
+  if (C ('(')) {
+    PT ('(');
+    while (! C (')')) {
+      if (C (T_NUMBER) || C (T_CH) || C (T_STR))
+	PT (curr_token->code);
+      else
+	PT (T_ID);
+      if (! C (')'))
+	PT (',');
+    }
+    PT (')');
+  }
+  return NULL;
+}
+
+D (attr_spec) {
+  node_t r;
+  token_t t = curr_token;
+
+  PTN (T_ID);
+  if (strcmp (r->u.s, "__attribute__") != 0)
+    PTFAIL (T_ID);
+  PT ('('); PT ('(');
+  for (;;) {
+    P (attr);
+    if (C (')'))
+      break;
+    PT (',');
+  }
+  PT (')'); PT (')');
+  return NULL;
+}
+
 DA (declaration_specs) {
   node_t list, r;
   int first_p, type_spec_p = FALSE;
@@ -3448,6 +3492,8 @@ DA (declaration_specs) {
       type_spec_p = TRUE;
     } else if ((r = TRY (type_spec)) != &err_node) {
       type_spec_p = TRUE;
+    } else if ((r = TRY (attr_spec)) != &err_node) {
+      continue;
     } else
       break;
     op_append (list, r);
