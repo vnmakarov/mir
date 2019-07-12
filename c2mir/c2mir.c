@@ -33,7 +33,7 @@
 #error "undefined or unsupported generation target for C"
 #endif
 
-static int debug_p, verbose_p, asm_p, no_prepro_p, prepro_only_p;
+static int debug_p, verbose_p, asm_p, no_prepro_p, prepro_only_p, syntax_only_p, pedantic_p;
 /* Dirs to search include files in "" and in <>.  End mark is NULL. */
 static const char **header_dirs, **system_header_dirs;
 
@@ -74,8 +74,8 @@ enum basic_type {
   TP_UNDEF, TP_VOID,
   /* Integer types: the first should be BOOL and the last should be
      ULLONG.  The order is important -- do not change it.  */
-  TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT, TP_INT, TP_UINT, TP_LONG, TP_ULONG,
-  TP_LLONG, TP_ULLONG,
+  TP_BOOL, TP_CHAR, TP_SCHAR, TP_UCHAR, TP_SHORT, TP_USHORT,
+  TP_INT, TP_UINT, TP_LONG, TP_ULONG, TP_LLONG, TP_ULLONG,
   TP_FLOAT, TP_DOUBLE, TP_LDOUBLE,
 };
 
@@ -1361,7 +1361,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       return t;
     }
     default:
-      if (isalpha (curr_c) || curr_c == '_' ) {
+      if (isalpha (curr_c) || curr_c == '_') {
 	pos = cs->pos;
 	do {
 	  VARR_PUSH (char, symbol_text, curr_c);
@@ -4520,8 +4520,7 @@ static int signed_integer_type_p (struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
     
-    return ((tp == TP_CHAR && char_is_signed_p ())
-	    || tp == TP_SCHAR || tp == TP_SHORT
+    return ((tp == TP_CHAR && char_is_signed_p ()) || tp == TP_SCHAR || tp == TP_SHORT
 	    || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
   if (type->mode == TM_ENUM) { // ???
@@ -6787,7 +6786,7 @@ static void check (node_t r, node_t context) {
 	/* Fall through: */									 \
       case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:			 \
 	e->u.mto = (cast) e2->u.i_val; break;							 \
-      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:					 \
+      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:						 \
 	e->u.mto = (cast) e2->u.d_val; break;							 \
       default:											 \
 	assert (FALSE);										 \
@@ -8788,7 +8787,7 @@ static void init_options (int argc, const char *argv[],
 			  int (*other_option_func) (int, int, const char **)) {
   const char *str;
   
-  debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = FALSE;
+  debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
   for (int i = 1; i < argc; i++) {
@@ -8800,8 +8799,12 @@ static void init_options (int argc, const char *argv[],
       verbose_p = TRUE;
     } else if (strcmp (argv[i], "-E") == 0) {
       prepro_only_p = TRUE;
+    } else if (strcmp (argv[i], "-fsyntax-only") == 0) {
+      syntax_only_p = TRUE;
     } else if (strcmp (argv[i], "-fpreprocessed") == 0) {
       no_prepro_p = TRUE;
+    } else if (strcmp (argv[i], "-pedantic") == 0) {
+      pedantic_p = TRUE;
     } else if (strncmp (argv[i], "-I", 2) == 0) {
       char *i_dir;
       const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
@@ -8941,25 +8944,27 @@ static int compile (const char *source_name) {
       fprintf (stderr, "  parser end          -- %.0f usec\n", real_usec_time () - start_time);
     if (verbose_p && n_errors)
       fprintf (stderr, "parser - FAIL\n");
-    n_error_before = n_errors;
-    context (r);
-    if (n_errors > n_error_before) {
-      if (debug_p)
-	print_node (stderr, r, 0, FALSE);
-      if (verbose_p)
-	fprintf (stderr, "context checker - FAIL\n");
-    } else {
-      if (debug_p)
-	print_node (stderr, r, 0, TRUE);
-      if (verbose_p)
-	fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
-      MIR_new_module (get_module_name ());
-      generate_mir (r);
-      if (asm_p && n_errors == 0)
-	MIR_output (stderr);
-      MIR_finish_module ();
-      if (verbose_p)
-	fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
+    if (! syntax_only_p) {
+      n_error_before = n_errors;
+      context (r);
+      if (n_errors > n_error_before) {
+	if (debug_p)
+	  print_node (stderr, r, 0, FALSE);
+	if (verbose_p)
+	  fprintf (stderr, "context checker - FAIL\n");
+      } else {
+	if (debug_p)
+	  print_node (stderr, r, 0, TRUE);
+	if (verbose_p)
+	  fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
+	MIR_new_module (get_module_name ());
+	generate_mir (r);
+	if (asm_p && n_errors == 0)
+	  MIR_output (stderr);
+	MIR_finish_module ();
+	if (verbose_p)
+	  fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
+      }
     }
   }
   if (verbose_p)
