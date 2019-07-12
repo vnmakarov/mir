@@ -3126,25 +3126,21 @@ static void tpname_finish (void) {
 
 #define P(f) do { if ((r = (f) (no_err_p)) == &err_node) return r; } while (0)
 #define PA(f, a) do { if ((r = (f) (no_err_p, a)) == &err_node) return r; } while (0)
+#define PTFAIL(t) do {                              		\
+  if (record_level == 0) syntax_error (get_token_name (t));	\
+  return &err_node;						\
+} while (0)
+
 #define PT(t) do {                              		\
-  if (! M(t)) {						        \
-    if (record_level == 0) syntax_error (get_token_name (t));	\
-    return &err_node;						\
-  }								\
+  if (! M(t)) PTFAIL (t);					\
 } while (0)
 
 #define PTP(t, pos) do {                              		\
-  if (! MP(t, pos)) {						\
-    if (record_level == 0) syntax_error (get_token_name (t));	\
-    return &err_node;						\
-  }								\
+  if (! MP(t, pos)) PTFAIL (t);					\
 } while (0)
 
 #define PTN(t) do {                             		\
-  if (! MN(t, r)) {						\
-    if (record_level == 0) syntax_error (get_token_name (t));	\
-    return &err_node;						\
-  }								\
+  if (! MN(t, r)) PTFAIL (t);					\
 } while (0)
 
 #define PE(f, l) do {if ((r = (f) (no_err_p)) == &err_node) goto l; } while (0)
