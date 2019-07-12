@@ -7835,6 +7835,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	emit2 (MIR_MOV, res.mir_op, zero_op.mir_op);
 	emit_insn (end_label);
       }
+      true_label = false_label = NULL;
     } else if (true_label != NULL) {
       int true_p;
       
