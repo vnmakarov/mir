@@ -46,7 +46,7 @@ static const int max_nested_includes = 32;
 #define TRUE 1
 
 typedef enum {
-  C_alloc_error, C_unfinished_comment, C_absent_exponent, C_wrong_octal_int, C_out_of_range_number,
+  C_alloc_error, C_unfinished_comment, C_out_of_range_number,
   C_invalid_char_constant, C_no_string_end, C_invalid_str_constant, C_invalid_char,
 } C_error_code_t;
 
@@ -988,25 +988,6 @@ static token_t get_next_pptoken_1 (int header_p) {
 	  return new_token (pos, "-=", T_ASSIGN, N_SUB_ASSIGN);
       } else if (start_c == '-' && curr_c == '>') {
 	return new_token (pos, "->", T_ARROW, N_DEREF_FIELD);
-      } else if (isdigit (curr_c)) {
-	cs_unget (curr_c);
-	curr_c = start_c;
-	goto number;
-      } else if (curr_c == '.') {
-	curr_c = cs_get ();
-	if (isdigit (curr_c)){
-	  cs_unget ('.');
-	  cs_unget (curr_c);
-	  curr_c = start_c;
-	  goto number;
-	} else {
-	  cs_unget ('.');
-	  cs_unget (curr_c);
-	  if (start_c == '+')
-	    return new_token (pos, "+", T_ADDOP, N_ADD);
-	  else
-	    return new_token (pos, "-", T_ADDOP, N_SUB);
-	}
       } else {
 	cs_unget (curr_c);
 	if (start_c == '+')
@@ -1207,7 +1188,6 @@ static token_t get_next_pptoken_1 (int header_p) {
       }
       cs_unget (curr_c);
       curr_c = '.';
-    number:
       /* Fall through: */
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': {
@@ -1217,115 +1197,23 @@ static token_t get_next_pptoken_1 (int header_p) {
       
       pos = cs->pos;
       VARR_TRUNC (char, symbol_text, 0);
-      if (curr_c == '+' || curr_c == '-') {
-	VARR_PUSH (char, symbol_text, curr_c);
-	curr_c = cs_get ();
-      }
-      if (curr_c == '0') {
-	curr_c = cs_get ();
-	if (curr_c != 'x' && curr_c != 'X') {
-	  base = 8;
-	  cs_unget (curr_c);
-	  curr_c = '0';
-	} else {
-	  VARR_PUSH (char, symbol_text, '0');
-	  VARR_PUSH (char, symbol_text, 'x');
-	  curr_c = cs_get ();
-	  base = 16;
-	}
-      }
       for (;;) {
 	VARR_PUSH (char, symbol_text, curr_c);
 	curr_c = cs_get ();
-	if (curr_c == '8' || curr_c == '9')
-	  dec_p = TRUE;
-	hex_char_p = isxdigit (curr_c);
-	if (! isdigit (curr_c) && (base != 16 || ! hex_char_p))
-	  break;
-	if (hex_char_p && ! isdigit (curr_c))
-	  hex_p = TRUE;
-      }
-      assert (base == 16 || ! hex_p);
-      if (curr_c == '.') {
-	double_p = TRUE;
-	do {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = cs_get ();
-	} while (isdigit (curr_c));
-      }
-      if ((base != 16 && (curr_c == 'e' || curr_c == 'E'))
-	  || (base == 16 && (curr_c == 'p' || curr_c == 'P'))) {
-	double_p = TRUE;
-	prev_c = curr_c;
-	curr_c = cs_get ();
-	if (curr_c != '+' && curr_c != '-' && ! isdigit (curr_c)) {
-	  error_func (C_absent_exponent, "absent exponent");
-	  err_p = TRUE;
-	} else {
-	  VARR_PUSH (char, symbol_text, prev_c);
-	  if (curr_c == '+' || curr_c == '-') {
+	if (curr_c == 'e' || curr_c == 'E' || curr_c == 'p' || curr_c == 'P') {
+	  int c = cs_get ();
+	  
+	  if (c == '+' || c == '-') {
 	    VARR_PUSH (char, symbol_text, curr_c);
-	    curr_c = cs_get ();
-	    if (! isdigit (curr_c)) {
-	      error_func (C_absent_exponent, "absent exponent");
-	      err_p = TRUE;
-	    }
+	    curr_c = c;
+	  } else {
+	    cs_unget (c);
 	  }
-	  if (! err_p) {
-	    do {
-	      VARR_PUSH (char, symbol_text, curr_c);
-	      curr_c = cs_get ();
-	    } while (isdigit (curr_c));
-	  }
-	}
-      }
-      if (double_p) {
-	if (curr_c == 'f' || curr_c == 'F') {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = cs_get ();
-	} else if (curr_c == 'l' || curr_c == 'L') {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  curr_c = cs_get ();
-	}
-      } else {
-	int c2 = cs_get (), c3 = cs_get ();
-	
-	if (((curr_c == 'u' || curr_c == 'U')
-	     && (c2 == 'l' || c2 == 'L')  && (c3 == 'l' || c3 == 'L'))
-	    || ((curr_c == 'l' || curr_c == 'L')
-		&& (c2 == 'l' || c2 == 'L')  && (c3 == 'u' || c3 == 'u'))) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  VARR_PUSH (char, symbol_text, c2);
-	  VARR_PUSH (char, symbol_text, c3);
-	  curr_c = cs_get ();
-	} else if (((curr_c == 'u' || curr_c == 'U') && (c2 == 'l' || c2 == 'L'))
-		   || ((curr_c == 'l' || curr_c == 'L') && (c2 == 'u' || c2 == 'u'))) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  VARR_PUSH (char, symbol_text, c2);
-	  curr_c = c3;
-	} else if ((curr_c == 'l' || curr_c == 'L') && (c2 == 'l' || c2 == 'L')) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  VARR_PUSH (char, symbol_text, c2);
-	  curr_c = c3;
-	} else if ((curr_c == 'l' || curr_c == 'L')) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  cs_unget (c3);
-	  curr_c = c2;
-	} else if ((curr_c == 'u' || curr_c == 'U')) {
-	  VARR_PUSH (char, symbol_text, curr_c);
-	  cs_unget (c3);
-	  curr_c = c2;
-	} else {
-	  cs_unget (c3);
-	  cs_unget (c2);
-	}
+	} else if (! isdigit (curr_c) && ! isalpha (curr_c) && curr_c != '_' && curr_c != '.')
+	  break;
       }
       VARR_PUSH (char, symbol_text, '\0');
       cs_unget (curr_c);
-      if (! err_p && base == 8 && dec_p) {
-	error_func (C_wrong_octal_int, "wrong octal integer");
-	err_p = TRUE;
-      }
       return new_token_wo_uniq_repr (pos, err_p ? "1" : VARR_ADDR (char, symbol_text),
 				     T_NUMBER, N_IGNORE);
     }
@@ -1486,59 +1374,73 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
     int i, base = 10, float_p = FALSE, double_p = FALSE, ldouble_p = FALSE;
     int uns_p = FALSE, long_p = FALSE, llong_p = FALSE;
     const char *repr = t->repr;
+    char *stop;
     int last = strlen (repr) - 1;
     
     assert (last >= 0);
     if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
-      repr += 2; base = 16;
+      base = 16;
     } else if (repr[0] == '0') {
       base = 8;
     }
-    for (i = last; i >= 0; i--) {
-      if ((repr[i] == 'l' && repr[i - 1] == 'l') || (repr[i] == 'L' && repr[i - 1] == 'L')) {
-	i--; llong_p = TRUE;
-      } else if (repr[i] == 'l' || repr[i] == 'L') {
-	long_p = TRUE;
-      } else if (repr[i] == 'u' || repr[i] == 'U') {
-	uns_p = TRUE;
-      } else if (repr[i] == '.') {
+    for (i = 0; i <= last; i++) {
+      if (repr[i] == '.') {
 	double_p = TRUE;
       } else if (repr[i] == 'p' || repr[i] == 'P') {
-	assert (base == 16);
 	double_p = TRUE;
       } else if ((repr[i] == 'e' || repr[i] == 'E') && base != 16) {
 	double_p = TRUE;
       }
     }
-    if (repr[last] == 'f' || repr[last] == 'f') {
-      float_p = TRUE; double_p = FALSE;
-    } else if (double_p && long_p) {
-      ldouble_p = TRUE; double_p = FALSE;
+    if (strcmp (&repr[last - 2], "LLU") == 0 || strcmp (&repr[last - 2], "ULL") == 0
+	|| strcmp (&repr[last - 2], "llu") == 0 || strcmp (&repr[last - 2], "ull") == 0) {
+      llong_p = uns_p = TRUE; last -= 3;
+    } else if (strcmp (&repr[last - 1], "LL") == 0 || strcmp (&repr[last - 1], "ll") == 0) {
+      llong_p = TRUE; last -= 2;
+    } else if (strcmp (&repr[last - 1], "LU") == 0 || strcmp (&repr[last - 1], "UL") == 0
+	       || strcmp (&repr[last - 1], "lu") == 0 || strcmp (&repr[last - 1], "ul") == 0) {
+      long_p = uns_p = TRUE; last -= 2;
+    } else if (strcmp (&repr[last], "L") == 0 || strcmp (&repr[last], "l") == 0) {
+      long_p = TRUE; last--;
+    } else if (strcmp (&repr[last], "U") == 0 || strcmp (&repr[last], "u") == 0) {
+      uns_p = TRUE; last--;
+    } else if (double_p && (strcmp (&repr[last], "F") == 0 || strcmp (&repr[last], "f") == 0)) {
+      float_p = TRUE; double_p = FALSE; last--;
+    }
+    if (double_p) {
+      if (uns_p || llong_p) {
+	error (t->pos, "wrong number: %s", repr);
+      } else if (long_p) {
+	ldouble_p = TRUE; double_p = FALSE;
+      }
     }
     errno = 0;
     if (float_p) {
-      t->node = new_f_node (strtof (repr, NULL), t->pos);
+      t->node = new_f_node (strtof (repr, &stop), t->pos);
     } else if (double_p) {
-      t->node = new_d_node (strtod (repr, NULL), t->pos);
+      t->node = new_d_node (strtod (repr, &stop), t->pos);
     } else if (ldouble_p) {
-      t->node = new_ld_node (strtold (repr, NULL), t->pos);
+      t->node = new_ld_node (strtold (repr, &stop), t->pos);
     } else if (uns_p) {
       if (llong_p) {
-	t->node = new_ull_node (strtoull (repr, NULL, base), t->pos);
+	t->node = new_ull_node (strtoull (repr, &stop, base), t->pos);
       } else if (long_p) {
-	t->node = new_ul_node (strtoul (repr, NULL, base), t->pos);
+	t->node = new_ul_node (strtoul (repr, &stop, base), t->pos);
       } else {
-	t->node = new_u_node (strtoul (repr, NULL, base), t->pos);
+	t->node = new_u_node (strtoul (repr, &stop, base), t->pos);
       }
     } else if (llong_p) {
-      t->node = new_ll_node (strtoll (repr, NULL, base), t->pos);
+      t->node = new_ll_node (strtoull (repr, &stop, base), t->pos);
     } else if (long_p) {
-      t->node = new_l_node (strtol (repr, NULL, base), t->pos);
+      t->node = new_l_node (strtoul (repr, &stop, base), t->pos);
     } else {
-      t->node = new_i_node (strtol (repr, NULL, base), t->pos);
+      t->node = new_i_node (strtoul (repr, &stop, base), t->pos);
     }
-    if (errno) {
-      error (t->pos, "number %s is out of range", repr);
+    if (stop != &repr [last + 1]) {
+      fprintf (stderr, "%s:%s:%s\n", repr, stop, &repr [last + 1]);
+      error (t->pos, "wrong number: %s", t->repr);
+    } else if (errno) {
+      error (t->pos, "number %s is out of range", t->repr);
     }
   }
   return t;
