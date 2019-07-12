@@ -651,7 +651,7 @@ static stream_t new_stream (FILE *f, const char *fname) {
   
   VARR_CREATE (char, s->ln, 128);
   s->f = f; s->fname = s->pos.fname = fname;
-  s->pos.lno = 1; s->pos.ln_pos = 0; s->ifs_length_at_stream_start = 0;
+  s->pos.lno = 0; s->pos.ln_pos = 0; s->ifs_length_at_stream_start = 0;
   return s;
 }
 
@@ -892,7 +892,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       case ' ': case '\f': case '\r': case '\v':
 	break;
       case '\n':
-	cs->pos.lno++; cs->pos.ln_pos = 0;
+	cs->pos.ln_pos = 0;
 	if (comment_char < 0) {
 	  nl_p = TRUE;
 	} else if (comment_char == '/') {
@@ -3111,7 +3111,7 @@ static void common_pre_out (token_t t) {
 static void pre (const char *start_source_name) {
   pre_last_token = NULL;
   actual_pre_pos.fname = NULL;
-  shouldbe_pre_pos.fname = start_source_name; shouldbe_pre_pos.lno = 1; shouldbe_pre_pos.ln_pos = 0;
+  shouldbe_pre_pos.fname = start_source_name; shouldbe_pre_pos.lno = 0; shouldbe_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
   if (! no_prepro_p) {
