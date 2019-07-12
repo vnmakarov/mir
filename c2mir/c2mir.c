@@ -3478,10 +3478,11 @@ D (attr_spec) {
 DA (declaration_specs) {
   node_t list, r;
   int first_p, type_spec_p = FALSE;
-  pos_t pos = curr_token->pos;
+  pos_t pos = curr_token->pos, spec_pos;
   
   list = new_node (N_LIST);
   for (first_p = arg == NULL;; first_p = FALSE) {
+    spec_pos = curr_token->pos;
     if (C (T_ALIGNAS)) {
       P (align_spec);
     } else if ((r = TRY (sc_spec)) != &err_node) {
@@ -3493,6 +3494,10 @@ DA (declaration_specs) {
     } else if ((r = TRY (type_spec)) != &err_node) {
       type_spec_p = TRUE;
     } else if ((r = TRY (attr_spec)) != &err_node) {
+      if (pedantic_p)
+	error (spec_pos, "GCC attributes are not implemented");
+      else
+	warning (spec_pos, "GCC attributes are not implemented -- ignoring them");
       continue;
     } else
       break;
