@@ -1394,13 +1394,16 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
 	double_p = TRUE;
       }
     }
-    if (strcmp (&repr[last - 2], "LLU") == 0 || strcmp (&repr[last - 2], "ULL") == 0
-	|| strcmp (&repr[last - 2], "llu") == 0 || strcmp (&repr[last - 2], "ull") == 0) {
+    if (last >= 2
+	&& (strcmp (&repr[last - 2], "LLU") == 0 || strcmp (&repr[last - 2], "ULL") == 0
+	    || strcmp (&repr[last - 2], "llu") == 0 || strcmp (&repr[last - 2], "ull") == 0)) {
       llong_p = uns_p = TRUE; last -= 3;
-    } else if (strcmp (&repr[last - 1], "LL") == 0 || strcmp (&repr[last - 1], "ll") == 0) {
+    } else if (last >= 1
+	       && (strcmp (&repr[last - 1], "LL") == 0 || strcmp (&repr[last - 1], "ll") == 0)) {
       llong_p = TRUE; last -= 2;
-    } else if (strcmp (&repr[last - 1], "LU") == 0 || strcmp (&repr[last - 1], "UL") == 0
-	       || strcmp (&repr[last - 1], "lu") == 0 || strcmp (&repr[last - 1], "ul") == 0) {
+    } else if (last >= 1
+	       && (strcmp (&repr[last - 1], "LU") == 0 || strcmp (&repr[last - 1], "UL") == 0
+		   || strcmp (&repr[last - 1], "lu") == 0 || strcmp (&repr[last - 1], "ul") == 0)) {
       long_p = uns_p = TRUE; last -= 2;
     } else if (strcmp (&repr[last], "L") == 0 || strcmp (&repr[last], "l") == 0) {
       long_p = TRUE; last--;
