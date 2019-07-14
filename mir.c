@@ -1884,7 +1884,7 @@ static void output_func_proto (FILE *f, size_t nres, MIR_type_t *types,
     fprintf (f, "%s:%s", MIR_type_str (var.type), var.name);
   }
   if (vararg_p)
-    fprintf (f, ", ...");
+    fprintf (f, nargs == 0 && nres == 0 ? "..." : ", ...");
   fprintf (f, "\n");
 }
 
