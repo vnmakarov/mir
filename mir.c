@@ -609,7 +609,7 @@ const char *MIR_type_str (MIR_type_t tp) {
   const char *str = type_str (tp);
   
   if (strcmp (str, "") == 0)
-    (*error_func) (MIR_wrong_param_value_error, "MIR_type_str");
+    (*error_func) (MIR_wrong_param_value_error, "MIR_type_str: wrong type");
   return str;
 }
 
