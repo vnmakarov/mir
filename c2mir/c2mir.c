@@ -7443,7 +7443,7 @@ static void finish_reg_vars (void) {
   HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
-static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
+static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name, int new_mir_reg_p) {
   reg_var_t reg_var, el;
   char *str;
   MIR_reg_t reg;
@@ -7452,7 +7452,8 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
   t = t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_U64 ? MIR_T_I64 : t;
-  reg = MIR_new_func_reg (curr_func->u.func, t, reg_name);
+  reg = (new_mir_reg_p ? MIR_new_func_reg (curr_func->u.func, t, reg_name)
+	 : MIR_reg (reg_name, curr_func->u.func));
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
   reg_var.name = str;
@@ -7483,7 +7484,7 @@ static op_t get_new_temp (MIR_type_t t) {
 	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
   sprintf (reg_name, t == MIR_T_I64 ? "I_%u" : t == MIR_T_U64 ? "U_%u" : t == MIR_T_I32 ? "i_%u"
 	   : t == MIR_T_U32 ? "u_%u" : t == MIR_T_F ? "f_%u" : "d_%u", reg_free_mark++);
-  reg = get_reg_var (t, reg_name).reg;
+  reg = get_reg_var (t, reg_name, TRUE).reg;
   return new_op (NULL, MIR_new_reg_op (reg));
 }
 
@@ -7807,13 +7808,27 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
   return mem;
 }
 
+static const char *get_reg_var_name (MIR_type_t promoted_type,
+				     const char *suffix, unsigned func_scope_num) {
+  char prefix[50];
+  
+  sprintf (prefix, promoted_type == MIR_T_I64 ? "I%u_" : promoted_type == MIR_T_U64
+	   ? "U%u_" : promoted_type == MIR_T_I32 ? "i%u_" : promoted_type == MIR_T_U32 ?
+	   "u%u_" : promoted_type == MIR_T_F ? "f%u_" : "d%u_",
+	   func_scope_num);
+  VARR_TRUNC (char, temp_string, 0);
+  add_to_temp_string (prefix);
+  add_to_temp_string (suffix);
+  return VARR_ADDR (char, temp_string);
+}
+
 static VARR (MIR_var_t) *vars;
 
 static void collect_args_and_func_types (struct func_type *func_type,
 					 MIR_type_t *ret_type, VARR (MIR_var_t) *args) {
   node_t declarator, id, first_param, p;
-  struct decl_spec *decl_spec_ptr;
   MIR_var_t var;
+  MIR_type_t type, promoted_type;
   
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, args, 0);
@@ -7821,15 +7836,17 @@ static void collect_args_and_func_types (struct func_type *func_type,
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
       if (p->code == N_TYPE) {
 	var.name = "p";
-	decl_spec_ptr = p->attr;
+	type = get_mir_type (((struct decl_spec *) p->attr)->type);
       } else {
 	declarator = NL_EL (p->ops, 1);
 	assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
 	id = NL_HEAD (declarator->ops);
-	var.name = id->u.s;
-	decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
+	type = get_mir_type (((decl_t) p->attr)->decl_spec.type);
+	assert (type != MIR_T_UNDEF);
+	promoted_type = promote_mir_int_type (type);
+	var.name = _MIR_uniq_string (get_reg_var_name (promoted_type, id->u.s, 0));
       }
-      var.type = get_mir_type (decl_spec_ptr->type);
+      var.type = type;
       VARR_PUSH (MIR_var_t, args, var);
     }
   }
@@ -8071,16 +8088,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       t = get_mir_type (e->type);
       res = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
     } else {
+      const char *name;
+      reg_var_t reg_var;
+      
       t = get_mir_type (e->type);
       assert (t != MIR_T_UNDEF);
       t = promote_mir_int_type (t);
-      sprintf (prefix, t == MIR_T_I64 ? "I%u_" : t == MIR_T_U64 ? "U%u_" : t == MIR_T_I32 ? "i%u_"
-	       : t == MIR_T_U32 ? "u%u_" : t == MIR_T_F ? "f%u_" : "d%u_",
-	       (unsigned) ((struct node_scope *) decl->scope->attr)->func_scope_num);
-      VARR_TRUNC (char, temp_string, 0);
-      add_to_temp_string (prefix);
-      add_to_temp_string (r->u.s);
-      res = new_op (decl, MIR_new_reg_op (get_reg_var (t, VARR_ADDR (char, temp_string)).reg));
+      name = get_reg_var_name (t, r->u.s,
+			       ((struct node_scope *) decl->scope->attr)->func_scope_num);
+      reg_var = get_reg_var (t, name, TRUE);
+      res = new_op (decl, MIR_new_reg_op (reg_var.reg));
     }
     break;
   }
@@ -8245,7 +8262,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     
     decl = (decl_t) r->attr;
     if (declarator != NULL && declarator->code != N_IGNORE
-	&& decl->decl_spec.linkage == N_EXTERN && decl->item == NULL) {
+	&& decl->decl_spec.linkage == N_EXTERN
+	&& decl->item == NULL) {
       id = NL_HEAD (declarator->ops);
       decl->item = MIR_new_import (id->u.s);
     }
@@ -8255,7 +8273,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_INIT:
     break; // ???
-  case N_FUNC_DEF: {
+  case N_FUNC_DEF: { // ?? vararg
     node_t decl_specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (decl_specs);
     node_t decls = NL_NEXT (declarator);
@@ -8273,6 +8291,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
 				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
     decl->item = curr_func;
+    for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++) {
+      MIR_var_t var = VARR_GET (MIR_var_t, vars, i);
+
+      get_reg_var (promote_mir_int_type (var.type), var.name, FALSE);
+    }
     if (ns->size != 0) {
       fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
       MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg),
