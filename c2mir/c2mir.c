@@ -7809,8 +7809,8 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
 
 static VARR (MIR_var_t) *vars;
 
-static void collect_func_types (struct func_type *func_type,
-				MIR_type_t *ret_type, VARR (MIR_var_t) *args) {
+static void collect_args_and_func_types (struct func_type *func_type,
+					 MIR_type_t *ret_type, VARR (MIR_var_t) *args) {
   node_t declarator, id, first_param, p;
   struct decl_spec *decl_spec_ptr;
   MIR_var_t var;
@@ -8268,8 +8268,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     assert (declarator != NULL && declarator->code == N_DECL
 	    && NL_HEAD (declarator->ops)->code == N_ID);
     assert (decl->decl_spec.type->mode == TM_FUNC);
-    collect_func_types (decl->decl_spec.type->u.func_type, &res_type, vars);
-    curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s, 1, &res_type,
+    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type, vars);
+    curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s,
+				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
 				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
     decl->item = curr_func;
     if (ns->size != 0) {
@@ -8456,11 +8457,13 @@ static void generate_mir_protos (void) {
     assert (type->mode == TM_PTR && type->u.ptr_type->mode == TM_FUNC);
     set_type_layout (type);
     func_type = type->u.ptr_type->u.func_type;
-    collect_func_types (func_type, &ret_type, vars);
+    assert (func_type->param_list->code == N_LIST);
+    collect_args_and_func_types (func_type, &ret_type, vars);
     sprintf (buf, "proto%d", n++);
-    func_type->proto_item = ((func_type->dots_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr)
-			     (buf, 1, &ret_type,
-			      VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
+    func_type->proto_item
+      = ((func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL
+	  ? MIR_new_vararg_proto_arr : MIR_new_proto_arr)
+	 (buf, ret_type == MIR_T_UNDEF ? 0 : 1, &ret_type, VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
   }
 }
 
