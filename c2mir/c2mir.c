@@ -383,6 +383,11 @@ static node_t op_append (node_t n, node_t op) {
   return add_pos (n, op->pos);
 }
 
+static node_t op_prepend (node_t n, node_t op) {
+  NL_PREPEND (n->ops, op);
+  return add_pos (n, op->pos);
+}
+
 static void op_flat_append (node_t n, node_t op) {
   if (op->code != N_LIST) {
     op_append (n, op);
@@ -6838,11 +6843,25 @@ static void check (node_t r, node_t context) {
   case N_CALL: {
     struct func_type *func_type;
     struct type *ret_type;
-    node_t param_list, start_param, param, arg_list, arg;
+    node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
     struct decl_spec *decl_spec;
-    
+
     VARR_PUSH (node_t, call_nodes, r);
     op1 = NL_HEAD (r->ops);
+    if (op1->code == N_ID && find_def (S_REGULAR, op1, curr_scope, NULL) == NULL) {
+      /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
+      spec_list = new_node (N_LIST); op_append (spec_list, new_node (N_INT));
+      list = new_node (N_LIST); op_append (list, new_node1 (N_FUNC, new_node (N_LIST)));
+      decl = new_pos_node3 (N_SPEC_DECL, op1->pos,
+			    new_node1 (N_SHARE, spec_list),
+			    new_node2 (N_DECL, copy_node (op1), list),
+			    new_node (N_IGNORE));
+      check (decl, NULL);
+      assert (top_scope->code == N_MODULE);
+      list = NL_HEAD (top_scope->ops);
+      assert (list->code == N_LIST);
+      op_prepend (list, decl);
+    }
     check (op1, r); e1 = op1->attr; t1 = e1->type;
     if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
       error (r->pos, "called object is not a function or function pointer");
