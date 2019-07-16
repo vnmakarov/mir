@@ -1286,6 +1286,7 @@ static void interp (MIR_item_t func_item, va_list va, MIR_val_t *results) {
     case MIR_T_U8: args[i].i = (uint8_t) va_arg (va, uint32_t); break;
     case MIR_T_U16: args[i].i = (uint16_t) va_arg (va, uint32_t); break;
     case MIR_T_U32: args[i].i = va_arg (va, uint32_t); break;
+    case MIR_T_U64: args[i].i = va_arg (va, uint64_t); break;
     case MIR_T_F: {
       union {double d; float f;} u;
       u.d = va_arg (va, double);
