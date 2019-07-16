@@ -6549,6 +6549,7 @@ static void check (node_t r, node_t context) {
       error (r->pos, "invalid type argument of unary *");
     } else {
       *e->type = *t1->u.ptr_type;
+      e->lvalue_node = r;
     }
     break;
   case N_FIELD: case N_DEREF_FIELD: {
