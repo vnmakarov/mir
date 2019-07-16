@@ -4744,6 +4744,8 @@ static void aux_set_type_align (struct type *type) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
     align = type_align (type->u.arr_type->el_type);
+  } else if (type->mode == TM_UNDEF) {
+    align = 0; /* error type */
   } else {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     align =  1;
@@ -4834,6 +4836,8 @@ static void set_type_layout (struct type *type) {
 
     set_type_layout (arr_type->el_type);
     overall_size = type_size (arr_type->el_type) * nel;
+  } else if (type->mode == TM_UNDEF) {
+    overall_size = sizeof (int); /* error type */
   } else {
     int bf_p = FALSE, bits = -1, bound_bit = 0;
     mir_size_t offset = 0, prev_size = 0;
