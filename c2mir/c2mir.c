@@ -8242,6 +8242,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     VARR_PUSH (MIR_op_t, ops, op1.mir_op);
     if (type->mode != TM_BASIC || type->u.basic_type != TP_VOID) {
       t = get_mir_type (type);
+      t = promote_mir_int_type (t);
       res = get_new_temp (t);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
     }
