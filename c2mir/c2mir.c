@@ -4150,7 +4150,8 @@ D (stmt) {
   return r;
 }
  
-static void error_recovery (int par_lev) {
+static void error_recovery (int par_lev, const char *expected) {
+  syntax_error (expected);
   if (debug_p)
     fprintf (stderr, "error recovery: skipping");
   for (;;) {
@@ -4186,14 +4187,14 @@ D (compound_stmt) {
     op_flat_append (list, r);
     continue;
   err1:
-    error_recovery (1);
+    error_recovery (1, "<statement>");
   }
   curr_scope = n->u.scope;
   if (! C (T_EOF))
     PT ('}');
   return n;
  err0:
-  error_recovery (0);
+  error_recovery (0, "{");
   return &err_node;
 }
  
@@ -4221,7 +4222,7 @@ D (transl_unit) {
   decl_err:
     curr_scope = d->u.scope;
   err:
-    error_recovery (0);
+    error_recovery (0, "<declarator>");
   }
   return new_node1 (N_MODULE, list);
 }
