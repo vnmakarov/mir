@@ -118,10 +118,14 @@ static void generate_icode (MIR_item_t func_item) {
 	get_icode (&v, get_int_mem_insn_code (TRUE, ops[1].u.mem.type)); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	push_mem (ops[1]);
-      } else if (ops[1].mode == MIR_OP_INT) {
+      } else if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT) {
 	get_icode (&v, IC_MOVI); VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
-	v.i = ops[1].u.i; VARR_PUSH (MIR_val_t, code_varr, v);
+	if (ops[1].mode == MIR_OP_INT)
+	  v.i = ops[1].u.i;
+	else
+	  v.u = ops[1].u.u; 
+	VARR_PUSH (MIR_val_t, code_varr, v);
       } else if (ops[1].mode == MIR_OP_REF) {
 	MIR_item_t item = ops[1].u.ref;
 	
