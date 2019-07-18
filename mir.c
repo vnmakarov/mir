@@ -2077,6 +2077,7 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     return; /* do nothing: this operand is used as a type */
   switch (op->mode) {
   case MIR_OP_INT:
+  case MIR_OP_UINT:
   case MIR_OP_FLOAT:
   case MIR_OP_DOUBLE:
   case MIR_OP_LDOUBLE:
