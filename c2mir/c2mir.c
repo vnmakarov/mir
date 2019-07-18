@@ -7683,9 +7683,8 @@ static int gen_unary_op (node_t r, op_t *op, op_t *res) {
   return TRUE;
 }
 
-static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res, op_t *var) {
+static int gen_type_bin_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *res, op_t *var) {
   MIR_type_t t;
-  struct type *type = ((struct expr *) r->attr)->type;
   
   if (push_const_val (r, res))
     return FALSE;
@@ -7698,6 +7697,10 @@ static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res, op_t *var) {
   *op1 = force_val (*op1);
   *res = get_new_temp (t);
   return TRUE;
+}
+
+static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res, op_t *var) {
+  return gen_type_bin_op (r, ((struct expr *) r->attr)->type, op1, op2, res, var);
 }
 
 static MIR_insn_code_t get_mir_insn_code (node_t r) {
@@ -8035,7 +8038,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     goto assign;
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN: // ptr ???
-    if (! gen_bin_op (r, &op1, &op2, &res, &var)) /* stack: var, var op val */
+    if (! gen_type_bin_op (r, ((struct expr *) r->attr)->type2, &op1, &op2, &res, &var)) /* stack: var, var op val */
       assert (FALSE); /* Can not be a constant */
     emit3 (get_mir_insn_code (r), res.mir_op, op1.mir_op, op2.mir_op);
     val = res;
@@ -8075,6 +8078,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     } else { /* block move */
       MIR_label_t repeat_label = MIR_new_label ();
       mir_size_t size = type_size (((struct expr *) r->attr)->type);
+      
       assert (r->code == N_ASSIGN);
       op1 = get_new_temp (MIR_T_I64);
       emit2 (MIR_MOV, op1.mir_op, MIR_new_int_op (size));
