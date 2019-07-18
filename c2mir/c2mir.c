@@ -4585,7 +4585,8 @@ static struct type arithmetic_conversion (struct type *type1, struct type *type2
 struct expr {
   unsigned int const_p : 1;
   node_t lvalue_node, def_node;
-  struct type *type;
+  struct type *type;  /* type of the result */
+  struct type *type2; /* used for assign expr type */
   union {
     mir_llong i_val;
     mir_ullong u_val;
@@ -5674,11 +5675,13 @@ static void check_type (struct type *type, int level, int func_def_p) {
   }
 }
 
-static void check_assignment_types (struct type *left, struct type *right, node_t assign_node) {
+static void check_assignment_types (struct type *left, struct type *right, struct expr *expr, node_t assign_node) {
   node_code_t code = assign_node->code;
   pos_t pos = assign_node->pos;
   const char *msg;
   
+  if (right == NULL)
+    right = expr->type;
   if (arithmetic_type_p (left)) {
     if (! arithmetic_type_p (right)
 	&& (left->mode != TM_BASIC || left->u.basic_type != TP_BOOL || right->mode != TM_PTR)) {
@@ -5698,7 +5701,8 @@ static void check_assignment_types (struct type *left, struct type *right, node_
   } else if (left->mode == TM_PTR) {
     if (right->mode != TM_PTR
 	|| (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
-	    && ! void_ptr_p (left) && ! void_ptr_p (right))) {
+	    && ! void_ptr_p (left) && ! void_ptr_p (right)
+	    && ! null_const_p (expr, right))) {
       msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
 	     : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
 	     : "incompatible types in assignment to a pointer");
@@ -5734,7 +5738,7 @@ static void check_initializer (struct type *type, node_t initializer,
       error (initializer->pos,
 	     "initializer of static or thread local object should be a constant expression");
     } else {
-      check_assignment_types (cexpr->type, type, initializer);
+      check_assignment_types (cexpr->type, NULL, cexpr, initializer);
     }
     return;
   }
@@ -5969,6 +5973,7 @@ static struct expr *create_expr (node_t r) {
   
   r->attr = e;
   e->type = create_type (NULL);
+  e->type2 = NULL;
   e->type->pos_node = r; e->lvalue_node = NULL; e->const_p = FALSE;
   return e;
 }
@@ -6198,7 +6203,7 @@ static node_t curr_func_def, curr_loop, curr_loop_switch;
 static void check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
-  struct type t, *t1, *t2;
+  struct type t, *t1, *t2, *assign_expr_type;
   
   switch (r->code) {
   case N_IGNORE: case N_STAR: case N_FIELD_ID:
@@ -6421,6 +6426,7 @@ static void check (node_t r, node_t context) {
     get_one_node (&op2, &e2, &t2);
     e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
+    assign_expr_type = create_type (NULL); *assign_expr_type = *e->type;
     goto assign;
     break;
   }
@@ -6467,6 +6473,7 @@ static void check (node_t r, node_t context) {
     t1 = e1->type = adjust_type (e1->type);
     t2 = e2->type = adjust_type (e2->type);
     e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
+    assign_expr_type = create_type (NULL); *assign_expr_type = *e->type;
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
     goto assign;
     break;
@@ -6474,13 +6481,16 @@ static void check (node_t r, node_t context) {
   case N_ASSIGN:
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, NULL);
     t2 = e2->type = adjust_type (e2->type);
+    assign_expr_type = NULL;
   assign:
     e = create_expr (r);
     if (! e1->lvalue_node) {
       error (r->pos, "lvalue required as left operand of assignment");
     }
-    check_assignment_types (t1, t2, r);
+    check_assignment_types (t1, t2, e2, r);
     *e->type = *t1;
+    if ((e->type2 = assign_expr_type) != NULL)
+      set_type_layout (assign_expr_type);
     break;
   case N_IND:
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
@@ -6896,7 +6906,7 @@ static void check (node_t r, node_t context) {
       }
       assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
       decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
-      check_assignment_types (decl_spec->type, e2->type, r);
+      check_assignment_types (decl_spec->type, NULL, e2, r);
       param = NL_NEXT (param);
     }
     if (param != NULL) {
@@ -7318,7 +7328,7 @@ static void check (node_t r, node_t context) {
 	       && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
       error (r->pos, "return with no value in function returning non-void");
     } else if (expr->code != N_IGNORE) {
-      check_assignment_types (ret_type, ((struct expr *) expr->attr)->type, r);
+      check_assignment_types (ret_type, NULL, expr->attr, r);
     }
     break;
   }
