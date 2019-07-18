@@ -5831,8 +5831,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	  error (curr_des->pos, "array index in initializer not of integer type");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
 	  error (curr_des->pos, "negative array index in initializer");
-	} else if (size_val >= 0
-		   && (! signed_integer_type_p (cexpr->type) || size_val <= cexpr->u.i_val)) {
+	} else if (size_val >= 0 && size_val <= cexpr->u.u_val) {
 	  error (curr_des->pos, "array index in initializer exceeds array bounds");
 	} else {
 	  check_initializer (type->u.arr_type->el_type, value, const_only_p, FALSE);
