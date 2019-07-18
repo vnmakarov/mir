@@ -5827,7 +5827,7 @@ static void check_initializer (struct type *type, node_t initializer,
 	  error (curr_des->pos, "array index in initializer for non-array");
 	} else if (! (cexpr = curr_des->attr)->const_p) {
 	  error (curr_des->pos, "nonconstant array index in initializer");
-	} else if (integer_type_p (cexpr->type)) {
+	} else if (! integer_type_p (cexpr->type)) {
 	  error (curr_des->pos, "array index in initializer not of integer type");
 	} else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
 	  error (curr_des->pos, "negative array index in initializer");
