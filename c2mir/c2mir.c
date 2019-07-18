@@ -7867,6 +7867,124 @@ static void collect_args_and_func_types (struct func_type *func_type,
   *ret_type = get_mir_type (func_type->ret_type);
 }
 
+struct init_el {
+  mir_size_t num, offset;
+  struct type *el_type;
+  node_t init;
+};
+typedef struct init_el init_el_t;
+
+DEF_VARR (init_el_t);
+static VARR (init_el_t) *init_els;
+
+static void collect_init_els (mir_size_t offset, struct type *type,
+			      node_t initializer, int const_only_p, int top_p) {
+  struct expr *cexpr;
+  node_t des_list, curr_des, init, last_member, value, size_node, temp;
+  mir_llong last_index, size_val;
+  symbol_t sym;
+  struct expr *sexpr;
+  init_el_t init_el;
+  int found_p;
+  
+ scalar:
+  if (initializer->code != N_LIST) {
+    /* it should be scalar type: */
+    assert (type->mode != TM_ARR && type->mode != TM_STRUCT && type->mode != TM_UNION);
+    cexpr = initializer->attr;
+    /* static or thread local object initialization should be const expr: */
+    assert (! const_only_p || cexpr->const_p);
+    init_el.num = VARR_LENGTH (init_el_t, init_els);
+    init_el.offset = offset;
+    init_el.el_type = type;
+    init_el.init = initializer;
+    VARR_PUSH (init_el_t, init_els, init_el);
+    return;
+  }
+  init = NL_HEAD (initializer->ops);
+  assert (init->code == N_INIT);
+  des_list = NL_HEAD (init->ops);
+  assert (des_list->code == N_LIST);
+  if (type->mode != TM_ARR && type->mode != TM_STRUCT  && type->mode != TM_UNION) {
+    assert (NL_NEXT (init) == NULL && NL_HEAD (des_list->ops) == NULL);
+    initializer = NL_NEXT (des_list);
+    assert (top_p);
+    top_p = FALSE;
+    goto scalar;
+  }
+  last_member = NULL; size_val = -1;
+  if (type->mode == TM_ARR) {
+    size_node = type->u.arr_type->size; sexpr = size_node->attr;
+    /* we already figured out the array size during check: */
+    assert (size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type));
+    size_val = sexpr->u.i_val;
+  }
+  last_index = -1; last_member = NULL;
+  for (; init != NULL; init = NL_NEXT (init)) {
+    assert (init->code == N_INIT);
+    des_list = NL_HEAD (init->ops);
+    value = NL_NEXT (des_list);
+    if (0&&value->code == N_LIST && type->mode != TM_ARR
+	&& type->mode != TM_STRUCT  && type->mode != TM_UNION) {
+      error (init->pos, "braces around scalar initializer");
+      continue;
+    }
+    /* we cannot have initialization of static or thread local object by non-const expr: */
+    assert (value->code == N_LIST || ((struct expr *) value->attr)->const_p || ! const_only_p);
+    if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
+      if (type->mode == TM_ARR) {
+	last_index++;
+	assert (last_index >= 0 && size_val >= 0 && size_val > last_index);
+	collect_init_els (last_index * type_size (type->u.arr_type->el_type) + offset,
+			  type->u.arr_type->el_type, value, const_only_p, FALSE);
+      } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
+	int first_p = last_member == NULL;
+	
+	if (last_member != NULL) {
+	  last_member = NL_NEXT (last_member);
+	} else {
+	  node_t declaration_list = NL_EL (type->u.tag_type->ops, 1);
+	  
+	  assert (declaration_list != NULL && declaration_list->code == N_LIST);
+	  last_member = NL_HEAD (declaration_list->ops);
+	}
+	while (last_member != NULL && last_member->code != N_MEMBER)
+	  last_member = NL_NEXT (last_member);
+	/* no access elements */
+	assert (last_member != NULL && (first_p || type->mode != TM_UNION));
+	collect_init_els (((decl_t) last_member->attr)->offset + offset,
+			  ((decl_t) last_member->attr)->decl_spec.type,
+			  value, const_only_p, FALSE);
+      }
+    } else {
+      for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
+	if (curr_des->code == N_FIELD_ID) {
+	  node_t id = NL_HEAD (curr_des->ops);
+	  
+	  /* field should be only in struct/union initializer */
+	  assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
+	  found_p = symbol_find (S_REGULAR, id, type->u.tag_type, &sym);
+	  assert (found_p); /* field should present */
+	  last_member = sym.def_node;
+	  assert (last_member->code == N_MEMBER);
+	  collect_init_els (((decl_t) last_member->attr)->offset + offset,
+			    ((decl_t) last_member->attr)->decl_spec.type, value,
+			    const_only_p, FALSE);
+	} else {
+	  cexpr = curr_des->attr;
+	  /* index should be in array initializer and const expr of right type and value: */
+	  assert (type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
+		  && (! signed_integer_type_p (cexpr->type) || cexpr->u.i_val >= 0)
+		  && (size_val < 0 || size_val > cexpr->u.u_val));
+	  collect_init_els (cexpr->u.u_val * type_size (type->u.arr_type->el_type) + offset,
+			    type->u.arr_type->el_type, value, const_only_p, FALSE);
+	}
+      }
+    }
+  }
+  return;
+}
+
 DEF_VARR (MIR_op_t);
 static VARR (MIR_op_t) *ops;
 
@@ -8512,10 +8630,12 @@ static void generate_mir (node_t r) {
   VARR_CREATE (MIR_var_t, vars, 32);
   generate_mir_protos ();
   VARR_CREATE (MIR_op_t, ops, 32);
+  VARR_CREATE (init_el_t, init_els, 128);
   top_gen (r, NULL, NULL);
   finish_reg_vars ();
   VARR_DESTROY (MIR_var_t, vars);
   VARR_DESTROY (MIR_op_t, ops);
+  VARR_DESTROY (init_el_t, init_els);
 }
 
 /* ------------------------- MIR generator finish ----------------------------- */
