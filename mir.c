@@ -1029,8 +1029,6 @@ static reg_desc_t *find_rd_by_reg (MIR_reg_t reg, MIR_func_t func) {
 void MIR_finish_func (void) {
   int expr_p = TRUE;
   MIR_insn_t insn;
-  MIR_error_type_t err = MIR_no_error; /* to eliminate warning */
-  const char *err_msg = NULL;
   MIR_insn_code_t code;
   
   if (curr_func == NULL)
@@ -1047,13 +1045,13 @@ void MIR_finish_func (void) {
     
     code = insn->code;
     if (!curr_func->vararg_p && (code == MIR_VA_START || code == MIR_VA_END || code == MIR_VA_ARG)) {
-	insn->code = MIR_INVALID_INSN;
-	if (err == MIR_no_error) {
-	  err = MIR_vararg_func_error; err_msg = "va_start, va_end, or va_arg are not in vararg function";
-	}
-    } else if (code == MIR_RET && insn_nops != curr_func->nres && err == MIR_no_error) {
-      err = MIR_vararg_func_error;
-      err_msg = "number of operands in return does not correspond number of function returns";
+      curr_func = NULL;
+      (*error_func) (MIR_vararg_func_error,
+		     "va_start, va_end, or va_arg are not in vararg function");
+    } else if (code == MIR_RET && insn_nops != curr_func->nres) {
+      curr_func = NULL;
+      (*error_func) (MIR_vararg_func_error,
+		     "number of operands in return does not correspond number of function returns");
     } else if (MIR_call_code_p (code))
       expr_p = FALSE;
     for (i = 0; i < insn_nops; i++) {
@@ -1095,20 +1093,16 @@ void MIR_finish_func (void) {
 	  rd = find_rd_by_reg (insn->ops[i].u.mem.base, curr_func);
 	  mir_assert (rd != NULL && insn->ops[i].u.mem.base == rd->reg);
 	  if (type2mode (rd->type) != MIR_OP_INT) {
-	    insn->code = MIR_INVALID_INSN;
-	    if (err == MIR_no_error) {
-	      err = MIR_reg_type_error; err_msg = "base reg of non-integer type";
-	    }
+	    curr_func = NULL;
+	    (*error_func) (MIR_reg_type_error, "base reg of non-integer type");
 	  }
 	}
 	if (insn->ops[i].u.mem.index != 0) {
 	  rd = find_rd_by_reg (insn->ops[i].u.mem.index, curr_func);
 	  mir_assert (rd != NULL && insn->ops[i].u.mem.index == rd->reg);
 	  if (type2mode (rd->type) != MIR_OP_INT) {
-	    insn->code = MIR_INVALID_INSN;
-	    if (err == MIR_no_error) {
-	      err = MIR_reg_type_error; err_msg = "index reg of non-integer type";
-	    }
+	    curr_func = NULL;
+	    (*error_func) (MIR_reg_type_error, "index reg of non-integer type");
 	  }
 	}
 	mode = type2mode (insn->ops[i].u.mem.type);
@@ -1127,25 +1121,17 @@ void MIR_finish_func (void) {
 	break;
       }
       insn->ops[i].value_mode = mode;
-      if (expected_mode != MIR_OP_UNDEF && mode != expected_mode) {
-	insn->code = MIR_INVALID_INSN;
-	if (err == MIR_no_error) {
-	  err = MIR_op_mode_error; err_msg = "unexpected operand mode";
-	}
+      if (expected_mode != MIR_OP_UNDEF
+	  && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
+	curr_func = NULL;
+	(*error_func) (MIR_op_mode_error, "unexpected operand mode");
       }
       if (out_p && ! can_be_out_p) {
-	insn->code = MIR_INVALID_INSN;
-	if (err == MIR_no_error) {
-	  err = MIR_out_op_error; err_msg = "wrong operand for insn output";
-	}
+	curr_func = NULL;
+	(*error_func) (MIR_out_op_error, "wrong operand for insn output");
       }
     }
   }
-  for (insn = DLIST_HEAD (MIR_insn_t, curr_func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
-    if (insn->code == MIR_INVALID_INSN) {
-      curr_func = NULL;
-      (*error_func) (err, err_msg);
-    }
   curr_func->expr_p = expr_p;
   curr_func = NULL;
 }
