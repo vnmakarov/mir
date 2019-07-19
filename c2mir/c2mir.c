@@ -4389,6 +4389,7 @@ typedef struct {
   node_t id;
   node_t scope;
   node_t def_node, aux_node;
+  VARR (node_t) *defs;
 } symbol_t;
 
 DEF_HTAB (symbol_t);
@@ -4428,10 +4429,16 @@ static void symbol_insert (enum symbol_mode mode, node_t id, node_t scope,
   
   symbol.mode = mode; symbol.id = id; symbol.scope = scope;
   symbol.def_node = def_node; symbol.aux_node = aux_node;
+  VARR_CREATE (node_t, symbol.defs, 4);
   HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_INSERT, el);
 }
 
+static void symbol_clear (symbol_t sym) {
+  VARR_DESTROY (node_t, sym.defs);
+}
+
 static void symbol_finish (void) {
+  HTAB_CLEAR (symbol_t, symbol_tab, symbol_clear);
   HTAB_DESTROY (symbol_t, symbol_tab);
 }
 
@@ -5053,6 +5060,10 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
   if (tab_decl_spec.thread_local_p != decl_spec.thread_local_p) {
     error (id->pos, "thread local and non-thread local declarations of %s", id->u.s);
   }
+  if ((decl_spec.linkage == N_EXTERN && linkage == N_STATIC)
+      || (decl_spec.linkage == N_STATIC && linkage == N_EXTERN))
+    warning (id->pos, "%s defined with external and internal linkage", id->u.s);
+  VARR_PUSH (node_t, sym.defs, def_node);
 }
 
 static int in_params_p;
