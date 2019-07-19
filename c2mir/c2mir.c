@@ -8924,7 +8924,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
       fprintf (f, ": higher scope node %lu", ((struct node_scope *) n->attr)->scope->uid);
     if (n->code == N_STRUCT || n->code == N_UNION)
       fprintf (f, "\n");
-    else
+    else if (attr_p)
       fprintf (f, ", size = %llu\n", (unsigned long long) ((struct node_scope *) n->attr)->size);
     print_ops (f, n, indent, attr_p);
     break;
