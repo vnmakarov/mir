@@ -6296,9 +6296,8 @@ static void check (node_t r, node_t context) {
 	error (r->pos, "typedef name %s as an operand", r->u.s);
       }
       *e->type = *decl->decl_spec.type;
-      if (decl->decl_spec.linkage != N_EXTERN) { // ??? definition and external linkage
+      if (e->type->mode != TM_FUNC)
 	e->lvalue_node = op1;
-      }
     } else if (op1->code == N_FUNC_DEF) {
       decl = op1->attr;
       assert (decl->decl_spec.type->mode == TM_FUNC);
