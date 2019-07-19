@@ -5911,7 +5911,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   decl->decl_spec = decl_spec; decl_node->attr = decl;
   if (declarator->code == N_DECL) {
     def_symbol (S_REGULAR, id, scope, decl_node, decl_spec.linkage);
-    if (decl_spec.linkage == N_EXTERN)
+    if (scope != top_scope && decl_spec.linkage == N_EXTERN)
       def_symbol (S_REGULAR, id, top_scope, decl_node, N_EXTERN);
     if (func_p && decl_spec.thread_local_p) {
       error (id->pos, "thread local function declaration");
