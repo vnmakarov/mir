@@ -5581,7 +5581,7 @@ static node_code_t get_id_linkage (int func_p, node_t id, node_t scope,
   
   if (decl_spec.typedef_p)
     return N_IGNORE; // p6: no linkage
-  if (decl_spec.static_p && scope == NULL)
+  if (decl_spec.static_p && scope == top_scope)
     return N_STATIC; // p3: internal linkage
   if (decl_spec.extern_p && def != NULL
       && (linkage = ((decl_t) def->attr)->decl_spec.linkage) != N_IGNORE)
@@ -5589,9 +5589,10 @@ static node_code_t get_id_linkage (int func_p, node_t id, node_t scope,
   if (decl_spec.extern_p
       && (def == NULL || ((decl_t) def->attr)->decl_spec.linkage == N_IGNORE))
     return N_EXTERN; // p4: external linkage
-  if (! decl_spec.static_p && ! decl_spec.extern_p && (scope == NULL || func_p))
+  if (! decl_spec.static_p && ! decl_spec.extern_p
+      && (scope == top_scope || func_p))
     return N_EXTERN; // p5
-  if (! decl_spec.extern_p && scope != NULL && ! func_p)
+  if (! decl_spec.extern_p && scope != top_scope && ! func_p)
     return N_IGNORE; // p6: no linkage
   return N_IGNORE;
 }
@@ -5931,7 +5932,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     error (initializer->pos, "initialization of incomplete type variable");
     return;
   }
-  if (decl_spec.linkage != N_IGNORE && scope != NULL) {
+  if (decl_spec.linkage != N_IGNORE && scope != top_scope) {
     error (initializer->pos,
 	   "initialization for block scope identifier with external or internal linkage");
     return;
