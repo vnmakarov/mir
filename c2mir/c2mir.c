@@ -4170,7 +4170,8 @@ static void error_recovery (int par_lev, const char *expected) {
   }
   if (debug_p)
     fprintf (stderr, " %s\n", get_token_name (curr_token->code));
-  read_token ();
+  if (curr_token->code != T_EOF)
+    read_token ();
 }
 
 D (compound_stmt) {
