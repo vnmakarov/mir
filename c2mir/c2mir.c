@@ -7627,25 +7627,28 @@ static op_t promote (op_t op, MIR_type_t t) {
       insn_code = op_type == MIR_T_F ? MIR_F2I : op_type == MIR_T_D ? MIR_D2I : MIR_INSN_BOUND;
     } else if (t == MIR_T_F) {
       insn_code = op_type == MIR_T_I32 ? MIR_EXT32 : op_type == MIR_T_U32 ? MIR_UEXT32 : MIR_INSN_BOUND;
-      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_U64 ? MIR_I2F
-		    : op_type == MIR_T_I32 || op_type == MIR_T_U32 ? MIR_I2F : MIR_INSN_BOUND);
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32 ? MIR_I2F
+		    : op_type == MIR_T_U64 || op_type == MIR_T_U32  ? MIR_UI2F : MIR_INSN_BOUND);
     } else if (t == MIR_T_D) {
       insn_code = op_type == MIR_T_I32 ? MIR_EXT32 : op_type == MIR_T_U32 ? MIR_UEXT32 : MIR_INSN_BOUND;
-      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_U64 ? MIR_I2D
-		    : op_type == MIR_T_I32 || op_type == MIR_T_U32 ? MIR_I2D : MIR_INSN_BOUND);
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32 ? MIR_I2D
+		    : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2D : MIR_INSN_BOUND);
     }
     break;
-  case MIR_OP_INT: case MIR_OP_UINT:
+  case MIR_OP_INT:
     insn_code = t == MIR_T_F ? MIR_I2F : t == MIR_T_D ? MIR_I2D : MIR_INSN_BOUND;
+    break;
+  case MIR_OP_UINT:
+    insn_code = t == MIR_T_F ? MIR_UI2F : t == MIR_T_D ? MIR_UI2D : MIR_INSN_BOUND;
     break;
   case MIR_OP_FLOAT:
   float_val:
-    insn_code = (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_F2I : t == MIR_T_I32 || t == MIR_T_U32 ? MIR_F2I
+    insn_code = (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 ? MIR_F2I
 		 : t == MIR_T_D ? MIR_F2D : MIR_INSN_BOUND);
     break;
   case MIR_OP_DOUBLE:
   double_val:
-    insn_code = (t == MIR_T_I64 || t == MIR_T_U64  ? MIR_D2I : t == MIR_T_I32 || t == MIR_T_U32 ? MIR_D2I
+    insn_code = (t == MIR_T_I64 || t == MIR_T_U64  || t == MIR_T_I32 || t == MIR_T_U32 ? MIR_D2I
 		 : t == MIR_T_F ? MIR_D2F : MIR_INSN_BOUND);
     break;
   default:
