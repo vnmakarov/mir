@@ -5934,7 +5934,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   }
   if (decl_spec.linkage != N_IGNORE && scope != top_scope) {
     error (initializer->pos,
-	   "initialization for block scope identifier with external or internal linkage");
+	   "initialization of %s in block scope with external or internal linkage", id->u.s);
     return;
   }
   check (initializer, decl_node);
