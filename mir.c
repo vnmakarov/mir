@@ -1062,6 +1062,7 @@ void MIR_finish_func (void) {
 	  continue; /* We checked the operand during insn creation -- skip the prototype */
 	} else if (i == 1 && insn->ops[i].mode == MIR_OP_REF) {
 	  mir_assert (insn->ops[i].u.ref->item_type == MIR_import_item
+		      || insn->ops[i].u.ref->item_type == MIR_export_item
 		      || insn->ops[i].u.ref->item_type == MIR_forward_item
 		      || insn->ops[i].u.ref->item_type == MIR_func_item);
 	  continue; /* We checked the operand during insn creation -- skip the func */
