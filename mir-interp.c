@@ -70,9 +70,10 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
 #if MIR_PTR64
   case MIR_T_P:
 #endif
-  case MIR_T_I64: return load_p ? IC_LDI64 : IC_STI64;
-  default: mir_assert (FALSE);
-    return load_p ? IC_LDI64 : IC_STI64;
+  case MIR_T_I64: case MIR_T_U64: return load_p ? IC_LDI64 : IC_STI64;
+  default:
+    mir_assert (FALSE);
+    return load_p ? IC_LDI64 : IC_STI64; /* to remove a warning */
   }
 }
 
