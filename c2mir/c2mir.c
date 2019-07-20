@@ -8232,10 +8232,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	t_label = MIR_new_label ();
 	f_label = MIR_new_label ();
       }
+      assert (t_label != NULL && f_label != NULL);
       gen (NL_HEAD (r->ops), r->code == N_ANDAND ? temp_label : t_label,
-	   r->code == N_ANDAND ? f_label : temp_label, TRUE);
+	   r->code == N_ANDAND ? f_label : temp_label, FALSE);
       emit_insn (temp_label);
-      gen (NL_EL (r->ops, 1), t_label, f_label, TRUE);
+      gen (NL_EL (r->ops, 1), t_label, f_label, FALSE);
       if (make_val_p) {
 	MIR_label_t end_label = MIR_new_label ();
 	
@@ -8269,14 +8270,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_NOT:
     if (true_label != NULL) {
-      gen (NL_HEAD (r->ops), false_label, true_label, TRUE);
+      gen (NL_HEAD (r->ops), false_label, true_label, FALSE);
       true_label = false_label = NULL;
     } else {
       MIR_label_t end_label = MIR_new_label ();
       MIR_label_t t_label = MIR_new_label (), f_label = MIR_new_label ();
       
       res = get_new_temp (MIR_T_I64);
-      gen (NL_EL (r->ops, 1), t_label, f_label, TRUE);
+      gen (NL_EL (r->ops, 1), t_label, f_label, FALSE);
       emit_insn (t_label);
       emit2 (MIR_MOV, res.mir_op, zero_op.mir_op);
       emit1 (MIR_JMP, MIR_new_label_op (end_label));
@@ -8505,7 +8506,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     t = get_mir_type (((struct expr *) r->attr)->type);
     res = get_new_temp (t);
-    gen (cond, true_label, false_label, TRUE);
+    gen (cond, true_label, false_label, FALSE);
     emit_insn (true_label);
     op1 = gen (true_expr, NULL, NULL, TRUE);
     emit2 (MIR_MOV, res.mir_op, op1.mir_op);
