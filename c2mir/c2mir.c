@@ -8523,7 +8523,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_CAST:
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     t = get_mir_type (((struct expr *) r->attr)->type);
-    res = promote (op1, t);
+    res = cast (op1, t);
     break;
   case N_COMPOUND_LITERAL:
     break; // ???
