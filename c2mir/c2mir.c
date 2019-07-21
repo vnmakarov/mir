@@ -8280,7 +8280,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       MIR_label_t t_label = MIR_new_label (), f_label = MIR_new_label ();
       
       res = get_new_temp (MIR_T_I64);
-      gen (NL_EL (r->ops, 1), t_label, f_label, FALSE);
+      gen (NL_HEAD (r->ops), t_label, f_label, FALSE);
       emit_insn (t_label);
       emit2 (MIR_MOV, res.mir_op, zero_op.mir_op);
       emit1 (MIR_JMP, MIR_new_label_op (end_label));
