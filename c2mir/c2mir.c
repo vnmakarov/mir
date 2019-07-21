@@ -7293,10 +7293,12 @@ static void check (node_t r, node_t context) {
 	}
       }
     }
-    check (cond, r);
-    e1 = cond->attr; t1 = e1->type;
-    if (! scalar_type_p (t1)) {
-      error (cond->pos, "for-condition should be of a scalar type");
+    if (cond->code != N_IGNORE) { /* non-empty condition: */
+      check (cond, r);
+      e1 = cond->attr; t1 = e1->type;
+      if (! scalar_type_p (t1)) {
+	error (cond->pos, "for-condition should be of a scalar type");
+      }
     }
     check (iter, r);
     check (stmt, r);
@@ -8778,7 +8780,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     emit_label (r);
     top_gen (init, NULL, NULL);
     emit_insn (start_label);
-    top_gen (cond, stmt_label, break_label);
+    if (cond->code != N_IGNORE) /* non-empty condition: */
+      top_gen (cond, stmt_label, break_label);
     emit_insn (stmt_label);
     gen (stmt, NULL, NULL, FALSE);
     emit_insn (continue_label);
