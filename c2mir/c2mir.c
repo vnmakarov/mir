@@ -8353,7 +8353,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       t = promote_mir_int_type (t);
       op2 = promote (val, t);
       if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
+	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, op2.mir_op);
       } else {
 	int size, sh;
 	uint64_t mask, mask2;
@@ -8367,7 +8367,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	temp_op2 = get_new_temp (MIR_T_I64);
 	emit2 (MIR_MOV, temp_op2.mir_op, var.mir_op);
 	emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
-	emit3 (MIR_AND, temp_op1.mir_op, val.mir_op, MIR_new_uint_op (mask));
+	emit3 (MIR_AND, temp_op1.mir_op, op2.mir_op, MIR_new_uint_op (mask));
 	if (sh != 0)
 	  emit3 (MIR_LSH, temp_op1.mir_op, temp_op1.mir_op, MIR_new_int_op (sh));
 	emit3 (MIR_OR, temp_op1.mir_op, temp_op1.mir_op, temp_op2.mir_op);
