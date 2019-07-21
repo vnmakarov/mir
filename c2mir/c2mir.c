@@ -7001,6 +7001,7 @@ static void check (node_t r, node_t context) {
       error (r->pos, "useless declaration");
     }
     /* We have at least one enum constant according to the syntax. */
+    set_type_layout (decl_spec.type);
     break;
   }
   case N_ST_ASSERT: {
