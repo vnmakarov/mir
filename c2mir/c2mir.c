@@ -7603,7 +7603,7 @@ static void emit3 (MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2, MIR_op_t op
 }
 
 static op_t cast (op_t op, MIR_type_t t) {
-  op_t res;
+  op_t res, interm;
   MIR_type_t op_type;
   MIR_insn_code_t insn_code = MIR_INSN_BOUND, insn_code2 = MIR_INSN_BOUND;
   
@@ -7714,8 +7714,9 @@ static op_t cast (op_t op, MIR_type_t t) {
   } else if (insn_code2 == MIR_INSN_BOUND) {
     emit2 (insn_code, res.mir_op, op.mir_op);
   } else {
-    emit2 (insn_code, res.mir_op, op.mir_op);
-    emit2 (insn_code2, res.mir_op, res.mir_op);
+    interm = get_new_temp (MIR_T_I64);
+    emit2 (insn_code, interm.mir_op, op.mir_op);
+    emit2 (insn_code2, res.mir_op, interm.mir_op);
   }
   return res;
 }
