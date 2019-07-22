@@ -8629,7 +8629,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     
     decl = (decl_t) r->attr;
     if (declarator != NULL && declarator->code != N_IGNORE && decl->item == NULL) {
-      if (decl->decl_spec.linkage == N_EXTERN) {
+      if (decl->decl_spec.linkage != N_IGNORE) {
 	MIR_item_t (*func) (const char *) = MIR_new_import;
 	struct decl *n_decl;
 	
