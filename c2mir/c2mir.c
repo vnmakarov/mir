@@ -4523,6 +4523,19 @@ static int scalar_type_p (struct type *type) {
   return arithmetic_type_p (type) || type->mode == TM_PTR;
 }
 
+static struct type get_ptr_int_type (int signed_p) {
+  struct type res;
+  
+  init_type (&res); res.mode = TM_BASIC;
+  if (sizeof (mir_int) == sizeof (mir_size_t)) {
+    res.u.basic_type = signed_p ? TP_INT : TP_UINT;
+    return res;
+  }
+  assert (sizeof (mir_long) == sizeof (mir_size_t));
+  res.u.basic_type = signed_p ? TP_LONG : TP_ULONG;
+  return res;
+}
+
 static struct type integer_promotion (struct type *type) {
   struct type res;
   
