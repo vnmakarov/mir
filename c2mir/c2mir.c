@@ -8973,6 +8973,8 @@ static void print_chars (FILE *f, const char *str) {
 
 static void print_node (FILE *f, node_t n, int indent, int attr_p);
 
+void debug_node (node_t n) { print_node (stderr, n, 0, TRUE); }
+
 static void print_ops (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   node_t op;
