@@ -3016,6 +3016,16 @@ static void write_item (FILE *f, MIR_item_t item) {
     write_uint (f, item->u.bss->len);
     return;
   }
+  if (item->item_type == MIR_ref_data_item) {
+    if (item->u.ref_data->name == NULL) {
+      write_name (f, "ref");
+    } else {
+      write_name (f, "nref");
+      write_name (f, item->u.ref_data->name);
+    }
+    write_name (f, MIR_item_name (item->u.ref_data->ref_item));
+    return;
+  }
   if (item->item_type == MIR_expr_data_item) {
     if (item->u.expr_data->name == NULL) {
       write_name (f, "expr");
@@ -3409,9 +3419,9 @@ void MIR_read (FILE *f) {
   uint64_t nstr, nres, u;
   MIR_op_t op;
   size_t n, nop;
-  const char *name;
+  const char *name, *item_name;
   MIR_module_t module;
-  MIR_item_t func;
+  MIR_item_t func, item;
   
   version = read_uint (f, "wrong header");
   if (version > CURR_BIN_VERSION)
@@ -3482,34 +3492,39 @@ void MIR_read (FILE *f) {
       } else if (strcmp (name, "export") == 0) {
 	name = read_name (f, "wrong export name");
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "export %s should have no labels", name);
+	  (*error_func) (MIR_binary_io_error, "export %s should have no labels", name);
 	MIR_new_export (name);
       } else if (strcmp (name, "import") == 0) {
 	name = read_name (f, "wrong import name");
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "import %s should have no labels", name);
+	  (*error_func) (MIR_binary_io_error, "import %s should have no labels", name);
 	MIR_new_import (name);
       } else if (strcmp (name, "forward") == 0) {
 	name = read_name (f, "wrong forward name");
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "forward %s should have no labels", name);
+	  (*error_func) (MIR_binary_io_error, "forward %s should have no labels", name);
 	MIR_new_forward (name);
       } else if (strcmp (name, "nbss") == 0 || strcmp (name, "bss") == 0) {
 	name = strcmp (name, "nbss") == 0 ? read_name (f, "wrong bss name") : NULL;
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "bss %s should have no labels", name == NULL ? "" : name);
+	  (*error_func) (MIR_binary_io_error, "bss %s should have no labels", name == NULL ? "" : name);
 	u = read_uint (f, "wrong bss len");
 	MIR_new_bss (name, u);
+      } else if (strcmp (name, "nref") == 0 || strcmp (name, "ref") == 0) {
+	name = strcmp (name, "nref") == 0 ? read_name (f, "wrong ref data name") : NULL;
+	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
+	  (*error_func) (MIR_binary_io_error, "ref data %s should have no labels", name == NULL ? "" : name);
+	item_name = read_name (f, "wrong ref data item name");
+	if ((item = find_item (item_name, module)) == NULL)
+	  (*error_func) (MIR_binary_io_error, "ref data refers to non-existing item %s", item_name);
+	MIR_new_ref_data (name, item);
       } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
-	const char *func_name;
-	MIR_item_t item;
-	
 	name = strcmp (name, "nexpr") == 0 ? read_name (f, "wrong expr name") : NULL;
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "expr %s should have no labels", name == NULL ? "" : name);
-	func_name = read_name (f, "wrong expr func name");
-	if ((item = find_item (func_name, module)) == NULL || item->item_type != MIR_func_item)
-	  (*error_func) (MIR_binary_io_error, "expr refers to non-function %s", func_name);
+	  (*error_func) (MIR_binary_io_error, "expr %s should have no labels", name == NULL ? "" : name);
+	item_name = read_name (f, "wrong expr func name");
+	if ((item = find_item (item_name, module)) == NULL || item->item_type != MIR_func_item)
+	  (*error_func) (MIR_binary_io_error, "expr refers to non-function %s", item_name);
 	MIR_new_expr_data (name, item);
       } else if (strcmp (name, "ndata") == 0 || strcmp (name, "data") == 0) {
 	MIR_type_t type;
@@ -3521,7 +3536,7 @@ void MIR_read (FILE *f) {
 	
 	name = strcmp (name, "ndata") == 0 ? read_name (f, "wrong data name") : NULL;
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "data %s should have no labels", name == NULL ? "" : name);
+	  (*error_func) (MIR_binary_io_error, "data %s should have no labels", name == NULL ? "" : name);
 	tag = read_token (f, &attr);
 	if (TAG_TI8 > tag || tag > TAG_TBLOCK)
 	  (*error_func) (MIR_binary_io_error, "wrong data type tag %d", tag);
@@ -3582,9 +3597,9 @@ void MIR_read (FILE *f) {
 	MIR_new_data (name, type, VARR_LENGTH (uint8_t, data_values), VARR_ADDR (uint8_t, data_values));
       } else if (strcmp (name, "local") == 0) {
 	if (func == NULL)
-	  (*error_func) (MIR_syntax_error, "local outside func");
+	  (*error_func) (MIR_binary_io_error, "local outside func");
 	if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
-	  (*error_func) (MIR_syntax_error, "local should have no labels");
+	  (*error_func) (MIR_binary_io_error, "local should have no labels");
 	for (;;) {
 	  tag = read_token (f, &attr);
 	  if (tag == TAG_EOI)
