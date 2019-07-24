@@ -443,7 +443,9 @@ const char *MIR_item_name (MIR_item_t item) {
 	  : item->item_type == MIR_export_item ? item->u.export
 	  : item->item_type == MIR_forward_item ? item->u.forward
 	  : item->item_type == MIR_bss_item ? item->u.bss->name
-	  : item->item_type == MIR_data_item ? item->u.data->name : item->u.expr_data->name);
+	  : item->item_type == MIR_data_item ? item->u.data->name
+	  : item->item_type == MIR_ref_data_item ? item->u.ref_data->name
+	  : item->u.expr_data->name);
 }
 
 #if MIR_IO
@@ -659,6 +661,7 @@ static MIR_item_t add_item (MIR_item_t item) {
     break;
   case MIR_bss_item:
   case MIR_data_item:
+  case MIR_ref_data_item:
   case MIR_expr_data_item:
   case MIR_func_item:
     if (item->item_type == MIR_export_item) {
@@ -800,6 +803,29 @@ MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const
 
 MIR_item_t MIR_new_string_data (const char *name, const char *str) {
   return MIR_new_data (name, MIR_T_U8, strlen (str) + 1, str);
+}
+
+MIR_item_t MIR_new_ref_data (const char *name, MIR_item_t ref_item) {
+  MIR_item_t tab_item, item = create_item (MIR_ref_data_item, "ref data");
+  MIR_ref_data_t ref_data;
+  
+  item->u.ref_data = ref_data = malloc (sizeof (struct MIR_ref_data));
+  if (ref_data == NULL) {
+    free (item);
+    (*error_func) (MIR_alloc_error,
+		   "Not enough memory for creation of ref data %s", name == NULL ? "" : name);
+  }
+  if (name != NULL)
+    name = string_store (&strings, &string_tab, name).str;
+  ref_data->name = name;
+  ref_data->ref_item = ref_item;
+  if (name == NULL) {
+    DLIST_APPEND (MIR_item_t, curr_module->items, item);
+  } else if (add_item (item) != item) {
+    free (item);
+    item = tab_item;
+  }
+  return item;
 }
 
 MIR_item_t MIR_new_expr_data (const char *name, MIR_item_t expr_item) {
