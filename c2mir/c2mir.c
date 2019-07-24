@@ -4953,16 +4953,25 @@ static void create_node_scope (node_t node) {
   node->attr = ns; ns->scope = curr_scope; curr_scope = node;
 }
 
-static void finish_scope (void) {
-  struct node_scope *ns = (struct node_scope *) curr_scope->attr;
+static void propagate_scope_size (node_t from_scope, node_t bound_scope) {
+  struct node_scope *ns = (struct node_scope *) from_scope->attr;
   mir_size_t size = ns->size;
   
-  curr_scope = ns->scope;
-  if (curr_scope != NULL && curr_scope != top_scope) {
-    ns = (struct node_scope *) curr_scope->attr;
+  for (;;) {
+    from_scope = ns->scope;
+    if (from_scope == NULL || from_scope == bound_scope)
+      break;
+    ns = (struct node_scope *) from_scope->attr;
     if (ns->size < size)
       ns->size = size;
   }
+}
+
+static void finish_scope (void) {
+  node_t from_scope = curr_scope;
+
+  curr_scope = ((struct node_scope *) curr_scope->attr)->scope;
+  propagate_scope_size (from_scope, curr_scope);
 }
 
 static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode) {
@@ -5035,7 +5044,7 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
 	     && decl_list->code != N_IGNORE) {
     error (id->pos, "tag %s redeclaration", id->u.s);
   } else {
-    if (decl_list->code != N_IGNORE) { /* swap */
+    if (decl_list->code != N_IGNORE) { /* swap decl lists */
       DLIST (node_t) temp = r->ops;
       
       r->ops = sym.def_node->ops;
@@ -7404,6 +7413,7 @@ static void context (node_t r) {
     ns->offset += type_size (type);
     if (ns->size < ns->offset)
       ns->size = ns->offset;
+    propagate_scope_size (decl->scope, top_scope);
   }
 }
 
