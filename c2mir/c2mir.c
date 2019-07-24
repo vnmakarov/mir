@@ -5251,6 +5251,13 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	decl = def->attr;
 	assert (decl->decl_spec.typedef_p);
 	*type = *decl->decl_spec.type;
+	if (type->incomplete_p
+	    && (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ENUM)
+	    && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE) {
+	  /* The type became complete: recalculate size: */
+	  type->incomplete_p = FALSE;
+	  type->raw_size = MIR_SIZE_MAX; set_type_layout (type);
+	}
       }
       break;
     }
