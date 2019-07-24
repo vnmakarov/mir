@@ -7797,7 +7797,7 @@ static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
   
   if (push_const_val (r, res))
     return FALSE;
-  *op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
+  *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
   *op1 = promote (*op1, t);
   *op2 = promote (*op2, t);
@@ -7810,7 +7810,7 @@ static int gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *
   
   if (push_const_val (r, res))
     return FALSE;
-  *op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
+  *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
   *op1 = promote (*op1, t);
   *op2 = promote (*op2, t);
@@ -8228,7 +8228,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   switch (r->code) {
   case N_LIST:
     for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
-      gen (n, true_label, false_label, FALSE);
+      gen (n, true_label, false_label, val_p);
     break;
   case N_IGNORE:
     break; /* do nothing */
