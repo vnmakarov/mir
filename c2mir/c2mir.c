@@ -4639,9 +4639,10 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
   } else if (type1->mode == TM_FUNC) {
     struct func_type *ft1 = type1->u.func_type, *ft2 = type2->u.func_type;
 
-    if (NL_LENGTH (ft1->param_list->ops) != NL_LENGTH (ft2->param_list->ops))
+    if (NL_HEAD (ft1->param_list->ops) != NULL && NL_HEAD (ft2->param_list->ops) != NULL
+	&& NL_LENGTH (ft1->param_list->ops) != NL_LENGTH (ft2->param_list->ops))
       return FALSE;
-    // ???
+    // ??? check parameter types
   } else {
     assert (type1->mode == TM_STRUCT || type1->mode == TM_UNION || type1->mode == TM_ENUM);
     return (type1->u.tag_type == type2->u.tag_type
@@ -4662,7 +4663,7 @@ static struct type composite_type (struct type *tp1, struct type *tp2) {
     if (arr_type->size == N_IGNORE)
       arr_type->size = tp2->u.arr_type->size;
     *arr_type->el_type = composite_type (tp1->u.arr_type->el_type, tp2->u.arr_type->el_type);
-  } else if (tp1->mode == TM_FUNC) {
+  } else if (tp1->mode == TM_FUNC) { /* ??? */
   }
   return t;
 }
