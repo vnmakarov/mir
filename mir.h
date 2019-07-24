@@ -251,6 +251,12 @@ typedef struct MIR_data {
   } u;
 } *MIR_data_t;
 
+typedef struct MIR_ref_data {
+  const char *name; /* can be NULL */
+  MIR_item_t ref_item; /* a special function can be called during linking */
+  void *load_addr;
+} *MIR_ref_data_t;
+
 typedef struct MIR_expr_data {
   const char *name; /* can be NULL */
   MIR_item_t expr_item; /* a special function can be called during linking */
@@ -267,8 +273,8 @@ typedef struct MIR_module *MIR_module_t;
 /* Definition of link of double list of MIR_item_t type elements */
 DEF_DLIST_LINK (MIR_item_t);
 
-typedef enum {MIR_func_item, MIR_proto_item, MIR_import_item, MIR_export_item,
-	      MIR_forward_item, MIR_data_item, MIR_expr_data_item, MIR_bss_item} MIR_item_type_t;
+typedef enum {MIR_func_item, MIR_proto_item, MIR_import_item, MIR_export_item, MIR_forward_item,
+	      MIR_data_item, MIR_ref_data_item, MIR_expr_data_item, MIR_bss_item} MIR_item_type_t;
 
 /* MIR module items (function or import): */
 struct MIR_item {
@@ -291,6 +297,7 @@ struct MIR_item {
     MIR_name_t export;
     MIR_name_t forward;
     MIR_data_t data;
+    MIR_ref_data_t ref_data;
     MIR_expr_data_t expr_data;
     MIR_bss_t bss;
   } u;
@@ -350,8 +357,9 @@ extern MIR_item_t MIR_new_forward (const char *name);
 extern MIR_item_t MIR_new_bss (const char *name, size_t len); /* name can be NULL */
 extern MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type,
 				size_t nel, const void *els); /* name can be NULL */
-extern MIR_item_t MIR_new_expr_data (const char *name, MIR_item_t expr_item); /* name can be NULL */
 extern MIR_item_t MIR_new_string_data (const char *name, const char *str); /* name can be NULL */
+extern MIR_item_t MIR_new_ref_data (const char *name, MIR_item_t item); /* name can be NULL */
+extern MIR_item_t MIR_new_expr_data (const char *name, MIR_item_t expr_item); /* name can be NULL */
 extern MIR_item_t MIR_new_proto_arr (const char *name, size_t nres, MIR_type_t *res_types,
 				     size_t nargs, MIR_var_t *vars);
 extern MIR_item_t MIR_new_proto (const char *name, size_t nres, MIR_type_t *res_types,
