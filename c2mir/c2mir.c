@@ -8370,7 +8370,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   }
   case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: // ??? ptr
-    t = get_mir_type (((struct expr *) r->attr)->type);
+    t = get_mir_type (((struct expr *) r->attr)->type2);
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     op1 = promote (force_val (var), t);
     op2 = promote (one_op, t);
