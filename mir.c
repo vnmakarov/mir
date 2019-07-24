@@ -1213,6 +1213,9 @@ static MIR_item_t load_bss_data_section (MIR_item_t item, int first_only_p) {
       else if (curr_item->item_type == MIR_data_item
 	       && (curr_item == item || curr_item->u.data->name == NULL))
 	section_size += curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
+      else if (curr_item->item_type == MIR_ref_data_item
+	       && (curr_item == item || curr_item->u.ref_data->name == NULL))
+	section_size += _MIR_type_size (MIR_T_P);
       else if (curr_item->item_type == MIR_expr_data_item
 	       && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
 	expr_item = curr_item->u.expr_data->expr_item;
@@ -1237,17 +1240,25 @@ static MIR_item_t load_bss_data_section (MIR_item_t item, int first_only_p) {
     if (curr_item->item_type == MIR_bss_item
 	&& (curr_item == item || curr_item->u.bss->name == NULL)) {
       memset (addr, 0, curr_item->u.bss->len);
+      curr_item->addr = addr;
       addr += curr_item->u.bss->len;
     } else if (curr_item->item_type == MIR_data_item
 	       && (curr_item == item || curr_item->u.data->name == NULL)) {
       len = curr_item->u.data->nel * _MIR_type_size (curr_item->u.data->el_type);
       memmove (addr, curr_item->u.data->u.els, len);
+      curr_item->addr = addr;
       addr += len;
+    } else if (curr_item->item_type == MIR_ref_data_item
+	       && (curr_item == item || curr_item->u.ref_data->name == NULL)) {
+      curr_item->u.ref_data->load_addr = addr;
+      curr_item->addr = addr;
+      addr += _MIR_type_size (MIR_T_P);
     } else if (curr_item->item_type == MIR_expr_data_item
 	       && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
       expr_item = curr_item->u.expr_data->expr_item;
       len = _MIR_type_size (expr_item->u.func->res_types[0]);
       curr_item->u.expr_data->load_addr = addr;
+      curr_item->addr = addr;
       addr += len;
     } else {
       break;
@@ -1259,8 +1270,8 @@ void MIR_load_module (MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items);
        item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
-    if (item->item_type == MIR_bss_item
-	|| item->item_type == MIR_data_item || item->item_type == MIR_expr_data_item) {
+    if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item
+	|| item->item_type == MIR_ref_data_item || item->item_type == MIR_expr_data_item) {
       item = load_bss_data_section (item, FALSE);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL)
@@ -1315,6 +1326,12 @@ void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (c
     for (item = DLIST_HEAD (MIR_item_t, m->items);
 	 item != NULL;
 	 item = DLIST_NEXT (MIR_item_t, item)) {
+      if (item->item_type == MIR_ref_data_item) {
+	assert (item->u.ref_data->ref_item->addr != NULL);
+	memcpy (item->u.ref_data->load_addr,
+		&item->u.ref_data->ref_item->addr, _MIR_type_size (MIR_T_P));
+	continue;
+      }
       if (item->item_type != MIR_expr_data_item)
 	continue;
       expr_item = item->u.expr_data->expr_item;
