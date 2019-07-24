@@ -7746,10 +7746,43 @@ static op_t promote (op_t op, MIR_type_t t) {
   return cast (op, t);
 }
 
+static op_t mem_to_address (op_t mem) {
+  op_t res;
+  
+  assert (mem.mir_op.mode == MIR_OP_MEM);
+  if (mem.mir_op.u.mem.base == 0 && mem.mir_op.u.mem.index == 0) {
+    mem.mir_op.mode = MIR_OP_INT;
+    mem.mir_op.u.i = mem.mir_op.u.mem.disp;
+  } else if (mem.mir_op.u.mem.index == 0 && mem.mir_op.u.mem.disp == 0) {
+    mem.mir_op.mode = MIR_OP_REG;
+    mem.mir_op.u.reg = mem.mir_op.u.mem.base;
+  } else if (mem.mir_op.u.mem.index == 0) {
+    res = get_new_temp (MIR_T_I64);
+    emit3 (MIR_ADD, res.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.base),
+	   MIR_new_int_op (mem.mir_op.u.mem.disp));
+    mem = res;
+  } else {
+    res = get_new_temp (MIR_T_I64);
+    if (mem.mir_op.u.mem.scale != 1)
+      emit3 (MIR_MUL, res.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.index),
+	     MIR_new_int_op (mem.mir_op.u.mem.scale));
+    else
+      emit2 (MIR_MOV, res.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.index));
+    if (mem.mir_op.u.mem.base != 0)
+      emit3 (MIR_ADD, res.mir_op, res.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.base));
+  }
+  mem.mir_op.value_mode = MIR_OP_INT;
+  return mem;
+}
+
 static op_t force_val (op_t op) {
   op_t temp_op;
   int sh, size;
   
+  if (op.decl != NULL && op.decl->decl_spec.type->mode == TM_ARR && op.mir_op.mode == MIR_OP_MEM) {
+    /* an array -- use a pointer: */
+    return mem_to_address (op);
+  }
   if (op.decl == NULL || op.decl->bit_offset < 0)
     return op;
   assert (op.mir_op.mode == MIR_OP_MEM);
