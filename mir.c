@@ -4066,7 +4066,7 @@ void MIR_scan_string (const char *str) {
   size_t n;
   int64_t i, nargs;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
-  int bss_p, expr_p, string_p, local_p, push_op_p, read_p, disp_p;
+  int bss_p, ref_p, expr_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
   curr_lno = 1;
@@ -4099,7 +4099,7 @@ void MIR_scan_string (const char *str) {
 	scan_token (&t, get_string_char, unget_string_char); /* label_names without insn */
     }
     module_p = end_module_p = proto_p = func_p = end_func_p = FALSE;
-    export_p = import_p = forward_p = bss_p = expr_p = string_p = local_p = FALSE;
+    export_p = import_p = forward_p = bss_p = ref_p = expr_p = string_p = local_p = FALSE;
     if (strcmp (name, "module") == 0) {
       module_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
@@ -4136,6 +4136,10 @@ void MIR_scan_string (const char *str) {
       bss_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
 	process_error (MIR_syntax_error, "at most one label should be used for bss");
+    } else if (strcmp (name, "ref") == 0) {
+      ref_p = TRUE;
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
+	process_error (MIR_syntax_error, "at most one label should be used for ref");
     } else if (strcmp (name, "expr") == 0) {
       expr_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
@@ -4196,7 +4200,7 @@ void MIR_scan_string (const char *str) {
 		     && MIR_branch_code_p (insn_code)
 		     && VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0) {
 	    op = MIR_new_label_op (create_label_desc (name));
-	  } else if (! expr_p && func_reg_p (func->u.func, name)) {
+	  } else if (! expr_p && ! ref_p && func_reg_p (func->u.func, name)) {
 	    op.mode = MIR_OP_REG;
 	    op.u.reg = MIR_reg (name, func->u.func);
 	  } else if ((item = find_item (name, module)) != NULL) {
@@ -4319,6 +4323,14 @@ void MIR_scan_string (const char *str) {
 	process_error (MIR_syntax_error, "wrong bss operand type or value");
       name = VARR_LENGTH (label_name_t, label_names) == 0 ? NULL : VARR_GET (label_name_t, label_names, 0);
       MIR_new_bss (name, op_addr[0].u.i);
+    } else if (ref_p) {
+      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
+	process_error (MIR_syntax_error, "ref should have one operand");
+      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      if (op_addr[0].mode != MIR_OP_REF)
+	process_error (MIR_syntax_error, "wrong ref operand");
+      name = VARR_LENGTH (label_name_t, label_names) == 0 ? NULL : VARR_GET (label_name_t, label_names, 0);
+      MIR_new_ref_data (name, op_addr[0].u.ref);
     } else if (expr_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
 	process_error (MIR_syntax_error, "expr should have one operand");
