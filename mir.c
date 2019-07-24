@@ -1907,6 +1907,7 @@ static void output_item (FILE *f, MIR_item_t item) {
   MIR_proto_t proto;
   MIR_var_t var;
   MIR_data_t data;
+  MIR_ref_data_t ref_data;
   MIR_expr_data_t expr_data;
   size_t i, nlocals;
   
@@ -1926,6 +1927,13 @@ static void output_item (FILE *f, MIR_item_t item) {
     if (item->u.bss->name != NULL)
       fprintf (f, "%s:", item->u.bss->name);
     fprintf (f, "\tbss\t%" PRIu64 "\n", item->u.bss->len);
+    return;
+  }
+  if (item->item_type == MIR_ref_data_item) {
+    ref_data = item->u.ref_data;
+    if (ref_data->name != NULL)
+      fprintf (f, "%s:", ref_data->name);
+    fprintf (f, "\tref\t%s\n", MIR_item_name (ref_data->ref_item));
     return;
   }
   if (item->item_type == MIR_expr_data_item) {
