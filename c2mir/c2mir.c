@@ -8436,6 +8436,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       val = modify_for_block_move (val, op1);
       emit_insn (repeat_label);
       emit3 (MIR_SUB, op1.mir_op, op1.mir_op, one_op.mir_op);
+      assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
+      val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
       emit2 (MIR_MOV, var.mir_op, val.mir_op);
       emit3 (MIR_BGT, MIR_new_label_op (repeat_label), op1.mir_op, zero_op.mir_op);
     }
