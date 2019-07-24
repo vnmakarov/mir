@@ -8869,8 +8869,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_RETURN:
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
-    if (NL_EL (r->ops, 1) == NULL) {
-      emit_insn (MIR_new_ret_insn (1, zero_op.mir_op));
+    if (NL_EL (r->ops, 1)->code == N_IGNORE) {
+      emit_insn (MIR_new_ret_insn (0));
       break;
     }
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
