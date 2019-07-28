@@ -8972,7 +8972,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   return res;
 }
 
-static void generate_mir_protos (void) {
+static void gen_mir_protos (void) {
   node_t call, func;
   struct type *type;
   struct func_type *func_type;
@@ -8997,12 +8997,12 @@ static void generate_mir_protos (void) {
   }
 }
 
-static void generate_mir (node_t r) {
+static void gen_mir (node_t r) {
   zero_op = new_op (NULL, MIR_new_int_op (0));
   one_op = new_op (NULL, MIR_new_int_op (1));
   init_reg_vars ();
   VARR_CREATE (MIR_var_t, vars, 32);
-  generate_mir_protos ();
+  gen_mir_protos ();
   VARR_CREATE (MIR_op_t, ops, 32);
   VARR_CREATE (init_el_t, init_els, 128);
   memset_proto = memset_item = NULL;
@@ -9496,7 +9496,7 @@ static int compile (const char *source_name) {
 	if (verbose_p)
 	  fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
 	MIR_new_module (get_module_name ());
-	generate_mir (r);
+	gen_mir (r);
 	if (asm_p && n_errors == 0)
 	  MIR_output (stderr);
 	MIR_finish_module ();
