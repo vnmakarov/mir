@@ -5992,7 +5992,11 @@ static struct type *check_initializer (struct type *type, node_t initializer,
       }
     }
   }
-  if (type->mode == TM_ARR && size_val < 0 && max_index >= 0) {  /* array w/o size: define it.  */
+  if (type->mode == TM_ARR && size_val < 0 && max_index >= 0) {
+    /* Array w/o size: define it.  Copy the type as the incomplete
+       type can be shared by declarations with different length
+       initializers.  We need only one level of copying as sub-array
+       can not have incomplete type with an initializer. */
     struct arr_type *arr_type = reg_malloc (sizeof (struct arr_type));
 
     type = create_type (type);
@@ -7765,8 +7769,10 @@ static op_t cast (op_t op, MIR_type_t t) {
   switch (op.mir_op.mode) {
   case MIR_OP_MEM:
     op_type = op.mir_op.u.mem.type;
-    if (op_type == MIR_T_I8 || op_type == MIR_T_U8 || op_type == MIR_T_I16
-	|| op_type == MIR_T_U16 || op_type == MIR_T_I32 || op_type == MIR_T_U32)
+    if (op_type == MIR_T_UNDEF) { /* ??? it is an array */
+      
+    } else if (op_type == MIR_T_I8 || op_type == MIR_T_U8 || op_type == MIR_T_I16
+	       || op_type == MIR_T_U16 || op_type == MIR_T_I32 || op_type == MIR_T_U32)
       op_type = MIR_T_I64;
     goto all_types;
   case MIR_OP_REG:
