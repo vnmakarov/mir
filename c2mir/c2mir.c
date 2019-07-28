@@ -4487,6 +4487,12 @@ static void set_type_pos_node (struct type *type, node_t n) {
     type->pos_node = n;
 }
 
+static int char_type_p (struct type *type) {
+  return (type->mode == TM_BASIC
+	  && (type->u.basic_type == TP_CHAR
+	      || type->u.basic_type == TP_SCHAR || type->u.basic_type == TP_UCHAR));
+}
+
 static int standard_integer_type_p (struct type *type) {
   return (type->mode == TM_BASIC
 	  && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULLONG);
