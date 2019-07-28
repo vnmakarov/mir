@@ -8239,10 +8239,9 @@ static void gen_initializer (op_t var, node_t id, mir_size_t size, int local_p) 
       if (i != 0 && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
 	continue;
       val = gen (init_el.init, NULL, NULL, TRUE);
-      /* ??? gaps */
       assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
 	      || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode ==  MIR_OP_DOUBLE
-	      || val.mir_op.mode ==  MIR_OP_LDOUBLE);
+	      || val.mir_op.mode ==  MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR);
       if (rel_offset < init_el.offset) { /* fill the gap: */
 	data = MIR_new_bss (name, init_el.offset - rel_offset);
 	if (name != NULL)
@@ -8250,11 +8249,32 @@ static void gen_initializer (op_t var, node_t id, mir_size_t size, int local_p) 
 	name = NULL;
       }
       t = get_mir_type (init_el.el_type);
-      data = MIR_new_data (name, t, 1, &val.mir_op.u);
+      if (val.mir_op.mode != MIR_OP_STR) {
+	data = MIR_new_data (name, t, 1, &val.mir_op.u);
+	data_size = _MIR_type_size (t);
+      } else if (init_el.el_type->mode == TM_ARR) {
+	data_size = init_el.el_type->raw_size;
+	str_len = strlen (val.mir_op.u.str) + 1;
+	if (data_size < str_len) {
+	  data = MIR_new_data (name, MIR_T_U8, data_size, val.mir_op.u.str);
+	} else {
+	  data = MIR_new_string_data (name, val.mir_op.u.str);
+	  if (data_size > str_len)
+	    MIR_new_bss (NULL, data_size - str_len);
+	}
+      } else {
+	MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
+	
+	data = MIR_new_string_data (_MIR_get_temp_item_name (module), val.mir_op.u.str);
+	DLIST_REMOVE (MIR_item_t, module->items, data);
+	DLIST_PREPEND (MIR_item_t, module->items, data);
+	data = MIR_new_ref_data (name, data);
+	data_size = _MIR_type_size (t);
+      }
       if (name != NULL)
 	var.decl->item = data;
       name = NULL;
-      rel_offset = init_el.offset + _MIR_type_size (t);
+      rel_offset = init_el.offset + data_size;
     }
     if (rel_offset < size) { /* fill the tail: */
       data = MIR_new_bss (name, size - rel_offset);
