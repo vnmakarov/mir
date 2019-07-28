@@ -470,6 +470,8 @@ extern size_t _MIR_type_size (MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_insn_code_t code, size_t nop, int *out_p);
 extern void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p);
 
+extern const char *_MIR_get_temp_item_name (MIR_module_t module);
+
 extern MIR_op_t _MIR_new_hard_reg_op (MIR_reg_t hard_reg);
 
 extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,

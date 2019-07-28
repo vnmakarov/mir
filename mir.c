@@ -2095,6 +2095,15 @@ static MIR_reg_t vn_add_val (MIR_func_t func, MIR_type_t type,
   return val.reg;
 }
 
+const char *_MIR_get_temp_item_name (MIR_module_t module) {
+  static char name [30];
+  
+  snprintf (name, sizeof (name), "%s%lu",
+	    TEMP_ITEM_NAME_PREFIX, (unsigned long) module->temp_items_num);
+  module->temp_items_num++;
+  return name;
+}
+
 void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 		      int out_p, MIR_insn_code_t code, int mem_float_p) {
   MIR_op_t new_op, mem_op, *op = &insn->ops[nop];
@@ -2131,14 +2140,12 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
     } else if (op->mode == MIR_OP_STR
 	       || (mem_float_p && (op->mode == MIR_OP_FLOAT
 				   || op->mode == MIR_OP_DOUBLE || op->mode == MIR_OP_LDOUBLE))) {
-      char name [30];
+      const char *name;
       MIR_item_t item;
       MIR_module_t m = curr_module;
       
       curr_module = func_item->module;
-      snprintf (name, sizeof (name), "%s%lu",
-		TEMP_ITEM_NAME_PREFIX, (unsigned long) curr_module->temp_items_num);
-      curr_module->temp_items_num++;
+      name = _MIR_get_temp_item_name (curr_module);
       if (op->mode == MIR_OP_STR) {
 	item = MIR_new_string_data (name, op->u.str);
 	*op = MIR_new_ref_op (item);
