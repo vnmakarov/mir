@@ -5965,7 +5965,10 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
   if (type->incomplete_p && (type->mode != TM_ARR || type->u.arr_type->el_type->incomplete_p)) {
-    error (initializer->pos, "initialization of incomplete type variable");
+    if (type->mode == TM_ARR && type->u.arr_type->el_type->mode == TM_ARR)
+      error (initializer->pos, "initialization of incomplete sub-array");
+    else
+      error (initializer->pos, "initialization of incomplete type variable");
     return;
   }
   if (decl_spec.linkage != N_IGNORE && scope != top_scope) {
