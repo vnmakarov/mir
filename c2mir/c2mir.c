@@ -8847,8 +8847,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_CAST:
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-    t = get_mir_type (((struct expr *) r->attr)->type);
-    res = cast (op1, t);
+    type = ((struct expr *) r->attr)->type;
+    if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) {
+      res = op1;
+      res.mir_op.mode = MIR_OP_UNDEF;
+    } else {
+      t = get_mir_type (type);
+      res = cast (op1, t);
+    }
     break;
   case N_COMPOUND_LITERAL:
     break; // ???
