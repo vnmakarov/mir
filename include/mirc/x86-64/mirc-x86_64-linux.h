@@ -32,6 +32,7 @@
 #define __INTPTR_TYPE__       long
 #define __UINTPTR_TYPE__      unsigned long
 
+#define __CHAR_BIT__      8
 #define __INT8_MAX__      127
 #define __INT16_MAX__     32767
 #define __INT32_MAX__     2147483647
