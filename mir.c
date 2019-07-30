@@ -716,7 +716,7 @@ static MIR_item_t new_export_import_forward (const char *name, MIR_item_type_t i
     item->u.forward = uniq_name;
   if (create_only_p)
     return item;
-  if (add_item (item) != item) {
+  if ((tab_item = add_item (item)) != item) {
     free (item);
     item = tab_item;
   }
