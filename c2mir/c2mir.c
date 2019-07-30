@@ -9425,7 +9425,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
   case N_ID:
     fprintf (f, " %s", n->u.s);
   expr:
-    if (attr_p)
+    if (attr_p && n->attr != NULL)
       print_expr (f, n->attr);
     fprintf (f, "\n");
     break;
@@ -9438,7 +9438,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
   case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: case N_ALIGNOF:
   case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL: case N_CALL:
   case N_GENERIC:
-    if (attr_p)
+    if (attr_p && n->attr != NULL)
       print_expr (f, n->attr);
     fprintf (f, "\n");
     print_ops (f, n, indent, attr_p);
@@ -9463,7 +9463,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
     print_ops (f, n, indent, attr_p);
     break;
   case N_SPEC_DECL: case N_MEMBER: case N_FUNC_DEF:
-    if (attr_p)
+    if (attr_p && n->attr != NULL)
       print_decl (f, (decl_t) n->attr);
     fprintf (f, "\n");
     print_ops (f, n, indent, attr_p);
@@ -9485,12 +9485,12 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
       fprintf (f, ": higher scope node %lu", ((struct node_scope *) n->attr)->scope->uid);
     if (n->code == N_STRUCT || n->code == N_UNION)
       fprintf (f, "\n");
-    else if (attr_p)
+    else if (attr_p && n->attr != NULL)
       fprintf (f, ", size = %llu\n", (unsigned long long) ((struct node_scope *) n->attr)->size);
     print_ops (f, n, indent, attr_p);
     break;
   case N_SWITCH:
-    if (attr_p) {
+    if (attr_p && n->attr != NULL) {
       fprintf (f, ": ");
       print_type (f, &((struct switch_attr *) n->attr)->type);
     }
@@ -9498,12 +9498,12 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
     print_ops (f, n, indent, attr_p);
     break;
   case N_GOTO:
-    if (attr_p)
+    if (attr_p && n->attr != NULL)
       fprintf (f, ": target node %lu\n", ((node_t) n->attr)->uid);
     print_ops (f, n, indent, attr_p);
     break;
   case N_ENUM_CONST:
-    if (attr_p)
+    if (attr_p && n->attr != NULL)
       fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
     print_ops (f, n, indent, attr_p);
     break;
