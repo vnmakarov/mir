@@ -6381,11 +6381,14 @@ static void check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2, *assign_expr_type;
+  int expr_p = TRUE;
   
   switch (r->code) {
   case N_IGNORE: case N_STAR: case N_FIELD_ID:
+    expr_p = FALSE;
     break; /* do nothing */
   case N_LIST: {
+    expr_p = FALSE;
     for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
       check (n, r);
     break;
@@ -7156,6 +7159,7 @@ static void check (node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
+    expr_p = FALSE;
     if (declarator->code != N_IGNORE) {
       create_decl (curr_scope, r, decl_spec, NULL, initializer);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
@@ -7170,6 +7174,7 @@ static void check (node_t r, node_t context) {
   case N_ST_ASSERT: {
     int ok_p;
     
+    expr_p = FALSE;
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e1 = op1->attr; t1 = e1->type;
@@ -7197,6 +7202,7 @@ static void check (node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
+    expr_p = FALSE;
     create_decl (curr_scope, r, decl_spec, const_expr, NULL);
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
@@ -7247,6 +7253,7 @@ static void check (node_t r, node_t context) {
   case N_INIT: {
     node_t des_list = NL_HEAD (r->ops), initializer = NL_NEXT (des_list);
 
+    expr_p = FALSE;
     check (des_list, r); check (initializer, r);
     break;
   }
@@ -7259,6 +7266,7 @@ static void check (node_t r, node_t context) {
     node_t p, next_p, param_list, param_id, param_declarator, func;
     symbol_t sym;
     
+    expr_p = FALSE;
     curr_func_scope_num = 0;
     create_node_scope (block);
     func_block_scope = curr_scope;
@@ -7333,6 +7341,7 @@ static void check (node_t r, node_t context) {
     node_t abstract_declarator = NL_NEXT (specs);
     struct decl_spec decl_spec = check_decl_spec (specs, r); /* only spec_qual_list here */
     
+    expr_p = FALSE;
     type = check_declarator (abstract_declarator, FALSE);
     assert (NL_HEAD (abstract_declarator->ops)->code == N_IGNORE);
     decl_spec.type = append_type (type, decl_spec.type);
@@ -7344,12 +7353,14 @@ static void check (node_t r, node_t context) {
     break;
   }
   case N_BLOCK:
+    expr_p = FALSE;
     if (curr_scope != r)
       create_node_scope (r); /* it happens if it is the top func block */
     check (NL_HEAD (r->ops), r);
     finish_scope ();
     break;
   case N_MODULE:
+    expr_p = FALSE;
     create_node_scope (r);
     top_scope = curr_scope;
     check (NL_HEAD (r->ops), r);
@@ -7361,6 +7372,7 @@ static void check (node_t r, node_t context) {
     node_t if_stmt = NL_NEXT (expr);
     node_t else_stmt = NL_NEXT (if_stmt);
  
+    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
@@ -7381,6 +7393,7 @@ static void check (node_t r, node_t context) {
     struct switch_attr *switch_attr;
     case_t el;
     
+    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     type = ((struct expr *) expr->attr)->type;
@@ -7419,6 +7432,7 @@ static void check (node_t r, node_t context) {
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
 
+    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
@@ -7440,6 +7454,7 @@ static void check (node_t r, node_t context) {
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
     
+    expr_p = FALSE;
     check_labels (labels, r);
     create_node_scope (r);
     curr_loop = curr_loop_switch = r;
@@ -7473,6 +7488,7 @@ static void check (node_t r, node_t context) {
   case N_GOTO: {
     node_t labels = NL_HEAD (r->ops);
     
+    expr_p = FALSE;
     check_labels (labels, r);
     VARR_PUSH (node_t, gotos, r);
     break;
@@ -7481,6 +7497,7 @@ static void check (node_t r, node_t context) {
   case N_BREAK: {
     node_t labels = NL_HEAD (r->ops);
     
+    expr_p = FALSE;
     if (r->code == N_BREAK && curr_loop_switch == NULL) {
       error (r->pos, "break statement not within loop or switch");
     } else if (r->code == N_CONTINUE && curr_loop == NULL) {
@@ -7495,6 +7512,7 @@ static void check (node_t r, node_t context) {
     decl_t decl = curr_func_def->attr;
     struct type *ret_type, *type = decl->decl_spec.type;
 
+    expr_p = FALSE;
     assert (type->mode == TM_FUNC);
     check_labels (labels, r);
     check (expr, r);
@@ -7514,6 +7532,7 @@ static void check (node_t r, node_t context) {
     node_t labels = NL_HEAD (r->ops);
     node_t expr = NL_NEXT (labels);
     
+    expr_p = FALSE;
     check_labels (labels, r); check (expr, r);
     break;
   }
@@ -7525,6 +7544,9 @@ static void check (node_t r, node_t context) {
 	 && context->code != N_EXPR_SIZEOF && context->code != N_ADDR)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
+  } else if (expr_p) { /* it is an error -- define any expr and type: */
+    e = create_expr (r);
+    e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
   }
 }
 
