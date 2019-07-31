@@ -2220,7 +2220,7 @@ static void process_replacement (macro_call_t mc) {
 #ifdef C2MIR_PREPRO_DEBUG
 	  fprintf (stderr, "# push back <EOA> for macro %s call\n", mc->macro->id->repr);
 #endif
-	  push_back (arg);
+	  copy_and_push_back (arg);
 	  unget_next_pptoken (new_token (t->pos, "", T_BOA, N_IGNORE));
 #ifdef C2MIR_PREPRO_DEBUG
 	  fprintf (stderr, "# push back <BOA> for macro %s call\n", mc->macro->id->repr);
