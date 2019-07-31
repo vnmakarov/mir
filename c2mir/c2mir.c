@@ -6736,6 +6736,8 @@ static void check (node_t r, node_t context) {
 	e->const_p = TRUE;
 	e->u.u_val = e2->u.u_val + decl->offset;
       }
+    } else if (e1->lvalue_node->code == N_COMPOUND_LITERAL) {
+      t2 = t1;
     }
     e->type->mode = TM_PTR; e->type->u.ptr_type = t2;
     break;
