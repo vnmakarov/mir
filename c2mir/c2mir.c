@@ -5748,14 +5748,22 @@ static void check_assignment_types (struct type *left, struct type *right, struc
       error (pos, "%s", msg);
     }
   } else if (left->mode == TM_PTR) {
-    if (right->mode != TM_PTR
-	|| (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
-	    && ! void_ptr_p (left) && ! void_ptr_p (right)
-	    && ! null_const_p (expr, right))) {
-      msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
-	     : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
-	     : "incompatible types in assignment to a pointer");
-      error (pos, "%s", msg);
+    if (null_const_p (expr, right)) {
+    } else if (right->mode != TM_PTR
+	       || (! compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
+		   && ! void_ptr_p (left) && ! void_ptr_p (right))) {
+      if (right->mode == TM_PTR
+	  && left->u.ptr_type->mode == TM_BASIC && right->u.ptr_type->mode == TM_BASIC) {
+	msg = (code == N_CALL ? "incompatible pointer types of argument and parameter"
+	       : code == N_RETURN ? "incompatible pointer types of return-expr and function result"
+	       : "incompatible pointer types in assignment");
+	warning (pos, "%s", msg);
+      } else {
+	msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
+	       : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
+	       : "incompatible types in assignment to a pointer");
+	error (pos, "%s", msg);
+      }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
 	     : code == N_RETURN ? "returning a pointer of an atomic type"
