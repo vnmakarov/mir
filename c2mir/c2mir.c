@@ -6033,6 +6033,11 @@ static void check_decl_align (struct decl_spec *decl_spec) {
 DEF_VARR (decl_t);
 static VARR (decl_t) *decls_for_allocation;
 
+static void init_decl (decl_t decl) {
+  decl->addr_p = FALSE; decl->reg_p = FALSE; decl->offset = 0; decl->bit_offset = -1;
+  decl->scope = curr_scope; decl->item = NULL;
+}
+
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
 			 node_t width, node_t initializer) {
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
@@ -6042,8 +6047,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   
   assert (decl_node->code == N_MEMBER
 	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
-  decl->addr_p = FALSE; decl->reg_p = FALSE; decl->offset = 0; decl->bit_offset = -1;
-  decl->scope = curr_scope; decl->item = NULL;
+  init_decl (decl);
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
