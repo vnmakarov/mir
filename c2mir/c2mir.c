@@ -4366,15 +4366,16 @@ static void parse_finish (void) {
    constraints.  It also augmenting AST nodes by type and layout
    information.  Here are the created node attributes:
 
-1. expr nodes have attribute "struct expr", N_ID not expr context has NULL attribute.
-2. N_SWITCH has attribute "struct switch_attr"
-3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
-4. N_GOTO hash attribute node_t (target stmt)
-5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
-6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
-7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec"
-8. N_ENUM_CONST has attribute "struct enum_value"
-9. N_CASE and N_DEFAULT have attribute "struct case_attr"
+ 1. expr nodes have attribute "struct expr", N_ID not expr context has NULL attribute.
+ 2. N_SWITCH has attribute "struct switch_attr"
+ 3. N_SPEC_DECL (only with ID), N_MEMBER, N_FUNC_DEF have attribute "struct decl"
+ 4. N_GOTO hash attribute node_t (target stmt)
+ 5. N_STRUCT, N_UNION have attribute "struct node_scope" if they have a decl list
+ 6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
+ 7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec",
+    but as a part of N_COMPOUND_LITERAL have attribute "struct decl"
+ 8. N_ENUM_CONST has attribute "struct enum_value"
+ 9. N_CASE and N_DEFAULT have attribute "struct case_attr"
 
 */
 
@@ -7019,18 +7020,19 @@ static void check (node_t r, node_t context) {
   }
   case N_COMPOUND_LITERAL: {
     node_t list;
-    struct decl_spec *decl_spec;
+    decl_t decl;
     
     op1 = NL_HEAD (r->ops);
     list = NL_NEXT (op1);
     assert (op1->code == N_TYPE && list->code == N_LIST);
-    check (op1, r); decl_spec = op1->attr; t1 = decl_spec->type; check (list, r);
+    check (op1, r); decl = op1->attr; t1 = decl->decl_spec.type; check (list, r);
+    decl->addr_p = TRUE;
     if (t1->incomplete_p && (t1->mode != TM_ARR || t1->u.arr_type->size != N_IGNORE
 			     || t1->u.arr_type->el_type->incomplete_p)) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
-    check_initializer (t1, list, decl_spec->static_p || decl_spec->thread_local_p, FALSE);
+    t1 = check_initializer (t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
     e = create_expr (r); e->lvalue_node = r;
     *e->type = *t1;
     break;
@@ -7351,11 +7353,20 @@ static void check (node_t r, node_t context) {
     type = check_declarator (abstract_declarator, FALSE);
     assert (NL_HEAD (abstract_declarator->ops)->code == N_IGNORE);
     decl_spec.type = append_type (type, decl_spec.type);
-    r->attr = reg_malloc (sizeof (struct decl_spec));
-    *((struct decl_spec *) r->attr) = decl_spec;
-    check_type (((struct decl_spec *) r->attr)->type, 0, FALSE);
-    set_type_layout (((struct decl_spec *) r->attr)->type);
-    check_decl_align (r->attr);
+    if (context && context->code == N_COMPOUND_LITERAL) {
+      r->attr = reg_malloc (sizeof (struct decl));
+      init_decl (r->attr);
+      ((struct decl *) r->attr)->decl_spec = decl_spec;
+      check_type (decl_spec.type, 0, FALSE);
+      set_type_layout (decl_spec.type);
+      check_decl_align (&((struct decl *) r->attr)->decl_spec);
+    } else {
+      r->attr = reg_malloc (sizeof (struct decl_spec));
+      *((struct decl_spec *) r->attr) = decl_spec;
+      check_type (decl_spec.type, 0, FALSE);
+      set_type_layout (decl_spec.type);
+      check_decl_align (r->attr);
+    }
     break;
   }
   case N_BLOCK:
