@@ -7035,6 +7035,7 @@ static void check (node_t r, node_t context) {
     t1 = check_initializer (t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
     e = create_expr (r); e->lvalue_node = r;
     *e->type = *t1;
+    VARR_PUSH (decl_t, decls_for_allocation, decl);
     break;
   }
   case N_CALL: {
@@ -8932,8 +8933,37 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
     }
     break;
-  case N_COMPOUND_LITERAL:
-    break; // ???
+  case N_COMPOUND_LITERAL: {
+    node_t id;
+    const char *global_name = NULL;
+    node_t type_name = NL_HEAD (r->ops);
+    decl_t decl = type_name->attr;
+    struct expr *expr = r->attr;
+    MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
+    
+    if (decl->scope == top_scope) {
+      assert (decl->item == NULL);
+      global_name = _MIR_get_temp_item_name (module);
+    }
+    VARR_TRUNC (init_el_t, init_els, 0);
+    collect_init_els (decl->decl_spec.type, NL_EL (r->ops, 1),
+		      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
+		      || decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
+		      TRUE);
+    if (decl->scope == top_scope)
+      qsort (VARR_ADDR (init_el_t, init_els), VARR_LENGTH (init_el_t, init_els),
+	     sizeof (init_el_t), cmp_init_el);
+    if (decl->scope == top_scope || decl->decl_spec.static_p) {
+      var = new_op (decl, MIR_new_ref_op (NULL));
+    } else {
+      t = get_mir_type (expr->type);
+      var = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
+    }
+    gen_initializer (var, global_name, decl->decl_spec.type->raw_size,
+		     decl->scope != top_scope && !decl->decl_spec.static_p);
+    res = var;
+    break;
+  }
   case N_CALL: {
     node_t func, args = NL_EL (r->ops, 1);
     size_t ops_start;
