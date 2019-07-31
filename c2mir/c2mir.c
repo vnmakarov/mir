@@ -8174,6 +8174,20 @@ static const char *get_reg_var_name (MIR_type_t promoted_type,
   return VARR_ADDR (char, temp_string);
 }
 
+static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
+  char prefix[50];
+  unsigned func_scope_num = ((struct node_scope *) decl->scope->attr)->func_scope_num;
+  
+  assert (curr_func != NULL);
+  sprintf (prefix, "S%u_", func_scope_num);
+  VARR_TRUNC (char, temp_string, 0);
+  add_to_temp_string (prefix);
+  add_to_temp_string (curr_func->u.func->name);
+  add_to_temp_string ("_");
+  add_to_temp_string (suffix);
+  return VARR_ADDR (char, temp_string);
+}
+
 static VARR (MIR_var_t) *vars;
 
 static void collect_args_and_func_types (struct func_type *func_type,
@@ -8516,6 +8530,17 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
 	var.decl->item = data;
     }
   }
+}
+
+static MIR_item_t get_ref_item (node_t def, const char *name) {
+  struct decl *decl = def->attr;
+  
+  if (def->code == N_FUNC_DEF
+      || (def->code == N_SPEC_DECL && NL_EL (def->ops, 1)->code == N_DECL
+	  && decl->scope == top_scope && decl->decl_spec.type->mode != TM_FUNC
+	  && ! decl->decl_spec.typedef_p && ! decl->decl_spec.extern_p))
+    return decl->decl_spec.linkage == N_EXTERN ? MIR_new_export (name) : MIR_new_forward (name);
+  return NULL;
 }
 
 DEF_VARR (MIR_op_t);
@@ -8956,35 +8981,26 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t initializer = NL_NEXT (declarator);
     node_t n, id;
     symbol_t sym;
+    const char *name;
     
     decl = (decl_t) r->attr;
     if (declarator != NULL && declarator->code != N_IGNORE && decl->item == NULL) {
-      if (decl->decl_spec.linkage != N_IGNORE) {
-	MIR_item_t (*func) (const char *) = MIR_new_import;
-	struct decl *n_decl;
-	
-	id = NL_HEAD (declarator->ops);
-	if (symbol_find (S_REGULAR, id, decl->scope, &sym)) {
-	  n = sym.def_node; n_decl = n->attr;
-	  if (n->code == N_FUNC_DEF
-	      || (n->code == N_SPEC_DECL && NL_EL (n->ops, 1)->code == N_DECL
-		  && n_decl->scope == top_scope && n_decl->decl_spec.type->mode != TM_FUNC
-		  && ! n_decl->decl_spec.typedef_p && ! n_decl->decl_spec.extern_p)) {
-	    func = MIR_new_export;
-	  } else {
-	    for (size_t i = 0; i < VARR_LENGTH (node_t, sym.defs); i++) {
-	      n = VARR_GET (node_t, sym.defs, i); n_decl = n->attr;
-	      if (n->code == N_FUNC_DEF
-		  || (n->code == N_SPEC_DECL && NL_EL (n->ops, 1)->code == N_DECL
-		      && n_decl->scope == top_scope && n_decl->decl_spec.type->mode != TM_FUNC
-		      && ! n_decl->decl_spec.typedef_p && ! n_decl->decl_spec.extern_p)) {
-		func = n_decl->decl_spec.linkage == N_EXTERN ? MIR_new_export : MIR_new_forward;
-		break;
-	      }
-	    }
-	  }
+      id = NL_HEAD (declarator->ops);
+      name = (decl->scope != top_scope && decl->decl_spec.static_p
+	      ? get_func_static_var_name (id->u.s, decl) : id->u.s);
+      if (decl->scope != top_scope && decl->decl_spec.static_p) {
+	decl->item = MIR_new_forward (name);
+	DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
+	DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, decl->item);
+      } else if (decl->decl_spec.linkage != N_IGNORE) {
+	if (symbol_find (S_REGULAR, id, decl->scope, &sym)
+	    && (decl->item = get_ref_item (sym.def_node, name)) == NULL) {
+	  for (size_t i = 0; i < VARR_LENGTH (node_t, sym.defs); i++)
+	    if ((decl->item = get_ref_item (VARR_GET (node_t, sym.defs, i), name)) != NULL)
+	      break;
 	}
-	decl->item = func (id->u.s);
+	if (decl->item == NULL)
+	  decl->item = MIR_new_import (name);
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
 	  && ! decl->decl_spec.typedef_p && ! decl->decl_spec.extern_p) {
