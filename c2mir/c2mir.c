@@ -8814,6 +8814,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     int add_p = FALSE;
     
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
+    if (op1.mir_op.mode == MIR_OP_REF) { /* array or func */
+      res = op1;
+      break;
+    }
     assert (op1.mir_op.mode == MIR_OP_MEM);
     t = get_mir_type (((struct expr *) r->attr)->type);
     res = get_new_temp (t);
