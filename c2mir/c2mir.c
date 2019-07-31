@@ -8502,17 +8502,17 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
 	data = MIR_new_string_data (_MIR_get_temp_item_name (module), val.mir_op.u.str);
 	DLIST_REMOVE (MIR_item_t, module->items, data);
 	DLIST_PREPEND (MIR_item_t, module->items, data);
-	data = MIR_new_ref_data (name, data);
+	data = MIR_new_ref_data (global_name, data);
 	data_size = _MIR_type_size (t);
       }
-      if (name != NULL)
+      if (global_name != NULL)
 	var.decl->item = data;
-      name = NULL;
+      global_name = NULL;
       rel_offset = init_el.offset + data_size;
     }
     if (rel_offset < size) { /* fill the tail: */
-      data = MIR_new_bss (name, size - rel_offset);
-      if (name != NULL)
+      data = MIR_new_bss (global_name, size - rel_offset);
+      if (global_name != NULL)
 	var.decl->item = data;
     }
   }
