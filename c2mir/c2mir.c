@@ -7545,7 +7545,7 @@ static void check (node_t r, node_t context) {
   }
   if (e != NULL) {
     if (context && context->code != N_ALIGNOF && context->code != N_SIZEOF
-	 && context->code != N_EXPR_SIZEOF && context->code != N_ADDR)
+	&& context->code != N_EXPR_SIZEOF)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
   } else if (expr_p) { /* it is an error -- define any expr and type: */
