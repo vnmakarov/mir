@@ -6102,7 +6102,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   decl->decl_spec.type
     = check_initializer (type, initializer,
 			 decl_spec.linkage == N_STATIC || decl_spec.linkage == N_EXTERN
-			 || decl_spec.thread_local_p,
+			 || decl_spec.thread_local_p || decl_spec.static_p,
 			 TRUE);
   if (decl_node->code != N_MEMBER && ! decl_spec.typedef_p &&
       ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
@@ -8784,7 +8784,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
       res = new_op (NULL, MIR_new_ref_op (((decl_t) e->def_node->attr)->item));
-    } else if ((decl = e->lvalue_node->attr)->scope == top_scope) {
+    } else if ((decl = e->lvalue_node->attr)->scope == top_scope || decl->decl_spec.static_p) {
       t = get_mir_type (e->type);
       res = get_new_temp (MIR_T_I64);
       emit2 (MIR_MOV, res.mir_op, MIR_new_ref_op (decl->item));
@@ -9004,13 +9004,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
 	  && ! decl->decl_spec.typedef_p && ! decl->decl_spec.extern_p) {
-	id = NL_HEAD (declarator->ops);
-	if (decl->scope == top_scope && initializer->code == N_IGNORE) {
-	  decl->item = MIR_new_bss (id->u.s, decl->decl_spec.type->raw_size);
+	if (initializer->code == N_IGNORE) {
+	  if (decl->scope == top_scope || decl->decl_spec.static_p)
+	    decl->item = MIR_new_bss (name, decl->decl_spec.type->raw_size);
 	} else if (initializer->code != N_IGNORE) { // ??? general code
 	  VARR_TRUNC (init_el_t, init_els, 0);
 	  collect_init_els (decl->decl_spec.type, initializer,
-			    decl->decl_spec.static_p || decl->decl_spec.thread_local_p, TRUE);
+			    decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
+			    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p, TRUE);
 	  if (decl->scope == top_scope)
 	    qsort (VARR_ADDR (init_el_t, init_els), VARR_LENGTH (init_el_t, init_els),
 		   sizeof (init_el_t), cmp_init_el);
@@ -9021,8 +9022,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	    check (id, NULL);
 	    curr_scope = saved_scope;
 	  }
-	  if (decl->scope == top_scope) {
-	    var = new_op (decl, MIR_new_ref_op (decl->item));
+	  if (decl->scope == top_scope || decl->decl_spec.static_p) {
+	    var = new_op (decl, MIR_new_ref_op (NULL));
 	  } else {
 	    var = gen (id, NULL, NULL, FALSE);
 	    assert (var.decl != NULL
