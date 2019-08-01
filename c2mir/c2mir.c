@@ -6119,17 +6119,20 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
 }
 
 static struct type *adjust_type (struct type *type) {
-  struct type *res = type;
+  struct type *res;
   
-  if (type->mode == TM_ARR) {
-    res = create_type (NULL);
-    res->mode = TM_PTR; res->incomplete_p = FALSE; res->u.ptr_type = type->u.arr_type->el_type;
+  if (type->mode != TM_ARR && type->mode != TM_FUNC)
+    return type;
+  res = create_type (NULL);
+  res->mode = TM_PTR; res->pos_node = type->pos_node;
+  if (type->mode == TM_FUNC) {
+    res->u.ptr_type = type;
+  } else {
+    res->u.ptr_type = type->u.arr_type->el_type;
     res->type_qual = type->u.arr_type->ind_type_qual;
-  } else if (type->mode == TM_FUNC) {
-    res = create_type (NULL);
-    res->mode = TM_PTR; res->incomplete_p = FALSE;
-    res->pos_node = type->pos_node; res->u.ptr_type = type;
   }
+  res->incomplete_p = type->incomplete_p;
+  set_type_layout (res);
   return res;
 }
 
