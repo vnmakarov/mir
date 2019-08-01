@@ -5758,7 +5758,7 @@ static void check_assignment_types (struct type *left, struct type *right, struc
 	msg = (code == N_CALL ? "incompatible pointer types of argument and parameter"
 	       : code == N_RETURN ? "incompatible pointer types of return-expr and function result"
 	       : "incompatible pointer types in assignment");
-	warning (pos, "%s", msg);
+	(pedantic_p ? error : warning) (pos, "%s", msg);
       } else {
 	msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
 	       : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
