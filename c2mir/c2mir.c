@@ -58,6 +58,10 @@ static void alloc_error (const char *message) { error_func (C_alloc_error, messa
 #include "mir-hash.h"
 #include "mir-htab.h"
 
+static mir_size_t round_size (mir_size_t size, mir_size_t round) {
+  return (size + round - 1) / round * round;
+}
+
 typedef struct node *node_t;
 
 /* Some abbreviations: */
@@ -894,7 +898,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     for (comment_char = -1, nl_p = FALSE;; curr_c = cs_get ()) {
       switch (curr_c) {
       case '\t':
-	cs->pos.ln_pos = (cs->pos.ln_pos / TAB_STOP + 1) * TAB_STOP;
+	cs->pos.ln_pos = round_size (cs->pos.ln_pos, TAB_STOP);
 	/* fall through */
       case ' ': case '\f': case '\r': case '\v':
 	break;
@@ -4805,7 +4809,7 @@ static void aux_set_type_align (struct type *type) {
 
 static mir_size_t type_size (struct type *type) {
   assert (type->raw_size != MIR_SIZE_MAX && type->align >= 0);
-  return (type->raw_size + type->align - 1) / type->align * type->align;
+  return round_size (type->raw_size, type->align);
 }
 
 
