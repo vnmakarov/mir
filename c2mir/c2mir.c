@@ -6061,14 +6061,13 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
-    type = decl_spec.type; decl_spec.linkage = N_IGNORE;
+    decl_spec.linkage = N_IGNORE;
   } else {
     assert (declarator->code == N_DECL);
     type = check_declarator (declarator, func_def_p);
-    type = append_type (type, decl_spec.type);
-    decl_spec.type = type;
+    decl_spec.type = append_type (type, decl_spec.type);
   }
-  check_type (type, 0, func_def_p);
+  check_type (decl_spec.type, 0, func_def_p);
   if (declarator->code == N_DECL) {
     id = NL_HEAD (declarator->ops);
     list_head = NL_HEAD (NL_NEXT (id)->ops);
@@ -6088,15 +6087,16 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     }
   }
   if (decl_node->code != N_MEMBER) {
-    set_type_layout (type);
+    set_type_layout (decl_spec.type);
     check_decl_align (&decl_spec);
     if (! decl_spec.typedef_p && ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
       VARR_PUSH (decl_t, decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
-  if (type->incomplete_p && (type->mode != TM_ARR || type->u.arr_type->el_type->incomplete_p)) {
-    if (type->mode == TM_ARR && type->u.arr_type->el_type->mode == TM_ARR)
+  if (decl_spec.type->incomplete_p
+      && (decl_spec.type->mode != TM_ARR || decl_spec.type->u.arr_type->el_type->incomplete_p)) {
+    if (decl_spec.type->mode == TM_ARR && decl_spec.type->u.arr_type->el_type->mode == TM_ARR)
       error (initializer->pos, "initialization of incomplete sub-array");
     else
       error (initializer->pos, "initialization of incomplete type variable");
