@@ -12,6 +12,8 @@ static const char *standard_include_dirs[] = {
   "include/mirc/x86-64/"
 };
 
+#define MAX_ALIGNMENT 16
+
 #define ADJUST_TYPE_ALIGNMENT(align, type) x86_adjust_type_alignment (align, type)
 
 static int x86_adjust_type_alignment (int align, struct type *type) {
