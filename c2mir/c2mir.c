@@ -7633,6 +7633,12 @@ static void context_finish (void) {
                                          type in scope with <scope_number>
 */
 
+#if MIR_PTR64
+static const MIR_type_t MIR_POINTER_TYPE = MIR_T_I64;
+#else
+static const MIR_type_t MIR_POINTER_TYPE = MIR_T_I32;
+#endif
+
 struct op {
   decl_t decl;
   MIR_op_t mir_op;
