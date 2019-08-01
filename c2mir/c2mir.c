@@ -5862,8 +5862,9 @@ static int update_init_object_path (size_t mark,  int list_p) {
   }
 }
 
-static struct type *check_initializer (struct type *type, node_t initializer,
-				       int const_only_p, int top_p) {
+static void check_initializer (struct type **type_ptr, node_t initializer,
+			       int const_only_p, int top_p) {
+  struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t des_list, curr_des, init, str, value, size_node, temp;
   mir_llong curr_index, max_index, size_val;
@@ -5883,7 +5884,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
     } else {
       check_assignment_types (cexpr->type, NULL, cexpr, initializer);
     }
-    return type;
+    return;
   }
   init = NL_HEAD (initializer->ops);
   if (((str = initializer)->code == N_STR /* string or string in parentheses  */
@@ -5900,7 +5901,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
     } else if (len > ((struct expr *) type->u.arr_type->size->attr)->u.i_val + 1)  {
       error (initializer->pos, "string is too long for array initializer");
     }
-    return type;
+    return;
   }
   assert (init->code == N_INIT);
   des_list = NL_HEAD (init->ops);
@@ -5908,16 +5909,16 @@ static struct type *check_initializer (struct type *type, node_t initializer,
   if (type->mode != TM_ARR && type->mode != TM_STRUCT && type->mode != TM_UNION) {
     if ((temp = NL_NEXT (init)) != NULL) {
       error (temp->pos, "excess elements in scalar initializer");
-      return type;
+      return;
     }
     if ((temp = NL_HEAD (des_list->ops)) != NULL) {
       error (temp->pos, "designator in scalar initializer");
-      return type;
+      return;
     }
     initializer = NL_NEXT (des_list);
     if (! top_p) {
       error (init->pos, "braces around scalar initializer");
-      return type;
+      return;
     }
     top_p = FALSE;
     goto check_one_value;
@@ -5956,13 +5957,13 @@ static struct type *check_initializer (struct type *type, node_t initializer,
       }
       init_object = VARR_LAST (init_object_t, init_object_path);
       if (init_object.container_type->mode == TM_ARR) {
-	check_initializer (init_object.container_type->u.arr_type->el_type,
+	check_initializer (&init_object.container_type->u.arr_type->el_type,
 			   value, const_only_p, FALSE);
 	if (max_index < (curr_index = VARR_GET (init_object_t, init_object_path, mark).u.curr_index))
 	  max_index = curr_index;
       } else if (init_object.container_type->mode == TM_STRUCT
 		 || init_object.container_type->mode == TM_UNION) {
-	check_initializer (((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
+	check_initializer (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
 			   value, const_only_p, FALSE);
       }
     } else {
@@ -5981,7 +5982,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
 	    init_object.u.curr_member = sym.def_node;
 	    assert (init_object.u.curr_member->code == N_MEMBER);
 	    VARR_PUSH (init_object_t, init_object_path, init_object);
-	    check_initializer (((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
+	    check_initializer (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
 			       value, const_only_p, FALSE);
 	  }
 	} else if (type->mode != TM_ARR) {
@@ -6000,7 +6001,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
 	  VARR_PUSH (init_object_t, init_object_path, init_object);
 	  if (max_index < init_object.u.curr_index)
 	    max_index = init_object.u.curr_index;
-	  check_initializer (type->u.arr_type->el_type, value, const_only_p, FALSE);
+	  check_initializer (&type->u.arr_type->el_type, value, const_only_p, FALSE);
 	}
       }
     }
@@ -6023,7 +6024,8 @@ static struct type *check_initializer (struct type *type, node_t initializer,
     make_type_complete (type);
   }
   VARR_TRUNC (init_object_t, init_object_path, mark);
-  return type;
+  *type_ptr = type;
+  return;
 }
 
 static void check_decl_align (struct decl_spec *decl_spec) {
@@ -6102,11 +6104,10 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     return;
   }
   check (initializer, decl_node);
-  decl->decl_spec.type
-    = check_initializer (type, initializer,
-			 decl_spec.linkage == N_STATIC || decl_spec.linkage == N_EXTERN
-			 || decl_spec.thread_local_p || decl_spec.static_p,
-			 TRUE);
+  check_initializer (&decl->decl_spec.type, initializer,
+		     decl_spec.linkage == N_STATIC || decl_spec.linkage == N_EXTERN
+		     || decl_spec.thread_local_p || decl_spec.static_p,
+		     TRUE);
   if (decl_node->code != N_MEMBER && ! decl_spec.typedef_p &&
       ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
     /* Process after initilizer because we can make type complete by it. */
@@ -7035,7 +7036,7 @@ static void check (node_t r, node_t context) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
-    t1 = check_initializer (t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
+    check_initializer (&t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
     e = create_expr (r); e->lvalue_node = r;
     *e->type = *t1;
     VARR_PUSH (decl_t, decls_for_allocation, decl);
