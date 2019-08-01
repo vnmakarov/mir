@@ -5096,6 +5096,14 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
   VARR_PUSH (node_t, sym.defs, def_node);
 }
 
+static void make_type_complete (struct type *type) {
+  if (! type->incomplete_p)
+    return;
+  /* The type became complete: recalculate size: */
+  type->incomplete_p = FALSE;
+  type->raw_size = MIR_SIZE_MAX; set_type_layout (type);
+}
+
 static int in_params_p;
 
 static void check (node_t node, node_t context);
@@ -5270,11 +5278,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	*type = *decl->decl_spec.type;
 	if (type->incomplete_p
 	    && (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ENUM)
-	    && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE) {
-	  /* The type became complete: recalculate size: */
-	  type->incomplete_p = FALSE;
-	  type->raw_size = MIR_SIZE_MAX; set_type_layout (type);
-	}
+	    && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE)
+	  make_type_complete (type);
       }
       break;
     }
@@ -5530,15 +5535,15 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	      struct arr_type *arr_type = type->u.arr_type;
 	      
 	      type->mode = TM_PTR;
-	      type->incomplete_p = FALSE;
 	      type->u.ptr_type = arr_type->el_type;
 	      type->type_qual = arr_type->ind_type_qual;
+	      make_type_complete (type);
 	    } else if (type->mode == TM_FUNC) {
 	      struct type *par_type = create_type (NULL);
 	      
 	      par_type->mode = TM_PTR;
-	      type->incomplete_p = FALSE;
 	      par_type->pos_node = type->pos_node; par_type->u.ptr_type = decl_spec_ptr->type;
+	      make_type_complete (type);
 	    }
 	  }
 	}
@@ -5891,8 +5896,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
       assert (len < MIR_INT_MAX);
       type->u.arr_type->size = new_i_node (len, type->u.arr_type->size->pos);
       check (type->u.arr_type->size, NULL);
-      type->incomplete_p = FALSE;
-      type->raw_size = MIR_SIZE_MAX; set_type_layout (type);
+      make_type_complete (type);
     } else if (len > ((struct expr *) type->u.arr_type->size->attr)->u.i_val + 1)  {
       error (initializer->pos, "string is too long for array initializer");
     }
@@ -6016,8 +6020,7 @@ static struct type *check_initializer (struct type *type, node_t initializer,
 			      : max_index < MIR_LONG_MAX ? new_l_node (max_index + 1, size_node->pos)
 			      : new_ll_node (max_index + 1, size_node->pos));
     check (type->u.arr_type->size, NULL);
-    type->incomplete_p = FALSE;
-    type->raw_size = MIR_SIZE_MAX; set_type_layout (type);
+    make_type_complete (type);
   }
   VARR_TRUNC (init_object_t, init_object_path, mark);
   return type;
