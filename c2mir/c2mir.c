@@ -9595,7 +9595,7 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
       fprintf (f, "\n");
     else if (n->code == N_MODULE)
       fprintf (f, ": the top scope");
-    else
+    else if (n->attr != NULL)
       fprintf (f, ": higher scope node %lu", ((struct node_scope *) n->attr)->scope->uid);
     if (n->code == N_STRUCT || n->code == N_UNION)
       fprintf (f, "\n");
