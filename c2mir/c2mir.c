@@ -9081,7 +9081,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = get_new_temp (t);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
     } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
-      node_t block = NL_EL (r->ops, 3);
+      node_t block = NL_EL (curr_func_def->ops, 3);
       struct node_scope *ns = block->attr;
 
       res = get_new_temp (MIR_T_I64);
