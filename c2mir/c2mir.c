@@ -8258,23 +8258,21 @@ static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
 }
 
 static VARR (MIR_var_t) *vars;
-
 static VARR (node_t) *mem_params;
 
-static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t *ret_type,
-					 VARR (MIR_var_t) *args, VARR (node_t) *mem_params) {
+static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t *ret_type) {
   node_t declarator, id, first_param, p;
   struct type *param_type;
   MIR_var_t var;
   MIR_type_t type, promoted_type;
   
   first_param = NL_HEAD (func_type->param_list->ops);
-  VARR_TRUNC (MIR_var_t, args, 0);
+  VARR_TRUNC (MIR_var_t, vars, 0);
   VARR_TRUNC (node_t, mem_params, 0);
   if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
-    VARR_PUSH (MIR_var_t, args, var);
+    VARR_PUSH (MIR_var_t, vars, var);
   }
   if (first_param != NULL && ! void_param_p (first_param)) {
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
@@ -8296,7 +8294,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
 	  VARR_PUSH (node_t, mem_params, p);
       }
       var.type = type;
-      VARR_PUSH (MIR_var_t, args, var);
+      VARR_PUSH (MIR_var_t, vars, var);
     }
   }
   set_type_layout (func_type->ret_type);
@@ -9176,7 +9174,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     assert (decl->decl_spec.type->mode == TM_FUNC);
     curr_func_def = r;
     curr_call_arg_offset = ns->size - ns->call_args_size;
-    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type, vars, mem_params);
+    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type);
     curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s,
 				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
 				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
@@ -9398,7 +9396,7 @@ static void gen_mir_protos (void) {
     set_type_layout (type);
     func_type = type->u.ptr_type->u.func_type;
     assert (func_type->param_list->code == N_LIST);
-    collect_args_and_func_types (func_type, &ret_type, vars, mem_params);
+    collect_args_and_func_types (func_type, &ret_type);
     sprintf (buf, "proto%d", n++);
     func_type->proto_item
       = ((func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL
