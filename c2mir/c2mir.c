@@ -7063,6 +7063,7 @@ static void check (node_t r, node_t context) {
     struct func_type *func_type;
     struct type *ret_type;
     node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
+    node_t saved_scope = curr_scope;
     struct decl_spec *decl_spec;
     node_t block = NL_EL (curr_func_def->ops, 3);
     struct node_scope *ns = block->attr;
@@ -7078,7 +7079,7 @@ static void check (node_t r, node_t context) {
 			    new_node1 (N_SHARE, spec_list),
 			    new_node2 (N_DECL, copy_node (op1), list),
 			    new_node (N_IGNORE));
-      check (decl, NULL);
+      curr_scope = top_scope; check (decl, NULL); curr_scope = saved_scope;
       assert (top_scope->code == N_MODULE);
       list = NL_HEAD (top_scope->ops);
       assert (list->code == N_LIST);
