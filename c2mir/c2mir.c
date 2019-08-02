@@ -8210,13 +8210,28 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
   return mem;
 }
 
+static void block_move (op_t var, op_t val, mir_size_t size) {
+  MIR_label_t repeat_label = MIR_new_label ();
+  op_t index = get_new_temp (MIR_T_I64);
+  
+  emit2 (MIR_MOV, index.mir_op, MIR_new_int_op (size));
+  val = modify_for_block_move (val, index);
+  var = modify_for_block_move (var, index);
+  emit_insn (repeat_label);
+  emit3 (MIR_SUB, index.mir_op, index.mir_op, one_op.mir_op);
+  assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
+  val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
+  emit2 (MIR_MOV, var.mir_op, val.mir_op);
+  emit3 (MIR_BGT, MIR_new_label_op (repeat_label), index.mir_op, zero_op.mir_op);
+}
+
 static const char *get_reg_var_name (MIR_type_t promoted_type,
 				     const char *suffix, unsigned func_scope_num) {
   char prefix[50];
   
-  sprintf (prefix, promoted_type == MIR_T_I64 ? "I%u_" : promoted_type == MIR_T_U64
-	   ? "U%u_" : promoted_type == MIR_T_I32 ? "i%u_" : promoted_type == MIR_T_U32 ?
-	   "u%u_" : promoted_type == MIR_T_F ? "f%u_" : "d%u_",
+  sprintf (prefix, promoted_type == MIR_T_I64 ? "I%u_" : promoted_type == MIR_T_U64 ? "U%u_"
+	   : promoted_type == MIR_T_I32 ? "i%u_" : promoted_type == MIR_T_U32 ? "u%u_"
+	   : promoted_type == MIR_T_F ? "f%u_" : "d%u_",
 	   func_scope_num);
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (prefix);
@@ -8811,20 +8826,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	emit2 (MIR_MOV, var.mir_op, temp_op1.mir_op);
       }
     } else { /* block move */
-      MIR_label_t repeat_label = MIR_new_label ();
       mir_size_t size = type_size (((struct expr *) r->attr)->type);
       
       assert (r->code == N_ASSIGN);
-      op1 = get_new_temp (MIR_T_I64);
-      emit2 (MIR_MOV, op1.mir_op, MIR_new_int_op (size));
-      var = modify_for_block_move (var, op1);
-      val = modify_for_block_move (val, op1);
-      emit_insn (repeat_label);
-      emit3 (MIR_SUB, op1.mir_op, op1.mir_op, one_op.mir_op);
-      assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
-      val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
-      emit2 (MIR_MOV, var.mir_op, val.mir_op);
-      emit3 (MIR_BGT, MIR_new_label_op (repeat_label), op1.mir_op, zero_op.mir_op);
+      block_move (var, val, size);
     }
     break;
   case N_ID: {
