@@ -192,7 +192,7 @@ static void str_init (void) {
 static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
   char *heap_s;
   str_t el, str;
-  
+
   str.s = s;
   if (HTAB_DO (str_t, str_tab, str, HTAB_FIND, el))
     return el;
@@ -207,7 +207,7 @@ static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
 
 static const char *find_str_by_key (size_t key) {
   str_t el, str;
-  
+
   str.key = key;
   if (! HTAB_DO (str_t, str_key_tab, str, HTAB_FIND, el))
     return NULL;
@@ -417,7 +417,7 @@ static node_t new_node (node_code_t nc) {
 
 static node_t copy_node (node_t n) {
   node_t r = new_node (n->code);
-  
+
   r->pos = n->pos;
   r->u = n->u;
   return r;
@@ -527,7 +527,7 @@ static const char *uniq_str (const char *str) {
 
 static token_t new_token (pos_t pos, const char *repr, int token_code, node_code_t node_code) {
   token_t token = reg_malloc (sizeof (struct token));
-  
+
   token->code = token_code; token->processed_p = FALSE;
   token->pos = pos; token->repr = repr;
   token->node_code = node_code; token->node = NULL;
@@ -549,7 +549,7 @@ static token_t new_token_wo_uniq_repr (pos_t pos, const char *repr,
 
 static token_t new_node_token (pos_t pos, const char *repr, int token_code, node_t node) {
   token_t token = new_token_wo_uniq_repr (pos, repr,  token_code, N_IGNORE);
-  
+
   token->node = node;
   return token;
 }
@@ -565,7 +565,7 @@ static void print_pos (FILE *f, pos_t pos, int col_p) {
 static const char *get_token_name (int token_code) {
   static char buf[30];
   const char *s;
-  
+
   switch (token_code) {
   case T_NUMBER: return "number";
   case T_CH: return "char constant";
@@ -601,7 +601,7 @@ static unsigned n_errors, n_warnings;
 
 static void error (pos_t pos, const char *format, ...) {
   va_list args;
-   
+
   n_errors++;
   va_start (args, format);
   print_pos (stderr, pos, TRUE);
@@ -612,7 +612,7 @@ static void error (pos_t pos, const char *format, ...) {
 
 static void warning (pos_t pos, const char *format, ...) {
   va_list args;
-   
+
   n_warnings++;
   va_start (args, format);
   print_pos (stderr, pos, TRUE);
@@ -638,7 +638,7 @@ typedef struct stream {
 DEF_VARR (stream_t);
 static VARR (stream_t) *streams;  /* stack of streams */
 static stream_t cs, eof_s;        /* current stream and stream corresponding the last EOF */
-  
+
 static void init_streams (void) {
   eof_s = NULL;
   VARR_CREATE (stream_t, streams, 32);
@@ -659,7 +659,7 @@ static void finish_streams (void) {
 
 static stream_t new_stream (FILE *f, const char *fname) {
   stream_t s = malloc (sizeof (struct stream));
-  
+
   VARR_CREATE (char, s->ln, 128);
   s->f = f; s->fname = s->pos.fname = fname;
   s->pos.lno = 0; s->pos.ln_pos = 0; s->ifs_length_at_stream_start = 0;
@@ -684,7 +684,7 @@ static void remove_trigraphs (void) {
   int len = VARR_LENGTH (char, cs->ln);
   char *addr = VARR_ADDR (char, cs->ln);
   int i, start, to, ch;
-  
+
   for (i = to = 0; i < len; i++, to++) {
     addr[to] = addr[i];
     for (start = i; i < len && addr[i] == '?'; i++, to++)
@@ -715,7 +715,7 @@ static void remove_trigraphs (void) {
   }
   VARR_TRUNC (char, cs->ln, len);
 }
-  
+
 static int ln_get (FILE *f) {
   if (f == NULL)
     return c_getc (); /* top level */
@@ -725,7 +725,7 @@ static int ln_get (FILE *f) {
 static char *reverse (VARR (char)  *v) {
   char *addr = VARR_ADDR (char, v);
   int i, j, temp, last = (int) VARR_LENGTH (char, v) - 1;
-  
+
   if (last >= 0 && addr[last] == '\0')
     last--;
   for (i = last, j = 0; i > j; i--, j++) {
@@ -767,12 +767,12 @@ static int cs_get (void) {
     cs->pos.ln_pos = 0; cs->pos.lno++;
   }
 }
-  
+
 static void cs_unget (int c) {
   cs->pos.ln_pos--;
   VARR_PUSH (char, cs->ln, c);
 }
-  
+
 static void set_string_stream (const char *str, pos_t pos,
 			       void (*transform) (const char *, VARR (char) *)) {
   /* read from string str */
@@ -839,7 +839,7 @@ static void set_string_val (token_t t, VARR (char) *temp) {
     case 'x': case 'X': {
       int first_p = TRUE;
       unsigned long v = 0;
-      
+
       for (i++; ; i++) {
 	curr_c = str[i];
 	if (! isxdigit (curr_c))
@@ -875,7 +875,7 @@ static void set_string_val (token_t t, VARR (char) *temp) {
 static token_t new_id_token (pos_t pos, const char *id_str) {
   token_t token;
   const char *str = uniq_str (id_str);
-  
+
   token = new_token (pos, str, T_ID, N_IGNORE);
   token->node = new_str_node (N_ID, str, pos);
   return token;
@@ -887,7 +887,7 @@ static VARR (token_t) *buffered_tokens;
 static token_t get_next_pptoken_1 (int header_p) {
   int start_c, curr_c, nl_p, comment_char;
   pos_t pos;
-  
+
   if (cs->fname != NULL && VARR_LENGTH (token_t, buffered_tokens) != 0) {
     return VARR_POP (token_t, buffered_tokens);
   }
@@ -952,7 +952,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     }
     if (header_p && (curr_c == '<' || curr_c == '\"')) {
       int i, stop;
-      
+
       pos = cs->pos;
       VARR_TRUNC (char, temp_string, 0);
       for (stop = curr_c == '<' ? '>' : '\"';;) {
@@ -1142,7 +1142,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     case ']': return new_token (cs->pos, "]", curr_c, N_IGNORE);
     case EOF: {
       pos_t pos = cs->pos;
-      
+
       assert (eof_s != cs);
       if (eof_s != NULL)
 	free_stream (eof_s);
@@ -1205,7 +1205,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       int base = 10, err_p = FALSE, double_p = FALSE;
       int dec_p = FALSE, hex_p = FALSE;
       int prev_c, hex_char_p;
-      
+
       pos = cs->pos;
       VARR_TRUNC (char, symbol_text, 0);
       for (;;) {
@@ -1213,7 +1213,7 @@ static token_t get_next_pptoken_1 (int header_p) {
 	curr_c = cs_get ();
 	if (curr_c == 'e' || curr_c == 'E' || curr_c == 'p' || curr_c == 'P') {
 	  int c = cs_get ();
-	  
+
 	  if (c == '+' || c == '-') {
 	    VARR_PUSH (char, symbol_text, curr_c);
 	    curr_c = c;
@@ -1231,7 +1231,7 @@ static token_t get_next_pptoken_1 (int header_p) {
     case '\'': case '\"': { /* ??? unicode and wchar */
       token_t t;
       int stop = curr_c;
-      
+
       pos = cs->pos;
       VARR_PUSH (char, symbol_text, curr_c);
       for (curr_c = cs_get ();
@@ -1322,7 +1322,7 @@ static const char *stringify (const char *str, VARR (char) *to) {
 
 static void destringify (const char *repr, VARR (char) *to) {
   int i, repr_len = strlen (repr);
-  
+
   VARR_TRUNC (char, to,  0);
   if (repr_len == 0)
     return;
@@ -1339,7 +1339,7 @@ static void destringify (const char *repr, VARR (char) *to) {
 /* TS - vector, T defines position for empty vector */
 static token_t token_stringify (token_t t, VARR (token_t) *ts) {
   int i;
-  
+
   if (VARR_LENGTH (token_t, ts) != 0)
     t = VARR_GET (token_t, ts, 0);
   t = new_node_token (t->pos, "", T_STR, new_str_node (N_STR, "", t->pos));
@@ -1353,7 +1353,7 @@ static token_t token_stringify (token_t t, VARR (token_t) *ts) {
     } else {
       for (const char *s = VARR_GET (token_t, ts, i)->repr; *s != 0; s++) {
 	int c = VARR_LENGTH (token_t, ts) == i + 1 ? '\0' : VARR_GET (token_t, ts, i + 1)->repr[0];
-	
+
 	/* It is an implementation defined behaviour analogous GCC/Clang: */
 	if (*s == '\"' || (*s == '\\' && c != 'a' && c != 'b'
 			   && c != 'f' && c != 'n' && c != 'r' && c != 't'))
@@ -1374,7 +1374,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
 	  && t->code != T_EOU && t->code != T_PLM && t->code != T_RDBLNO);
   if (t->code == T_ID && id2kw_p) {
     str_t str = str_add (t->repr, T_STR, 0, FALSE);
-    
+
     if (str.key != T_STR) {
       t->code = str.key; t->node_code = N_IGNORE; t->node = NULL;
     }
@@ -1387,7 +1387,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
     const char *repr = t->repr;
     char *stop;
     int last = strlen (repr) - 1;
-    
+
     assert (last >= 0);
     if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
       base = 16;
@@ -1469,7 +1469,7 @@ static VARR (char) *temp_string;
 
 static void add_to_temp_string (const char *str) {
   size_t i, len;
-  
+
   if ((len = VARR_LENGTH (char, temp_string)) != 0
       && VARR_GET (char, temp_string, len - 1) == '\0') {
     VARR_POP (char, temp_string);
@@ -1479,7 +1479,7 @@ static void add_to_temp_string (const char *str) {
    VARR_PUSH (char, temp_string, str[i]);
  VARR_PUSH (char, temp_string, '\0');
 }
- 
+
 static VARR (token_t) *temp_tokens;
 
 typedef struct macro { /* macro definition: */
@@ -1521,7 +1521,7 @@ static void init_macros (void) {
 
 static macro_t new_macro (token_t id, VARR (token_t) *params, VARR (token_t) *replacement) {
   macro_t tab_m, m = malloc (sizeof (struct macro));
-  
+
   m->id = id; m->params = params; m->replacement = replacement; m->ignore_p = FALSE;
   assert (! HTAB_DO (macro_t, macro_tab, m, HTAB_FIND, tab_m));
   HTAB_DO (macro_t, macro_tab, m, HTAB_INSERT, tab_m);
@@ -1611,7 +1611,7 @@ static void (*pre_out_token_func) (token_t);
 static void pre_init (void) {
   time_t t;
   struct tm *tm;
-  
+
   no_out_p = skip_if_part_p = FALSE;
   t = time (NULL);
   tm = localtime(&t);
@@ -1643,7 +1643,7 @@ static void pre_finish (void) {
 
 static void add_include_stream (const char *fname) {
   FILE *f;
-  
+
   assert (fname != NULL);
   if ((f = fopen (fname, "r")) == NULL) {
     fprintf (stderr, "error in opening file %s\n", fname);
@@ -1665,7 +1665,7 @@ static void skip_nl (token_t t, VARR (token_t) *buffer) { /* skip until new line
 static int find_param (VARR (token_t) *params, const char *name) {
   size_t len;
   token_t param;
-  
+
   len = VARR_LENGTH (token_t, params);
   if (strcmp (name, varg) == 0 && len != 0 && VARR_LAST (token_t, params)->code == T_DOTS)
     return len - 1;
@@ -1679,7 +1679,7 @@ static int find_param (VARR (token_t) *params, const char *name) {
 
 static int params_eq_p (VARR (token_t) *params1, VARR (token_t) *params2) {
   token_t param1, param2;
-  
+
   if (params1 == NULL || params2 == NULL)
     return params1 == params2;
   if (VARR_LENGTH (token_t, params1) != VARR_LENGTH (token_t, params2))
@@ -1695,13 +1695,13 @@ static int params_eq_p (VARR (token_t) *params1, VARR (token_t) *params2) {
 
 static int replacement_eq_p (VARR (token_t) *r1, VARR (token_t) *r2) {
   token_t el1, el2;
-  
+
   if (VARR_LENGTH (token_t, r1) != VARR_LENGTH (token_t, r2))
     return FALSE;
   for (int i = 0; i < VARR_LENGTH (token_t, r1); i++)  {
     el1 = VARR_GET (token_t, r1, i);
     el2 = VARR_GET (token_t, r2, i);
-    
+
     if (el1->code == ' ' && el2->code == ' ')
       return TRUE;
     if (el1->node_code != el2->node_code)
@@ -1718,7 +1718,7 @@ static void define (void) {
   const char *name;
   macro_t m;
   struct  macro macro_struct;
-  
+
   t = get_next_pptoken (); // ???
   if (t->code == ' ')
     t = get_next_pptoken (); // ??
@@ -1841,7 +1841,7 @@ static void copy_and_push_back (VARR (token_t) *tokens) {
 
 static int file_found_p (const char *name) {
   FILE *f;
-  
+
   if ((f = fopen (name, "r")) == NULL)
     return FALSE;
   fclose (f);
@@ -1851,7 +1851,7 @@ static int file_found_p (const char *name) {
 static const char *get_full_name (const char *base, const char *name, int dir_base_p) {
   const char *str, *last;
   size_t len;
-  
+
   VARR_TRUNC (char, temp_string, 0);
   if (base == NULL || *base == '\0') {
     assert (name != NULL && name[0] != '\0');
@@ -1914,7 +1914,7 @@ static pos_t check_line_directive_args (VARR (token_t) *buffer) {
   pos_t pos;
   int lno;
   unsigned long long l;
-  
+
   if (len == 0)
     return no_pos;
   i = buffer_arr[0]->code == ' ' ? 1 : 0;
@@ -1943,7 +1943,7 @@ static pos_t check_line_directive_args (VARR (token_t) *buffer) {
 static void check_pragma (token_t t, VARR (token_t) *tokens) {
   token_t *tokens_arr = VARR_ADDR (token_t, tokens);
   size_t i, tokens_len = VARR_LENGTH (token_t, tokens);
-  
+
   i = 0;
   if (i < tokens_len && tokens_arr[i]->code == ' ')
     i++;
@@ -2002,7 +2002,7 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
   size_t params_len;
   VARR (token_arr_t) *args;
   VARR (token_t) *arg, *temp_arr;
-  
+
   m = mc->macro;
   VARR_CREATE (token_arr_t, args, 16);
   VARR_CREATE (token_t, arg, 16);
@@ -2074,7 +2074,7 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
 
 static token_t token_concat (token_t t1, token_t t2) {
   token_t t, next;
-  
+
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (t1->repr);
   add_to_temp_string (t2->repr);
@@ -2097,7 +2097,7 @@ static void add_token (VARR (token_t) *to, token_t t) {
 
 static void add_arg_tokens (VARR (token_t) *to, VARR (token_t) *from) {
   int start;
-  
+
   for (start = VARR_LENGTH (token_t, from) - 1; start >= 0; start--)
     if (VARR_GET (token_t, from, start)->code == T_BOA)
       break;
@@ -2115,7 +2115,7 @@ static void add_tokens (VARR (token_t) *to, VARR (token_t) *from) {
 static void del_tokens (VARR (token_t) *tokens, int from, int len) {
   int diff, tokens_len = VARR_LENGTH (token_t, tokens);
   token_t *addr = VARR_ADDR (token_t, tokens);
-  
+
   if (len < 0)
     len = tokens_len - from;
   assert (from + len <= tokens_len);
@@ -2127,7 +2127,7 @@ static void del_tokens (VARR (token_t) *tokens, int from, int len) {
 static VARR (token_t) *do_concat (VARR (token_t) *tokens) {
   int i, j, k, len = VARR_LENGTH (token_t, tokens);
   token_t t;
-  
+
   for (i = len - 1; i >= 0 ; i--)
     if (VARR_GET (token_t, tokens, i)->code == T_RDBLNO) {
       j = i + 1; k = i - 1;
@@ -2167,7 +2167,7 @@ static void process_replacement (macro_call_t mc) {
   token_t t, *m_repl;
   VARR (token_t) *arg;
   int i, m_repl_len, sharp_pos, copy_p;
-  
+
   m = mc->macro; sharp_pos = -1;
   m_repl = VARR_ADDR (token_t, m->replacement);
   m_repl_len = VARR_LENGTH (token_t, m->replacement);
@@ -2315,7 +2315,7 @@ struct val {
     mir_ullong u_val;
   } u;
 };
- 
+
 static void move_tokens (VARR (token_t) *to, VARR (token_t) *from) {
   VARR_TRUNC (token_t, to, 0);
   for (int i = 0; i < VARR_LENGTH (token_t, from); i++)
@@ -2341,7 +2341,7 @@ static void process_directive (void) {
   struct macro macro;
   macro_t tab_macro;
   const char *name;
-  
+
   t = get_next_pptoken ();
   if (t->code == '\n')
     return;
@@ -2419,7 +2419,7 @@ static void process_directive (void) {
       skip_nl (NULL, NULL);
     } else {
       struct val val;
-      
+
       skip_if_part_p = FALSE; /* for eval expr */
       skip_nl (NULL, temp_buffer);
       val = eval_expr (temp_buffer, t);
@@ -2526,7 +2526,7 @@ static VARR (token_t) *pre_expr;
 
 static int pre_match (int c, pos_t *pos, node_code_t *node_code, node_t *node) {
   token_t t;
-  
+
   if (VARR_LENGTH (token_t, pre_expr) == 0)
     return FALSE;
   t = VARR_LAST (token_t, pre_expr);
@@ -2547,7 +2547,7 @@ static node_t pre_cond_expr (void);
 /* Expressions: */
 static node_t pre_primary_expr (void) {
   node_t r;
-  
+
   if (pre_match (T_NUMBER, NULL, NULL, &r) || pre_match (T_CH, NULL, NULL, &r))
     return r;
   if (pre_match ('(', NULL, NULL, NULL)) {
@@ -2563,7 +2563,7 @@ static node_t pre_unary_expr (void) {
   node_t r;
   node_code_t code;
   pos_t pos;
-  
+
   if (! pre_match (T_UNOP, &pos, &code, NULL) && ! pre_match (T_ADDOP, &pos, &code, NULL))
     return pre_primary_expr ();
   if ((r = pre_unary_expr ()) == NULL)
@@ -2576,7 +2576,7 @@ static node_t pre_left_op (int token, int token2, node_t (*f) (void)) {
   node_code_t code;
   node_t r, n;
   pos_t pos;
-  
+
   if ((r = f ()) == NULL)
     return r;
   while (pre_match (token, &pos, &code, NULL)
@@ -2604,7 +2604,7 @@ static node_t pre_lor_expr (void) { return pre_left_op (T_OROR, -1, pre_land_exp
 static node_t pre_cond_expr (void) {
   node_t r, n;
   pos_t pos;
-  
+
   if ((r = pre_lor_expr ()) == NULL)
     return r;
   if (! pre_match ('?', &pos, NULL, NULL))
@@ -2624,7 +2624,7 @@ static node_t pre_cond_expr (void) {
 static node_t parse_pre_expr (VARR (token_t) *expr) {
   node_t r;
   token_t t;
-  
+
   pre_expr = expr;
   t = VARR_LAST (token_t, expr);
   if ((r = pre_cond_expr ()) != NULL && VARR_LENGTH (token_t, expr) == 0)
@@ -2717,7 +2717,7 @@ static struct val eval_expr (VARR (token_t) *expr_buffer, token_t if_token) {
   VARR_DESTROY (token_t, temp_buffer);
   if (tree == NULL) {
     struct val val;
-    
+
     val.uns_p = FALSE; val.u.i_val = 0;
     return val;
   }
@@ -2800,7 +2800,7 @@ static struct val eval (node_t tree) {
   case N_MUL: BINOP (*); break;
   case N_DIV: case N_MOD: {
     int zero_p;
-    
+
     res.uns_p = eval_binop_operands (tree, &v1, &v2);
     if (res.uns_p) {
       res.u.u_val = ((zero_p = v2.u.u_val == 0) ? 1
@@ -2840,7 +2840,7 @@ static void processing (int ignore_directive_p) {
   macro_t m;
   macro_call_t mc;
   int newln_p;
-  
+
   for (newln_p = TRUE;;) { /* Main loop. */
     t = get_next_pptoken ();
     if (t->code == T_EOP)
@@ -2907,7 +2907,7 @@ static void processing (int ignore_directive_p) {
 	out_token (new_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR, N_IGNORE));
       } else if (strcmp (t->repr, "__LINE__") == 0) {
 	char str[50];
-	
+
 	sprintf (str, "%d", t->pos.lno);
 	out_token (new_token (t->pos, uniq_str (str), T_NUMBER, N_IGNORE));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
@@ -3079,7 +3079,7 @@ static void syntax_error (const char *expected_name) {
 #if 0
   {
     static const int context_len = 5;
-    
+
     for (int i = 0; i < context_len && curr_token->code != T_EOF; i++) {
       fprintf (stderr, " %s", curr_token->repr);
     }
@@ -3116,7 +3116,7 @@ static void tpname_init (void) {
 static int tpname_find (node_t id, node_t scope, tpname_t *res) {
   int found_p;
   tpname_t el, tpname;
-  
+
   tpname.id = id; tpname.scope = scope;
   found_p = HTAB_DO (tpname_t, tpname_tab, tpname, HTAB_FIND, el);
   if (res != NULL && found_p)
@@ -3126,7 +3126,7 @@ static int tpname_find (node_t id, node_t scope, tpname_t *res) {
 
 static tpname_t tpname_add (node_t id, node_t scope) {
   tpname_t el, tpname;
-  
+
   tpname.id = id; tpname.scope = scope;
   if (HTAB_DO (tpname_t, tpname_tab, tpname, HTAB_FIND, el))
     return el;
@@ -3189,7 +3189,7 @@ static int match (int c, pos_t *pos, node_code_t *node_code, node_t *node) {
 static node_t try (nonterm_func_t f) {
   node_t r;
   size_t mark;
-  
+
   mark = record_start ();
   r = (f) (TRUE);
   record_stop (mark, r == &err_node);
@@ -3211,7 +3211,7 @@ D (par_type_name) {
 D (primary_expr) {
   node_t r, n, op, gn, list;
   pos_t pos;
-  
+
   if (MN (T_ID, r) || MN (T_NUMBER, r) || MN (T_CH, r) || MN (T_STR, r)) {
     return r;
   } else if (M ('(')) {
@@ -3245,7 +3245,7 @@ DA (post_expr_part) {
   node_t r, n, op, list;
   node_code_t code;
   pos_t pos;
-  
+
   r = arg;
   for (;;) {
     if (MC (T_INCDEC, pos, code)) {
@@ -3283,7 +3283,7 @@ DA (post_expr_part) {
 
 D (post_expr) {
   node_t r;
-  
+
   P (primary_expr); PA (post_expr_part, r);
   return r;
 }
@@ -3292,7 +3292,7 @@ D (unary_expr) {
   node_t r, t;
   node_code_t code;
   pos_t pos;
-  
+
   if ((r = TRY (par_type_name)) != &err_node) {
     t = r;
     if (! MP ('{', pos)) {
@@ -3338,7 +3338,7 @@ static node_t left_op (int no_err_p, int token, int token2, nonterm_func_t f) {
   node_code_t code;
   node_t r, n;
   pos_t pos;
-  
+
   P (f);
   while (MC (token, pos, code) || (token2 >= 0 && MC (token2, pos, code))) {
     n = new_pos_node1 (code, pos, r);
@@ -3354,7 +3354,7 @@ static node_t right_op (int no_err_p, int token, int token2,
   node_code_t code;
   node_t r, n;
   pos_t pos;
-  
+
   P (left);
   if (MC (token, pos, code) || (token2 >= 0 && MC (token2, pos, code))) {
     n = new_pos_node1 (code, pos, r);
@@ -3379,7 +3379,7 @@ D (lor_expr) { return left_op (no_err_p, T_OROR, -1, land_expr); }
 D (cond_expr) {
   node_t r, n;
   pos_t pos;
-  
+
   P (lor_expr);
   if (! MP ('?', pos))
     return r;
@@ -3408,7 +3408,7 @@ D (initializer); D (st_assert);
 D (declaration) {
   int typedef_p;
   node_t op, list, decl, spec, r;
-  
+
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
   } else {
@@ -3491,7 +3491,7 @@ DA (declaration_specs) {
   node_t list, r;
   int first_p, type_spec_p = FALSE;
   pos_t pos = curr_token->pos, spec_pos;
-  
+
   list = new_node (N_LIST);
   for (first_p = arg == NULL;; first_p = FALSE) {
     spec_pos = curr_token->pos;
@@ -3527,7 +3527,7 @@ DA (declaration_specs) {
 D (sc_spec) {
   node_t r;
   pos_t pos;
-  
+
   if (MP (T_TYPEDEF, pos)) {
     r = new_pos_node (N_TYPEDEF, pos);
   } else if (MP (T_EXTERN, pos)) {
@@ -3551,7 +3551,7 @@ D (type_spec) {
   node_t op1, op2, op3, op4, r;
   int struct_p, id_p = FALSE;
   pos_t pos;
-  
+
   if (MP (T_VOID, pos)) {
     r = new_pos_node (N_VOID, pos);
   } else if (MP (T_CHAR, pos)) {
@@ -3628,7 +3628,7 @@ D (type_spec) {
 
 D (struct_declaration_list) {
   node_t r, res, el, next_el;
-  
+
   res = new_node (N_LIST);
   for (;;) {
     P (struct_declaration);
@@ -3649,7 +3649,7 @@ D (struct_declaration_list) {
 
 D (struct_declaration) {
   node_t list, spec, op, r;
-  
+
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
   } else {
@@ -3681,7 +3681,7 @@ D (struct_declaration) {
 D (spec_qual_list) {
   node_t list, op, r;
   int first_p;
-  
+
   list = new_node (N_LIST);
   for (first_p = TRUE;; first_p = FALSE) {
     if (C (T_CONST) || C (T_RESTRICT) || C (T_VOLATILE) || C (T_ATOMIC)) {
@@ -3700,7 +3700,7 @@ D (spec_qual_list) {
 D (type_qual) {
   node_t r;
   pos_t pos;
-  
+
   if (MP (T_CONST, pos)) {
     r = new_pos_node (N_CONST, pos);
   } else if (MP (T_RESTRICT, pos)) {
@@ -3720,7 +3720,7 @@ D (type_qual) {
 D (func_spec) {
   node_t r;
   pos_t pos;
-  
+
   if (MP (T_INLINE, pos)) {
     r = new_pos_node (N_INLINE, pos);
   } else if (MP (T_NO_RETURN, pos)) {
@@ -3736,7 +3736,7 @@ D (func_spec) {
 D (align_spec) {
   node_t r;
   pos_t pos;
-  
+
   PTP (T_ALIGNAS, pos); PT ('(');
   if ((r = TRY (type_name)) != &err_node) {
   } else {
@@ -3748,7 +3748,7 @@ D (align_spec) {
 
 D (declarator) {
   node_t list, p = NULL, r, el, next_el;
-  
+
   if (C ('*')) {
     P (pointer); p = r;
   }
@@ -3768,7 +3768,7 @@ D (declarator) {
 D (direct_declarator) {
   node_t list, tql, ae, res, r;
   pos_t pos, static_pos;
-  
+
   if (MN (T_ID, r)) {
     res = new_node2 (N_DECL, r, new_node (N_LIST));
   } else if (M ('(')) {
@@ -3787,7 +3787,7 @@ D (direct_declarator) {
       PT (')'); op_append (list, new_pos_node1 (N_FUNC, pos, r));
     } else if (M ('[')) {
       int static_p = FALSE;
-      
+
       if (MP (T_STATIC, static_pos)) {
 	static_p = TRUE;
       }
@@ -3823,7 +3823,7 @@ D (direct_declarator) {
 D (pointer) {
   node_t op, r;
   pos_t pos;
-  
+
   PTP ('*', pos);
   if (C (T_CONST) || C (T_RESTRICT) || C (T_VOLATILE) || C (T_ATOMIC)) {
     P (type_qual_list);
@@ -3842,7 +3842,7 @@ D (pointer) {
 
 D (type_qual_list) {
   node_t list, r;
-  
+
   list = new_node (N_LIST);
   for (;;) {
     P (type_qual); op_append (list, r);
@@ -3856,7 +3856,7 @@ D (param_type_list) {
   node_t list, op1, op2, r = &err_node;
   int comma_p;
   pos_t pos;
-  
+
   list = new_node (N_LIST);
   for (;;) { /* parameter-list, parameter-declaration */
     PA (declaration_specs, NULL); op1 = r;
@@ -3881,10 +3881,10 @@ D (param_type_list) {
   }
   return list;
 }
- 
+
 D (id_list) {
   node_t list, r;
-  
+
   list = new_node (N_LIST);
   if (C (')'))
     return list;
@@ -3898,7 +3898,7 @@ D (id_list) {
 
 D (abstract_declarator) {
   node_t list, p = NULL, r, el, next_el;
-  
+
   if (C ('*')) {
     P (pointer); p = r;
     if ((r = TRY (direct_abstract_declarator)) == &err_node)
@@ -3920,7 +3920,7 @@ D (abstract_declarator) {
 
 D (par_abstract_declarator) {
   node_t r;
-  
+
   PT ('('); P (abstract_declarator); PT (')');
   return r;
 }
@@ -3928,7 +3928,7 @@ D (par_abstract_declarator) {
 D (direct_abstract_declarator) {
   node_t res, list, tql, ae, r;
   pos_t pos, pos2 = no_pos;
-  
+
   if ((res = TRY (par_abstract_declarator)) != &err_node) {
     if (! C ('(') && ! C ('['))
       return res;
@@ -3947,7 +3947,7 @@ D (direct_abstract_declarator) {
 			   new_node (N_IGNORE), new_pos_node (N_STAR, pos2));
       } else {
 	int static_p = FALSE;
-	
+
 	if (MP (T_STATIC, pos2)) {
 	  static_p = TRUE;
 	}
@@ -3979,7 +3979,7 @@ D (direct_abstract_declarator) {
 
 D (typedef_name) {
   node_t scope, r;
-  
+
   PTN (T_ID);
   for (scope = curr_scope; ; scope = scope->u.scope) {
     if (tpname_find (r, scope, NULL))
@@ -3992,7 +3992,7 @@ D (typedef_name) {
 
 D (initializer) {
   node_t r;
-  
+
   if (! M ('{')) {
     P (assign_expr);
   } else {
@@ -4007,7 +4007,7 @@ D (initializer) {
 D (initializer_list) {
   node_t list, list2, r;
   int first_p;
-  
+
   list = new_node (N_LIST);
   for (;;) { /* designation */
     list2 = new_node (N_LIST);
@@ -4047,7 +4047,7 @@ D (type_name) {
 D (st_assert) {
   node_t op1, r;
   pos_t pos;
-  
+
   PTP (T_STATIC_ASSERT, pos); PT ('('); P (const_expr); op1 = r;
   PT (','); PTN (T_STR); PT (')');  PT (';');
   r = new_pos_node2 (N_ST_ASSERT, pos, op1, r);
@@ -4060,7 +4060,7 @@ D (compound_stmt);
 D (label) {
   node_t r;
   pos_t pos;
-  
+
   if (MP (T_CASE, pos)) {
     P (expr); r = new_pos_node1 (N_CASE, pos, r);
   } else if (MP (T_DEFAULT, pos)) {
@@ -4071,11 +4071,11 @@ D (label) {
   PT (':');
   return r;
 }
- 
+
 D (stmt) {
   node_t l, n, op1, op2, op3, r;
   pos_t pos;
-  
+
   l = new_node (N_LIST);
   while ((op1 = TRY (label)) != &err_node) {
     op_append (l, op1);
@@ -4153,7 +4153,7 @@ D (stmt) {
   }
   return r;
 }
- 
+
 static void error_recovery (int par_lev, const char *expected) {
   syntax_error (expected);
   if (debug_p)
@@ -4181,7 +4181,7 @@ static void error_recovery (int par_lev, const char *expected) {
 D (compound_stmt) {
   node_t n, list, r;
   pos_t pos;
-  
+
   PTE ('{', pos, err0); list = new_node (N_LIST);
   n = new_pos_node1 (N_BLOCK, pos, list); n->u.scope = curr_scope; curr_scope = n;
   while (! C ('}') && ! C (T_EOF)) { /* block-item-list, block_item */
@@ -4202,7 +4202,7 @@ D (compound_stmt) {
   error_recovery (0, "{");
   return &err_node;
 }
- 
+
 D (transl_unit) {
   node_t list, ds, d, dl, r;
 
@@ -4312,7 +4312,7 @@ static void parse_init (void) {
 static void add_standard_includes (void) {
   FILE *f;
   const char *str1, *str2;
-  
+
   for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (SOURCEDIR); add_to_temp_string (standard_includes[i]);
@@ -4420,7 +4420,7 @@ static void symbol_init (void) {
 static int symbol_find (enum symbol_mode mode, node_t id, node_t scope, symbol_t *res) {
   int found_p;
   symbol_t el, symbol;
-  
+
   symbol.mode = mode; symbol.id = id; symbol.scope = scope;
   found_p = HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_FIND, el);
   if (res != NULL && found_p)
@@ -4431,7 +4431,7 @@ static int symbol_find (enum symbol_mode mode, node_t id, node_t scope, symbol_t
 static void symbol_insert (enum symbol_mode mode, node_t id, node_t scope,
 			   node_t def_node, node_t aux_node) {
   symbol_t el, symbol;
-  
+
   symbol.mode = mode; symbol.id = id; symbol.scope = scope;
   symbol.def_node = def_node; symbol.aux_node = aux_node;
   VARR_CREATE (node_t, symbol.defs, 4);
@@ -4510,7 +4510,7 @@ static int integer_type_p (struct type *type) {
 static int signed_integer_type_p (struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
-    
+
     return ((tp == TP_CHAR && char_is_signed_p ()) || tp == TP_SCHAR || tp == TP_SHORT
 	    || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
@@ -4536,7 +4536,7 @@ static int scalar_type_p (struct type *type) {
 
 static struct type get_ptr_int_type (int signed_p) {
   struct type res;
-  
+
   init_type (&res); res.mode = TM_BASIC;
   if (sizeof (mir_int) == sizeof (mir_size_t)) {
     res.u.basic_type = signed_p ? TP_INT : TP_UINT;
@@ -4549,7 +4549,7 @@ static struct type get_ptr_int_type (int signed_p) {
 
 static struct type integer_promotion (struct type *type) {
   struct type res;
-  
+
   assert (integer_type_p (type));
   init_type (&res); res.mode = TM_BASIC;
   if (type->mode == TM_BASIC && TP_LONG <= type->u.basic_type && type->u.basic_type <= TP_ULLONG) {
@@ -4595,7 +4595,7 @@ static struct type arithmetic_conversion (struct type *type1, struct type *type2
     res.u.basic_type = t1.u.basic_type < t2.u.basic_type ? t2.u.basic_type : t1.u.basic_type;
   } else {
     struct type t;
-    
+
     if (signed_integer_type_p (&t1))
       SWAP (t1, t2, t);
     assert (! signed_integer_type_p (&t1) && signed_integer_type_p (&t2));
@@ -4638,7 +4638,7 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
   } else if (type1->mode == TM_ARR) {
     struct expr *cexpr1, *cexpr2;
     struct arr_type *at1 = type1->u.arr_type, *at2 = type2->u.arr_type;
-    
+
     if (! compatible_types_p (at1->el_type, at2->el_type, ignore_quals_p))
       return FALSE;
     if (at1->size->code == N_IGNORE || at2->size->code == N_IGNORE)
@@ -4664,7 +4664,7 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
 
 static struct type composite_type (struct type *tp1, struct type *tp2) {
   struct type t = *tp1;
-  
+
   assert (compatible_types_p (tp1, tp2, FALSE) && tp1->mode == tp2->mode);
   if (tp1->mode == TM_ARR) {
     struct arr_type *arr_type;
@@ -4771,7 +4771,7 @@ static int type_align (struct type *type) {
 static void aux_set_type_align (struct type *type) {
   /* Should be called only from set_type_layout. */
   int align, member_align;
-  
+
   if (type->align >= 0)
     return;
   if (type->mode == TM_BASIC) {
@@ -4795,7 +4795,7 @@ static void aux_set_type_align (struct type *type) {
 	   member = NL_NEXT (member))
 	if (member->code == N_MEMBER) {
 	  decl_t decl = member->attr;
-	  
+
 	  member_align = type_align (decl->decl_spec.type);
 	  if (align < member_align)
 	    align = member_align;
@@ -4820,7 +4820,7 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size,
 				 int align, int bits) {
   mir_size_t prev_field_offset = *offset, bytes = 0;
   int start_bit, diff;
-  
+
   assert (size > 0);
   if (! *bf_p) { /* field -> bit field or field */
     if (bits >= 0 && size > prev_size) {
@@ -4881,7 +4881,7 @@ static void set_type_layout (struct type *type) {
   } else {
     int bf_p = FALSE, bits = -1, bound_bit = 0;
     mir_size_t offset = 0, prev_size = 0;
-    
+
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
     if (! type->incomplete_p)
       for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops);
@@ -4893,7 +4893,7 @@ static void set_type_layout (struct type *type) {
 	  mir_size_t member_size;
 	  node_t width = NL_EL (member->ops, 2);
 	  struct expr *expr;
-	  
+
 	  set_type_layout (decl->decl_spec.type);
 	  member_size = type_size (decl->decl_spec.type);
 	  member_align = type_align (decl->decl_spec.type);
@@ -4956,7 +4956,7 @@ static unsigned curr_func_scope_num;
 
 static void create_node_scope (node_t node) {
   struct node_scope *ns = reg_malloc (sizeof (struct node_scope));
-  
+
   assert (node != curr_scope);
   ns->func_scope_num = curr_func_scope_num++;
   ns->size = ns->call_arg_area_size = 0;
@@ -4967,7 +4967,7 @@ static void create_node_scope (node_t node) {
 static void propagate_scope_size (node_t from_scope, node_t bound_scope) {
   struct node_scope *ns = (struct node_scope *) from_scope->attr;
   mir_size_t size = ns->size;
-  
+
   for (;;) {
     from_scope = ns->scope;
     if (from_scope == NULL || from_scope == bound_scope)
@@ -5038,7 +5038,7 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   symbol_t sym;
   int found_p;
   node_t tab_decl_list;
-  
+
   if (id->code != N_ID)
     return r;
   if (decl_list->code != N_IGNORE) {
@@ -5057,7 +5057,7 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   } else {
     if (decl_list->code != N_IGNORE) { /* swap decl lists */
       DLIST (node_t) temp = r->ops;
-      
+
       r->ops = sym.def_node->ops;
       sym.def_node->ops = temp;
     }
@@ -5070,7 +5070,7 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope,
 			node_t def_node, node_code_t linkage) {
   symbol_t sym;
   struct decl_spec tab_decl_spec, decl_spec;
-  
+
   if (id->code == N_IGNORE)
     return;
   assert (id->code == N_ID && scope != NULL);
@@ -5111,12 +5111,12 @@ static void make_type_complete (struct type *type) {
 static int in_params_p;
 
 static void check (node_t node, node_t context);
-    
+
 static struct decl_spec check_decl_spec (node_t r, node_t decl) {
   int n_sc = 0, sign = 0, size = 0;
   struct decl_spec *res;
   struct type *type;
-  
+
   if (r->attr != NULL)
     return *(struct decl_spec *) r->attr;
   r->attr = res = reg_malloc (sizeof (struct decl_spec));
@@ -5269,7 +5269,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_ID: {
       node_t def = find_def (S_REGULAR, n, curr_scope, NULL);
       decl_t decl;
-      
+
       set_type_pos_node (type, n);
       if (def == NULL) {
 	error (n->pos, "unknown type %s", n->u.s);
@@ -5307,7 +5307,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_ENUM: {
       node_t res, id = NL_HEAD (n->ops);
       node_t enum_list = NL_NEXT (id);
-      
+
       set_type_pos_node (type, n);
       res = process_tag (n, id, enum_list);
       check_type_duplication (type, n, "enum", size, sign);
@@ -5318,7 +5318,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	  error (n->pos, "enum storage size is unknown");
       } else {
 	mir_int curr_val = 0;
-	
+
 	for (node_t en = NL_HEAD (enum_list->ops); en != NULL; en = NL_NEXT (en)) { // ??? id
 	  node_t id, const_expr;
 	  symbol_t sym;
@@ -5334,7 +5334,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	  }
 	  if (const_expr->code != N_IGNORE) {
 	    struct expr *cexpr = const_expr->attr;
-	    
+
 	    if (! cexpr->const_p)
 	      error (const_expr->pos, "non-constant value in enum const expression");
 	    else if (! integer_type_p (cexpr->type))
@@ -5355,7 +5355,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_ALIGNAS: {
       node_t el;
       int align = -1;
-      
+
       if (decl->code == N_FUNC_DEF) {
 	error (n->pos, "_Alignas for function");
       } else if (decl->code == N_MEMBER && (el = NL_EL (decl->ops, 3)) != NULL
@@ -5369,7 +5369,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	check (op, n);
 	if (op->code == N_TYPE) {
 	  struct decl_spec *decl_spec = op->attr;
-	  
+
 	  align = type_align (decl_spec->type);
 	} else {
 	  struct expr *cexpr = op->attr;
@@ -5420,7 +5420,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 
 static struct type *append_type (struct type *head, struct type *el) {
   struct type **holder;
-  
+
   if (head == NULL)
     return el;
   if (head->mode == TM_PTR) {
@@ -5454,7 +5454,7 @@ static int void_param_p (node_t param) {
 static struct type *check_declarator (node_t r, int func_def_p) {
   struct type *type, *res = NULL;
   node_t list = NL_EL (r->ops, 1);
-  
+
   assert (r->code == N_DECL);
   if (NL_HEAD (list->ops) == NULL)
     return NULL;
@@ -5464,7 +5464,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
     switch (n->code) {
     case N_POINTER: {
       node_t type_qual = NL_HEAD (n->ops);
-      
+
       type->mode = TM_PTR; type->pos_node = n; type->u.ptr_type = NULL;
       set_type_qual (type_qual, &type->type_qual, TM_PTR);
       break;
@@ -5474,7 +5474,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       node_t static_node = NL_HEAD (n->ops);
       node_t type_qual = NL_NEXT (static_node);
       node_t size = NL_NEXT (type_qual);
-      
+
       type->mode = TM_ARR; type->pos_node = n;
       type->u.arr_type = arr_type = reg_malloc (sizeof (struct arr_type));
       clear_type_qual (&arr_type->ind_type_qual);
@@ -5489,7 +5489,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       node_t first_param, param_list = NL_HEAD (n->ops);
       node_t last = NL_TAIL (param_list->ops);
       int saved_in_params_p = in_params_p;
-      
+
       type->mode = TM_FUNC; type->pos_node = n;
       type->u.func_type = func_type = reg_malloc (sizeof (struct func_type));
       func_type->ret_type = NULL;
@@ -5505,7 +5505,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	check (first_param, n);
       if (void_param_p (first_param)) {
 	struct decl_spec *ds = first_param->attr;
-	
+
 	if (non_reg_decl_spec_p (ds) || ds->register_p
 	    || ! type_qual_eq_p (&ds->type->type_qual, &zero_type_qual)) {
 	  error (first_param->pos, "qualified void parameter");
@@ -5517,7 +5517,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	for (node_t p = first_param; p != NULL; p = NL_NEXT (p)) {
 	  struct decl_spec *decl_spec_ptr;
 	  struct type *type;
-	  
+
 	  if (p->code == N_ID) {
 	    if (! func_def_p)
 	      error (p->pos, "parameters identifier list can be only in function definition");
@@ -5529,7 +5529,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	      decl_spec_ptr = p->attr;
 	    } else {
 	      node_t declarator = NL_EL (p->ops, 1);
-	      
+
 	      assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
 	      decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
 	    }
@@ -5537,14 +5537,14 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	    /* Parameter adjustments: */
 	    if (type->mode == TM_ARR) { // ??? static, old type qual
 	      struct arr_type *arr_type = type->u.arr_type;
-	      
+
 	      type->mode = TM_PTR;
 	      type->u.ptr_type = arr_type->el_type;
 	      type->type_qual = arr_type->ind_type_qual;
 	      make_type_complete (type);
 	    } else if (type->mode == TM_FUNC) {
 	      struct type *par_type = create_type (NULL);
-	      
+
 	      par_type->mode = TM_PTR;
 	      par_type->pos_node = type->pos_node; par_type->u.ptr_type = decl_spec_ptr->type;
 	      make_type_complete (type);
@@ -5572,7 +5572,7 @@ static void check_labels (node_t labels, node_t target) {
     if (l->code == N_LABEL) {
       symbol_t sym;
       node_t id = NL_HEAD (l->ops);
-      
+
       if (symbol_find (S_LABEL, id, func_block_scope, &sym)) {
 	error (id->pos, "label %s redeclaration", id->u.s);
       } else {
@@ -5588,7 +5588,7 @@ static void check_labels (node_t labels, node_t target) {
       case_t case_attr, tail = DLIST_TAIL (case_t, switch_attr->case_labels);
       int ok_p = FALSE, default_p = tail != NULL && tail->case_node->code == N_DEFAULT;
       struct expr *expr;
-      
+
       if (case_expr == NULL) {
 	if (default_p) {
 	  error (l->pos, "multiple default labels in one switch");
@@ -5624,7 +5624,7 @@ static node_code_t get_id_linkage (int func_p, node_t id, node_t scope,
 				   struct decl_spec decl_spec) {
   node_code_t linkage;
   node_t def = find_def (S_REGULAR, id, scope, NULL);
-  
+
   if (decl_spec.typedef_p)
     return N_IGNORE; // p6: no linkage
   if (decl_spec.static_p && scope == top_scope)
@@ -5668,7 +5668,7 @@ static void check_type (struct type *type, int level, int func_def_p) {
       error (size_node->pos, "variable size arrays are not supported");
     } else {
       struct expr *cexpr = size_node->attr;
-      
+
       if (! integer_type_p (cexpr->type)) {
 	error (size_node->pos, "non-integer array size type");
       } else if (! cexpr->const_p) {
@@ -5697,7 +5697,7 @@ static void check_type (struct type *type, int level, int func_def_p) {
     struct func_type *func_type = type->u.func_type;
     struct type *ret_type = func_type->ret_type;
     node_t first_param, param_list = func_type->param_list;
-    
+
     check_type (ret_type, level + 1, FALSE);
     if (ret_type->mode == TM_FUNC) {
       error (ret_type->pos_node->pos, "function returning a function");
@@ -5738,7 +5738,7 @@ static void check_assignment_types (struct type *left, struct type *right, struc
   node_code_t code = assign_node->code;
   pos_t pos = assign_node->pos;
   const char *msg;
-  
+
   if (right == NULL)
     right = expr->type;
   if (arithmetic_type_p (left)) {
@@ -5808,7 +5808,7 @@ static int update_init_object_path (size_t mark,  int list_p) {
   node_t size_node;
   mir_llong size_val;
   struct expr *sexpr;
-  
+
   for (;;) {
     for (;;) {
       if (mark == VARR_LENGTH (init_object_t, init_object_path))
@@ -5828,7 +5828,7 @@ static int update_init_object_path (size_t mark,  int list_p) {
 		|| init_object.container_type->mode == TM_UNION);
 	if (init_object.u.curr_member == NULL) { /* finding the first named member */
 	  node_t declaration_list = NL_EL (init_object.container_type->u.tag_type->ops, 1);
-      
+
 	  assert (declaration_list != NULL && declaration_list->code == N_LIST);
 	  for (init_object.u.curr_member = NL_HEAD (declaration_list->ops);
 	       init_object.u.curr_member != NULL
@@ -5876,7 +5876,7 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
   symbol_t sym;
   struct expr *sexpr;
   init_object_t init_object;
-  
+
  check_one_value:
   if (initializer->code != N_LIST
       && ! (initializer->code == N_STR
@@ -5977,7 +5977,7 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
 	assert (type == init_object.container_type);
 	if (curr_des->code == N_FIELD_ID) {
 	  node_t id = NL_HEAD (curr_des->ops);
-	  
+
 	  if (type->mode != TM_STRUCT && type->mode != TM_UNION) {
 	    error (curr_des->pos, "field name not in struct or union initializer");
 	  } else if (! symbol_find (S_REGULAR, id, type->u.tag_type, &sym)) {
@@ -6054,7 +6054,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   node_t id, list_head, declarator;
   struct type *type;
   decl_t decl = reg_malloc (sizeof (struct decl));
-  
+
   assert (decl_node->code == N_MEMBER
 	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
   init_decl (decl);
@@ -6120,7 +6120,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
 
 static struct type *adjust_type (struct type *type) {
   struct type *res;
-  
+
   if (type->mode != TM_ARR && type->mode != TM_FUNC)
     return type;
   res = create_type (NULL);
@@ -6163,7 +6163,7 @@ static void process_type_bin_ops (node_t r, node_t *op1, node_t *op2,
 
 static struct expr *create_expr (node_t r) {
   struct expr *e = reg_malloc (sizeof (struct expr));
-  
+
   r->attr = e;
   e->type = create_type (NULL);
   e->type2 = NULL;
@@ -6173,7 +6173,7 @@ static struct expr *create_expr (node_t r) {
 
 static struct expr *create_basic_type_expr (node_t r, enum basic_type bt) {
   struct expr *e = create_expr (r);
-  
+
   e->type->mode = TM_BASIC; e->type->u.basic_type = bt;
   return e;
 }
@@ -6225,7 +6225,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
       e->type->u.basic_type = t.u.basic_type;
       if (e1->const_p && e2->const_p) {
 	struct type rt = integer_promotion (t2);
-	
+
 	convert_value (e1, &t);
 	convert_value (e2, &rt);
 	e->const_p = TRUE;
@@ -6249,7 +6249,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
     mir_size_t size;
     int add_p = (r->code == N_ADD || r->code == N_ADD_ASSIGN
 		 || r->code == N_INC || r->code == N_POST_INC);
-    
+
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     if (arithmetic_type_p (t1) && arithmetic_type_p (t2)) {
@@ -6368,7 +6368,7 @@ static HTAB (case_t) *case_tab;
 static unsigned case_hash (case_t el) {
   node_t case_expr = NL_HEAD (el->case_node->ops);
   struct expr *expr;
-  
+
   assert (el->case_node->code == N_CASE);
   expr = case_expr->attr;
   assert (expr->const_p);
@@ -6381,7 +6381,7 @@ static int case_eq (case_t el1, case_t el2) {
   node_t case_expr1 = NL_HEAD (el1->case_node->ops);
   node_t case_expr2 = NL_HEAD (el2->case_node->ops);
   struct expr *expr1, *expr2;
-  
+
   assert (el1->case_node->code == N_CASE && el2->case_node->code == N_CASE);
   expr1 = case_expr1->attr; expr2 = case_expr2->attr;
   assert (expr1->const_p && expr2->const_p);
@@ -6397,7 +6397,7 @@ static mir_size_t curr_call_arg_area_offset;
 static void update_call_arg_area_offset (struct type *type, int update_scope_p) {
   node_t block = NL_EL (curr_func_def->ops, 3);
   struct node_scope *ns = block->attr;
-  
+
   curr_call_arg_area_offset += round_size (type_size (type), MAX_ALIGNMENT);
   if (update_scope_p && ns->call_arg_area_size < curr_call_arg_area_offset)
     ns->call_arg_area_size = curr_call_arg_area_offset;
@@ -6443,7 +6443,7 @@ static void check (node_t r, node_t context) {
   struct type t, *t1, *t2, *assign_expr_type;
   int expr_attr_p, stmt_p;
   mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
-  
+
   classify_node (r, &expr_attr_p, &stmt_p);
   switch (r->code) {
   case N_IGNORE: case N_STAR: case N_FIELD_ID:
@@ -6493,7 +6493,7 @@ static void check (node_t r, node_t context) {
     break;
   case N_STR: {
     struct arr_type *arr_type;
-    
+
     e = create_expr (r);
     e->lvalue_node = r;
     e->type->mode = TM_ARR; e->type->pos_node = r;
@@ -6509,7 +6509,7 @@ static void check (node_t r, node_t context) {
   case N_ID: {
     node_t aux_node = NULL;
     decl_t decl;
-    
+
     op1 = find_def (S_REGULAR, r, curr_scope, &aux_node);
     e = create_expr (r);
     e->def_node = op1;
@@ -6549,7 +6549,7 @@ static void check (node_t r, node_t context) {
       error (r->pos, "invalid operand types of %s", r->code == N_ANDAND ? "&&" : "||");
     } else if (e1->const_p) {
       int v;
-      
+
       if (floating_type_p (t1))
 	v = e1->u.d_val != 0.0;
       else if (signed_integer_type_p (t1))
@@ -6658,7 +6658,7 @@ static void check (node_t r, node_t context) {
     break;
   case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: {
     struct expr saved_expr;
-    
+
     process_unop (r, &op1, &e1, &t1, NULL);
     saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
@@ -6706,7 +6706,7 @@ static void check (node_t r, node_t context) {
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN: {
     struct expr saved_expr;
-    
+
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, NULL);
     saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
@@ -6757,7 +6757,7 @@ static void check (node_t r, node_t context) {
     process_unop (r, &op1, &e1, &t1, r); e = create_expr (r);
     if (op1->code == N_DEREF) {
       node_t deref_op = NL_HEAD (op1->ops);
-      
+
       *e->type = *((struct expr *) deref_op->attr)->type;
       break;
     } else if (e1->type->mode == TM_PTR && e1->type->u.ptr_type->mode == TM_FUNC) {
@@ -6782,7 +6782,7 @@ static void check (node_t r, node_t context) {
       node_t declarator = NL_EL (e1->lvalue_node->ops, 1);
       node_t width = NL_NEXT (declarator);
       decl_t decl = e1->lvalue_node->attr;
-      
+
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
 	error (r->pos, "cannot take address of bit-field %s", NL_HEAD (declarator->ops)->u.s);
@@ -6811,7 +6811,7 @@ static void check (node_t r, node_t context) {
   case N_FIELD: case N_DEREF_FIELD: {
     symbol_t sym;
     decl_t decl;
-    
+
     process_unop (r, &op1, &e1, &t1, r);
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
@@ -6837,7 +6837,7 @@ static void check (node_t r, node_t context) {
     struct expr *e3;
     struct type *t3;
     int v = 0;
-    
+
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
     op3 = NL_NEXT (op2); check (op3, r);
     e3 = op3->attr;
@@ -6961,7 +6961,7 @@ static void check (node_t r, node_t context) {
     } else if (e1->lvalue_node && e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->ops, 1);
       node_t width = NL_NEXT (declarator);
-      
+
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
 	error (r->pos, "sizeof applied to a bit-field %s", NL_HEAD (declarator->ops)->u.s);
@@ -6973,7 +6973,7 @@ static void check (node_t r, node_t context) {
   case N_CAST: {
     struct decl_spec *decl_spec;
     int void_p;
-    
+
     process_type_bin_ops (r, &op1, &op2, &e2, &t2, r); e = create_expr (r);
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
@@ -6988,7 +6988,7 @@ static void check (node_t r, node_t context) {
     } else if (decl_spec->type->mode == TM_PTR && floating_type_p (t2)) {
       error (r->pos, "conversion of floating point value to a pointer requested");
     } else if (e2->const_p && ! void_p) {
-      
+
 #define CONV(TP, cast, mto, mfrom) case TP: e->u.mto = (cast) e2->u.mfrom; break;
 #define BASIC_FROM_CONV(mfrom)						\
       switch (decl_spec->type->u.basic_type) {				\
@@ -7009,7 +7009,7 @@ static void check (node_t r, node_t context) {
       default:								\
 	assert (FALSE);							\
       }
-      
+
 #define BASIC_TO_CONV(cast, mto)					\
       switch (t2->u.basic_type) {					\
       case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	\
@@ -7076,7 +7076,7 @@ static void check (node_t r, node_t context) {
   case N_COMPOUND_LITERAL: {
     node_t list;
     decl_t decl;
-    
+
     op1 = NL_HEAD (r->ops);
     list = NL_NEXT (op1);
     assert (op1->code == N_TYPE && list->code == N_LIST);
@@ -7171,7 +7171,7 @@ static void check (node_t r, node_t context) {
     node_t list, ga, ga2, type_name, type_name2, expr;
     node_t default_case = NULL, ga_case = NULL;
     struct decl_spec *decl_spec;
-    
+
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e1 = op1->attr; t = *e1->type;
@@ -7222,7 +7222,7 @@ static void check (node_t r, node_t context) {
       t2 = e->type;
       *e = *(struct expr *) NL_EL (ga_case->ops, 1)->attr;
       *t2 = *e->type; e->type = t2;
-	
+
     }
     break;
   }
@@ -7232,7 +7232,7 @@ static void check (node_t r, node_t context) {
     node_t initializer = NL_NEXT (declarator);
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
-    
+
     if (declarator->code != N_IGNORE) {
       create_decl (curr_scope, r, decl_spec, NULL, initializer);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
@@ -7246,7 +7246,7 @@ static void check (node_t r, node_t context) {
   }
   case N_ST_ASSERT: {
     int ok_p;
-    
+
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e1 = op1->attr; t1 = e1->type;
@@ -7273,12 +7273,12 @@ static void check (node_t r, node_t context) {
     node_t const_expr = NL_NEXT (declarator);
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
-    
+
     create_decl (curr_scope, r, decl_spec, const_expr, NULL);
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
       struct expr *cexpr;
-      
+
       check (const_expr, r);
       cexpr = const_expr->attr;
       if (cexpr != NULL) {
@@ -7336,7 +7336,7 @@ static void check (node_t r, node_t context) {
     node_t p, next_p, param_list, param_id, param_declarator, func;
     symbol_t sym;
     struct node_scope *ns;
-    
+
     VARR_TRUNC (decl_t, decls_for_allocation, 0);
     curr_func_scope_num = 0;
     create_node_scope (block);
@@ -7361,7 +7361,7 @@ static void check (node_t r, node_t context) {
       } else {
 	node_t decl = sym.def_node;
 	struct decl_spec decl_spec;
-	
+
 	assert (decl->code == N_SPEC_DECL);
 	NL_REMOVE (declarations->ops, decl);
 	NL_APPEND (param_list->ops, decl);
@@ -7432,7 +7432,7 @@ static void check (node_t r, node_t context) {
     node_t specs = NL_HEAD (r->ops);
     node_t abstract_declarator = NL_NEXT (specs);
     struct decl_spec decl_spec = check_decl_spec (specs, r); /* only spec_qual_list here */
-    
+
     type = check_declarator (abstract_declarator, FALSE);
     assert (NL_HEAD (abstract_declarator->ops)->code == N_IGNORE);
     decl_spec.type = append_type (type, decl_spec.type);
@@ -7469,7 +7469,7 @@ static void check (node_t r, node_t context) {
     node_t expr = NL_NEXT (labels);
     node_t if_stmt = NL_NEXT (expr);
     node_t else_stmt = NL_NEXT (if_stmt);
- 
+
     check_labels (labels, r);
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
@@ -7489,7 +7489,7 @@ static void check (node_t r, node_t context) {
     struct type t, *type;
     struct switch_attr *switch_attr;
     case_t el;
-    
+
     check_labels (labels, r);
     check (expr, r);
     type = ((struct expr *) expr->attr)->type;
@@ -7548,7 +7548,7 @@ static void check (node_t r, node_t context) {
     decl_t decl;
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
-    
+
     check_labels (labels, r);
     create_node_scope (r);
     curr_loop = curr_loop_switch = r;
@@ -7581,7 +7581,7 @@ static void check (node_t r, node_t context) {
   }
   case N_GOTO: {
     node_t labels = NL_HEAD (r->ops);
-    
+
     check_labels (labels, r);
     VARR_PUSH (node_t, gotos, r);
     break;
@@ -7589,7 +7589,7 @@ static void check (node_t r, node_t context) {
   case N_CONTINUE:
   case N_BREAK: {
     node_t labels = NL_HEAD (r->ops);
-    
+
     if (r->code == N_BREAK && curr_loop_switch == NULL) {
       error (r->pos, "break statement not within loop or switch");
     } else if (r->code == N_CONTINUE && curr_loop == NULL) {
@@ -7622,7 +7622,7 @@ static void check (node_t r, node_t context) {
   case N_EXPR: {
     node_t labels = NL_HEAD (r->ops);
     node_t expr = NL_NEXT (labels);
-    
+
     check_labels (labels, r); check (expr, r);
     break;
   }
@@ -7741,7 +7741,7 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var_t reg_var, el;
   char *str;
   MIR_reg_t reg;
-  
+
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
@@ -7797,7 +7797,7 @@ static int get_int_mir_type_size (MIR_type_t t) {
 static MIR_type_t get_mir_type (struct type *type) {
   size_t size = type->raw_size;
   int int_p = ! floating_type_p (type), signed_p = signed_integer_type_p (type);
-  
+
   if (! scalar_type_p (type))
     return MIR_T_UNDEF;
   assert (type->mode == TM_BASIC || type->mode == TM_PTR || type->mode == TM_ENUM);
@@ -7833,7 +7833,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
 static int push_const_val (node_t r, op_t *res) {
   struct expr *e = (struct expr *) r->attr;
-  
+
   if (! e->const_p)
     return FALSE;
   if (floating_type_p (e->type)) {
@@ -7852,7 +7852,7 @@ static int push_const_val (node_t r, op_t *res) {
 static void emit_insn (MIR_insn_t insn) {
   MIR_insn_t tail;
   int out_p;
-  
+
   if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
       && (tail = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) != NULL
       && MIR_insn_nops (tail) > 0 && temp_reg_p (insn->ops[1]) && temp_reg_p (tail->ops[0])
@@ -7878,7 +7878,7 @@ static op_t cast (op_t op, MIR_type_t t) {
   op_t res, interm;
   MIR_type_t op_type;
   MIR_insn_code_t insn_code = MIR_INSN_BOUND, insn_code2 = MIR_INSN_BOUND;
-  
+
   assert (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16
 	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_I64 || t == MIR_T_U64
 	  || t == MIR_T_F || t == MIR_T_D || t == MIR_T_LD);
@@ -7886,7 +7886,7 @@ static op_t cast (op_t op, MIR_type_t t) {
   case MIR_OP_MEM:
     op_type = op.mir_op.u.mem.type;
     if (op_type == MIR_T_UNDEF) { /* ??? it is an array */
-      
+
     } else if (op_type == MIR_T_I8 || op_type == MIR_T_U8 || op_type == MIR_T_I16
 	       || op_type == MIR_T_U16 || op_type == MIR_T_I32 || op_type == MIR_T_U32)
       op_type = MIR_T_I64;
@@ -8003,7 +8003,7 @@ static op_t promote (op_t op, MIR_type_t t) {
 
 static op_t mem_to_address (op_t mem) {
   op_t temp;
-  
+
   if (mem.mir_op.mode == MIR_OP_STR)
     return mem;
   assert (mem.mir_op.mode == MIR_OP_MEM);
@@ -8036,7 +8036,7 @@ static op_t mem_to_address (op_t mem) {
 static op_t force_val (op_t op) {
   op_t temp_op;
   int sh, size;
-  
+
   if (op.decl != NULL && op.decl->decl_spec.type->mode == TM_ARR && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
     return mem_to_address (op);
@@ -8057,7 +8057,7 @@ static op_t force_val (op_t op) {
 
 static int gen_unary_op (node_t r, op_t *op, op_t *res) {
   MIR_type_t t;
-  
+
   if (push_const_val (r, res))
     return FALSE;
   *op = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
@@ -8070,7 +8070,7 @@ static int gen_unary_op (node_t r, op_t *op, op_t *res) {
 static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
 			      op_t *op1, op_t *op2, op_t *res, op_t *var) {
   MIR_type_t t;
-  
+
   if (push_const_val (r, res))
     return FALSE;
   t = get_mir_type (assign_expr_type);
@@ -8085,7 +8085,7 @@ static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
 
 static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
   MIR_type_t t = get_mir_type (((struct expr *) r->attr)->type);
-  
+
   if (push_const_val (r, res))
     return FALSE;
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
@@ -8098,7 +8098,7 @@ static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
 
 static int gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *res) {
   MIR_type_t t = get_mir_type (type), res_t = get_int_mir_type (sizeof (mir_int));
-  
+
   if (push_const_val (r, res))
     return FALSE;
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
@@ -8111,7 +8111,7 @@ static int gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *
 
 static MIR_insn_code_t get_mir_type_insn_code (struct type *type, node_t r) {
   MIR_type_t t = get_mir_type (type);
-  
+
   switch (r->code) {
   case N_INC: case N_POST_INC: case N_ADD: case N_ADD_ASSIGN:
     return (t == MIR_T_F ? MIR_FADD : t == MIR_T_D ? MIR_DADD
@@ -8174,7 +8174,7 @@ static MIR_insn_code_t get_compare_branch_code (MIR_insn_code_t code) {
 
 static op_t force_reg (op_t op, MIR_type_t t) {
   op_t res;
-  
+
   if (op.mir_op.mode == MIR_OP_REG)
     return op;
   res = get_new_temp (t);
@@ -8213,7 +8213,7 @@ static void top_gen (node_t r, MIR_label_t true_label, MIR_label_t false_label) 
 
 static op_t modify_for_block_move (op_t mem, op_t index) {
   op_t base;
-  
+
   assert (mem.mir_op.u.mem.base != 0
 	  && mem.mir_op.mode == MIR_OP_MEM && index.mir_op.mode == MIR_OP_REG);
   if (mem.mir_op.u.mem.index == 0) {
@@ -8235,7 +8235,7 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
 static void block_move (op_t var, op_t val, mir_size_t size) {
   MIR_label_t repeat_label = MIR_new_label ();
   op_t index = get_new_temp (MIR_T_I64);
-  
+
   emit2 (MIR_MOV, index.mir_op, MIR_new_int_op (size));
   val = modify_for_block_move (val, index);
   var = modify_for_block_move (var, index);
@@ -8250,7 +8250,7 @@ static void block_move (op_t var, op_t val, mir_size_t size) {
 static const char *get_reg_var_name (MIR_type_t promoted_type,
 				     const char *suffix, unsigned func_scope_num) {
   char prefix[50];
-  
+
   sprintf (prefix, promoted_type == MIR_T_I64 ? "I%u_" : promoted_type == MIR_T_U64 ? "U%u_"
 	   : promoted_type == MIR_T_I32 ? "i%u_" : promoted_type == MIR_T_U32 ? "u%u_"
 	   : promoted_type == MIR_T_F ? "f%u_" : "d%u_",
@@ -8274,7 +8274,7 @@ static const char *get_func_var_name (const char *prefix, const char *suffix) {
 static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
   char prefix[50];
   unsigned func_scope_num = ((struct node_scope *) decl->scope->attr)->func_scope_num;
-  
+
   sprintf (prefix, "S%u_", func_scope_num);
   return get_func_var_name (prefix, suffix);
 }
@@ -8287,7 +8287,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
   struct type *param_type;
   MIR_var_t var;
   MIR_type_t type, promoted_type;
-  
+
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, vars, 0);
   VARR_TRUNC (node_t, mem_params, 0);
@@ -8326,7 +8326,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
 static mir_size_t get_object_path_offset (void) {
   init_object_t init_object;
   size_t offset = 0;
-  
+
   for (size_t i = 0; i < VARR_LENGTH (init_object_t, init_object_path); i++) {
     init_object = VARR_GET (init_object_t, init_object_path, i);
     if (init_object.container_type->mode == TM_ARR) { // ??? index < 0
@@ -8362,7 +8362,7 @@ static void collect_init_els (struct type *type, node_t initializer, int const_o
   init_el_t init_el;
   int found_p, ok_p;
   init_object_t init_object;
-  
+
  check_one_value:
   if (initializer->code != N_LIST
       && ! (initializer->code == N_STR
@@ -8438,7 +8438,7 @@ static void collect_init_els (struct type *type, node_t initializer, int const_o
 	assert (type == init_object.container_type);
 	if (curr_des->code == N_FIELD_ID) {
 	  node_t id = NL_HEAD (curr_des->ops);
-	  
+
 	  /* field should be only in struct/union initializer */
 	  assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
 	  found_p = symbol_find (S_REGULAR, id, type->u.tag_type, &sym);
@@ -8465,7 +8465,7 @@ static void collect_init_els (struct type *type, node_t initializer, int const_o
 
 static int cmp_init_el (const void *p1, const void *p2) {
   const init_el_t *el1 = p1, *el2 = p2;
-  
+
   if (el1->offset < el2->offset) return -1;
   else if (el1->offset > el2->offset) return 1;
   else if (el1->num < el2->num) return 1;
@@ -8480,7 +8480,7 @@ static void gen_memset (MIR_disp_t disp, MIR_reg_t base, mir_size_t len) {
   MIR_var_t vars[3];
   MIR_op_t treg_op, args[6];
   MIR_module_t module;
-  
+
   if (memset_item == NULL) {
     ret_type = get_int_mir_type (sizeof (mir_size_t));
     vars[0].name = "s"; vars[0].type = get_int_mir_type (sizeof (mir_size_t));
@@ -8516,7 +8516,7 @@ static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t le
   MIR_var_t vars[3];
   MIR_op_t treg_op, args[6];
   MIR_module_t module;
-  
+
   if (memcpy_item == NULL) {
     ret_type = get_int_mir_type (sizeof (mir_size_t));
     vars[0].name = "dest"; vars[0].type = get_int_mir_type (sizeof (mir_size_t));
@@ -8553,7 +8553,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
   MIR_reg_t base;
   MIR_type_t t;
   MIR_item_t data;
-  
+
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
     assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) == 1);
     init_el = VARR_GET (init_el_t, init_els, 0);
@@ -8615,7 +8615,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
 	}
       } else {
 	MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
-	
+
 	data = MIR_new_string_data (_MIR_get_temp_item_name (module), val.mir_op.u.str);
 	DLIST_REMOVE (MIR_item_t, module->items, data);
 	DLIST_PREPEND (MIR_item_t, module->items, data);
@@ -8637,7 +8637,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
 
 static MIR_item_t get_ref_item (node_t def, const char *name) {
   struct decl *decl = def->attr;
-  
+
   if (def->code == N_FUNC_DEF
       || (def->code == N_SPEC_DECL && NL_EL (def->ops, 1)->code == N_DECL
 	  && decl->scope == top_scope && decl->decl_spec.type->mode != TM_FUNC
@@ -8662,7 +8662,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   int saved_reg_free_mark = reg_free_mark;
   int expr_attr_p, stmt_p;
   mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
-  
+
   classify_node (r, &expr_attr_p, &stmt_p);
   assert ((true_label == NULL && false_label == NULL)
 	  || (true_label != NULL && false_label != NULL));
@@ -8715,7 +8715,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (! push_const_val (r, &res)) {
       MIR_label_t temp_label = MIR_new_label (), t_label = true_label, f_label = false_label;
       int make_val_p = t_label == NULL;
-      
+
       if (make_val_p) {
 	t_label = MIR_new_label ();
 	f_label = MIR_new_label ();
@@ -8727,7 +8727,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       gen (NL_EL (r->ops, 1), t_label, f_label, FALSE);
       if (make_val_p) {
 	MIR_label_t end_label = MIR_new_label ();
-	
+
 	type = ((struct expr *) r->attr)->type;
 	res = get_new_temp (get_mir_type (type));
 	emit_insn (t_label);
@@ -8740,7 +8740,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       true_label = false_label = NULL;
     } else if (true_label != NULL) {
       int true_p;
-      
+
       assert (res.mir_op.mode == MIR_OP_INT || res.mir_op.mode == MIR_OP_UINT
 	      || res.mir_op.mode == MIR_OP_FLOAT || res.mir_op.mode == MIR_OP_DOUBLE);
       true_p = ((res.mir_op.mode == MIR_OP_INT && res.mir_op.u.i != 0)
@@ -8763,7 +8763,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     } else {
       MIR_label_t end_label = MIR_new_label ();
       MIR_label_t t_label = MIR_new_label (), f_label = MIR_new_label ();
-      
+
       res = get_new_temp (MIR_T_I64);
       gen (NL_HEAD (r->ops), t_label, f_label, FALSE);
       emit_insn (t_label);
@@ -8778,7 +8778,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (NL_NEXT (NL_HEAD (r->ops)) == NULL) { /* unary */
       if (gen_unary_op (r, &op1, &res)) {
 	MIR_insn_code_t ic = get_mir_insn_code (r);
-	  
+
 	if (r->code == N_ADD) {
 	  ic = ic == MIR_FADD ? MIR_FMOV : ic == MIR_DADD ? MIR_DMOV : MIR_MOV;
 	  emit2 (ic, res.mir_op, op1.mir_op);
@@ -8799,7 +8799,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     struct type *type1 = ((struct expr *) NL_HEAD (r->ops)->attr)->type;
     struct type *type2 = ((struct expr *) NL_EL (r->ops, 1)->attr)->type;
     struct type type, ptr_type = get_ptr_int_type (FALSE);
-    
+
     type = arithmetic_conversion (type1->mode == TM_PTR ? &ptr_type : type1,
 				  type2->mode == TM_PTR ? &ptr_type : type2);
     set_type_layout (&type);
@@ -8868,14 +8868,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
     } else { /* block move */
       mir_size_t size = type_size (((struct expr *) r->attr)->type);
-      
+
       assert (r->code == N_ASSIGN);
       block_move (var, val, size);
     }
     break;
   case N_ID: {
     char prefix[50];
-    
+
     e = r->attr;
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
@@ -8891,7 +8891,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     } else {
       const char *name;
       reg_var_t reg_var;
-      
+
       t = get_mir_type (e->type);
       assert (t != MIR_T_UNDEF);
       t = promote_mir_int_type (t);
@@ -8905,7 +8905,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_IND: {
     MIR_type_t ind_t;
     mir_size_t size = type_size (((struct expr *) r->attr)->type);
-    
+
     t = get_mir_type (((struct expr *) r->attr)->type);
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
     op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
@@ -8921,7 +8921,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res.mir_op.u.mem.index = op2.mir_op.u.reg; res.mir_op.u.mem.scale = size;
     } else {
       op_t temp_op;
-      
+
       temp_op = get_new_temp (MIR_T_I64);
       emit3 (MIR_MUL, temp_op.mir_op, op2.mir_op, MIR_new_int_op (size));
       if (res.mir_op.u.mem.base != 0)
@@ -8933,7 +8933,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_ADDR: {
     int add_p = FALSE;
-    
+
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     if (op1.mir_op.mode == MIR_OP_REF) { /* array or func */
       res = op1;
@@ -9035,7 +9035,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     decl_t decl = type_name->attr;
     struct expr *expr = r->attr;
     MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
-    
+
     if (decl->scope == top_scope) {
       assert (decl->item == NULL);
       global_name = _MIR_get_temp_item_name (module);
@@ -9065,7 +9065,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     struct type *func_type, *type = ((struct expr *) r->attr)->type;
     MIR_item_t proto_item;
     mir_size_t saved_call_arg_area_offset_before_args;
-    
+
     ops_start = VARR_LENGTH (MIR_op_t, ops);
     func = NL_HEAD (r->ops);
     func_type = ((struct expr *) func->attr)->type;
@@ -9125,7 +9125,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t n, id;
     symbol_t sym;
     const char *name;
-    
+
     decl = (decl_t) r->attr;
     if (declarator != NULL && declarator->code != N_IGNORE && decl->item == NULL) {
       id = NL_HEAD (declarator->ops);
@@ -9160,7 +9160,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 		   sizeof (init_el_t), cmp_init_el);
 	  if (id->attr == NULL) {
 	    node_t saved_scope = curr_scope;
-	    
+
 	    curr_scope = decl->scope;
 	    check (id, NULL);
 	    curr_scope = saved_scope;
@@ -9261,7 +9261,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     struct switch_attr *switch_attr = r->attr;
     op_t case_reg_op;
     case_t c;
-    
+
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
     break_label = MIR_new_label ();
@@ -9270,7 +9270,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     for (c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL; c = DLIST_NEXT (case_t, c)) {
       MIR_label_t label = get_label (c->case_target_node);
       node_t case_expr;
-      
+
       if (c->case_node->code == N_DEFAULT) {
 	assert (DLIST_NEXT (case_t, c) == NULL);
 	emit1 (MIR_JMP, MIR_new_label_op (label));
@@ -9345,7 +9345,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_GOTO: {
     node_t target = r->attr;
-    
+
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
     emit1 (MIR_JMP, MIR_new_label_op (get_label (target)));
@@ -9417,7 +9417,7 @@ static void gen_mir_protos (void) {
   MIR_type_t ret_type;
   char buf[30];
   int n = 0;
-  
+
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
     assert (call->code == N_CALL);
@@ -9502,7 +9502,7 @@ void debug_node (node_t n) { print_node (stderr, n, 0, TRUE); }
 static void print_ops (FILE *f, node_t n, int indent, int attr_p) {
   int i;
   node_t op;
-  
+
   for (i = 0; (op = get_op (n, i)) != NULL; i++)
     print_node (f, op, indent + 2, attr_p);
 }
@@ -9641,7 +9641,7 @@ static void print_expr (FILE *f, struct expr *e) {
 
 static void print_node (FILE *f, node_t n, int indent, int attr_p) {
   int i;
-  
+
   fprintf (f, "%6lu: ", n->uid);
   for (i = 0; i < indent; i++)
     fprintf (f, " ");
@@ -9764,7 +9764,7 @@ static VARR (char_ptr_t) *system_headers;
 static void init_options (int argc, const char *argv[],
 			  int (*other_option_func) (int, int, const char **)) {
   const char *str;
-  
+
   debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
@@ -9786,7 +9786,7 @@ static void init_options (int argc, const char *argv[],
     } else if (strncmp (argv[i], "-I", 2) == 0) {
       char *i_dir;
       const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
-      
+
       if (*dir == '\0')
 	continue;
       i_dir = reg_malloc (strlen (dir) + 1);
@@ -9909,7 +9909,7 @@ static int compile (const char *source_name) {
   double start_time = real_usec_time ();
   node_t r;
   unsigned n_error_before;
-  
+
   if (verbose_p)
     fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
   add_stream (NULL, source_name);
@@ -9990,7 +9990,7 @@ static int interp_exec_p,  gen_exec_p;
 static int other_option_func (int i, int argc, const char *argv[]) {
   FILE *f = NULL;
   int c;
-  
+
   if (strcmp (argv[i], "-i") == 0) {
     f = stdin; source_name = "<stdin>";
   } else if (strcmp (argv[i], "-ei") == 0) {
@@ -10053,7 +10053,7 @@ static void open_libs (void) {
 
 static void *import_resolver (const char *name) {
   void *sym = NULL;
-  
+
   for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++) {
     if ((sym = dlsym (libs[i].handler, name)) != NULL)
       break;
@@ -10068,7 +10068,7 @@ static void *import_resolver (const char *name) {
 
 int main (int argc, const char *argv[]) {
   int ok_p;
-  
+
   code = NULL; source_name = NULL;
   interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
@@ -10112,7 +10112,7 @@ int main (int argc, const char *argv[]) {
     MIR_item_t func, main_func = NULL;
     uint64_t (*fun_addr) (void);
     double start_time;
-    
+
     module = DLIST_HEAD (MIR_module_t, MIR_modules);
     assert (module != NULL && DLIST_NEXT (MIR_module_t, module) == NULL);
     for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL; func =  DLIST_NEXT (MIR_item_t, func))
