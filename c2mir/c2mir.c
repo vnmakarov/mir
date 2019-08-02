@@ -8236,7 +8236,7 @@ static const char *get_reg_var_name (MIR_type_t promoted_type,
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (prefix);
   add_to_temp_string (suffix);
-  return VARR_ADDR (char, temp_string);
+  return uniq_str (VARR_ADDR (char, temp_string));
 }
 
 static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
