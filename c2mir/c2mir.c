@@ -4705,7 +4705,7 @@ struct enum_value {
 
 struct node_scope {
   unsigned func_scope_num;
-  mir_size_t size, offset, call_args_size;
+  mir_size_t size, offset, call_arg_area_size;
   node_t scope;
 };
 
@@ -4959,7 +4959,7 @@ static void create_node_scope (node_t node) {
   
   assert (node != curr_scope);
   ns->func_scope_num = curr_func_scope_num++;
-  ns->size = ns->call_args_size = 0;
+  ns->size = ns->call_arg_area_size = 0;
   ns->offset = curr_scope == NULL ? 0 : ((struct node_scope *) curr_scope->attr)->offset;
   node->attr = ns; ns->scope = curr_scope; curr_scope = node;
 }
@@ -6392,29 +6392,63 @@ static int case_eq (case_t el1, case_t el2) {
 }
 
 static node_t curr_func_def, curr_loop, curr_loop_switch;
-static mir_size_t curr_call_arg_offset;
+static mir_size_t curr_call_arg_area_offset;
 
-static void update_arg_offset (struct type *type) {
+static void update_call_arg_area_offset (struct type *type, int update_scope_p) {
   node_t block = NL_EL (curr_func_def->ops, 3);
   struct node_scope *ns = block->attr;
   
-  curr_call_arg_offset += round_size (type_size (type), MAX_ALIGNMENT);
-  if (ns->call_args_size < curr_call_arg_offset)
-    ns->call_args_size = curr_call_arg_offset;
+  curr_call_arg_area_offset += round_size (type_size (type), MAX_ALIGNMENT);
+  if (update_scope_p && ns->call_arg_area_size < curr_call_arg_area_offset)
+    ns->call_arg_area_size = curr_call_arg_area_offset;
+}
+
+static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
+  *expr_attr_p = *stmt_p = FALSE;
+  switch (n->code) {
+  case N_I: case N_L: case N_LL: case N_U: case N_UL: case N_ULL: case N_F: case N_D: case N_LD:
+  case N_CH: case N_STR: case N_ID: case N_COMMA: case N_ANDAND: case N_OROR:
+  case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE:
+  case N_ASSIGN: case N_BITWISE_NOT: case N_NOT: case N_AND: case N_AND_ASSIGN:
+  case N_OR: case N_OR_ASSIGN: case N_XOR: case N_XOR_ASSIGN: case N_LSH: case N_LSH_ASSIGN:
+  case N_RSH: case N_RSH_ASSIGN: case N_ADD: case N_ADD_ASSIGN: case N_SUB: case N_SUB_ASSIGN:
+  case N_MUL: case N_MUL_ASSIGN: case N_DIV: case N_DIV_ASSIGN: case N_MOD: case N_MOD_ASSIGN:
+  case N_IND: case N_FIELD: case N_ADDR: case N_DEREF: case N_DEREF_FIELD:
+  case N_COND: case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC:
+  case N_ALIGNOF: case N_SIZEOF: case N_EXPR_SIZEOF: case N_CAST: case N_COMPOUND_LITERAL:
+  case N_CALL: case N_GENERIC: case N_GENERIC_ASSOC:
+    *expr_attr_p = TRUE;
+    break;
+  case N_IF: case N_SWITCH: case N_WHILE: case N_DO: case N_FOR: case N_GOTO:
+  case N_CONTINUE: case N_BREAK: case N_RETURN: case N_EXPR: case N_BLOCK:
+    *stmt_p = TRUE;
+    break;
+  case N_IGNORE: case N_CASE: case N_DEFAULT: case N_LABEL: case N_LIST: case N_SPEC_DECL:
+  case N_SHARE: case N_TYPEDEF: case N_EXTERN: case N_STATIC: case N_AUTO: case N_REGISTER:
+  case N_THREAD_LOCAL: case N_DECL: case N_VOID: case N_CHAR: case N_SHORT: case N_INT:
+  case N_LONG: case N_FLOAT: case N_DOUBLE: case N_SIGNED: case N_UNSIGNED: case N_BOOL:
+  case N_STRUCT: case N_UNION: case N_ENUM: case N_ENUM_CONST: case N_MEMBER: case N_CONST:
+  case N_RESTRICT: case N_VOLATILE: case N_ATOMIC: case N_INLINE: case N_NO_RETURN:
+  case N_ALIGNAS: case N_FUNC: case N_STAR: case N_POINTER: case N_DOTS: case N_ARR:
+  case N_INIT: case N_FIELD_ID: case N_TYPE: case N_ST_ASSERT: case N_FUNC_DEF: case N_MODULE:
+    break;
+  default:
+    assert (FALSE);
+    }
 }
 
 static void check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2, *assign_expr_type;
-  int expr_p = TRUE;
+  int expr_attr_p, stmt_p;
+  mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
   
+  classify_node (r, &expr_attr_p, &stmt_p);
   switch (r->code) {
   case N_IGNORE: case N_STAR: case N_FIELD_ID:
-    expr_p = FALSE;
     break; /* do nothing */
   case N_LIST: {
-    expr_p = FALSE;
     for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
       check (n, r);
     break;
@@ -6536,7 +6570,7 @@ static void check (node_t r, node_t context) {
 	  v = e2->u.i_val != 0;
 	else
 	  v = e2->u.u_val != 0;
-	 e->u.i_val = v;
+	e->u.i_val = v;
       }
     }
     break;
@@ -6956,41 +6990,41 @@ static void check (node_t r, node_t context) {
     } else if (e2->const_p && ! void_p) {
       
 #define CONV(TP, cast, mto, mfrom) case TP: e->u.mto = (cast) e2->u.mfrom; break;
-#define BASIC_FROM_CONV(mfrom)									 \
-      switch (decl_spec->type->u.basic_type) {							 \
-	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom);	 \
-	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom);	 \
-	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ullong, u_val, mfrom);     \
-	CONV (TP_SCHAR, mir_char, i_val, mfrom);						 \
-	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom);		 \
-	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_llong, i_val, mfrom);	 \
-	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom);	 \
-	CONV (TP_LDOUBLE, mir_ldouble, d_val, mfrom);					 	 \
-      case TP_CHAR:										 \
-	if (char_is_signed_p ())								 \
-	  e->u.i_val = (mir_char) e2->u.mfrom;							 \
-	else											 \
-	  e->u.u_val = (mir_char) e2->u.mfrom;							 \
-	break;											 \
-      default:											 \
-	assert (FALSE);										 \
+#define BASIC_FROM_CONV(mfrom)						\
+      switch (decl_spec->type->u.basic_type) {				\
+	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom); \
+	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom); \
+	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ullong, u_val, mfrom); \
+	CONV (TP_SCHAR, mir_char, i_val, mfrom);			\
+	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom); \
+	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_llong, i_val, mfrom); \
+	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom); \
+	CONV (TP_LDOUBLE, mir_ldouble, d_val, mfrom);			\
+      case TP_CHAR:							\
+	if (char_is_signed_p ())					\
+	  e->u.i_val = (mir_char) e2->u.mfrom;				\
+	else								\
+	  e->u.u_val = (mir_char) e2->u.mfrom;				\
+	break;								\
+      default:								\
+	assert (FALSE);							\
       }
       
-#define BASIC_TO_CONV(cast, mto)								 \
-      switch (t2->u.basic_type) {								 \
-      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	 \
-	e->u.mto = (cast) e2->u.u_val; break;							 \
-      case TP_CHAR:										 \
-	if (! char_is_signed_p ()) {								 \
-	  e->u.mto = (cast) e2->u.u_val; break;							 \
-	}											 \
-	/* Fall through: */									 \
-      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:			 \
-	e->u.mto = (cast) e2->u.i_val; break;							 \
-      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:						 \
-	e->u.mto = (cast) e2->u.d_val; break;							 \
-      default:											 \
-	assert (FALSE);										 \
+#define BASIC_TO_CONV(cast, mto)					\
+      switch (t2->u.basic_type) {					\
+      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	\
+	e->u.mto = (cast) e2->u.u_val; break;				\
+      case TP_CHAR:							\
+	if (! char_is_signed_p ()) {					\
+	  e->u.mto = (cast) e2->u.u_val; break;				\
+	}								\
+	/* Fall through: */						\
+      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG: \
+	e->u.mto = (cast) e2->u.i_val; break;				\
+      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:			\
+	e->u.mto = (cast) e2->u.d_val; break;				\
+      default:								\
+	assert (FALSE);							\
       }
 
       e->const_p = TRUE;
@@ -7067,7 +7101,7 @@ static void check (node_t r, node_t context) {
     struct decl_spec *decl_spec;
     node_t block = NL_EL (curr_func_def->ops, 3);
     struct node_scope *ns = block->attr;
-    mir_size_t saved_call_arg_offset;
+    mir_size_t saved_call_arg_area_offset_before_args;
 
     VARR_PUSH (node_t, call_nodes, r);
     op1 = NL_HEAD (r->ops);
@@ -7100,7 +7134,7 @@ static void check (node_t r, node_t context) {
     }
     if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
       set_type_layout (ret_type);
-      update_arg_offset (ret_type);
+      update_call_arg_area_offset (ret_type, TRUE);
     }
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->ops);
@@ -7110,7 +7144,7 @@ static void check (node_t r, node_t context) {
 	error (arg->pos, "too many arguments");
       break;
     }
-    saved_call_arg_offset = curr_call_arg_offset;
+    saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
     for (node_t arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) {
       check (arg, r);
       e2 = arg->attr;
@@ -7127,7 +7161,7 @@ static void check (node_t r, node_t context) {
       check_assignment_types (decl_spec->type, NULL, e2, r);
       param = NL_NEXT (param);
     }
-    curr_call_arg_offset = saved_call_arg_offset;
+    curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
     if (param != NULL) {
       error (r->pos, "too few arguments");
     }
@@ -7199,7 +7233,6 @@ static void check (node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
-    expr_p = FALSE;
     if (declarator->code != N_IGNORE) {
       create_decl (curr_scope, r, decl_spec, NULL, initializer);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
@@ -7214,7 +7247,6 @@ static void check (node_t r, node_t context) {
   case N_ST_ASSERT: {
     int ok_p;
     
-    expr_p = FALSE;
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e1 = op1->attr; t1 = e1->type;
@@ -7242,7 +7274,6 @@ static void check (node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
     
-    expr_p = FALSE;
     create_decl (curr_scope, r, decl_spec, const_expr, NULL);
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
@@ -7293,7 +7324,6 @@ static void check (node_t r, node_t context) {
   case N_INIT: {
     node_t des_list = NL_HEAD (r->ops), initializer = NL_NEXT (des_list);
 
-    expr_p = FALSE;
     check (des_list, r); check (initializer, r);
     break;
   }
@@ -7308,12 +7338,11 @@ static void check (node_t r, node_t context) {
     struct node_scope *ns;
     
     VARR_TRUNC (decl_t, decls_for_allocation, 0);
-    expr_p = FALSE;
     curr_func_scope_num = 0;
     create_node_scope (block);
     func_block_scope = curr_scope;
     curr_func_def = r; curr_switch = curr_loop = curr_loop_switch = NULL;
-    curr_call_arg_offset = 0;
+    curr_call_arg_area_offset = 0;
     create_decl (top_scope, r, decl_spec, NULL, NULL);
     curr_scope = func_block_scope;
     check (declarations, r);
@@ -7395,7 +7424,7 @@ static void check (node_t r, node_t context) {
     }
     ns = block->attr;
     ns->size = round_size (ns->size, MAX_ALIGNMENT);
-    ns->size += ns->call_args_size;
+    ns->size += ns->call_arg_area_size;
     break;
   }
   case N_TYPE: {
@@ -7404,7 +7433,6 @@ static void check (node_t r, node_t context) {
     node_t abstract_declarator = NL_NEXT (specs);
     struct decl_spec decl_spec = check_decl_spec (specs, r); /* only spec_qual_list here */
     
-    expr_p = FALSE;
     type = check_declarator (abstract_declarator, FALSE);
     assert (NL_HEAD (abstract_declarator->ops)->code == N_IGNORE);
     decl_spec.type = append_type (type, decl_spec.type);
@@ -7425,14 +7453,12 @@ static void check (node_t r, node_t context) {
     break;
   }
   case N_BLOCK:
-    expr_p = FALSE;
     if (curr_scope != r)
       create_node_scope (r); /* it happens if it is the top func block */
     check (NL_HEAD (r->ops), r);
     finish_scope ();
     break;
   case N_MODULE:
-    expr_p = FALSE;
     create_node_scope (r);
     top_scope = curr_scope;
     check (NL_HEAD (r->ops), r);
@@ -7444,7 +7470,6 @@ static void check (node_t r, node_t context) {
     node_t if_stmt = NL_NEXT (expr);
     node_t else_stmt = NL_NEXT (if_stmt);
  
-    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
@@ -7465,7 +7490,6 @@ static void check (node_t r, node_t context) {
     struct switch_attr *switch_attr;
     case_t el;
     
-    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     type = ((struct expr *) expr->attr)->type;
@@ -7504,7 +7528,6 @@ static void check (node_t r, node_t context) {
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
 
-    expr_p = FALSE;
     check_labels (labels, r);
     check (expr, r);
     e1 = expr->attr; t1 = e1->type;
@@ -7526,7 +7549,6 @@ static void check (node_t r, node_t context) {
     node_t saved_loop = curr_loop;
     node_t saved_loop_switch = curr_loop_switch;
     
-    expr_p = FALSE;
     check_labels (labels, r);
     create_node_scope (r);
     curr_loop = curr_loop_switch = r;
@@ -7560,7 +7582,6 @@ static void check (node_t r, node_t context) {
   case N_GOTO: {
     node_t labels = NL_HEAD (r->ops);
     
-    expr_p = FALSE;
     check_labels (labels, r);
     VARR_PUSH (node_t, gotos, r);
     break;
@@ -7569,7 +7590,6 @@ static void check (node_t r, node_t context) {
   case N_BREAK: {
     node_t labels = NL_HEAD (r->ops);
     
-    expr_p = FALSE;
     if (r->code == N_BREAK && curr_loop_switch == NULL) {
       error (r->pos, "break statement not within loop or switch");
     } else if (r->code == N_CONTINUE && curr_loop == NULL) {
@@ -7584,7 +7604,6 @@ static void check (node_t r, node_t context) {
     decl_t decl = curr_func_def->attr;
     struct type *ret_type, *type = decl->decl_spec.type;
 
-    expr_p = FALSE;
     assert (type->mode == TM_FUNC);
     check_labels (labels, r);
     check (expr, r);
@@ -7604,7 +7623,6 @@ static void check (node_t r, node_t context) {
     node_t labels = NL_HEAD (r->ops);
     node_t expr = NL_NEXT (labels);
     
-    expr_p = FALSE;
     check_labels (labels, r); check (expr, r);
     break;
   }
@@ -7612,13 +7630,17 @@ static void check (node_t r, node_t context) {
     abort ();
   }
   if (e != NULL) {
+    assert (! stmt_p);
     if (context && context->code != N_ALIGNOF && context->code != N_SIZEOF
 	&& context->code != N_EXPR_SIZEOF)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
-  } else if (expr_p) { /* it is an error -- define any expr and type: */
+  } else if (expr_attr_p) { /* it is an error -- define any expr and type: */
+    assert (! stmt_p);
     e = create_expr (r);
     e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
+  } else if (stmt_p) {
+    curr_call_arg_area_offset = saved_call_arg_area_offset;
   }
 }
 
@@ -8638,7 +8660,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   long long ll;
   unsigned long long ull;
   int saved_reg_free_mark = reg_free_mark;
+  int expr_attr_p, stmt_p;
+  mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
   
+  classify_node (r, &expr_attr_p, &stmt_p);
   assert ((true_label == NULL && false_label == NULL)
 	  || (true_label != NULL && false_label != NULL));
   switch (r->code) {
@@ -9039,7 +9064,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     size_t ops_start;
     struct type *func_type, *type = ((struct expr *) r->attr)->type;
     MIR_item_t proto_item;
-    mir_size_t saved_call_arg_offset;
+    mir_size_t saved_call_arg_area_offset_before_args;
     
     ops_start = VARR_LENGTH (MIR_op_t, ops);
     func = NL_HEAD (r->ops);
@@ -9056,14 +9081,17 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = get_new_temp (t);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
     } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
+      node_t block = NL_EL (r->ops, 3);
+      struct node_scope *ns = block->attr;
+
       res = get_new_temp (MIR_T_I64);
       emit3 (MIR_ADD, res.mir_op, MIR_new_reg_op (MIR_reg (FP_NAME, curr_func->u.func)),
-	     MIR_new_int_op (curr_call_arg_offset));
-      curr_call_arg_offset += round_size (type_size (type), MAX_ALIGNMENT);
+	     MIR_new_int_op (curr_call_arg_area_offset + ns->size - ns->call_arg_area_size));
+      update_call_arg_area_offset (type, FALSE);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
       res.mir_op = MIR_new_mem_op (MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
     }
-    saved_call_arg_offset = curr_call_arg_offset;
+    saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
     for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
       op2 = gen (arg, NULL, NULL, TRUE);
       e = arg->attr;
@@ -9073,7 +9101,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
     }
-    curr_call_arg_offset = saved_call_arg_offset;
+    curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
     // VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
     MIR_append_insn (curr_func, MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
 						  VARR_ADDR (MIR_op_t, ops) + ops_start));
@@ -9173,7 +9201,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	    && NL_HEAD (declarator->ops)->code == N_ID);
     assert (decl->decl_spec.type->mode == TM_FUNC);
     curr_func_def = r;
-    curr_call_arg_offset = ns->size - ns->call_args_size;
+    curr_call_arg_area_offset = 0;
     collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type);
     curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s,
 				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
@@ -9377,6 +9405,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   } else if (val_p) {
     res = force_val (res);
   }
+  if (stmt_p)
+    curr_call_arg_area_offset = saved_call_arg_area_offset;
   return res;
 }
 
