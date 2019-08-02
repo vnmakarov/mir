@@ -7651,7 +7651,8 @@ static void context_finish (void) {
 
 /* -------------------------- MIR generator start ----------------------------- */
 
-#define FP_NAME "fp"
+static const char *FP_NAME = "fp";
+static const char *RET_ADDR_NAME = "Ret_Addr";
 
 /* New attribute for non-empty label LIST is a MIR label.  */
 
@@ -7739,10 +7740,13 @@ static int temp_reg_p (MIR_op_t op) {
 
 static MIR_type_t reg_type (MIR_reg_t reg) {
   const char *n = MIR_reg_name (reg, curr_func->u.func);
-  MIR_type_t res = (n[0] == 'I' ? MIR_T_I64 : n[0] == 'U' ? MIR_T_U64 : n[0] == 'i' ? MIR_T_I32
-		    : n[0] == 'u' ? MIR_T_U32 : n[0] == 'f' ? MIR_T_F : n[0] == 'd' ? MIR_T_D
-		    : MIR_T_BOUND);
-  
+  MIR_type_t res;
+
+  if (strcmp (n, FP_NAME) == 0 || strcmp (n, RET_ADDR_NAME) == 0)
+    return MIR_POINTER_TYPE;
+  res = (n[0] == 'I' ? MIR_T_I64 : n[0] == 'U' ? MIR_T_U64 : n[0] == 'i' ? MIR_T_I32
+	 : n[0] == 'u' ? MIR_T_U32 : n[0] == 'f' ? MIR_T_F : n[0] == 'd' ? MIR_T_D
+	 : MIR_T_BOUND);
   assert (res != MIR_T_BOUND);
   return res;
 }
