@@ -7715,7 +7715,7 @@ static void finish_reg_vars (void) {
   HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
-static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name, int new_mir_reg_p) {
+static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name) {
   reg_var_t reg_var, el;
   char *str;
   MIR_reg_t reg;
@@ -7724,7 +7724,7 @@ static reg_var_t get_reg_var (MIR_type_t t, const char *reg_name, int new_mir_re
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el))
     return el;
   t = t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_U64 ? MIR_T_I64 : t;
-  reg = (new_mir_reg_p ? MIR_new_func_reg (curr_func->u.func, t, reg_name)
+  reg = (t != MIR_T_UNDEF ? MIR_new_func_reg (curr_func->u.func, t, reg_name)
 	 : MIR_reg (reg_name, curr_func->u.func));
   str = reg_malloc ((strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
@@ -7759,7 +7759,7 @@ static op_t get_new_temp (MIR_type_t t) {
 	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
   sprintf (reg_name, t == MIR_T_I64 ? "I_%u" : t == MIR_T_U64 ? "U_%u" : t == MIR_T_I32 ? "i_%u"
 	   : t == MIR_T_U32 ? "u_%u" : t == MIR_T_F ? "f_%u" : "d_%u", reg_free_mark++);
-  reg = get_reg_var (t, reg_name, TRUE).reg;
+  reg = get_reg_var (t, reg_name).reg;
   return new_op (NULL, MIR_new_reg_op (reg));
 }
 
@@ -8860,7 +8860,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       t = promote_mir_int_type (t);
       name = get_reg_var_name (t, r->u.s,
 			       ((struct node_scope *) decl->scope->attr)->func_scope_num);
-      reg_var = get_reg_var (t, name, TRUE);
+      reg_var = get_reg_var (t, name);
       res = new_op (decl, MIR_new_reg_op (reg_var.reg));
     }
     break;
@@ -9149,16 +9149,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
 				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
     decl->item = curr_func;
-    for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++) {
-      MIR_var_t var = VARR_GET (MIR_var_t, vars, i);
-
-      get_reg_var (promote_mir_int_type (var.type), var.name, FALSE);
-    }
     if (ns->size != 0) {
       fp_reg = MIR_new_func_reg (curr_func->u.func, MIR_T_I64, FP_NAME);
       MIR_append_insn (curr_func, MIR_new_insn (MIR_ALLOCA, MIR_new_reg_op (fp_reg),
 						MIR_new_int_op (ns->size)));
     }
+    for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++)
+      get_reg_var (MIR_T_UNDEF, VARR_GET (MIR_var_t, vars, i).name);
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
     finish_curr_func_reg_vars ();
