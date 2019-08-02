@@ -51,6 +51,9 @@
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (const char *name, const char *str)`)
+    * **Reference data**: `MIR_ref_data_item` with optional name
+      (`MIR_item_t MIR_new_ref_data (const char *name, MIR_item_t item)`
+      * The address of the item after linking is used to initialize the data
     * **Expression Data**: `MIR_expr_data_item` with optional name
       (`MIR_item_t MIR_new_expr_data (const char *name, MIR_item_func_item)`)
       * Not all MIR functions can be used for expression data.  The expression function should have
@@ -472,9 +475,14 @@ ex100:    func v
       the same name, it will be not visible for linking anymore.  Such
       visibility mechanism permits usage of different versions of the
       same function
-    * Expression data are initialized not during loading but during linking after
+    * Reference data are initialized not during loading but during linking after
+      the referenced item address is known.  The address is used for the data
+      initialization
+    * Expression data are also initialized not during loading but during linking after
       all addresses are known.  The expression function is evaluated by the interpreter
-      and its evaluation result is used for the data initialization
+      and its evaluation result is used for the data initialization.  For example, if
+      you need to initialize data by item address plus offset you should use
+      an expression data
     * MIR permits to use imported items not implemented in MIR, for
       example to use C standard function `strcmp`.  You need to inform
       MIR about it.  API function `MIR_load_external (const char
