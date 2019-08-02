@@ -8267,6 +8267,11 @@ static void collect_args_and_func_types (struct func_type *func_type,
   
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, args, 0);
+  if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
+    var.name = RET_ADDR_NAME;
+    var.type = MIR_POINTER_TYPE;
+    VARR_PUSH (MIR_var_t, args, var);
+  }
   if (first_param != NULL && ! void_param_p (first_param)) {
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
       if (p->code == N_TYPE) {
@@ -9027,26 +9032,36 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     size_t ops_start;
     struct type *func_type, *type = ((struct expr *) r->attr)->type;
     MIR_item_t proto_item;
+    mir_size_t saved_call_arg_offset;
     
     ops_start = VARR_LENGTH (MIR_op_t, ops);
     func = NL_HEAD (r->ops);
     func_type = ((struct expr *) func->attr)->type;
     assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
     func_type = func_type->u.ptr_type;
-    proto_item = func_type->u.func_type->proto_item;
+    proto_item = func_type->u.func_type->proto_item; // ???
     VARR_PUSH (MIR_op_t, ops, MIR_new_ref_op (proto_item));
     op1 = gen (func, NULL, NULL, TRUE);
     VARR_PUSH (MIR_op_t, ops, op1.mir_op);
-    if (type->mode != TM_BASIC || type->u.basic_type != TP_VOID) {
+    if (scalar_type_p (type)) {
       t = get_mir_type (type);
       t = promote_mir_int_type (t);
       res = get_new_temp (t);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
+    } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
+      res = get_new_temp (MIR_T_I64);
+      emit3 (MIR_ADD, res.mir_op, MIR_new_reg_op (MIR_reg (FP_NAME, curr_func->u.func)),
+	     MIR_new_int_op (curr_call_arg_offset));
+      curr_call_arg_offset += round_size (type_size (type), MAX_ALIGNMENT);
+      VARR_PUSH (MIR_op_t, ops, res.mir_op);
+      res.mir_op = MIR_new_mem_op (MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
     }
+    saved_call_arg_offset = curr_call_arg_offset;
     for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
       op2 = gen (arg, NULL, NULL, TRUE);
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
     }
+    curr_call_arg_offset = saved_call_arg_offset;
     // VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
     MIR_append_insn (curr_func, MIR_new_insn_arr (MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
 						  VARR_ADDR (MIR_op_t, ops) + ops_start));
