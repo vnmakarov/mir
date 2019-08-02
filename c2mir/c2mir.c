@@ -8192,8 +8192,11 @@ static void top_gen (node_t r, MIR_label_t true_label, MIR_label_t false_label) 
 static op_t modify_for_block_move (op_t mem, op_t index) {
   op_t base;
   
-  assert (mem.mir_op.mode == MIR_OP_MEM && index.mir_op.mode == MIR_OP_REG);
-  if (mem.mir_op.u.mem.base != 0 && mem.mir_op.u.mem.index != 0) {
+  assert (mem.mir_op.u.mem.base != 0
+	  && mem.mir_op.mode == MIR_OP_MEM && index.mir_op.mode == MIR_OP_REG);
+  if (mem.mir_op.u.mem.index == 0) {
+    mem.mir_op.u.mem.index = index.mir_op.u.reg; mem.mir_op.u.mem.scale = 1;
+  } else {
     base = get_new_temp (MIR_T_I64);
     if (mem.mir_op.u.mem.scale != 1)
       emit3 (MIR_MUL, base.mir_op, MIR_new_reg_op (mem.mir_op.u.mem.index),
