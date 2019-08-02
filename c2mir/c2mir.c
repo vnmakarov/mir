@@ -9291,18 +9291,35 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     emit_label (r);
     emit1 (MIR_JMP, MIR_new_label_op (break_label));
     break;
-  case N_RETURN:
+  case N_RETURN: {
+    decl_t func_decl = curr_func_def->attr;
+    struct type *func_type = func_decl->decl_spec.type;
+    struct type *ret_type = func_type->u.func_type->ret_type;
+
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
     if (NL_EL (r->ops, 1)->code == N_IGNORE) {
       emit_insn (MIR_new_ret_insn (0));
+      reg_free_mark = saved_reg_free_mark; /* free used temp regs */
       break;
     }
-    op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-    t = get_op_type (op1);
-    emit_insn (MIR_new_ret_insn (1, op1.mir_op));
-    reg_free_mark = saved_reg_free_mark; /* free used temp regs */
+    val = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
+    if (scalar_type_p (ret_type)) {
+      t = get_mir_type (ret_type);
+      t = promote_mir_int_type (t);
+      val = promote (val, t);
+      emit_insn (MIR_new_ret_insn (1, val.mir_op));
+    } else { /* block return */
+      mir_size_t size = type_size (ret_type);
+      MIR_reg_t ret_addr_reg = MIR_reg (RET_ADDR_NAME, curr_func->u.func);
+
+      var = new_op (NULL, MIR_new_mem_op (MIR_T_I8, 0, ret_addr_reg, 0, 1));
+      block_move (var, val, size);
+      emit_insn (MIR_new_ret_insn (0));
+    }
+    reg_free_mark = saved_reg_free_mark;
     break;
+  }
   case N_EXPR:
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
