@@ -8259,14 +8259,18 @@ static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
 
 static VARR (MIR_var_t) *vars;
 
-static void collect_args_and_func_types (struct func_type *func_type,
-					 MIR_type_t *ret_type, VARR (MIR_var_t) *args) {
+static VARR (node_t) *mem_params;
+
+static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t *ret_type,
+					 VARR (MIR_var_t) *args, VARR (node_t) *mem_params) {
   node_t declarator, id, first_param, p;
+  struct type *param_type;
   MIR_var_t var;
   MIR_type_t type, promoted_type;
   
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, args, 0);
+  VARR_TRUNC (node_t, mem_params, 0);
   if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
@@ -8276,15 +8280,20 @@ static void collect_args_and_func_types (struct func_type *func_type,
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
       if (p->code == N_TYPE) {
 	var.name = "p";
-	type = get_mir_type (((struct decl_spec *) p->attr)->type);
+	param_type = ((struct decl_spec *) p->attr)->type;
+	type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
+		? MIR_POINTER_TYPE : get_mir_type (param_type));
       } else {
 	declarator = NL_EL (p->ops, 1);
 	assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
 	id = NL_HEAD (declarator->ops);
-	type = get_mir_type (((decl_t) p->attr)->decl_spec.type);
-	assert (type != MIR_T_UNDEF);
+	param_type = ((decl_t) p->attr)->decl_spec.type;
+	type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
+		? MIR_POINTER_TYPE : get_mir_type (param_type));
 	promoted_type = promote_mir_int_type (type);
-	var.name = _MIR_uniq_string (get_reg_var_name (promoted_type, id->u.s, 0));
+	var.name = get_reg_var_name (promoted_type, id->u.s, 0);
+	if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION)
+	  VARR_PUSH (node_t, mem_params, p);
       }
       var.type = type;
       VARR_PUSH (MIR_var_t, args, var);
@@ -9152,14 +9161,17 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t decls = NL_NEXT (declarator);
     node_t stmt = NL_NEXT (decls);
     struct node_scope *ns = stmt->attr;
-    decl_t decl = r->attr;
+    decl_t param_decl, decl = r->attr;
+    node_t param, param_declarator, param_id;
     MIR_type_t res_type;
-    MIR_reg_t fp_reg;
-    
+    MIR_reg_t fp_reg, param_reg;
+
     assert (declarator != NULL && declarator->code == N_DECL
 	    && NL_HEAD (declarator->ops)->code == N_ID);
     assert (decl->decl_spec.type->mode == TM_FUNC);
-    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type, vars);
+    curr_func_def = r;
+    curr_call_arg_offset = ns->size - ns->call_args_size;
+    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type, vars, mem_params);
     curr_func = MIR_new_func_arr (NL_HEAD (declarator->ops)->u.s,
 				  res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
 				  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
@@ -9171,6 +9183,18 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++)
       get_reg_var (MIR_T_UNDEF, VARR_GET (MIR_var_t, vars, i).name);
+    for (size_t i = 0; i < VARR_LENGTH (node_t, mem_params); i++) {
+      param = VARR_GET (node_t, mem_params, i);
+      param_declarator = NL_EL (param->ops, 1);
+      param_decl = param->attr;
+      assert (param_declarator != NULL && param_declarator->code == N_DECL);
+      param_id = NL_HEAD (param_declarator->ops);
+      param_reg = get_reg_var (MIR_POINTER_TYPE, param_id->u.s).reg;
+      val = new_op (NULL, MIR_new_mem_op (MIR_T_UNDEF, 0, param_reg, 0, 1));
+      var = new_op (param_decl, MIR_new_mem_op (MIR_T_UNDEF, param_decl->offset,
+						MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
+      block_move (var, val, type_size (decl->decl_spec.type));
+    }
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
     finish_curr_func_reg_vars ();
@@ -9369,7 +9393,7 @@ static void gen_mir_protos (void) {
     set_type_layout (type);
     func_type = type->u.ptr_type->u.func_type;
     assert (func_type->param_list->code == N_LIST);
-    collect_args_and_func_types (func_type, &ret_type, vars);
+    collect_args_and_func_types (func_type, &ret_type, vars, mem_params);
     sprintf (buf, "proto%d", n++);
     func_type->proto_item
       = ((func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL
@@ -9383,6 +9407,7 @@ static void gen_mir (node_t r) {
   one_op = new_op (NULL, MIR_new_int_op (1));
   init_reg_vars ();
   VARR_CREATE (MIR_var_t, vars, 32);
+  VARR_CREATE (node_t, mem_params, 16);
   gen_mir_protos ();
   VARR_CREATE (MIR_op_t, ops, 32);
   VARR_CREATE (init_el_t, init_els, 128);
@@ -9390,6 +9415,7 @@ static void gen_mir (node_t r) {
   top_gen (r, NULL, NULL);
   finish_reg_vars ();
   VARR_DESTROY (MIR_var_t, vars);
+  VARR_DESTROY (node_t, mem_params);
   VARR_DESTROY (MIR_op_t, ops);
   VARR_DESTROY (init_el_t, init_els);
 }
