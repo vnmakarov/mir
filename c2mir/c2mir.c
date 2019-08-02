@@ -8239,18 +8239,22 @@ static const char *get_reg_var_name (MIR_type_t promoted_type,
   return uniq_str (VARR_ADDR (char, temp_string));
 }
 
-static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
-  char prefix[50];
-  unsigned func_scope_num = ((struct node_scope *) decl->scope->attr)->func_scope_num;
-  
+static const char *get_func_var_name (const char *prefix, const char *suffix) {
   assert (curr_func != NULL);
-  sprintf (prefix, "S%u_", func_scope_num);
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (prefix);
   add_to_temp_string (curr_func->u.func->name);
   add_to_temp_string ("_");
   add_to_temp_string (suffix);
-  return VARR_ADDR (char, temp_string);
+  return uniq_str (VARR_ADDR (char, temp_string));
+}
+
+static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
+  char prefix[50];
+  unsigned func_scope_num = ((struct node_scope *) decl->scope->attr)->func_scope_num;
+  
+  sprintf (prefix, "S%u_", func_scope_num);
+  return get_func_var_name (prefix, suffix);
 }
 
 static VARR (MIR_var_t) *vars;
