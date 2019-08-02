@@ -4705,7 +4705,7 @@ struct enum_value {
 
 struct node_scope {
   unsigned func_scope_num;
-  mir_size_t size, offset;
+  mir_size_t size, offset, call_args_size;
   node_t scope;
 };
 
@@ -4959,7 +4959,7 @@ static void create_node_scope (node_t node) {
   
   assert (node != curr_scope);
   ns->func_scope_num = curr_func_scope_num++;
-  ns->size = 0;
+  ns->size = ns->call_args_size = 0;
   ns->offset = curr_scope == NULL ? 0 : ((struct node_scope *) curr_scope->attr)->offset;
   node->attr = ns; ns->scope = curr_scope; curr_scope = node;
 }
@@ -6392,6 +6392,16 @@ static int case_eq (case_t el1, case_t el2) {
 }
 
 static node_t curr_func_def, curr_loop, curr_loop_switch;
+static mir_size_t curr_call_arg_offset;
+
+static void update_arg_offset (struct type *type) {
+  node_t block = NL_EL (curr_func_def->ops, 3);
+  struct node_scope *ns = block->attr;
+  
+  curr_call_arg_offset += round_size (type_size (type), MAX_ALIGNMENT);
+  if (ns->call_args_size < curr_call_arg_offset)
+    ns->call_args_size = curr_call_arg_offset;
+}
 
 static void check (node_t r, node_t context) {
   node_t op1, op2;
@@ -7054,6 +7064,9 @@ static void check (node_t r, node_t context) {
     struct type *ret_type;
     node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
     struct decl_spec *decl_spec;
+    node_t block = NL_EL (curr_func_def->ops, 3);
+    struct node_scope *ns = block->attr;
+    mir_size_t saved_call_arg_offset;
 
     VARR_PUSH (node_t, call_nodes, r);
     op1 = NL_HEAD (r->ops);
@@ -7084,6 +7097,10 @@ static void check (node_t r, node_t context) {
 	&& ret_type->incomplete_p) {
       error (r->pos, "function return type is incomplete");
     }
+    if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
+      set_type_layout (ret_type);
+      update_arg_offset (ret_type);
+    }
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->ops);
     arg_list = NL_NEXT (op1);
@@ -7092,6 +7109,7 @@ static void check (node_t r, node_t context) {
 	error (arg->pos, "too many arguments");
       break;
     }
+    saved_call_arg_offset = curr_call_arg_offset;
     for (node_t arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) {
       check (arg, r);
       e2 = arg->attr;
@@ -7108,6 +7126,7 @@ static void check (node_t r, node_t context) {
       check_assignment_types (decl_spec->type, NULL, e2, r);
       param = NL_NEXT (param);
     }
+    curr_call_arg_offset = saved_call_arg_offset;
     if (param != NULL) {
       error (r->pos, "too few arguments");
     }
@@ -7285,12 +7304,15 @@ static void check (node_t r, node_t context) {
     struct decl_spec decl_spec = check_decl_spec (specs, r);
     node_t p, next_p, param_list, param_id, param_declarator, func;
     symbol_t sym;
+    struct node_scope *ns;
     
+    VARR_TRUNC (decl_t, decls_for_allocation, 0);
     expr_p = FALSE;
     curr_func_scope_num = 0;
     create_node_scope (block);
     func_block_scope = curr_scope;
     curr_func_def = r; curr_switch = curr_loop = curr_loop_switch = NULL;
+    curr_call_arg_offset = 0;
     create_decl (top_scope, r, decl_spec, NULL, NULL);
     curr_scope = func_block_scope;
     check (declarations, r);
@@ -7353,6 +7375,26 @@ static void check (node_t r, node_t context) {
     VARR_TRUNC (node_t, gotos, 0);
     assert (curr_scope == top_scope); /* set up in the block */
     func_block_scope = top_scope;
+    /* Process decls in the original order: */
+    for (size_t i = 0; i < VARR_LENGTH (decl_t, decls_for_allocation); i++) {
+      decl_t decl = VARR_GET (decl_t, decls_for_allocation, i);
+      struct type *type = decl->decl_spec.type;
+
+      ns = (struct node_scope *) decl->scope->attr;
+      if (scalar_type_p (type) && ! decl->addr_p) {
+	decl->reg_p = TRUE;
+	continue;
+      }
+      ns->offset = round_size (ns->offset, type->align);
+      decl->offset = ns->offset;
+      ns->offset += type_size (type);
+      if (ns->size < ns->offset)
+	ns->size = ns->offset;
+      propagate_scope_size (decl->scope, top_scope);
+    }
+    ns = block->attr;
+    ns->size = round_size (ns->size, MAX_ALIGNMENT);
+    ns->size += ns->call_args_size;
     break;
   }
   case N_TYPE: {
@@ -7580,26 +7622,8 @@ static void check (node_t r, node_t context) {
 }
 
 static void context (node_t r) {
-  VARR_TRUNC (decl_t, decls_for_allocation, 0);
   VARR_TRUNC (node_t, call_nodes, 0);
   check (r, NULL);
-  /* Process decls in the original order: */
-  for (int i = 0; i < VARR_LENGTH (decl_t, decls_for_allocation); i++) {
-    decl_t decl = VARR_GET (decl_t, decls_for_allocation, i);
-    struct node_scope *ns = (struct node_scope *) decl->scope->attr;
-    struct type *type = decl->decl_spec.type;
-    
-    if (scalar_type_p (type) && ! decl->addr_p) {
-      decl->reg_p = TRUE;
-      continue;
-    }
-    ns->offset = (ns->offset + type->align - 1) / type->align * type->align;
-    decl->offset = ns->offset;
-    ns->offset += type_size (type);
-    if (ns->size < ns->offset)
-      ns->size = ns->offset;
-    propagate_scope_size (decl->scope, top_scope);
-  }
 }
 
 static void context_init (void) {
