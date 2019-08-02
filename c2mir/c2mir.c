@@ -9068,6 +9068,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     saved_call_arg_offset = curr_call_arg_offset;
     for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
       op2 = gen (arg, NULL, NULL, TRUE);
+      e = arg->attr;
+      if (e->type->mode == TM_STRUCT || e->type->mode == TM_UNION) {
+	assert (op2.mir_op.mode == MIR_OP_MEM);
+	op2 = mem_to_address (op2);
+      }
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
     }
     curr_call_arg_offset = saved_call_arg_offset;
