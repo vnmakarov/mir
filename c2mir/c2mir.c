@@ -5541,13 +5541,13 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	      type->mode = TM_PTR;
 	      type->u.ptr_type = arr_type->el_type;
 	      type->type_qual = arr_type->ind_type_qual;
-	      make_type_complete (type);
+	      type->incomplete_p = TRUE; make_type_complete (type);
 	    } else if (type->mode == TM_FUNC) {
 	      struct type *par_type = create_type (NULL);
 
 	      par_type->mode = TM_PTR;
 	      par_type->pos_node = type->pos_node; par_type->u.ptr_type = decl_spec_ptr->type;
-	      make_type_complete (type);
+	      type->incomplete_p = TRUE; make_type_complete (type);
 	    }
 	  }
 	}
