@@ -6070,28 +6070,28 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   assert (decl_node->code == N_MEMBER
 	  || decl_node->code == N_SPEC_DECL || decl_node->code == N_FUNC_DEF);
   init_decl (decl);
+  decl->decl_spec = decl_spec; decl_node->attr = decl;
   declarator = NL_EL (decl_node->ops, 1);
   if (declarator->code == N_IGNORE) {
     assert (decl_node->code == N_MEMBER);
-    decl_spec.linkage = N_IGNORE;
+    decl->decl_spec.linkage = N_IGNORE;
   } else {
     assert (declarator->code == N_DECL);
     type = check_declarator (declarator, func_def_p);
-    decl_spec.type = append_type (type, decl_spec.type);
+    decl->decl_spec.type = append_type (type, decl->decl_spec.type);
   }
-  check_type (decl_spec.type, 0, func_def_p);
+  check_type (decl->decl_spec.type, 0, func_def_p);
   if (declarator->code == N_DECL) {
     id = NL_HEAD (declarator->ops);
     list_head = NL_HEAD (NL_NEXT (id)->ops);
     func_p = list_head && list_head->code == N_FUNC;
-    decl_spec.linkage = get_id_linkage (func_p, id, scope, decl_spec);
+    decl->decl_spec.linkage = get_id_linkage (func_p, id, scope, decl->decl_spec);
   }
-  decl->decl_spec = decl_spec; decl_node->attr = decl;
   if (declarator->code == N_DECL) {
-    def_symbol (S_REGULAR, id, scope, decl_node, decl_spec.linkage);
-    if (scope != top_scope && decl_spec.linkage == N_EXTERN)
+    def_symbol (S_REGULAR, id, scope, decl_node, decl->decl_spec.linkage);
+    if (scope != top_scope && decl->decl_spec.linkage == N_EXTERN)
       def_symbol (S_REGULAR, id, top_scope, decl_node, N_EXTERN);
-    if (func_p && decl_spec.thread_local_p) {
+    if (func_p && decl->decl_spec.thread_local_p) {
       error (id->pos, "thread local function declaration");
       if (id->code != N_IGNORE)
 	fprintf (stderr, " of %s", id->u.s);
@@ -6099,33 +6099,36 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     }
   }
   if (decl_node->code != N_MEMBER) {
-    set_type_layout (decl_spec.type);
-    check_decl_align (&decl_spec);
-    if (! decl_spec.typedef_p && ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
+    set_type_layout (decl->decl_spec.type);
+    check_decl_align (&decl->decl_spec);
+    if (! decl->decl_spec.typedef_p
+	&& ! decl->decl_spec.type->incomplete_p && decl->decl_spec.type->mode != TM_FUNC)
       VARR_PUSH (decl_t, decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
     return;
-  if (decl_spec.type->incomplete_p
-      && (decl_spec.type->mode != TM_ARR || decl_spec.type->u.arr_type->el_type->incomplete_p)) {
-    if (decl_spec.type->mode == TM_ARR && decl_spec.type->u.arr_type->el_type->mode == TM_ARR)
+  if (decl->decl_spec.type->incomplete_p
+      && (decl->decl_spec.type->mode != TM_ARR
+	  || decl->decl_spec.type->u.arr_type->el_type->incomplete_p)) {
+    if (decl->decl_spec.type->mode == TM_ARR
+	&& decl->decl_spec.type->u.arr_type->el_type->mode == TM_ARR)
       error (initializer->pos, "initialization of incomplete sub-array");
     else
       error (initializer->pos, "initialization of incomplete type variable");
     return;
   }
-  if (decl_spec.linkage != N_IGNORE && scope != top_scope) {
+  if (decl->decl_spec.linkage != N_IGNORE && scope != top_scope) {
     error (initializer->pos,
 	   "initialization of %s in block scope with external or internal linkage", id->u.s);
     return;
   }
   check (initializer, decl_node);
   check_initializer (&decl->decl_spec.type, initializer,
-		     decl_spec.linkage == N_STATIC || decl_spec.linkage == N_EXTERN
-		     || decl_spec.thread_local_p || decl_spec.static_p,
+		     decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
+		     || decl->decl_spec.thread_local_p || decl->decl_spec.static_p,
 		     TRUE);
-  if (decl_node->code != N_MEMBER && ! decl_spec.typedef_p &&
-      ! decl_spec.type->incomplete_p && decl_spec.type->mode != TM_FUNC)
+  if (decl_node->code != N_MEMBER && ! decl->decl_spec.typedef_p &&
+      ! decl->decl_spec.type->incomplete_p && decl->decl_spec.type->mode != TM_FUNC)
     /* Process after initilizer because we can make type complete by it. */
     VARR_PUSH (decl_t, decls_for_allocation, decl);
 }
