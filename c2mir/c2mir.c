@@ -5775,6 +5775,11 @@ static void check_assignment_types (struct type *left, struct type *right, struc
 	       : code == N_RETURN ? "incompatible pointer types of return-expr and function result"
 	       : "incompatible pointer types in assignment");
 	(pedantic_p ? error : warning) (pos, "%s", msg);
+      } else if (integer_type_p (right)) {
+	msg = (code == N_CALL ? "using integer without cast for pointer type parameter"
+	       : code == N_RETURN ? "returning integer without cast for pointer result"
+	       : "assigning integer without cast to pointer");
+	(pedantic_p ? error : warning) (pos, "%s", msg);
       } else {
 	msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
 	       : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
