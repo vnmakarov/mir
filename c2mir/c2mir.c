@@ -7704,7 +7704,7 @@ static op_t new_op (decl_t decl, MIR_op_t mir_op) {
   return res;
 }
 
-static op_t zero_op, one_op;
+static op_t zero_op, one_op, minus_one_op;
 
 static MIR_item_t curr_func;
 
@@ -8753,7 +8753,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_BITWISE_NOT:
     if (gen_unary_op (r, &op1, &res)) {
-      emit3 (get_mir_insn_code (r), res.mir_op, op1.mir_op, zero_op.mir_op);
+      t = get_mir_type (((struct expr *) r->attr)->type);
+      emit3 (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_XOR : MIR_XORS,
+	     res.mir_op, op1.mir_op, minus_one_op.mir_op);
     }
     break;
   case N_NOT:
@@ -9438,6 +9440,7 @@ static void gen_mir_protos (void) {
 static void gen_mir (node_t r) {
   zero_op = new_op (NULL, MIR_new_int_op (0));
   one_op = new_op (NULL, MIR_new_int_op (1));
+  minus_one_op = new_op (NULL, MIR_new_int_op (-1));
   init_reg_vars ();
   VARR_CREATE (MIR_var_t, vars, 32);
   VARR_CREATE (node_t, mem_params, 16);
