@@ -5743,11 +5743,18 @@ static void check_assignment_types (struct type *left, struct type *right, struc
     right = expr->type;
   if (arithmetic_type_p (left)) {
     if (! arithmetic_type_p (right)
-	&& (left->mode != TM_BASIC || left->u.basic_type != TP_BOOL || right->mode != TM_PTR)) {
-      msg = (code == N_CALL ? "incompatible argument type for arithemtic type parameter"
-	     : code != N_RETURN ? "incompatible types in assignment to an arithemtic type lvalue"
-	     : "incompatible return-expr type in function returning an arithemtic value");
-      error (pos, "%s", msg);
+	&& ! (left->mode == TM_BASIC && left->u.basic_type != TP_BOOL && right->mode != TM_PTR)) {
+      if (integer_type_p (left) && right->mode == TM_PTR) {
+	msg = (code == N_CALL ? "using pointer without cast for integer type parameter"
+	       : code == N_RETURN ? "returning pointer without cast for integer result"
+	       : "assigning pointer without cast to integer");
+	(pedantic_p ? error : warning) (pos, "%s", msg);
+      } else {
+	msg = (code == N_CALL ? "incompatible argument type for arithemtic type parameter"
+	       : code != N_RETURN ? "incompatible types in assignment to an arithemtic type lvalue"
+	       : "incompatible return-expr type in function returning an arithemtic value");
+	error (pos, "%s", msg);
+      }
     }
   } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
     if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
