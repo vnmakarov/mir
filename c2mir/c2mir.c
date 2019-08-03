@@ -8929,7 +8929,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     ind_t = promote_mir_int_type (get_mir_type (((struct expr *) NL_EL (r->ops, 1)->attr)->type));
     op2 = force_reg (op2, ind_t);
     assert (op2.mir_op.mode == MIR_OP_REG && (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM));
-    res = op1;
+    res = op1; res.decl = NULL;
     if (res.mir_op.mode == MIR_OP_REG)
       res.mir_op = MIR_new_mem_op (t, 0, res.mir_op.u.reg, 0, 1);
     if (res.mir_op.u.mem.base == 0 && size == 1) {
@@ -8953,7 +8953,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     if (op1.mir_op.mode == MIR_OP_REF) { /* array or func */
-      res = op1;
+      res = op1; res.decl = NULL;
       break;
     }
     assert (op1.mir_op.mode == MIR_OP_MEM);
@@ -9037,7 +9037,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
       type = ((struct expr *) r->attr)->type;
       if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) {
-	res = op1;
+	res = op1; res.decl = NULL;
 	res.mir_op.mode = MIR_OP_UNDEF;
       } else {
 	t = get_mir_type (type);
