@@ -53,6 +53,24 @@
 #define __INTPTR_MAX__    __INT64_MAX__
 #define __UINTPTR_MAX__   __UINT64_MAX__
 
+#define __FLT_MIN_EXP__ (-125)
+#define __FLT_MAX_EXP__ 128
+#define __FLT_DIG__ 6
+#define __FLT_DECIMAL_DIG__ 9
+#define __FLT_MANT_DIG__ 24
+#define __FLT_MIN__ 1.17549435082228750796873653722224568e-38F
+#define __FLT_MAX__ 3.40282346638528859811704183484516925e+38F
+#define __FLT_EPSILON__ 1.19209289550781250000000000000000000e-7F
+
+#define __DBL_MIN_EXP__ (-1021)
+#define __DBL_MAX_EXP__ 1024
+#define __DBL_DIG__ 15
+#define __DBL_DECIMAL_DIG__ 17
+#define __DBL_MANT_DIG__ 53
+#define __DBL_MAX__ ((double)1.79769313486231570814527423731704357e+308L)
+#define __DBL_MIN__ ((double)2.22507385850720138309023271733240406e-308L)
+#define __DBL_EPSILON__ ((double)2.22044604925031308084726333618164062e-16L)
+
 typedef unsigned short char16_t;
 typedef unsigned int char32_t;
 
