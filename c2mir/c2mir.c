@@ -7364,7 +7364,7 @@ static void check (node_t r, node_t context) {
     node_t declarations = NL_NEXT (declarator);
     node_t block = NL_NEXT (declarations);
     struct decl_spec decl_spec = check_decl_spec (specs, r);
-    node_t p, next_p, param_list, param_id, param_declarator, func;
+    node_t decl_node, p, next_p, param_list, param_id, param_declarator, func;
     symbol_t sym;
     struct node_scope *ns;
 
@@ -7388,21 +7388,33 @@ static void check (node_t r, node_t context) {
 	break;
       NL_REMOVE (param_list->ops, p);
       if (! symbol_find (S_REGULAR, p, curr_scope, &sym)) {
-	error (p->pos, "parameter %s has no type", p->u.s);
+	if (pedantic_p) {
+	  error (p->pos, "parameter %s has no type", p->u.s);
+	} else {
+	  warning (p->pos, "type of parameter %s defaults to int", p->u.s);
+	  decl_node
+	    = new_pos_node3 (N_SPEC_DECL, p->pos,
+			     new_node1 (N_SHARE, new_node1 (N_LIST, new_pos_node (N_INT, p->pos))),
+			     new_pos_node2 (N_DECL, p->pos, new_str_node (N_ID, p->u.s, p->pos),
+					    new_node (N_LIST)),
+			     new_node (N_IGNORE));
+	  NL_APPEND (param_list->ops, decl_node);
+	  check (decl_node, r);
+	}
       } else {
-	node_t decl = sym.def_node;
 	struct decl_spec decl_spec;
 
-	assert (decl->code == N_SPEC_DECL);
-	NL_REMOVE (declarations->ops, decl);
-	NL_APPEND (param_list->ops, decl);
-	param_declarator = NL_EL (decl->ops, 1);
+	decl_node = sym.def_node;
+	assert (decl_node->code == N_SPEC_DECL);
+	NL_REMOVE (declarations->ops, decl_node);
+	NL_APPEND (param_list->ops, decl_node);
+	param_declarator = NL_EL (decl_node->ops, 1);
 	assert (param_declarator->code == N_DECL);
 	param_id = NL_HEAD (param_declarator->ops);
 	if (NL_NEXT (param_declarator)->code != N_IGNORE) {
 	  error (p->pos, "initialized parameter %s", param_id->u.s);
 	}
-	decl_spec = ((decl_t) decl->attr)->decl_spec;
+	decl_spec = ((decl_t) decl_node->attr)->decl_spec;
 	if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p
 	    || decl_spec.auto_p || decl_spec.thread_local_p) {
 	  error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s);
