@@ -9257,7 +9257,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	  gen_initializer (var, name, decl->decl_spec.type->raw_size,
 			   decl->scope != top_scope && ! decl->decl_spec.static_p);
 	}
-	if (decl->scope == top_scope && ! decl->decl_spec.static_p)
+	if (decl->item != NULL && decl->scope == top_scope && ! decl->decl_spec.static_p)
 	  MIR_new_export (name);
       }
     }
