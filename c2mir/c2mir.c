@@ -9116,7 +9116,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   }
   case N_CALL: {
-    node_t func, args = NL_EL (r->ops, 1);
+    node_t func, param_list, param, args = NL_EL (r->ops, 1);
+    struct decl_spec *decl_spec;
     size_t ops_start;
     struct type *func_type, *type = ((struct expr *) r->attr)->type;
     MIR_item_t proto_item;
@@ -9148,14 +9149,29 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res.mir_op = MIR_new_mem_op (MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
+    param_list = func_type->u.func_type->param_list;
+    param = NL_HEAD (param_list->ops);
     for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
       op2 = gen (arg, NULL, NULL, TRUE);
       e = arg->attr;
+      assert (param != NULL || NL_HEAD (param_list->ops) == NULL || func_type->u.func_type->dots_p);
       if (e->type->mode == TM_STRUCT || e->type->mode == TM_UNION) {
 	assert (op2.mir_op.mode == MIR_OP_MEM);
 	op2 = mem_to_address (op2);
+      } else if (param != NULL) {
+	assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
+	decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
+	t = get_mir_type (decl_spec->type);
+	t = promote_mir_int_type (t);
+	op2 = promote (op2, t);
+      } else {
+	t = get_mir_type (e->type);
+	t = promote_mir_int_type (t);
+	op2 = promote (op2, t == MIR_T_F ? MIR_T_D : t);
       }
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
+      if (param != NULL)
+	param = NL_NEXT (param);
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
     // VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (nargs));
