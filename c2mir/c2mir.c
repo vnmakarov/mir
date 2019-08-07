@@ -83,6 +83,9 @@ enum basic_type {
   TP_FLOAT, TP_DOUBLE, TP_LDOUBLE,
 };
 
+#define ENUM_BASIC_INT_TYPE TP_INT
+#define ENUM_MIR_INT mir_int
+
 struct type_qual {
   unsigned int const_p : 1, restrict_p : 1, volatile_p : 1, atomic_p : 1; /* Type qualifiers */
 };
@@ -124,6 +127,11 @@ struct type {
     struct func_type *func_type;
   } u;
 };
+
+static const struct type ENUM_INT_TYPE = {
+   .raw_size = MIR_SIZE_MAX, .align = -1,
+   .mode = TM_BASIC, .u = {.basic_type = ENUM_BASIC_INT_TYPE}
+  };
 
 static mir_size_t raw_type_size (struct type *type) {
   assert (type->raw_size != MIR_SIZE_MAX);
@@ -4514,9 +4522,8 @@ static int signed_integer_type_p (struct type *type) {
     return ((tp == TP_CHAR && char_is_signed_p ()) || tp == TP_SCHAR || tp == TP_SHORT
 	    || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
-  if (type->mode == TM_ENUM) { // ???
-    return TRUE;
-  }
+  if (type->mode == TM_ENUM)
+    return signed_integer_type_p (&ENUM_INT_TYPE);
   return FALSE;
 }
 
@@ -4561,8 +4568,10 @@ static struct type integer_promotion (struct type *type) {
 	  || (type->u.basic_type == TP_UCHAR && MIR_UCHAR_MAX > MIR_INT_MAX)
 	  || (type->u.basic_type == TP_USHORT && MIR_USHORT_MAX > MIR_INT_MAX)))
     res.u.basic_type = TP_UINT;
+  else if (type->mode == TM_ENUM)
+    res.u.basic_type = ENUM_BASIC_INT_TYPE;
   else
-    res.u.basic_type = TP_INT; /* including ENUM */
+    res.u.basic_type = TP_INT;
   return res;
 }
 
@@ -4779,7 +4788,7 @@ static void aux_set_type_align (struct type *type) {
   } else if (type->mode == TM_PTR) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    align = basic_type_align (TP_INT);
+    align = basic_type_align (ENUM_BASIC_INT_TYPE);
   } else if (type->mode == TM_FUNC) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -4866,7 +4875,7 @@ static void set_type_layout (struct type *type) {
   } else if (type->mode == TM_PTR) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    overall_size = basic_type_size (TP_INT);
+    overall_size = basic_type_size (ENUM_BASIC_INT_TYPE);
   } else if (type->mode == TM_FUNC) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -7047,7 +7056,7 @@ static void check (node_t r, node_t context) {
 	e->u = e2->u;
       } else if (t2->mode == TM_PTR) {
 	if (decl_spec->type->mode == TM_ENUM) {
-	  e->u.i_val = (mir_int) e2->u.u_val;
+	  e->u.i_val = (ENUM_MIR_INT) e2->u.u_val;
 	} else {
 	  BASIC_FROM_CONV (u_val);
 	}
@@ -7060,7 +7069,7 @@ static void check (node_t r, node_t context) {
       } else if (decl_spec->type->mode == TM_PTR) {
         BASIC_TO_CONV (mir_size_t, u_val);
       } else if (decl_spec->type->mode == TM_ENUM) {
-        BASIC_TO_CONV (mir_int, i_val);
+        BASIC_TO_CONV (ENUM_MIR_INT, i_val);
       } else {
 	switch (t2->u.basic_type) {
 	case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:
