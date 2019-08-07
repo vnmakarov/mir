@@ -4636,8 +4636,15 @@ struct expr {
 };
 
 static int compatible_types_p (struct type *type1, struct type *type2, int ignore_quals_p) {
-  if (type1->mode != type2->mode)
+  if (type1->mode != type2->mode) {
+    if (! ignore_quals_p && ! type_qual_eq_p (&type1->type_qual, &type2->type_qual))
+      return FALSE;
+    if (type1->mode == TM_ENUM && type2->mode == TM_BASIC)
+      return type2->u.basic_type == ENUM_BASIC_INT_TYPE;
+    if (type2->mode == TM_ENUM && type1->mode == TM_BASIC)
+      return type1->u.basic_type == ENUM_BASIC_INT_TYPE;
     return FALSE;
+  }
   if (type1->mode == TM_BASIC) {
     return (type1->u.basic_type == type2->u.basic_type
 	    && (ignore_quals_p || type_qual_eq_p (&type1->type_qual, &type2->type_qual)));
@@ -4674,7 +4681,7 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
 static struct type composite_type (struct type *tp1, struct type *tp2) {
   struct type t = *tp1;
 
-  assert (compatible_types_p (tp1, tp2, FALSE) && tp1->mode == tp2->mode);
+  assert (compatible_types_p (tp1, tp2, FALSE));
   if (tp1->mode == TM_ARR) {
     struct arr_type *arr_type;
 
