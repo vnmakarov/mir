@@ -8602,6 +8602,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
     init_el = VARR_GET (init_el_t, init_els, 0);
     val = gen (init_el.init, NULL, NULL, TRUE);
     t = get_op_type (var);
+    val = promote (val, promote_mir_int_type (t));
     emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
   } else if (local_p) { /* local variable initialization: */
     assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
@@ -8619,6 +8620,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
 		    : init_el.el_type->raw_size);
 	rel_offset = init_el.offset + init_el.el_type->raw_size;
       } else {
+	val = promote (val, promote_mir_int_type (t));
 	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
 	       MIR_new_mem_op (t, offset + init_el.offset, base, 0, 1), val.mir_op);
 	rel_offset = init_el.offset + _MIR_type_size (t);
