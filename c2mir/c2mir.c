@@ -4475,12 +4475,12 @@ static void clear_type_qual (struct type_qual *tq) {
   tq->const_p = tq->restrict_p = tq->volatile_p = tq->atomic_p = FALSE;
 }
 
-static int type_qual_subset_p (struct type_qual *tq1, struct type_qual *tq2) {
+static int type_qual_subset_p (const struct type_qual *tq1, const struct type_qual *tq2) {
   return (tq1->const_p <= tq2->const_p && tq1->restrict_p <= tq2->restrict_p
 	  && tq1->volatile_p <= tq2->volatile_p && tq1->atomic_p <= tq2->atomic_p);
 }
 
-static struct type_qual type_qual_union (struct type_qual *tq1, struct type_qual *tq2) {
+static struct type_qual type_qual_union (const struct type_qual *tq1, const struct type_qual *tq2) {
   struct type_qual res;
 
   res.const_p = tq1->const_p || tq2->const_p; res.restrict_p = tq1->restrict_p || tq2->restrict_p;
@@ -4500,22 +4500,22 @@ static void set_type_pos_node (struct type *type, node_t n) {
     type->pos_node = n;
 }
 
-static int char_type_p (struct type *type) {
+static int char_type_p (const struct type *type) {
   return (type->mode == TM_BASIC
 	  && (type->u.basic_type == TP_CHAR
 	      || type->u.basic_type == TP_SCHAR || type->u.basic_type == TP_UCHAR));
 }
 
-static int standard_integer_type_p (struct type *type) {
+static int standard_integer_type_p (const struct type *type) {
   return (type->mode == TM_BASIC
 	  && type->u.basic_type >= TP_BOOL && type->u.basic_type <= TP_ULLONG);
 }
 
-static int integer_type_p (struct type *type) {
+static int integer_type_p (const struct type *type) {
   return standard_integer_type_p (type) || type->mode == TM_ENUM;
 }
 
-static int signed_integer_type_p (struct type *type) {
+static int signed_integer_type_p (const const struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
 
@@ -4527,17 +4527,17 @@ static int signed_integer_type_p (struct type *type) {
   return FALSE;
 }
 
-static int floating_type_p (struct type *type) {
+static int floating_type_p (const struct type *type) {
   return type->mode == TM_BASIC && (type->u.basic_type == TP_FLOAT
 				    || type->u.basic_type == TP_DOUBLE
 				    || type->u.basic_type == TP_LDOUBLE);
 }
 
-static int arithmetic_type_p (struct type *type) {
+static int arithmetic_type_p (const struct type *type) {
   return integer_type_p (type) || floating_type_p (type);
 }
 
-static int scalar_type_p (struct type *type) {
+static int scalar_type_p (const struct type *type) {
   return arithmetic_type_p (type) || type->mode == TM_PTR;
 }
 
@@ -4554,7 +4554,7 @@ static struct type get_ptr_int_type (int signed_p) {
   return res;
 }
 
-static struct type integer_promotion (struct type *type) {
+static struct type integer_promotion (const struct type *type) {
   struct type res;
 
   assert (integer_type_p (type));
@@ -4579,7 +4579,7 @@ static struct type integer_promotion (struct type *type) {
   t = a1; a1 = a2; a2 = t;  \
 } while (0)
 
-static struct type arithmetic_conversion (struct type *type1, struct type *type2) {
+static struct type arithmetic_conversion (const struct type *type1, const struct type *type2) {
   struct type res, t1, t2;
 
   assert (arithmetic_type_p (type1) && arithmetic_type_p (type2));
