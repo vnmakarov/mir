@@ -5563,6 +5563,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 
 	      par_type->mode = TM_PTR;
 	      par_type->pos_node = type->pos_node; par_type->u.ptr_type = decl_spec_ptr->type;
+	      type = decl_spec_ptr->type = par_type;
 	      type->incomplete_p = TRUE; make_type_complete (type);
 	    }
 	  }
