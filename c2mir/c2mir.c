@@ -9480,7 +9480,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     abort ();
   }
   if (true_label != NULL) {
-    res = force_val (res);
+    res = promote (force_val (res), MIR_T_I64);
     emit2 (MIR_BT, MIR_new_label_op (true_label), res.mir_op);
     emit1 (MIR_JMP, MIR_new_label_op (false_label));
   } else if (val_p) {
