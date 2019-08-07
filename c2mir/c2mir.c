@@ -6118,8 +6118,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   if (decl_node->code != N_MEMBER) {
     set_type_layout (decl->decl_spec.type);
     check_decl_align (&decl->decl_spec);
-    if (! decl->decl_spec.typedef_p
-	&& ! decl->decl_spec.type->incomplete_p && decl->decl_spec.type->mode != TM_FUNC)
+    if (! decl->decl_spec.typedef_p && decl->decl_spec.type->mode != TM_FUNC)
       VARR_PUSH (decl_t, decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE)
@@ -6144,8 +6143,8 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
 		     decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 		     || decl->decl_spec.thread_local_p || decl->decl_spec.static_p,
 		     TRUE);
-  if (decl_node->code != N_MEMBER && ! decl->decl_spec.typedef_p &&
-      ! decl->decl_spec.type->incomplete_p && decl->decl_spec.type->mode != TM_FUNC)
+  if (decl_node->code != N_MEMBER && ! decl->decl_spec.typedef_p
+      && decl->decl_spec.type->mode != TM_FUNC)
     /* Process after initilizer because we can make type complete by it. */
     VARR_PUSH (decl_t, decls_for_allocation, decl);
 }
