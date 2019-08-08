@@ -3662,7 +3662,11 @@ D (struct_declaration) {
     P (st_assert);
   } else {
     P (spec_qual_list); spec = r; list = new_node (N_LIST);
-    if (! M (';')) { /* struct-declarator-list */
+    if (M (';')) {
+      op = new_pos_node3 (N_MEMBER, spec->pos, new_node1 (N_SHARE, spec),
+			  new_node (N_IGNORE), new_node (N_IGNORE));
+      op_append (list, op);
+    } else { /* struct-declarator-list */
       for (;;) { /* struct-declarator */
 	if (! C (':')) {
 	  P (declarator); op = r;
@@ -5311,6 +5315,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     }
     case N_STRUCT:
     case N_UNION: {
+      int new_scope_p;
       node_t res, id = NL_HEAD (n->ops);
       node_t decl_list = NL_NEXT (id);
 
@@ -5319,10 +5324,14 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       check_type_duplication (type, n, n->code == N_STRUCT ? "struct" : "union", size, sign);
       type->mode = n->code == N_STRUCT ? TM_STRUCT : TM_UNION; type->u.tag_type = res;
       type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
+      new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
+		     || NL_EL (decl->ops, 1)->code != N_IGNORE);
       if (decl_list->code != N_IGNORE) {
-	create_node_scope (res);
+	if (new_scope_p)
+	  create_node_scope (res);
 	check (decl_list, n);
-	finish_scope ();
+	if (new_scope_p)
+	  finish_scope ();
       }
       break;
     }
