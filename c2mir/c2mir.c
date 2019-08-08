@@ -7363,7 +7363,9 @@ static void check (node_t r, node_t context) {
       }
     }
     if (declarator->code == N_IGNORE) {
-      if (const_expr->code == N_IGNORE)
+      if (((decl_spec.type->mode != TM_STRUCT && decl_spec.type->mode != TM_UNION)
+	   || NL_HEAD (decl_spec.type->u.tag_type->ops)->code != N_IGNORE)
+	  && const_expr->code == N_IGNORE)
 	error (r->pos, "no declarator in struct or union declaration");
     } else {
       node_t id = NL_HEAD (declarator->ops);
