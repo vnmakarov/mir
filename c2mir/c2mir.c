@@ -7138,12 +7138,13 @@ static void check (node_t r, node_t context) {
     assert (op1->code == N_TYPE && list->code == N_LIST);
     check (op1, r); decl = op1->attr; t1 = decl->decl_spec.type; check (list, r);
     decl->addr_p = TRUE;
-    if (t1->incomplete_p && (t1->mode != TM_ARR || t1->u.arr_type->size != N_IGNORE
+    if (t1->incomplete_p && (t1->mode != TM_ARR || t1->u.arr_type->size->code != N_IGNORE
 			     || t1->u.arr_type->el_type->incomplete_p)) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
     check_initializer (&t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
+    decl->decl_spec.type = t1;
     e = create_expr (r); e->lvalue_node = r;
     *e->type = *t1;
     VARR_PUSH (decl_t, decls_for_allocation, decl);
