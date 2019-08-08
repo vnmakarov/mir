@@ -262,7 +262,7 @@ stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_FOR(N_LIST:(label)*,(N_LIST: declaration+ | expr)?, expr?, expr?, stmt)
     | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
     | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
-compound_stmt: N_BLOCK(N_LIST:(declaration | stmt)*)
+compound_stmt: N_BLOCK(N_LIST:(N_LIST:(label)*, declaration | stmt)*)
 declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
 st_assert: N_ST_ASSERT(const_expr, N_STR)
 declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
@@ -4090,6 +4090,11 @@ D (stmt) {
   }
   if (C ('{')) {
     P (compound_stmt);
+    if (NL_HEAD (l->ops) != NULL) { /* replace empty label list */
+      assert (NL_HEAD (r->ops)->code == N_LIST && NL_HEAD (NL_HEAD (r->ops)->ops) == NULL);
+      NL_REMOVE (r->ops, NL_HEAD (r->ops));
+      NL_PREPEND (r->ops, l);
+    }
   } else if (MP (T_IF, pos)) { /* selection-statement */
     PT ('('); P (expr); op1 = r; PT (')'); P (stmt); op2 = r;
     if (! M (T_ELSE)) {
@@ -4191,7 +4196,8 @@ D (compound_stmt) {
   pos_t pos;
 
   PTE ('{', pos, err0); list = new_node (N_LIST);
-  n = new_pos_node1 (N_BLOCK, pos, list); n->u.scope = curr_scope; curr_scope = n;
+  n = new_pos_node2 (N_BLOCK, pos, new_node (N_LIST), list);
+  n->u.scope = curr_scope; curr_scope = n;
   while (! C ('}') && ! C (T_EOF)) { /* block-item-list, block_item */
     if ((r = TRY (declaration)) != &err_node) {
     } else {
@@ -7495,10 +7501,11 @@ static void check (node_t r, node_t context) {
     }
     break;
   }
-  case N_BLOCK:
+  case N_BLOCK:    
+    check_labels (NL_HEAD (r->ops), r);
     if (curr_scope != r)
       create_node_scope (r); /* it happens if it is the top func block */
-    check (NL_HEAD (r->ops), r);
+    check (NL_EL (r->ops, 1), r);
     finish_scope ();
     break;
   case N_MODULE:
@@ -9313,7 +9320,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   }
   case N_BLOCK:
-    gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
+    emit_label (r);
+    gen (NL_EL (r->ops, 1), NULL, NULL, FALSE);
     break;
   case N_MODULE:
     gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
