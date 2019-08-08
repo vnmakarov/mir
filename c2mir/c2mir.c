@@ -5946,7 +5946,7 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
       error (initializer->pos,
 	     "initializer of non-auto or thread local object should be a constant expression");
     } else {
-      check_assignment_types (cexpr->type, NULL, cexpr, initializer);
+      check_assignment_types (type, NULL, cexpr, initializer);
     }
     return;
   }
