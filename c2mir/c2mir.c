@@ -69,6 +69,7 @@ typedef struct node *node_t;
 #define NL_TAIL(list) DLIST_TAIL (node_t, list)
 #define NL_LENGTH(list) DLIST_LENGTH (node_t, list)
 #define NL_NEXT(el) DLIST_NEXT (node_t, el)
+#define NL_PREV(el) DLIST_PREV (node_t, el)
 #define NL_REMOVE(list, el) DLIST_REMOVE (node_t, list, el)
 #define NL_APPEND(list, el) DLIST_APPEND (node_t, list, el)
 #define NL_PREPEND(list, el) DLIST_PREPEND (node_t, list, el)
@@ -5843,6 +5844,14 @@ static void check_assignment_types (struct type *left, struct type *right, struc
   }
 }
 
+static node_t get_adjacent_member (node_t member, int next_p) {
+  assert (member->code == N_MEMBER);
+  while ((member = next_p ? NL_NEXT (member) : NL_PREV (member)) != NULL
+	 && (member->code != N_MEMBER || NL_EL (member->ops, 1)->code == N_IGNORE))
+    ;
+  return member;
+}
+
 struct init_object {
   struct type *container_type;
   union {
@@ -5893,10 +5902,7 @@ static int update_init_object_path (size_t mark,  int list_p) {
 	} else if (init_object.container_type->mode == TM_UNION) { /* no next union member: */
 	  init_object.u.curr_member == NULL;
 	} else { /* finding the next named struct member: */
-	  while ((init_object.u.curr_member = NL_NEXT (init_object.u.curr_member)) != NULL
-		 && (init_object.u.curr_member->code != N_MEMBER
-		     || NL_EL (init_object.u.curr_member->ops, 1)->code == N_IGNORE))
-	    ;
+	  init_object.u.curr_member = get_adjacent_member (init_object.u.curr_member, TRUE);
 	}
 	if (init_object.u.curr_member != NULL) {
 	  el_type = ((decl_t) init_object.u.curr_member->attr)->decl_spec.type;
