@@ -5926,6 +5926,31 @@ static int update_init_object_path (size_t mark,  int list_p) {
   }
 }
 
+static int update_path_and_do (void (*action) (struct type **type_ptr,
+					       node_t initializer, int const_only_p, int top_p),
+			       size_t mark, node_t value, int const_only_p,
+			       mir_llong *max_index, pos_t pos, const char *detail) {
+  init_object_t init_object;
+  mir_llong index;
+  
+  if (! update_init_object_path (mark, value->code == N_LIST)) {
+    error (pos, "excess elements in %s initializer", detail);
+    return FALSE;
+  }
+  init_object = VARR_LAST (init_object_t, init_object_path);
+  if (init_object.container_type->mode == TM_ARR) {
+    action (&init_object.container_type->u.arr_type->el_type, value, const_only_p, FALSE);
+    if (max_index != NULL
+	&& *max_index < (index = VARR_GET (init_object_t, init_object_path, mark).u.curr_index))
+      *max_index = index;
+  } else if (init_object.container_type->mode == TM_STRUCT
+	     || init_object.container_type->mode == TM_UNION) {
+    action (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
+	    value, const_only_p, FALSE);
+  }
+  return TRUE;
+}
+
 static void check_initializer (struct type **type_ptr, node_t initializer,
 			       int const_only_p, int top_p) {
   struct type *type = *type_ptr;
@@ -6015,24 +6040,12 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
       continue;
     }
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
-      if (! update_init_object_path (mark, value->code == N_LIST)) {
-	error (init->pos, "excess elements in array initializer");
+      if (! update_path_and_do (check_initializer, mark, value, const_only_p,
+				&max_index, init->pos, "array/struct/union"))
 	break;
-      }
-      init_object = VARR_LAST (init_object_t, init_object_path);
-      if (init_object.container_type->mode == TM_ARR) {
-	check_initializer (&init_object.container_type->u.arr_type->el_type,
-			   value, const_only_p, FALSE);
-	if (max_index < (curr_index = VARR_GET (init_object_t, init_object_path, mark).u.curr_index))
-	  max_index = curr_index;
-      } else if (init_object.container_type->mode == TM_STRUCT
-		 || init_object.container_type->mode == TM_UNION) {
-	check_initializer (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
-			   value, const_only_p, FALSE);
-      }
     } else {
-      VARR_TRUNC (init_object_t, init_object_path, mark + 1);
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
+	VARR_TRUNC (init_object_t, init_object_path, mark + 1);
 	init_object = VARR_POP (init_object_t, init_object_path);
 	assert (type == init_object.container_type);
 	if (curr_des->code == N_FIELD_ID) {
@@ -6043,11 +6056,12 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
 	  } else if (! symbol_find (S_REGULAR, id, type->u.tag_type, &sym)) {
 	    error (curr_des->pos, "unknown field %s in initializer", id->u.s);
 	  } else {
-	    init_object.u.curr_member = sym.def_node;
-	    assert (init_object.u.curr_member->code == N_MEMBER);
+	    assert (sym.def_node->code == N_MEMBER);
+	    init_object.u.curr_member = get_adjacent_member (sym.def_node, FALSE);
 	    VARR_PUSH (init_object_t, init_object_path, init_object);
-	    check_initializer (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
-			       value, const_only_p, FALSE);
+	    if (! update_path_and_do (check_initializer, mark, value, const_only_p,
+				      NULL, init->pos, "struct/union"))
+	      break;
 	  }
 	} else if (type->mode != TM_ARR) {
 	  error (curr_des->pos, "array index in initializer for non-array");
@@ -6061,11 +6075,11 @@ static void check_initializer (struct type **type_ptr, node_t initializer,
 	} else if (size_val >= 0 && size_val <= cexpr->u.u_val) {
 	  error (curr_des->pos, "array index in initializer exceeds array bounds");
 	} else {
-	  init_object.u.curr_index = cexpr->u.i_val;
+	  init_object.u.curr_index = cexpr->u.i_val - 1; /* previous el */
 	  VARR_PUSH (init_object_t, init_object_path, init_object);
-	  if (max_index < init_object.u.curr_index)
-	    max_index = init_object.u.curr_index;
-	  check_initializer (&type->u.arr_type->el_type, value, const_only_p, FALSE);
+	  if (! update_path_and_do (check_initializer, mark, value, const_only_p,
+				    &max_index, init->pos, "array"))
+	    break;
 	}
       }
     }
@@ -8440,7 +8454,10 @@ typedef struct init_el init_el_t;
 DEF_VARR (init_el_t);
 static VARR (init_el_t) *init_els;
 
-static void collect_init_els (struct type *type, node_t initializer, int const_only_p, int top_p) {
+/* The function has the same structure as check_initializer.  Keep it this way. */
+static void collect_init_els (struct type **type_ptr,
+			      node_t initializer, int const_only_p, int top_p) {
+  struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t des_list, curr_des, str, init, value, size_node, temp;
   mir_llong size_val;
@@ -8507,21 +8524,14 @@ static void collect_init_els (struct type *type, node_t initializer, int const_o
     assert (value->code != N_LIST || type->mode == TM_ARR
 	    || type->mode == TM_STRUCT || type->mode == TM_UNION);
     /* we cannot have initialization of static or thread local object by non-const expr: */
-    assert (value->code == N_LIST || ((struct expr *) value->attr)->const_p || ! const_only_p);
+    assert (value->code == N_LIST || ! const_only_p
+	    || value->code == N_STR || ((struct expr *) value->attr)->const_p);
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
-      ok_p = update_init_object_path (mark, value->code == N_LIST);
+      ok_p = update_path_and_do (collect_init_els, mark, value, const_only_p, NULL, init->pos, "");
       assert (ok_p);
-      init_object = VARR_LAST (init_object_t, init_object_path);
-      if (init_object.container_type->mode == TM_ARR) {
-	collect_init_els (init_object.container_type->u.arr_type->el_type, value, const_only_p, FALSE);
-      } else if (init_object.container_type->mode == TM_STRUCT
-		 || init_object.container_type->mode == TM_UNION) {
-	collect_init_els (((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
-			  value, const_only_p, FALSE);
-      }
     } else {
-      VARR_TRUNC (init_object_t, init_object_path, mark + 1);
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
+	VARR_TRUNC (init_object_t, init_object_path, mark + 1);
 	init_object = VARR_POP (init_object_t, init_object_path);
 	assert (type == init_object.container_type);
 	if (curr_des->code == N_FIELD_ID) {
@@ -8531,19 +8541,22 @@ static void collect_init_els (struct type *type, node_t initializer, int const_o
 	  assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
 	  found_p = symbol_find (S_REGULAR, id, type->u.tag_type, &sym);
 	  assert (found_p); /* field should present */
-	  init_object.u.curr_member = sym.def_node;
-	  assert (init_object.u.curr_member->code == N_MEMBER);
+	  assert (sym.def_node->code == N_MEMBER);
+	  init_object.u.curr_member = get_adjacent_member (sym.def_node, FALSE);
 	  VARR_PUSH (init_object_t, init_object_path, init_object);
-	  collect_init_els (((decl_t) init_object.u.curr_member->attr)->decl_spec.type, value,
-			    const_only_p, FALSE);
+	  ok_p = update_path_and_do (collect_init_els, mark, value,
+				     const_only_p, NULL, init->pos, "");
+	  assert (ok_p);
 	} else {
 	  cexpr = curr_des->attr;
 	  /* index should be in array initializer and const expr of right type and value: */
 	  assert (type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
 		  && ! type->incomplete_p && size_val >= 0 && size_val > cexpr->u.u_val);
-	  init_object.u.curr_index = cexpr->u.i_val;
+	  init_object.u.curr_index = cexpr->u.i_val - 1;
 	  VARR_PUSH (init_object_t, init_object_path, init_object);
-	  collect_init_els (type->u.arr_type->el_type, value, const_only_p, FALSE);
+	  ok_p = update_path_and_do (collect_init_els, mark, value,
+				     const_only_p, NULL, init->pos, "");
+	  assert (ok_p);
 	}
       }
     }
@@ -9134,7 +9147,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       global_name = _MIR_get_temp_item_name (module);
     }
     VARR_TRUNC (init_el_t, init_els, 0);
-    collect_init_els (decl->decl_spec.type, NL_EL (r->ops, 1),
+    collect_init_els (&decl->decl_spec.type, NL_EL (r->ops, 1),
 		      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 		      || decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
 		      TRUE);
@@ -9270,7 +9283,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	  }
 	} else if (initializer->code != N_IGNORE) { // ??? general code
 	  VARR_TRUNC (init_el_t, init_els, 0);
-	  collect_init_els (decl->decl_spec.type, initializer,
+	  collect_init_els (&decl->decl_spec.type, initializer,
 			    decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 			    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p, TRUE);
 	  if (decl->scope == top_scope)
