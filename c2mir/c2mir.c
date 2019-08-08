@@ -5139,12 +5139,20 @@ static int in_params_p;
 static void check (node_t node, node_t context);
 
 static struct decl_spec check_decl_spec (node_t r, node_t decl) {
-  int n_sc = 0, sign = 0, size = 0;
+  int n_sc = 0, sign = 0, size = 0, func_p = FALSE;
   struct decl_spec *res;
   struct type *type;
 
   if (r->attr != NULL)
     return *(struct decl_spec *) r->attr;
+  if (decl->code == N_FUNC_DEF) {
+    func_p = TRUE;
+  } else if (decl->code == N_SPEC_DECL) {
+    node_t declarator = NL_EL (decl->ops, 1);
+    node_t list = NL_EL (declarator->ops, 1);
+
+    func_p = list != NULL && NL_HEAD (list->ops) != NULL && NL_HEAD (list->ops)->code == N_FUNC;
+  }
   r->attr = res = reg_malloc (sizeof (struct decl_spec));
   res->typedef_p = res->extern_p = res->static_p = FALSE;
   res->auto_p = res->register_p = res->thread_local_p = FALSE;
@@ -5179,13 +5187,13 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     case N_CONST: case N_RESTRICT: case N_VOLATILE: case N_ATOMIC: break;
       /* Func specifiers: */
     case N_INLINE:
-      if (decl->code != N_FUNC_DEF)
+      if (! func_p)
 	error (n->pos, "non-function declaration with inline");
       else
 	res->inline_p = TRUE;
       break;
     case N_NO_RETURN:
-      if (decl->code != N_FUNC_DEF)
+      if (! func_p)
 	error (n->pos, "non-function declaration with _Noreturn");
       else
 	res->no_return_p = TRUE;
