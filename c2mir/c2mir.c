@@ -5490,6 +5490,25 @@ static int void_param_p (node_t param) {
   return FALSE;
 }
 
+static void adjust_param_type (struct type **type_ptr) {
+  struct type *par_type, *type = *type_ptr;
+  struct arr_type *arr_type;
+  
+  if (type->mode == TM_ARR) { // ??? static, old type qual
+    arr_type = type->u.arr_type;
+    type->mode = TM_PTR;
+    type->u.ptr_type = arr_type->el_type;
+    type->type_qual = arr_type->ind_type_qual;
+    type->incomplete_p = TRUE; make_type_complete (type);
+  } else if (type->mode == TM_FUNC) {
+    par_type = create_type (NULL);
+    par_type->mode = TM_PTR;
+    par_type->pos_node = type->pos_node; par_type->u.ptr_type = type;
+    *type_ptr = type = par_type;
+    type->incomplete_p = TRUE; make_type_complete (type);
+  }
+}
+
 static struct type *check_declarator (node_t r, int func_def_p) {
   struct type *type, *res = NULL;
   node_t list = NL_EL (r->ops, 1);
@@ -5555,7 +5574,6 @@ static struct type *check_declarator (node_t r, int func_def_p) {
       } else {
 	for (node_t p = first_param; p != NULL; p = NL_NEXT (p)) {
 	  struct decl_spec *decl_spec_ptr;
-	  struct type *type;
 
 	  if (p->code == N_ID) {
 	    if (! func_def_p)
@@ -5572,23 +5590,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 	      assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
 	      decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
 	    }
-	    type = decl_spec_ptr->type;
-	    /* Parameter adjustments: */
-	    if (type->mode == TM_ARR) { // ??? static, old type qual
-	      struct arr_type *arr_type = type->u.arr_type;
-
-	      type->mode = TM_PTR;
-	      type->u.ptr_type = arr_type->el_type;
-	      type->type_qual = arr_type->ind_type_qual;
-	      type->incomplete_p = TRUE; make_type_complete (type);
-	    } else if (type->mode == TM_FUNC) {
-	      struct type *par_type = create_type (NULL);
-
-	      par_type->mode = TM_PTR;
-	      par_type->pos_node = type->pos_node; par_type->u.ptr_type = decl_spec_ptr->type;
-	      type = decl_spec_ptr->type = par_type;
-	      type->incomplete_p = TRUE; make_type_complete (type);
-	    }
+	    adjust_param_type (&decl_spec_ptr->type);
 	  }
 	}
       }
@@ -7425,7 +7427,7 @@ static void check (node_t r, node_t context) {
 	  check (decl_node, r);
 	}
       } else {
-	struct decl_spec decl_spec;
+	struct decl_spec decl_spec, *decl_spec_ptr;
 
 	decl_node = sym.def_node;
 	assert (decl_node->code == N_SPEC_DECL);
@@ -7437,7 +7439,9 @@ static void check (node_t r, node_t context) {
 	if (NL_NEXT (param_declarator)->code != N_IGNORE) {
 	  error (p->pos, "initialized parameter %s", param_id->u.s);
 	}
-	decl_spec = ((decl_t) decl_node->attr)->decl_spec;
+	decl_spec_ptr = &((decl_t) decl_node->attr)->decl_spec;
+	adjust_param_type (&decl_spec_ptr->type);
+	decl_spec = *decl_spec_ptr;
 	if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p
 	    || decl_spec.auto_p || decl_spec.thread_local_p) {
 	  error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s);
