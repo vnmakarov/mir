@@ -9244,8 +9244,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (specs);
     node_t initializer = NL_NEXT (declarator);
-    node_t n, id;
+    node_t n, id, curr_node;
     symbol_t sym;
+    decl_t curr_decl;
     size_t i;
     const char *name;
 
@@ -9275,11 +9276,17 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	  if (decl->scope != top_scope && decl->decl_spec.static_p) {
 	    decl->item = MIR_new_bss (name, decl->decl_spec.type->raw_size);
 	  } else if (decl->scope == top_scope
-		     && symbol_find (S_REGULAR, id, top_scope, &sym) && sym.def_node == r) {
-	    for (i = 0; i < VARR_LENGTH (node_t, sym.defs); i++)
-	      if (NL_EL (VARR_GET (node_t, sym.defs, i)->ops, 2)->code != N_IGNORE)
+		     && symbol_find (S_REGULAR, id, top_scope, &sym)
+		     && ((curr_decl = sym.def_node->attr)->item == NULL
+			 || curr_decl->item->item_type != MIR_bss_item)) {
+	    for (i = 0; i < VARR_LENGTH (node_t, sym.defs); i++) {
+	      curr_node = VARR_GET (node_t, sym.defs, i);
+	      curr_decl = curr_node->attr;
+	      if ((curr_decl->item != NULL && curr_decl->item->item_type == MIR_bss_item)
+		  || NL_EL (curr_node->ops, 2)->code != N_IGNORE)
 		break;
-	    if (i >= VARR_LENGTH (node_t, sym.defs)) /* No decl with intializer: */
+	    }
+	    if (i >= VARR_LENGTH (node_t, sym.defs)) /* No item yet or no decl with intializer: */
 	      decl->item = MIR_new_bss (name, decl->decl_spec.type->raw_size);
 	  }
 	} else if (initializer->code != N_IGNORE) { // ??? general code
