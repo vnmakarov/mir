@@ -9259,7 +9259,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
 	DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, decl->item);
       } else if (decl->decl_spec.linkage != N_IGNORE) {
-	if (symbol_find (S_REGULAR, id, decl->scope, &sym)
+	if (symbol_find (S_REGULAR, id,
+			 decl->decl_spec.linkage == N_EXTERN ? top_scope : decl->scope, &sym)
 	    && (decl->item = get_ref_item (sym.def_node, name)) == NULL) {
 	  for (i = 0; i < VARR_LENGTH (node_t, sym.defs); i++)
 	    if ((decl->item = get_ref_item (VARR_GET (node_t, sym.defs, i), name)) != NULL)
