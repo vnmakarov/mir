@@ -8271,7 +8271,7 @@ static op_t force_reg (op_t op, MIR_type_t t) {
 
   if (op.mir_op.mode == MIR_OP_REG)
     return op;
-  res = get_new_temp (t);
+  res = get_new_temp (promote_mir_int_type (t));
   emit2 (MIR_MOV, res.mir_op, op.mir_op);
   return res;
 }
@@ -8280,7 +8280,7 @@ static op_t force_reg_or_mem (op_t op, MIR_type_t t) {
   if (op.mir_op.mode == MIR_OP_REG || op.mir_op.mode == MIR_OP_MEM)
     return op;
   assert (op.mir_op.mode == MIR_OP_REF || op.mir_op.mode == MIR_OP_STR);
-  return force_reg (op,t);
+  return force_reg (op, t);
 }
 
 
@@ -9014,7 +9014,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     t = get_mir_type (((struct expr *) r->attr)->type);
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
     op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-    ind_t = promote_mir_int_type (get_mir_type (((struct expr *) NL_EL (r->ops, 1)->attr)->type));
+    ind_t = get_mir_type (((struct expr *) NL_EL (r->ops, 1)->attr)->type);
     op2 = force_reg (op2, ind_t);
     op1 = force_reg_or_mem (op1, MIR_T_I64);
     assert (op2.mir_op.mode == MIR_OP_REG && (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM));
