@@ -9415,6 +9415,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     struct switch_attr *switch_attr = r->attr;
     op_t case_reg_op;
     case_t c;
+    MIR_label_t saved_break_label = break_label;
 
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
@@ -9439,11 +9440,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       emit1 (MIR_JMP, MIR_new_label_op (break_label));
     top_gen (stmt, NULL, NULL);
     emit_insn (break_label);
+    break_label = saved_break_label;
     break;
   }
   case N_DO: {
     node_t expr = NL_EL (r->ops, 1);
     node_t stmt = NL_NEXT (expr);
+    MIR_label_t saved_continue_label = continue_label, saved_break_label = break_label;
 
     assert (false_label == NULL && true_label == NULL);
     continue_label = MIR_new_label ();
@@ -9453,12 +9456,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     gen (stmt, NULL, NULL, FALSE);
     top_gen (expr, continue_label, break_label);
     emit_insn (break_label);
+    continue_label = saved_continue_label; break_label = saved_break_label;
     break;
   }
   case N_WHILE: {
     node_t expr = NL_EL (r->ops, 1);
     node_t stmt = NL_NEXT (expr);
     MIR_label_t stmt_label = MIR_new_label ();
+    MIR_label_t saved_continue_label = continue_label, saved_break_label = break_label;
 
     assert (false_label == NULL && true_label == NULL);
     continue_label = MIR_new_label ();
@@ -9470,6 +9475,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     gen (stmt, NULL, NULL, FALSE);
     emit1 (MIR_JMP, MIR_new_label_op (continue_label));
     emit_insn (break_label);
+    continue_label = saved_continue_label; break_label = saved_break_label;
     break;
   }
   case N_FOR: {
