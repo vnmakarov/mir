@@ -4958,8 +4958,9 @@ static void set_type_layout (struct type *type) {
 }
 
 static int int_bit_size (struct type *type) {
-  assert (type->mode == TM_BASIC);
-  return basic_type_size (type->u.basic_type) * MIR_CHAR_BIT;
+  assert (type->mode == TM_BASIC || type->mode == TM_ENUM);
+  return (basic_type_size (type->mode == TM_ENUM ? ENUM_BASIC_INT_TYPE : type->u.basic_type)
+	  * MIR_CHAR_BIT);
 }
 
 static int void_ptr_p (struct type *type) {
