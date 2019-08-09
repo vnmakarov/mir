@@ -5347,6 +5347,9 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 	check (decl_list, n);
 	if (new_scope_p)
 	  finish_scope ();
+	if (res != n) {
+	  type->incomplete_p = TRUE; make_type_complete (type); /* recalculate size */
+	}
       }
       break;
     }
