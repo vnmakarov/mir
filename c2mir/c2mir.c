@@ -4581,6 +4581,8 @@ static struct type integer_promotion (const struct type *type) {
     res.u.basic_type = TP_UINT;
   else if (type->mode == TM_ENUM)
     res.u.basic_type = ENUM_BASIC_INT_TYPE;
+  else if (type->mode == TM_BASIC && type->u.basic_type == TP_UINT)
+    res.u.basic_type = TP_UINT;
   else
     res.u.basic_type = TP_INT;
   return res;
