@@ -8390,6 +8390,12 @@ static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
   return get_func_var_name (prefix, suffix);
 }
 
+static const char *get_param_name (MIR_type_t *type, struct type *param_type, const char *name) {
+  *type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
+	   ? MIR_POINTER_TYPE : get_mir_type (param_type));
+  return get_reg_var_name (promote_mir_int_type (*type), name, 0);
+}
+
 static VARR (MIR_var_t) *vars;
 static VARR (node_t) *mem_params;
 
@@ -8397,7 +8403,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
   node_t declarator, id, first_param, p;
   struct type *param_type;
   MIR_var_t var;
-  MIR_type_t type, promoted_type;
+  MIR_type_t type;
 
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, vars, 0);
@@ -8419,10 +8425,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
 	assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
 	id = NL_HEAD (declarator->ops);
 	param_type = ((decl_t) p->attr)->decl_spec.type;
-	type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
-		? MIR_POINTER_TYPE : get_mir_type (param_type));
-	promoted_type = promote_mir_int_type (type);
-	var.name = get_reg_var_name (promoted_type, id->u.s, 0);
+	var.name = get_param_name (&type, param_type, id->u.s);
 	if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION)
 	  VARR_PUSH (node_t, mem_params, p);
       }
@@ -9344,7 +9347,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t param, param_declarator, param_id;
     MIR_type_t res_type;
     MIR_reg_t fp_reg, param_reg;
-
+    const char *name;
+    
     assert (declarator != NULL && declarator->code == N_DECL
 	    && NL_HEAD (declarator->ops)->code == N_ID);
     assert (decl->decl_spec.type->mode == TM_FUNC);
@@ -9368,7 +9372,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       param_decl = param->attr;
       assert (param_declarator != NULL && param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
-      param_reg = get_reg_var (MIR_POINTER_TYPE, param_id->u.s).reg;
+      name = get_param_name (&res_type, param_decl->decl_spec.type, param_id->u.s);
+      param_reg = get_reg_var (MIR_POINTER_TYPE, name).reg;
       val = new_op (NULL, MIR_new_mem_op (MIR_T_UNDEF, 0, param_reg, 0, 1));
       var = new_op (param_decl, MIR_new_mem_op (MIR_T_UNDEF, param_decl->offset,
 						MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
