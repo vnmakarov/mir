@@ -7958,8 +7958,8 @@ static void emit_insn (MIR_insn_t insn) {
 
   if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV)
       && (tail = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) != NULL
-      && MIR_insn_nops (tail) > 0 && temp_reg_p (insn->ops[1]) && temp_reg_p (tail->ops[0])
-      && insn->ops[1].u.reg == tail->ops[0].u.reg) {
+      && MIR_insn_nops (tail) > 0 && temp_reg_p (insn->ops[1]) && ! temp_reg_p (insn->ops[0])
+      && temp_reg_p (tail->ops[0]) && insn->ops[1].u.reg == tail->ops[0].u.reg) {
     MIR_insn_op_mode (tail, 0, &out_p);
     if (out_p) {
       tail->ops[0] = insn->ops[0];
