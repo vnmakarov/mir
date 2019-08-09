@@ -7384,9 +7384,9 @@ static void check (node_t r, node_t context) {
 	} else if (cexpr->u.i_val == 0 && declarator->code == N_DECL) {
 	  error (const_expr->pos, "zero bit field width for %s", NL_HEAD (declarator->ops)->u.s);
 	} else if ((! signed_integer_type_p (cexpr->type)
-		    && cexpr->u.u_val > int_bit_size (cexpr->type))
+		    && cexpr->u.u_val > int_bit_size (type))
 		   || (signed_integer_type_p (cexpr->type)
-		       && cexpr->u.i_val > int_bit_size (cexpr->type))) {
+		       && cexpr->u.i_val > int_bit_size (type))) {
 	  error (const_expr->pos, "bit field width exceeds its type");
 	}
       }
