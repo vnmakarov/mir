@@ -5067,18 +5067,21 @@ static node_t find_def (enum symbol_mode mode, node_t id, node_t scope, node_t *
 static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   symbol_t sym;
   int found_p;
-  node_t tab_decl_list;
+  node_t scope, tab_decl_list;
 
   if (id->code != N_ID)
     return r;
+  scope = curr_scope;
+  while (scope != top_scope && (scope->code == N_STRUCT || scope->code == N_UNION))
+    scope = ((struct node_scope *) scope->attr)->scope;
   if (decl_list->code != N_IGNORE) {
-    found_p = symbol_find (S_TAG, id, curr_scope, &sym);
+    found_p = symbol_find (S_TAG, id, scope, &sym);
   } else {
-    sym.def_node = find_def (S_TAG, id, curr_scope, NULL);
+    sym.def_node = find_def (S_TAG, id, scope, NULL);
     found_p = sym.def_node != NULL;
   }
   if (! found_p) {
-    symbol_insert (S_TAG, id, curr_scope, r, NULL);
+    symbol_insert (S_TAG, id, scope, r, NULL);
   } else if (sym.def_node->code != r->code) {
     error (id->pos, "kind of tag %s is unmatched with previous declaration", id->u.s);
   } else if ((tab_decl_list = NL_EL (sym.def_node->ops, 1))->code != N_IGNORE
