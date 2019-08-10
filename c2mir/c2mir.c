@@ -830,17 +830,17 @@ static void set_string_val (token_t t, VARR (char) *temp) {
     case 'v': curr_c = '\v'; break;
     case '\\': case '\'': case '\?': case '\"': break;
     case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
-      unsigned long v = curr_c;
+      unsigned long v = curr_c - '0';
 
       curr_c = str[++i];
       if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
 	i--;
       } else {
-	v = v * 8 + curr_c; curr_c = str[++i];
+	v = v * 8 + curr_c - '0'; curr_c = str[++i];
 	if (! isdigit (curr_c) || curr_c == '8' || curr_c == '9')
 	  i--;
 	else
-	  v = v * 8 + curr_c;
+	  v = v * 8 + curr_c - '0';
       }
       curr_c = v;
       break;
@@ -869,7 +869,7 @@ static void set_string_val (token_t t, VARR (char) *temp) {
       error (t->pos, "wrong escape char 0x%x", curr_c);
       curr_c = 0;
     }
-    if (curr_c != 0)
+    if (t->repr[0] == '\'' || curr_c != 0)
       VARR_PUSH (char, temp, curr_c);
   }
   VARR_PUSH (char, temp, '\0');
