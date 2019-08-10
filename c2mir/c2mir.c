@@ -7951,8 +7951,10 @@ static int push_const_val (node_t r, op_t *res) {
   return TRUE;
 }
 
+static void emit_insn (MIR_insn_t insn) { MIR_append_insn (curr_func, insn); }
+
 /* Change t1 = expr; v = t1 to v = expr */
-static void emit_insn (MIR_insn_t insn) {
+static void emit_insn_opt (MIR_insn_t insn) {
   MIR_insn_t tail;
   int out_p;
 
@@ -7969,12 +7971,16 @@ static void emit_insn (MIR_insn_t insn) {
   MIR_append_insn (curr_func, insn);
 }
 
-static void emit1 (MIR_insn_code_t code, MIR_op_t op1) {emit_insn (MIR_new_insn (code, op1)); }
+static void emit1 (MIR_insn_code_t code, MIR_op_t op1) { emit_insn_opt (MIR_new_insn (code, op1)); }
 static void emit2 (MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
-  emit_insn (MIR_new_insn (code, op1, op2));
+  emit_insn_opt (MIR_new_insn (code, op1, op2));
 }
 static void emit3 (MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2, MIR_op_t op3) {
-  emit_insn (MIR_new_insn (code, op1, op2, op3));
+  emit_insn_opt (MIR_new_insn (code, op1, op2, op3));
+}
+
+static void emit2_noopt (MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
+  emit_insn (MIR_new_insn (code, op1, op2));
 }
 
 static op_t cast (op_t op, MIR_type_t t) {
@@ -8963,7 +8969,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       t = promote_mir_int_type (t);
       op2 = promote (val, t);
       if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, op2.mir_op);
+	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, op2.mir_op);
       } else {
 	int size, sh;
 	uint64_t mask, mask2;
@@ -8975,7 +8981,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	mask = 0xffffffffffffffff >> (64 - var.decl->width); mask2 = ~(mask << sh);
 	temp_op1 = get_new_temp (MIR_T_I64);
 	temp_op2 = get_new_temp (MIR_T_I64);
-	emit2 (MIR_MOV, temp_op2.mir_op, var.mir_op);
+	emit2_noopt (MIR_MOV, temp_op2.mir_op, var.mir_op);
 	emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
 	emit3 (MIR_AND, temp_op1.mir_op, op2.mir_op, MIR_new_uint_op (mask));
 	if (sh != 0)
