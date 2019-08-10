@@ -2199,14 +2199,20 @@ void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
 	MIR_op_t disp_op = MIR_new_int_op (op->u.mem.disp);
 
 	disp_reg = vn_add_val (func, MIR_T_I64, MIR_INSN_BOUND, disp_op, disp_op);
-	insn = insert_op_insn (after_p, func_item, insn, MIR_new_insn (MIR_MOV, MIR_new_reg_op (disp_reg), disp_op));
+	insn = insert_op_insn (after_p, func_item, insn,
+			       MIR_new_insn (MIR_MOV, MIR_new_reg_op (disp_reg), disp_op));
       }
       if (scale_ind_reg != 0 && op->u.mem.scale > 1) {
-	MIR_op_t ind_op = MIR_new_reg_op (op->u.mem.index), scale_op = MIR_new_int_op (op->u.mem.scale);
+	MIR_op_t ind_op = MIR_new_reg_op (op->u.mem.index);
+	MIR_op_t scale_reg_op, scale_int_op = MIR_new_int_op (op->u.mem.scale);
 
-	scale_ind_reg = vn_add_val (func, MIR_T_I64, MIR_MUL, ind_op, scale_op);
+	scale_reg_op = MIR_new_reg_op (vn_add_val (func, MIR_T_I64,
+						   MIR_INSN_BOUND, scale_int_op, scale_int_op));
 	insn = insert_op_insn (after_p, func_item, insn,
-			       MIR_new_insn (MIR_MUL, MIR_new_reg_op (scale_ind_reg), ind_op, scale_op));
+			       MIR_new_insn (MIR_MOV, scale_reg_op, scale_int_op));
+	scale_ind_reg = vn_add_val (func, MIR_T_I64, MIR_MUL, ind_op, scale_reg_op);
+	insn = insert_op_insn (after_p, func_item, insn,
+			       MIR_new_insn (MIR_MUL, MIR_new_reg_op (scale_ind_reg), ind_op, scale_reg_op));
       }
       if (base_reg != 0 && scale_ind_reg != 0) {
 	MIR_op_t base_op = MIR_new_reg_op (base_reg), ind_op = MIR_new_reg_op (scale_ind_reg);
