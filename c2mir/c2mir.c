@@ -8432,7 +8432,8 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
 	id = NL_HEAD (declarator->ops);
 	param_type = ((decl_t) p->attr)->decl_spec.type;
 	var.name = get_param_name (&type, param_type, id->u.s);
-	if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION)
+	if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
+	    || ! ((decl_t) p->attr)->reg_p)
 	  VARR_PUSH (node_t, mem_params, p);
       }
       var.type = type;
@@ -9351,7 +9352,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     struct node_scope *ns = stmt->attr;
     decl_t param_decl, decl = r->attr;
     node_t param, param_declarator, param_id;
-    MIR_type_t res_type;
+    struct type *param_type;
+    MIR_insn_t insn;
+    MIR_type_t res_type, param_mir_type;
     MIR_reg_t fp_reg, param_reg;
     const char *name;
     
@@ -9378,12 +9381,21 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       param_decl = param->attr;
       assert (param_declarator != NULL && param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
-      name = get_param_name (&res_type, param_decl->decl_spec.type, param_id->u.s);
-      param_reg = get_reg_var (MIR_POINTER_TYPE, name).reg;
-      val = new_op (NULL, MIR_new_mem_op (MIR_T_UNDEF, 0, param_reg, 0, 1));
-      var = new_op (param_decl, MIR_new_mem_op (MIR_T_UNDEF, param_decl->offset,
-						MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
-      block_move (var, val, type_size (decl->decl_spec.type));
+      param_type = param_decl->decl_spec.type;
+      name = get_param_name (&param_mir_type, param_type, param_id->u.s);
+      if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION) {
+	param_reg = get_reg_var (MIR_POINTER_TYPE, name).reg;
+	val = new_op (NULL, MIR_new_mem_op (MIR_T_UNDEF, 0, param_reg, 0, 1));
+	var = new_op (param_decl, MIR_new_mem_op (MIR_T_UNDEF, param_decl->offset,
+						  MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
+	block_move (var, val, type_size (param_type));
+      } else {
+	assert (! param_decl->reg_p);
+	emit2 (param_mir_type == MIR_T_F ? MIR_FMOV : param_mir_type == MIR_T_D ? MIR_DMOV : MIR_MOV,
+	       MIR_new_mem_op (param_mir_type, param_decl->offset,
+			       MIR_reg (FP_NAME, curr_func->u.func), 0, 1),
+	       MIR_new_reg_op (get_reg_var (MIR_T_UNDEF, name).reg));
+      }
     }
     gen (stmt, NULL, NULL, FALSE);
     MIR_finish_func ();
