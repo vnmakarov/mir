@@ -9398,6 +9398,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
     }
     gen (stmt, NULL, NULL, FALSE);
+    if (res_type == MIR_T_UNDEF
+	&& ((insn = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) == NULL
+	    || (insn->code != MIR_RET && insn->code != MIR_JMP)))
+      emit_insn (MIR_new_ret_insn (0));
     MIR_finish_func ();
     finish_curr_func_reg_vars ();
     break;
