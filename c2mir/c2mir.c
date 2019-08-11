@@ -6266,10 +6266,16 @@ static struct expr *create_basic_type_expr (node_t r, enum basic_type bt) {
 
 static node_t n_i1_node;
 
-static void get_one_node (node_t *op, struct expr **e, struct type **t) {
-  *op = n_i1_node; *e = (*op)->attr; *t = (*e)->type;
-  init_type (*t);
-  (*e)->type->mode = TM_BASIC; (*e)->type->u.basic_type = TP_INT; (*e)->u.i_val = 1;
+static void get_int_node (node_t *op, struct expr **e, struct type **t, mir_size_t i) {
+  if (i == 1) {
+    *op = n_i1_node;
+  } else {
+    *op = new_i_node (i, no_pos);
+    check (*op, NULL);
+  }
+  *e = (*op)->attr; *t = (*e)->type;
+  init_type (*t); (*e)->type->mode = TM_BASIC; (*e)->type->u.basic_type = TP_INT;
+  (*e)->u.i_val = i; // ???
 }
 
 static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct expr *e1, struct expr *e2,
@@ -6749,7 +6755,7 @@ static void check (node_t r, node_t context) {
     process_unop (r, &op1, &e1, &t1, NULL);
     saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
-    get_one_node (&op2, &e2, &t2);
+    get_int_node (&op2, &e2, &t2, 1);
     e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
     assign_expr_type = create_type (NULL); *assign_expr_type = *e->type;
