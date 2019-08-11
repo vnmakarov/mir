@@ -4739,7 +4739,7 @@ struct node_scope {
 };
 
 struct decl {
-  unsigned addr_p : 1, reg_p : 1; /* true if address is taken; true if reg can be used */
+  unsigned addr_p : 1, reg_p : 1, used_p : 1; /* true if address is taken, reg can be used or is used */
   int bit_offset, width; /* for bitfields, -1 bit_offset for non bitfields. */
   mir_size_t offset; /* var offset in frame or bss */
   node_t scope; /* declaration scope */
@@ -5319,6 +5319,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       } else {
 	assert (def->code == N_SPEC_DECL);
 	decl = def->attr;
+	decl->used_p = TRUE;
 	assert (decl->decl_spec.typedef_p);
 	*type = *decl->decl_spec.type;
 	if (type->incomplete_p
@@ -6127,8 +6128,8 @@ DEF_VARR (decl_t);
 static VARR (decl_t) *decls_for_allocation;
 
 static void init_decl (decl_t decl) {
-  decl->addr_p = FALSE; decl->reg_p = FALSE; decl->offset = 0; decl->bit_offset = -1;
-  decl->scope = curr_scope; decl->item = NULL;
+  decl->addr_p = FALSE; decl->reg_p = decl->used_p = FALSE; decl->offset = 0;
+  decl->bit_offset = -1; decl->scope = curr_scope; decl->item = NULL;
 }
 
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec,
@@ -6604,14 +6605,15 @@ static void check (node_t r, node_t context) {
       e->type->mode = TM_BASIC; e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
       decl = op1->attr;
-      if (decl->decl_spec.typedef_p) {
+      if (decl->decl_spec.typedef_p)
 	error (r->pos, "typedef name %s as an operand", r->u.s);
-      }
+      decl->used_p = TRUE;
       *e->type = *decl->decl_spec.type;
       if (e->type->mode != TM_FUNC)
 	e->lvalue_node = op1;
     } else if (op1->code == N_FUNC_DEF) {
       decl = op1->attr;
+      decl->used_p = TRUE;
       assert (decl->decl_spec.type->mode == TM_FUNC);
       *e->type = *decl->decl_spec.type;
     } else {
@@ -9274,11 +9276,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       id = NL_HEAD (declarator->ops);
       name = (decl->scope != top_scope && decl->decl_spec.static_p
 	      ? get_func_static_var_name (id->u.s, decl) : id->u.s);
-      if (decl->scope != top_scope && decl->decl_spec.static_p) {
+      if (decl->used_p && decl->scope != top_scope && decl->decl_spec.static_p) {
 	decl->item = MIR_new_forward (name);
 	DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
 	DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, decl->item);
-      } else if (decl->decl_spec.linkage != N_IGNORE) {
+      } else if (decl->used_p && decl->decl_spec.linkage != N_IGNORE) {
 	if (symbol_find (S_REGULAR, id,
 			 decl->decl_spec.linkage == N_EXTERN ? top_scope : decl->scope, &sym)
 	    && (decl->item = get_ref_item (sym.def_node, name)) == NULL) {
@@ -9794,6 +9796,8 @@ static void print_decl (FILE *f, decl_t decl) {
   print_decl_spec (f, &decl->decl_spec);
   if (decl->addr_p)
     fprintf (f, ", addressable");
+  if (decl->used_p)
+    fprintf (f, ", used");
   if (decl->reg_p)
     fprintf (f, ", reg");
   else {
