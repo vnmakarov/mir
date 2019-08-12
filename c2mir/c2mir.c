@@ -6755,7 +6755,7 @@ static void check (node_t r, node_t context) {
     process_unop (r, &op1, &e1, &t1, NULL);
     saved_expr = *e1;
     t1 = e1->type = adjust_type (e1->type);
-    get_int_node (&op2, &e2, &t2, 1);
+    get_int_node (&op2, &e2, &t2, t1->mode != TM_PTR ? 1 : type_size (t1->u.ptr_type));
     e = check_assign_op (r, op1, op2, e1, e2, t1, t2);
     t2 = ((struct expr *) r->attr)->type; *e1 = saved_expr; t1 = e1->type;
     assign_expr_type = create_type (NULL); *assign_expr_type = *e->type;
@@ -8777,6 +8777,30 @@ static MIR_item_t get_ref_item (node_t def, const char *name) {
   return NULL;
 }
 
+static void emit_bin_op (node_t r, struct type *type, op_t res, op_t op1, op_t op2) {
+  op_t temp;
+  
+  if (type->mode == TM_PTR) {  /* ptr +/- int */
+    assert (r->code == N_ADD || r->code == N_SUB || r->code == N_ADD_ASSIGN || r->code == N_SUB_ASSIGN);
+    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->mode != TM_PTR) /* int + ptr */
+      SWAP (op1, op2, temp);
+    if (op2.mir_op.mode == MIR_OP_INT || op2.mir_op.mode == MIR_OP_UINT) {
+      op2 = new_op (NULL, MIR_new_int_op (op2.mir_op.u.i * type_size (type->u.ptr_type)));
+    } else {
+      emit3 (sizeof (mir_size_t) == 8 ? MIR_MUL : MIR_MULS,
+	     res.mir_op, op2.mir_op, MIR_new_int_op (type_size (type->u.ptr_type)));
+      op2 = res;
+    }
+  }
+  emit3 (get_mir_type_insn_code (type, r), res.mir_op, op1.mir_op, op2.mir_op);
+  if (type->mode != TM_PTR
+      && (type = ((struct expr *) NL_HEAD (r->ops)->attr)->type)->mode == TM_PTR) { /* ptr - ptr */
+    assert (r->code == N_SUB || r->code == N_SUB_ASSIGN);
+    emit3 (sizeof (mir_size_t) == 8 ? MIR_DIV : MIR_DIVS,
+	   res.mir_op, res.mir_op, MIR_new_int_op (type_size (type->u.ptr_type)));
+  }
+}
+
 DEF_VARR (MIR_op_t);
 static VARR (MIR_op_t) *ops;
 
@@ -8907,7 +8931,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       emit_insn (end_label);
     }
     break;
-  case N_ADD: case N_SUB: // ptr ???
+  case N_ADD: case N_SUB:
     if (NL_NEXT (NL_HEAD (r->ops)) == NULL) { /* unary */
       if (gen_unary_op (r, &op1, &res)) {
 	MIR_insn_code_t ic = get_mir_insn_code (r);
@@ -8922,11 +8946,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       }
       break;
     }
-    /* Fall through: */
+  /* Fall through: */
   case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH: case N_MUL: case N_DIV: case N_MOD:
-    if (gen_bin_op (r, &op1, &op2, &res)) {
-      emit3 (get_mir_insn_code (r), res.mir_op, op1.mir_op, op2.mir_op);
-    }
+    if (gen_bin_op (r, &op1, &op2, &res))
+      emit_bin_op (r, ((struct expr *) r->attr)->type, res, op1, op2);
     break;
   case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE: {
     struct type *type1 = ((struct expr *) NL_HEAD (r->ops)->attr)->type;
@@ -8949,22 +8972,26 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     break;
   }
-  case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: // ??? ptr
-    t = get_mir_type (((struct expr *) r->attr)->type2);
+  case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: {
+    struct type *type = ((struct expr *) r->attr)->type2;
+
+    t = get_mir_type (type);
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     op1 = promote (force_val (var), t);
-    op2 = promote (one_op, t);
+    op2 = promote (type->mode != TM_PTR ? one_op
+		   : new_op (NULL, MIR_new_int_op (type_size (type->u.ptr_type))), t);
     res = get_new_temp (t);
     val = get_new_temp (t);
     emit3 (get_mir_insn_code (r), val.mir_op, op1.mir_op, op2.mir_op);
     emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op,
 	   r->code == N_INC || r->code == N_DEC ? val.mir_op : op1.mir_op);
     goto assign;
+  }
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
-  case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN: // ptr ???
-    if (! gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &op1, &op2, &res, &var)) /* stack: var, var op val */
+  case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
+    if (! gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &op1, &op2, &res, &var))
       assert (FALSE); /* Can not be a constant */
-    emit3 (get_mir_insn_code (r), res.mir_op, op1.mir_op, op2.mir_op);
+    emit_bin_op (r, ((struct expr *) r->attr)->type2, res, op1, op2);
     val = res;
     goto assign;
     break;
