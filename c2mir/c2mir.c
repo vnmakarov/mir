@@ -8673,7 +8673,8 @@ static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t le
   emit_insn (MIR_new_insn_arr (MIR_CALL, 6 /* args + proto + func + res */, args));
 }
 
-static void gen_initializer (op_t var, const char *global_name, mir_size_t size, int local_p) {
+static void gen_initializer (size_t init_start, op_t var,
+			     const char *global_name, mir_size_t size, int local_p) {
   op_t val;
   size_t str_len;
   mir_size_t data_size, offset = 0, rel_offset = 0;
@@ -8683,8 +8684,8 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
   MIR_item_t data;
 
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
-    assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) == 1);
-    init_el = VARR_GET (init_el_t, init_els, 0);
+    assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) - init_start == 1);
+    init_el = VARR_GET (init_el_t, init_els, init_start);
     val = gen (init_el.init, NULL, NULL, TRUE);
     t = get_op_type (var);
     val = promote (val, promote_mir_int_type (t));
@@ -8693,7 +8694,7 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
     assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
     offset = var.mir_op.u.mem.disp;
     base = var.mir_op.u.mem.base;
-    for (size_t i = 0; i < VARR_LENGTH (init_el_t, init_els); i++) {
+    for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
       init_el = VARR_GET (init_el_t, init_els, i);
       val = gen (init_el.init, NULL, NULL, TRUE);
       t = get_mir_type (init_el.el_type);
@@ -8715,9 +8716,9 @@ static void gen_initializer (op_t var, const char *global_name, mir_size_t size,
       gen_memset (offset + rel_offset, base, size - rel_offset);
   } else {
     assert (var.mir_op.mode == MIR_OP_REF);
-    for (size_t i = 0; i < VARR_LENGTH (init_el_t, init_els); i++) {
+    for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
       init_el = VARR_GET (init_el_t, init_els, i);
-      if (i != 0 && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
+      if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
 	continue;
       val = gen (init_el.init, NULL, NULL, TRUE);
       assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
@@ -9168,27 +9169,29 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     decl_t decl = type_name->attr;
     struct expr *expr = r->attr;
     MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
+    size_t init_start;
 
     if (decl->scope == top_scope) {
       assert (decl->item == NULL);
       global_name = _MIR_get_temp_item_name (module);
     }
-    VARR_TRUNC (init_el_t, init_els, 0);
+    init_start = VARR_LENGTH (init_el_t, init_els);
     collect_init_els (&decl->decl_spec.type, NL_EL (r->ops, 1),
 		      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 		      || decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
 		      TRUE);
     if (decl->scope == top_scope)
-      qsort (VARR_ADDR (init_el_t, init_els), VARR_LENGTH (init_el_t, init_els),
-	     sizeof (init_el_t), cmp_init_el);
+      qsort (VARR_ADDR (init_el_t, init_els) + init_start,
+	     VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
     if (decl->scope == top_scope || decl->decl_spec.static_p) {
       var = new_op (decl, MIR_new_ref_op (NULL));
     } else {
       t = get_mir_type (expr->type);
       var = new_op (decl, MIR_new_mem_op (t, decl->offset, MIR_reg (FP_NAME, curr_func->u.func), 0, 1));
     }
-    gen_initializer (var, global_name, decl->decl_spec.type->raw_size,
+    gen_initializer (init_start, var, global_name, decl->decl_spec.type->raw_size,
 		     decl->scope != top_scope && !decl->decl_spec.static_p);
+    VARR_TRUNC (init_el_t, init_els, init_start);
     res = var;
     break;
   }
@@ -9274,7 +9277,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t n, id, curr_node;
     symbol_t sym;
     decl_t curr_decl;
-    size_t i;
+    size_t i, init_start;
     const char *name;
 
     decl = (decl_t) r->attr;
@@ -9317,13 +9320,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	      decl->item = MIR_new_bss (name, decl->decl_spec.type->raw_size);
 	  }
 	} else if (initializer->code != N_IGNORE) { // ??? general code
-	  VARR_TRUNC (init_el_t, init_els, 0);
+	  init_start = VARR_LENGTH (init_el_t, init_els);
 	  collect_init_els (&decl->decl_spec.type, initializer,
 			    decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 			    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p, TRUE);
 	  if (decl->scope == top_scope)
-	    qsort (VARR_ADDR (init_el_t, init_els), VARR_LENGTH (init_el_t, init_els),
-		   sizeof (init_el_t), cmp_init_el);
+	    qsort (VARR_ADDR (init_el_t, init_els) + init_start,
+		   VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
 	  if (id->attr == NULL) {
 	    node_t saved_scope = curr_scope;
 
@@ -9339,8 +9342,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 		    && (var.mir_op.mode == MIR_OP_REG
 			|| (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0)));
 	  }
-	  gen_initializer (var, name, decl->decl_spec.type->raw_size,
+	  gen_initializer (init_start, var, name, decl->decl_spec.type->raw_size,
 			   decl->scope != top_scope && ! decl->decl_spec.static_p);
+	  VARR_TRUNC (init_el_t, init_els, init_start);
 	}
 	if (decl->item != NULL && decl->scope == top_scope && ! decl->decl_spec.static_p)
 	  MIR_new_export (name);
