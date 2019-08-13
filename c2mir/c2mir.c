@@ -7991,7 +7991,7 @@ static void emit2_noopt (MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
   emit_insn (MIR_new_insn (code, op1, op2));
 }
 
-static op_t cast (op_t op, MIR_type_t t) {
+static op_t cast (op_t op, MIR_type_t t, int new_op_p) {
   op_t res, interm;
   MIR_type_t op_type;
   MIR_insn_code_t insn_code = MIR_INSN_BOUND, insn_code2 = MIR_INSN_BOUND;
@@ -8097,10 +8097,12 @@ static op_t cast (op_t op, MIR_type_t t) {
   default:
     break;
   }
-  if (insn_code == MIR_INSN_BOUND && insn_code2 == MIR_INSN_BOUND)
+  if (! new_op_p && insn_code == MIR_INSN_BOUND && insn_code2 == MIR_INSN_BOUND)
     return op;
   res = get_new_temp (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16 ? MIR_T_I64 : t);
-  if (insn_code == MIR_INSN_BOUND) {
+  if (insn_code == MIR_INSN_BOUND && insn_code2 == MIR_INSN_BOUND) {
+    emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op, op.mir_op);
+  } else if (insn_code == MIR_INSN_BOUND) {
     emit2 (insn_code2, res.mir_op, op.mir_op);
   } else if (insn_code2 == MIR_INSN_BOUND) {
     emit2 (insn_code, res.mir_op, op.mir_op);
@@ -8112,10 +8114,10 @@ static op_t cast (op_t op, MIR_type_t t) {
   return res;
 }
 
-static op_t promote (op_t op, MIR_type_t t) {
+static op_t promote (op_t op, MIR_type_t t, int new_op_p) {
   assert (t == MIR_T_I64 || t == MIR_T_U64
 	  || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F || t == MIR_T_D);
-  return cast (op, t);
+  return cast (op, t, new_op_p);
 }
 
 static op_t mem_to_address (op_t mem) {
@@ -8179,7 +8181,7 @@ static int gen_unary_op (node_t r, op_t *op, op_t *res) {
     return FALSE;
   *op = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   t = get_mir_type (((struct expr *) r->attr)->type);
-  *op = promote (*op, t);
+  *op = promote (*op, t, FALSE);
   *res = get_new_temp (t);
   return TRUE;
 }
@@ -8193,9 +8195,10 @@ static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
   t = get_mir_type (assign_expr_type);
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-  *op2 = promote (*op2, t);
+  *op2 = promote (*op2, t, FALSE);
   *var = *op1;
   *op1 = force_val (*op1);
+  *op1 = promote (*op1, t, TRUE);
   *res = get_new_temp (t);
   return TRUE;
 }
@@ -8207,8 +8210,8 @@ static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
     return FALSE;
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-  *op1 = promote (*op1, t);
-  *op2 = promote (*op2, t);
+  *op1 = promote (*op1, t, FALSE);
+  *op2 = promote (*op2, t, FALSE);
   *res = get_new_temp (t);
   return TRUE;
 }
@@ -8220,8 +8223,8 @@ static int gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *
     return FALSE;
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-  *op1 = promote (*op1, t);
-  *op2 = promote (*op2, t);
+  *op1 = promote (*op1, t, FALSE);
+  *op2 = promote (*op2, t, FALSE);
   *res = get_new_temp (res_t);
   return TRUE;
 }
@@ -8688,7 +8691,7 @@ static void gen_initializer (size_t init_start, op_t var,
     init_el = VARR_GET (init_el_t, init_els, init_start);
     val = gen (init_el.init, NULL, NULL, TRUE);
     t = get_op_type (var);
-    val = promote (val, promote_mir_int_type (t));
+    val = promote (val, promote_mir_int_type (t), FALSE);
     emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
   } else if (local_p) { /* local variable initialization: */
     assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
@@ -8706,7 +8709,7 @@ static void gen_initializer (size_t init_start, op_t var,
 		    : init_el.el_type->raw_size);
 	rel_offset = init_el.offset + init_el.el_type->raw_size;
       } else {
-	val = promote (val, promote_mir_int_type (t));
+	val = promote (val, promote_mir_int_type (t), FALSE);
 	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
 	       MIR_new_mem_op (t, offset + init_el.offset, base, 0, 1), val.mir_op);
 	rel_offset = init_el.offset + _MIR_type_size (t);
@@ -8972,41 +8975,60 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     break;
   }
-  case N_INC: case N_DEC: case N_POST_INC: case N_POST_DEC: {
+ case N_POST_INC: case N_POST_DEC: {
     struct type *type = ((struct expr *) r->attr)->type2;
 
     t = get_mir_type (type);
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    op1 = promote (force_val (var), t);
-    op2 = promote (type->mode != TM_PTR ? one_op
-		   : new_op (NULL, MIR_new_int_op (type_size (type->u.ptr_type))), t);
+    op1 = force_val (var);
     res = get_new_temp (t);
-    val = get_new_temp (t);
-    emit3 (get_mir_insn_code (r), val.mir_op, op1.mir_op, op2.mir_op);
-    emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op,
-	   r->code == N_INC || r->code == N_DEC ? val.mir_op : op1.mir_op);
+    emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op, op1.mir_op);
+    val = promote (op1, t, TRUE);
+    op2 = promote (type->mode != TM_PTR ? one_op
+		   : new_op (NULL, MIR_new_int_op (type_size (type->u.ptr_type))), t, FALSE);
+    emit3 (get_mir_insn_code (r), val.mir_op, val.mir_op, op2.mir_op);
+    t = promote_mir_int_type (t);
+    goto assign;
+  }
+  case N_INC: case N_DEC: {
+    struct type *type = ((struct expr *) r->attr)->type2;
+
+    t = get_mir_type (type);
+    var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
+    val = promote (force_val (var), t, TRUE);
+    op2 = promote (type->mode != TM_PTR ? one_op
+		   : new_op (NULL, MIR_new_int_op (type_size (type->u.ptr_type))), t, FALSE);
+    t = promote_mir_int_type (t);
+    res = get_new_temp (t);
+    emit3 (get_mir_insn_code (r), val.mir_op, val.mir_op, op2.mir_op);
     goto assign;
   }
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
-    if (! gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &op1, &op2, &res, &var))
+    if (! gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &val, &op2, &res, &var))
       assert (FALSE); /* Can not be a constant */
-    emit_bin_op (r, ((struct expr *) r->attr)->type2, res, op1, op2);
-    val = res;
+    emit_bin_op (r, ((struct expr *) r->attr)->type2, val, val, op2);
+    t = get_op_type (var);
+    t = promote_mir_int_type (t);
     goto assign;
     break;
   case N_ASSIGN:
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    res = val = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-    t = get_mir_type (((struct expr *) r->attr)->type);
-    //???    res = promote (res, t);
-  assign:
-    if (scalar_type_p (((struct expr *) r->attr)->type)) {
-      t = get_op_type (var);
+    op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
+    t = get_op_type (var);
+    if (t == MIR_T_UNDEF) {
+      val = op2;
+    } else {
       t = promote_mir_int_type (t);
-      op2 = promote (val, t);
+      val = promote (op2, t, TRUE);
+      res = get_new_temp (t);
+    }
+  assign: /* t/val is promoted type/new value of assign expression */
+    if (scalar_type_p (((struct expr *) r->attr)->type)) {
+      assert (t != MIR_T_UNDEF);
+      val = cast (val, get_mir_type (((struct expr *) r->attr)->type), FALSE);
       if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, op2.mir_op);
+	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
       } else {
 	int size, sh;
 	uint64_t mask, mask2;
@@ -9026,6 +9048,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	emit3 (MIR_OR, temp_op1.mir_op, temp_op1.mir_op, temp_op2.mir_op);
 	emit2 (MIR_MOV, var.mir_op, temp_op1.mir_op);
       }
+      if (r->code != N_POST_INC && r->code != N_POST_DEC)
+	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
+		     res.mir_op, val.mir_op);
     } else { /* block move */
       mir_size_t size = type_size (((struct expr *) r->attr)->type);
 
@@ -9185,7 +9210,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	res.mir_op.mode = MIR_OP_UNDEF;
       } else {
 	t = get_mir_type (type);
-	res = cast (op1, t);
+	res = cast (op1, t, TRUE);
       }
     }
     break;
@@ -9270,11 +9295,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
 	t = get_mir_type (decl_spec->type);
 	t = promote_mir_int_type (t);
-	op2 = promote (op2, t);
+	op2 = promote (op2, t, FALSE);
       } else {
 	t = get_mir_type (e->type);
 	t = promote_mir_int_type (t);
-	op2 = promote (op2, t == MIR_T_F ? MIR_T_D : t);
+	op2 = promote (op2, t == MIR_T_F ? MIR_T_D : t, FALSE);
       }
       VARR_PUSH (MIR_op_t, ops, op2.mir_op);
       if (param != NULL)
@@ -9294,7 +9319,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     /* first element is now a compatible generic association case */
     op1 = gen (NL_EL (ga_case->ops, 1), NULL, NULL, TRUE);
     t = get_mir_type (((struct expr *) r->attr)->type);
-    res = promote (op1, t);
+    res = promote (op1, t, TRUE);
     break;
   }
   case N_SPEC_DECL: { // ??? export and defintion with external declaration
@@ -9598,7 +9623,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (scalar_type_p (ret_type)) {
       t = get_mir_type (ret_type);
       t = promote_mir_int_type (t);
-      val = promote (val, t);
+      val = promote (val, t, FALSE);
       emit_insn (MIR_new_ret_insn (1, val.mir_op));
     } else { /* block return */
       mir_size_t size = type_size (ret_type);
@@ -9620,7 +9645,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     abort ();
   }
   if (true_label != NULL) {
-    res = promote (force_val (res), MIR_T_I64);
+    res = promote (force_val (res), MIR_T_I64, FALSE);
     emit2 (MIR_BT, MIR_new_label_op (true_label), res.mir_op);
     emit1 (MIR_JMP, MIR_new_label_op (false_label));
   } else if (val_p) {
