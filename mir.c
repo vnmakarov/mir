@@ -665,7 +665,9 @@ static MIR_item_t add_item (MIR_item_t item) {
   case MIR_expr_data_item:
   case MIR_func_item:
     if (item->item_type == MIR_export_item) {
-      if (! tab_item->export_p) { /* just keep one export: */
+      if (tab_item->export_p) {
+	item = tab_item;
+      } else { /* just keep one export: */
 	tab_item->export_p = TRUE;
 	DLIST_APPEND (MIR_item_t, curr_module->items, item);
 	item->ref_def = tab_item;
@@ -1318,7 +1320,10 @@ void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (c
 	item->addr = tab_item->addr;
 	item->ref_def = tab_item;
       } else if (item->item_type == MIR_export_item) {
-	// ???;
+	if ((tab_item = find_item (item->u.export, m)) == NULL)
+	  (*error_func) (MIR_undeclared_op_ref_error, "export of undefined item %s", item->u.export);
+	item->addr = tab_item->addr;
+	item->ref_def = tab_item;
       }
   }
   for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
