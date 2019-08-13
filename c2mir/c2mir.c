@@ -8790,9 +8790,10 @@ static void emit_bin_op (node_t r, struct type *type, op_t res, op_t op1, op_t o
     if (op2.mir_op.mode == MIR_OP_INT || op2.mir_op.mode == MIR_OP_UINT) {
       op2 = new_op (NULL, MIR_new_int_op (op2.mir_op.u.i * type_size (type->u.ptr_type)));
     } else {
+      temp = get_new_temp (get_mir_type (type));
       emit3 (sizeof (mir_size_t) == 8 ? MIR_MUL : MIR_MULS,
-	     res.mir_op, op2.mir_op, MIR_new_int_op (type_size (type->u.ptr_type)));
-      op2 = res;
+	     temp.mir_op, op2.mir_op, MIR_new_int_op (type_size (type->u.ptr_type)));
+      op2 = temp;
     }
   }
   emit3 (get_mir_type_insn_code (type, r), res.mir_op, op1.mir_op, op2.mir_op);
