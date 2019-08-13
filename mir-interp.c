@@ -85,8 +85,7 @@ static VARR (MIR_insn_t) *branches;
 static void push_mem (MIR_op_t op) {
   MIR_val_t v;
   
-  mir_assert (op.mode == MIR_OP_MEM && op.u.mem.disp == 0
-	      && op.u.mem.index == 0 && op.u.mem.scale == 0);
+  mir_assert (op.mode == MIR_OP_MEM && op.u.mem.disp == 0 && op.u.mem.index == 0);
   v.i = op.u.mem.base; VARR_PUSH (MIR_val_t, code_varr, v);
 }
 
