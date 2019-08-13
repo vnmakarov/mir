@@ -9066,7 +9066,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
       res = new_op (NULL, MIR_new_ref_op (((decl_t) e->def_node->attr)->item));
-    } else if ((decl = e->lvalue_node->attr)->scope == top_scope || decl->decl_spec.static_p) {
+    } else if ((decl = e->lvalue_node->attr)->scope == top_scope
+	       || decl->decl_spec.static_p || decl->decl_spec.linkage == N_EXTERN) {
       t = get_mir_type (e->type);
       res = get_new_temp (MIR_T_I64);
       emit2 (MIR_MOV, res.mir_op, MIR_new_ref_op (decl->item));
