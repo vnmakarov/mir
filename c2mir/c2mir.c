@@ -9176,9 +9176,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
     op1 = force_reg (op1, MIR_T_I64);
     assert (op1.mir_op.mode == MIR_OP_REG);
-    t = get_mir_type (((struct expr *) r->attr)->type);
-    op1.mir_op = MIR_new_mem_op (t, 0, op1.mir_op.u.reg, 0, 1);
-    res = new_op (NULL, op1.mir_op);
+    if ((type = ((struct expr *) r->attr)->type)->mode == TM_PTR
+	&& type->u.ptr_type->mode == TM_FUNC) {
+      res = op1;
+    } else {
+      t = get_mir_type (type);
+      op1.mir_op = MIR_new_mem_op (t, 0, op1.mir_op.u.reg, 0, 1);
+      res = new_op (NULL, op1.mir_op);
+    }
     break;
   case N_FIELD: case N_DEREF_FIELD: {
     node_t def_node;
