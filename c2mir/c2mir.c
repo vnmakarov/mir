@@ -9040,19 +9040,27 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       if (var.decl == NULL || var.decl->bit_offset < 0) {
 	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
       } else {
-	int size, sh;
+	int size, sh, width = var.decl->width;
 	uint64_t mask, mask2;
-	op_t temp_op1, temp_op2;
+	op_t temp_op1, temp_op2, temp_op3;
 
 	assert (var.mir_op.mode == MIR_OP_MEM);
 	size = get_int_mir_type_size (var.mir_op.u.mem.type);
-	sh = size  * 8 - var.decl->bit_offset - var.decl->width;
-	mask = 0xffffffffffffffff >> (64 - var.decl->width); mask2 = ~(mask << sh);
+	sh = size  * 8 - var.decl->bit_offset - width;
+	mask = 0xffffffffffffffff >> (64 - width); mask2 = ~(mask << sh);
 	temp_op1 = get_new_temp (MIR_T_I64);
 	temp_op2 = get_new_temp (MIR_T_I64);
+	temp_op3 = get_new_temp (MIR_T_I64);
 	emit2_noopt (MIR_MOV, temp_op2.mir_op, var.mir_op);
 	emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
 	emit3 (MIR_AND, temp_op1.mir_op, op2.mir_op, MIR_new_uint_op (mask));
+	if (! signed_integer_type_p (var.decl->decl_spec.type)) {
+	  emit2 (MIR_MOV, temp_op3.mir_op, temp_op1.mir_op);
+	} else {
+	  emit3 (MIR_LSH, temp_op3.mir_op, temp_op1.mir_op, MIR_new_int_op (64 - width));
+	  emit3 (MIR_RSH, temp_op3.mir_op, temp_op3.mir_op, MIR_new_int_op (64 - width));
+	}
+	val = temp_op3;
 	if (sh != 0)
 	  emit3 (MIR_LSH, temp_op1.mir_op, temp_op1.mir_op, MIR_new_int_op (sh));
 	emit3 (MIR_OR, temp_op1.mir_op, temp_op1.mir_op, temp_op2.mir_op);
