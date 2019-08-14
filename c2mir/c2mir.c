@@ -114,7 +114,8 @@ enum type_mode {
 struct type {
   struct type_qual type_qual;
   node_t pos_node; /* set up and used only for checking type correctness */
-  unsigned int incomplete_p : 1;
+  /* incomplete type or array type before its adjustment: */
+  unsigned int incomplete_p : 1, arr_p : 1;
   /* Raw type size (w/o alignment type itself requirement but with
      element alignment requirements), undefined if mir_size_max.  */
   mir_size_t raw_size;
@@ -4502,7 +4503,7 @@ static struct type_qual type_qual_union (const struct type_qual *tq1, const stru
 
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
-  type->pos_node = NULL; type->incomplete_p = FALSE;
+  type->pos_node = NULL; type->incomplete_p = type->arr_p = FALSE;
   type->align = -1; type->raw_size = MIR_SIZE_MAX;
 }
 
@@ -6214,6 +6215,7 @@ static struct type *adjust_type (struct type *type) {
   if (type->mode == TM_FUNC) {
     res->u.ptr_type = type;
   } else {
+    res->arr_p = TRUE;
     res->u.ptr_type = type->u.arr_type->el_type;
     res->type_qual = type->u.arr_type->ind_type_qual;
   }
@@ -9098,8 +9100,13 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     ind_t = get_mir_type (((struct expr *) NL_EL (r->ops, 1)->attr)->type);
     op2 = force_reg (op2, ind_t);
-    op1 = force_reg_or_mem (op1, MIR_T_I64);
-    assert (op2.mir_op.mode == MIR_OP_REG && (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM));
+    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_p) { /* it was an array */
+      op1 = force_reg_or_mem (op1, MIR_T_I64);
+      assert (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM);
+    } else {
+      op1 = force_reg (op1, MIR_T_I64);
+      assert (op1.mir_op.mode == MIR_OP_REG);
+    }
     res = op1; res.decl = NULL;
     if (res.mir_op.mode == MIR_OP_REG)
       res.mir_op = MIR_new_mem_op (t, 0, res.mir_op.u.reg, 0, 1);
