@@ -5996,7 +5996,7 @@ static int update_init_object_path (size_t mark,  int list_p) {
 	       init_object.u.curr_member = NL_NEXT (init_object.u.curr_member))
 	    ;
 	} else if (init_object.container_type->mode == TM_UNION) { /* no next union member: */
-	  init_object.u.curr_member == NULL;
+	  init_object.u.curr_member = NULL;
 	} else { /* finding the next named struct member: */
 	  init_object.u.curr_member = get_adjacent_member (init_object.u.curr_member, TRUE);
 	}
