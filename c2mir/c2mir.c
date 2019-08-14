@@ -4527,7 +4527,7 @@ static int integer_type_p (const struct type *type) {
   return standard_integer_type_p (type) || type->mode == TM_ENUM;
 }
 
-static int signed_integer_type_p (const const struct type *type) {
+static int signed_integer_type_p (const struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
 
