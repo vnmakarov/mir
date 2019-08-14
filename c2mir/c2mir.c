@@ -4975,8 +4975,93 @@ static int null_const_p (struct expr *expr, struct type *type) {
 	       && type_qual_eq_p (&type->type_qual, &zero_type_qual)));
 }
 
-static void convert_value (struct expr *e, struct type *t) {
+static void cast_value (struct expr *to_e, struct expr *from_e, struct type *to) {
+  assert (to_e->const_p && from_e->const_p);
+  struct type *from = from_e->type;
+  
+#define CONV(TP, cast, mto, mfrom) case TP: to_e->u.mto = (cast) from_e->u.mfrom; break;
+#define BASIC_FROM_CONV(mfrom)									\
+      switch (to->u.basic_type) {									\
+	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom); 	\
+	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom); 	\
+	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ullong, u_val, mfrom); 	\
+	CONV (TP_SCHAR, mir_char, i_val, mfrom);						\
+	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom); 		\
+	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_llong, i_val, mfrom); 	\
+	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom); 	\
+	CONV (TP_LDOUBLE, mir_ldouble, d_val, mfrom);						\
+      case TP_CHAR:										\
+	if (char_is_signed_p ())								\
+	  to_e->u.i_val = (mir_char) from_e->u.mfrom;						\
+	else											\
+	  to_e->u.u_val = (mir_char) from_e->u.mfrom;						\
+	break;											\
+      default:											\
+	assert (FALSE);										\
+      }
+
+#define BASIC_TO_CONV(cast, mto)								\
+      switch (from->u.basic_type) {								\
+      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	\
+	to_e->u.mto = (cast) from_e->u.u_val; break;						\
+      case TP_CHAR:										\
+	if (! char_is_signed_p ()) {								\
+	  to_e->u.mto = (cast) from_e->u.u_val; break;						\
+	}											\
+	/* Fall through: */									\
+      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG: 			\
+	to_e->u.mto = (cast) from_e->u.i_val; break;						\
+      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:						\
+	to_e->u.mto = (cast) from_e->u.d_val; break;						\
+      default:											\
+	assert (FALSE);										\
+      }
+
+  if (to->mode == from->mode && (from->mode == TM_PTR || from->mode == TM_ENUM)) {
+    to_e->u = from_e->u;
+  } else if (from->mode == TM_PTR) {
+    if (to->mode == TM_ENUM) {
+      to_e->u.i_val = (ENUM_MIR_INT) from_e->u.u_val;
+    } else {
+      BASIC_FROM_CONV (u_val);
+    }
+  } else if (from->mode == TM_ENUM) {
+    if (to->mode == TM_PTR) {
+      to_e->u.u_val = (mir_size_t) from_e->u.i_val;
+    } else {
+      BASIC_FROM_CONV (i_val);
+    }
+  } else if (to->mode == TM_PTR) {
+    BASIC_TO_CONV (mir_size_t, u_val);
+  } else if (to->mode == TM_ENUM) {
+    BASIC_TO_CONV (ENUM_MIR_INT, i_val);
+  } else {
+    switch (from->u.basic_type) {
+    case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:
+      BASIC_FROM_CONV (u_val);
+      break;
+    case TP_CHAR:
+      if (! char_is_signed_p ()) {
+	BASIC_FROM_CONV (u_val);
+	break;
+      }
+      /* Fall through: */
+    case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:
+      BASIC_FROM_CONV (i_val);
+      break;
+    case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:
+      BASIC_FROM_CONV (d_val);
+      break;
+    default:
+      assert (FALSE);
+    }
+  }
+#undef CONV
+#undef BASIC_FROM_CONV
+#undef BASIC_TO_CONV
 }
+
+static void convert_value (struct expr *e, struct type *to) { cast_value (e, e, to); }
 
 static int non_reg_decl_spec_p (struct decl_spec *ds) {
   return (ds->typedef_p || ds->extern_p || ds->static_p || ds->auto_p
@@ -7083,88 +7168,8 @@ static void check (node_t r, node_t context) {
     } else if (decl_spec->type->mode == TM_PTR && floating_type_p (t2)) {
       error (r->pos, "conversion of floating point value to a pointer requested");
     } else if (e2->const_p && ! void_p) {
-
-#define CONV(TP, cast, mto, mfrom) case TP: e->u.mto = (cast) e2->u.mfrom; break;
-#define BASIC_FROM_CONV(mfrom)						\
-      switch (decl_spec->type->u.basic_type) {				\
-	CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom); \
-	CONV (TP_USHORT, mir_ushort, u_val, mfrom) CONV (TP_UINT, mir_uint, u_val, mfrom); \
-	CONV (TP_ULONG, mir_ulong, u_val, mfrom) CONV (TP_ULLONG, mir_ullong, u_val, mfrom); \
-	CONV (TP_SCHAR, mir_char, i_val, mfrom);			\
-	CONV (TP_SHORT, mir_short, i_val, mfrom) CONV (TP_INT, mir_int, i_val, mfrom); \
-	CONV (TP_LONG, mir_long, i_val, mfrom) CONV (TP_LLONG, mir_llong, i_val, mfrom); \
-	CONV (TP_FLOAT, mir_float, d_val, mfrom) CONV (TP_DOUBLE, mir_double, d_val, mfrom); \
-	CONV (TP_LDOUBLE, mir_ldouble, d_val, mfrom);			\
-      case TP_CHAR:							\
-	if (char_is_signed_p ())					\
-	  e->u.i_val = (mir_char) e2->u.mfrom;				\
-	else								\
-	  e->u.u_val = (mir_char) e2->u.mfrom;				\
-	break;								\
-      default:								\
-	assert (FALSE);							\
-      }
-
-#define BASIC_TO_CONV(cast, mto)					\
-      switch (t2->u.basic_type) {					\
-      case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:	\
-	e->u.mto = (cast) e2->u.u_val; break;				\
-      case TP_CHAR:							\
-	if (! char_is_signed_p ()) {					\
-	  e->u.mto = (cast) e2->u.u_val; break;				\
-	}								\
-	/* Fall through: */						\
-      case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG: \
-	e->u.mto = (cast) e2->u.i_val; break;				\
-      case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:			\
-	e->u.mto = (cast) e2->u.d_val; break;				\
-      default:								\
-	assert (FALSE);							\
-      }
-
       e->const_p = TRUE;
-      if (decl_spec->type->mode == t2->mode && (t2->mode == TM_PTR || t2->mode == TM_ENUM)) {
-	e->u = e2->u;
-      } else if (t2->mode == TM_PTR) {
-	if (decl_spec->type->mode == TM_ENUM) {
-	  e->u.i_val = (ENUM_MIR_INT) e2->u.u_val;
-	} else {
-	  BASIC_FROM_CONV (u_val);
-	}
-      } else if (t2->mode == TM_ENUM) {
-	if (decl_spec->type->mode == TM_PTR) {
-	  e->u.u_val = (mir_size_t) e2->u.i_val;
-	} else {
-	  BASIC_FROM_CONV (i_val);
-	}
-      } else if (decl_spec->type->mode == TM_PTR) {
-        BASIC_TO_CONV (mir_size_t, u_val);
-      } else if (decl_spec->type->mode == TM_ENUM) {
-        BASIC_TO_CONV (ENUM_MIR_INT, i_val);
-      } else {
-	switch (t2->u.basic_type) {
-	case TP_BOOL: case TP_UCHAR: case TP_USHORT: case TP_UINT: case TP_ULONG: case TP_ULLONG:
-	  BASIC_FROM_CONV (u_val);
-	  break;
-	case TP_CHAR:
-	  if (! char_is_signed_p ()) {
-	    BASIC_FROM_CONV (u_val);
-	    break;
-	  }
-	  /* Fall through: */
-	case TP_SCHAR: case TP_SHORT: case TP_INT: case TP_LONG: case TP_LLONG:
-	  BASIC_FROM_CONV (i_val);
-	  break;
-	case TP_FLOAT: case TP_DOUBLE: case TP_LDOUBLE:
-	  BASIC_FROM_CONV (d_val);
-	  break;
-	default:
-	  assert (FALSE);
-	}
-      }
-#undef CONV
-#undef BASIC_FROM_CONV
-#undef BASIC_TO_CONV
+      cast_value (e, e2, decl_spec->type);
     }
     break;
   }
@@ -7748,6 +7753,8 @@ static void check (node_t r, node_t context) {
 	&& context->code != N_EXPR_SIZEOF)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
+    if (e->const_p)
+      convert_value (e, e->type);
   } else if (expr_attr_p) { /* it is an error -- define any expr and type: */
     assert (! stmt_p);
     e = create_expr (r);
