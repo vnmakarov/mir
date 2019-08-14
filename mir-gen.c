@@ -1022,6 +1022,7 @@ static void create_exprs (void) {
       if (! MIR_branch_code_p (insn->code) && insn->code != MIR_RET
 	  && insn->code != MIR_LABEL && ! MIR_call_code_p (insn->code)
 	  && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && insn->code != MIR_VA_START && insn->code != MIR_VA_END
 	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* After simplification we have only one store form: mem = reg.
 	     It is unprofitable to add the reg as an expression.  */
@@ -1067,6 +1068,7 @@ static void create_av_bitmaps (void) {
 	continue;
       if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
 	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && insn->code != MIR_VA_START && insn->code != MIR_VA_END
 	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* See create_expr comments: */
 	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
@@ -1127,6 +1129,7 @@ static void cse_modify (void) {
 	continue;
       if (! MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
 	  && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && insn->code != MIR_VA_START && insn->code != MIR_VA_END
 	  && ! move_p (insn) && ! imm_move_p (insn)
 	  /* See create_expr comments: */
 	  && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
@@ -3591,6 +3594,7 @@ static void dead_code_elimination (void) {
 	dead_p = FALSE;
       if (dead_p && ! MIR_call_code_p (insn->code) && insn->code != MIR_RET
 	  && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
+	  && insn->code != MIR_VA_START && insn->code != MIR_VA_END
 	  && ! (insn->ops[0].mode == MIR_OP_HARD_REG
 	        && (insn->ops[0].u.hard_reg == BP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
 #if MIR_GEN_DEBUG
