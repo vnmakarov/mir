@@ -1138,7 +1138,7 @@ static void cse_modify (void) {
 	type = MIR_reg_type (e->temp_reg, curr_func_item->u.func);
 	move_code = (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV
 		     : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
-#ifdef NDEBUG
+#ifndef NDEBUG
 	MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
 	gen_assert (out_p);
 #endif
@@ -1846,7 +1846,7 @@ static int ccp_insn_update (MIR_insn_t insn, const_t *res) { // ??? should we do
       
   default: ccp_res = CCP_VARYING; goto non_const;
   }
-#ifdef NDEBUG
+#ifndef NDEBUG
   {
     int out_p;
 
@@ -2249,11 +2249,11 @@ static int ccp_modify (void) {
 	}
 #endif
 	op = val.uns_p ? MIR_new_uint_op (val.u.u) : MIR_new_int_op (val.u.i);
-#ifdef NDEBUG
+#ifndef NDEBUG
 	{
 	  int out_p;
 	  
-	  MIR_insn_op_mode (insn, 0, &out_p); /* result here is always 0-th op */
+	  MIR_insn_op_mode (bb_insn->insn, 0, &out_p); /* result here is always 0-th op */
 	  gen_assert (out_p);
 	}
 #endif
