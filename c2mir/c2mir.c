@@ -9127,7 +9127,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res.mir_op = MIR_new_mem_op (t, 0, res.mir_op.u.reg, 0, 1);
     if (res.mir_op.u.mem.base == 0 && size == 1) {
       res.mir_op.u.mem.base = op2.mir_op.u.reg;
-    } else if (op1.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
+    } else if (res.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
       res.mir_op.u.mem.index = op2.mir_op.u.reg; res.mir_op.u.mem.scale = size;
     } else {
       op_t temp_op;
