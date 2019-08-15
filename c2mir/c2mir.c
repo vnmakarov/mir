@@ -8718,8 +8718,10 @@ static void gen_initializer (size_t init_start, op_t var,
       init_el = VARR_GET (init_el_t, init_els, i);
       val = gen (init_el.init, NULL, NULL, TRUE);
       t = get_mir_type (init_el.el_type);
-      if (rel_offset < init_el.offset) /* fill the gap: */
+      if (rel_offset < init_el.offset) { /* fill the gap: */
 	gen_memset (offset + rel_offset, base, init_el.offset - rel_offset);
+	rel_offset = init_el.offset;
+      }
       if (! scalar_type_p (init_el.el_type)) {
 	gen_memcpy (offset + rel_offset, base, val,
 		    init_el.init->code == N_STR ? strlen (init_el.init->u.s) + 1
