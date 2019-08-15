@@ -8745,7 +8745,7 @@ static void gen_initializer (size_t init_start, op_t var,
   op_t val;
   size_t str_len;
   mir_size_t data_size, offset = 0, rel_offset = 0;
-  init_el_t init_el;
+  init_el_t init_el, next_init_el;
   MIR_reg_t base;
   MIR_type_t t;
   MIR_item_t data;
@@ -8802,7 +8802,24 @@ static void gen_initializer (size_t init_start, op_t var,
       }
       t = get_mir_type (init_el.el_type);
       if (val.mir_op.mode != MIR_OP_STR) {
-	data = MIR_new_data (global_name, t, 1, &val.mir_op.u);
+	if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
+	  uint64_t u = 0;
+	  
+	  assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
+	  add_bit_field (&u, val.mir_op.u.u, init_el.member_decl);
+	  for (; i + 1 < VARR_LENGTH (init_el_t, init_els); i++, init_el = next_init_el) {
+	    next_init_el = VARR_GET (init_el_t, init_els, i + 1);
+	    if (next_init_el.offset != init_el.offset)
+	      break;
+	    if (next_init_el.member_decl->bit_offset == init_el.member_decl->bit_offset)
+	      continue;
+	    val = gen (next_init_el.init, NULL, NULL, TRUE);
+	    assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
+	    add_bit_field (&u, val.mir_op.u.u, next_init_el.member_decl);
+	  }
+	  val.mir_op.u.u = u;
+	}
+	data = MIR_new_data (global_name, t, 1, &val.mir_op.u); // ??? big endian
 	data_size = _MIR_type_size (t);
       } else if (init_el.el_type->mode == TM_ARR) {
 	data_size = init_el.el_type->raw_size;
