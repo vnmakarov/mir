@@ -1010,7 +1010,7 @@ static void patterns_init (void) {
   int i, ind, n = sizeof (patterns) / sizeof (struct pattern);
   MIR_insn_code_t prev_code, code;
   insn_pattern_info_t *info_addr;
-  static insn_pattern_info_t pinfo = {0, 0};
+  insn_pattern_info_t pinfo = {0, 0};
   
   VARR_CREATE (int, pattern_indexes, 0);
   for (i = 0; i < n; i++)
