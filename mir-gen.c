@@ -3833,7 +3833,7 @@ void MIR_gen_set_debug_file (FILE *f) {
 
 void MIR_gen_init (void) {
   MIR_reg_t i;
-  static hreg_ref_t hreg_ref = {NULL, 0, 0};
+  hreg_ref_t hreg_ref = {NULL, 0, 0};
     
 #ifdef TEST_MIR_GEN
   fprintf (stderr, "Page size = %lu\n", (unsigned long) page_size);
