@@ -8612,6 +8612,10 @@ static int cmp_init_el (const void *p1, const void *p2) {
 
   if (el1->offset < el2->offset) return -1;
   else if (el1->offset > el2->offset) return 1;
+  else if (el1->member_decl != NULL && el2->member_decl != NULL
+	   && el1->member_decl->bit_offset < el2->member_decl->bit_offset) return -1;
+  else if (el1->member_decl != NULL && el2->member_decl != NULL
+	   && el1->member_decl->bit_offset > el2->member_decl->bit_offset) return 1;
   else if (el1->num < el2->num) return 1;
   else if (el1->num > el2->num) return -1;
   else return 0;
