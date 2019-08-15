@@ -4852,7 +4852,7 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size,
   int start_bit, diff;
 
   assert (size > 0);
-  if (! *bf_p) { /* field -> bit field or field */
+  if (! *bf_p) { /* transition from field to bit field or field */
     if (bits >= 0 && size > prev_size) {
       *bound_bit = prev_size * MIR_CHAR_BIT;
     } else {
@@ -8177,7 +8177,7 @@ static op_t force_val (op_t op) {
   temp_op = get_new_temp (MIR_T_I64);
   emit2 (MIR_MOV, temp_op.mir_op, op.mir_op);
   size = get_int_mir_type_size (op.mir_op.u.mem.type);
-  sh = op.decl->bit_offset + (64 - size * 8);
+  sh = 64 - op.decl->bit_offset - op.decl->width;
   if (sh != 0)
     emit3 (MIR_LSH, temp_op.mir_op, temp_op.mir_op, MIR_new_int_op (sh));
   emit3 (signed_integer_type_p (op.decl->decl_spec.type) ? MIR_RSH : MIR_URSH,
@@ -8693,6 +8693,53 @@ static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t le
   emit_insn (MIR_new_insn_arr (MIR_CALL, 6 /* args + proto + func + res */, args));
 }
 
+static void emit_scalar_assign (op_t var, op_t *val, MIR_type_t t, int ignore_others_p) {
+  if (var.decl == NULL || var.decl->bit_offset < 0) {
+    emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val->mir_op);
+  } else {
+    int size, width = var.decl->width;
+    uint64_t mask, mask2;
+    op_t temp_op1, temp_op2, temp_op3;
+    
+    assert (var.mir_op.mode == MIR_OP_MEM);
+    size = get_int_mir_type_size (var.mir_op.u.mem.type);
+    mask = 0xffffffffffffffff >> (64 - width); mask2 = ~(mask << var.decl->bit_offset);
+    temp_op1 = get_new_temp (MIR_T_I64);
+    temp_op3 = get_new_temp (MIR_T_I64);
+    if (! ignore_others_p) {
+      temp_op2 = get_new_temp (MIR_T_I64);
+      emit2_noopt (MIR_MOV, temp_op2.mir_op, var.mir_op);
+      emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
+    }
+    emit3 (MIR_AND, temp_op1.mir_op, val->mir_op, MIR_new_uint_op (mask));
+    if (! signed_integer_type_p (var.decl->decl_spec.type)) {
+      emit2 (MIR_MOV, temp_op3.mir_op, temp_op1.mir_op);
+    } else {
+      emit3 (MIR_LSH, temp_op3.mir_op, temp_op1.mir_op, MIR_new_int_op (64 - width));
+      emit3 (MIR_RSH, temp_op3.mir_op, temp_op3.mir_op, MIR_new_int_op (64 - width));
+    }
+    *val = temp_op3;
+    if (var.decl->bit_offset != 0)
+      emit3 (MIR_LSH, temp_op1.mir_op, temp_op1.mir_op, MIR_new_int_op (var.decl->bit_offset));
+    if (! ignore_others_p)
+      emit3 (MIR_OR, temp_op1.mir_op, temp_op1.mir_op, temp_op2.mir_op);
+    emit2 (MIR_MOV, var.mir_op, temp_op1.mir_op);
+  }
+}
+
+static void add_bit_field (uint64_t *u, uint64_t v, decl_t member_decl) {
+  uint64_t mask, mask2;
+  int bit_offset = member_decl->bit_offset, width = member_decl->width;
+  
+  mask = 0xffffffffffffffff >> (64 - width); mask2 = ~(mask << bit_offset);
+  *u &= mask2; v &= mask;
+  if (signed_integer_type_p (member_decl->decl_spec.type)) {
+    v <<= (64 - width); v = (int64_t) v >> (64 - width);
+  }
+  v <<= bit_offset;
+  *u |= v;
+}
+
 static void gen_initializer (size_t init_start, op_t var,
 			     const char *global_name, mir_size_t size, int local_p) {
   op_t val;
@@ -8709,7 +8756,7 @@ static void gen_initializer (size_t init_start, op_t var,
     val = gen (init_el.init, NULL, NULL, TRUE);
     t = get_op_type (var);
     val = promote (val, promote_mir_int_type (t), FALSE);
-    emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
+    emit_scalar_assign (var, &val, t, FALSE);
   } else if (local_p) { /* local variable initialization: */
     assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
     offset = var.mir_op.u.mem.disp;
@@ -8729,8 +8776,9 @@ static void gen_initializer (size_t init_start, op_t var,
 	rel_offset = init_el.offset + init_el.el_type->raw_size;
       } else {
 	val = promote (val, promote_mir_int_type (t), FALSE);
-	emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
-	       MIR_new_mem_op (t, offset + init_el.offset, base, 0, 1), val.mir_op);
+	emit_scalar_assign (new_op (init_el.member_decl,
+				    MIR_new_mem_op (t, offset + init_el.offset, base, 0, 1)),
+			    &val, t, i == init_start || rel_offset == init_el.offset);
 	rel_offset = init_el.offset + _MIR_type_size (t);
       }
     }
@@ -9047,35 +9095,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (scalar_type_p (((struct expr *) r->attr)->type)) {
       assert (t != MIR_T_UNDEF);
       val = cast (val, get_mir_type (((struct expr *) r->attr)->type), FALSE);
-      if (var.decl == NULL || var.decl->bit_offset < 0) {
-	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, var.mir_op, val.mir_op);
-      } else {
-	int size, sh, width = var.decl->width;
-	uint64_t mask, mask2;
-	op_t temp_op1, temp_op2, temp_op3;
-
-	assert (var.mir_op.mode == MIR_OP_MEM);
-	size = get_int_mir_type_size (var.mir_op.u.mem.type);
-	sh = size  * 8 - var.decl->bit_offset - width;
-	mask = 0xffffffffffffffff >> (64 - width); mask2 = ~(mask << sh);
-	temp_op1 = get_new_temp (MIR_T_I64);
-	temp_op2 = get_new_temp (MIR_T_I64);
-	temp_op3 = get_new_temp (MIR_T_I64);
-	emit2_noopt (MIR_MOV, temp_op2.mir_op, var.mir_op);
-	emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (mask2));
-	emit3 (MIR_AND, temp_op1.mir_op, op2.mir_op, MIR_new_uint_op (mask));
-	if (! signed_integer_type_p (var.decl->decl_spec.type)) {
-	  emit2 (MIR_MOV, temp_op3.mir_op, temp_op1.mir_op);
-	} else {
-	  emit3 (MIR_LSH, temp_op3.mir_op, temp_op1.mir_op, MIR_new_int_op (64 - width));
-	  emit3 (MIR_RSH, temp_op3.mir_op, temp_op3.mir_op, MIR_new_int_op (64 - width));
-	}
-	val = temp_op3;
-	if (sh != 0)
-	  emit3 (MIR_LSH, temp_op1.mir_op, temp_op1.mir_op, MIR_new_int_op (sh));
-	emit3 (MIR_OR, temp_op1.mir_op, temp_op1.mir_op, temp_op2.mir_op);
-	emit2 (MIR_MOV, var.mir_op, temp_op1.mir_op);
-      }
+      emit_scalar_assign (var, &val, t, FALSE);
       if (r->code != N_POST_INC && r->code != N_POST_DEC)
 	emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
 		     res.mir_op, val.mir_op);
