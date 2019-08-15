@@ -76,7 +76,7 @@ struct insn_desc {
 
 #define OUTPUT_FLAG (1 << 31)
 
-static struct insn_desc insn_descs[] = {
+static const struct insn_desc insn_descs[] = {
   {MIR_MOV, "mov", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FMOV, "fmov", {MIR_OP_FLOAT | OUTPUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DMOV, "dmov", {MIR_OP_DOUBLE | OUTPUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
@@ -275,7 +275,7 @@ static htab_hash_t str_hash (string_t str) { return mir_hash (str.str, strlen (s
 static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2.str) == 0; }
 
 static void string_init (VARR (string_t) **strs, HTAB (string_t) **str_tab) {
-  static string_t string = {0, NULL};
+  string_t string = {0, NULL};
   
   VARR_CREATE (string_t, *strs, 0);
   VARR_PUSH (string_t, *strs, string); /* don't use 0th string */
@@ -358,7 +358,7 @@ static htab_hash_t reg2rdn_hash (size_t rdn) {
 }
 
 static void reg_init (void) {
-  static reg_desc_t rd = {0, NULL, MIR_T_I64, 0};
+  reg_desc_t rd = {0, NULL, MIR_T_I64, 0};
   
   VARR_CREATE (reg_desc_t, reg_descs, 300);
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
@@ -1525,8 +1525,9 @@ static MIR_insn_t create_label (int64_t label_num) {
 
 MIR_insn_t MIR_new_label (void) { return create_label (++curr_label_num); }
 
+static char temp_buff[30];
+
 MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
-  static char name[30];
   string_t string;
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
@@ -1535,8 +1536,8 @@ MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
     func->last_temp_num++;
     if (func->last_temp_num == 0)
       (*error_func) (MIR_unique_reg_error, "out of unique regs");
-    sprintf (name, "t%d", func->last_temp_num);
-    string = string_store (&strings, &string_tab, name);
+    sprintf (temp_buff, "t%d", func->last_temp_num);
+    string = string_store (&strings, &string_tab, temp_buff);
     if (find_rd_by_name_num (string.num, func) == NULL)
       return MIR_new_func_reg (func, type, string.str);
   }
@@ -2101,12 +2102,10 @@ static MIR_reg_t vn_add_val (MIR_func_t func, MIR_type_t type,
 }
 
 const char *_MIR_get_temp_item_name (MIR_module_t module) {
-  static char name [30];
-  
-  snprintf (name, sizeof (name), "%s%lu",
+  snprintf (temp_buff, sizeof (temp_buff), "%s%lu",
 	    TEMP_ITEM_NAME_PREFIX, (unsigned long) module->temp_items_num);
   module->temp_items_num++;
-  return name;
+  return temp_buff;
 }
 
 void MIR_simplify_op (MIR_item_t func_item, MIR_insn_t insn, int nop,
@@ -2778,7 +2777,7 @@ typedef enum {
    o EOI, EOF - tokens for end of insn (optional for most insns) and end of file
 */
 
-static int CURR_BIN_VERSION = 1;
+static const int CURR_BIN_VERSION = 1;
 
 static VARR (string_t) *output_strings;
 static HTAB (string_t) *output_string_tab;
