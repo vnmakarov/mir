@@ -6022,7 +6022,7 @@ static int update_init_object_path (size_t mark,  int list_p) {
   }
 }
 
-static int update_path_and_do (void (*action) (struct type **type_ptr,
+static int update_path_and_do (void (*action) (decl_t member_decl, struct type **type_ptr,
 					       node_t initializer, int const_only_p, int top_p),
 			       size_t mark, node_t value, int const_only_p,
 			       mir_llong *max_index, pos_t pos, const char *detail) {
@@ -6035,19 +6035,20 @@ static int update_path_and_do (void (*action) (struct type **type_ptr,
   }
   init_object = VARR_LAST (init_object_t, init_object_path);
   if (init_object.container_type->mode == TM_ARR) {
-    action (&init_object.container_type->u.arr_type->el_type, value, const_only_p, FALSE);
+    action (NULL, &init_object.container_type->u.arr_type->el_type, value, const_only_p, FALSE);
     if (max_index != NULL
 	&& *max_index < (index = VARR_GET (init_object_t, init_object_path, mark).u.curr_index))
       *max_index = index;
   } else if (init_object.container_type->mode == TM_STRUCT
 	     || init_object.container_type->mode == TM_UNION) {
-    action (&((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
+    action ((decl_t) init_object.u.curr_member->attr,
+	    &((decl_t) init_object.u.curr_member->attr)->decl_spec.type,
 	    value, const_only_p, FALSE);
   }
   return TRUE;
 }
 
-static void check_initializer (struct type **type_ptr, node_t initializer,
+static void check_initializer (decl_t member_decl, struct type **type_ptr, node_t initializer,
 			       int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
@@ -6280,7 +6281,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
     return;
   }
   check (initializer, decl_node);
-  check_initializer (&decl->decl_spec.type, initializer,
+  check_initializer (NULL, &decl->decl_spec.type, initializer,
 		     decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 		     || decl->decl_spec.thread_local_p || decl->decl_spec.static_p,
 		     TRUE);
@@ -7187,7 +7188,8 @@ static void check (node_t r, node_t context) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
-    check_initializer (&t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
+    check_initializer (NULL, &t1,
+		       list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p, FALSE);
     decl->decl_spec.type = t1;
     e = create_expr (r); e->lvalue_node = r;
     *e->type = *t1;
@@ -8485,6 +8487,7 @@ static mir_size_t get_object_path_offset (void) {
 
 struct init_el {
   mir_size_t num, offset;
+  decl_t member_decl; /* NULL for non-member initialization  */
   struct type *el_type;
   node_t init;
 };
@@ -8494,7 +8497,7 @@ DEF_VARR (init_el_t);
 static VARR (init_el_t) *init_els;
 
 /* The function has the same structure as check_initializer.  Keep it this way. */
-static void collect_init_els (struct type **type_ptr,
+static void collect_init_els (decl_t member_decl, struct type **type_ptr,
 			      node_t initializer, int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
@@ -8516,6 +8519,7 @@ static void collect_init_els (struct type **type_ptr,
     assert (initializer->code == N_STR || ! const_only_p || cexpr->const_p);
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset ();
+    init_el.member_decl = member_decl;
     init_el.el_type = type;
     init_el.init = initializer;
     VARR_PUSH (init_el_t, init_els, init_el);
@@ -9257,7 +9261,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       global_name = _MIR_get_temp_item_name (module);
     }
     init_start = VARR_LENGTH (init_el_t, init_els);
-    collect_init_els (&decl->decl_spec.type, NL_EL (r->ops, 1),
+    collect_init_els (NULL, &decl->decl_spec.type, NL_EL (r->ops, 1),
 		      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 		      || decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
 		      TRUE);
@@ -9402,7 +9406,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 	  }
 	} else if (initializer->code != N_IGNORE) { // ??? general code
 	  init_start = VARR_LENGTH (init_el_t, init_els);
-	  collect_init_els (&decl->decl_spec.type, initializer,
+	  collect_init_els (NULL, &decl->decl_spec.type, initializer,
 			    decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
 			    || decl->decl_spec.static_p || decl->decl_spec.thread_local_p, TRUE);
 	  if (decl->scope == top_scope)
