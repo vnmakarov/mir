@@ -30,5 +30,5 @@ f:     func i64, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i
        endmodule\n\
 ";
   MIR_scan_string (str);
-  return DLIST_TAIL (MIR_module_t, MIR_modules);
+  return DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
 }

@@ -33,8 +33,8 @@ fin:     ret count\n\
   if (len != NULL)
     *len = strlen (str);
   MIR_scan_string (str);
-  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
   if (m_res != NULL)
-    *m_res = DLIST_TAIL (MIR_module_t, MIR_modules);
+    *m_res = m;
   return DLIST_TAIL (MIR_item_t, m->items);
 }

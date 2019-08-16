@@ -46,7 +46,7 @@ fin:     ret count\n\
 ");
   MIR_output (stderr);
   fprintf (stderr, "+++++++++++++After sieve simplification:\n");
-  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
   MIR_simplify_func (DLIST_TAIL (MIR_item_t, m->items), TRUE);
   MIR_output (stderr);
   MIR_finish ();
