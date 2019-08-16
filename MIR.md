@@ -39,6 +39,7 @@
   * Module is created through API function `MIR_module_t MIR_new_module (const char *name)`
   * Module creation is finished by calling API function `MIR_finish_module`
   * You can create only one module at any given time
+  * List of all created modules can be gotten by function `DLIST (MIR_module_t) *MIR_get_module_list (void)`
   * MIR module consists of **items**.  There are following **item types** (and function for their creation):
     * **Function**: `MIR_func_item`
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (const char *name)`)
