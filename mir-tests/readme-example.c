@@ -61,7 +61,7 @@ int main (void) {
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
   create_program ();
   fprintf (stderr, "MIR program creation end -- %.0f usec\n", real_usec_time () - start_time);
-  m1 = DLIST_HEAD (MIR_module_t, MIR_modules); m2 = DLIST_NEXT (MIR_module_t, m1);
+  m1 = DLIST_HEAD (MIR_module_t, *MIR_get_module_list ()); m2 = DLIST_NEXT (MIR_module_t, m1);
   f1 = DLIST_TAIL (MIR_item_t, m1->items); f2 = DLIST_TAIL (MIR_item_t, m2->items);
   MIR_load_module (m2); MIR_load_module (m1);
   MIR_load_external ("printf", printf);

@@ -23,5 +23,5 @@ hi:      func i32\n\
 ";
   
   MIR_scan_string (str);
-  return DLIST_TAIL (MIR_module_t, MIR_modules);
+  return DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
 }

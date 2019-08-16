@@ -8832,7 +8832,7 @@ static void gen_initializer (size_t init_start, op_t var,
 	    MIR_new_bss (NULL, data_size - str_len);
 	}
       } else {
-	MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
+	MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
 
 	data = MIR_new_string_data (_MIR_get_temp_item_name (module), val.mir_op.u.str);
 	DLIST_REMOVE (MIR_item_t, module->items, data);
@@ -9296,7 +9296,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t type_name = NL_HEAD (r->ops);
     decl_t decl = type_name->attr;
     struct expr *expr = r->attr;
-    MIR_module_t module = DLIST_TAIL (MIR_module_t, MIR_modules);
+    MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
     size_t init_start;
 
     if (decl->scope == top_scope) {
@@ -10447,7 +10447,7 @@ int main (int argc, const char *argv[]) {
     uint64_t (*fun_addr) (void);
     double start_time;
 
-    module = DLIST_HEAD (MIR_module_t, MIR_modules);
+    module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list ());
     assert (module != NULL && DLIST_NEXT (MIR_module_t, module) == NULL);
     for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL; func =  DLIST_NEXT (MIR_item_t, func))
       if (func->item_type == MIR_func_item && strcmp (func->u.func->name, "main") == 0)

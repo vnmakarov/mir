@@ -28,7 +28,7 @@ int main (int argc, char *argv[]) {
   mir_fname = argv[argc - 1];
   MIR_init ();
   MIR_scan_string (read_file (mir_fname));
-  mir_module = DLIST_HEAD (MIR_module_t, MIR_modules);
+  mir_module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list ());
   if (DLIST_NEXT (MIR_module_t, mir_module) != NULL) {
     fprintf (stderr, "%s: there should be one module in the file %s\n", argv[0], mir_fname);
     exit (1);

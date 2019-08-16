@@ -321,8 +321,6 @@ struct MIR_module {
 /* Definition of double list of MIR_item_t type elements */
 DEF_DLIST (MIR_module_t, module_link);
 
-extern DLIST (MIR_module_t) MIR_modules; /* List of all modules */
-
 static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_FBEQ || code == MIR_DBEQ || code == MIR_LDBEQ
 	  || code == MIR_FBNE || code == MIR_DBNE || code == MIR_LDBNE
@@ -351,6 +349,7 @@ extern int MIR_init (void);
 extern void MIR_finish (void);
 
 extern MIR_module_t MIR_new_module (const char *name);
+extern DLIST (MIR_module_t) *MIR_get_module_list (void);
 extern MIR_item_t MIR_new_import (const char *name);
 extern MIR_item_t MIR_new_export (const char *name);
 extern MIR_item_t MIR_new_forward (const char *name);

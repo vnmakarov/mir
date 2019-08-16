@@ -420,8 +420,6 @@ static MIR_module_t curr_module;
 static MIR_func_t curr_func;
 static int curr_label_num;
 
-DLIST (MIR_module_t) MIR_modules; /* List of all modules */
-
 DEF_VARR (MIR_module_t);
 static VARR (MIR_module_t) *modules_to_link;
 
@@ -509,6 +507,8 @@ static VARR (char) *temp_string;
 DEF_VARR (MIR_reg_t);
 static VARR (MIR_reg_t) *inline_reg_map;
 
+static DLIST (MIR_module_t) modules;
+
 int MIR_init (void) {
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++)
@@ -526,7 +526,7 @@ int MIR_init (void) {
   check_and_prepare_insn_descs ();
   VARR_CREATE (MIR_insn_t, ret_insns, 0);
   VARR_CREATE (MIR_op_t, ret_ops, 0);
-  DLIST_INIT (MIR_module_t, MIR_modules);
+  DLIST_INIT (MIR_module_t, modules);
   vn_init ();
   VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
@@ -585,8 +585,12 @@ MIR_module_t MIR_new_module (const char *name) {
   if ((curr_module = malloc (sizeof (struct MIR_module))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for module %s creation", name);
   init_module (curr_module, name);
-  DLIST_APPEND (MIR_module_t, MIR_modules, curr_module);
+  DLIST_APPEND (MIR_module_t, modules, curr_module);
   return curr_module;
+}
+
+DLIST (MIR_module_t) *MIR_get_module_list (void) {
+  return &modules;
 }
 
 static const char *type_str (MIR_type_t tp) {
@@ -2034,7 +2038,7 @@ static void output_module (FILE *f, MIR_module_t module) {
 }
 
 void MIR_output (FILE *f) {
-  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, MIR_modules);
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, modules);
        module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
     output_module (f, module);
@@ -3155,7 +3159,7 @@ static void write_module (FILE *f, MIR_module_t module) {
 }
 
 static void write_modules (FILE *f) {
-  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, MIR_modules);
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, modules);
        module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
     write_module (f, module);

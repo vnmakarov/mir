@@ -12,7 +12,7 @@ int main (int argc, char *argv[]) {
   }
   MIR_init ();
   MIR_scan_string (read_file (argv[1]));
-  m = DLIST_TAIL (MIR_module_t, MIR_modules);
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_load_module (m);
   MIR_link (NULL, NULL);
