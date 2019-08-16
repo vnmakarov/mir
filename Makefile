@@ -1,4 +1,6 @@
-CC=gcc -std=gnu11 -Wno-abi
+CC=gcc -fno-tree-sra -std=gnu11 -Wno-abi # latest versions of gcc has a buggy SRA
+# 2nd alternative:
+# CC=clang -std=gnu11 -Wno-abi
 CFLAGS=-O3 -g
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
