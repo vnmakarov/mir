@@ -156,7 +156,7 @@ typedef union {int64_t i; uint64_t u; float f; double d; long double ld;} MIR_im
    integer type memory value expands to int64_t value when the insn is
    executed.  */
 typedef struct {
-  MIR_type_t type : 8; MIR_scale_t scale : 8;
+  MIR_type_t type : 8; MIR_scale_t scale;
   /* 0 means no reg for memory.  MIR_NON_HARD_REG means no reg for
      hard reg memory. */
   MIR_reg_t base, index;
