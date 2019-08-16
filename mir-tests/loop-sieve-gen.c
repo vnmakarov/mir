@@ -52,6 +52,9 @@ int main (void) {
   for (int i = 0; i < N; i++)
     fun = MIR_gen (funcs[i]);
   fprintf (stderr, "MIR_gen end (%d funcs) -- %.0f usec\n", N, real_usec_time () - start_time);
+#if defined(TEST_GENERATION_ONLY)
+  return 0;
+#endif
   start_execution_time = real_usec_time ();
 #if defined(TEST_GEN_LOOP)
   res = fun (arg);

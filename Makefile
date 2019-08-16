@@ -112,6 +112,9 @@ gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
+gen-speed:
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE -DTEST_GENERATION_ONLY mir.c mir-gen.c mir-tests/loop-sieve-gen.c && valgrind --tool=lackey ./a.out
+
 readme-example-test:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/readme-example.c && ./a.out
 
