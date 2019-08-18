@@ -4,6 +4,57 @@
 
 #include "mir.h"
 
+DEF_VARR (MIR_insn_t);
+DEF_VARR (MIR_reg_t);
+DEF_VARR (MIR_op_t);
+DEF_VARR (MIR_type_t);
+DEF_HTAB (MIR_item_t);
+DEF_VARR (MIR_module_t);
+DEF_VARR (size_t);
+DEF_VARR (char);
+DEF_VARR (uint8_t);
+
+struct context {
+  MIR_error_func_t error_func;
+  VARR (MIR_insn_t) *temp_insns;
+  VARR (MIR_op_t) *temp_insn_ops;
+  VARR (MIR_var_t) *temp_vars;
+  VARR (MIR_type_t) *temp_types;
+  VARR (size_t) *insn_nops;
+  VARR (char) *temp_string;
+  VARR (uint8_t) *temp_data;
+  char temp_buff[30];
+  HTAB (MIR_item_t) *module_item_tab;
+  /* Module to keep items potentially used by all modules:  */
+  struct MIR_module environment_module;
+  VARR (MIR_reg_t) *inline_reg_map;
+  MIR_module_t curr_module;
+  MIR_func_t curr_func;
+  int curr_label_num;
+  DLIST (MIR_module_t) all_modules;
+  VARR (MIR_module_t) *modules_to_link;
+};
+
+struct context context;
+
+#define error_func context.error_func
+#define temp_insns context.temp_insns
+#define temp_insn_ops context.temp_insn_ops
+#define temp_vars context.temp_vars
+#define temp_types context.temp_types
+#define insn_nops context.insn_nops
+#define temp_string context.temp_string
+#define temp_data context.temp_data
+#define temp_buff context.temp_buff
+#define module_item_tab context.module_item_tab
+#define environment_module context.environment_module
+#define inline_reg_map context.inline_reg_map
+#define curr_module context.curr_module
+#define curr_func context.curr_func
+#define curr_label_num context.curr_label_num
+#define all_modules context.all_modules
+#define modules_to_link context.modules_to_link
+
 static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
 #define MIR_HTAB_ERROR MIR_VARR_ERROR
@@ -20,8 +71,6 @@ static void util_error (const char *message);
 static void interp_init (void);
 static void finish_func_interpretation (MIR_item_t func_item);
 static void interp_finish (void);
-
-static MIR_error_func_t error_func;
 
 static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
   va_list ap;
@@ -61,14 +110,6 @@ int _MIR_reserved_name_p (const char *name) {
       return FALSE;
   return TRUE;
 }
-
-DEF_VARR (MIR_op_t);
-static VARR (MIR_op_t) *temp_insn_ops;
-
-static VARR (MIR_var_t) *temp_vars;
-
-DEF_VARR (MIR_type_t);
-static VARR (MIR_type_t) *temp_types;
 
 struct insn_desc {
   MIR_insn_code_t code; const char *name; unsigned op_modes[4];
@@ -239,10 +280,6 @@ static const struct insn_desc insn_descs[] = {
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
 
-DEF_VARR (size_t);
-
-static VARR (size_t) *insn_nops;
-
 static void check_and_prepare_insn_descs (void) {
   size_t i, j;
   
@@ -260,16 +297,25 @@ static MIR_op_mode_t type2mode (MIR_type_t type) {
 	  : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
 }
 
+
+
 typedef struct string {
   size_t num; /* string number starting with 1 */
   const char *str;
 } string_t;
 
 DEF_VARR (string_t);
-static VARR (string_t) *strings;
-
 DEF_HTAB (string_t);
-static HTAB (string_t) *string_tab;
+
+struct string_context {
+  VARR (string_t) *strings;
+  HTAB (string_t) *string_tab;
+};
+
+struct string_context string_context;
+
+#define strings string_context.strings
+#define string_tab string_context.string_tab
 
 static htab_hash_t str_hash (string_t str) { return mir_hash (str.str, strlen (str.str), 0); }
 static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2.str) == 0; }
@@ -315,6 +361,8 @@ static void string_finish (VARR (string_t) **strs, HTAB (string_t) **str_tab) {
   HTAB_DESTROY (string_t, *str_tab);
 }
 
+
+
 typedef struct reg_desc {
   size_t name_num;   /* 1st key for the namenum2rdn hash tab */
   MIR_func_t func;   /* 2nd key for hash the both tabs */
@@ -323,11 +371,18 @@ typedef struct reg_desc {
 } reg_desc_t;
 
 DEF_VARR (reg_desc_t);
-static VARR (reg_desc_t) *reg_descs;
-
 DEF_HTAB (size_t);
-static HTAB (size_t) *namenum2rdn_tab;
-static HTAB (size_t) *reg2rdn_tab;
+
+struct reg_context {
+  VARR (reg_desc_t) *reg_descs;
+  HTAB (size_t) *namenum2rdn_tab;
+  HTAB (size_t) *reg2rdn_tab;
+};
+
+struct reg_context reg_context;
+#define reg_descs reg_context.reg_descs
+#define namenum2rdn_tab reg_context.namenum2rdn_tab
+#define reg2rdn_tab reg_context.reg2rdn_tab
 
 static int namenum2rdn_eq (size_t rdn1, size_t rdn2) {
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
@@ -411,28 +466,12 @@ static void reg_finish (void) {
   HTAB_DESTROY (size_t, reg2rdn_tab);
 }
 
-DEF_VARR (MIR_insn_t);
-static VARR (MIR_insn_t) *ret_insns;
-
-static VARR (MIR_op_t) *ret_ops;
-
-static MIR_module_t curr_module;
-static MIR_func_t curr_func;
-static int curr_label_num;
-
-DEF_VARR (MIR_module_t);
-static VARR (MIR_module_t) *modules_to_link;
-
-DEF_VARR (uint8_t);
-
-#if MIR_SCAN || MIR_IO
-static VARR (uint8_t) *data_values;
+
 
 static void push_data (uint8_t *els, size_t size) {
   for (size_t i = 0; i < size; i++)
-    VARR_PUSH (uint8_t, data_values, els[i]);
+    VARR_PUSH (uint8_t, temp_data, els[i]);
 }
-#endif
 
 const char *MIR_item_name (MIR_item_t item) {
   return (item->item_type == MIR_func_item ? item->u.func->name
@@ -463,9 +502,6 @@ MIR_error_func_t MIR_get_error_func (void) { return error_func; }
 
 void MIR_set_error_func (MIR_error_func_t func) { error_func = func; }
 
-DEF_HTAB (MIR_item_t);
-static HTAB (MIR_item_t) *module_item_tab;
-
 static htab_hash_t item_hash (MIR_item_t it) {
   return mir_hash_finish (mir_hash_step
 			  (mir_hash_step (mir_hash_init (28),
@@ -489,9 +525,6 @@ static MIR_item_t find_item (const char *name, MIR_module_t module) {
   return NULL;
 }
 
-/* Module to keep items potentially used by all modules:  */
-static struct MIR_module environment_module;
-
 static void init_module (MIR_module_t m, const char *name) {
   m->data = NULL;
   m->temp_items_num = 0;
@@ -501,13 +534,6 @@ static void init_module (MIR_module_t m, const char *name) {
 
 static void code_init (void);
 static void code_finish (void);
-
-DEF_VARR (char);
-static VARR (char) *temp_string;
-DEF_VARR (MIR_reg_t);
-static VARR (MIR_reg_t) *inline_reg_map;
-
-static DLIST (MIR_module_t) modules;
 
 int MIR_init (void) {
 #ifndef NDEBUG
@@ -520,19 +546,16 @@ int MIR_init (void) {
   curr_label_num = 0;
   string_init (&strings, &string_tab);
   reg_init ();
+  VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
   VARR_CREATE (MIR_var_t, temp_vars, 0);
   VARR_CREATE (MIR_type_t, temp_types, 0);
   check_and_prepare_insn_descs ();
-  VARR_CREATE (MIR_insn_t, ret_insns, 0);
-  VARR_CREATE (MIR_op_t, ret_ops, 0);
-  DLIST_INIT (MIR_module_t, modules);
+  DLIST_INIT (MIR_module_t, all_modules);
   vn_init ();
   VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
-#if MIR_SCAN || MIR_IO
-  VARR_CREATE (uint8_t, data_values, 512);
-#endif
+  VARR_CREATE (uint8_t, temp_data, 512);
 #if MIR_IO
   io_init ();
 #endif
@@ -557,19 +580,16 @@ void MIR_finish (void) {
 #if MIR_IO
   io_finish ();
 #endif
-#if MIR_SCAN || MIR_IO
-  VARR_DESTROY (uint8_t, data_values);
-#endif
+  VARR_DESTROY (uint8_t, temp_data);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (MIR_reg_t, inline_reg_map);
   reg_finish ();
   string_finish (&strings, &string_tab);
   vn_finish ();
-  VARR_DESTROY (MIR_insn_t, ret_insns);
-  VARR_DESTROY (MIR_op_t, ret_ops);
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
+  VARR_DESTROY (MIR_insn_t, temp_insns);
   VARR_DESTROY (MIR_type_t, temp_types);
   code_finish ();
   if (curr_func != NULL)
@@ -585,12 +605,12 @@ MIR_module_t MIR_new_module (const char *name) {
   if ((curr_module = malloc (sizeof (struct MIR_module))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for module %s creation", name);
   init_module (curr_module, name);
-  DLIST_APPEND (MIR_module_t, modules, curr_module);
+  DLIST_APPEND (MIR_module_t, all_modules, curr_module);
   return curr_module;
 }
 
 DLIST (MIR_module_t) *MIR_get_module_list (void) {
-  return &modules;
+  return &all_modules;
 }
 
 static const char *type_str (MIR_type_t tp) {
@@ -1070,7 +1090,7 @@ void MIR_finish_func (void) {
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func->insns);
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
-    size_t i, insn_nops = MIR_insn_nops (insn);
+    size_t i, actual_nops = MIR_insn_nops (insn);
     MIR_op_mode_t mode, expected_mode;
     reg_desc_t *rd;
     int out_p, can_be_out_p;
@@ -1080,13 +1100,13 @@ void MIR_finish_func (void) {
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error,
 		     "va_start, va_end, or va_arg are not in vararg function");
-    } else if (code == MIR_RET && insn_nops != curr_func->nres) {
+    } else if (code == MIR_RET && actual_nops != curr_func->nres) {
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error,
 		     "number of operands in return does not correspond number of function returns");
     } else if (MIR_call_code_p (code))
       expr_p = FALSE;
-    for (i = 0; i < insn_nops; i++) {
+    for (i = 0; i < actual_nops; i++) {
       if (MIR_call_code_p (code)) {
 	if (i == 0) {
 	  mir_assert (insn->ops[i].mode == MIR_OP_REF
@@ -1445,9 +1465,9 @@ static MIR_insn_t new_insn1 (MIR_insn_code_t code) { return create_insn (1, code
 MIR_insn_t MIR_new_insn_arr (MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_insn_t insn;
   MIR_proto_t proto;
-  size_t i = 0, insn_nops = insn_code_nops (code);
+  size_t i = 0, expected_nops = insn_code_nops (code);
   
-  if  (! MIR_call_code_p (code) && code != MIR_RET && nops != insn_nops) {
+  if  (! MIR_call_code_p (code) && code != MIR_RET && nops != expected_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands for insn %s", insn_descs[code].name);
   } else if (MIR_call_code_p (code)) {
     if (nops < 2)
@@ -1528,8 +1548,6 @@ static MIR_insn_t create_label (int64_t label_num) {
 }
 
 MIR_insn_t MIR_new_label (void) { return create_label (++curr_label_num); }
-
-static char temp_buff[30];
 
 MIR_reg_t _MIR_new_temp_reg (MIR_type_t type, MIR_func_t func) {
   string_t string;
@@ -1777,21 +1795,19 @@ void MIR_remove_insn (MIR_item_t func_item, MIR_insn_t insn) {
   free (insn);
 }
 
-static MIR_func_t curr_output_func;
-
 static void MIR_output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (tp)); }
 
 static void MIR_output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
 
 static void MIR_output_scale (FILE *f, unsigned scale) { fprintf (f, "%u", scale); }
 
-static void MIR_output_reg (FILE *f, MIR_reg_t reg) {
-  fprintf (f, "%s", MIR_reg_name (reg, curr_output_func));
+static void MIR_output_reg (FILE *f, MIR_func_t func, MIR_reg_t reg) {
+  fprintf (f, "%s", MIR_reg_name (reg, func));
 }
 
 static void MIR_output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
 
-static void MIR_output_label (FILE *f, MIR_label_t label);
+static void MIR_output_label (FILE *f, MIR_func_t func, MIR_label_t label);
 
 static void out_str (FILE *f, const char *str) {
   fprintf (f, "\"");
@@ -1820,10 +1836,9 @@ static void out_str (FILE *f, const char *str) {
 }
 
 void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
-  curr_output_func = func;
   switch (op.mode) {
   case MIR_OP_REG:
-    MIR_output_reg (f, op.u.reg);
+    MIR_output_reg (f, func, op.u.reg);
     break;
   case MIR_OP_HARD_REG:
     MIR_output_hard_reg (f, op.u.hard_reg);
@@ -1846,7 +1861,6 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
   case MIR_OP_MEM:
   case MIR_OP_HARD_REG_MEM: {
     MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_HARD_REG;
-    void (*out_reg) (FILE *, MIR_reg_t) = op.mode == MIR_OP_MEM ? MIR_output_reg : MIR_output_hard_reg;
     
     MIR_output_type (f, op.u.mem.type);
     fprintf (f, ":");
@@ -1854,11 +1868,18 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
       MIR_output_disp (f, op.u.mem.disp);
     if (op.u.mem.base != no_reg || op.u.mem.index != no_reg) {
       fprintf (f, "(");
-      if (op.u.mem.base != no_reg)
-	out_reg (f, op.u.mem.base);
+      if (op.u.mem.base != no_reg) {
+	if (op.mode == MIR_OP_MEM)
+	  MIR_output_reg (f, func, op.u.mem.base);
+	else
+	  MIR_output_hard_reg (f, op.u.hard_reg_mem.base);
+      }
       if (op.u.mem.index != no_reg) {
 	fprintf(f, ", ");
-	out_reg (f, op.u.mem.index);
+	if (op.mode == MIR_OP_MEM)
+	  MIR_output_reg (f, func, op.u.mem.index);
+	else
+	  MIR_output_hard_reg (f, op.u.hard_reg_mem.index);
 	if (op.u.mem.scale != 1) {
 	  fprintf(f, " * ");
 	  MIR_output_scale (f, op.u.mem.scale);
@@ -1875,23 +1896,22 @@ void MIR_output_op (FILE *f, MIR_op_t op, MIR_func_t func) {
     out_str (f, op.u.str);
     break;
   case MIR_OP_LABEL:
-    MIR_output_label (f, op.u.label);
+    MIR_output_label (f, func, op.u.label);
     break;
   default:
     mir_assert (FALSE);
   }
 }
 
-static void MIR_output_label (FILE *f, MIR_label_t label) {
-  fprintf (f, "L"); MIR_output_op (f, label->ops[0], curr_output_func);
+static void MIR_output_label (FILE *f, MIR_func_t func, MIR_label_t label) {
+  fprintf (f, "L"); MIR_output_op (f, label->ops[0], func);
 }
 
 void MIR_output_insn (FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p) {
   size_t i, nops;
   
-  curr_output_func = func;
   if (insn->code == MIR_LABEL) {
-    MIR_output_label (f, insn);
+    MIR_output_label (f, func, insn);
     if (newline_p)
       fprintf (f, ":\n");
     return;
@@ -2008,7 +2028,7 @@ static void output_item (FILE *f, MIR_item_t item) {
 		       VARR_LENGTH (MIR_var_t, proto->args), proto->args, proto->vararg_p);
     return;
   }
-  curr_output_func = func = item->u.func;
+  func = item->u.func;
   fprintf (f, "%s:\tfunc\t", func->name);
   output_func_proto (f, func->nres, func->res_types, func->nargs, func->vars, func->vararg_p);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
@@ -2038,7 +2058,7 @@ static void output_module (FILE *f, MIR_module_t module) {
 }
 
 void MIR_output (FILE *f) {
-  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, modules);
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules);
        module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
     output_module (f, module);
@@ -2062,7 +2082,13 @@ typedef struct {
 } val_t;
 
 DEF_HTAB (val_t);
-static HTAB (val_t) *val_tab;
+
+struct simplify_context {
+  HTAB (val_t) *val_tab;
+};
+
+struct simplify_context simplify_context;
+#define val_tab simplify_context.val_tab
 
 static htab_hash_t val_hash (val_t v) {
   htab_hash_t h;
@@ -2281,8 +2307,6 @@ void _MIR_simplify_insn (MIR_item_t func_item, MIR_insn_t insn, int mem_float_p)
   }
 }
 
-static VARR (MIR_insn_t) *ret_insns;
-
 static void make_one_ret (MIR_item_t func_item) {
   size_t i, j;
   MIR_insn_code_t mov_code, ext_code;
@@ -2291,16 +2315,17 @@ static void make_one_ret (MIR_item_t func_item) {
   MIR_func_t func = func_item->u.func;
   MIR_type_t *res_types = func->res_types;
   MIR_insn_t ret_label, insn;
-  
-  if (VARR_LENGTH (MIR_insn_t, ret_insns) == 1
-      && VARR_GET (MIR_insn_t, ret_insns, 0) == DLIST_TAIL (MIR_insn_t, func->insns))
+  VARR (MIR_op_t) *ret_ops;
+
+  if (VARR_LENGTH (MIR_insn_t, temp_insns) == 1
+      && VARR_GET (MIR_insn_t, temp_insns, 0) == DLIST_TAIL (MIR_insn_t, func->insns))
     return;
   ret_label = NULL;
-  if (VARR_LENGTH (MIR_insn_t, ret_insns) != 0) {
+  if (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) {
     ret_label = MIR_new_label ();
     MIR_append_insn (func_item, ret_label);
   }
-  VARR_TRUNC (MIR_op_t, ret_ops, 0);
+  VARR_CREATE (MIR_op_t, ret_ops, 16);
   for (i = 0; i < func->nres; i++) {
     mov_code = (res_types[i] == MIR_T_F ? MIR_FMOV : res_types[i] == MIR_T_D ? MIR_DMOV
 		: res_types[i] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
@@ -2320,8 +2345,8 @@ static void make_one_ret (MIR_item_t func_item) {
       MIR_append_insn (func_item, MIR_new_insn (ext_code, ret_reg_op, ret_reg_op));
   }
   MIR_append_insn (func_item, MIR_new_insn_arr (MIR_RET, func->nres, VARR_ADDR (MIR_op_t, ret_ops)));
-  for (i = 0; i < VARR_LENGTH (MIR_insn_t, ret_insns); i++) {
-    insn = VARR_GET (MIR_insn_t, ret_insns, i);
+  for (i = 0; i < VARR_LENGTH (MIR_insn_t, temp_insns); i++) {
+    insn = VARR_GET (MIR_insn_t, temp_insns, i);
     mir_assert (func->nres == MIR_insn_nops (insn));
     for (j = 0; j < func->nres; j++) {
       mov_code = (res_types[j] == MIR_T_F ? MIR_FMOV : res_types[j] == MIR_T_D ? MIR_DMOV
@@ -2334,6 +2359,7 @@ static void make_one_ret (MIR_item_t func_item) {
     MIR_insert_insn_before (func_item, insn, MIR_new_insn (MIR_JMP, MIR_new_label_op (ret_label)));
     MIR_remove_insn (func_item, insn);
   }
+  VARR_DESTROY (MIR_op_t, ret_ops);
 }
 
 static int64_t natural_alignment (int64_t s) { return s <= 2 ? s : s <= 4 ? 4 : s <= 8 ? 8 : 16; }
@@ -2370,7 +2396,7 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       MIR_prepend_insn (func_item, new_insn);
     }
   }
-  VARR_TRUNC (MIR_insn_t, ret_insns, 0);
+  VARR_TRUNC (MIR_insn_t, temp_insns, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
     MIR_op_t temp_op;
@@ -2384,7 +2410,7 @@ void MIR_simplify_func (MIR_item_t func_item, int mem_float_p) {
       insn->ops[0] = temp_op;
     }
     if (code == MIR_RET)
-      VARR_PUSH (MIR_insn_t, ret_insns, insn);
+      VARR_PUSH (MIR_insn_t, temp_insns, insn);
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (code == MIR_ALLOCA
 	&& (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT)) { /* consolidate allocas */
@@ -2451,7 +2477,7 @@ static void set_inline_reg_map (MIR_reg_t old_reg, MIR_reg_t new_reg) {
    extensions and one return.  */
 void MIR_inline (MIR_item_t func_item) {
   int alloca_p;
-  size_t i, insn_nops, nargs, nvars;
+  size_t i, actual_nops, nargs, nvars;
   const char *name;
   MIR_type_t type, *res_types;
   MIR_var_t var;
@@ -2509,12 +2535,12 @@ void MIR_inline (MIR_item_t func_item) {
     for (insn = DLIST_HEAD (MIR_insn_t, called_func->insns);
 	 insn != NULL;
 	 insn = DLIST_NEXT (MIR_insn_t, insn)) {
-      insn_nops = MIR_insn_nops (insn);
+      actual_nops = MIR_insn_nops (insn);
       new_insn = MIR_copy_insn (insn);
       mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_START && insn->code != MIR_VA_END);
       if (insn->code == MIR_ALLOCA)
 	alloca_p = TRUE;
-      for (i = 0; i < insn_nops; i++)
+      for (i = 0; i < actual_nops; i++)
 	switch (new_insn->ops[i].mode) {
 	case MIR_OP_REG:
 	  new_insn->ops[i].u.reg = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.reg);
@@ -2535,8 +2561,8 @@ void MIR_inline (MIR_item_t func_item) {
 	mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL
 		    && call->ops[0].mode == MIR_OP_REF && call->ops[0].u.ref->item_type == MIR_proto_item);
 	free (new_insn);
-	mir_assert (called_func->nres == insn_nops);
-	for (i = 0; i < insn_nops; i++) {
+	mir_assert (called_func->nres == actual_nops);
+	for (i = 0; i < actual_nops; i++) {
 	  mir_assert (new_insn->ops[i].mode == MIR_OP_REG);
 	  ret_reg = new_insn->ops[i].u.reg;
 	  new_insn = MIR_new_insn (res_types[i] == MIR_T_F ? MIR_FMOV : res_types[i] == MIR_T_D ? MIR_DMOV
@@ -2658,9 +2684,15 @@ struct code_holder {
 typedef struct code_holder code_holder_t;
 
 DEF_VARR (code_holder_t);
-static VARR (code_holder_t) *code_holders;
 
-static size_t page_size;
+struct machine_code_context {
+  VARR (code_holder_t) *code_holders;
+  size_t page_size;
+};
+
+struct machine_code_context machine_code_context;
+#define code_holders machine_code_context.code_holders
+#define page_size machine_code_context.page_size
 
 uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
@@ -2779,9 +2811,24 @@ typedef enum {
 
 static const int CURR_BIN_VERSION = 1;
 
-static VARR (string_t) *output_strings;
-static HTAB (string_t) *output_string_tab;
+typedef char *char_ptr_t;
+DEF_VARR (char_ptr_t);
 
+DEF_VARR (uint64_t);
+
+struct io_context {
+  VARR (string_t) *output_strings;
+  HTAB (string_t) *output_string_tab;
+  VARR (char_ptr_t) *bin_strings;
+  VARR (uint64_t) *insn_label_string_nums;
+};
+
+struct io_context io_context;
+#define output_strings io_context.output_strings
+#define output_string_tab io_context.output_string_tab
+#define bin_strings io_context.bin_strings
+#define insn_label_string_nums io_context.insn_label_string_nums
+  
 static void put_byte (FILE *f, int ch) {
   if (f == NULL)
     return;
@@ -2939,10 +2986,10 @@ static void write_lab (FILE *f, MIR_label_t lab) {
   put_uint (f, lab_num, nb);
 }
 
-static void write_op (FILE *f, MIR_op_t op) {
+static void write_op (FILE *f, MIR_func_t func, MIR_op_t op) {
   switch (op.mode) {
   case MIR_OP_REG:
-    write_reg (f, MIR_reg_name (op.u.reg, curr_output_func));
+    write_reg (f, MIR_reg_name (op.u.reg, func));
     break;
   case MIR_OP_INT:
     write_int (f, op.u.i);
@@ -2977,9 +3024,9 @@ static void write_op (FILE *f, MIR_op_t op) {
     if (op.u.mem.disp != 0)
       write_int (f, op.u.mem.disp);
     if (op.u.mem.base != 0)
-      write_reg (f, MIR_reg_name (op.u.mem.base, curr_output_func));
+      write_reg (f, MIR_reg_name (op.u.mem.base, func));
     if (op.u.mem.index != 0) {
-      write_reg (f, MIR_reg_name (op.u.mem.index, curr_output_func));
+      write_reg (f, MIR_reg_name (op.u.mem.index, func));
       write_uint (f, op.u.mem.scale);
     }
     break;
@@ -2998,7 +3045,7 @@ static void write_op (FILE *f, MIR_op_t op) {
   }
 }
 
-static void write_insn (FILE *f, MIR_insn_t insn) {
+static void write_insn (FILE *f, MIR_func_t func, MIR_insn_t insn) {
   size_t i, nops;
   MIR_insn_code_t code = insn->code;
 
@@ -3009,7 +3056,7 @@ static void write_insn (FILE *f, MIR_insn_t insn) {
   nops = MIR_insn_nops (insn);
   write_uint (f, code);
   for (i = 0; i < nops; i++) {
-    write_op (f, insn->ops[i]);
+    write_op (f, func, insn->ops[i]);
   }
   if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
     /* first operand mode is undefined if it is a variable operand insn */
@@ -3116,7 +3163,7 @@ static void write_item (FILE *f, MIR_item_t item) {
     put_byte (f, TAG_EOI);
     return;
   }
-  curr_output_func = func = item->u.func;
+  func = item->u.func;
   write_name (f, "func");
   write_name (f, func->name);
   write_uint (f, func->vararg_p != 0);
@@ -3140,7 +3187,7 @@ static void write_item (FILE *f, MIR_item_t item) {
     put_byte (f, TAG_EOI);
   }
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
-    write_insn (f, insn);
+    write_insn (f, func, insn);
   write_name (f, "endfunc");
 }
 
@@ -3155,7 +3202,7 @@ static void write_module (FILE *f, MIR_module_t module) {
 }
 
 static void write_modules (FILE *f) {
-  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, modules);
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules);
        module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
     write_module (f, module);
@@ -3231,10 +3278,6 @@ static long double get_ldouble (FILE *f) {
   u.u[1] = get_uint (f, sizeof (uint64_t));
   return u.ld;
 }
-
-typedef char *char_ptr_t;
-DEF_VARR (char_ptr_t);
-static VARR (char_ptr_t) *bin_strings;
 
 static const char *to_str (uint64_t str_num) {
   if (str_num >= VARR_LENGTH (char_ptr_t, bin_strings))
@@ -3413,9 +3456,6 @@ static int read_operand (FILE *f, MIR_op_t *op, MIR_item_t func) {
   return TRUE;
 }
 
-DEF_VARR (uint64_t);
-static VARR (uint64_t) *insn_label_string_nums;
-
 static int func_proto_read (FILE *f, uint64_t *nres_ptr) {
   bin_tag_t tag;
   token_attr_t attr;
@@ -3575,7 +3615,7 @@ void MIR_read (FILE *f) {
 	if (TAG_TI8 > tag || tag > TAG_TBLOCK)
 	  (*error_func) (MIR_binary_io_error, "wrong data type tag %d", tag);
 	type = tag_type (tag);
-	VARR_TRUNC (uint8_t, data_values, 0);
+	VARR_TRUNC (uint8_t, temp_data, 0);
 	for (nel = 0;; nel++) {
 	  tag = read_token (f, &attr);
 	  if (tag == TAG_EOI)
@@ -3628,7 +3668,7 @@ void MIR_read (FILE *f) {
 	    (*error_func) (MIR_binary_io_error, "wrong data value tag %d", tag);
 	  }
 	}
-	MIR_new_data (name, type, VARR_LENGTH (uint8_t, data_values), VARR_ADDR (uint8_t, data_values));
+	MIR_new_data (name, type, VARR_LENGTH (uint8_t, temp_data), VARR_ADDR (uint8_t, temp_data));
       } else if (strcmp (name, "local") == 0) {
 	if (func == NULL)
 	  (*error_func) (MIR_binary_io_error, "local outside func");
@@ -3699,8 +3739,6 @@ static void io_finish (void) {
 #include <errno.h>
 #include <setjmp.h>
 
-static size_t curr_line_num;
-
 typedef struct insn_name {
   const char *name;
   MIR_insn_code_t code;
@@ -3708,9 +3746,6 @@ typedef struct insn_name {
 
 static int insn_name_eq (insn_name_t in1, insn_name_t in2) { return strcmp (in1.name, in2.name) == 0; }
 static htab_hash_t insn_name_hash (insn_name_t in) { return mir_hash (in.name, strlen (in.name), 0); }
-
-DEF_HTAB (insn_name_t);
-static HTAB (insn_name_t) *insn_name_tab;
 
 enum token_code { TC_INT, TC_FLOAT, TC_DOUBLE, TC_LDOUBLE, TC_NAME, TC_STR,
 		  TC_NL, TC_EOF, TC_LEFT_PAR, TC_RIGHT_PAR, TC_COMMA, TC_SEMICOL, TC_COL };
@@ -3727,9 +3762,35 @@ typedef struct token {
   } u;
 } token_t;
 
-static jmp_buf error_jmp_buf;
+DEF_HTAB (insn_name_t);
+typedef const char *label_name_t;
+DEF_VARR (label_name_t);
 
-static size_t curr_lno;
+typedef struct label_desc {
+  const char *name;
+  MIR_label_t label;
+} label_desc_t;
+
+DEF_HTAB (label_desc_t);
+
+struct scan_context {
+  jmp_buf error_jmp_buf;
+  size_t curr_lno;
+  HTAB (insn_name_t) *insn_name_tab;
+  const char *input_string;
+  size_t input_string_char_num;
+  VARR (label_name_t) *label_names;
+  HTAB (label_desc_t) *label_desc_tab;
+};
+
+struct scan_context scan_context;
+#define error_jmp_buf scan_context.error_jmp_buf
+#define curr_lno scan_context.curr_lno
+#define insn_name_tab scan_context.insn_name_tab
+#define input_string scan_context.input_string
+#define input_string_char_num scan_context.input_string_char_num
+#define label_names scan_context.label_names
+#define label_desc_tab scan_context.label_desc_tab
 
 static void MIR_NO_RETURN process_error (enum MIR_error_type error_type, const char *message) {
   (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
@@ -3844,7 +3905,7 @@ static void scan_string (token_t *t, int c, int get_char (void), void unget_char
       else if (c == '\\' || c == '\'' || c == '\"')
 	;
       else if (c == '\n') {
-	curr_line_num++;
+	curr_lno++;
 	continue;
       } else if (isdigit (c) && c != '8' && c != '9') {
 	ch_code = c - '0';
@@ -3879,9 +3940,6 @@ static void scan_string (token_t *t, int c, int get_char (void), void unget_char
   t->code = TC_STR;
   t->u.str = string_store (&strings, &string_tab, VARR_ADDR (char, temp_string)).str;
 }
-
-static const char *input_string;
-static size_t input_string_char_num;
 
 static int get_string_char (void) {
   int ch = input_string[input_string_char_num];
@@ -3919,7 +3977,7 @@ static void scan_token (token_t *token, int (*get_char) (void), void (*unget_cha
 	;
       /* Fall through: */
     case '\n':
-      curr_line_num++;
+      curr_lno++;
       token->code = TC_NL;
       return;
     case '(':
@@ -3989,18 +4047,6 @@ static void scan_token (token_t *token, int (*get_char) (void), void (*unget_cha
     }
   }
 }
-
-typedef const char *label_name_t;
-DEF_VARR (label_name_t);
-static VARR (label_name_t) *label_names;
-
-typedef struct label_desc {
-  const char *name;
-  MIR_label_t label;
-} label_desc_t;
-
-DEF_HTAB (label_desc_t);
-static HTAB (label_desc_t) *label_desc_tab;
 
 static int label_eq (label_desc_t l1, label_desc_t l2) { return strcmp (l1.name, l2.name) == 0; }
 static htab_hash_t label_hash (label_desc_t l) { return mir_hash (l.name, strlen (l.name), 0); }
@@ -4389,7 +4435,7 @@ void MIR_scan_string (const char *str) {
       
       n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      VARR_TRUNC (uint8_t, data_values, 0);
+      VARR_TRUNC (uint8_t, temp_data, 0);
       for (i = 0; i < n; i++) {
 	if (op_addr[i].mode != type2mode (data_type))
 	  process_error (MIR_syntax_error, "data operand is not of data type");
@@ -4411,7 +4457,7 @@ void MIR_scan_string (const char *str) {
 	}
       }
       name = VARR_LENGTH (label_name_t, label_names) == 0 ? NULL : VARR_GET (label_name_t, label_names, 0);
-      MIR_new_data (name, data_type, VARR_LENGTH (uint8_t, data_values), VARR_ADDR (uint8_t, data_values));
+      MIR_new_data (name, data_type, VARR_LENGTH (uint8_t, temp_data), VARR_ADDR (uint8_t, temp_data));
     } else if (proto_p) {
       if (module == NULL)
 	process_error (MIR_syntax_error, "prototype outside module");
