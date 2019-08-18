@@ -92,7 +92,33 @@ static void gen_add_insn_before (MIR_insn_t insn, MIR_insn_t before);
 static void gen_add_insn_after (MIR_insn_t insn, MIR_insn_t after);
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
-static MIR_item_t curr_func_item;
+#ifndef MIR_GEN_DEBUG
+#define MIR_GEN_DEBUG 0
+#endif
+
+typedef struct func_cfg *func_cfg_t;
+
+struct gen_context {
+  MIR_item_t curr_func_item;
+#if MIR_GEN_DEBUG
+  FILE *debug_file;
+#endif
+  bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, all_vars;
+  bitmap_t call_used_hard_regs;
+  func_cfg_t curr_cfg;
+  size_t curr_bb_index;
+};
+
+struct gen_context gen_context;
+#define curr_func_item gen_context.curr_func_item
+#define debug_file gen_context.debug_file
+#define insn_to_consider gen_context.insn_to_consider
+#define temp_bitmap gen_context.temp_bitmap
+#define temp_bitmap2 gen_context.temp_bitmap2
+#define all_vars gen_context.all_vars
+#define call_used_hard_regs gen_context.call_used_hard_regs
+#define curr_cfg gen_context.curr_cfg
+#define curr_bb_index gen_context.curr_bb_index
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -100,16 +126,7 @@ static MIR_item_t curr_func_item;
 #error "undefined or unsupported generation target"
 #endif
 
-#ifndef MIR_GEN_DEBUG
-#define MIR_GEN_DEBUG 0
-#endif
-
-#if MIR_GEN_DEBUG
-static FILE *debug_file;
-#endif
-
 #define DEFAULT_INIT_BITMAP_BITS_NUM 256
-static bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, all_vars;
 
 static void make_2op_insns (void) {
   MIR_func_t func;
@@ -222,8 +239,6 @@ struct bb {
 
 DEF_DLIST (bb_t, bb_link);
 
-typedef struct func_cfg *func_cfg_t;
-
 DEF_DLIST_LINK (func_cfg_t);
 
 typedef struct mv *mv_t;
@@ -280,9 +295,6 @@ struct func_cfg {
   DLIST (mv_t) used_moves;
   DLIST (mv_t) free_moves;
 };
-
-static bitmap_t call_used_hard_regs;
-static func_cfg_t curr_cfg;
 
 static DLIST (dead_var_t) free_dead_vars;
 
@@ -423,8 +435,6 @@ static size_t get_label_disp (MIR_insn_t insn) {
   gen_assert (insn->code == MIR_LABEL);
   return ((bb_insn_t) insn->data)->label_disp;
 }
-
-static size_t curr_bb_index;
 
 static bb_t create_bb (MIR_insn_t insn) {
   bb_t bb = gen_malloc (sizeof (struct bb));
@@ -797,12 +807,18 @@ static int post_cmp (const void *a1, const void *a2) { return -rpost_cmp (a1, a2
 
 DEF_VARR (bb_t);
 
-static VARR (bb_t) *worklist, *pending;
-static bitmap_t bb_to_consider;
+struct data_flow_context {
+  VARR (bb_t) *worklist, *pending;
+  bitmap_t bb_to_consider;
+};
 
-static void
-solve_dataflow (int forward_p, void (*con_func_0) (bb_t), int (*con_func_n) (bb_t),
-		int (*trans_func) (bb_t)) {
+struct data_flow_context data_flow_context;
+#define worklist data_flow_context.worklist
+#define pending data_flow_context.pending
+#define bb_to_consider data_flow_context.bb_to_consider
+
+static void  solve_dataflow (int forward_p, void (*con_func_0) (bb_t), int (*con_func_n) (bb_t),
+			     int (*trans_func) (bb_t)) {
   size_t i, iter;
   bb_t bb, *addr;
   VARR (bb_t) *t;
@@ -867,15 +883,25 @@ typedef struct expr {
 } *expr_t;
 
 DEF_VARR (expr_t);
-static VARR (expr_t) *exprs; /* the expr number -> expression */
-
-DEF_VARR (bitmap_t);
-/* map: var number -> bitmap of numbers of exprs with given var as an input operand. */
-static VARR (bitmap_t) *var2dep_expr;
-static bitmap_t memory_exprs; /* expressions containing memory */
-
 DEF_HTAB (expr_t);
-static HTAB (expr_t) *expr_tab; /* keys: insn code and input operands */
+DEF_VARR (bitmap_t);
+
+struct cse_context {
+  VARR (expr_t) *exprs; /* the expr number -> expression */
+  /* map: var number -> bitmap of numbers of exprs with given var as an input operand. */
+  VARR (bitmap_t) *var2dep_expr;
+  bitmap_t memory_exprs; /* expressions containing memory */
+  HTAB (expr_t) *expr_tab; /* keys: insn code and input operands */
+  bitmap_t curr_bb_av_gen, curr_bb_av_kill;
+};
+
+struct cse_context cse_context;
+#define exprs cse_context.exprs
+#define var2dep_expr cse_context.var2dep_expr
+#define memory_exprs cse_context.memory_exprs
+#define expr_tab cse_context.expr_tab
+#define curr_bb_av_gen cse_context.curr_bb_av_gen
+#define curr_bb_av_kill cse_context.curr_bb_av_kill
 
 static int op_eq (MIR_op_t op1, MIR_op_t op2) { return MIR_op_eq_p (op1, op2); }
 
@@ -1031,8 +1057,6 @@ static void create_exprs (void) {
 	add_expr (insn);
     }
 }
-
-static bitmap_t curr_bb_av_gen, curr_bb_av_kill;
 
 static void make_obsolete_var_exprs (size_t nel) {
   MIR_reg_t var = nel;
@@ -1289,14 +1313,49 @@ DEF_DLIST_CODE (var_occ_t, use_link);
 
 typedef DLIST (var_occ_t) bb_start_occ_list_t;
 DEF_VARR (bb_start_occ_list_t);
-static VARR (bb_start_occ_list_t) *bb_start_occ_list_varr;
-static bb_start_occ_list_t *bb_start_occ_lists;
 
 DEF_VARR (var_occ_t);
-static VARR (var_occ_t) *var_occs;
-
 DEF_HTAB (var_occ_t);
-static HTAB (var_occ_t) *var_occ_tab;
+
+typedef struct {
+  int producer_age, op_age;
+  var_occ_t producer; /* valid if producer_age == curr_producer_age */
+  var_occ_t op_var_use; /* valid if op_age == curr_op_age */
+} var_producer_t;
+
+DEF_VARR (var_producer_t);
+
+DEF_VARR (bb_insn_t);
+
+struct ccp_context {
+  VARR (bb_start_occ_list_t) *bb_start_occ_list_varr;
+  bb_start_occ_list_t *bb_start_occ_lists;
+  VARR (var_occ_t) *var_occs;
+  HTAB (var_occ_t) *var_occ_tab;
+  int curr_producer_age, curr_op_age;
+  var_producer_t *producers;
+  VARR (var_producer_t) *producer_varr;
+  bb_t ccp_end_bb;
+  bitmap_t bb_visited;
+  VARR (bb_t) *ccp_bbs;
+  VARR (var_occ_t) *ccp_var_occs;
+  VARR (bb_insn_t) *ccp_insns;
+};
+
+struct ccp_context ccp_context;
+#define bb_start_occ_list_varr ccp_context.bb_start_occ_list_varr
+#define bb_start_occ_lists ccp_context.bb_start_occ_lists
+#define var_occs ccp_context.var_occs
+#define var_occ_tab ccp_context.var_occ_tab
+#define curr_producer_age ccp_context.curr_producer_age
+#define curr_op_age ccp_context.curr_op_age
+#define producers ccp_context.producers
+#define producer_varr ccp_context.producer_varr
+#define ccp_end_bb ccp_context.ccp_end_bb
+#define bb_visited ccp_context.bb_visited
+#define ccp_bbs ccp_context.ccp_bbs
+#define ccp_var_occs ccp_context.ccp_var_occs
+#define ccp_insns ccp_context.ccp_insns
 
 static htab_hash_t var_occ_hash (var_occ_t vo) {
   gen_assert (vo->place.type != OCC_INSN);
@@ -1354,17 +1413,6 @@ static var_occ_t get_bb_var_occ (MIR_reg_t var, enum place_type type, bb_t bb) {
   return var_occ;
 }
 
-typedef struct {
-  int producer_age, op_age;
-  var_occ_t producer; /* valid if producer_age == curr_producer_age */
-  var_occ_t op_var_use; /* valid if op_age == curr_op_age */
-} var_producer_t;
-
-static int curr_producer_age, curr_op_age;
-static var_producer_t *producers;
-DEF_VARR (var_producer_t);
-static VARR (var_producer_t) *producer_varr;
-
 static var_occ_t get_var_def (MIR_reg_t var, bb_t bb) {
   var_occ_t var_occ;
   
@@ -1418,8 +1466,6 @@ static void process_op_use (MIR_op_t *op, bb_insn_t bb_insn) {
     break;
   }
 }
-
-static bb_t ccp_end_bb;
 
 static void process_bb_end (size_t el) {
   MIR_reg_t var = el;
@@ -1508,13 +1554,6 @@ static void finish_var_occs (void) {
   VARR_DESTROY (var_producer_t, producer_varr);
   HTAB_DESTROY (var_occ_t, var_occ_tab);
 }
-
-static bitmap_t bb_visited;
-
-static VARR (bb_t) *ccp_bbs;
-static VARR (var_occ_t) *ccp_var_occs;
-DEF_VARR (bb_insn_t);
-static VARR (bb_insn_t) *ccp_insns;
 
 static void initiate_ccp_info (void) {
   bb_insn_t bb_insn;
@@ -2588,12 +2627,18 @@ struct live_range {
   live_range_t next;
 };
 
-static int curr_point;
-static bitmap_t live_vars;
-
 DEF_VARR (live_range_t);
 
-static VARR (live_range_t) *var_live_ranges;
+struct lr_context {
+  int curr_point;
+  bitmap_t live_vars;
+  VARR (live_range_t) *var_live_ranges;
+};
+
+struct lr_context lr_context;
+#define curr_point lr_context.curr_point
+#define live_vars lr_context.live_vars
+#define var_live_ranges lr_context.var_live_ranges
 
 static live_range_t create_live_range (int start, int finish, live_range_t next) {
   live_range_t lr = gen_malloc (sizeof (struct live_range));
@@ -2804,29 +2849,39 @@ static void output_bb_live_info (bb_t bb) {
 /* Register allocation */
 
 DEF_VARR (MIR_reg_t);
+DEF_VARR (size_t);
 
-static VARR (MIR_reg_t) *breg_renumber;
+struct ra_context {
+  VARR (MIR_reg_t) *breg_renumber;
+  VARR (MIR_reg_t) *sorted_bregs;
+  VARR (bitmap_t) *point_used_locs;
+  bitmap_t conflict_locs;
+  reg_info_t *curr_breg_infos;
+  VARR (size_t) *loc_profits;
+  VARR (size_t) *loc_profit_ages;
+  size_t curr_age;
+  /* Slots num for variables.  Some variable can take several slots. */
+  size_t func_stack_slots_num;
+  bitmap_t func_assigned_hard_regs;
+};
 
-static VARR (MIR_reg_t) *sorted_bregs;
-
-static VARR (bitmap_t) *point_used_locs;
-  
-static bitmap_t conflict_locs;
-
-static reg_info_t *curr_breg_infos;
+struct ra_context ra_context;
+#define breg_renumber ra_context.breg_renumber
+#define sorted_bregs ra_context.sorted_bregs
+#define point_used_locs ra_context.point_used_locs
+#define conflict_locs ra_context.conflict_locs
+#define curr_breg_infos ra_context.curr_breg_infos
+#define loc_profits ra_context.loc_profits
+#define loc_profit_ages ra_context.loc_profit_ages
+#define curr_age ra_context.curr_age
+#define func_stack_slots_num ra_context.func_stack_slots_num
+#define func_assigned_hard_regs ra_context.func_assigned_hard_regs
 
 static int breg_info_compare_func (const void *a1, const void *a2) {
   MIR_reg_t br1 = *(const MIR_reg_t *) a1, br2 = *(const MIR_reg_t *) a2;
 
   return ((int) curr_breg_infos[br2].freq - (int) curr_breg_infos[br1].freq);
 }
-
-DEF_VARR (size_t);
-
-static VARR (size_t) *loc_profits;
-static VARR (size_t) *loc_profit_ages;
-
-static size_t curr_age;
 
 static void setup_loc_profit_from_op (MIR_op_t op) {
   MIR_reg_t loc;
@@ -2854,10 +2909,6 @@ static void setup_loc_profits (MIR_reg_t breg) {
   for (mv = DLIST_HEAD (src_mv_t, info->src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
     setup_loc_profit_from_op (mv->bb_insn->insn->ops[1]);
 }
-
-/* Slots num for variables.  Some variable can take several slots. */
-static size_t func_stack_slots_num;
-static bitmap_t func_assigned_hard_regs;
 
 static void assign (void) {
   MIR_reg_t loc, best_loc, i, reg, breg, var, nregs = get_nregs ();
@@ -3105,16 +3156,25 @@ typedef struct hreg_ref hreg_ref_t;
 
 DEF_VARR (hreg_ref_t);
 
-static VARR (size_t) *hreg_ref_ages;
-static VARR (hreg_ref_t) *hreg_refs;
-static hreg_ref_t *hreg_refs_addr;
-static size_t *hreg_ref_ages_addr;
+struct selection_context {
+  VARR (size_t) *hreg_ref_ages;
+  VARR (hreg_ref_t) *hreg_refs;
+  hreg_ref_t *hreg_refs_addr;
+  size_t *hreg_ref_ages_addr;
+  size_t curr_bb_hreg_ref_age;
+  size_t last_mem_ref_insn_num;
+  /* Output registers of def insns to delete the def insns after the substitution */
+  VARR (MIR_reg_t) *dead_def_regs;
+};
 
-static size_t curr_bb_hreg_ref_age;
-static size_t last_mem_ref_insn_num;
-
-/* Output registers of def insns to delete the def insns after the substitution */
-static VARR (MIR_reg_t) *dead_def_regs;
+struct selection_context selection_context;
+#define hreg_ref_ages selection_context.hreg_ref_ages
+#define hreg_refs selection_context.hreg_refs
+#define hreg_refs_addr selection_context.hreg_refs_addr
+#define hreg_ref_ages_addr selection_context.hreg_ref_ages_addr
+#define curr_bb_hreg_ref_age selection_context.curr_bb_hreg_ref_age
+#define last_mem_ref_insn_num selection_context.last_mem_ref_insn_num
+#define dead_def_regs selection_context.dead_def_regs
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
