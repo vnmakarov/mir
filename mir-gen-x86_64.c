@@ -85,9 +85,7 @@ static MIR_disp_t get_stack_slot_offset (MIR_type_t type, MIR_reg_t slot) { /* s
 	    + (curr_func_item->u.func->vararg_p ? reg_save_area_size : 0));
 }
 
-static int alloca_p;
-
-static MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
+static const MIR_insn_code_t two_op_insn_codes [] = { /* see possible patterns */
   MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, MIR_LDSUB,
   MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_LDMUL,
   MIR_DIV, MIR_DIVS, MIR_UDIV, MIR_FDIV, MIR_DDIV, MIR_LDDIV,
@@ -340,8 +338,56 @@ static void gen_mov (MIR_insn_t anchor, MIR_insn_code_t code, MIR_op_t dst_op, M
   gen_add_insn_before (anchor, MIR_new_insn (code, dst_op, src_op));
 }
 
-static int stack_arg_func_p;
-static int start_sp_from_bp_offset;
+DEF_VARR (int);
+DEF_VARR (uint8_t);
+DEF_VARR (uint64_t);
+
+struct insn_pattern_info {
+  int start, num;
+};
+
+typedef struct insn_pattern_info insn_pattern_info_t;
+
+DEF_VARR (insn_pattern_info_t);
+
+struct const_ref {
+  size_t pc; /* where rel32 address should be in code */
+  size_t const_num;
+};
+
+typedef struct const_ref const_ref_t;
+DEF_VARR (const_ref_t);
+
+struct label_ref {
+  size_t label_val_disp, next_insn_disp;
+  MIR_label_t label;
+};
+
+typedef struct label_ref label_ref_t;
+DEF_VARR (label_ref_t);
+
+struct x86_64_context {
+  int alloca_p;
+  int stack_arg_func_p;
+  int start_sp_from_bp_offset;
+  VARR (int) *pattern_indexes;
+  VARR (insn_pattern_info_t) *insn_pattern_info;
+  VARR (uint8_t) *result_code;
+  VARR (uint64_t) *const_pool;
+  VARR (const_ref_t) *const_refs;
+  VARR (label_ref_t) *label_refs;
+};
+
+struct x86_64_context x86_64_context;
+#define alloca_p x86_64_context.alloca_p
+#define stack_arg_func_p x86_64_context.stack_arg_func_p
+#define start_sp_from_bp_offset x86_64_context.start_sp_from_bp_offset
+#define pattern_indexes x86_64_context.pattern_indexes
+#define insn_pattern_info x86_64_context.insn_pattern_info
+#define result_code x86_64_context.result_code
+#define const_pool x86_64_context.const_pool
+#define const_refs x86_64_context.const_refs
+#define label_refs x86_64_context.label_refs
 
 static void machinize (void) {
   MIR_func_t func;
@@ -777,7 +823,7 @@ struct pattern {
   /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel32*/ \
   {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JUMP_OPCODE " l0"},
 
-static struct pattern patterns[] = {
+static const struct pattern patterns[] = {
   {MIR_MOV, "r z",  "Y 33 r0 R0"},     /* xor r0,r0 -- 32 bit xor */
   {MIR_MOV, "r r",  "X 8B r0 R1"},     /* mov r0,r1 */
   {MIR_MOV, "r m3", "X 8B r0 m1"},     /* mov r0,m1 */
@@ -987,18 +1033,6 @@ static int MIR_UNUSED uint16_p (int64_t v) { return 0 <= v && v <= UINT16_MAX; }
 static int int32_p (int64_t v) { return INT32_MIN <= v && v <= INT32_MAX; }
 static int uint32_p (int64_t v) { return 0 <= v && v <= UINT32_MAX; }
 
-DEF_VARR (int);
-static VARR (int) *pattern_indexes;
-
-struct insn_pattern_info {
-  int start, num;
-};
-
-typedef struct insn_pattern_info insn_pattern_info_t;
-
-DEF_VARR (insn_pattern_info_t);
-static VARR (insn_pattern_info_t) *insn_pattern_info;
-
 static int pattern_index_cmp (const void *a1, const void *a2) {
   int i1 = *(const int *) a1, i2 = *(const int *) a2;
   int c1 = (int) patterns[i1].code, c2 = (int) patterns[i2].code;
@@ -1033,7 +1067,7 @@ static void patterns_init (void) {
   info_addr[prev_code].num = n - info_addr[prev_code].start;
 }
 
-static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
+static int pattern_match_p (const struct pattern *pat, MIR_insn_t insn) {
   int nop, n;
   size_t nops = MIR_insn_nops (insn);
   const char *p;
@@ -1162,7 +1196,7 @@ static int pattern_match_p (struct pattern *pat, MIR_insn_t insn) {
 
 static const char *find_insn_pattern_replacement (MIR_insn_t insn) {
   int i;
-  struct pattern *pat;
+  const struct pattern *pat;
   insn_pattern_info_t info = VARR_GET (insn_pattern_info_t, insn_pattern_info, insn->code);
   
   for (i = 0; i < info.num; i++) {
@@ -1278,11 +1312,8 @@ static void setup_mem (MIR_mem_t mem, int *mod, int *rm, int *scale, int *base, 
   }
 }
 
-DEF_VARR (uint8_t);
-static VARR (uint8_t) *code;
-
 static void put_byte (int byte) {
-  VARR_PUSH (uint8_t, code, byte);
+  VARR_PUSH (uint8_t, result_code, byte);
 }
 
 static void put_uint64 (uint64_t v, int nb) {
@@ -1297,9 +1328,6 @@ static void set_int64 (uint8_t *addr, int64_t v, int nb) {
   }
 }
 
-DEF_VARR (uint64_t);
-static VARR (uint64_t) *const_pool;
-
 static size_t add_to_const_pool (uint64_t v) {
   uint64_t *addr = VARR_ADDR (uint64_t, const_pool);
   size_t n, len = VARR_LENGTH (uint64_t, const_pool);
@@ -1310,24 +1338,6 @@ static size_t add_to_const_pool (uint64_t v) {
   VARR_PUSH (uint64_t, const_pool, v);
   return len;
 }
-
-struct const_ref {
-  size_t pc; /* where rel32 address should be in code */
-  size_t const_num;
-};
-
-typedef struct const_ref const_ref_t;
-DEF_VARR (const_ref_t);
-static VARR (const_ref_t) *const_refs;
-
-struct label_ref {
-  size_t label_val_disp, next_insn_disp;
-  MIR_label_t label;
-};
-
-typedef struct label_ref label_ref_t;
-DEF_VARR (label_ref_t);
-static VARR (label_ref_t) *label_refs;
 
 static int setup_imm_addr (uint64_t v, int *mod, int *rm, int64_t *disp32) {
   const_ref_t cr;
@@ -1581,9 +1591,9 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       put_byte ((scale << 6) | (index << 3) | base);
     }
     if (const_ref_num >= 0)
-      VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, code);
+      VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, result_code);
     if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, code);
+      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
     if (disp8 >= 0)
       put_byte (disp8);
     if (disp32 >= 0)
@@ -1596,7 +1606,7 @@ static void out_insn (MIR_insn_t insn, const char *replacement) {
       put_uint64 (imm64, 8);
 
     if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, code);
+      VARR_ADDR (label_ref_t, label_refs)[label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
 
     if (ch == '\0')
       break;
@@ -1619,7 +1629,7 @@ static uint8_t *target_translate (size_t *len) {
   const char *replacement;
   
   gen_assert (curr_func_item->item_type == MIR_func_item);
-  VARR_TRUNC (uint8_t, code, 0);
+  VARR_TRUNC (uint8_t, result_code, 0);
   VARR_TRUNC (uint64_t, const_pool, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);
   VARR_TRUNC (label_ref_t, label_refs, 0);
@@ -1627,7 +1637,7 @@ static uint8_t *target_translate (size_t *len) {
        insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
-      set_label_disp (insn, VARR_LENGTH (uint8_t, code));
+      set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
     } else {
       replacement = find_insn_pattern_replacement (insn);
       if (replacement == NULL) {
@@ -1642,17 +1652,17 @@ static uint8_t *target_translate (size_t *len) {
   for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++){
     label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
     
-    set_int64 (&VARR_ADDR (uint8_t, code)[lr.label_val_disp],
+    set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
 	       (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp,
 	       4);
   }
   // ??? pool
-  *len = VARR_LENGTH (uint8_t, code);
-  return VARR_ADDR (uint8_t, code);
+  *len = VARR_LENGTH (uint8_t, result_code);
+  return VARR_ADDR (uint8_t, result_code);
 }
 
 static void target_init (void) {
-  VARR_CREATE (uint8_t, code, 0);
+  VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
   VARR_CREATE (const_ref_t, const_refs, 0);
   VARR_CREATE (label_ref_t, label_refs, 0);
@@ -1661,7 +1671,7 @@ static void target_init (void) {
 
 static void target_finish (void) {
   patterns_finish ();
-  VARR_DESTROY (uint8_t, code);
+  VARR_DESTROY (uint8_t, result_code);
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);
   VARR_DESTROY (label_ref_t, label_refs);
