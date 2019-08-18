@@ -328,8 +328,8 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
   return _MIR_publish_code (VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
 }
 
-/* save regs; _MIR_called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
-void *_MIR_get_wrapper (void *hook_address) {
+/* save regs; *called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
+void *_MIR_get_wrapper (MIR_item_t *called_func, void *hook_address) {
   static uint8_t push_rax[] = {  0x50,  /*push   %rax */ };
   static uint8_t wrap_end[] = {
     0x58, 				/*pop   %rax */
@@ -348,7 +348,7 @@ void *_MIR_get_wrapper (void *hook_address) {
   push_insns (push_rax, sizeof (push_rax));
   push_insns (save_pat, sizeof (save_pat));
   addr = push_insns (call_pat, sizeof (call_pat));
-  memcpy (addr + 2, &_MIR_called_func, sizeof (void *));
+  memcpy (addr + 2, called_func, sizeof (void *));
   memcpy (addr + 15, &hook_address, sizeof (void *));
   push_insns (restore_pat, sizeof (restore_pat));
   push_insns (wrap_end, sizeof (wrap_end));
