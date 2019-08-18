@@ -44,9 +44,40 @@ typedef enum {
   IC_INSN_BOUND
 } MIR_full_insn_code_t;
 
+DEF_VARR (MIR_val_t);
+
+struct interp_context {
 #if DIRECT_THREADED_DISPATCH
-static void **dispatch_label_tab;
+  void *dispatch_label_tab [IC_INSN_BOUND];
 #endif
+  VARR (MIR_val_t) *code_varr;
+  VARR (MIR_insn_t) *branches;
+  VARR (MIR_val_t) *arg_vals_varr;
+  MIR_val_t *arg_vals;
+#if MIR_INTERP_TRACE
+  int trace_insn_ident;
+#endif
+  void *(*bstart_builtin) (void);
+  void (*bend_builtin) (void *);
+  VARR (MIR_val_t) *call_res_args_varr;
+  MIR_val_t *call_res_args;
+  VARR (MIR_type_t) *call_arg_types_varr;
+  MIR_type_t *call_arg_types;
+};
+
+struct interp_context interpr_context;
+#define dispatch_label_tab interpr_context.dispatch_label_tab
+#define code_varr interpr_context.code_varr
+#define branches interpr_context.branches
+#define arg_vals_varr interpr_context.arg_vals_varr
+#define arg_vals interpr_context.arg_vals
+#define trace_ident interpr_context.trace_ident
+#define bstart_builtin interpr_context.bstart_builtin
+#define bend_builtin interpr_context.bend_builtin
+#define call_res_args_varr interpr_context.call_res_args_varr
+#define call_res_args interpr_context.call_res_args
+#define call_arg_types_varr interpr_context.call_arg_types_varr
+#define call_arg_types interpr_context.call_arg_types
 
 static void get_icode (MIR_val_t *v, int code) {
 #if DIRECT_THREADED_DISPATCH
@@ -76,11 +107,6 @@ static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
     return load_p ? IC_LDI64 : IC_STI64; /* to remove a warning */
   }
 }
-
-DEF_VARR (MIR_val_t);
-static VARR (MIR_val_t) *code_varr;
-
-static VARR (MIR_insn_t) *branches;
 
 static void push_mem (MIR_op_t op) {
   MIR_val_t v;
@@ -452,16 +478,10 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
 #define OPTIMIZE
 #endif
 
-static VARR (MIR_val_t) *args_varr;
-
-static MIR_val_t *args;
- 
 static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr, MIR_item_t proto_item,
-		  void *addr, code_t res_ops, size_t nargs, MIR_val_t *args);
+		  void *addr, code_t res_ops, size_t nargs);
 
 #if MIR_INTERP_TRACE
-static int trace_insn_ident;
-
 static void start_insn_trace (const char *name, func_desc_t func_desc, code_t pc, size_t nops) {
   code_t ops = pc + 1;
   
@@ -518,9 +538,6 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
 }
 #endif
 
-static void *(*bstart_builtin) (void);
-static void (*bend_builtin) (void *);
-
 static code_t call_insn_execute (code_t pc, MIR_val_t *bp, code_t ops, int imm_p) {
   int64_t nops = get_i (ops); /* #args w/o nop, insn, and ff interface address */
   MIR_insn_t insn = get_a (ops + 1);
@@ -528,17 +545,17 @@ static code_t call_insn_execute (code_t pc, MIR_val_t *bp, code_t ops, int imm_p
   void *func_addr = imm_p ? get_a (ops + 4) : *get_aop (bp, ops + 4);
   size_t start = proto_item->u.proto->nres + 5;
   
-  if (VARR_EXPAND (MIR_val_t, args_varr, nops))
-    args = VARR_ADDR (MIR_val_t, args_varr);
+  if (VARR_EXPAND (MIR_val_t, arg_vals_varr, nops))
+    arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   
   for (size_t i = start; i < nops + 3; i++)
-    args[i - start] = bp [get_i (ops + i)];
+    arg_vals[i - start] = bp [get_i (ops + i)];
   
 #if MIR_INTERP_TRACE
   trace_insn_ident += 2;
 #endif
   call (bp, &insn->ops[proto_item->u.proto->nres + 2] /* arg ops */, ops + 2 /* ffi address holder */,
-	proto_item, func_addr, ops + 5 /* results start */, nops - start + 3 /* arg # */, args);
+	proto_item, func_addr, ops + 5 /* results start */, nops - start + 3 /* arg # */);
 #if MIR_INTERP_TRACE
   trace_insn_ident -= 2;
 #endif
@@ -558,7 +575,7 @@ static void OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp, MIR_val_t *resu
 #endif
 
 #if DIRECT_THREADED_DISPATCH
-  static void *ltab [IC_INSN_BOUND];
+  void **ltab = dispatch_label_tab;
 
   if (bp == NULL)
     {
@@ -648,7 +665,7 @@ static void OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp, MIR_val_t *resu
       ltab [IC_MOVI] = &&L_IC_MOVI; ltab [IC_MOVP] = &&L_IC_MOVP;
       ltab [IC_MOVF] = &&L_IC_MOVF; ltab [IC_MOVD] = &&L_IC_MOVD; ltab [IC_MOVLD] = &&L_IC_MOVLD;
       ltab [IC_IMM_CALL] = &&L_IC_IMM_CALL;
-      results->a = ltab; return;
+      return;
     }
   
 #define CASE(value, nops) L_ ## value: START_INSN(value, nops)
@@ -1026,18 +1043,11 @@ static void OPTIMIZE eval (func_desc_t func_desc, MIR_val_t *bp, MIR_val_t *resu
 #endif
 }
 
-static inline func_desc_t
-get_func_desc (MIR_item_t func_item) {
+static inline func_desc_t get_func_desc (MIR_item_t func_item) {
   mir_assert (func_item->item_type == MIR_func_item);
   return func_item->data;
 }
 
-static VARR (MIR_val_t) *call_res_args_varr;
-static MIR_val_t *call_res_args;
- 
-static VARR (MIR_type_t) *call_arg_types_varr;
-static MIR_type_t *call_arg_types;
- 
 struct ff_interface {
   size_t nres, nargs;
   MIR_type_t *res_types, *arg_types;
@@ -1047,7 +1057,13 @@ struct ff_interface {
 typedef struct ff_interface *ff_interface_t;
 
 DEF_HTAB (ff_interface_t);
-static HTAB (ff_interface_t) *ff_interface_tab;
+
+struct ff_interface_context {
+  HTAB (ff_interface_t) *ff_interface_tab;
+};
+
+struct ff_interface_context ff_interface_context;
+#define ff_interface_tab ff_interface_context.ff_interface_tab
 
 static htab_hash_t ff_interface_hash (ff_interface_t i) {
   return mir_hash_finish (mir_hash_step
@@ -1086,7 +1102,7 @@ static void *get_ff_interface (size_t nres, MIR_type_t *res_types, size_t nargs,
 }
 
 static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr, MIR_item_t proto_item,
-		  void *addr, code_t res_ops, size_t nargs, MIR_val_t *args) {
+		  void *addr, code_t res_ops, size_t nargs) {
   size_t i, arg_vars_num, nres;
   MIR_val_t val, *res;
   MIR_type_t type;
@@ -1130,23 +1146,23 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
   
   for (i = 0; i < nargs; i++) {
     if (i >= arg_vars_num) {
-      call_res_args[i + nres] = args[i];
+      call_res_args[i + nres] = arg_vals[i];
       continue;
     }
     type = arg_vars[i].type;
     switch (type) {
-    case MIR_T_I8: call_res_args[i + nres].i = (int8_t) (args[i].i); break;
-    case MIR_T_U8: call_res_args[i + nres].u = (uint8_t) (args[i].i); break;
-    case MIR_T_I16: call_res_args[i + nres].i = (int16_t) (args[i].i); break;
-    case MIR_T_U16: call_res_args[i + nres].u = (uint16_t) (args[i].i); break;
-    case MIR_T_I32: call_res_args[i + nres].i = (int32_t) (args[i].i); break;
-    case MIR_T_U32: call_res_args[i + nres].u = (uint32_t) (args[i].i); break;
-    case MIR_T_I64: call_res_args[i + nres].i = (int64_t) (args[i].i); break;
-    case MIR_T_U64: call_res_args[i + nres].u = (uint64_t) (args[i].i); break;
-    case MIR_T_F: call_res_args[i + nres].f = args[i].f; break;
-    case MIR_T_D: call_res_args[i + nres].d = args[i].d; break;
-    case MIR_T_LD: call_res_args[i + nres].ld = args[i].ld; break;
-    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) args[i].a; break;
+    case MIR_T_I8: call_res_args[i + nres].i = (int8_t) (arg_vals[i].i); break;
+    case MIR_T_U8: call_res_args[i + nres].u = (uint8_t) (arg_vals[i].i); break;
+    case MIR_T_I16: call_res_args[i + nres].i = (int16_t) (arg_vals[i].i); break;
+    case MIR_T_U16: call_res_args[i + nres].u = (uint16_t) (arg_vals[i].i); break;
+    case MIR_T_I32: call_res_args[i + nres].i = (int32_t) (arg_vals[i].i); break;
+    case MIR_T_U32: call_res_args[i + nres].u = (uint32_t) (arg_vals[i].i); break;
+    case MIR_T_I64: call_res_args[i + nres].i = (int64_t) (arg_vals[i].i); break;
+    case MIR_T_U64: call_res_args[i + nres].u = (uint64_t) (arg_vals[i].i); break;
+    case MIR_T_F: call_res_args[i + nres].f = arg_vals[i].f; break;
+    case MIR_T_D: call_res_args[i + nres].d = arg_vals[i].d; break;
+    case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
+    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
     default:
       mir_assert (FALSE);
     }
@@ -1176,13 +1192,12 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
 static void interp_init (void) {
 #if DIRECT_THREADED_DISPATCH
   MIR_val_t v;
-  eval (NULL, NULL, &v);
-  dispatch_label_tab = v.a;
+  eval (NULL, NULL, NULL);
 #endif
   VARR_CREATE (MIR_insn_t, branches, 0);
   VARR_CREATE (MIR_val_t, code_varr, 0);
-  VARR_CREATE (MIR_val_t, args_varr, 0);
-  args = VARR_ADDR (MIR_val_t, args_varr);
+  VARR_CREATE (MIR_val_t, arg_vals_varr, 0);
+  arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   VARR_CREATE (MIR_val_t, call_res_args_varr, 0);
   VARR_CREATE (MIR_type_t, call_arg_types_varr, 0);
   call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
@@ -1198,7 +1213,7 @@ static void interp_init (void) {
 static void interp_finish (void) {
   VARR_DESTROY (MIR_insn_t, branches);
   VARR_DESTROY (MIR_val_t, code_varr);
-  VARR_DESTROY (MIR_val_t, args_varr);
+  VARR_DESTROY (MIR_val_t, arg_vals_varr);
   VARR_DESTROY (MIR_val_t, call_res_args_varr);
   VARR_DESTROY (MIR_type_t, call_arg_types_varr);
   HTAB_CLEAR (ff_interface_t, ff_interface_tab, ff_interface_clear);
@@ -1234,12 +1249,12 @@ void MIR_interp (MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...) {
   size_t i;
   MIR_val_t res;
   
-  if (VARR_EXPAND (MIR_val_t, args_varr, nargs))
-    args = VARR_ADDR (MIR_val_t, args_varr);
+  if (VARR_EXPAND (MIR_val_t, arg_vals_varr, nargs))
+    arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
-    args[i] = va_arg (argp, MIR_val_t);
-  interp_arr_varg (func_item, results, nargs, args, argp);
+    arg_vals[i] = va_arg (argp, MIR_val_t);
+  interp_arr_varg (func_item, results, nargs, arg_vals, argp);
 }
 
 void MIR_interp_arr_varg (MIR_item_t func_item, MIR_val_t *results,
@@ -1278,33 +1293,33 @@ static void interp (MIR_item_t func_item, va_list va, MIR_val_t *results) {
 
   nargs = func->nargs;
   arg_vars = VARR_ADDR (MIR_var_t, func->vars);
-  if (VARR_EXPAND (MIR_val_t, args_varr, nargs))
-    args = VARR_ADDR (MIR_val_t, args_varr);
+  if (VARR_EXPAND (MIR_val_t, arg_vals_varr, nargs))
+    arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = arg_vars[i].type;
     switch (type) {
-    case MIR_T_I8: args[i].i = (int8_t) va_arg (va, int32_t); break;
-    case MIR_T_I16: args[i].i = (int16_t) va_arg (va, int32_t); break;
-    case MIR_T_I32: args[i].i = va_arg (va, int32_t); break;
-    case MIR_T_I64: args[i].i = va_arg (va, int64_t); break;
-    case MIR_T_U8: args[i].i = (uint8_t) va_arg (va, uint32_t); break;
-    case MIR_T_U16: args[i].i = (uint16_t) va_arg (va, uint32_t); break;
-    case MIR_T_U32: args[i].i = va_arg (va, uint32_t); break;
-    case MIR_T_U64: args[i].i = va_arg (va, uint64_t); break;
+    case MIR_T_I8: arg_vals[i].i = (int8_t) va_arg (va, int32_t); break;
+    case MIR_T_I16: arg_vals[i].i = (int16_t) va_arg (va, int32_t); break;
+    case MIR_T_I32: arg_vals[i].i = va_arg (va, int32_t); break;
+    case MIR_T_I64: arg_vals[i].i = va_arg (va, int64_t); break;
+    case MIR_T_U8: arg_vals[i].i = (uint8_t) va_arg (va, uint32_t); break;
+    case MIR_T_U16: arg_vals[i].i = (uint16_t) va_arg (va, uint32_t); break;
+    case MIR_T_U32: arg_vals[i].i = va_arg (va, uint32_t); break;
+    case MIR_T_U64: arg_vals[i].i = va_arg (va, uint64_t); break;
     case MIR_T_F: {
       union {double d; float f;} u;
       u.d = va_arg (va, double);
-      args[i].f = u.f;
+      arg_vals[i].f = u.f;
       break;
     }
-    case MIR_T_D: args[i].d = va_arg (va, double); break;
-    case MIR_T_LD: args[i].ld = va_arg (va, long double); break;
-    case MIR_T_P: args[i].a = va_arg (va, void *); break;
+    case MIR_T_D: arg_vals[i].d = va_arg (va, double); break;
+    case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
+    case MIR_T_P: arg_vals[i].a = va_arg (va, void *); break;
     default:
       mir_assert (FALSE);
     }
   }
-  interp_arr_varg (func_item, results, nargs, args, va);
+  interp_arr_varg (func_item, results, nargs, arg_vals, va);
 }
 
 static void redirect_interface_to_interp (MIR_item_t func_item) {
