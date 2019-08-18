@@ -458,9 +458,6 @@ extern void MIR_interp_arr_varg (MIR_item_t func_item, MIR_val_t *results,
 				 size_t nargs, MIR_val_t *vals, va_list va);
 extern void MIR_set_interp_interface (MIR_item_t func_item);
 
-/* For internal use only:  */
-extern MIR_item_t _MIR_called_func;
-
 extern const char *_MIR_uniq_string (const char *str);
 extern int _MIR_reserved_ref_name_p (const char *name);
 extern int _MIR_reserved_name_p (const char *name);

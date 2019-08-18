@@ -2732,10 +2732,6 @@ static void code_finish (void) {
   machine_finish ();
 }
 
-/* Used by interpreter for calling through C interface and generator
-   for lazy JIT compilation. */
-MIR_item_t _MIR_called_func;
-
 
 
 #if MIR_IO
