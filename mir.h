@@ -480,7 +480,7 @@ extern MIR_item_t _MIR_builtin_proto (MIR_module_t module, const char *name,
 				      size_t nres, MIR_type_t *res_types, size_t nargs, ...);
 extern MIR_item_t _MIR_builtin_func (MIR_module_t module, const char *name, void *addr);
 
-extern uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len);
+extern uint8_t *_MIR_publish_code (const uint8_t *code, size_t code_len);
 
 struct MIR_code_reloc {
   size_t offset;

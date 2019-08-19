@@ -2719,7 +2719,7 @@ struct machine_code_context {
 #define code_holders context->machine_code_context->code_holders
 #define page_size context->machine_code_context->page_size
 
-uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
+uint8_t *_MIR_publish_code (const uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
   size_t len;
   int new_p = TRUE;
