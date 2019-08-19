@@ -3,14 +3,14 @@
 */
 
 void *_MIR_get_bstart_builtin (void) {
-  static uint8_t bstart_code[] = {
+  static const uint8_t bstart_code[] = {
     0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */
     0xc3,                         /* ret */
   };
   return _MIR_publish_code (bstart_code, sizeof (bstart_code));
 }
 void *_MIR_get_bend_builtin (void) {
-  static uint8_t bend_code[] = {
+  static const uint8_t bend_code[] = {
     0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
     0x48, 0x89, 0xfc,       /* rsp = rdi */
     0xff, 0xe0,             /* jmp *rax */
@@ -56,7 +56,7 @@ void va_end_interp_builtin (void *p) { }
 /* r11=<address to go to>; r10=<address of func item>; jump *r11  */
 void *_MIR_get_thunk (MIR_item_t item) {
   void *res;
-  static uint8_t pattern[] = {
+  static const uint8_t pattern[] = {
     0x49, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0, /* 0x0: movabsq 0, r11 */
     0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0xa: movabsq 0, r10 */
     0x41, 0xff, 0xe3, /* 0x14: jmpq   *%r11 */
@@ -84,7 +84,7 @@ MIR_item_t _MIR_get_thunk_func (void *thunk) {
   return res;
 }
 
-static uint8_t save_pat[] = {
+static const uint8_t save_pat[] = {
   0x48, 0x81, 0xec, 0x80, 0, 0, 0, 	/*sub    $0x80,%rsp		   */
   0xf3, 0x0f, 0x7f, 0x04, 0x24,       	/*movdqu %xmm0,(%rsp)		   */
   0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,   /*movdqu %xmm1,0x10(%rsp)	   */
@@ -102,7 +102,7 @@ static uint8_t save_pat[] = {
   0x57,                   		/*push   %rdi			   */
 };
 
-static uint8_t restore_pat[] = {
+static const uint8_t restore_pat[] = {
   0x5f,                   		/*pop    %rdi			   */
   0x5e,                   		/*pop    %rsi			   */
   0x5a,                   		/*pop    %rdx			   */
@@ -122,15 +122,15 @@ static uint8_t restore_pat[] = {
 
 VARR (uint8_t) *machine_insns;
 
-static uint8_t *push_insns (uint8_t *pat, size_t pat_len) {
+static uint8_t *push_insns (const uint8_t *pat, size_t pat_len) {
   for (size_t i = 0; i < pat_len; i++)
     VARR_PUSH (uint8_t, machine_insns, pat[i]);
   return VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns) - pat_len;
 }
 
 static void gen_mov (uint32_t offset, uint32_t reg, int ld_p) {
-  static uint8_t ld_gp_reg[] = { 0x48, 0x8b, 0x83, 0, 0, 0, 0 /* mov <offset>(%rbx),%reg */ };
-  static uint8_t st_gp_reg[] = { 0x48, 0x89, 0x83, 0, 0, 0, 0 /* mov %reg,<offset>(%rbx) */ };
+  static const uint8_t ld_gp_reg[] = { 0x48, 0x8b, 0x83, 0, 0, 0, 0 /* mov <offset>(%rbx),%reg */ };
+  static const uint8_t st_gp_reg[] = { 0x48, 0x89, 0x83, 0, 0, 0, 0 /* mov %reg,<offset>(%rbx) */ };
   uint8_t *addr = push_insns (ld_p ? ld_gp_reg : st_gp_reg, ld_p ? sizeof (ld_gp_reg) : sizeof (st_gp_reg));
   memcpy (addr + 3, &offset, sizeof (uint32_t));
   assert (reg <= 15);
@@ -138,8 +138,8 @@ static void gen_mov (uint32_t offset, uint32_t reg, int ld_p) {
 }
 
 static void gen_movxmm (uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
-  static uint8_t ld_xmm_reg_pat[] = { 0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */ };
-  static uint8_t st_xmm_reg_pat[] = {
+  static const uint8_t ld_xmm_reg_pat[] = { 0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */ };
+  static const uint8_t st_xmm_reg_pat[] = {
     0xf2, 0x0f, 0x11, 0x83, 0, 0, 0, 0 /* movs[sd] %xmm, <offset>(%rbx) */
   };
   uint8_t *addr = push_insns (ld_p ? ld_xmm_reg_pat : st_xmm_reg_pat,
@@ -152,7 +152,7 @@ static void gen_movxmm (uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
 }
 
 static void gen_ldst (uint32_t sp_offset, uint32_t src_offset, int b64_p) {
-  static uint8_t ldst_pat[] = {
+  static const uint8_t ldst_pat[] = {
     0x44, 0x8b, 0x93, 0, 0, 0, 0,       /* mov    <src_offset>(%rbx),%r10 */
     0x44, 0x89, 0x94, 0x24, 0, 0, 0, 0, /* mov    %r10,<sp_offset>(%sp) */
   };
@@ -166,7 +166,7 @@ static void gen_ldst (uint32_t sp_offset, uint32_t src_offset, int b64_p) {
 }
 
 static void gen_ldst80 (uint32_t sp_offset, uint32_t src_offset) {
-  static uint8_t ldst80_pat[] = {
+  static uint8_t const ldst80_pat[] = {
     0xdb, 0xab, 0, 0, 0, 0,       /* fldt   <src_offset>(%rbx) */
     0xdb, 0xbc, 0x24, 0, 0, 0, 0, /* fstpt  <sp_offset>(%sp) */
   };
@@ -176,7 +176,7 @@ static void gen_ldst80 (uint32_t sp_offset, uint32_t src_offset) {
 }
 
 static void gen_st80 (uint32_t src_offset) {
-  static uint8_t st80_pat[] = { 0xdb, 0xbb, 0, 0, 0, 0 /* fstpt   <src_offset>(%rbx) */ };
+  static const uint8_t st80_pat[] = { 0xdb, 0xbb, 0, 0, 0, 0 /* fstpt   <src_offset>(%rbx) */ };
   memcpy (push_insns (st80_pat, sizeof (st80_pat)) + 2, &src_offset, sizeof (uint32_t));
 }
 
@@ -187,22 +187,22 @@ static void gen_st80 (uint32_t src_offset) {
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
    pop rbx; ret. */
 void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types) {
-  static uint8_t prolog[] = {
+  static const uint8_t prolog[] = {
     0x53, /* pushq %rbx */
     0x48, 0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
     0x49, 0x89, 0xfb, /* mov $rdi, $r11 -- fun addr */
     0x48, 0x89, 0xf3, /* mov $rsi, $rbx -- result/arg addresses */
   };
-  static uint8_t call_end[] = {
+  static const uint8_t call_end[] = {
     0x48, 0xc7, 0xc0, 0x08, 0, 0, 0,    /* mov $8, rax -- to save xmm varargs */
     0x41, 0xff, 0xd3,             	/* callq  *%r11	   */
     0x48, 0x81, 0xc4, 0, 0, 0, 0, /* addq <sp_offset>, %rsp */
   };
-  static uint8_t epilog[] = {
+  static const uint8_t epilog[] = {
     0x5b, /* pop %rbx */
     0xc3, /* ret */
   };
-  static uint8_t iregs[] = {7, 6, 2, 1, 8, 9}; /* rdi, rsi, rdx, rcx, r8, r9 */
+  static const uint8_t iregs[] = {7, 6, 2, 1, 8, 9}; /* rdi, rsi, rdx, rcx, r8, r9 */
   uint32_t n_iregs = 0, n_xregs = 0, n_fregs, sp_offset = 0;
   uint8_t *addr;
 
@@ -253,8 +253,8 @@ void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_ty
 }
 
 void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
-  static uint8_t push_rbx[] = {  0x53, /*push   %rbx  */ };
-  static uint8_t prepare_pat[] = {
+  static const uint8_t push_rbx[] = {  0x53, /*push   %rbx  */ };
+  static const uint8_t prepare_pat[] = {
     /*  0: */ 0x48, 0x83, 0xec, 0x20,             /* sub    32,%rsp	     */
     /*  4: */ 0x48, 0x89, 0xe6,			  /* mov    %rsp,%rsi	     */
     /*  7: */ 0xc7, 0x06, 0, 0, 0, 0,		  /* movl   0,(%rsi)	     */
@@ -270,16 +270,16 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
     /* 40: */ 0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <handler>,%rax    */
     /* 4a: */ 0xff, 0xd0,			  /* callq  *%rax            */
   };
-  static uint8_t shim_end[] = {
+  static const uint8_t shim_end[] = {
     /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, 	/*add    208+n,%rsp*/
     /* 7: */ 0x5b,                              /*pop          %rbx*/
     /* 8: */ 0xc3,                   	        /*retq             */
   };
-  static uint8_t ld_pat[] = {0x48, 0x8b, 0x83, 0, 0, 0, 0}; /* movss <offset>(%rbx), %xmm[01] */
-  static uint8_t movss_pat[] = {0xf3, 0x0f, 0x10, 0x83, 0, 0, 0, 0}; /* movss <offset>(%rbx), %xmm[01] */
-  static uint8_t movsd_pat[] = {0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0}; /* movsd <offset>(%rbx), %xmm[01] */
-  static uint8_t fldt_pat[] = {0xdb, 0xab, 0, 0, 0, 0}; /* fldt <offset>(%rbx) */
-  static uint8_t fxch_pat[] = {0xd9, 0xc9}; /* fxch */
+  static const uint8_t ld_pat[] = {0x48, 0x8b, 0x83, 0, 0, 0, 0}; /* movss <offset>(%rbx), %xmm[01] */
+  static const uint8_t movss_pat[] = {0xf3, 0x0f, 0x10, 0x83, 0, 0, 0, 0}; /* movss <offset>(%rbx), %xmm[01] */
+  static const uint8_t movsd_pat[] = {0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0}; /* movsd <offset>(%rbx), %xmm[01] */
+  static const uint8_t fldt_pat[] = {0xdb, 0xab, 0, 0, 0, 0}; /* fldt <offset>(%rbx) */
+  static const uint8_t fxch_pat[] = {0xd9, 0xc9}; /* fxch */
   uint8_t *addr;
   uint32_t imm, n, n_iregs, n_xregs, n_fregs, offset;
   uint32_t nres = func_item->u.func->nres;
@@ -330,12 +330,12 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
 
 /* save regs; *called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
 void *_MIR_get_wrapper (MIR_item_t *called_func, void *hook_address) {
-  static uint8_t push_rax[] = {  0x50,  /*push   %rax */ };
-  static uint8_t wrap_end[] = {
+  static const uint8_t push_rax[] = {  0x50,  /*push   %rax */ };
+  static const uint8_t wrap_end[] = {
     0x58, 				/*pop   %rax */
     0x41, 0xff, 0xe2,          		/*jmpq   *%r10			   */
   };
-  static uint8_t call_pat[] = {
+  static const uint8_t call_pat[] = {
     0x49, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0,	/*movabs &_MIR_call_func,%r11  	   */
     0x4d, 0x89, 0x13,                   /*mov %r10, (%r11) 		   */
     0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0,	/*movabs <hook_address>,%r10  	   */
