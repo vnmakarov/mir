@@ -98,6 +98,14 @@ static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
 typedef struct func_cfg *func_cfg_t;
 
+struct target_context;
+struct data_flow_context;
+struct cse_context;
+struct ccp_context;
+struct lr_context;
+struct ra_context;
+struct selection_context;
+
 struct gen_context {
   MIR_item_t curr_func_item;
 #if MIR_GEN_DEBUG
@@ -107,18 +115,25 @@ struct gen_context {
   bitmap_t call_used_hard_regs;
   func_cfg_t curr_cfg;
   size_t curr_bb_index;
+  struct target_context *target_context;
+  struct data_flow_context *data_flow_context;
+  struct cse_context *cse_context;
+  struct ccp_context *ccp_context;
+  struct lr_context *lr_context;
+  struct ra_context *ra_context;
+  struct selection_context *selection_context;
 };
 
-struct gen_context gen_context;
-#define curr_func_item gen_context.curr_func_item
-#define debug_file gen_context.debug_file
-#define insn_to_consider gen_context.insn_to_consider
-#define temp_bitmap gen_context.temp_bitmap
-#define temp_bitmap2 gen_context.temp_bitmap2
-#define all_vars gen_context.all_vars
-#define call_used_hard_regs gen_context.call_used_hard_regs
-#define curr_cfg gen_context.curr_cfg
-#define curr_bb_index gen_context.curr_bb_index
+static struct gen_context *gen_context;
+#define curr_func_item gen_context->curr_func_item
+#define debug_file gen_context->debug_file
+#define insn_to_consider gen_context->insn_to_consider
+#define temp_bitmap gen_context->temp_bitmap
+#define temp_bitmap2 gen_context->temp_bitmap2
+#define all_vars gen_context->all_vars
+#define call_used_hard_regs gen_context->call_used_hard_regs
+#define curr_cfg gen_context->curr_cfg
+#define curr_bb_index gen_context->curr_bb_index
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -812,10 +827,9 @@ struct data_flow_context {
   bitmap_t bb_to_consider;
 };
 
-struct data_flow_context data_flow_context;
-#define worklist data_flow_context.worklist
-#define pending data_flow_context.pending
-#define bb_to_consider data_flow_context.bb_to_consider
+#define worklist gen_context->data_flow_context->worklist
+#define pending gen_context->data_flow_context->pending
+#define bb_to_consider gen_context->data_flow_context->bb_to_consider
 
 static void  solve_dataflow (int forward_p, void (*con_func_0) (bb_t), int (*con_func_n) (bb_t),
 			     int (*trans_func) (bb_t)) {
@@ -867,6 +881,20 @@ static void  solve_dataflow (int forward_p, void (*con_func_0) (bb_t), int (*con
   }
 }
 
+static void init_data_flow (void) {
+  gen_context->data_flow_context = gen_malloc (sizeof (struct data_flow_context));
+  VARR_CREATE (bb_t, worklist, 0);
+  VARR_CREATE (bb_t, pending, 0);
+  bb_to_consider = bitmap_create2 (512);
+}
+
+static void finish_data_flow (void) {
+  VARR_DESTROY (bb_t, worklist);
+  VARR_DESTROY (bb_t, pending);
+  bitmap_destroy (bb_to_consider);
+  free (gen_context->data_flow_context); gen_context->data_flow_context = NULL;
+}
+
 
 
 /* Common Sub-expression Elimination.  */
@@ -895,13 +923,12 @@ struct cse_context {
   bitmap_t curr_bb_av_gen, curr_bb_av_kill;
 };
 
-struct cse_context cse_context;
-#define exprs cse_context.exprs
-#define var2dep_expr cse_context.var2dep_expr
-#define memory_exprs cse_context.memory_exprs
-#define expr_tab cse_context.expr_tab
-#define curr_bb_av_gen cse_context.curr_bb_av_gen
-#define curr_bb_av_kill cse_context.curr_bb_av_kill
+#define exprs gen_context->cse_context->exprs
+#define var2dep_expr gen_context->cse_context->var2dep_expr
+#define memory_exprs gen_context->cse_context->memory_exprs
+#define expr_tab gen_context->cse_context->expr_tab
+#define curr_bb_av_gen gen_context->cse_context->curr_bb_av_gen
+#define curr_bb_av_kill gen_context->cse_context->curr_bb_av_kill
 
 static int op_eq (MIR_op_t op1, MIR_op_t op2) { return MIR_op_eq_p (op1, op2); }
 
@@ -1268,6 +1295,22 @@ static void cse_clear (void) {
   bitmap_clear (memory_exprs);
 }
 
+static void init_cse (void) {
+  gen_context->cse_context = gen_malloc (sizeof (struct cse_context));
+  VARR_CREATE (expr_t, exprs, 512);
+  VARR_CREATE (bitmap_t, var2dep_expr, 512);
+  memory_exprs = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq);
+}
+
+static void finish_cse (void) {
+  VARR_DESTROY (expr_t, exprs);
+  bitmap_destroy (memory_exprs);
+  VARR_DESTROY (bitmap_t, var2dep_expr);
+  HTAB_DESTROY (expr_t, expr_tab);
+  free (gen_context->cse_context); gen_context->cse_context = NULL;
+}
+
 #undef av_in
 #undef av_out
 #undef av_kill
@@ -1342,20 +1385,19 @@ struct ccp_context {
   VARR (bb_insn_t) *ccp_insns;
 };
 
-struct ccp_context ccp_context;
-#define bb_start_occ_list_varr ccp_context.bb_start_occ_list_varr
-#define bb_start_occ_lists ccp_context.bb_start_occ_lists
-#define var_occs ccp_context.var_occs
-#define var_occ_tab ccp_context.var_occ_tab
-#define curr_producer_age ccp_context.curr_producer_age
-#define curr_op_age ccp_context.curr_op_age
-#define producers ccp_context.producers
-#define producer_varr ccp_context.producer_varr
-#define ccp_end_bb ccp_context.ccp_end_bb
-#define bb_visited ccp_context.bb_visited
-#define ccp_bbs ccp_context.ccp_bbs
-#define ccp_var_occs ccp_context.ccp_var_occs
-#define ccp_insns ccp_context.ccp_insns
+#define bb_start_occ_list_varr gen_context->ccp_context->bb_start_occ_list_varr
+#define bb_start_occ_lists gen_context->ccp_context->bb_start_occ_lists
+#define var_occs gen_context->ccp_context->var_occs
+#define var_occ_tab gen_context->ccp_context->var_occ_tab
+#define curr_producer_age gen_context->ccp_context->curr_producer_age
+#define curr_op_age gen_context->ccp_context->curr_op_age
+#define producers gen_context->ccp_context->producers
+#define producer_varr gen_context->ccp_context->producer_varr
+#define ccp_end_bb gen_context->ccp_context->ccp_end_bb
+#define bb_visited gen_context->ccp_context->bb_visited
+#define ccp_bbs gen_context->ccp_context->ccp_bbs
+#define ccp_var_occs gen_context->ccp_context->ccp_var_occs
+#define ccp_insns gen_context->ccp_context->ccp_insns
 
 static htab_hash_t var_occ_hash (var_occ_t vo) {
   gen_assert (vo->place.type != OCC_INSN);
@@ -2393,6 +2435,7 @@ static void ccp_clear (void) {
 }
 
 static void init_ccp (void) {
+  gen_context->ccp_context = gen_malloc (sizeof (struct ccp_context));
   init_var_occs ();
   VARR_CREATE (bb_t, ccp_bbs, 256);
   VARR_CREATE (var_occ_t, ccp_var_occs, 256);
@@ -2404,6 +2447,7 @@ static void finish_ccp (void) {
   VARR_DESTROY (bb_t, ccp_bbs);
   VARR_DESTROY (var_occ_t, ccp_var_occs);
   VARR_DESTROY (bb_insn_t, ccp_insns);
+  free (gen_context->ccp_context); gen_context->ccp_context = NULL;
 }
 
 #undef live_in
@@ -2635,10 +2679,9 @@ struct lr_context {
   VARR (live_range_t) *var_live_ranges;
 };
 
-struct lr_context lr_context;
-#define curr_point lr_context.curr_point
-#define live_vars lr_context.live_vars
-#define var_live_ranges lr_context.var_live_ranges
+#define curr_point gen_context->lr_context->curr_point
+#define live_vars gen_context->lr_context->live_vars
+#define var_live_ranges gen_context->lr_context->var_live_ranges
 
 static live_range_t create_live_range (int start, int finish, live_range_t next) {
   live_range_t lr = gen_malloc (sizeof (struct live_range));
@@ -2839,6 +2882,18 @@ static void output_bb_live_info (bb_t bb) {
 }
 #endif
 
+static void init_live_ranges (void) {
+  gen_context->lr_context = gen_malloc (sizeof (struct lr_context));
+  VARR_CREATE (live_range_t, var_live_ranges, 0);
+  live_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+}
+
+static void finish_live_ranges (void) {
+  VARR_DESTROY (live_range_t, var_live_ranges);
+  bitmap_destroy (live_vars);
+  free (gen_context->lr_context); gen_context->lr_context = NULL;
+}
+
 #undef live_in
 #undef live_out
 #undef live_kill
@@ -2865,17 +2920,16 @@ struct ra_context {
   bitmap_t func_assigned_hard_regs;
 };
 
-struct ra_context ra_context;
-#define breg_renumber ra_context.breg_renumber
-#define sorted_bregs ra_context.sorted_bregs
-#define point_used_locs ra_context.point_used_locs
-#define conflict_locs ra_context.conflict_locs
-#define curr_breg_infos ra_context.curr_breg_infos
-#define loc_profits ra_context.loc_profits
-#define loc_profit_ages ra_context.loc_profit_ages
-#define curr_age ra_context.curr_age
-#define func_stack_slots_num ra_context.func_stack_slots_num
-#define func_assigned_hard_regs ra_context.func_assigned_hard_regs
+#define breg_renumber gen_context->ra_context->breg_renumber
+#define sorted_bregs gen_context->ra_context->sorted_bregs
+#define point_used_locs gen_context->ra_context->point_used_locs
+#define conflict_locs gen_context->ra_context->conflict_locs
+#define curr_breg_infos gen_context->ra_context->curr_breg_infos
+#define loc_profits gen_context->ra_context->loc_profits
+#define loc_profit_ages gen_context->ra_context->loc_profit_ages
+#define curr_age gen_context->ra_context->curr_age
+#define func_stack_slots_num gen_context->ra_context->func_stack_slots_num
+#define func_assigned_hard_regs gen_context->ra_context->func_assigned_hard_regs
 
 static int breg_info_compare_func (const void *a1, const void *a2) {
   MIR_reg_t br1 = *(const MIR_reg_t *) a1, br2 = *(const MIR_reg_t *) a2;
@@ -3141,6 +3195,28 @@ static void rewrite (void) {
   }
 }
 
+static void init_ra (void) {
+  gen_context->ra_context = gen_malloc (sizeof (struct ra_context));
+  VARR_CREATE (MIR_reg_t, breg_renumber, 0);
+  VARR_CREATE (MIR_reg_t, sorted_bregs, 0);
+  VARR_CREATE (bitmap_t, point_used_locs, 0);
+  VARR_CREATE (size_t, loc_profits, 0);
+  VARR_CREATE (size_t, loc_profit_ages, 0);
+  conflict_locs = bitmap_create2 (3 * MAX_HARD_REG / 2);
+  func_assigned_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+}
+
+static void finish_ra (void) {
+  VARR_DESTROY (MIR_reg_t, breg_renumber);
+  VARR_DESTROY (MIR_reg_t, sorted_bregs);
+  VARR_DESTROY (bitmap_t, point_used_locs);
+  VARR_DESTROY (size_t, loc_profits);
+  VARR_DESTROY (size_t, loc_profit_ages);
+  bitmap_destroy (conflict_locs);
+  bitmap_destroy (func_assigned_hard_regs);
+  free (gen_context->ra_context); gen_context->ra_context = NULL;
+}
+
 
 
 /* Code selection */
@@ -3167,14 +3243,13 @@ struct selection_context {
   VARR (MIR_reg_t) *dead_def_regs;
 };
 
-struct selection_context selection_context;
-#define hreg_ref_ages selection_context.hreg_ref_ages
-#define hreg_refs selection_context.hreg_refs
-#define hreg_refs_addr selection_context.hreg_refs_addr
-#define hreg_ref_ages_addr selection_context.hreg_ref_ages_addr
-#define curr_bb_hreg_ref_age selection_context.curr_bb_hreg_ref_age
-#define last_mem_ref_insn_num selection_context.last_mem_ref_insn_num
-#define dead_def_regs selection_context.dead_def_regs
+#define hreg_ref_ages gen_context->selection_context->hreg_ref_ages
+#define hreg_refs gen_context->selection_context->hreg_refs
+#define hreg_refs_addr gen_context->selection_context->hreg_refs_addr
+#define hreg_ref_ages_addr gen_context->selection_context->hreg_ref_ages_addr
+#define curr_bb_hreg_ref_age gen_context->selection_context->curr_bb_hreg_ref_age
+#define last_mem_ref_insn_num gen_context->selection_context->last_mem_ref_insn_num
+#define dead_def_regs gen_context->selection_context->dead_def_regs
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
@@ -3613,6 +3688,27 @@ static void combine (void) {
   }
 }
 
+static void init_selection (void) {
+  hreg_ref_t hreg_ref = {NULL, 0, 0};
+
+  gen_context->selection_context = gen_malloc (sizeof (struct selection_context));
+  curr_bb_hreg_ref_age = 0;
+  VARR_CREATE (size_t, hreg_ref_ages, MAX_HARD_REG + 1);
+  VARR_CREATE (hreg_ref_t, hreg_refs, MAX_HARD_REG + 1);
+  VARR_CREATE (MIR_reg_t, dead_def_regs, MAX_HARD_REG + 1);
+  for (MIR_reg_t i = 0; i <= MAX_HARD_REG; i++) {
+    VARR_PUSH (hreg_ref_t, hreg_refs, hreg_ref);
+    VARR_PUSH (size_t, hreg_ref_ages, 0);
+  }
+}
+
+static void finish_selection (void) {
+  VARR_DESTROY (size_t, hreg_ref_ages);
+  VARR_DESTROY (hreg_ref_t, hreg_refs);
+  VARR_DESTROY (MIR_reg_t, dead_def_regs);
+  free (gen_context->selection_context); gen_context->selection_context = NULL;
+}
+
 
 
 /* Dead code elimnination */
@@ -3893,75 +3989,49 @@ void MIR_gen_set_debug_file (FILE *f) {
 
 void MIR_gen_init (void) {
   MIR_reg_t i;
-  hreg_ref_t hreg_ref = {NULL, 0, 0};
     
 #ifdef TEST_MIR_GEN
   fprintf (stderr, "Page size = %lu\n", (unsigned long) page_size);
 #endif
+  gen_context = gen_malloc (sizeof (struct gen_context));
+  gen_context->target_context = NULL; gen_context->data_flow_context = NULL;
+  gen_context->cse_context = NULL; gen_context->ccp_context = NULL;
+  gen_context->lr_context = NULL; gen_context->ra_context = NULL;
+  gen_context->selection_context = NULL;
   init_dead_vars ();
-  VARR_CREATE (bb_t, worklist, 0);
-  VARR_CREATE (bb_t, pending, 0);
-  VARR_CREATE (expr_t, exprs, 512);
-  VARR_CREATE (bitmap_t, var2dep_expr, 512);
-  memory_exprs = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  init_data_flow ();
+  init_cse ();
   init_ccp ();
-  VARR_CREATE (live_range_t, var_live_ranges, 0);
-  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  bb_to_consider = bitmap_create2 (512);
   all_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  live_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  VARR_CREATE (MIR_reg_t, breg_renumber, 0);
-  VARR_CREATE (MIR_reg_t, sorted_bregs, 0);
-  VARR_CREATE (bitmap_t, point_used_locs, 0);
-  VARR_CREATE (size_t, loc_profits, 0);
-  VARR_CREATE (size_t, loc_profit_ages, 0);
-  curr_bb_hreg_ref_age = 0;
-  VARR_CREATE (size_t, hreg_ref_ages, MAX_HARD_REG + 1);
-  VARR_CREATE (hreg_ref_t, hreg_refs, MAX_HARD_REG + 1);
-  VARR_CREATE (MIR_reg_t, dead_def_regs, MAX_HARD_REG + 1);
-  conflict_locs = bitmap_create2 (3 * MAX_HARD_REG / 2);
+  init_live_ranges ();
+  init_ra ();
+  init_selection ();
   call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
-  for (i = 0; i <= MAX_HARD_REG; i++) {
-    VARR_PUSH (hreg_ref_t, hreg_refs, hreg_ref);
-    VARR_PUSH (size_t, hreg_ref_ages, 0);
+  for (i = 0; i <= MAX_HARD_REG; i++)
     if (call_used_hard_reg_p (i))
       bitmap_set_bit_p (call_used_hard_regs, i);
-  }
-  func_assigned_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
   insn_to_consider = bitmap_create2 (1024);
   target_init ();
 }
 
 void MIR_gen_finish (void) {
-  VARR_DESTROY (bb_t, worklist);
-  VARR_DESTROY (expr_t, exprs);
-  bitmap_destroy (memory_exprs);
-  VARR_DESTROY (bitmap_t, var2dep_expr);
-  VARR_DESTROY (bb_t, pending);
-  VARR_DESTROY (live_range_t, var_live_ranges);
-  HTAB_DESTROY (expr_t, expr_tab);
+  finish_data_flow ();
+  finish_cse ();
   finish_ccp ();
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
-  bitmap_destroy (bb_to_consider);
   bitmap_destroy (all_vars);
-  bitmap_destroy (live_vars);
-  VARR_DESTROY (MIR_reg_t, breg_renumber);
-  VARR_DESTROY (MIR_reg_t, sorted_bregs);
-  VARR_DESTROY (bitmap_t, point_used_locs);
-  VARR_DESTROY (size_t, loc_profits);
-  VARR_DESTROY (size_t, loc_profit_ages);
-  VARR_DESTROY (size_t, hreg_ref_ages);
-  VARR_DESTROY (hreg_ref_t, hreg_refs);
-  VARR_DESTROY (MIR_reg_t, dead_def_regs);
-  bitmap_destroy (conflict_locs);
+  finish_live_ranges ();
+  finish_ra ();
+  finish_selection ();
   bitmap_destroy (call_used_hard_regs);
-  bitmap_destroy (func_assigned_hard_regs);
   bitmap_destroy (insn_to_consider);
   target_finish ();
   finish_dead_vars ();
+  free (gen_context->data_flow_context);
+  free (gen_context);
 }
 
 void MIR_set_gen_interface (MIR_item_t func_item) { MIR_gen (func_item); }
