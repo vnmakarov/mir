@@ -22,7 +22,7 @@ struct io_context;
 struct scan_context;
 struct interp_context;
 
-struct context {
+struct MIR_context {
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) *temp_insns;
   VARR (MIR_op_t) *temp_insn_ops;
@@ -50,7 +50,7 @@ struct context {
   struct interp_context *interp_context;
 };
 
-static struct context *context;
+static MIR_context_t context;
 
 #define error_func context->error_func
 #define temp_insns context->temp_insns
@@ -550,8 +550,8 @@ static void init_module (MIR_module_t m, const char *name) {
 static void code_init (void);
 static void code_finish (void);
 
-int MIR_init (void) {
-  if ((context = malloc (sizeof (struct context))) == NULL)
+MIR_context_t MIR_init (void) {
+  if ((context = malloc (sizeof (struct MIR_context))) == NULL)
     default_error (MIR_alloc_error, "Not enough memory for context");
   context->string_context = NULL; context->reg_context = NULL; context->simplify_context = NULL;
   context->machine_code_context = NULL; context->io_context = NULL; context->scan_context = NULL;
@@ -588,8 +588,8 @@ int MIR_init (void) {
   init_module (&environment_module, ".environment");
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq);
   code_init ();
-  interp_init ();
-  return TRUE;
+  interp_init (context);
+  return context;
 }
 
 void MIR_finish (void) {

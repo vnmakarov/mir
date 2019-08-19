@@ -321,6 +321,9 @@ struct MIR_module {
 /* Definition of double list of MIR_item_t type elements */
 DEF_DLIST (MIR_module_t, module_link);
 
+struct MIR_context;
+typedef struct MIR_context *MIR_context_t;
+
 static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_FBEQ || code == MIR_DBEQ || code == MIR_LDBEQ
 	  || code == MIR_FBNE || code == MIR_DBNE || code == MIR_LDBNE
@@ -345,7 +348,7 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
 }
 
 /* Use only the following API to create MIR code.  */
-extern int MIR_init (void);
+extern MIR_context_t MIR_init (void);
 extern void MIR_finish (void);
 
 extern MIR_module_t MIR_new_module (const char *name);
