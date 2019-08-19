@@ -17,7 +17,7 @@ extern void MIR_gen_init (void);
 extern void MIR_gen_set_debug_file (FILE *f);
 #endif
 extern void *MIR_gen (MIR_item_t func_item);
-extern void MIR_set_gen_interface (MIR_item_t func_item);
+extern void MIR_set_gen_interface (MIR_context_t context, MIR_item_t func_item);
 extern void MIR_gen_finish (void);
 
 

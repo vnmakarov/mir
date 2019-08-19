@@ -442,7 +442,8 @@ extern void MIR_scan_string (const char *str);
 extern MIR_item_t MIR_get_global_item (const char *name);
 extern void MIR_load_module (MIR_module_t m);
 extern void MIR_load_external (const char *name, void *addr);
-extern void MIR_link (void (*set_interface) (MIR_item_t item), void * (*import_resolver) (const char *));
+extern void MIR_link (void (*set_interface) (MIR_context_t context, MIR_item_t item),
+		      void * (*import_resolver) (const char *));
 
 /* Interpreters: */
 typedef union {
@@ -455,11 +456,13 @@ typedef union {
   long double ld;
 } MIR_val_t;
 
-extern void MIR_interp (MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...);
-extern void MIR_interp_arr (MIR_item_t func_item, MIR_val_t *results, size_t nargs, MIR_val_t *vals);
-extern void MIR_interp_arr_varg (MIR_item_t func_item, MIR_val_t *results,
+extern void MIR_interp (MIR_context_t context, MIR_item_t func_item,
+			MIR_val_t *results, size_t nargs, ...);
+extern void MIR_interp_arr (MIR_context_t context, MIR_item_t func_item, MIR_val_t *results,
+			    size_t nargs, MIR_val_t *vals);
+extern void MIR_interp_arr_varg (MIR_context_t context, MIR_item_t func_item, MIR_val_t *results,
 				 size_t nargs, MIR_val_t *vals, va_list va);
-extern void MIR_set_interp_interface (MIR_item_t func_item);
+extern void MIR_set_interp_interface (MIR_context_t context, MIR_item_t func_item);
 
 extern const char *_MIR_uniq_string (const char *str);
 extern int _MIR_reserved_ref_name_p (const char *name);
@@ -500,7 +503,7 @@ extern void *_MIR_get_bstart_builtin (void);
 extern void *_MIR_get_bend_builtin (void);
 
 extern void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types);
-extern void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler);
+extern void *_MIR_get_interp_shim (MIR_context_t context, MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_item_t item);
 extern void _MIR_redirect_thunk (void *thunk, void *to);
 extern void *_MIR_get_thunk_target (void *thunk);

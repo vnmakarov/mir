@@ -56,8 +56,8 @@ int main (void) {
   MIR_module_t m1, m2;
   MIR_item_t f1, f2;
   uint64_t res;
-
-  MIR_init ();
+  MIR_context_t context = MIR_init ();
+  
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
   create_program ();
   fprintf (stderr, "MIR program creation end -- %.0f usec\n", real_usec_time () - start_time);
@@ -68,7 +68,7 @@ int main (void) {
   MIR_link (MIR_set_interp_interface, NULL);
   MIR_gen_init ();
   MIR_gen (f1);
-  MIR_interp (f2, NULL, 0);
+  MIR_interp (context, f2, NULL, 0);
   MIR_gen_finish ();
   MIR_finish ();
   fprintf (stderr, "MIR_finish end -- %.0f usec\n", real_usec_time () - start_time);

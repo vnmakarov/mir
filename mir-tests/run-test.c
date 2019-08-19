@@ -11,6 +11,7 @@ int main (int argc, char *argv[]) {
   int interpr_p, gen_p;
   int res;
   uint64_t (*fun_addr) (void);
+  MIR_context_t context;
   
   if (argc != 2 && argc != 3) {
     fprintf (stderr, "%s: [-i|-g] <input mir file>\n", argv[0]);
@@ -26,7 +27,7 @@ int main (int argc, char *argv[]) {
     exit (1);
   }
   mir_fname = argv[argc - 1];
-  MIR_init ();
+  context = MIR_init ();
   MIR_scan_string (read_file (mir_fname));
   mir_module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list ());
   if (DLIST_NEXT (MIR_module_t, mir_module) != NULL) {
@@ -61,7 +62,7 @@ int main (int argc, char *argv[]) {
   }
   if (interpr_p) {
     MIR_link (MIR_set_interp_interface, NULL);
-    MIR_interp (main_func, &val, 0);
+    MIR_interp (context, main_func, &val, 0);
     fprintf (stderr, "%s: %lu\n", mir_fname, val.i);
   } else if (gen_p) {
     MIR_gen_init ();

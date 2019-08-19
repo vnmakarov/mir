@@ -9,8 +9,8 @@ int main (void) {
   MIR_item_t func;
   MIR_val_t val;
   double start_time;
-    
-  MIR_init ();
+  MIR_context_t context = MIR_init ();
+  
   func = create_mir_func_sieve (NULL, &m);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "\n++++++ SIEVE before simplification:\n");
@@ -28,11 +28,11 @@ int main (void) {
   start_time = real_sec_time ();
 #if MIR_C_INTERFACE
   typedef int64_t (*loop_func) (void);
-  MIR_set_interp_interface (func);
+  MIR_set_interp_interface (context, func);
   int64_t res = ((loop_func) func->addr) ();
   fprintf (stderr, "C interface SIEVE -> %"PRId64 ": %.3f sec\n", res, real_sec_time () - start_time);
 #else
-  MIR_interp (func, &val, 0);
+  MIR_interp (context, func, &val, 0);
   fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
 #endif
   MIR_finish ();

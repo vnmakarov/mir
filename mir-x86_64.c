@@ -252,23 +252,24 @@ void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_ty
   return _MIR_publish_code (VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
 }
 
-void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
+void *_MIR_get_interp_shim (MIR_context_t context, MIR_item_t func_item, void *handler) {
   static const uint8_t push_rbx[] = {  0x53, /*push   %rbx  */ };
   static const uint8_t prepare_pat[] = {
     /*  0: */ 0x48, 0x83, 0xec, 0x20,             /* sub    32,%rsp	     */
-    /*  4: */ 0x48, 0x89, 0xe6,			  /* mov    %rsp,%rsi	     */
-    /*  7: */ 0xc7, 0x06, 0, 0, 0, 0,		  /* movl   0,(%rsi)	     */
-    /*  d: */ 0xc7, 0x46, 0x04, 0x30, 0, 0, 0,	  /* movl   48, 4(%rsi)	     */
+    /*  4: */ 0x48, 0x89, 0xe2,			  /* mov    %rsp,%rdx	     */
+    /*  7: */ 0xc7, 0x02, 0, 0, 0, 0,		  /* movl   0,(%rdx)	     */
+    /*  d: */ 0xc7, 0x42, 0x04, 0x30, 0, 0, 0,	  /* movl   48, 4(%rdx)	     */
     /* 14: */ 0x48, 0x8d, 0x44, 0x24, 0x20,	  /* lea    32(%rsp),%rax   */
-    /* 19: */ 0x48, 0x89, 0x46, 0x10,		  /* mov    %rax,16(%rsi)     */
+    /* 19: */ 0x48, 0x89, 0x42, 0x10,		  /* mov    %rax,16(%rdx)     */
     /* 1d: */ 0x48, 0x8d, 0x84, 0x24, 0xe0, 0, 0, 0,  /* lea    224(%rsp),%rax   */
-    /* 25: */ 0x48, 0x89, 0x46, 0x08,		  /* mov    %rax,8(%rsi)    */
+    /* 25: */ 0x48, 0x89, 0x42, 0x08,		  /* mov    %rax,8(%rdx)    */
     /* 29: */ 0x48, 0x81, 0xec, 0, 0, 0, 0,	  /* sub    <n>,%rsp	     */
     /* 30: */ 0x48, 0x89, 0xe3,			  /* mov    %rsp,%rbx	     */
-    /* 33: */ 0x48, 0x89, 0xe2,			  /* mov    %rsp,%rdx	     */
-    /* 36: */ 0x48, 0xbf, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <func_item>,%rdi */
-    /* 40: */ 0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <handler>,%rax    */
-    /* 4a: */ 0xff, 0xd0,			  /* callq  *%rax            */
+    /* 33: */ 0x48, 0x89, 0xe1,			  /* mov    %rsp,%rcx	     */
+    /* 36: */ 0x48, 0xbf, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <context>,%rdi */
+    /* 40: */ 0x48, 0xbe, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <func_item>,%rsi */
+    /* 4a: */ 0x48, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, /* movabs <handler>,%rax    */
+    /* 54: */ 0xff, 0xd0,			  /* callq  *%rax            */
   };
   static const uint8_t shim_end[] = {
     /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, 	/*add    208+n,%rsp*/
@@ -291,8 +292,9 @@ void *_MIR_get_interp_shim (MIR_item_t func_item, void *handler) {
   addr = push_insns (prepare_pat, sizeof (prepare_pat));
   imm = nres * 16;
   memcpy (addr + 0x2c, &imm, sizeof (uint32_t));
-  memcpy (addr + 0x38, &func_item, sizeof (void *));
-  memcpy (addr + 0x42, &handler, sizeof (void *));
+  memcpy (addr + 0x38, &context->interp_context, sizeof (void *));
+  memcpy (addr + 0x42, &func_item, sizeof (void *));
+  memcpy (addr + 0x4c, &handler, sizeof (void *));
   /* move results: */
   n_iregs = n_xregs = n_fregs = offset = 0;
   for (uint32_t i = 0; i < nres; i++) {

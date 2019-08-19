@@ -4034,4 +4034,4 @@ void MIR_gen_finish (void) {
   free (gen_context);
 }
 
-void MIR_set_gen_interface (MIR_item_t func_item) { MIR_gen (func_item); }
+void MIR_set_gen_interface (MIR_context_t context, MIR_item_t func_item) { MIR_gen (func_item); }
