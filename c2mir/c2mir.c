@@ -10402,7 +10402,8 @@ static void *import_resolver (const char *name) {
 
 int main (int argc, const char *argv[]) {
   int ok_p;
-
+  MIR_context_t context;
+  
   code = NULL; source_name = NULL;
   interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
@@ -10438,7 +10439,7 @@ int main (int argc, const char *argv[]) {
     source_name = "<example>";
   }
   assert (source_name != NULL);
-  MIR_init ();
+  context = MIR_init ();
   if ((ok_p = compile (source_name)) && ! prepro_only_p && (interp_exec_p || gen_exec_p)) {
     MIR_val_t val;
     int res;
@@ -10462,7 +10463,7 @@ int main (int argc, const char *argv[]) {
       if (interp_exec_p) {
 	MIR_link (MIR_set_interp_interface, import_resolver);
 	start_time = real_usec_time ();
-	MIR_interp (main_func, &val, 0);
+	MIR_interp (context, main_func, &val, 0);
 	if (verbose_p) {
 	  fprintf (stderr, "  execution       -- %.0f msec\n", (real_usec_time () - start_time) / 1000.0);
 	  fprintf (stderr, "exit code %s: %lu\n", source_name, val.i);

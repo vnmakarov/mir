@@ -83,9 +83,9 @@ static void util_error (const char *message);
 #include <ctype.h>
 #include <limits.h>
 
-static void interp_init (void);
+static void interp_init (MIR_context_t context);
 static void finish_func_interpretation (MIR_item_t func_item);
-static void interp_finish (void);
+static void interp_finish (MIR_context_t context);
 
 static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
   va_list ap;
@@ -593,7 +593,7 @@ MIR_context_t MIR_init (void) {
 }
 
 void MIR_finish (void) {
-  interp_finish ();
+  interp_finish (context);
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
 #if MIR_SCAN
@@ -1342,7 +1342,8 @@ void MIR_load_external (const char *name, void *addr) {
   setup_global (name, addr, NULL);
 }
 
-void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (const char *)) {
+void MIR_link (void (*set_interface) (MIR_context_t context, MIR_item_t item),
+	       void *import_resolver (const char *)) {
   MIR_item_t item, tab_item, def, expr_item;
   MIR_type_t type;
   MIR_val_t res;
@@ -1388,7 +1389,7 @@ void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (c
       if (item->item_type != MIR_expr_data_item)
 	continue;
       expr_item = item->u.expr_data->expr_item;
-      MIR_interp (expr_item, &res, 0);
+      MIR_interp (context, expr_item, &res, 0);
       type = expr_item->u.func->res_types[0];
       switch (type) {
       case MIR_T_I8: case MIR_T_U8: v.i8 = (int8_t) res.i; break;
@@ -1412,7 +1413,7 @@ void MIR_link (void (*set_interface) (MIR_item_t item), void *import_resolver (c
 	   item = DLIST_NEXT (MIR_item_t, item))
 	if (item->item_type == MIR_func_item) {
 	  finish_func_interpretation (item); /* in case if it was used for expr data */
-	  set_interface (item);
+	  set_interface (context, item);
 	}
     }
 }
