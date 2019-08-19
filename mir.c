@@ -14,6 +14,14 @@ DEF_VARR (size_t);
 DEF_VARR (char);
 DEF_VARR (uint8_t);
 
+struct string_context;
+struct reg_context;
+struct simplify_context;
+struct machine_code_context;
+struct io_context;
+struct scan_context;
+struct interp_context;
+
 struct context {
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) *temp_insns;
@@ -33,27 +41,34 @@ struct context {
   int curr_label_num;
   DLIST (MIR_module_t) all_modules;
   VARR (MIR_module_t) *modules_to_link;
+  struct string_context *string_context;
+  struct reg_context *reg_context;
+  struct simplify_context *simplify_context;
+  struct machine_code_context *machine_code_context;
+  struct io_context *io_context;
+  struct scan_context *scan_context;
+  struct interp_context *interp_context;
 };
 
-struct context context;
+static struct context *context;
 
-#define error_func context.error_func
-#define temp_insns context.temp_insns
-#define temp_insn_ops context.temp_insn_ops
-#define temp_vars context.temp_vars
-#define temp_types context.temp_types
-#define insn_nops context.insn_nops
-#define temp_string context.temp_string
-#define temp_data context.temp_data
-#define temp_buff context.temp_buff
-#define module_item_tab context.module_item_tab
-#define environment_module context.environment_module
-#define inline_reg_map context.inline_reg_map
-#define curr_module context.curr_module
-#define curr_func context.curr_func
-#define curr_label_num context.curr_label_num
-#define all_modules context.all_modules
-#define modules_to_link context.modules_to_link
+#define error_func context->error_func
+#define temp_insns context->temp_insns
+#define temp_insn_ops context->temp_insn_ops
+#define temp_vars context->temp_vars
+#define temp_types context->temp_types
+#define insn_nops context->insn_nops
+#define temp_string context->temp_string
+#define temp_data context->temp_data
+#define temp_buff context->temp_buff
+#define module_item_tab context->module_item_tab
+#define environment_module context->environment_module
+#define inline_reg_map context->inline_reg_map
+#define curr_module context->curr_module
+#define curr_func context->curr_func
+#define curr_label_num context->curr_label_num
+#define all_modules context->all_modules
+#define modules_to_link context->modules_to_link
 
 static void util_error (const char *message);
 #define MIR_VARR_ERROR util_error
@@ -312,10 +327,8 @@ struct string_context {
   HTAB (string_t) *string_tab;
 };
 
-struct string_context string_context;
-
-#define strings string_context.strings
-#define string_tab string_context.string_tab
+#define strings context->string_context->strings
+#define string_tab context->string_context->string_tab
 
 static htab_hash_t str_hash (string_t str) { return mir_hash (str.str, strlen (str.str), 0); }
 static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2.str) == 0; }
@@ -379,10 +392,9 @@ struct reg_context {
   HTAB (size_t) *reg2rdn_tab;
 };
 
-struct reg_context reg_context;
-#define reg_descs reg_context.reg_descs
-#define namenum2rdn_tab reg_context.namenum2rdn_tab
-#define reg2rdn_tab reg_context.reg2rdn_tab
+#define reg_descs context->reg_context->reg_descs
+#define namenum2rdn_tab context->reg_context->namenum2rdn_tab
+#define reg2rdn_tab context->reg_context->reg2rdn_tab
 
 static int namenum2rdn_eq (size_t rdn1, size_t rdn2) {
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
@@ -415,6 +427,8 @@ static htab_hash_t reg2rdn_hash (size_t rdn) {
 static void reg_init (void) {
   reg_desc_t rd = {0, NULL, MIR_T_I64, 0};
   
+  if ((context->reg_context = malloc (sizeof (struct reg_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   VARR_CREATE (reg_desc_t, reg_descs, 300);
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq);
@@ -464,6 +478,7 @@ static void reg_finish (void) {
   VARR_DESTROY (reg_desc_t, reg_descs);
   HTAB_DESTROY (size_t, namenum2rdn_tab);
   HTAB_DESTROY (size_t, reg2rdn_tab);
+  free (context->reg_context); context->reg_context = NULL;
 }
 
 
@@ -536,6 +551,11 @@ static void code_init (void);
 static void code_finish (void);
 
 int MIR_init (void) {
+  if ((context = malloc (sizeof (struct context))) == NULL)
+    default_error (MIR_alloc_error, "Not enough memory for context");
+  context->string_context = NULL; context->reg_context = NULL; context->simplify_context = NULL;
+  context->machine_code_context = NULL; context->io_context = NULL; context->scan_context = NULL;
+  context->interp_context = NULL;
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++)
     mir_assert (c == insn_descs[c].code);
@@ -544,6 +564,8 @@ int MIR_init (void) {
   curr_module = NULL;
   curr_func = NULL;
   curr_label_num = 0;
+  if ((context->string_context = malloc (sizeof (struct string_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   string_init (&strings, &string_tab);
   reg_init ();
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
@@ -596,6 +618,8 @@ void MIR_finish (void) {
     (*error_func) (MIR_finish_error, "finish when function %s is not finished", curr_func->name);
   if (curr_module != NULL)
     (*error_func) (MIR_finish_error, "finish when module %s is not finished", curr_module->name);
+  free (context->string_context);
+  free (context); context = NULL;
 }
 
 MIR_module_t MIR_new_module (const char *name) {
@@ -2087,8 +2111,7 @@ struct simplify_context {
   HTAB (val_t) *val_tab;
 };
 
-struct simplify_context simplify_context;
-#define val_tab simplify_context.val_tab
+#define val_tab context->simplify_context->val_tab
 
 static htab_hash_t val_hash (val_t v) {
   htab_hash_t h;
@@ -2108,11 +2131,14 @@ static int val_eq (val_t v1, val_t v2) {
 }
 
 static void vn_init (void) {
+  if ((context->simplify_context = malloc (sizeof (struct simplify_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq);
 }
 
 static void vn_finish (void) {
   HTAB_DESTROY (val_t, val_tab);
+  free (context->simplify_context); context->simplify_context = NULL;
 }
 
 static void vn_empty (void) {
@@ -2690,9 +2716,8 @@ struct machine_code_context {
   size_t page_size;
 };
 
-struct machine_code_context machine_code_context;
-#define code_holders machine_code_context.code_holders
-#define page_size machine_code_context.page_size
+#define code_holders context->machine_code_context->code_holders
+#define page_size context->machine_code_context->page_size
 
 uint8_t *_MIR_publish_code (uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
@@ -2750,6 +2775,8 @@ static void machine_init (void);
 static void machine_finish (void);
 
 static void code_init (void) {
+  if ((context->machine_code_context = malloc (sizeof (struct machine_code_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   page_size = sysconf(_SC_PAGE_SIZE);
   VARR_CREATE (code_holder_t, code_holders, 128);
   machine_init ();
@@ -2762,6 +2789,7 @@ static void code_finish (void) {
   }
   VARR_DESTROY (code_holder_t, code_holders);
   machine_finish ();
+  free (context->machine_code_context); context->machine_code_context = NULL;
 }
 
 
@@ -2823,11 +2851,10 @@ struct io_context {
   VARR (uint64_t) *insn_label_string_nums;
 };
 
-struct io_context io_context;
-#define output_strings io_context.output_strings
-#define output_string_tab io_context.output_string_tab
-#define bin_strings io_context.bin_strings
-#define insn_label_string_nums io_context.insn_label_string_nums
+#define output_strings context->io_context->output_strings
+#define output_string_tab context->io_context->output_string_tab
+#define bin_strings context->io_context->bin_strings
+#define insn_label_string_nums context->io_context->insn_label_string_nums
   
 static void put_byte (FILE *f, int ch) {
   if (f == NULL)
@@ -3716,6 +3743,8 @@ void MIR_read (FILE *f) {
 }
 
 static void io_init (void) {
+  if ((context->io_context = malloc (sizeof (struct io_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   VARR_CREATE (char_ptr_t, bin_strings, 512);
   VARR_CREATE (uint64_t, insn_label_string_nums, 64);
 }
@@ -3723,6 +3752,7 @@ static void io_init (void) {
 static void io_finish (void) {
   VARR_DESTROY (uint64_t, insn_label_string_nums);
   VARR_DESTROY (char_ptr_t, bin_strings);
+  free (context->io_context); context->io_context = NULL;
 }
 
 #endif /* if MIR_IO */
@@ -3783,14 +3813,13 @@ struct scan_context {
   HTAB (label_desc_t) *label_desc_tab;
 };
 
-struct scan_context scan_context;
-#define error_jmp_buf scan_context.error_jmp_buf
-#define curr_lno scan_context.curr_lno
-#define insn_name_tab scan_context.insn_name_tab
-#define input_string scan_context.input_string
-#define input_string_char_num scan_context.input_string_char_num
-#define label_names scan_context.label_names
-#define label_desc_tab scan_context.label_desc_tab
+#define error_jmp_buf context->scan_context->error_jmp_buf
+#define curr_lno context->scan_context->curr_lno
+#define insn_name_tab context->scan_context->insn_name_tab
+#define input_string context->scan_context->input_string
+#define input_string_char_num context->scan_context->input_string_char_num
+#define label_names context->scan_context->label_names
+#define label_desc_tab context->scan_context->label_desc_tab
 
 static void MIR_NO_RETURN process_error (enum MIR_error_type error_type, const char *message) {
   (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
@@ -4520,6 +4549,8 @@ static void scan_init (void) {
   insn_name_t in, el;
   size_t i;
   
+  if ((context->scan_context = malloc (sizeof (struct scan_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
   VARR_CREATE (label_name_t, label_names, 0);
   HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq);
   HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq);
@@ -4534,6 +4565,7 @@ static void scan_finish (void) {
   VARR_DESTROY (label_name_t, label_names);
   HTAB_DESTROY (label_desc_t, label_desc_tab);
   HTAB_DESTROY (insn_name_t, insn_name_tab);
+  free (context->scan_context); context->scan_context = NULL;
 }
 
 #endif /* if MIR_SCAN */
