@@ -366,7 +366,7 @@ struct label_ref {
 typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
 
-struct x86_64_context {
+struct target_context {
   int alloca_p;
   int stack_arg_func_p;
   int start_sp_from_bp_offset;
@@ -378,16 +378,15 @@ struct x86_64_context {
   VARR (label_ref_t) *label_refs;
 };
 
-struct x86_64_context x86_64_context;
-#define alloca_p x86_64_context.alloca_p
-#define stack_arg_func_p x86_64_context.stack_arg_func_p
-#define start_sp_from_bp_offset x86_64_context.start_sp_from_bp_offset
-#define pattern_indexes x86_64_context.pattern_indexes
-#define insn_pattern_info x86_64_context.insn_pattern_info
-#define result_code x86_64_context.result_code
-#define const_pool x86_64_context.const_pool
-#define const_refs x86_64_context.const_refs
-#define label_refs x86_64_context.label_refs
+#define alloca_p gen_context->target_context->alloca_p
+#define stack_arg_func_p gen_context->target_context->stack_arg_func_p
+#define start_sp_from_bp_offset gen_context->target_context->start_sp_from_bp_offset
+#define pattern_indexes gen_context->target_context->pattern_indexes
+#define insn_pattern_info gen_context->target_context->insn_pattern_info
+#define result_code gen_context->target_context->result_code
+#define const_pool gen_context->target_context->const_pool
+#define const_refs gen_context->target_context->const_refs
+#define label_refs gen_context->target_context->label_refs
 
 static void machinize (void) {
   MIR_func_t func;
@@ -1662,6 +1661,7 @@ static uint8_t *target_translate (size_t *len) {
 }
 
 static void target_init (void) {
+  gen_context->target_context = gen_malloc (sizeof (struct target_context));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
   VARR_CREATE (const_ref_t, const_refs, 0);
@@ -1675,4 +1675,5 @@ static void target_finish (void) {
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);
   VARR_DESTROY (label_ref_t, label_refs);
+  free (gen_context->target_context); gen_context->target_context = NULL;
 }
