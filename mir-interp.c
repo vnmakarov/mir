@@ -46,6 +46,15 @@ typedef enum {
 
 DEF_VARR (MIR_val_t);
 
+struct ff_interface {
+  size_t nres, nargs;
+  MIR_type_t *res_types, *arg_types;
+  void *interface_addr;
+};
+
+typedef struct ff_interface *ff_interface_t;
+DEF_HTAB (ff_interface_t);
+
 struct interp_context {
 #if DIRECT_THREADED_DISPATCH
   void *dispatch_label_tab [IC_INSN_BOUND];
@@ -63,21 +72,22 @@ struct interp_context {
   MIR_val_t *call_res_args;
   VARR (MIR_type_t) *call_arg_types_varr;
   MIR_type_t *call_arg_types;
+  HTAB (ff_interface_t) *ff_interface_tab;
 };
 
-struct interp_context interpr_context;
-#define dispatch_label_tab interpr_context.dispatch_label_tab
-#define code_varr interpr_context.code_varr
-#define branches interpr_context.branches
-#define arg_vals_varr interpr_context.arg_vals_varr
-#define arg_vals interpr_context.arg_vals
-#define trace_ident interpr_context.trace_ident
-#define bstart_builtin interpr_context.bstart_builtin
-#define bend_builtin interpr_context.bend_builtin
-#define call_res_args_varr interpr_context.call_res_args_varr
-#define call_res_args interpr_context.call_res_args
-#define call_arg_types_varr interpr_context.call_arg_types_varr
-#define call_arg_types interpr_context.call_arg_types
+#define dispatch_label_tab context->interp_context->dispatch_label_tab
+#define code_varr context->interp_context->code_varr
+#define branches context->interp_context->branches
+#define arg_vals_varr context->interp_context->arg_vals_varr
+#define arg_vals context->interp_context->arg_vals
+#define trace_ident context->interp_context->trace_ident
+#define bstart_builtin context->interp_context->bstart_builtin
+#define bend_builtin context->interp_context->bend_builtin
+#define call_res_args_varr context->interp_context->call_res_args_varr
+#define call_res_args context->interp_context->call_res_args
+#define call_arg_types_varr context->interp_context->call_arg_types_varr
+#define call_arg_types context->interp_context->call_arg_types
+#define ff_interface_tab context->interp_context->ff_interface_tab
 
 static void get_icode (MIR_val_t *v, int code) {
 #if DIRECT_THREADED_DISPATCH
@@ -1048,23 +1058,6 @@ static inline func_desc_t get_func_desc (MIR_item_t func_item) {
   return func_item->data;
 }
 
-struct ff_interface {
-  size_t nres, nargs;
-  MIR_type_t *res_types, *arg_types;
-  void *interface_addr;
-};
-
-typedef struct ff_interface *ff_interface_t;
-
-DEF_HTAB (ff_interface_t);
-
-struct ff_interface_context {
-  HTAB (ff_interface_t) *ff_interface_tab;
-};
-
-struct ff_interface_context ff_interface_context;
-#define ff_interface_tab ff_interface_context.ff_interface_tab
-
 static htab_hash_t ff_interface_hash (ff_interface_t i) {
   return mir_hash_finish (mir_hash_step
 			  (mir_hash_step
@@ -1190,9 +1183,13 @@ static void call (MIR_val_t *bp, MIR_op_t *insn_arg_ops, code_t ffi_address_ptr,
 }
 
 static void interp_init (void) {
+  if ((context->interp_context = malloc (sizeof (struct interp_context))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for context");
 #if DIRECT_THREADED_DISPATCH
-  MIR_val_t v;
-  eval (NULL, NULL, NULL);
+  {
+    MIR_val_t v;
+    eval (NULL, NULL, NULL);
+  }
 #endif
   VARR_CREATE (MIR_insn_t, branches, 0);
   VARR_CREATE (MIR_val_t, code_varr, 0);
@@ -1219,6 +1216,7 @@ static void interp_finish (void) {
   HTAB_CLEAR (ff_interface_t, ff_interface_tab, ff_interface_clear);
   HTAB_DESTROY (ff_interface_t, ff_interface_tab);
   /* Clear func descs???  */
+  free (context->interp_context); context->interp_context = NULL;
 }
 
 static void interp_arr_varg (MIR_item_t func_item, MIR_val_t *results,
