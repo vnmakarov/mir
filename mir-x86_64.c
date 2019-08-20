@@ -2,20 +2,20 @@
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-void *_MIR_get_bstart_builtin (void) {
+void *_MIR_get_bstart_builtin (MIR_context_t context) {
   static const uint8_t bstart_code[] = {
     0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */
     0xc3,                         /* ret */
   };
-  return _MIR_publish_code (bstart_code, sizeof (bstart_code));
+  return _MIR_publish_code (context, bstart_code, sizeof (bstart_code));
 }
-void *_MIR_get_bend_builtin (void) {
+void *_MIR_get_bend_builtin (MIR_context_t context) {
   static const uint8_t bend_code[] = {
     0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
     0x48, 0x89, 0xfc,       /* rsp = rdi */
     0xff, 0xe0,             /* jmp *rax */
   };
-  return _MIR_publish_code (bend_code, sizeof (bend_code));
+  return _MIR_publish_code (context, bend_code, sizeof (bend_code));
   
 }
 
@@ -43,7 +43,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_start_interp_builtin (void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   struct x86_64_va_list *va = p;
   va_list *vap = a;
   
@@ -51,33 +51,33 @@ void va_start_interp_builtin (void *p, void *a) {
   *va = *(struct x86_64_va_list *)vap;
 }
 
-void va_end_interp_builtin (void *p) { }
+void va_end_interp_builtin (MIR_context_t context, void *p) { }
 
 /* r11=<address to go to>; r10=<address of func item>; jump *r11  */
-void *_MIR_get_thunk (MIR_item_t item) {
+void *_MIR_get_thunk (MIR_context_t context, MIR_item_t item) {
   void *res;
   static const uint8_t pattern[] = {
     0x49, 0xbb, 0, 0, 0, 0, 0, 0, 0, 0, /* 0x0: movabsq 0, r11 */
     0x49, 0xba, 0, 0, 0, 0, 0, 0, 0, 0, /* 0xa: movabsq 0, r10 */
     0x41, 0xff, 0xe3, /* 0x14: jmpq   *%r11 */
   };
-  res = _MIR_publish_code (pattern, sizeof (pattern));
-  _MIR_update_code (res, 1, 12, item);
+  res = _MIR_publish_code (context, pattern, sizeof (pattern));
+  _MIR_update_code (context, res, 1, 12, item);
   return res;
 }
 
-void _MIR_redirect_thunk (void *thunk, void *to) {
-  _MIR_update_code (thunk, 1, 2, to);
+void _MIR_redirect_thunk (MIR_context_t context, void *thunk, void *to) {
+  _MIR_update_code (context, thunk, 1, 2, to);
 }
 
-void *_MIR_get_thunk_target (void *thunk) {
+void *_MIR_get_thunk_target (MIR_context_t context, void *thunk) {
   void *res;
   
   memcpy (&res, (char *) thunk + 2, sizeof (void *));
   return res;
 }
 
-MIR_item_t _MIR_get_thunk_func (void *thunk) {
+MIR_item_t _MIR_get_thunk_func (MIR_context_t context, void *thunk) {
   MIR_item_t res;
   
   memcpy (&res, (char *) thunk + 12, sizeof (MIR_item_t));
@@ -186,7 +186,8 @@ static void gen_st80 (uint32_t src_offset) {
    rax=8; call *r11; sp+=offset
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
    pop rbx; ret. */
-void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types) {
+void *_MIR_get_ff_call (MIR_context_t context, size_t nres, MIR_type_t *res_types,
+			size_t nargs, MIR_type_t *arg_types) {
   static const uint8_t prolog[] = {
     0x53, /* pushq %rbx */
     0x48, 0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
@@ -249,7 +250,7 @@ void *_MIR_get_ff_call (size_t nres, MIR_type_t *res_types, size_t nargs, MIR_ty
     }
   }
   push_insns (epilog, sizeof (epilog));
-  return _MIR_publish_code (VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (context, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
 }
 
 void *_MIR_get_interp_shim (MIR_context_t context, MIR_item_t func_item, void *handler) {
@@ -292,7 +293,7 @@ void *_MIR_get_interp_shim (MIR_context_t context, MIR_item_t func_item, void *h
   addr = push_insns (prepare_pat, sizeof (prepare_pat));
   imm = nres * 16;
   memcpy (addr + 0x2c, &imm, sizeof (uint32_t));
-  memcpy (addr + 0x38, &context->interp_context, sizeof (void *));
+  memcpy (addr + 0x38, &context, sizeof (void *));
   memcpy (addr + 0x42, &func_item, sizeof (void *));
   memcpy (addr + 0x4c, &handler, sizeof (void *));
   /* move results: */
@@ -327,11 +328,11 @@ void *_MIR_get_interp_shim (MIR_context_t context, MIR_item_t func_item, void *h
   addr = push_insns (shim_end, sizeof (shim_end));
   imm = 208 + nres * 16;
   memcpy (addr + 3, &imm, sizeof (uint32_t));
-  return _MIR_publish_code (VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (context, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
 }
 
 /* save regs; *called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
-void *_MIR_get_wrapper (MIR_item_t *called_func, void *hook_address) {
+void *_MIR_get_wrapper (MIR_context_t context, MIR_item_t *called_func, void *hook_address) {
   static const uint8_t push_rax[] = {  0x50,  /*push   %rax */ };
   static const uint8_t wrap_end[] = {
     0x58, 				/*pop   %rax */
@@ -354,13 +355,13 @@ void *_MIR_get_wrapper (MIR_item_t *called_func, void *hook_address) {
   memcpy (addr + 15, &hook_address, sizeof (void *));
   push_insns (restore_pat, sizeof (restore_pat));
   push_insns (wrap_end, sizeof (wrap_end));
-  return _MIR_publish_code (VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (context, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
 }
 
-static void machine_init (void) {
+static void machine_init (MIR_context_t context) {
   VARR_CREATE (uint8_t, machine_insns, 1024);
 }
 
-static void machine_finish (void) {
+static void machine_finish (MIR_context_t context) {
   VARR_DESTROY (uint8_t, machine_insns);
 }

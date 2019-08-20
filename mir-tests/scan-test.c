@@ -2,9 +2,9 @@
 
 int main (void) {
   MIR_module_t m;
+  MIR_context_t ctx = MIR_init ();
   
-  MIR_init ();
-  MIR_scan_string ("\n\
+  MIR_scan_string (ctx, "\n\
 m_loop: module\n\
 loop:   func i64, i64:limit # a comment\n\
 \n\
@@ -17,7 +17,7 @@ L1:     ret count  # label with insn\n\
         endfunc\n\
         endmodule\n\
   ");
-  MIR_scan_string ("\n\
+  MIR_scan_string (ctx, "\n\
 m_sieve: module\n\
 sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
@@ -44,11 +44,11 @@ fin:     ret count\n\
          endfunc\n\
          endmodule\n\
 ");
-  MIR_output (stderr);
+  MIR_output (ctx, stderr);
   fprintf (stderr, "+++++++++++++After sieve simplification:\n");
-  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
-  MIR_simplify_func (DLIST_TAIL (MIR_item_t, m->items), TRUE);
-  MIR_output (stderr);
-  MIR_finish ();
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+  MIR_simplify_func (ctx, DLIST_TAIL (MIR_item_t, m->items), TRUE);
+  MIR_output (ctx, stderr);
+  MIR_finish (ctx);
   return 0;
 }

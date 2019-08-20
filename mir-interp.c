@@ -127,7 +127,8 @@ static void push_mem (struct interp_context *interp_context, MIR_op_t op) {
 
 static void redirect_interface_to_interp (MIR_context_t context, MIR_item_t func_item);
 
-static void generate_icode (struct interp_context *interp_context, MIR_item_t func_item) {
+static void generate_icode (MIR_context_t context, MIR_item_t func_item) {
+  struct interp_context *interp_context = context->interp_context;
   int imm_call_p;
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, label;
@@ -140,7 +141,7 @@ static void generate_icode (struct interp_context *interp_context, MIR_item_t fu
   VARR_TRUNC (MIR_val_t, code_varr, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn)) {
     MIR_insn_code_t code = insn->code;
-    size_t nops = MIR_insn_nops (insn);
+    size_t nops = MIR_insn_nops (context, insn);
     MIR_op_t *ops = insn->ops;
         
     insn->data = (void *) VARR_LENGTH (MIR_val_t, code_varr);
@@ -240,7 +241,7 @@ static void generate_icode (struct interp_context *interp_context, MIR_item_t fu
     case MIR_LABEL:
       break;
     case MIR_INVALID_INSN:
-      (*MIR_get_error_func ()) (MIR_invalid_insn_error, "invalid insn for interpreter");
+      (*MIR_get_error_func (context)) (MIR_invalid_insn_error, "invalid insn for interpreter");
       break;
     case MIR_JMP:
       VARR_PUSH (MIR_insn_t, branches, insn);
@@ -309,7 +310,7 @@ static void generate_icode (struct interp_context *interp_context, MIR_item_t fu
   func_item->data = func_desc = malloc (sizeof (struct func_desc)
 					+ VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   if (func_desc == NULL)
-    (*MIR_get_error_func ()) (MIR_alloc_error, "no memory for interpreter code");
+    (*MIR_get_error_func (context)) (MIR_alloc_error, "no memory for interpreter code");
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr),
 	   VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   mir_assert (max_nreg < MIR_MAX_REG_NUM);
@@ -488,7 +489,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp 
 #define OPTIMIZE
 #endif
 
-static void call (struct interp_context *interp_context, MIR_val_t *bp, MIR_op_t *insn_arg_ops,
+static void call (MIR_context_t context, MIR_val_t *bp, MIR_op_t *insn_arg_ops,
 		  code_t ffi_address_ptr, MIR_item_t proto_item,
 		  void *addr, code_t res_ops, size_t nargs);
 
@@ -549,8 +550,9 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
 }
 #endif
 
-static code_t call_insn_execute (struct interp_context *interp_context, code_t pc,
+static code_t call_insn_execute (MIR_context_t context, code_t pc,
 				 MIR_val_t *bp, code_t ops, int imm_p) {
+  struct interp_context *interp_context = context->interp_context;
   int64_t nops = get_i (ops); /* #args w/o nop, insn, and ff interface address */
   MIR_insn_t insn = get_a (ops + 1);
   MIR_item_t proto_item = get_a (ops + 3);
@@ -566,7 +568,7 @@ static code_t call_insn_execute (struct interp_context *interp_context, code_t p
 #if MIR_INTERP_TRACE
   trace_insn_ident += 2;
 #endif
-  call (interp_context, bp, &insn->ops[proto_item->u.proto->nres + 2] /* arg ops */,
+  call (context, bp, &insn->ops[proto_item->u.proto->nres + 2] /* arg ops */,
 	ops + 2 /* ffi address holder */, proto_item, func_addr, ops + 5 /* results start */,
 	nops - start + 3 /* arg # */);
 #if MIR_INTERP_TRACE
@@ -576,8 +578,9 @@ static code_t call_insn_execute (struct interp_context *interp_context, code_t p
   return pc;
 }
 
-static void OPTIMIZE eval (struct interp_context *interp_context, func_desc_t func_desc,
+static void OPTIMIZE eval (MIR_context_t context, func_desc_t func_desc,
 			   MIR_val_t *bp, MIR_val_t *results) {
+  struct interp_context *interp_context = context->interp_context;
   code_t pc, ops, code = func_desc->code;
   
 #if MIR_INTERP_TRACE
@@ -988,8 +991,8 @@ static void OPTIMIZE eval (struct interp_context *interp_context, func_desc_t fu
       CASE (MIR_DBGE, 3);  BDCMP (>=); END_INSN;
       CASE (MIR_LDBGE, 3); BLDCMP (>=); END_INSN;
 
-      CASE (MIR_CALL, 0); pc = call_insn_execute (interp_context, pc, bp, ops, FALSE); END_INSN;
-      CASE (IC_IMM_CALL, 0); pc = call_insn_execute (interp_context, pc, bp, ops, TRUE); END_INSN;
+      CASE (MIR_CALL, 0); pc = call_insn_execute (context, pc, bp, ops, FALSE); END_INSN;
+      CASE (IC_IMM_CALL, 0); pc = call_insn_execute (context, pc, bp, ops, TRUE); END_INSN;
       CASE (MIR_INLINE, 0); mir_assert (FALSE); END_INSN; /* should be not here */
       
       CASE (MIR_RET, 0); {
@@ -1021,8 +1024,8 @@ static void OPTIMIZE eval (struct interp_context *interp_context, func_desc_t fu
 	r = get_2iops (bp, ops, &va); tp = get_i (ops + 2); *r = (uint64_t) va_arg_builtin ((void *) va, tp);
       }
       END_INSN;
-      CASE (MIR_VA_START, 1); { va_start_interp_builtin (bp [get_i (ops)].a, bp[-1].a); } END_INSN;
-      CASE (MIR_VA_END, 1); { va_end_interp_builtin (bp [get_i (ops)].a); } END_INSN;
+      CASE (MIR_VA_START, 1); { va_start_interp_builtin (context, bp [get_i (ops)].a, bp[-1].a); } END_INSN;
+      CASE (MIR_VA_END, 1); { va_end_interp_builtin (context, bp [get_i (ops)].a); } END_INSN;
 
       CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
       CASE (IC_LDU8, 2);  LD (uop, uint64_t, uint8_t); END_INSN;
@@ -1078,8 +1081,9 @@ static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2) {
 
 static void ff_interface_clear (ff_interface_t ffi) { free (ffi); }
 
-static void *get_ff_interface (struct interp_context *interp_context, size_t nres,
+static void *get_ff_interface (MIR_context_t context, size_t nres,
 			       MIR_type_t *res_types, size_t nargs, MIR_type_t *arg_types) {
+  struct interp_context *interp_context = context->interp_context;
   struct ff_interface ffi_s;
   ff_interface_t tab_ffi, ffi;
   int htab_res;
@@ -1093,15 +1097,16 @@ static void *get_ff_interface (struct interp_context *interp_context, size_t nre
   ffi->arg_types = ffi->res_types + nres;
   memcpy (ffi->res_types, res_types, sizeof (MIR_type_t) * nres);
   memcpy (ffi->arg_types, arg_types, sizeof (MIR_type_t) * nargs);
-  ffi->interface_addr = _MIR_get_ff_call (nres, res_types, nargs, call_arg_types);
+  ffi->interface_addr = _MIR_get_ff_call (context, nres, res_types, nargs, call_arg_types);
   htab_res = HTAB_DO (ff_interface_t, ff_interface_tab, ffi, HTAB_INSERT, tab_ffi);
   mir_assert (! htab_res && ffi == tab_ffi);
   return ffi->interface_addr;
 }
 
-static void call (struct interp_context *interp_context, MIR_val_t *bp,
+static void call (MIR_context_t context, MIR_val_t *bp,
 		  MIR_op_t *insn_arg_ops, code_t ffi_address_ptr, MIR_item_t proto_item,
 		  void *addr, code_t res_ops, size_t nargs) {
+  struct interp_context *interp_context = context->interp_context;
   size_t i, arg_vars_num, nres;
   MIR_val_t val, *res;
   MIR_type_t type;
@@ -1136,12 +1141,12 @@ static void call (struct interp_context *interp_context, MIR_val_t *bp,
       mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
 		  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
-	(*MIR_get_error_func ()) (MIR_call_op_error,
-				  "passing float variadic arg (should be passed as double)");
+	(*MIR_get_error_func (context)) (MIR_call_op_error,
+					 "passing float variadic arg (should be passed as double)");
       call_arg_types[i] = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     ff_interface_addr = ffi_address_ptr->a
-      = get_ff_interface (interp_context, nres, proto->res_types, nargs, call_arg_types);
+      = get_ff_interface (context, nres, proto->res_types, nargs, call_arg_types);
   }
   
   for (i = 0; i < nargs; i++) {
@@ -1197,7 +1202,7 @@ static void interp_init (MIR_context_t context) {
 #if DIRECT_THREADED_DISPATCH
   {
     MIR_val_t v;
-    eval (context->interp_context, NULL, NULL, NULL);
+    eval (context, NULL, NULL, NULL);
   }
 #endif
   VARR_CREATE (MIR_insn_t, branches, 0);
@@ -1212,8 +1217,8 @@ static void interp_init (MIR_context_t context) {
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
-  bstart_builtin = _MIR_get_bstart_builtin ();
-  bend_builtin = _MIR_get_bend_builtin ();
+  bstart_builtin = _MIR_get_bstart_builtin (context);
+  bend_builtin = _MIR_get_bend_builtin (context);
 }
 
 static void interp_finish (MIR_context_t context) {
@@ -1230,15 +1235,15 @@ static void interp_finish (MIR_context_t context) {
   free (context->interp_context); context->interp_context = NULL;
 }
 
-static void interp_arr_varg (struct interp_context *interp_context, MIR_item_t func_item,
+static void interp_arr_varg (MIR_context_t context, MIR_item_t func_item,
 			     MIR_val_t *results, size_t nargs, MIR_val_t *vals, va_list va) {
   func_desc_t func_desc;
   MIR_val_t *bp, res;
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
-    MIR_simplify_func (func_item, FALSE);
-    generate_icode (interp_context, func_item);
+    MIR_simplify_func (context, func_item, FALSE);
+    generate_icode (context, func_item);
   }
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
@@ -1248,7 +1253,7 @@ static void interp_arr_varg (struct interp_context *interp_context, MIR_item_t f
     nargs = func_desc->nregs - 1;
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
-  eval (interp_context, func_desc, bp, results);
+  eval (context, func_desc, bp, results);
   if (va != NULL)
     va_end (va);
 }
@@ -1265,7 +1270,7 @@ void MIR_interp (MIR_context_t context, MIR_item_t func_item,
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++)
     arg_vals[i] = va_arg (argp, MIR_val_t);
-  interp_arr_varg (interp_context, func_item, results, nargs, arg_vals, argp);
+  interp_arr_varg (context, func_item, results, nargs, arg_vals, argp);
 }
 
 void MIR_interp_arr_varg (MIR_context_t context, MIR_item_t func_item, MIR_val_t *results,
@@ -1275,8 +1280,8 @@ void MIR_interp_arr_varg (MIR_context_t context, MIR_item_t func_item, MIR_val_t
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
-    MIR_simplify_func (func_item, FALSE);
-    generate_icode (context->interp_context, func_item);
+    MIR_simplify_func (context, func_item, FALSE);
+    generate_icode (context, func_item);
   }
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
@@ -1286,19 +1291,19 @@ void MIR_interp_arr_varg (MIR_context_t context, MIR_item_t func_item, MIR_val_t
     nargs = func_desc->nregs - 1;
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
-  eval (context->interp_context, func_desc, bp, results);
+  eval (context, func_desc, bp, results);
 }
 
 void MIR_interp_arr (MIR_context_t context, MIR_item_t func_item,
 		     MIR_val_t *results, size_t nargs, MIR_val_t *vals) {
-  interp_arr_varg (context->interp_context, func_item, results, nargs, vals, NULL);
+  interp_arr_varg (context, func_item, results, nargs, vals, NULL);
 }
 
 /* C call interface to interpreter.  It is based on knowledge of
    common vararg implementation.  For some targets it might not
    work.  */
-static void interp (struct interp_context *interp_context,
-		    MIR_item_t func_item, va_list va, MIR_val_t *results) {
+static void interp (MIR_context_t context, MIR_item_t func_item, va_list va, MIR_val_t *results) {
+  struct interp_context *interp_context = context->interp_context;
   size_t nargs;
   MIR_val_t res;
   MIR_var_t *arg_vars;
@@ -1332,11 +1337,11 @@ static void interp (struct interp_context *interp_context,
       mir_assert (FALSE);
     }
   }
-  interp_arr_varg (interp_context, func_item, results, nargs, arg_vals, va);
+  interp_arr_varg (context, func_item, results, nargs, arg_vals, va);
 }
 
 static void redirect_interface_to_interp (MIR_context_t context, MIR_item_t func_item) {
-  _MIR_redirect_thunk (func_item->addr, _MIR_get_interp_shim (context, func_item, interp));
+  _MIR_redirect_thunk (context, func_item->addr, _MIR_get_interp_shim (context, func_item, interp));
 }
 
 void MIR_set_interp_interface (MIR_context_t context, MIR_item_t func_item) {

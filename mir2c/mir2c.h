@@ -4,4 +4,4 @@
 
 #include "mir.h"
 
-extern void MIR_module2c (FILE *f, MIR_module_t m);
+extern void MIR_module2c (MIR_context_t ctx, FILE *f, MIR_module_t m);
