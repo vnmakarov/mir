@@ -10,31 +10,31 @@ int main (void) {
   MIR_val_t val;
   double start_time;
   const int64_t n_iter = 100000000;
-  MIR_context_t context = MIR_init ();
+  MIR_context_t ctx = MIR_init ();
   
-  func = create_mir_func_with_loop (&m);
+  func = create_mir_func_with_loop (ctx, &m);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Loop before simplification:\n");
-  MIR_output (stderr);
+  MIR_output (ctx, stderr);
 #endif
-  MIR_simplify_func (func, TRUE);
+  MIR_simplify_func (ctx, func, TRUE);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Loop after simplification:\n");
-  MIR_output (stderr);
+  MIR_output (ctx, stderr);
 #endif
-  MIR_load_module (m);
-  MIR_link (MIR_set_interp_interface, NULL);
+  MIR_load_module (ctx, m);
+  MIR_link (ctx, MIR_set_interp_interface, NULL);
   start_time = real_sec_time ();
   val.i = n_iter;
 #if MIR_C_INTERFACE
   typedef int64_t (*loop_func) (int64_t);
-  MIR_set_interp_interface (context, func);
+  MIR_set_interp_interface (ctx, func);
   int64_t res = ((loop_func) func->addr) (n_iter);
   fprintf (stderr, "C interface test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, res, real_sec_time () - start_time);
 #else
-  MIR_interp (context, func, &val, 1, val);
+  MIR_interp (ctx, func, &val, 1, val);
   fprintf (stderr, "test (%"PRId64 ") -> %"PRId64 ": %.3f sec\n", n_iter, val.i, real_sec_time () - start_time);
 #endif
-  MIR_finish ();
+  MIR_finish (ctx);
   return 0;
 }

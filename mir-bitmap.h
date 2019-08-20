@@ -284,7 +284,7 @@ static inline int bitmap_ior_and_compl (bitmap_t dst, bitmap_t src1,
   return bitmap_op3 (dst, src1, src2, src3, bitmap_el_ior_and_compl);
 }
 
-static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t)) {
+static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t, void *), void *data) {
   size_t i, nb, len = VARR_LENGTH (bitmap_el_t, bm);
   bitmap_el_t el, *addr = VARR_ADDR (bitmap_el_t, bm);
   
@@ -292,7 +292,7 @@ static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t)) {
     if ((el = addr[i]) != 0) {
       for (nb = 0; el != 0; el >>= 1, nb++)
 	if (el & 1)
-	  func (i * BITMAP_WORD_BITS + nb);
+	  func (i * BITMAP_WORD_BITS + nb, data);
     }
   }
 }

@@ -1,6 +1,6 @@
 #include <string.h>
 
-MIR_item_t create_mir_func_sieve (size_t *len, MIR_module_t *m_res) {
+MIR_item_t create_mir_func_sieve (MIR_context_t ctx, size_t *len, MIR_module_t *m_res) {
   MIR_module_t m;
   const char *str = "\n\
 m_sieve: module\n\
@@ -32,8 +32,8 @@ fin:     ret count\n\
   
   if (len != NULL)
     *len = strlen (str);
-  MIR_scan_string (str);
-  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
+  MIR_scan_string (ctx, str);
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
   if (m_res != NULL)
     *m_res = m;
   return DLIST_TAIL (MIR_item_t, m->items);

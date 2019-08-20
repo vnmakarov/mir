@@ -1,4 +1,4 @@
-MIR_module_t create_args_module (void) {
+MIR_module_t create_args_module (MIR_context_t ctx) {
   const char *str = "\n\
 m:     module\n\
 p_pri: proto i64:v\n\
@@ -29,6 +29,6 @@ f:     func i64, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i
        endfunc\n\
        endmodule\n\
 ";
-  MIR_scan_string (str);
-  return DLIST_TAIL (MIR_module_t, *MIR_get_module_list ());
+  MIR_scan_string (ctx, str);
+  return DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
 }
