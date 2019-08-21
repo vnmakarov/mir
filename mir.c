@@ -14,6 +14,7 @@ DEF_VARR (size_t);
 DEF_VARR (char);
 DEF_VARR (uint8_t);
 
+struct gen_context;
 struct string_context;
 struct reg_context;
 struct simplify_context;
@@ -23,6 +24,7 @@ struct scan_context;
 struct interp_context;
 
 struct MIR_context {
+  struct gen_context *gen_context; /* should be the 1st member */
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) *temp_insns;
   VARR (MIR_op_t) *temp_insn_ops;
