@@ -37,7 +37,8 @@ int main (void) {
   start_time = clock ();
   for (len = 0; fgetc (f) != EOF; len++)
     ;
-  fprintf (stderr, "Just reading MIR binary file containing %d sieve functions (%.3f MB): %.3f CPU sec\n",
+  fprintf (stderr,
+	   "Just reading MIR binary file containing %d sieve functions (%.3f MB): %.3f CPU sec\n",
 	   nfunc, len / 1000000.0, (clock () - start_time) / CLOCKS_PER_SEC);
   fclose (f);
   ctx = MIR_init ();
@@ -46,7 +47,8 @@ int main (void) {
   start_time = clock ();
   MIR_read (ctx, f);
   read_api_time_creation = (clock () - start_time) / CLOCKS_PER_SEC;
-  fprintf (stderr, "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec - API use\n",
+  fprintf (stderr,
+	   "Reading and creating MIR binary %d sieve functions (%.3f MB): %.3f CPU sec - API use\n",
 	   nfunc, len / 1000000.0, read_api_time_creation);
   fclose (f);
   remove (fname);

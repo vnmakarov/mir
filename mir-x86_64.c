@@ -131,14 +131,17 @@ static uint8_t *push_insns (const uint8_t *pat, size_t pat_len) {
 static void gen_mov (uint32_t offset, uint32_t reg, int ld_p) {
   static const uint8_t ld_gp_reg[] = { 0x48, 0x8b, 0x83, 0, 0, 0, 0 /* mov <offset>(%rbx),%reg */ };
   static const uint8_t st_gp_reg[] = { 0x48, 0x89, 0x83, 0, 0, 0, 0 /* mov %reg,<offset>(%rbx) */ };
-  uint8_t *addr = push_insns (ld_p ? ld_gp_reg : st_gp_reg, ld_p ? sizeof (ld_gp_reg) : sizeof (st_gp_reg));
+  uint8_t *addr = push_insns (ld_p ? ld_gp_reg
+			      : st_gp_reg, ld_p ? sizeof (ld_gp_reg) : sizeof (st_gp_reg));
   memcpy (addr + 3, &offset, sizeof (uint32_t));
   assert (reg <= 15);
   addr[0] |= (reg >> 1) & 4; addr[2] |= (reg & 7) << 3;
 }
 
 static void gen_movxmm (uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
-  static const uint8_t ld_xmm_reg_pat[] = { 0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */ };
+  static const uint8_t ld_xmm_reg_pat[] = {
+   0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */
+  };
   static const uint8_t st_xmm_reg_pat[] = {
     0xf2, 0x0f, 0x11, 0x83, 0, 0, 0, 0 /* movs[sd] %xmm, <offset>(%rbx) */
   };
@@ -250,7 +253,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types,
     }
   }
   push_insns (epilog, sizeof (epilog));
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+			    VARR_LENGTH (uint8_t, machine_insns));
 }
 
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
@@ -328,7 +332,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   addr = push_insns (shim_end, sizeof (shim_end));
   imm = 208 + nres * 16;
   memcpy (addr + 3, &imm, sizeof (uint32_t));
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+			    VARR_LENGTH (uint8_t, machine_insns));
 }
 
 /* save regs; *called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
@@ -355,7 +360,8 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t *called_func, void *hook_a
   memcpy (addr + 15, &hook_address, sizeof (void *));
   push_insns (restore_pat, sizeof (restore_pat));
   push_insns (wrap_end, sizeof (wrap_end));
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns), VARR_LENGTH (uint8_t, machine_insns));
+  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+			    VARR_LENGTH (uint8_t, machine_insns));
 }
 
 static void machine_init (MIR_context_t ctx) {
