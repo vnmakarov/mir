@@ -822,7 +822,7 @@ MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len) {
   item->u.bss->len = len;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (ctx, item) != item) {
+  } else if ((tab_item = add_item (ctx, item)) != item) {
     free (item);
     item = tab_item;
   }
@@ -866,7 +866,7 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name,
   data->name = name;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (ctx, item) != item) {
+  } else if ((tab_item = add_item (ctx, item)) != item) {
     free (item);
     item = tab_item;
   }
@@ -896,7 +896,7 @@ MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref
   ref_data->ref_item = ref_item;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (ctx, item) != item) {
+  } else if ((tab_item = add_item (ctx, item)) != item) {
     free (item);
     item = tab_item;
   }
@@ -924,7 +924,7 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
   expr_data->expr_item = expr_item;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
-  } else if (add_item (ctx, item) != item) {
+  } else if ((tab_item = add_item (ctx, item)) != item) {
     free (item);
     item = tab_item;
   }
@@ -1256,10 +1256,6 @@ void MIR_finish_func (MIR_context_t ctx) {
 }
 
 void MIR_finish_module (MIR_context_t ctx) {
-  const char *name;
-  MIR_item_t found_item;
-  int global_p, new_p;
-  
   if (curr_module == NULL)
     (*error_func) (MIR_no_module_error, "finish of non-existing module");
   curr_module = NULL;
@@ -1389,7 +1385,7 @@ void MIR_load_external (MIR_context_t ctx, const char *name, void *addr) {
 void MIR_link (MIR_context_t ctx,
 	       void (*set_interface) (MIR_context_t ctx, MIR_item_t item),
 	       void *import_resolver (const char *)) {
-  MIR_item_t item, tab_item, def, expr_item;
+  MIR_item_t item, tab_item, expr_item;
   MIR_type_t type;
   MIR_val_t res;
   MIR_module_t m;
@@ -2475,7 +2471,6 @@ static int64_t natural_alignment (int64_t s) { return s <= 2 ? s : s <= 4 ? 4 : 
 void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, next_insn, new_insn;
-  MIR_reg_t reg;
   MIR_insn_code_t ext_code;
   
   if (func_item->item_type != MIR_func_item)
@@ -2592,7 +2587,6 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
   int alloca_p;
   size_t i, actual_nops, nargs, nvars;
-  const char *name;
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, old_reg, new_reg, temp_reg;
@@ -3779,10 +3773,18 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 	  case TAG_I1: case TAG_I2: case TAG_I3: case TAG_I4:
 	  case TAG_I5: case TAG_I6: case TAG_I7: case TAG_I8:
 	    switch (type) {
-	    case MIR_T_I8: v.i8 = attr.i; push_data (ctx, (uint8_t *) &v.i8, sizeof (int8_t)); break;
-	    case MIR_T_I16: v.i16 = attr.i; push_data (ctx, (uint8_t *) &v.i16, sizeof (int16_t)); break;
-	    case MIR_T_I32: v.i32 = attr.i; push_data (ctx, (uint8_t *) &v.i32, sizeof (int32_t)); break;
-	    case MIR_T_I64: v.i64 = attr.i; push_data (ctx, (uint8_t *) &v.i64, sizeof (int64_t)); break;
+	    case MIR_T_I8:
+	      v.i8 = attr.i; push_data (ctx, (uint8_t *) &v.i8, sizeof (int8_t));
+	      break;
+	    case MIR_T_I16:
+	      v.i16 = attr.i; push_data (ctx, (uint8_t *) &v.i16, sizeof (int16_t));
+	      break;
+	    case MIR_T_I32:
+	      v.i32 = attr.i; push_data (ctx, (uint8_t *) &v.i32, sizeof (int32_t));
+	      break;
+	    case MIR_T_I64:
+	      v.i64 = attr.i; push_data (ctx, (uint8_t *) &v.i64, sizeof (int64_t));
+	      break;
 	    default:
 	      (*error_func) (MIR_binary_io_error, "data type %s does not correspond value type",
 			     type_str (type));
@@ -4301,7 +4303,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   MIR_op_t op, *op_addr;
   MIR_label_t label;
   size_t n;
-  int64_t i, nargs;
+  int64_t i;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
   int bss_p, ref_p, expr_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;

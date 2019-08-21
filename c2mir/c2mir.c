@@ -1212,10 +1212,6 @@ static token_t get_next_pptoken_1 (int header_p) {
       /* Fall through: */
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': {
-      int base = 10, err_p = FALSE, double_p = FALSE;
-      int dec_p = FALSE, hex_p = FALSE;
-      int prev_c, hex_char_p;
-
       pos = cs->pos;
       VARR_TRUNC (char, symbol_text, 0);
       for (;;) {
@@ -1235,8 +1231,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       }
       VARR_PUSH (char, symbol_text, '\0');
       cs_unget (curr_c);
-      return new_token_wo_uniq_repr (pos, err_p ? "1" : VARR_ADDR (char, symbol_text),
-				     T_NUMBER, N_IGNORE);
+      return new_token_wo_uniq_repr (pos, VARR_ADDR (char, symbol_text), T_NUMBER, N_IGNORE);
     }
     case '\'': case '\"': { /* ??? unicode and wchar */
       token_t t;
@@ -3457,8 +3452,6 @@ D (declaration) {
 }
 
 D (attr) {
-  node_t r;
-
   if (C (')') || C  (',')) /* empty */
     return NULL;
   if (FIRST_KW <= curr_token->code && curr_token->code <= LAST_KW)
@@ -3482,7 +3475,6 @@ D (attr) {
 
 D (attr_spec) {
   node_t r;
-  token_t t = curr_token;
 
   PTN (T_ID);
   if (strcmp (r->u.s, "__attribute__") != 0)
@@ -6057,7 +6049,7 @@ static void check_initializer (decl_t member_decl, struct type **type_ptr, node_
   struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t des_list, curr_des, init, str, value, size_node, temp;
-  mir_llong curr_index, max_index, size_val;
+  mir_llong max_index, size_val;
   size_t mark, len;
   symbol_t sym;
   struct expr *sexpr;
@@ -7207,8 +7199,6 @@ static void check (node_t r, node_t context) {
     node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
     node_t saved_scope = curr_scope;
     struct decl_spec *decl_spec;
-    node_t block = NL_EL (curr_func_def->ops, 3);
-    struct node_scope *ns = block->attr;
     mir_size_t saved_call_arg_area_offset_before_args;
 
     VARR_PUSH (node_t, call_nodes, r);
@@ -8179,7 +8169,7 @@ static op_t mem_to_address (op_t mem) {
 
 static op_t force_val (op_t op) {
   op_t temp_op;
-  int sh, size;
+  int sh;
 
   if (op.decl != NULL && op.decl->decl_spec.type->mode == TM_ARR && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
@@ -8190,7 +8180,6 @@ static op_t force_val (op_t op) {
   assert (op.mir_op.mode == MIR_OP_MEM);
   temp_op = get_new_temp (MIR_T_I64);
   emit2 (MIR_MOV, temp_op.mir_op, op.mir_op);
-  size = get_int_mir_type_size (op.mir_op.u.mem.type);
   sh = 64 - op.decl->bit_offset - op.decl->width;
   if (sh != 0)
     emit3 (MIR_LSH, temp_op.mir_op, temp_op.mir_op, MIR_new_int_op (ctx, sh));
@@ -8515,7 +8504,7 @@ static void collect_init_els (decl_t member_decl, struct type **type_ptr,
 			      node_t initializer, int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
-  node_t des_list, curr_des, str, init, value, size_node, temp;
+  node_t des_list, curr_des, str, init, value, size_node;
   mir_llong size_val;
   size_t mark;
   symbol_t sym;
@@ -8712,12 +8701,11 @@ static void emit_scalar_assign (op_t var, op_t *val, MIR_type_t t, int ignore_ot
     emit2_noopt (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV,
 		 var.mir_op, val->mir_op);
   } else {
-    int size, width = var.decl->width;
+    int width = var.decl->width;
     uint64_t mask, mask2;
     op_t temp_op1, temp_op2, temp_op3;
     
     assert (var.mir_op.mode == MIR_OP_MEM);
-    size = get_int_mir_type_size (var.mir_op.u.mem.type);
     mask = 0xffffffffffffffff >> (64 - width); mask2 = ~(mask << var.decl->bit_offset);
     temp_op1 = get_new_temp (MIR_T_I64);
     temp_op3 = get_new_temp (MIR_T_I64);
@@ -9141,8 +9129,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     break;
   case N_ID: {
-    char prefix[50];
-
     e = r->attr;
     if (push_const_val (r, &res)) {
     } else if (e->lvalue_node == NULL) {
@@ -9310,7 +9296,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     break;
   case N_COMPOUND_LITERAL: {
-    node_t id;
     const char *global_name = NULL;
     node_t type_name = NL_HEAD (r->ops);
     decl_t decl = type_name->attr;
@@ -9423,7 +9408,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (specs);
     node_t initializer = NL_NEXT (declarator);
-    node_t n, id, curr_node;
+    node_t id, curr_node;
     symbol_t sym;
     decl_t curr_decl;
     size_t i, init_start;

@@ -287,7 +287,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   static const uint8_t fldt_pat[] = {0xdb, 0xab, 0, 0, 0, 0}; /* fldt <offset>(%rbx) */
   static const uint8_t fxch_pat[] = {0xd9, 0xc9}; /* fxch */
   uint8_t *addr;
-  uint32_t imm, n, n_iregs, n_xregs, n_fregs, offset;
+  uint32_t imm, n_iregs, n_xregs, n_fregs, offset;
   uint32_t nres = func_item->u.func->nres;
   MIR_type_t *results = func_item->u.func->res_types;
   

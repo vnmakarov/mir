@@ -1184,10 +1184,9 @@ static void create_av_bitmaps (MIR_context_t ctx) {
 	 bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       size_t i, nops;
       int out_p;
-      MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+      MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
       MIR_op_t op;
       expr_t e;
-      bitmap_t b;
       MIR_insn_t insn = bb_insn->insn;
       
       if (MIR_branch_code_p (bb_insn->insn->code)
@@ -1245,10 +1244,9 @@ static void cse_modify (MIR_context_t ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       size_t i, nops;
       expr_t e;
-      MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+      MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
       MIR_op_t op;
       int out_p;
-      bitmap_t b;
       MIR_type_t type;
       MIR_insn_code_t move_code;
       MIR_insn_t new_insn, insn = bb_insn->insn;
@@ -1331,8 +1329,6 @@ static void cse_modify (MIR_context_t ctx) {
 }
 
 static void cse (MIR_context_t ctx) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
   create_exprs (ctx);
   create_av_bitmaps (ctx);
   solve_dataflow (ctx, TRUE, cse_con_func_0, cse_con_func_n, cse_trans_func);
@@ -1962,7 +1958,7 @@ static int get_ccp_res_op (MIR_context_t ctx, MIR_insn_t insn, int out_num, MIR_
 static int ccp_insn_update (MIR_context_t ctx, MIR_insn_t insn, const_t *res) {
   // ??? should we do CCP for FP too
   MIR_op_t op;
-  int out_p, change_p;
+  int change_p;
   enum ccp_val_kind ccp_res;
   const_t val;
   var_occ_t var_occ;
@@ -2389,7 +2385,6 @@ static void ccp_traverse (bb_t bb) {
 }
 
 static int get_ccp_res_val (MIR_context_t ctx, MIR_insn_t insn, const_t *val) {
-  int out_p;
   var_occ_t var_occ;
   MIR_op_t op;
   
@@ -2718,8 +2713,6 @@ static void initiate_live_info (MIR_context_t ctx, int moves_p) {
 }
 
 static void calculate_func_cfg_live_info (MIR_context_t ctx, int moves_p) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
   initiate_live_info (ctx, moves_p);
   solve_dataflow (ctx, FALSE, live_con_func_0, live_con_func_n, live_trans_func);
 }
