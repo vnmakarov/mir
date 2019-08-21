@@ -602,8 +602,6 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
 
   if (bp == NULL)
     {
-      MIR_val_t v;
-      
       ltab [MIR_MOV] = &&L_MIR_MOV; ltab [MIR_FMOV] = &&L_MIR_FMOV;
       ltab [MIR_DMOV] = &&L_MIR_DMOV; ltab [MIR_LDMOV] = &&L_MIR_LDMOV;
       ltab [MIR_EXT8] = &&L_MIR_EXT8; ltab [MIR_EXT16] = &&L_MIR_EXT16;
@@ -1135,10 +1133,9 @@ static void call (MIR_context_t ctx, MIR_val_t *bp,
 		  void *addr, code_t res_ops, size_t nargs) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   size_t i, arg_vars_num, nres;
-  MIR_val_t val, *res;
+  MIR_val_t *res;
   MIR_type_t type;
   MIR_var_t *arg_vars = NULL;
-  MIR_item_t func_item;
   MIR_proto_t proto = proto_item->u.proto;
   MIR_op_mode_t mode;
   void *ff_interface_addr;
@@ -1228,10 +1225,7 @@ static void interp_init (MIR_context_t ctx) {
   if ((interp_ctx = ctx->interp_ctx = malloc (sizeof (struct interp_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
 #if DIRECT_THREADED_DISPATCH
-  {
-    MIR_val_t v;
     eval (ctx, NULL, NULL, NULL);
-  }
 #endif
   VARR_CREATE (MIR_insn_t, branches, 0);
   VARR_CREATE (MIR_val_t, code_varr, 0);
@@ -1266,7 +1260,7 @@ static void interp_finish (MIR_context_t ctx) {
 static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item,
 			     MIR_val_t *results, size_t nargs, MIR_val_t *vals, va_list va) {
   func_desc_t func_desc;
-  MIR_val_t *bp, res;
+  MIR_val_t *bp;
   
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) {
@@ -1291,7 +1285,6 @@ void MIR_interp (MIR_context_t ctx, MIR_item_t func_item,
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   va_list argp;
   size_t i;
-  MIR_val_t res;
   
   if (VARR_EXPAND (MIR_val_t, arg_vals_varr, nargs))
     arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
@@ -1333,7 +1326,6 @@ void MIR_interp_arr (MIR_context_t ctx, MIR_item_t func_item,
 static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val_t *results) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   size_t nargs;
-  MIR_val_t res;
   MIR_var_t *arg_vars;
   MIR_func_t func = func_item->u.func;
 
