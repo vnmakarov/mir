@@ -349,115 +349,115 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
 
 /* Use only the following API to create MIR code.  */
 extern MIR_context_t MIR_init (void);
-extern void MIR_finish (MIR_context_t context);
+extern void MIR_finish (MIR_context_t ctx);
 
-extern MIR_module_t MIR_new_module (MIR_context_t context, const char *name);
-extern DLIST (MIR_module_t) *MIR_get_module_list (MIR_context_t context);
-extern MIR_item_t MIR_new_import (MIR_context_t context, const char *name);
-extern MIR_item_t MIR_new_export (MIR_context_t context, const char *name);
-extern MIR_item_t MIR_new_forward (MIR_context_t context, const char *name);
-extern MIR_item_t MIR_new_bss (MIR_context_t context,
+extern MIR_module_t MIR_new_module (MIR_context_t ctx, const char *name);
+extern DLIST (MIR_module_t) *MIR_get_module_list (MIR_context_t ctx);
+extern MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name);
+extern MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name);
+extern MIR_item_t MIR_new_forward (MIR_context_t ctx, const char *name);
+extern MIR_item_t MIR_new_bss (MIR_context_t ctx,
 			       const char *name, size_t len); /* name can be NULL */
-extern MIR_item_t MIR_new_data (MIR_context_t context, const char *name, MIR_type_t el_type,
+extern MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type,
 				size_t nel, const void *els); /* name can be NULL */
-extern MIR_item_t MIR_new_string_data (MIR_context_t context,
+extern MIR_item_t MIR_new_string_data (MIR_context_t ctx,
 				       const char *name, const char *str); /* name can be NULL */
-extern MIR_item_t MIR_new_ref_data (MIR_context_t context,
+extern MIR_item_t MIR_new_ref_data (MIR_context_t ctx,
 				    const char *name, MIR_item_t item); /* name can be NULL */
-extern MIR_item_t MIR_new_expr_data (MIR_context_t context,
+extern MIR_item_t MIR_new_expr_data (MIR_context_t ctx,
 				     const char *name, MIR_item_t expr_item); /* name can be NULL */
-extern MIR_item_t MIR_new_proto_arr (MIR_context_t context,
+extern MIR_item_t MIR_new_proto_arr (MIR_context_t ctx,
 				     const char *name, size_t nres, MIR_type_t *res_types,
 				     size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_proto (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_proto (MIR_context_t ctx, const char *name,
 				 size_t nres, MIR_type_t *res_types, size_t nargs, ...);
-extern MIR_item_t MIR_new_vararg_proto_arr (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_vararg_proto_arr (MIR_context_t ctx, const char *name,
 					    size_t nres, MIR_type_t *res_types,
 					    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_vararg_proto (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_vararg_proto (MIR_context_t ctx, const char *name,
 					size_t nres, MIR_type_t *res_types, size_t nargs, ...);
-extern MIR_item_t MIR_new_func_arr (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_func_arr (MIR_context_t ctx, const char *name,
 				    size_t nres, MIR_type_t *res_types,
 				    size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_func (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_func (MIR_context_t ctx, const char *name,
 				size_t nres, MIR_type_t *res_types, size_t nargs, ...);
-extern MIR_item_t MIR_new_vararg_func_arr (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_vararg_func_arr (MIR_context_t ctx, const char *name,
 					   size_t nres, MIR_type_t *res_types,
 					   size_t nargs, MIR_var_t *vars);
-extern MIR_item_t MIR_new_vararg_func (MIR_context_t context, const char *name,
+extern MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name,
 				       size_t nres, MIR_type_t *res_types, size_t nargs, ...);
-extern const char *MIR_item_name (MIR_context_t context, MIR_item_t item);
-extern MIR_reg_t MIR_new_func_reg (MIR_context_t context, MIR_func_t func,
+extern const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item);
+extern MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func,
 				   MIR_type_t type, const char *name);
-extern void MIR_finish_func (MIR_context_t context);
-extern void MIR_finish_module (MIR_context_t context);
+extern void MIR_finish_func (MIR_context_t ctx);
+extern void MIR_finish_module (MIR_context_t ctx);
 
-extern MIR_error_func_t MIR_get_error_func (MIR_context_t context);
-extern void MIR_set_error_func (MIR_context_t context, MIR_error_func_t func);
+extern MIR_error_func_t MIR_get_error_func (MIR_context_t ctx);
+extern void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func);
 
-extern MIR_insn_t MIR_new_insn_arr (MIR_context_t context, MIR_insn_code_t code,
+extern MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code,
 				    size_t nops, MIR_op_t *ops);
-extern MIR_insn_t MIR_new_insn (MIR_context_t context, MIR_insn_code_t code, ...);
-extern MIR_insn_t MIR_new_call_insn (MIR_context_t context, size_t nops, ...);
-extern MIR_insn_t MIR_new_ret_insn (MIR_context_t context, size_t nops, ...);
-extern MIR_insn_t MIR_copy_insn (MIR_context_t context, MIR_insn_t insn);
+extern MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...);
+extern MIR_insn_t MIR_new_call_insn (MIR_context_t ctx, size_t nops, ...);
+extern MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...);
+extern MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn);
 
-extern const char *MIR_insn_name (MIR_context_t context, MIR_insn_code_t code);
-extern size_t MIR_insn_nops (MIR_context_t context, MIR_insn_t insn);
-extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t context, MIR_insn_t insn,
+extern const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code);
+extern size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn);
+extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn,
 				       size_t nop, int *out_p);
 
-extern MIR_insn_t MIR_new_label (MIR_context_t context);
+extern MIR_insn_t MIR_new_label (MIR_context_t ctx);
 
-extern MIR_reg_t MIR_reg (MIR_context_t context, const char *reg_name, MIR_func_t func);
-extern MIR_type_t MIR_reg_type (MIR_context_t context, MIR_reg_t reg, MIR_func_t func);
-extern const char *MIR_reg_name (MIR_context_t context, MIR_reg_t reg, MIR_func_t func);
+extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
+extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
+extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 
-extern MIR_op_t MIR_new_reg_op (MIR_context_t context, MIR_reg_t reg);
-extern MIR_op_t MIR_new_int_op (MIR_context_t context, int64_t v);
-extern MIR_op_t MIR_new_uint_op (MIR_context_t context, uint64_t v);
-extern MIR_op_t MIR_new_float_op (MIR_context_t context, float v);
-extern MIR_op_t MIR_new_double_op (MIR_context_t context, double v);
-extern MIR_op_t MIR_new_ldouble_op (MIR_context_t context, long double v);
-extern MIR_op_t MIR_new_ref_op (MIR_context_t context, MIR_item_t item);
-extern MIR_op_t MIR_new_str_op (MIR_context_t context, const char *str);
-extern MIR_op_t MIR_new_mem_op (MIR_context_t context, MIR_type_t type, MIR_disp_t disp,
+extern MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg);
+extern MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v);
+extern MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v);
+extern MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v);
+extern MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v);
+extern MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v);
+extern MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item);
+extern MIR_op_t MIR_new_str_op (MIR_context_t ctx, const char *str);
+extern MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
 				MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale);
-extern MIR_op_t MIR_new_label_op (MIR_context_t context, MIR_label_t label);
-extern int MIR_op_eq_p (MIR_context_t context, MIR_op_t op1, MIR_op_t op2);
-extern htab_hash_t MIR_op_hash_step (MIR_context_t context, htab_hash_t h, MIR_op_t op);
+extern MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label);
+extern int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2);
+extern htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op);
 
-extern void MIR_append_insn (MIR_context_t context, MIR_item_t func, MIR_insn_t insn);
-extern void MIR_prepend_insn (MIR_context_t context, MIR_item_t func, MIR_insn_t insn);
-extern void MIR_insert_insn_after (MIR_context_t context, MIR_item_t func,
+extern void MIR_append_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn);
+extern void MIR_prepend_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn);
+extern void MIR_insert_insn_after (MIR_context_t ctx, MIR_item_t func,
 				   MIR_insn_t after, MIR_insn_t insn);
-extern void MIR_insert_insn_before (MIR_context_t context, MIR_item_t func,
+extern void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func,
 				    MIR_insn_t before, MIR_insn_t insn);
-extern void MIR_remove_insn (MIR_context_t context, MIR_item_t func, MIR_insn_t insn);
+extern void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn);
 
-extern const char *MIR_type_str (MIR_context_t context, MIR_type_t tp);
-extern void MIR_output_op (MIR_context_t context, FILE *f, MIR_op_t op, MIR_func_t func);
-extern void MIR_output_insn (MIR_context_t context, FILE *f, MIR_insn_t insn,
+extern const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp);
+extern void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func);
+extern void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn,
 			     MIR_func_t func, int newline_p);
-extern void MIR_output (MIR_context_t context, FILE *f);
+extern void MIR_output (MIR_context_t ctx, FILE *f);
 
-extern void MIR_simplify_func (MIR_context_t context, MIR_item_t func, int mem_float_p);
-extern void MIR_inline (MIR_context_t context, MIR_item_t func_item);
+extern void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func, int mem_float_p);
+extern void MIR_inline (MIR_context_t ctx, MIR_item_t func_item);
 
 #if MIR_IO
-extern void MIR_write (MIR_context_t context, FILE *f);
-extern void MIR_read (MIR_context_t context, FILE *f);
+extern void MIR_write (MIR_context_t ctx, FILE *f);
+extern void MIR_read (MIR_context_t ctx, FILE *f);
 #endif
 
 #if MIR_SCAN
-extern void MIR_scan_string (MIR_context_t context, const char *str);
+extern void MIR_scan_string (MIR_context_t ctx, const char *str);
 #endif
 
-extern MIR_item_t MIR_get_global_item (MIR_context_t context, const char *name);
-extern void MIR_load_module (MIR_context_t context, MIR_module_t m);
-extern void MIR_load_external (MIR_context_t context, const char *name, void *addr);
-extern void MIR_link (MIR_context_t context,
-		      void (*set_interface) (MIR_context_t context, MIR_item_t item),
+extern MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name);
+extern void MIR_load_module (MIR_context_t ctx, MIR_module_t m);
+extern void MIR_load_external (MIR_context_t ctx, const char *name, void *addr);
+extern void MIR_link (MIR_context_t ctx,
+		      void (*set_interface) (MIR_context_t ctx, MIR_item_t item),
 		      void * (*import_resolver) (const char *));
 
 /* Interpreters: */
@@ -471,39 +471,39 @@ typedef union {
   long double ld;
 } MIR_val_t;
 
-extern void MIR_interp (MIR_context_t context, MIR_item_t func_item,
+extern void MIR_interp (MIR_context_t ctx, MIR_item_t func_item,
 			MIR_val_t *results, size_t nargs, ...);
-extern void MIR_interp_arr (MIR_context_t context, MIR_item_t func_item, MIR_val_t *results,
+extern void MIR_interp_arr (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results,
 			    size_t nargs, MIR_val_t *vals);
-extern void MIR_interp_arr_varg (MIR_context_t context, MIR_item_t func_item, MIR_val_t *results,
+extern void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results,
 				 size_t nargs, MIR_val_t *vals, va_list va);
-extern void MIR_set_interp_interface (MIR_context_t context, MIR_item_t func_item);
+extern void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item);
 
-extern const char *_MIR_uniq_string (MIR_context_t context, const char *str);
-extern int _MIR_reserved_ref_name_p (MIR_context_t context, const char *name);
-extern int _MIR_reserved_name_p (MIR_context_t context, const char *name);
-extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t context, MIR_type_t type,
+extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
+extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
+extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
+extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
 				    MIR_func_t func); /* for internal use only */
-extern size_t _MIR_type_size (MIR_context_t context, MIR_type_t type);
-extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t context, MIR_insn_code_t code,
+extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
+extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code,
 					     size_t nop, int *out_p);
-extern void _MIR_simplify_insn (MIR_context_t context, MIR_item_t func_item,
+extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item,
 				MIR_insn_t insn, int mem_float_p);
 
-extern const char *_MIR_get_temp_item_name (MIR_context_t context, MIR_module_t module);
+extern const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module);
 
-extern MIR_op_t _MIR_new_hard_reg_op (MIR_context_t context, MIR_reg_t hard_reg);
+extern MIR_op_t _MIR_new_hard_reg_op (MIR_context_t ctx, MIR_reg_t hard_reg);
 
-extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t context, MIR_type_t type,
+extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type,
 					  MIR_disp_t disp, MIR_reg_t base,
 					  MIR_reg_t index, MIR_scale_t scale);
 
-extern MIR_item_t _MIR_builtin_proto (MIR_context_t context, MIR_module_t module, const char *name,
+extern MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const char *name,
 				      size_t nres, MIR_type_t *res_types, size_t nargs, ...);
-extern MIR_item_t _MIR_builtin_func (MIR_context_t context, MIR_module_t module,
+extern MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module,
 				     const char *name, void *addr);
 
-extern uint8_t *_MIR_publish_code (MIR_context_t context, const uint8_t *code, size_t code_len);
+extern uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len);
 
 struct MIR_code_reloc {
   size_t offset;
@@ -512,24 +512,24 @@ struct MIR_code_reloc {
 
 typedef struct MIR_code_reloc *MIR_code_reloc_t;
 
-extern void _MIR_update_code_arr (MIR_context_t context, uint8_t *base,
+extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base,
 				  size_t nloc, MIR_code_reloc_t relocs);
-extern void _MIR_update_code (MIR_context_t context, uint8_t *base, size_t nloc, ...);
+extern void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...);
 
 extern void *va_arg_builtin (void *p, uint64_t t);
-extern void va_start_interp_builtin (MIR_context_t context, void *p, void *a);
-extern void va_end_interp_builtin (MIR_context_t context, void *p);
+extern void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a);
+extern void va_end_interp_builtin (MIR_context_t ctx, void *p);
   
-extern void *_MIR_get_bstart_builtin (MIR_context_t context);
-extern void *_MIR_get_bend_builtin (MIR_context_t context);
+extern void *_MIR_get_bstart_builtin (MIR_context_t ctx);
+extern void *_MIR_get_bend_builtin (MIR_context_t ctx);
 
-extern void *_MIR_get_ff_call (MIR_context_t context, size_t nres, MIR_type_t *res_types,
+extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types,
 			       size_t nargs, MIR_type_t *arg_types);
-extern void *_MIR_get_interp_shim (MIR_context_t context,
+extern void *_MIR_get_interp_shim (MIR_context_t ctx,
 				   MIR_item_t func_item, void *handler);
-extern void *_MIR_get_thunk (MIR_context_t context, MIR_item_t item);
-extern void _MIR_redirect_thunk (MIR_context_t context, void *thunk, void *to);
-extern void *_MIR_get_thunk_target (MIR_context_t context, void *thunk);
-extern MIR_item_t _MIR_get_thunk_func (MIR_context_t context, void *thunk);
+extern void *_MIR_get_thunk (MIR_context_t ctx, MIR_item_t item);
+extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
+extern void *_MIR_get_thunk_target (MIR_context_t ctx, void *thunk);
+extern MIR_item_t _MIR_get_thunk_func (MIR_context_t ctx, void *thunk);
 
 #endif /* #ifndef MIR_H */
