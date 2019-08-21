@@ -17,7 +17,7 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test
 	@echo ==============================Test is done
       
-bench: interp-bench gen-bench io-bench mir2c-bench c2mir-bench
+bench: interp-bench gen-bench io-bench mir2c-bench c2mir-bench gen-speed
 	@echo ==============================Bench is done
 
 mir-test:
@@ -113,7 +113,9 @@ gen-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
 gen-speed:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE -DTEST_GENERATION_ONLY mir.c mir-gen.c mir-tests/loop-sieve-gen.c && valgrind --tool=lackey ./a.out
+	if type valgrind  > /dev/null 2>&1; then \
+	  $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_SCAN -DTEST_GEN_SIEVE -DTEST_GENERATION_ONLY mir.c mir-gen.c mir-tests/loop-sieve-gen.c && valgrind --tool=lackey ./a.out; \
+	fi
 
 readme-example-test:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/readme-example.c && ./a.out
