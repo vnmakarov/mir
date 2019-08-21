@@ -296,7 +296,12 @@ ex100:    func v, 0
    and run MIR code
 
 ## MIR project competitors
-  * I only see two real universal light-weight JIT competitors
+  * I only see three projects which could be considered or adapted as real universal light-weight JIT competitors
+  * [**QBE**](https://github.com/8l/qbe):
+    * It is small (10K C lines)
+    * It uses SSA based IR (kind of simplified LLVM IR)
+    * It has the same optimizations as MIR-generator plus aliasing and loop analysis for better RA but QBE has no inlining
+    * It generates assembler code which makes QBE 30 slower in machine code generation than MIR-generator
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
       * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR
@@ -310,9 +315,9 @@ ex100:    func v, 0
       minus SCCP
     * RyuJIT uses SSA
   * Other candidates:
-    * [**QBE**](https://github.com/8l/qbe): standalone+, small+ (10K LOC), SSA-, ASM generation-,
-      MIT License
     * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-,
       ASM generation-, LGPL2
     * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-,
       big- (70K LOC of Rust-), SSA-, Apache License
+    * [**NanoJIT**](https://github.com/dibyendumajumdar/nanojit), standalone+, medium (40K C++ LOC), only simple RA-,
+      Mozilla Public License
