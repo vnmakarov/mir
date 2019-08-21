@@ -154,10 +154,12 @@ ex100:    func v, 0
   * Running code from above example could look the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
 ```
-    MIR_load_module (m1); MIR_load_module (m2); MIR_load_external ("printf", printf);
-    MIR_link (MIR_set_interp_interface);
+    /* ctx is a context created by MIR_init */
+    MIR_load_module (ctx, m1); MIR_load_module (ctx, m2);
+    MIR_load_external (ctx, "printf", printf);
+    MIR_link (ctx, MIR_set_interp_interface);
     /* or MIR_gen (MIR_set_gen_interface); to generate and use the machine code */
-    MIR_interp (func, &result, 0); /* zero here is arguments number  */
+    MIR_interp (ctx, func, &result, 0); /* zero here is arguments number  */
     /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
 
