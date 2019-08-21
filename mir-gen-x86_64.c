@@ -80,7 +80,9 @@ static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
 
 static const int reg_save_area_size = 176;
 
-static MIR_disp_t get_stack_slot_offset (MIR_type_t type, MIR_reg_t slot) { /* slot is 0, 1, ... */
+static MIR_disp_t get_stack_slot_offset (MIR_context_t context, MIR_type_t type, MIR_reg_t slot) { /* slot is 0, 1, ... */
+  struct gen_context *gen_context = *gen_context_loc (context);
+  
   return - ((MIR_disp_t) (slot + (type == MIR_T_LD ? 2 : 1)) * 8
 	    + (curr_func_item->u.func->vararg_p ? reg_save_area_size : 0));
 }
@@ -156,6 +158,7 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type,
 }
 
 static void machinize_call (MIR_context_t context, MIR_insn_t call_insn) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t nargs, nops = MIR_insn_nops (context, call_insn), start = proto->nres + 2;
@@ -302,7 +305,9 @@ static const char *VA_ARG = "mir.va_arg";
 
 static void get_builtin (MIR_context_t context, MIR_insn_code_t code,
 			 MIR_item_t *proto_item, MIR_item_t *func_import_item) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   MIR_type_t res_type;
+  
   switch (code) {
   case MIR_UI2F:
     res_type = MIR_T_F;
@@ -390,6 +395,7 @@ struct target_context {
 #define label_refs gen_context->target_context->label_refs
 
 static void machinize (MIR_context_t context) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   MIR_func_t func;
   MIR_type_t type, mem_type, res_type;
   MIR_insn_code_t code, new_insn_code;
@@ -587,6 +593,7 @@ static void dsave (MIR_context_t context, MIR_insn_t anchor, int disp, MIR_reg_t
 }
 
 static void make_prolog_epilog (MIR_context_t context, bitmap_t used_hard_regs, size_t stack_slots_num) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
   MIR_op_t sp_reg_op, fp_reg_op;
@@ -1040,7 +1047,8 @@ static int pattern_index_cmp (const void *a1, const void *a2) {
   return c1 != c2 ? c1 - c2 : (long) i1 - (long) i2;
 }
 
-static void patterns_init (void) {
+static void patterns_init (MIR_context_t context) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   int i, ind, n = sizeof (patterns) / sizeof (struct pattern);
   MIR_insn_code_t prev_code, code;
   insn_pattern_info_t *info_addr;
@@ -1195,6 +1203,7 @@ static int pattern_match_p (MIR_context_t context, const struct pattern *pat, MI
 }
 
 static const char *find_insn_pattern_replacement (MIR_context_t context, MIR_insn_t insn) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   int i;
   const struct pattern *pat;
   insn_pattern_info_t info = VARR_GET (insn_pattern_info_t, insn_pattern_info, insn->code);
@@ -1207,7 +1216,9 @@ static const char *find_insn_pattern_replacement (MIR_context_t context, MIR_ins
   return NULL;
 }
 
-static void patterns_finish (void) {
+static void patterns_finish (MIR_context_t context) {
+  struct gen_context *gen_context = *gen_context_loc (context);
+  
   VARR_DESTROY (int, pattern_indexes);
   VARR_DESTROY (insn_pattern_info_t, insn_pattern_info);
 }
@@ -1312,13 +1323,13 @@ static void setup_mem (MIR_mem_t mem, int *mod, int *rm, int *scale, int *base, 
   }
 }
 
-static void put_byte (int byte) {
+static void put_byte (struct gen_context *gen_context, int byte) {
   VARR_PUSH (uint8_t, result_code, byte);
 }
 
-static void put_uint64 (uint64_t v, int nb) {
+static void put_uint64 (struct gen_context *gen_context, uint64_t v, int nb) {
   for (; nb > 0; nb--) {
-    put_byte (v & 0xff); v >>= 8;
+    put_byte (gen_context, v & 0xff); v >>= 8;
   }
 }
 
@@ -1328,7 +1339,7 @@ static void set_int64 (uint8_t *addr, int64_t v, int nb) {
   }
 }
 
-static size_t add_to_const_pool (uint64_t v) {
+static size_t add_to_const_pool (struct gen_context *gen_context, uint64_t v) {
   uint64_t *addr = VARR_ADDR (uint64_t, const_pool);
   size_t n, len = VARR_LENGTH (uint64_t, const_pool);
 
@@ -1339,11 +1350,11 @@ static size_t add_to_const_pool (uint64_t v) {
   return len;
 }
 
-static int setup_imm_addr (uint64_t v, int *mod, int *rm, int64_t *disp32) {
+static int setup_imm_addr (struct gen_context *gen_context, uint64_t v, int *mod, int *rm, int64_t *disp32) {
   const_ref_t cr;
   size_t n;
 	
-  n = add_to_const_pool (v);
+  n = add_to_const_pool (gen_context, v);
   setup_rip_rel_addr (0, mod, rm, disp32);
   cr.pc = 0; cr.const_num = n;
   VARR_PUSH (const_ref_t, const_refs, cr);
@@ -1351,6 +1362,7 @@ static int setup_imm_addr (uint64_t v, int *mod, int *rm, int64_t *disp32) {
 }
 
 static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replacement) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   const char *p, *insn_str;
   
   if (insn->code == MIR_ALLOCA && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
@@ -1520,7 +1532,7 @@ static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replac
 	++p;
 	v = read_hex (&p);
 	gen_assert (const_ref_num < 0 && disp32 < 0);
-	const_ref_num = setup_imm_addr (v, &mod, &rm, &disp32);
+	const_ref_num = setup_imm_addr (gen_context, v, &mod, &rm, &disp32);
 	break;
       case 'h':
 	++p;
@@ -1549,7 +1561,7 @@ static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replac
 	gen_assert (FALSE);
       }
     }
-    if (prefix >= 0) put_byte (prefix);
+    if (prefix >= 0) put_byte (gen_context, prefix);
     
     if (rex_w > 0 || rex_r >= 0 || rex_x >= 0 || rex_b >= 0 || rex_0 >= 0) {
       if (rex_w < 0) rex_w = 0;
@@ -1557,18 +1569,18 @@ static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replac
       if (rex_x < 0) rex_x = 0;
       if (rex_b < 0) rex_b = 0;
       gen_assert (rex_w <= 1 && rex_r <= 1 && rex_x <= 1 && rex_b <= 1);
-      put_byte (0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | rex_b);
+      put_byte (gen_context, 0x40 | (rex_w << 3) | (rex_r << 2) | (rex_x << 1) | rex_b);
     }
     
     gen_assert (opcode0 >= 0 && lb <= 7);
     if (lb >= 0)
       opcode0 |= lb;
-    put_byte (opcode0);
+    put_byte (gen_context, opcode0);
     
     if (opcode1 >= 0)
-      put_byte (opcode1);
+      put_byte (gen_context, opcode1);
     if (opcode2 >= 0)
-      put_byte (opcode2);
+      put_byte (gen_context, opcode2);
     
     if (mod >= 0 || reg >= 0 || rm >= 0) {
       if (mod < 0)
@@ -1578,7 +1590,7 @@ static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replac
       if (rm < 0)
 	rm = 0;
       gen_assert (mod <= 3 && reg <= 7 && rm <= 7);
-      put_byte ((mod << 6) | (reg << 3) | rm);
+      put_byte (gen_context, (mod << 6) | (reg << 3) | rm);
     }
     if (scale >= 0 || base >= 0 || index >= 0) {
       if (scale < 0)
@@ -1588,22 +1600,22 @@ static void out_insn (MIR_context_t context, MIR_insn_t insn, const char *replac
       if (index < 0)
 	index = 0;
       gen_assert (scale <= 3 && base <= 7 && index <= 7);
-      put_byte ((scale << 6) | (index << 3) | base);
+      put_byte (gen_context, (scale << 6) | (index << 3) | base);
     }
     if (const_ref_num >= 0)
       VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, result_code);
     if (label_ref_num >= 0)
       VARR_ADDR (label_ref_t, label_refs)[label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
     if (disp8 >= 0)
-      put_byte (disp8);
+      put_byte (gen_context, disp8);
     if (disp32 >= 0)
-      put_uint64 (disp32, 4);
+      put_uint64 (gen_context, disp32, 4);
     if (imm8 >= 0)
-      put_byte (imm8);
+      put_byte (gen_context, imm8);
     if (imm32 >= 0)
-      put_uint64 (imm32, 4);
+      put_uint64 (gen_context, imm32, 4);
     if (imm64_p)
-      put_uint64 (imm64, 8);
+      put_uint64 (gen_context, imm64, 8);
 
     if (label_ref_num >= 0)
       VARR_ADDR (label_ref_t, label_refs)[label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
@@ -1624,6 +1636,7 @@ static int insn_ok_p (MIR_context_t context, MIR_insn_t insn) {
 }
 
 static uint8_t *target_translate (MIR_context_t context, size_t *len) {
+  struct gen_context *gen_context = *gen_context_loc (context);
   size_t i;
   MIR_insn_t insn;
   const char *replacement;
@@ -1662,16 +1675,20 @@ static uint8_t *target_translate (MIR_context_t context, size_t *len) {
 }
 
 static void target_init (MIR_context_t context) {
+  struct gen_context *gen_context = *gen_context_loc (context);
+
   gen_context->target_context = gen_malloc (context, sizeof (struct target_context));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
   VARR_CREATE (const_ref_t, const_refs, 0);
   VARR_CREATE (label_ref_t, label_refs, 0);
-  patterns_init ();
+  patterns_init (context);
 }
 
-static void target_finish (void) {
-  patterns_finish ();
+static void target_finish (MIR_context_t context) {
+  struct gen_context *gen_context = *gen_context_loc (context);
+
+  patterns_finish (context);
   VARR_DESTROY (uint8_t, result_code);
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);
