@@ -39,11 +39,11 @@ static inline int mir_assert (int cond) {return 0 && cond;}
 
 typedef enum MIR_error_type {
   MIR_no_error, MIR_syntax_error, MIR_binary_io_error, MIR_alloc_error, MIR_finish_error,
-  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_func_error, MIR_vararg_func_error,
-  MIR_nested_func_error, MIR_wrong_param_value_error, MIR_reserved_name_error, MIR_import_export_error,
-  MIR_undeclared_func_reg_error, MIR_repeated_decl_error, MIR_reg_type_error, MIR_unique_reg_error,
-  MIR_undeclared_op_ref_error, MIR_ops_num_error, MIR_call_op_error, MIR_ret_error,
-  MIR_op_mode_error, MIR_out_op_error,
+  MIR_no_module_error, MIR_nested_module_error, MIR_no_func_error, MIR_func_error,
+  MIR_vararg_func_error, MIR_nested_func_error, MIR_wrong_param_value_error,
+  MIR_reserved_name_error, MIR_import_export_error, MIR_undeclared_func_reg_error,
+  MIR_repeated_decl_error, MIR_reg_type_error, MIR_unique_reg_error, MIR_undeclared_op_ref_error,
+  MIR_ops_num_error, MIR_call_op_error, MIR_ret_error, MIR_op_mode_error, MIR_out_op_error,
   MIR_invalid_insn_error,
 } MIR_error_type_t;
 
@@ -53,7 +53,8 @@ typedef enum MIR_error_type {
 #define MIR_NO_RETURN
 #endif
 
-typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *format, ...);
+typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type,
+						const char *format, ...);
 
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
@@ -65,14 +66,14 @@ typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, con
    o Operand types should be what the insn expects */
 typedef enum {
   /* Abbreviations:
-     I - 64-bit integer, S -short (32-bit), U - unsigned, F -float, D - double, LD - long double.  */
+     I - 64-bit int, S - short (32-bit), U - unsigned, F -float, D - double, LD - long double.  */
   /* 2 operand insns: */
   MIR_MOV, MIR_FMOV, MIR_DMOV, MIR_LDMOV, /* Moves */
   /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
   MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32,
-  MIR_I2F, MIR_I2D, MIR_I2LD,             /* Integer to float or (long) double conversion */
-  MIR_UI2F, MIR_UI2D, MIR_UI2LD,          /* Unsigned integer to float or (long) double conversion */
-  MIR_F2I, MIR_D2I, MIR_LD2I,             /* Float or (long) double to integer conversion */
+  MIR_I2F, MIR_I2D, MIR_I2LD,          /* Integer to float or (long) double conversion */
+  MIR_UI2F, MIR_UI2D, MIR_UI2LD,       /* Unsigned integer to float or (long) double conversion */
+  MIR_F2I, MIR_D2I, MIR_LD2I,         /* Float or (long) double to integer conversion */
   MIR_F2D, MIR_F2LD, MIR_D2F, MIR_D2LD, MIR_LD2F, MIR_LD2D, /* Float, (long) double conversions */
   MIR_NEG, MIR_NEGS, MIR_FNEG, MIR_DNEG, MIR_LDNEG,         /* Changing sign */
   /* 3 operand insn: */

@@ -86,17 +86,20 @@ static void out_op3 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str)
 
 static void out_uop3 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   out_op (ctx, f, ops[0]); fprintf (f, " = (uint64_t) ");
-  out_op (ctx, f, ops[1]); fprintf (f, " %s (uint64_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ";\n");
+  out_op (ctx, f, ops[1]); fprintf (f, " %s (uint64_t) ", str);
+  out_op (ctx, f, ops[2]); fprintf (f, ";\n");
 }
 
 static void out_sop3 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   out_op (ctx, f, ops[0]); fprintf (f, " = (int32_t) ");
-  out_op (ctx, f, ops[1]); fprintf (f, " %s (int32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ";\n");
+  out_op (ctx, f, ops[1]); fprintf (f, " %s (int32_t) ", str);
+  out_op (ctx, f, ops[2]); fprintf (f, ";\n");
 }
 
 static void out_usop3 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   out_op (ctx, f, ops[0]); fprintf (f, " = (uint32_t) ");
-  out_op (ctx, f, ops[1]); fprintf (f, " %s (uint32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ";\n");
+  out_op (ctx, f, ops[1]); fprintf (f, " %s (uint32_t) ", str);
+  out_op (ctx, f, ops[2]); fprintf (f, ";\n");
 }
 
 static void out_jmp (MIR_context_t ctx, FILE *f, MIR_op_t label_op) {
@@ -106,22 +109,26 @@ static void out_jmp (MIR_context_t ctx, FILE *f, MIR_op_t label_op) {
 
 static void out_bcmp (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   fprintf (f, "if ((int64_t) "); out_op (ctx, f, ops[1]);
-  fprintf (f, " %s (int64_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") "); out_jmp (ctx, f, ops[0]);
+  fprintf (f, " %s (int64_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") ");
+  out_jmp (ctx, f, ops[0]);
 }
 
 static void out_bucmp (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   fprintf (f, "if ((uint64_t) "); out_op (ctx, f, ops[1]);
-  fprintf (f, " %s (uint64_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") "); out_jmp (ctx, f, ops[0]);
+  fprintf (f, " %s (uint64_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") ");
+  out_jmp (ctx, f, ops[0]);
 }
 
 static void out_bscmp (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   fprintf (f, "if ((int32_t) "); out_op (ctx, f, ops[1]);
-  fprintf (f, " %s (int32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") "); out_jmp (ctx, f, ops[0]);
+  fprintf (f, " %s (int32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") ");
+  out_jmp (ctx, f, ops[0]);
 }
 
 static void out_buscmp (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   fprintf (f, "if ((uint32_t) "); out_op (ctx, f, ops[1]);
-  fprintf (f, " %s (uint32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") "); out_jmp (ctx, f, ops[0]);
+  fprintf (f, " %s (uint32_t) ", str); out_op (ctx, f, ops[2]); fprintf (f, ") ");
+  out_jmp (ctx, f, ops[0]);
 }
 
 static void out_fop3 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
@@ -250,7 +257,8 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
   case MIR_FBGT: case MIR_DBGT: case MIR_LDBGT: out_bfcmp (ctx, f, ops, ">"); break;
   case MIR_FBGE: case MIR_DBGE: case MIR_LDBGE: out_bfcmp (ctx, f, ops, ">="); break;
   case MIR_ALLOCA:
-    out_op (ctx, f, ops[0]); fprintf (f, " = alloca ("); out_op (ctx, f, ops[1]); fprintf (f, ");\n");
+    out_op (ctx, f, ops[0]); fprintf (f, " = alloca (");
+    out_op (ctx, f, ops[1]); fprintf (f, ");\n");
     break;
   case MIR_CALL: case MIR_INLINE: {
     MIR_proto_t proto;
@@ -260,7 +268,8 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
 		&& ops[0].mode == MIR_OP_REF && ops[0].u.ref->item_type == MIR_proto_item);
     proto = ops[0].u.ref->u.proto;
     if (proto->nres > 1) {
-      (*MIR_get_error_func (ctx)) (MIR_call_op_error, " can not translate multiple results functions into C");
+      (*MIR_get_error_func (ctx)) (MIR_call_op_error,
+				   " can not translate multiple results functions into C");
     } else if (proto->nres == 1) {
       out_op (ctx, f, ops[2]); fprintf (f, " = ");
       start = 3;
@@ -306,7 +315,8 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     else if (proto->nres == 1)
       out_type (f, proto->res_types[0]);
     else
-      (*MIR_get_error_func (ctx)) (MIR_func_error, "Multiple result functions can not be called in C");
+      (*MIR_get_error_func (ctx)) (MIR_func_error,
+				   "Multiple result functions can not be called in C");
     fprintf (f, " (*%s) (", proto->name);
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
@@ -329,7 +339,8 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   else if (curr_func->nres == 1)
     out_type (f, curr_func->res_types[0]);
   else
-    (*MIR_get_error_func (ctx)) (MIR_func_error, "Multiple result functions can not be represented in C");
+    (*MIR_get_error_func (ctx)) (MIR_func_error,
+				 "Multiple result functions can not be represented in C");
   fprintf (f, " %s (", curr_func->name);
   if (curr_func->nargs == 0)
     fprintf (f, "void");
@@ -337,8 +348,8 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     if (i != 0)
       fprintf (f, ", ");
     var = VARR_GET (MIR_var_t, curr_func->vars, i); out_type (f, var.type);
-    fprintf (f, var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD
-	     ? " %s" : " _%s", var.name);
+    fprintf (f, var.type == MIR_T_I64 || var.type == MIR_T_F
+	     || var.type == MIR_T_D || var.type == MIR_T_LD ? " %s" : " _%s", var.name);
   }
   fprintf (f, ") {\n");
   for (i = 0; i < curr_func->nargs; i++) {

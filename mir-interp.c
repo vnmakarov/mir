@@ -139,7 +139,9 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
   
   VARR_TRUNC (MIR_insn_t, branches, 0);
   VARR_TRUNC (MIR_val_t, code_varr, 0);
-  for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn)) {
+  for (insn = DLIST_HEAD (MIR_insn_t, func->insns);
+       insn != NULL;
+       insn = DLIST_NEXT (MIR_insn_t, insn)) {
     MIR_insn_code_t code = insn->code;
     size_t nops = MIR_insn_nops (ctx, insn);
     MIR_op_t *ops = insn->ops;
@@ -148,11 +150,13 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     switch (code) {
     case MIR_MOV: /* loads, imm moves */
       if (ops[0].mode == MIR_OP_MEM) {
-	get_icode (interp_ctx, &v, get_int_mem_insn_code (FALSE, ops[0].u.mem.type)); VARR_PUSH (MIR_val_t, code_varr, v);
+	get_icode (interp_ctx, &v, get_int_mem_insn_code (FALSE, ops[0].u.mem.type));
+	VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[1], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	push_mem (interp_ctx, ops[0]);
       } else if (ops[1].mode == MIR_OP_MEM) {
-	get_icode (interp_ctx, &v, get_int_mem_insn_code (TRUE, ops[1].u.mem.type)); VARR_PUSH (MIR_val_t, code_varr, v);
+	get_icode (interp_ctx, &v, get_int_mem_insn_code (TRUE, ops[1].u.mem.type));
+	VARR_PUSH (MIR_val_t, code_varr, v);
 	v.i = get_reg (ops[0], &max_nreg); VARR_PUSH (MIR_val_t, code_varr, v);
 	push_mem (interp_ctx, ops[1]);
       } else if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT) {
@@ -395,11 +399,13 @@ static ALWAYS_INLINE long double *get_2ldops (MIR_val_t *bp, code_t c, long doub
   *p = *get_ldop (bp, c + 1); return get_ldop (bp, c);
 }
 
-static ALWAYS_INLINE long double *get_3ldops (MIR_val_t *bp, code_t c, long double *p1, long double *p2) {
+static ALWAYS_INLINE long double *get_3ldops (MIR_val_t *bp,
+					      code_t c, long double *p1, long double *p2) {
   *p1 = *get_ldop (bp, c + 1); *p2 = *get_ldop (bp, c + 2); return get_ldop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_ldcmp_ops (MIR_val_t *bp, code_t c, long double *p1, long double *p2) {
+static ALWAYS_INLINE int64_t *get_ldcmp_ops (MIR_val_t *bp,
+					     code_t c, long double *p1, long double *p2) {
   *p1 = *get_ldop (bp, c + 1); *p2 = *get_ldop (bp, c + 2); return get_iop (bp, c);
 }
 
@@ -601,28 +607,31 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
       ltab [MIR_MOV] = &&L_MIR_MOV; ltab [MIR_FMOV] = &&L_MIR_FMOV;
       ltab [MIR_DMOV] = &&L_MIR_DMOV; ltab [MIR_LDMOV] = &&L_MIR_LDMOV;
       ltab [MIR_EXT8] = &&L_MIR_EXT8; ltab [MIR_EXT16] = &&L_MIR_EXT16;
-      ltab [MIR_EXT32] = &&L_MIR_EXT32;
-      ltab [MIR_UEXT8] = &&L_MIR_UEXT8; ltab [MIR_UEXT16] = &&L_MIR_UEXT16;
-      ltab [MIR_UEXT32] = &&L_MIR_UEXT32;
+      ltab [MIR_EXT32] = &&L_MIR_EXT32; ltab [MIR_UEXT8] = &&L_MIR_UEXT8;
+      ltab [MIR_UEXT16] = &&L_MIR_UEXT16; ltab [MIR_UEXT32] = &&L_MIR_UEXT32;
       ltab [MIR_I2F] = &&L_MIR_I2F; ltab [MIR_I2D] = &&L_MIR_I2D; ltab [MIR_I2LD] = &&L_MIR_I2LD;
-      ltab [MIR_UI2F] = &&L_MIR_UI2F; ltab [MIR_UI2D] = &&L_MIR_UI2D; ltab [MIR_UI2LD] = &&L_MIR_UI2LD;
-      ltab [MIR_F2I] = &&L_MIR_F2I; ltab [MIR_D2I] = &&L_MIR_D2I; ltab [MIR_LD2I] = &&L_MIR_LD2I;
+      ltab [MIR_UI2F] = &&L_MIR_UI2F; ltab [MIR_UI2D] = &&L_MIR_UI2D;
+      ltab [MIR_UI2LD] = &&L_MIR_UI2LD; ltab [MIR_F2I] = &&L_MIR_F2I;
+      ltab [MIR_D2I] = &&L_MIR_D2I; ltab [MIR_LD2I] = &&L_MIR_LD2I;
       ltab [MIR_F2D] = &&L_MIR_F2D; ltab [MIR_F2LD] = &&L_MIR_F2LD;
       ltab [MIR_D2F] = &&L_MIR_D2F; ltab [MIR_D2LD] = &&L_MIR_D2LD;
       ltab [MIR_LD2F] = &&L_MIR_LD2F; ltab [MIR_LD2D] = &&L_MIR_LD2D;
       ltab [MIR_NEG] = &&L_MIR_NEG; ltab [MIR_NEGS] = &&L_MIR_NEGS;
-      ltab [MIR_FNEG] = &&L_MIR_FNEG; ltab [MIR_DNEG] = &&L_MIR_DNEG; ltab [MIR_LDNEG] = &&L_MIR_LDNEG;
-      ltab [MIR_ADD] = &&L_MIR_ADD; ltab [MIR_ADDS] = &&L_MIR_ADDS;
-      ltab [MIR_FADD] = &&L_MIR_FADD; ltab [MIR_DADD] = &&L_MIR_DADD; ltab [MIR_LDADD] = &&L_MIR_LDADD;
+      ltab [MIR_FNEG] = &&L_MIR_FNEG; ltab [MIR_DNEG] = &&L_MIR_DNEG;
+      ltab [MIR_LDNEG] = &&L_MIR_LDNEG; ltab [MIR_ADD] = &&L_MIR_ADD;
+      ltab [MIR_ADDS] = &&L_MIR_ADDS; ltab [MIR_FADD] = &&L_MIR_FADD;
+      ltab [MIR_DADD] = &&L_MIR_DADD; ltab [MIR_LDADD] = &&L_MIR_LDADD;
       ltab [MIR_SUB] = &&L_MIR_SUB; ltab [MIR_SUBS] = &&L_MIR_SUBS;
-      ltab [MIR_FSUB] = &&L_MIR_FSUB; ltab [MIR_DSUB] = &&L_MIR_DSUB; ltab [MIR_LDSUB] = &&L_MIR_LDSUB;
-      ltab [MIR_MUL] = &&L_MIR_MUL; ltab [MIR_MULS] = &&L_MIR_MULS;
-      ltab [MIR_FMUL] = &&L_MIR_FMUL; ltab [MIR_DMUL] = &&L_MIR_DMUL; ltab [MIR_LDMUL] = &&L_MIR_LDMUL;
+      ltab [MIR_FSUB] = &&L_MIR_FSUB; ltab [MIR_DSUB] = &&L_MIR_DSUB;
+      ltab [MIR_LDSUB] = &&L_MIR_LDSUB; ltab [MIR_MUL] = &&L_MIR_MUL;
+      ltab [MIR_MULS] = &&L_MIR_MULS; ltab [MIR_FMUL] = &&L_MIR_FMUL;
+      ltab [MIR_DMUL] = &&L_MIR_DMUL; ltab [MIR_LDMUL] = &&L_MIR_LDMUL;
       ltab [MIR_DIV] = &&L_MIR_DIV; ltab [MIR_DIVS] = &&L_MIR_DIVS;
       ltab [MIR_UDIV] = &&L_MIR_UDIV; ltab [MIR_UDIVS] = &&L_MIR_UDIVS;
-      ltab [MIR_FDIV] = &&L_MIR_FDIV; ltab [MIR_DDIV] = &&L_MIR_DDIV; ltab [MIR_LDDIV] = &&L_MIR_LDDIV;
-      ltab [MIR_MOD] = &&L_MIR_MOD; ltab [MIR_MODS] = &&L_MIR_MODS;
-      ltab [MIR_UMOD] = &&L_MIR_UMOD; ltab [MIR_UMODS] = &&L_MIR_UMODS;
+      ltab [MIR_FDIV] = &&L_MIR_FDIV; ltab [MIR_DDIV] = &&L_MIR_DDIV;
+      ltab [MIR_LDDIV] = &&L_MIR_LDDIV; ltab [MIR_MOD] = &&L_MIR_MOD;
+      ltab [MIR_MODS] = &&L_MIR_MODS; ltab [MIR_UMOD] = &&L_MIR_UMOD;
+      ltab [MIR_UMODS] = &&L_MIR_UMODS;
       ltab [MIR_AND] = &&L_MIR_AND; ltab [MIR_ANDS] = &&L_MIR_ANDS;
       ltab [MIR_OR] = &&L_MIR_OR; ltab [MIR_ORS] = &&L_MIR_ORS;
       ltab [MIR_XOR] = &&L_MIR_XOR; ltab [MIR_XORS] = &&L_MIR_XORS;
@@ -645,30 +654,35 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
       ltab [MIR_GE] = &&L_MIR_GE; ltab [MIR_GES] = &&L_MIR_GES;
       ltab [MIR_UGE] = &&L_MIR_UGE; ltab [MIR_UGES] = &&L_MIR_UGES;
       ltab [MIR_FGE] = &&L_MIR_FGE; ltab [MIR_DGE] = &&L_MIR_DGE; ltab [MIR_LDGE] = &&L_MIR_LDGE;
-      ltab [MIR_JMP] = &&L_MIR_JMP;
-      ltab [MIR_BT] = &&L_MIR_BT; ltab [MIR_BTS] = &&L_MIR_BTS;
+      ltab [MIR_JMP] = &&L_MIR_JMP; ltab [MIR_BT] = &&L_MIR_BT; ltab [MIR_BTS] = &&L_MIR_BTS;
       ltab [MIR_BF] = &&L_MIR_BF; ltab [MIR_BFS] = &&L_MIR_BFS;
       ltab [MIR_BEQ] = &&L_MIR_BEQ; ltab [MIR_BEQS] = &&L_MIR_BEQS;
-      ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ; ltab [MIR_LDBEQ] = &&L_MIR_LDBEQ;
+      ltab [MIR_FBEQ] = &&L_MIR_FBEQ; ltab [MIR_DBEQ] = &&L_MIR_DBEQ;
+      ltab [MIR_LDBEQ] = &&L_MIR_LDBEQ;
       ltab [MIR_BNE] = &&L_MIR_BNE; ltab [MIR_BNES] = &&L_MIR_BNES;
-      ltab [MIR_FBNE] = &&L_MIR_FBNE; ltab [MIR_DBNE] = &&L_MIR_DBNE; ltab [MIR_LDBNE] = &&L_MIR_LDBNE;
+      ltab [MIR_FBNE] = &&L_MIR_FBNE; ltab [MIR_DBNE] = &&L_MIR_DBNE;
+      ltab [MIR_LDBNE] = &&L_MIR_LDBNE;
       ltab [MIR_BLT] = &&L_MIR_BLT; ltab [MIR_BLTS] = &&L_MIR_BLTS;
       ltab [MIR_UBLT] = &&L_MIR_UBLT; ltab [MIR_UBLTS] = &&L_MIR_UBLTS;
-      ltab [MIR_FBLT] = &&L_MIR_FBLT; ltab [MIR_DBLT] = &&L_MIR_DBLT; ltab [MIR_LDBLT] = &&L_MIR_LDBLT;
+      ltab [MIR_FBLT] = &&L_MIR_FBLT; ltab [MIR_DBLT] = &&L_MIR_DBLT;
+      ltab [MIR_LDBLT] = &&L_MIR_LDBLT;
       ltab [MIR_BLE] = &&L_MIR_BLE; ltab [MIR_BLES] = &&L_MIR_BLES;
       ltab [MIR_UBLE] = &&L_MIR_UBLE; ltab [MIR_UBLES] = &&L_MIR_UBLES;
-      ltab [MIR_FBLE] = &&L_MIR_FBLE; ltab [MIR_DBLE] = &&L_MIR_DBLE; ltab [MIR_LDBLE] = &&L_MIR_LDBLE;
+      ltab [MIR_FBLE] = &&L_MIR_FBLE; ltab [MIR_DBLE] = &&L_MIR_DBLE;
+      ltab [MIR_LDBLE] = &&L_MIR_LDBLE;
       ltab [MIR_BGT] = &&L_MIR_BGT; ltab [MIR_BGTS] = &&L_MIR_BGTS;
       ltab [MIR_UBGT] = &&L_MIR_UBGT; ltab [MIR_UBGTS] = &&L_MIR_UBGTS;
-      ltab [MIR_FBGT] = &&L_MIR_FBGT; ltab [MIR_DBGT] = &&L_MIR_DBGT; ltab [MIR_LDBGT] = &&L_MIR_LDBGT;
+      ltab [MIR_FBGT] = &&L_MIR_FBGT; ltab [MIR_DBGT] = &&L_MIR_DBGT;
+      ltab [MIR_LDBGT] = &&L_MIR_LDBGT;
       ltab [MIR_BGE] = &&L_MIR_BGE; ltab [MIR_BGES] = &&L_MIR_BGES;
       ltab [MIR_UBGE] = &&L_MIR_UBGE; ltab [MIR_UBGES] = &&L_MIR_UBGES;
-      ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE; ltab [MIR_LDBGE] = &&L_MIR_LDBGE;
+      ltab [MIR_FBGE] = &&L_MIR_FBGE; ltab [MIR_DBGE] = &&L_MIR_DBGE;
+      ltab [MIR_LDBGE] = &&L_MIR_LDBGE;
       ltab [MIR_CALL] = &&L_MIR_CALL; ltab [MIR_INLINE] = &&L_MIR_INLINE;
-      ltab [MIR_RET] = &&L_MIR_RET;
-      ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA; ltab [MIR_BSTART] = &&L_MIR_BSTART;
-      ltab [MIR_BEND] = &&L_MIR_BEND; ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG;
-      ltab [MIR_VA_START] = &&L_MIR_VA_START; ltab [MIR_VA_END] = &&L_MIR_VA_END;
+      ltab [MIR_RET] = &&L_MIR_RET; ltab [MIR_ALLOCA] = &&L_MIR_ALLOCA;
+      ltab [MIR_BSTART] = &&L_MIR_BSTART; ltab [MIR_BEND] = &&L_MIR_BEND;
+      ltab [MIR_VA_ARG] = &&L_MIR_VA_ARG; ltab [MIR_VA_START] = &&L_MIR_VA_START;
+      ltab [MIR_VA_END] = &&L_MIR_VA_END;
       ltab [IC_LDI8] = &&L_IC_LDI8; ltab [IC_LDU8] = &&L_IC_LDU8;
       ltab [IC_LDI16] = &&L_IC_LDI16; ltab [IC_LDU16] = &&L_IC_LDU16;
       ltab [IC_LDI32] = &&L_IC_LDI32; ltab [IC_LDU32] = &&L_IC_LDU32;
@@ -790,7 +804,10 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
       }
       END_INSN;
       
-      CASE (MIR_F2D, 2);  {double *r = get_dop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;} END_INSN;
+      CASE (MIR_F2D, 2);  {
+	double *r = get_dop (bp, ops); float f = *get_fop (bp, ops + 1); *r = f;
+      }
+      END_INSN;
       CASE (MIR_F2LD, 2); {
 	long double *r = get_ldop (bp, ops);
 	float f = *get_fop (bp, ops + 1);
@@ -1021,10 +1038,14 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
       CASE (MIR_VA_ARG, 3); {
 	int64_t *r, va, tp;
 	
-	r = get_2iops (bp, ops, &va); tp = get_i (ops + 2); *r = (uint64_t) va_arg_builtin ((void *) va, tp);
+	r = get_2iops (bp, ops, &va); tp = get_i (ops + 2);
+	*r = (uint64_t) va_arg_builtin ((void *) va, tp);
       }
       END_INSN;
-      CASE (MIR_VA_START, 1); { va_start_interp_builtin (ctx, bp [get_i (ops)].a, bp[-1].a); } END_INSN;
+      CASE (MIR_VA_START, 1); {
+	va_start_interp_builtin (ctx, bp [get_i (ops)].a, bp[-1].a);
+      }
+      END_INSN;
       CASE (MIR_VA_END, 1); { va_end_interp_builtin (ctx, bp [get_i (ops)].a); } END_INSN;
 
       CASE (IC_LDI8, 2);  LD (iop, int64_t, int8_t); END_INSN;
@@ -1048,10 +1069,16 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
       CASE (IC_STF, 2); ST (fop, float, float); END_INSN;
       CASE (IC_STD, 2); ST (dop, double, double); END_INSN;
       CASE (IC_STLD, 2); ST (ldop, long double, long double); END_INSN;
-      CASE (IC_MOVI, 2); {int64_t *r = get_iop (bp, ops), imm = get_i (ops + 1); *r = imm;} END_INSN;
+      CASE (IC_MOVI, 2); {
+	int64_t *r = get_iop (bp, ops), imm = get_i (ops + 1); *r = imm;
+      }
+      END_INSN;
       CASE (IC_MOVF, 2); {float *r = get_fop (bp, ops), imm = get_f (ops + 1); *r = imm;} END_INSN;
       CASE (IC_MOVD, 2); {double *r = get_dop (bp, ops), imm = get_d (ops + 1); *r = imm;} END_INSN;
-      CASE (IC_MOVLD, 2); {long double *r = get_ldop (bp, ops), imm = get_ld (ops + 1); *r = imm;} END_INSN;
+      CASE (IC_MOVLD, 2); {
+	long double *r = get_ldop (bp, ops), imm = get_ld (ops + 1); *r = imm;
+      }
+      END_INSN;
 #if ! DIRECT_THREADED_DISPATCH
     default:
       mir_assert (FALSE);
@@ -1143,7 +1170,8 @@ static void call (MIR_context_t ctx, MIR_val_t *bp,
       if (mode == MIR_OP_FLOAT)
 	(*MIR_get_error_func (ctx)) (MIR_call_op_error,
 					 "passing float variadic arg (should be passed as double)");
-      call_arg_types[i] = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
+      call_arg_types[i] = (mode == MIR_OP_DOUBLE ? MIR_T_D
+			   : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
     }
     ff_interface_addr = ffi_address_ptr->a
       = get_ff_interface (ctx, nres, proto->res_types, nargs, call_arg_types);
