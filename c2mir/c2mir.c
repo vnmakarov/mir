@@ -8215,7 +8215,10 @@ static op_t force_val (op_t op, int arr_p) {
   sh = 64 - op.decl->bit_offset - op.decl->width;
   if (sh != 0)
     emit3 (MIR_LSH, temp_op.mir_op, temp_op.mir_op, MIR_new_int_op (ctx, sh));
-  emit3 (signed_integer_type_p (op.decl->decl_spec.type) ? MIR_RSH : MIR_URSH,
+  emit3 (signed_integer_type_p (op.decl->decl_spec.type)
+	 && (op.decl->decl_spec.type->mode != TM_ENUM
+	     || op.decl->width >= sizeof (mir_int) * MIR_CHAR_BIT)
+	 ? MIR_RSH : MIR_URSH,
 	 temp_op.mir_op, temp_op.mir_op, MIR_new_int_op (ctx, 64 - op.decl->width));
   return temp_op;
 }
