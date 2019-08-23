@@ -8199,11 +8199,11 @@ static op_t mem_to_address (op_t mem) {
   return mem;
 }
 
-static op_t force_val (op_t op) {
+static op_t force_val (op_t op, int arr_p) {
   op_t temp_op;
   int sh;
 
-  if (op.decl != NULL && op.decl->decl_spec.type->mode == TM_ARR && op.mir_op.mode == MIR_OP_MEM) {
+  if (arr_p && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
     return mem_to_address (op);
   }
@@ -8235,15 +8235,16 @@ static int gen_unary_op (node_t r, op_t *op, op_t *res) {
 static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
 			      op_t *op1, op_t *op2, op_t *res, op_t *var) {
   MIR_type_t t;
-
+  node_t e = NL_HEAD (r->ops);
+  
   if (push_const_val (r, res))
     return FALSE;
   t = get_mir_type (assign_expr_type);
-  *op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-  *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
+  *op1 = gen (e, NULL, NULL, FALSE);
+  *op2 = gen (NL_NEXT (e), NULL, NULL, TRUE);
   *op2 = promote (*op2, t, FALSE);
   *var = *op1;
-  *op1 = force_val (*op1);
+  *op1 = force_val (*op1, ((struct expr *) e->attr)->type->arr_p);
   *op1 = promote (*op1, t, TRUE);
   *res = get_new_temp (t);
   return TRUE;
@@ -9102,7 +9103,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     t = get_mir_type (type);
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    op1 = force_val (var);
+    op1 = force_val (var, FALSE);
     res = get_new_temp (t);
     emit2 (t == MIR_T_F ? MIR_FMOV : t == MIR_T_D ? MIR_DMOV : MIR_MOV, res.mir_op, op1.mir_op);
     val = promote (op1, t, TRUE);
@@ -9117,7 +9118,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     t = get_mir_type (type);
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    val = promote (force_val (var), t, TRUE);
+    val = promote (force_val (var, FALSE), t, TRUE);
     op2 = promote (type->mode != TM_PTR ? one_op
 		   : new_op (NULL, MIR_new_int_op (ctx, type_size (type->u.ptr_type))), t, FALSE);
     t = promote_mir_int_type (t);
@@ -9769,11 +9770,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     abort ();
   }
   if (true_label != NULL) {
-    res = promote (force_val (res), MIR_T_I64, FALSE);
+    res = promote (force_val (res, ((struct expr *) r->attr)->type->arr_p), MIR_T_I64, FALSE);
     emit2 (MIR_BT, MIR_new_label_op (ctx, true_label), res.mir_op);
     emit1 (MIR_JMP, MIR_new_label_op (ctx, false_label));
   } else if (val_p) {
-    res = force_val (res);
+    res = force_val (res, ((struct expr *) r->attr)->type->arr_p);
   }
   if (stmt_p)
     curr_call_arg_area_offset = saved_call_arg_area_offset;
