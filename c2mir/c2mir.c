@@ -7015,6 +7015,8 @@ static void check (node_t r, node_t context) {
   case N_FIELD: case N_DEREF_FIELD: {
     symbol_t sym;
     decl_t decl;
+    node_t width;
+    struct expr *width_expr;
 
     process_unop (r, &op1, &e1, &t1, r);
     e = create_expr (r);
@@ -7033,6 +7035,10 @@ static void check (node_t r, node_t context) {
       decl = sym.def_node->attr;
       *e->type = *decl->decl_spec.type;
       e->lvalue_node = sym.def_node;
+      if ((width = NL_EL (sym.def_node->ops, 2))->code != N_IGNORE
+	  && e->type->mode == TM_BASIC && (width_expr = width->attr)->const_p
+	  && width_expr->u.i_val < sizeof (mir_int) * MIR_CHAR_BIT)
+	e->type->u.basic_type = TP_INT;
     }
     break;
   }
