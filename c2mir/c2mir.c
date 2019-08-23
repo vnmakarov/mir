@@ -8223,25 +8223,22 @@ static op_t force_val (op_t op, int arr_p) {
   return temp_op;
 }
 
-static int gen_unary_op (node_t r, op_t *op, op_t *res) {
+static void gen_unary_op (node_t r, op_t *op, op_t *res) {
   MIR_type_t t;
 
-  if (push_const_val (r, res))
-    return FALSE;
+  assert (! ((struct expr *) r->attr)->const_p);
   *op = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   t = get_mir_type (((struct expr *) r->attr)->type);
   *op = promote (*op, t, FALSE);
   *res = get_new_temp (t);
-  return TRUE;
 }
 
-static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
-			      op_t *op1, op_t *op2, op_t *res, op_t *var) {
+static void gen_assign_bin_op (node_t r, struct type *assign_expr_type,
+			       op_t *op1, op_t *op2, op_t *res, op_t *var) {
   MIR_type_t t;
   node_t e = NL_HEAD (r->ops);
   
-  if (push_const_val (r, res))
-    return FALSE;
+  assert (! ((struct expr *) r->attr)->const_p);
   t = get_mir_type (assign_expr_type);
   *op1 = gen (e, NULL, NULL, FALSE);
   *op2 = gen (NL_NEXT (e), NULL, NULL, TRUE);
@@ -8250,33 +8247,29 @@ static int gen_assign_bin_op (node_t r, struct type *assign_expr_type,
   *op1 = force_val (*op1, ((struct expr *) e->attr)->type->arr_p);
   *op1 = promote (*op1, t, TRUE);
   *res = get_new_temp (t);
-  return TRUE;
 }
 
-static int gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
-  MIR_type_t t = get_mir_type (((struct expr *) r->attr)->type);
+static void gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
+  struct expr *e = (struct expr *) r->attr;
+  MIR_type_t t = get_mir_type (e->type);
 
-  if (push_const_val (r, res))
-    return FALSE;
+  assert (! e->const_p);
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
   *op1 = promote (*op1, t, FALSE);
   *op2 = promote (*op2, t, FALSE);
   *res = get_new_temp (t);
-  return TRUE;
 }
 
-static int gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *res) {
+static void gen_cmp_op (node_t r, struct type *type, op_t *op1, op_t *op2, op_t *res) {
   MIR_type_t t = get_mir_type (type), res_t = get_int_mir_type (sizeof (mir_int));
 
-  if (push_const_val (r, res))
-    return FALSE;
+  assert (! ((struct expr *) r->attr)->const_p);
   *op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
   *op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
   *op1 = promote (*op1, t, FALSE);
   *op2 = promote (*op2, t, FALSE);
   *res = get_new_temp (res_t);
-  return TRUE;
 }
 
 static MIR_insn_code_t get_mir_type_insn_code (struct type *type, node_t r) {
@@ -9042,11 +9035,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     break;
   case N_BITWISE_NOT:
-    if (gen_unary_op (r, &op1, &res)) {
-      t = get_mir_type (((struct expr *) r->attr)->type);
-      emit3 (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_XOR : MIR_XORS,
-	     res.mir_op, op1.mir_op, minus_one_op.mir_op);
-    }
+    gen_unary_op (r, &op1, &res);
+    t = get_mir_type (((struct expr *) r->attr)->type);
+    emit3 (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_XOR : MIR_XORS,
+	   res.mir_op, op1.mir_op, minus_one_op.mir_op);
     break;
   case N_NOT:
     if (true_label != NULL) {
@@ -9068,23 +9060,23 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_ADD: case N_SUB:
     if (NL_NEXT (NL_HEAD (r->ops)) == NULL) { /* unary */
-      if (gen_unary_op (r, &op1, &res)) {
-	MIR_insn_code_t ic = get_mir_insn_code (r);
+      MIR_insn_code_t ic = get_mir_insn_code (r);
 
-	if (r->code == N_ADD) {
-	  ic = ic == MIR_FADD ? MIR_FMOV : ic == MIR_DADD ? MIR_DMOV : MIR_MOV;
-	  emit2 (ic, res.mir_op, op1.mir_op);
-	} else {
-	  ic = ic == MIR_FSUB ? MIR_FNEG : ic == MIR_DSUB ? MIR_DNEG : ic == MIR_SUB ? MIR_NEG : MIR_NEGS;
-	  emit2 (ic, res.mir_op, op1.mir_op);
-	}
+      gen_unary_op (r, &op1, &res);
+      if (r->code == N_ADD) {
+	ic = ic == MIR_FADD ? MIR_FMOV : ic == MIR_DADD ? MIR_DMOV : MIR_MOV;
+	emit2 (ic, res.mir_op, op1.mir_op);
+      } else {
+	ic = (ic == MIR_FSUB ? MIR_FNEG : ic == MIR_DSUB ? MIR_DNEG
+	      : ic == MIR_SUB ? MIR_NEG : MIR_NEGS);
+	emit2 (ic, res.mir_op, op1.mir_op);
       }
       break;
     }
   /* Fall through: */
   case N_AND: case N_OR: case N_XOR: case N_LSH: case N_RSH: case N_MUL: case N_DIV: case N_MOD:
-    if (gen_bin_op (r, &op1, &op2, &res))
-      emit_bin_op (r, ((struct expr *) r->attr)->type, res, op1, op2);
+    gen_bin_op (r, &op1, &op2, &res);
+    emit_bin_op (r, ((struct expr *) r->attr)->type, res, op1, op2);
     break;
   case N_EQ: case N_NE: case N_LT: case N_LE: case N_GT: case N_GE: {
     struct type *type1 = ((struct expr *) NL_HEAD (r->ops)->attr)->type;
@@ -9094,8 +9086,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     type = arithmetic_conversion (type1->mode == TM_PTR ? &ptr_type : type1,
 				  type2->mode == TM_PTR ? &ptr_type : type2);
     set_type_layout (&type);
-    if (! gen_cmp_op (r, &type, &op1, &op2, &res))
-      break;
+    gen_cmp_op (r, &type, &op1, &op2, &res);
     insn_code = get_mir_type_insn_code (&type, r);
     if (true_label == NULL) {
       emit3 (insn_code, res.mir_op, op1.mir_op, op2.mir_op);
@@ -9137,8 +9128,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_AND_ASSIGN: case N_OR_ASSIGN: case N_XOR_ASSIGN: case N_LSH_ASSIGN: case N_RSH_ASSIGN:
   case N_ADD_ASSIGN: case N_SUB_ASSIGN: case N_MUL_ASSIGN: case N_DIV_ASSIGN: case N_MOD_ASSIGN:
-    if (! gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &val, &op2, &res, &var))
-      assert (FALSE); /* Can not be a constant */
+    gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &val, &op2, &res, &var);
     emit_bin_op (r, ((struct expr *) r->attr)->type2, val, val, op2);
     t = get_op_type (var);
     t = promote_mir_int_type (t);
@@ -9172,8 +9162,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_ID: {
     e = r->attr;
-    if (push_const_val (r, &res)) {
-    } else if (e->lvalue_node == NULL) {
+    assert (! e->const_p);
+    if (e->lvalue_node == NULL) {
       res = new_op (NULL, MIR_new_ref_op (ctx, ((decl_t) e->def_node->attr)->item));
     } else if ((decl = e->lvalue_node->attr)->scope == top_scope
 	       || decl->decl_spec.static_p || decl->decl_spec.linkage == N_EXTERN) {
@@ -9321,20 +9311,18 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   }
   case N_ALIGNOF: case N_SIZEOF: case N_EXPR_SIZEOF:
-    if (gen_unary_op (r, &op1, &res))
-      assert (FALSE); /* should be a constant expression */
+    assert (FALSE);
     break;
   case N_CAST:
-    if (! push_const_val (r, &res)) {
-      op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
-      type = ((struct expr *) r->attr)->type;
-      if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) {
-	res = op1; res.decl = NULL;
-	res.mir_op.mode = MIR_OP_UNDEF;
-      } else {
-	t = get_mir_type (type);
-	res = cast (op1, t, TRUE);
-      }
+    assert (! ((struct expr *) r->attr)->const_p);
+    op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
+    type = ((struct expr *) r->attr)->type;
+    if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) {
+      res = op1; res.decl = NULL;
+      res.mir_op.mode = MIR_OP_UNDEF;
+    } else {
+      t = get_mir_type (type);
+      res = cast (op1, t, TRUE);
     }
     break;
   case N_COMPOUND_LITERAL: {
