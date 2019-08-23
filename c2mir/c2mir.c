@@ -8954,6 +8954,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   classify_node (r, &expr_attr_p, &stmt_p);
   assert ((true_label == NULL && false_label == NULL)
 	  || (true_label != NULL && false_label != NULL));
+  if (r->code != N_ANDAND && r->code != N_OROR && expr_attr_p && push_const_val (r, &res))
+    goto finish;
   switch (r->code) {
   case N_LIST:
     for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n))
@@ -9776,6 +9778,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   default:
     abort ();
   }
+ finish:
   if (true_label != NULL) {
     res = promote (force_val (res, ((struct expr *) r->attr)->type->arr_p), MIR_T_I64, FALSE);
     emit2 (MIR_BT, MIR_new_label_op (ctx, true_label), res.mir_op);
