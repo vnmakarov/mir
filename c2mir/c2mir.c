@@ -1373,6 +1373,44 @@ static token_t token_stringify (token_t t, VARR (token_t) *ts) {
   return t;
 }
 
+static node_t get_int_node_from_repr (const char *repr, char **stop,
+				      int base, int uns_p, int long_p, int llong_p, pos_t pos) {
+  mir_ullong ull = strtoull (repr, stop, base);
+
+  if (llong_p) {
+    if (! uns_p && (base == 10 || ull <= MIR_LLONG_MAX))
+      return new_ll_node (ull, pos);
+    return new_ull_node (ull, pos);
+  }
+  if (long_p) {
+    if (! uns_p && (base == 10 || ull <= MIR_LONG_MAX))
+      return new_l_node (ull, pos);
+    if (base != 10 && ull <= MIR_ULONG_MAX)
+      return new_ul_node (ull, pos);
+    if (! uns_p && (base == 10 || ull <= MIR_LLONG_MAX))
+      return new_ll_node (ull, pos);
+    return new_ull_node (ull, pos);
+  }
+  if (uns_p) {
+    if (ull <= MIR_UINT_MAX)
+      return new_u_node (ull, pos);
+    if (ull <= MIR_ULONG_MAX)
+      return new_ul_node (ull, pos);
+    return new_ull_node (ull, pos);
+  }
+  if (ull <= MIR_INT_MAX)
+    return new_i_node (ull, pos);
+  if (base != 10 && ull <= MIR_UINT_MAX)
+    return new_u_node (ull, pos);
+  if (ull <= MIR_LONG_MAX)
+    return new_l_node (ull, pos);
+  if (base != 10 && ull <= MIR_ULONG_MAX)
+    return new_ul_node (ull, pos);
+  if (base == 10 || ull <= MIR_LLONG_MAX)
+    return new_ll_node (ull, pos);
+  return new_ull_node (ull, pos);
+}
+
 static token_t pptoken2token (token_t t, int id2kw_p) {
   assert (t->code != T_HEADER && t->code != T_BOA && t->code != T_EOA
 	  && t->code != T_EOR && t->code != T_EOP && t->code != T_EOF
@@ -1440,20 +1478,8 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
       t->node = new_d_node (strtod (repr, &stop), t->pos);
     } else if (ldouble_p) {
       t->node = new_ld_node (strtold (repr, &stop), t->pos);
-    } else if (uns_p) {
-      if (llong_p) {
-	t->node = new_ull_node (strtoull (repr, &stop, base), t->pos);
-      } else if (long_p) {
-	t->node = new_ul_node (strtoul (repr, &stop, base), t->pos);
-      } else {
-	t->node = new_u_node (strtoul (repr, &stop, base), t->pos);
-      }
-    } else if (llong_p) {
-      t->node = new_ll_node (strtoull (repr, &stop, base), t->pos);
-    } else if (long_p) {
-      t->node = new_l_node (strtoul (repr, &stop, base), t->pos);
     } else {
-      t->node = new_i_node (strtoul (repr, &stop, base), t->pos);
+      t->node = get_int_node_from_repr (repr, &stop, base, uns_p, long_p, llong_p, t->pos);
     }
     if (stop != &repr [last + 1]) {
       fprintf (stderr, "%s:%s:%s\n", repr, stop, &repr [last + 1]);
