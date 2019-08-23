@@ -80,6 +80,7 @@ struct interp_ctx {
 #define branches interp_ctx->branches
 #define arg_vals_varr interp_ctx->arg_vals_varr
 #define arg_vals interp_ctx->arg_vals
+#define trace_insn_ident interp_ctx->trace_insn_ident
 #define trace_ident interp_ctx->trace_ident
 #define bstart_builtin interp_ctx->bstart_builtin
 #define bend_builtin interp_ctx->bend_builtin
@@ -500,7 +501,8 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops,
 		  void *addr, code_t res_ops, size_t nargs);
 
 #if MIR_INTERP_TRACE
-static void start_insn_trace (const char *name, func_desc_t func_desc, code_t pc, size_t nops) {
+static void start_insn_trace (MIR_context_t ctx, const char *name, func_desc_t func_desc, code_t pc, size_t nops) {
+  struct interp_ctx *interp_ctx = ctx->interp_ctx;
   code_t ops = pc + 1;
   
   for (int i = 0; i < trace_insn_ident; i++)
@@ -512,7 +514,7 @@ static void start_insn_trace (const char *name, func_desc_t func_desc, code_t pc
   }
 }
 
-static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) {
+static void finish_insn_trace (MIR_context_t ctx, MIR_insn_code_t code, code_t ops, MIR_val_t *bp) {
   int out_p;
   MIR_op_mode_t op_mode = MIR_OP_UNDEF;
 
@@ -532,7 +534,7 @@ static void finish_insn_trace (MIR_insn_code_t code, code_t ops, MIR_val_t *bp) 
   case IC_IMM_CALL:
     break;
   default:
-    op_mode = _MIR_insn_code_op_mode (code, 0, &out_p);
+    op_mode = _MIR_insn_code_op_mode (ctx, code, 0, &out_p);
     if (!out_p)
       op_mode = MIR_OP_UNDEF;
     break;
@@ -591,7 +593,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
   
 #if MIR_INTERP_TRACE
   MIR_full_insn_code_t trace_insn_code;
-#define START_INSN(v, nops) do {trace_insn_code = v; start_insn_trace (#v, func_desc, pc, nops);\
+#define START_INSN(v, nops) do {trace_insn_code = v; start_insn_trace (ctx, #v, func_desc, pc, nops); \
                                 ops = pc + 1; pc += nops + 1;} while (0)
 #else
 #define START_INSN(v, nops) do {ops = pc + 1; pc += nops + 1;} while (0)
@@ -700,7 +702,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc,
 #define CASE(value, nops) L_ ## value: START_INSN(value, nops)
 
 #if MIR_INTERP_TRACE
-#define END_INSN finish_insn_trace (trace_insn_code, ops, bp); goto *pc->a
+#define END_INSN finish_insn_trace (ctx, trace_insn_code, ops, bp); goto *pc->a
 #else
 #define END_INSN goto *pc->a
 #endif
