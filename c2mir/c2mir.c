@@ -8788,13 +8788,14 @@ static void gen_initializer (size_t init_start, op_t var,
   MIR_reg_t base;
   MIR_type_t t;
   MIR_item_t data;
-
+  struct expr *e;
+  
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
     assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) - init_start == 1);
     init_el = VARR_GET (init_el_t, init_els, init_start);
     val = gen (init_el.init, NULL, NULL, TRUE);
     t = get_op_type (var);
-    val = promote (val, promote_mir_int_type (t), FALSE);
+    val = cast (val, get_mir_type (init_el.el_type), FALSE);
     emit_scalar_assign (var, &val, t, FALSE);
   } else if (local_p) { /* local variable initialization: */
     assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
@@ -8814,7 +8815,7 @@ static void gen_initializer (size_t init_start, op_t var,
 		    : init_el.el_type->raw_size);
 	rel_offset = init_el.offset + init_el.el_type->raw_size;
       } else {
-	val = promote (val, promote_mir_int_type (t), FALSE);
+	val = cast (val, get_mir_type (init_el.el_type), FALSE);
 	emit_scalar_assign (new_op (init_el.member_decl,
 				    MIR_new_mem_op (ctx, t, offset + init_el.offset, base, 0, 1)),
 			    &val, t, i == init_start || rel_offset == init_el.offset);
