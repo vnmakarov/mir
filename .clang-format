@@ -1,0 +1,17 @@
+BasedOnStyle: google
+SpaceBeforeParens: Always
+IndentCaseLabels: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+SpaceAfterCStyleCast: true
+PointerAlignment: Right
+BreakBeforeBinaryOperators: All
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+ContinuationIndentWidth: 2
+PenaltyBreakBeforeFirstCallParameter: 100
+SortIncludes: false
+BreakStringLiterals: true
+BreakBeforeTernaryOperators: true
+AllowShortCaseLabelsOnASingleLine: true
+ColumnLimit: 100
