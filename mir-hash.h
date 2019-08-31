@@ -17,14 +17,16 @@
 static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax_p) {
   size_t i, start = 0;
   uint64_t tail = 0;
-  
+
   if (relax_p || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) {
-#if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) || defined(__s390__)  \
-    || defined(__m32c__) || defined(cris) || defined(__CR16__) || defined(__vax__)       \
-    || defined(__m68k__) || defined(__aarch64__) || defined(_M_AMD64) || defined(_M_IX86)
-    if (len == sizeof (uint64_t)) return *(uint64_t *) v;
+#if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) || defined(__s390__) \
+  || defined(__m32c__) || defined(cris) || defined(__CR16__) || defined(__vax__)        \
+  || defined(__m68k__) || defined(__aarch64__) || defined(_M_AMD64) || defined(_M_IX86)
+    if (len == sizeof (uint64_t))
+      return *(uint64_t *) v;
     if (len >= sizeof (uint32_t)) {
-      tail = (uint64_t) *(uint32_t *) v << 32; start = 4;
+      tail = (uint64_t) * (uint32_t *) v << 32;
+      start = 4;
     }
 #endif
   }
@@ -36,7 +38,7 @@ static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax
 static const uint64_t p1 = 0X65862b62bdf5ef4d, p2 = 0X288eea216831e6a7;
 static inline uint64_t mir_mum (uint64_t v, uint64_t c, int relax_p) {
   if (relax_p) {
-#if defined (__SIZEOF_INT128__)
+#if defined(__SIZEOF_INT128__)
     __uint128_t r = (__uint128_t) v * (__uint128_t) c;
     return (uint64_t) (r >> 64) + (uint64_t) r;
 #endif
@@ -53,7 +55,7 @@ static inline uint64_t mir_round (uint64_t state, uint64_t v, int relax_p) {
 static inline uint64_t mir_hash_1 (const void *key, size_t len, uint64_t seed, int relax_p) {
   const uint8_t *v = (const uint8_t *) key;
   uint64_t r = seed + len;
-  
+
   for (; len >= 16; len -= 16, v += 16) {
     r ^= mir_mum (mir_get_key_part (v, 8, relax_p), p1, relax_p);
     r ^= mir_mum (mir_get_key_part (v + 8, 8, relax_p), p2, relax_p);
