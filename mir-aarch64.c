@@ -24,12 +24,20 @@ void *_MIR_get_interp_shim (MIR_item_t from, MIR_item_t *to, void *handler) {
   uint32_t *u;
   uint64_t f = (uint64_t) from, t = (uint64_t) to, h = (uint64_t) handler;
 
-  u = (uint32_t *) addr; *u++ |= (f & 0xffff) << 5; *u++ |= ((f >> 16) & 0xffff) << 5;
-  *u++ |= ((f >> 32) & 0xffff) << 5; *u++ |= ((f >> 48) & 0xffff) << 5;
-  *u++ |= (t & 0xffff) << 5; *u++ |= ((t >> 16) & 0xffff) << 5;
-  *u++ |= ((t >> 32) & 0xffff) << 5; *u++ |= ((t >> 48) & 0xffff) << 5;
-  u = (uint32_t *) addr + 9; *u++ |= (h & 0xffff) << 5; *u++ |= ((h >> 16) & 0xffff) << 5;
-  *u++ |= ((h >> 32) & 0xffff) << 5; *u++ |= ((h >> 48) & 0xffff) << 5;
+  u = (uint32_t *) addr;
+  *u++ |= (f & 0xffff) << 5;
+  *u++ |= ((f >> 16) & 0xffff) << 5;
+  *u++ |= ((f >> 32) & 0xffff) << 5;
+  *u++ |= ((f >> 48) & 0xffff) << 5;
+  *u++ |= (t & 0xffff) << 5;
+  *u++ |= ((t >> 16) & 0xffff) << 5;
+  *u++ |= ((t >> 32) & 0xffff) << 5;
+  *u++ |= ((t >> 48) & 0xffff) << 5;
+  u = (uint32_t *) addr + 9;
+  *u++ |= (h & 0xffff) << 5;
+  *u++ |= ((h >> 16) & 0xffff) << 5;
+  *u++ |= ((h >> 32) & 0xffff) << 5;
+  *u++ |= ((h >> 48) & 0xffff) << 5;
   return addr;
 }
 
@@ -48,7 +56,9 @@ void *_MIR_get_thunk (void) {
 void _MIR_redirect_thunk (void *thunk, void *to) {
   uint32_t *u = (uint32_t *) thunk, mask = ~(0xffff << 5);
   uint64_t t = (uint64_t) to;
-  
-  u[0] = u[0] & mask | (t & 0xffff) << 5; u[1] = u[1] & mask | ((t >> 16) & 0xffff) << 5;
-  u[2] = u[2] & mask | ((t >> 32) & 0xffff) << 5; u[3] = u[3] & mask | ((t >> 48) & 0xffff) << 5;
+
+  u[0] = u[0] & mask | (t & 0xffff) << 5;
+  u[1] = u[1] & mask | ((t >> 16) & 0xffff) << 5;
+  u[2] = u[2] & mask | ((t >> 32) & 0xffff) << 5;
+  u[3] = u[3] & mask | ((t >> 48) & 0xffff) << 5;
 }
