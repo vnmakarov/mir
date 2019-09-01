@@ -2,7 +2,8 @@
 
 MIR_item_t create_mir_func_sieve (MIR_context_t ctx, size_t *len, MIR_module_t *m_res) {
   MIR_module_t m;
-  const char *str = "\n\
+  const char *str
+    = "\n\
 m_sieve: module\n\
 sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
@@ -29,7 +30,7 @@ fin:     ret count\n\
          endfunc\n\
          endmodule\n\
 ";
-  
+
   if (len != NULL)
     *len = strlen (str);
   MIR_scan_string (ctx, str);

@@ -10,7 +10,7 @@ int main (void) {
   MIR_val_t val;
   double start_time;
   MIR_context_t ctx = MIR_init ();
-  
+
   func = create_mir_func_sieve (ctx, NULL, &m);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "\n++++++ SIEVE before simplification:\n");
@@ -30,11 +30,11 @@ int main (void) {
   typedef int64_t (*loop_func) (void);
   MIR_set_interp_interface (ctx, func);
   int64_t res = ((loop_func) func->addr) ();
-  fprintf (stderr,
-	   "C interface SIEVE -> %"PRId64 ": %.3f sec\n", res, real_sec_time () - start_time);
+  fprintf (stderr, "C interface SIEVE -> %" PRId64 ": %.3f sec\n", res,
+           real_sec_time () - start_time);
 #else
   MIR_interp (ctx, func, &val, 0);
-  fprintf (stderr, "SIEVE -> %"PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
+  fprintf (stderr, "SIEVE -> %" PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
 #endif
   MIR_finish (ctx);
   return 0;

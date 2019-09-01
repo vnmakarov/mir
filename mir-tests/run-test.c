@@ -12,7 +12,7 @@ int main (int argc, char *argv[]) {
   int res;
   uint64_t (*fun_addr) (void);
   MIR_context_t ctx;
-  
+
   if (argc != 2 && argc != 3) {
     fprintf (stderr, "%s: [-i|-g] <input mir file>\n", argv[0]);
     exit (1);
@@ -34,16 +34,16 @@ int main (int argc, char *argv[]) {
     fprintf (stderr, "%s: there should be one module in the file %s\n", argv[0], mir_fname);
     exit (1);
   }
-  if (! gen_p && ! interpr_p)
+  if (!gen_p && !interpr_p)
     MIR_output (ctx, stderr);
   main_func = NULL;
-  for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f =  DLIST_NEXT (MIR_item_t, f))
+  for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f = DLIST_NEXT (MIR_item_t, f))
     if (f->item_type == MIR_func_item) {
       MIR_simplify_func (ctx, f, TRUE);
       if (strcmp (f->u.func->name, "main") == 0)
-	main_func = f;
+        main_func = f;
     }
-  if (! gen_p && ! interpr_p) {
+  if (!gen_p && !interpr_p) {
     fprintf (stderr, "+++++++++++++++++++After simplification:+++++++++++++++\n");
     MIR_output (ctx, stderr);
   }
@@ -56,7 +56,7 @@ int main (int argc, char *argv[]) {
   MIR_load_external (ctx, "exit", exit);
   MIR_load_external (ctx, "printf", printf);
   MIR_inline (ctx, main_func);
-  if (! gen_p && ! interpr_p) {
+  if (!gen_p && !interpr_p) {
     fprintf (stderr, "+++++++++++++++++++After inlining:+++++++++++++++\n");
     MIR_output (ctx, stderr);
   }
