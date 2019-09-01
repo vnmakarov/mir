@@ -1,5 +1,6 @@
 MIR_module_t create_args_module (MIR_context_t ctx) {
-  const char *str = "\n\
+  const char *str
+    = "\n\
 m:     module\n\
 p_pri: proto i64:v\n\
 p_prf: proto f:v\n\

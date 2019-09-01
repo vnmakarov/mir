@@ -11,7 +11,7 @@ int main (void) {
   MIR_item_t func;
   MIR_val_t val;
   MIR_context_t ctx = MIR_init ();
-  
+
   MIR_load_external (ctx, "print", print);
   m = create_hi_module (ctx);
   func = DLIST_TAIL (MIR_item_t, m->items);

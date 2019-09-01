@@ -3,8 +3,9 @@
 int main (void) {
   MIR_module_t m;
   MIR_context_t ctx = MIR_init ();
-  
-  MIR_scan_string (ctx, "\n\
+
+  MIR_scan_string (ctx,
+                   "\n\
 m_loop: module\n\
 loop:   func i64, i64:limit # a comment\n\
 \n\
@@ -17,7 +18,8 @@ L1:     ret count  # label with insn\n\
         endfunc\n\
         endmodule\n\
   ");
-  MIR_scan_string (ctx, "\n\
+  MIR_scan_string (ctx,
+                   "\n\
 m_sieve: module\n\
 sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\

@@ -2,7 +2,8 @@
 #include "../mir-gen.h"
 
 static void create_program (MIR_context_t ctx) {
-  const char *str = "\n\
+  const char *str
+    = "\n\
 m_sieve:  module\n\
           export sieve\n\
 sieve:    func i32, i32:N\n\
@@ -42,7 +43,7 @@ ex100:    func\n\
           endfunc\n\
           endmodule\n\
 ";
-  
+
   MIR_scan_string (ctx, str);
 }
 
@@ -57,13 +58,16 @@ int main (void) {
   MIR_item_t f1, f2;
   uint64_t res;
   MIR_context_t ctx = MIR_init ();
-  
+
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
   create_program (ctx);
   fprintf (stderr, "MIR program creation end -- %.0f usec\n", real_usec_time () - start_time);
-  m1 = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); m2 = DLIST_NEXT (MIR_module_t, m1);
-  f1 = DLIST_TAIL (MIR_item_t, m1->items); f2 = DLIST_TAIL (MIR_item_t, m2->items);
-  MIR_load_module (ctx, m2); MIR_load_module (ctx, m1);
+  m1 = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx));
+  m2 = DLIST_NEXT (MIR_module_t, m1);
+  f1 = DLIST_TAIL (MIR_item_t, m1->items);
+  f2 = DLIST_TAIL (MIR_item_t, m2->items);
+  MIR_load_module (ctx, m2);
+  MIR_load_module (ctx, m1);
   MIR_load_external (ctx, "printf", printf);
   MIR_link (ctx, MIR_set_interp_interface, NULL);
   MIR_gen_init (ctx);

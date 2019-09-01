@@ -24,7 +24,7 @@ int main (void) {
   uint64_t res;
 #endif
   MIR_context_t ctx = MIR_init ();
-  
+
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
   funcs = malloc (sizeof (MIR_item_t) * N);
   for (int i = 0; i < N; i++) {
@@ -58,13 +58,13 @@ int main (void) {
   start_execution_time = real_usec_time ();
 #if defined(TEST_GEN_LOOP)
   res = fun (arg);
-  fprintf (stderr, "fun (%ld) -> %ld",  arg, res);
+  fprintf (stderr, "fun (%ld) -> %ld", arg, res);
 #else
   res = fun ();
   fprintf (stderr, "sieve () -> %ld", res);
 #endif
   fprintf (stderr, " -- call %.0f usec, memory used = %.1f KB\n",
-	   real_usec_time () - start_execution_time, ((char *) sbrk (0) - start_heap) / 1000.0);
+           real_usec_time () - start_execution_time, ((char *) sbrk (0) - start_heap) / 1000.0);
   MIR_gen_finish (ctx);
   fprintf (stderr, "MIR_finish_gen end -- %.0f usec\n", real_usec_time () - start_time);
   MIR_finish (ctx);

@@ -6,7 +6,7 @@ int main (void) {
   FILE *f;
   const char *fname = "/tmp/__tmp.mirb";
   MIR_context_t ctx = MIR_init ();
-  
+
   create_mir_func_sieve (ctx, NULL, NULL);
   MIR_output (ctx, stderr);
   f = fopen (fname, "wb");

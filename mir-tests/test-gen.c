@@ -6,7 +6,7 @@ int main (int argc, char *argv[]) {
   MIR_item_t func;
   MIR_module_t m;
   MIR_context_t ctx;
-  
+
   if (argc != 2) {
     fprintf (stderr, "Usage: %s <mir file name>\n", argv[0]);
     exit (1);

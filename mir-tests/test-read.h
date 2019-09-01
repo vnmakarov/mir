@@ -2,7 +2,7 @@ static char *read_file (const char *name) {
   FILE *f;
   size_t len;
   char *str;
-  
+
   if ((f = fopen (name, "r")) == NULL) {
     perror (name);
     exit (1);

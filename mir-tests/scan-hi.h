@@ -1,5 +1,6 @@
 MIR_module_t create_hi_module (MIR_context_t ctx) {
-  const char *str = "\n\
+  const char *str
+    = "\n\
 m_hi:    module\n\
 proto:	 proto i32, i32:ch\n\
 	 import print\n\
@@ -21,7 +22,7 @@ hi:      func i32\n\
          endfunc\n\
          endmodule\n\
 ";
-  
+
   MIR_scan_string (ctx, str);
   return DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
 }
