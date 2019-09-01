@@ -9,10 +9,10 @@ typedef struct {
   void *reg_save_area;
 } va_list[1];
 
-#define va_start(ap, param) __builtin_va_start(ap)
-#define va_arg(ap, type)    __builtin_va_arg(ap, (type *) 0)
-#define va_end(ap)          0
-#define va_copy(dest, src)   ((dest)[0] = (src)[0])
+#define va_start(ap, param) __builtin_va_start (ap)
+#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)
+#define va_end(ap) 0
+#define va_copy(dest, src) ((dest)[0] = (src)[0])
 
 /* For standard headers of a GNU system: */
 #ifndef __GNUC_VA_LIST
