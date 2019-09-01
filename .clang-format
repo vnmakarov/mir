@@ -9,9 +9,10 @@ BreakBeforeBinaryOperators: All
 ConstructorInitializerIndentWidth: 2
 ContinuationIndentWidth: 2
 ContinuationIndentWidth: 2
-PenaltyBreakBeforeFirstCallParameter: 100
+PenaltyBreakBeforeFirstCallParameter: 10000
 SortIncludes: false
 BreakStringLiterals: true
 BreakBeforeTernaryOperators: true
 AllowShortCaseLabelsOnASingleLine: true
 ColumnLimit: 100
+MaxEmptyLinesToKeep: 1
