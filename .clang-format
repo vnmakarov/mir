@@ -16,4 +16,5 @@ BreakBeforeTernaryOperators: true
 AllowShortCaseLabelsOnASingleLine: true
 ColumnLimit: 100
 MaxEmptyLinesToKeep: 1
+#StatementMacros: [ 'REP2', 'REP3', 'REP4', 'REP5', 'REP6', 'REP7', 'REP8' ]
 #TypenameMacros: [ 'VARR', 'DLIST', 'HTAB' ]
