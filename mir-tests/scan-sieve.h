@@ -31,11 +31,9 @@ fin:     ret count\n\
          endmodule\n\
 ";
 
-  if (len != NULL)
-    *len = strlen (str);
+  if (len != NULL) *len = strlen (str);
   MIR_scan_string (ctx, str);
   m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-  if (m_res != NULL)
-    *m_res = m;
+  if (m_res != NULL) *m_res = m;
   return DLIST_TAIL (MIR_item_t, m->items);
 }
