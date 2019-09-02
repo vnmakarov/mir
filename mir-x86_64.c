@@ -122,8 +122,7 @@ static const uint8_t restore_pat[] = {
 VARR (uint8_t) * machine_insns;
 
 static uint8_t *push_insns (const uint8_t *pat, size_t pat_len) {
-  for (size_t i = 0; i < pat_len; i++)
-    VARR_PUSH (uint8_t, machine_insns, pat[i]);
+  for (size_t i = 0; i < pat_len; i++) VARR_PUSH (uint8_t, machine_insns, pat[i]);
   return VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns) - pat_len;
 }
 
@@ -150,8 +149,7 @@ static void gen_movxmm (uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
   memcpy (addr + 4, &offset, sizeof (uint32_t));
   assert (reg <= 7);
   addr[3] |= reg << 3;
-  if (b32_p)
-    addr[0] |= 1;
+  if (b32_p) addr[0] |= 1;
 }
 
 static void gen_ldst (uint32_t sp_offset, uint32_t src_offset, int b64_p) {
@@ -319,8 +317,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     } else if (results[i] == MIR_T_LD && n_fregs < 2) {
       addr = push_insns (fldt_pat, sizeof (fldt_pat));
       memcpy (addr + 2, &offset, sizeof (uint32_t));
-      if (n_fregs == 1)
-        push_insns (fxch_pat, sizeof (fxch_pat));
+      if (n_fregs == 1) push_insns (fxch_pat, sizeof (fxch_pat));
       n_fregs++;
     } else if (n_iregs < 2) {
       addr = push_insns (ld_pat, sizeof (ld_pat));
