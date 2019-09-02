@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #ifndef MIR_VARR_H
@@ -63,11 +63,9 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
                                                                                           \
   static inline void VARR_OP (T, create) (VARR (T) * *varr, size_t size) {                \
     VARR (T) * va;                                                                        \
-    if (size == 0)                                                                        \
-      size = VARR_DEFAULT_SIZE;                                                           \
+    if (size == 0) size = VARR_DEFAULT_SIZE;                                              \
     *varr = va = (VARR (T) *) malloc (sizeof (VARR (T)));                                 \
-    if (va == NULL)                                                                       \
-      mir_varr_error ("varr: no memory");                                                 \
+    if (va == NULL) mir_varr_error ("varr: no memory");                                   \
     va->els_num = 0;                                                                      \
     va->size = size;                                                                      \
     va->varr = (T *) malloc (size * sizeof (T));                                          \
@@ -127,8 +125,7 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
                                                                                           \
   static inline void VARR_OP (T, tailor) (VARR (T) * varr, size_t size) {                 \
     VARR_ASSERT (varr && varr->varr, "tailor", T);                                        \
-    if (varr->size != size)                                                               \
-      varr->varr = (T *) realloc (varr->varr, sizeof (T) * size);                         \
+    if (varr->size != size) varr->varr = (T *) realloc (varr->varr, sizeof (T) * size);   \
     varr->els_num = varr->size = size;                                                    \
   }                                                                                       \
                                                                                           \
