@@ -47,16 +47,12 @@ static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
       disp_p = TRUE;
     }
     if (op.u.mem.base != no_reg || op.u.mem.index != no_reg) {
-      if (disp_p)
-        fprintf (f, " + ");
-      if (op.u.mem.base != no_reg)
-        fprintf (f, "%s", MIR_reg_name (ctx, op.u.mem.base, curr_func));
+      if (disp_p) fprintf (f, " + ");
+      if (op.u.mem.base != no_reg) fprintf (f, "%s", MIR_reg_name (ctx, op.u.mem.base, curr_func));
       if (op.u.mem.index != no_reg) {
-        if (op.u.mem.base != no_reg)
-          fprintf (f, " + ");
+        if (op.u.mem.base != no_reg) fprintf (f, " + ");
         fprintf (f, "%s", MIR_reg_name (ctx, op.u.mem.index, curr_func));
-        if (op.u.mem.scale != 1)
-          fprintf (f, " * %u", op.u.mem.scale);
+        if (op.u.mem.scale != 1) fprintf (f, " * %u", op.u.mem.scale);
       }
     }
     fprintf (f, ")");
@@ -73,8 +69,7 @@ static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
 static void out_op2 (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *str) {
   out_op (ctx, f, ops[0]);
   fprintf (f, " = ");
-  if (str != NULL)
-    fprintf (f, "%s ", str);
+  if (str != NULL) fprintf (f, "%s ", str);
   out_op (ctx, f, ops[1]);
   fprintf (f, ";\n");
 }
@@ -179,8 +174,7 @@ static void out_bfcmp (MIR_context_t ctx, FILE *f, MIR_op_t *ops, const char *st
 static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
   MIR_op_t *ops = insn->ops;
 
-  if (insn->code != MIR_LABEL)
-    fprintf (f, "  ");
+  if (insn->code != MIR_LABEL) fprintf (f, "  ");
   switch (insn->code) {
   case MIR_MOV:
   case MIR_FMOV:
@@ -365,8 +359,7 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
     out_op (ctx, f, ops[1]);
     fprintf (f, ") (");
     for (size_t i = start; i < insn->nops; i++) {
-      if (i != start)
-        fprintf (f, ", ");
+      if (i != start) fprintf (f, ", ");
       out_op (ctx, f, ops[i]);
     }
     fprintf (f, ");\n");
@@ -389,8 +382,7 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_var_t var;
   size_t i, nlocals;
 
-  if (item->item_type == MIR_export_item)
-    return;
+  if (item->item_type == MIR_export_item) return;
   if (item->item_type == MIR_import_item) {
     fprintf (f, "extern char %s[];\n", item->u.import);
     return;
@@ -412,19 +404,15 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     fprintf (f, " (*%s) (", proto->name);
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
-      if (i != 0)
-        fprintf (f, ", ");
+      if (i != 0) fprintf (f, ", ");
       out_type (f, var.type);
-      if (var.name != NULL)
-        fprintf (f, " %s", var.name);
+      if (var.name != NULL) fprintf (f, " %s", var.name);
     }
-    if (i == 0)
-      fprintf (f, "void");
+    if (i == 0) fprintf (f, "void");
     fprintf (f, ");\n");
     return;
   }
-  if (!item->export_p)
-    fprintf (f, "static ");
+  if (!item->export_p) fprintf (f, "static ");
   curr_func = item->u.func;
   if (curr_func->nres == 0)
     fprintf (f, "void");
@@ -434,11 +422,9 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     (*MIR_get_error_func (ctx)) (MIR_func_error,
                                  "Multiple result functions can not be represented in C");
   fprintf (f, " %s (", curr_func->name);
-  if (curr_func->nargs == 0)
-    fprintf (f, "void");
+  if (curr_func->nargs == 0) fprintf (f, "void");
   for (i = 0; i < curr_func->nargs; i++) {
-    if (i != 0)
-      fprintf (f, ", ");
+    if (i != 0) fprintf (f, ", ");
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
     out_type (f, var.type);
     fprintf (f,
