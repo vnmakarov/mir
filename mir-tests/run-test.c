@@ -34,14 +34,12 @@ int main (int argc, char *argv[]) {
     fprintf (stderr, "%s: there should be one module in the file %s\n", argv[0], mir_fname);
     exit (1);
   }
-  if (!gen_p && !interpr_p)
-    MIR_output (ctx, stderr);
+  if (!gen_p && !interpr_p) MIR_output (ctx, stderr);
   main_func = NULL;
   for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f = DLIST_NEXT (MIR_item_t, f))
     if (f->item_type == MIR_func_item) {
       MIR_simplify_func (ctx, f, TRUE);
-      if (strcmp (f->u.func->name, "main") == 0)
-        main_func = f;
+      if (strcmp (f->u.func->name, "main") == 0) main_func = f;
     }
   if (!gen_p && !interpr_p) {
     fprintf (stderr, "+++++++++++++++++++After simplification:+++++++++++++++\n");

@@ -10,8 +10,7 @@ static MIR_item_t create_mir_func_sieve_api (MIR_context_t ctx, MIR_module_t *m_
   MIR_label_t cont3 = MIR_new_label (ctx);
 
   m = MIR_new_module (ctx, "m_sieve");
-  if (m_res != NULL)
-    *m_res = m;
+  if (m_res != NULL) *m_res = m;
   res_type = MIR_T_I64;
   func = MIR_new_func (ctx, "sieve", 1, &res_type, 0);
   iter = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "iter");

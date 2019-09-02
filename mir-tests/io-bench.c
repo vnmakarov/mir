@@ -14,15 +14,13 @@ int main (void) {
   MIR_context_t ctx = MIR_init ();
 
   start_time = clock ();
-  for (int i = 0; i < nfunc; i++)
-    create_mir_func_sieve_api (ctx, NULL);
+  for (int i = 0; i < nfunc; i++) create_mir_func_sieve_api (ctx, NULL);
   api_time_creation = (clock () - start_time) / CLOCKS_PER_SEC;
   fprintf (stderr, "Creating %d sieve functions by API: %.3f CPU sec\n", nfunc, api_time_creation);
   MIR_finish (ctx);
   ctx = MIR_init ();
   start_time = clock ();
-  for (int i = 0; i < nfunc; i++)
-    create_mir_func_sieve (ctx, &text_len, NULL);
+  for (int i = 0; i < nfunc; i++) create_mir_func_sieve (ctx, &text_len, NULL);
   scan_api_time_creation = (clock () - start_time) / CLOCKS_PER_SEC;
   fprintf (stderr, "Creating %d sieve functions from MIR text (%.3f MB): %.3f CPU sec - API use\n",
            nfunc, text_len / 1000000.0 * nfunc, scan_api_time_creation);
