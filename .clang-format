@@ -1,8 +1,8 @@
 BasedOnStyle: google
 SpaceBeforeParens: Always
 IndentCaseLabels: false
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
 SpaceAfterCStyleCast: true
 PointerAlignment: Right
 BreakBeforeBinaryOperators: All
@@ -16,3 +16,4 @@ BreakBeforeTernaryOperators: true
 AllowShortCaseLabelsOnASingleLine: true
 ColumnLimit: 100
 MaxEmptyLinesToKeep: 1
+#TypenameMacros: [ 'VARR', 'DLIST', 'HTAB' ]
