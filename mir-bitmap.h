@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #ifndef MIR_BITMAP_H
@@ -59,16 +59,14 @@ static inline void bitmap_expand (bitmap_t bm, size_t nb) {
   size_t i, len = VARR_LENGTH (bitmap_el_t, bm);
   size_t new_len = (nb + BITMAP_WORD_BITS - 1) / BITMAP_WORD_BITS;
 
-  for (i = len; i < new_len; i++)
-    VARR_PUSH (bitmap_el_t, bm, (bitmap_el_t) 0);
+  for (i = len; i < new_len; i++) VARR_PUSH (bitmap_el_t, bm, (bitmap_el_t) 0);
 }
 
 static inline int bitmap_bit_p (const_bitmap_t bm, size_t nb) {
   size_t nw, sh, len = VARR_LENGTH (bitmap_el_t, bm);
   bitmap_el_t *addr = VARR_ADDR (bitmap_el_t, bm);
 
-  if (nb >= BITMAP_WORD_BITS * len)
-    return 0;
+  if (nb >= BITMAP_WORD_BITS * len) return 0;
   nw = nb / BITMAP_WORD_BITS;
   sh = nb % BITMAP_WORD_BITS;
   return (addr[nw] >> sh) & 1;
@@ -93,8 +91,7 @@ static inline int bitmap_clear_bit_p (bitmap_t bm, size_t nb) {
   bitmap_el_t *addr = VARR_ADDR (bitmap_el_t, bm);
   int res;
 
-  if (nb >= BITMAP_WORD_BITS * len)
-    return 0;
+  if (nb >= BITMAP_WORD_BITS * len) return 0;
   nw = nb / BITMAP_WORD_BITS;
   sh = nb % BITMAP_WORD_BITS;
   res = (addr[nw] >> sh) & 1;
@@ -130,11 +127,9 @@ static inline int bitmap_equal_p (const_bitmap_t bm1, const_bitmap_t bm2) {
   }
   addr1 = VARR_ADDR (bitmap_el_t, bm1);
   addr2 = VARR_ADDR (bitmap_el_t, bm2);
-  if (memcmp (addr1, addr2, bm1_len * sizeof (bitmap_el_t)) != 0)
-    return FALSE;
+  if (memcmp (addr1, addr2, bm1_len * sizeof (bitmap_el_t)) != 0) return FALSE;
   for (i = bm1_len; i < bm2_len; i++)
-    if (addr2[i] != 0)
-      return FALSE;
+    if (addr2[i] != 0) return FALSE;
   return TRUE;
 }
 
@@ -146,8 +141,7 @@ static inline int bitmap_intersect_p (const_bitmap_t bm1, const_bitmap_t bm2) {
 
   min_len = bm1_len <= bm2_len ? bm1_len : bm2_len;
   for (i = 0; i < min_len; i++)
-    if ((addr1[i] & addr2[i]) != 0)
-      return TRUE;
+    if ((addr1[i] & addr2[i]) != 0) return TRUE;
   return FALSE;
 }
 
@@ -156,21 +150,18 @@ static inline int bitmap_empty_p (const_bitmap_t bm) {
   bitmap_el_t *addr = VARR_ADDR (bitmap_el_t, bm);
 
   for (i = 0; i < len; i++)
-    if (addr[i] != 0)
-      return FALSE;
+    if (addr[i] != 0) return FALSE;
   return TRUE;
 }
 
 static inline bitmap_el_t bitmap_el_max3 (bitmap_el_t el1, bitmap_el_t el2, bitmap_el_t el3) {
-  if (el1 <= el2)
-    return el2 < el3 ? el3 : el2;
+  if (el1 <= el2) return el2 < el3 ? el3 : el2;
   return el1 < el3 ? el3 : el1;
 }
 
 static inline bitmap_el_t bitmap_el_max4 (bitmap_el_t el1, bitmap_el_t el2, bitmap_el_t el3,
                                           bitmap_el_t el4) {
-  if (el1 <= el2)
-    return bitmap_el_max3 (el2, el3, el4);
+  if (el1 <= el2) return bitmap_el_max3 (el2, el3, el4);
   return bitmap_el_max3 (el1, el3, el4);
 }
 
@@ -183,8 +174,7 @@ static inline size_t bitmap_bit_count (const_bitmap_t bm) {
   for (i = 0; i < len; i++) {
     if ((el = addr[i]) != 0) {
       for (; el != 0; el >>= 1)
-        if (el & 1)
-          count++;
+        if (el & 1) count++;
     }
   }
   return count;
@@ -208,8 +198,7 @@ static inline int bitmap_op2 (bitmap_t dst, const_bitmap_t src1, const_bitmap_t 
     if ((dst_addr[i] = op (i >= src1_len ? 0 : src1_addr[i], i >= src2_len ? 0 : src2_addr[i]))
         != 0)
       bound = i + 1;
-    if (old != dst_addr[i])
-      change_p = TRUE;
+    if (old != dst_addr[i]) change_p = TRUE;
   }
   VARR_TRUNC (bitmap_el_t, dst, bound);
   return change_p;
@@ -257,8 +246,7 @@ static inline int bitmap_op3 (bitmap_t dst, const_bitmap_t src1, const_bitmap_t 
                            i >= src3_len ? 0 : src3_addr[i]))
         != 0)
       bound = i + 1;
-    if (old != dst_addr[i])
-      change_p = TRUE;
+    if (old != dst_addr[i]) change_p = TRUE;
   }
   VARR_TRUNC (bitmap_el_t, dst, bound);
   return change_p;
@@ -290,8 +278,7 @@ static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t, void *), 
   for (i = 0; i < len; i++) {
     if ((el = addr[i]) != 0) {
       for (nb = 0; el != 0; el >>= 1, nb++)
-        if (el & 1)
-          func (i * BITMAP_WORD_BITS + nb, data);
+        if (el & 1) func (i * BITMAP_WORD_BITS + nb, data);
     }
   }
 }

@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #ifndef MIR_HTAB_H
@@ -87,16 +87,14 @@ DEF_VARR (htab_ind_t)
     for (size = 2; min_size > size; size *= 2)                                                    \
       ;                                                                                           \
     ht = malloc (sizeof (*ht));                                                                   \
-    if (ht == NULL)                                                                               \
-      mir_htab_error ("htab: no memory");                                                         \
+    if (ht == NULL) mir_htab_error ("htab: no memory");                                           \
     VARR_CREATE (HTAB_EL (T), ht->els, size);                                                     \
     VARR_TAILOR (HTAB_EL (T), ht->els, size);                                                     \
     VARR_CREATE (htab_ind_t, ht->entries, 2 * size);                                              \
     ht->hash_func = hash_func;                                                                    \
     ht->eq_func = eq_func;                                                                        \
     ht->els_num = ht->els_start = ht->els_bound = ht->collisions = 0;                             \
-    for (i = 0; i < 2 * size; i++)                                                                \
-      VARR_PUSH (htab_ind_t, ht->entries, HTAB_EMPTY_IND);                                        \
+    for (i = 0; i < 2 * size; i++) VARR_PUSH (htab_ind_t, ht->entries, HTAB_EMPTY_IND);           \
     *htab = ht;                                                                                   \
   }                                                                                               \
                                                                                                   \
@@ -118,14 +116,12 @@ DEF_VARR (htab_ind_t)
       els_addr = VARR_ADDR (HTAB_EL (T), htab->els);                                              \
       size = VARR_LENGTH (HTAB_EL (T), htab->els);                                                \
       for (i = 0; i < htab->els_bound; i++)                                                       \
-        if (els_addr[i].hash != HTAB_DELETED_HASH)                                                \
-          f (els_addr[i].el);                                                                     \
+        if (els_addr[i].hash != HTAB_DELETED_HASH) f (els_addr[i].el);                            \
     }                                                                                             \
     htab->els_num = htab->els_start = htab->els_bound = 0;                                        \
     addr = VARR_ADDR (htab_ind_t, htab->entries);                                                 \
     size = VARR_LENGTH (htab_ind_t, htab->entries);                                               \
-    for (i = 0; i < size; i++)                                                                    \
-      addr[i] = HTAB_EMPTY_IND;                                                                   \
+    for (i = 0; i < size; i++) addr[i] = HTAB_EMPTY_IND;                                          \
   }                                                                                               \
                                                                                                   \
   static inline int HTAB_OP (T, do) (HTAB (T) * htab, T el, enum htab_action action, T * res) {   \
@@ -143,8 +139,7 @@ DEF_VARR (htab_ind_t)
       size *= 2;                                                                                  \
       VARR_TAILOR (htab_ind_t, htab->entries, size);                                              \
       addr = VARR_ADDR (htab_ind_t, htab->entries);                                               \
-      for (i = 0; i < size; i++)                                                                  \
-        addr[i] = HTAB_EMPTY_IND;                                                                 \
+      for (i = 0; i < size; i++) addr[i] = HTAB_EMPTY_IND;                                        \
       VARR_TAILOR (HTAB_EL (T), htab->els, els_size * 2);                                         \
       els_addr = VARR_ADDR (HTAB_EL (T), htab->els);                                              \
       start = htab->els_start;                                                                    \
@@ -159,8 +154,7 @@ DEF_VARR (htab_ind_t)
     }                                                                                             \
     mask = size - 1;                                                                              \
     hash = (*htab->hash_func) (el);                                                               \
-    if (hash == HTAB_DELETED_HASH)                                                                \
-      hash += 1;                                                                                  \
+    if (hash == HTAB_DELETED_HASH) hash += 1;                                                     \
     peterb = hash;                                                                                \
     ind = hash & mask;                                                                            \
     addr = VARR_ADDR (htab_ind_t, htab->entries);                                                 \
@@ -183,8 +177,7 @@ DEF_VARR (htab_ind_t)
       } else {                                                                                    \
         if (action == HTAB_INSERT) {                                                              \
           htab->els_num++;                                                                        \
-          if (first_deleted_entry != NULL)                                                        \
-            entry = first_deleted_entry;                                                          \
+          if (first_deleted_entry != NULL) entry = first_deleted_entry;                           \
           els_addr[htab->els_bound].hash = hash;                                                  \
           els_addr[htab->els_bound].el = el;                                                      \
           *entry = htab->els_bound++;                                                             \

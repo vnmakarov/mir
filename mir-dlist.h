@@ -1,5 +1,5 @@
 /* This file is part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* Typed doubly linked lists.  */
@@ -19,7 +19,7 @@
 #define DLIST_ASSERT(EXPR, OP, T) ((void) (EXPR))
 
 #else
-static inline void dlist_assert_fail (const char *op, const char *var) {
+static inline void dlist_assert_fail (const char* op, const char* var) {
   fprintf (stderr, "wrong %s for %s", op, var);
   assert (0);
 }
@@ -151,8 +151,7 @@ static inline void dlist_assert_fail (const char *op, const char *var) {
     size_t len = 0;                                                                            \
     T curr;                                                                                    \
                                                                                                \
-    for (curr = list->head; curr != NULL; curr = curr->LINK.next)                              \
-      len++;                                                                                   \
+    for (curr = list->head; curr != NULL; curr = curr->LINK.next) len++;                       \
     return len;                                                                                \
   }
 

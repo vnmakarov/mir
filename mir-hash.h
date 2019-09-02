@@ -1,6 +1,6 @@
 /* This file is a part of MIR project.
 
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* Simple high-quality multiplicative hash passing demerphq-smhsher,
@@ -22,16 +22,14 @@ static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax
 #if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) || defined(__s390__) \
   || defined(__m32c__) || defined(cris) || defined(__CR16__) || defined(__vax__)        \
   || defined(__m68k__) || defined(__aarch64__) || defined(_M_AMD64) || defined(_M_IX86)
-    if (len == sizeof (uint64_t))
-      return *(uint64_t *) v;
+    if (len == sizeof (uint64_t)) return *(uint64_t *) v;
     if (len >= sizeof (uint32_t)) {
       tail = (uint64_t) * (uint32_t *) v << 32;
       start = 4;
     }
 #endif
   }
-  for (i = start; i < len; i++)
-    tail = (tail >> 8) | ((uint64_t) v[i] << 56);
+  for (i = start; i < len; i++) tail = (tail >> 8) | ((uint64_t) v[i] << 56);
   return tail;
 }
 
@@ -65,8 +63,7 @@ static inline uint64_t mir_hash_1 (const void *key, size_t len, uint64_t seed, i
     r ^= mir_mum (mir_get_key_part (v, 8, relax_p), p1, relax_p);
     len -= 8, v += 8;
   }
-  if (len != 0)
-    r ^= mir_mum (mir_get_key_part (v, len, relax_p), p2, relax_p);
+  if (len != 0) r ^= mir_mum (mir_get_key_part (v, len, relax_p), p2, relax_p);
   return mir_round (r, r, relax_p);
 }
 
