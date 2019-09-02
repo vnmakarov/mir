@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #ifndef MIR_H
@@ -37,32 +37,23 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_UNUSED
 #endif
 
+#define REP2(M, a1, a2) M (a1) REP_SEP M (a2)
+#define REP3(M, a1, a2, a3) REP2 (M, a1, a2) REP_SEP M (a3)
+#define REP4(M, a1, a2, a3, a4) REP3 (M, a1, a2, a3) REP_SEP M (a4)
+#define REP5(M, a1, a2, a3, a4, a5) REP4 (M, a1, a2, a3, a4) REP_SEP M (a5)
+#define REP6(M, a1, a2, a3, a4, a5, a6) REP5 (M, a1, a2, a3, a4, a5) REP_SEP M (a6)
+#define REP7(M, a1, a2, a3, a4, a5, a6, a7) REP6 (M, a1, a2, a3, a4, a5, a6) REP_SEP M (a7)
+#define REP8(M, a1, a2, a3, a4, a5, a6, a7, a8) REP7 (M, a1, a2, a3, a4, a5, a6, a7) REP_SEP M (a8)
+
+#define REP_SEP ,
+
+#define ERR_EL(e) MIR_##e##_error
 typedef enum MIR_error_type {
-  MIR_no_error,
-  MIR_syntax_error,
-  MIR_binary_io_error,
-  MIR_alloc_error,
-  MIR_finish_error,
-  MIR_no_module_error,
-  MIR_nested_module_error,
-  MIR_no_func_error,
-  MIR_func_error,
-  MIR_vararg_func_error,
-  MIR_nested_func_error,
-  MIR_wrong_param_value_error,
-  MIR_reserved_name_error,
-  MIR_import_export_error,
-  MIR_undeclared_func_reg_error,
-  MIR_repeated_decl_error,
-  MIR_reg_type_error,
-  MIR_unique_reg_error,
-  MIR_undeclared_op_ref_error,
-  MIR_ops_num_error,
-  MIR_call_op_error,
-  MIR_ret_error,
-  MIR_op_mode_error,
-  MIR_out_op_error,
-  MIR_invalid_insn_error,
+  REP8 (ERR_EL, no, syntax, binary_io, alloc, finish, no_module, nested_module, no_func),
+  REP4 (ERR_EL, func, vararg_func, nested_func, wrong_param_value),
+  REP4 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl),
+  REP8 (ERR_EL, reg_type, unique_reg, undeclared_op_ref, ops_num, call_op, ret, op_mode, out_op),
+  ERR_EL (invalid_insn)
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -73,6 +64,8 @@ typedef enum MIR_error_type {
 
 typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *format,
                                                 ...);
+
+#define INSN_EL(i) MIR_##i
 
 /* The most MIR insns have destination operand and one or two source
    operands.  The destination can be ony a register or memory.
@@ -86,197 +79,64 @@ typedef enum {
   /* Abbreviations:
      I - 64-bit int, S - short (32-bit), U - unsigned, F -float, D - double, LD - long double.  */
   /* 2 operand insns: */
-  MIR_MOV,
-  MIR_FMOV,
-  MIR_DMOV,
-  MIR_LDMOV, /* Moves */
+  REP4 (INSN_EL, MOV, FMOV, DMOV, LDMOV), /* Moves */
   /* Extensions.  Truncation is not necessary because we can use an extension to use a part. */
-  MIR_EXT8,
-  MIR_EXT16,
-  MIR_EXT32,
-  MIR_UEXT8,
-  MIR_UEXT16,
-  MIR_UEXT32,
-  MIR_I2F,
-  MIR_I2D,
-  MIR_I2LD, /* Integer to float or (long) double conversion */
-  MIR_UI2F,
-  MIR_UI2D,
-  MIR_UI2LD, /* Unsigned integer to float or (long) double conversion */
-  MIR_F2I,
-  MIR_D2I,
-  MIR_LD2I, /* Float or (long) double to integer conversion */
-  MIR_F2D,
-  MIR_F2LD,
-  MIR_D2F,
-  MIR_D2LD,
-  MIR_LD2F,
-  MIR_LD2D, /* Float, (long) double conversions */
-  MIR_NEG,
-  MIR_NEGS,
-  MIR_FNEG,
-  MIR_DNEG,
-  MIR_LDNEG, /* Changing sign */
+  REP6 (INSN_EL, EXT8, EXT16, EXT32, UEXT8, UEXT16, UEXT32),
+  REP3 (INSN_EL, I2F, I2D, I2LD),    /* Integer to float or (long) double conversion */
+  REP3 (INSN_EL, UI2F, UI2D, UI2LD), /* Unsigned integer to float or (long) double conversion */
+  REP3 (INSN_EL, F2I, D2I, LD2I),    /* Float or (long) double to integer conversion */
+  REP6 (INSN_EL, F2D, F2LD, D2F, D2LD, LD2F, LD2D), /* Float, (long) double conversions */
+  REP5 (INSN_EL, NEG, NEGS, FNEG, DNEG, LDNEG),     /* Changing sign */
   /* 3 operand insn: */
-  MIR_ADD,
-  MIR_ADDS,
-  MIR_FADD,
-  MIR_DADD,
-  MIR_LDADD, /* Addition */
-  MIR_SUB,
-  MIR_SUBS,
-  MIR_FSUB,
-  MIR_DSUB,
-  MIR_LDSUB, /* Subtraction */
-  MIR_MUL,
-  MIR_MULS,
-  MIR_FMUL,
-  MIR_DMUL,
-  MIR_LDMUL, /* Multiplication */
-  MIR_DIV,
-  MIR_DIVS,
-  MIR_UDIV,
-  MIR_UDIVS,
-  MIR_FDIV,
-  MIR_DDIV,
-  MIR_LDDIV, /* Division */
-  MIR_MOD,
-  MIR_MODS,
-  MIR_UMOD,
-  MIR_UMODS, /* Modulo */
-  MIR_AND,
-  MIR_ANDS,
-  MIR_OR,
-  MIR_ORS,
-  MIR_XOR,
-  MIR_XORS, /* Logical */
-  MIR_LSH,
-  MIR_LSHS,
-  MIR_RSH,
-  MIR_RSHS,
-  MIR_URSH,
-  MIR_URSHS, /* Right signed/unsigned shift */
-  MIR_EQ,
-  MIR_EQS,
-  MIR_FEQ,
-  MIR_DEQ,
-  MIR_LDEQ, /* Equality */
-  MIR_NE,
-  MIR_NES,
-  MIR_FNE,
-  MIR_DNE,
-  MIR_LDNE, /* Inequality */
-  MIR_LT,
-  MIR_LTS,
-  MIR_ULT,
-  MIR_ULTS,
-  MIR_FLT,
-  MIR_DLT,
-  MIR_LDLT, /* Less then */
-  MIR_LE,
-  MIR_LES,
-  MIR_ULE,
-  MIR_ULES,
-  MIR_FLE,
-  MIR_DLE,
-  MIR_LDLE, /* Less or equal */
-  MIR_GT,
-  MIR_GTS,
-  MIR_UGT,
-  MIR_UGTS,
-  MIR_FGT,
-  MIR_DGT,
-  MIR_LDGT, /* Greater then */
-  MIR_GE,
-  MIR_GES,
-  MIR_UGE,
-  MIR_UGES,
-  MIR_FGE,
-  MIR_DGE,
-  MIR_LDGE, /* Greater or equal */
+  REP5 (INSN_EL, ADD, ADDS, FADD, DADD, LDADD),              /* Addition */
+  REP5 (INSN_EL, SUB, SUBS, FSUB, DSUB, LDSUB),              /* Subtraction */
+  REP5 (INSN_EL, MUL, MULS, FMUL, DMUL, LDMUL),              /* Multiplication */
+  REP7 (INSN_EL, DIV, DIVS, UDIV, UDIVS, FDIV, DDIV, LDDIV), /* Division */
+  REP4 (INSN_EL, MOD, MODS, UMOD, UMODS),                    /* Modulo */
+  REP6 (INSN_EL, AND, ANDS, OR, ORS, XOR, XORS),             /* Logical */
+  REP6 (INSN_EL, LSH, LSHS, RSH, RSHS, URSH, URSHS),         /* Right signed/unsigned shift */
+  REP5 (INSN_EL, EQ, EQS, FEQ, DEQ, LDEQ),                   /* Equality */
+  REP5 (INSN_EL, NE, NES, FNE, DNE, LDNE),                   /* Inequality */
+  REP7 (INSN_EL, LT, LTS, ULT, ULTS, FLT, DLT, LDLT),        /* Less then */
+  REP7 (INSN_EL, LE, LES, ULE, ULES, FLE, DLE, LDLE),        /* Less or equal */
+  REP7 (INSN_EL, GT, GTS, UGT, UGTS, FGT, DGT, LDGT),        /* Greater then */
+  REP7 (INSN_EL, GE, GES, UGE, UGES, FGE, DGE, LDGE),        /* Greater or equal */
   /* Uncoditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
-  MIR_JMP,
-  MIR_BT,
-  MIR_BTS,
-  MIR_BF,
-  MIR_BFS,
+  REP5 (INSN_EL, JMP, BT, BTS, BF, BFS),
   /* Compare and branch (3 operand) insns.  The first operand is the
      label. */
-  MIR_BEQ,
-  MIR_BEQS,
-  MIR_FBEQ,
-  MIR_DBEQ,
-  MIR_LDBEQ,
-  MIR_BNE,
-  MIR_BNES,
-  MIR_FBNE,
-  MIR_DBNE,
-  MIR_LDBNE,
-  MIR_BLT,
-  MIR_BLTS,
-  MIR_UBLT,
-  MIR_UBLTS,
-  MIR_FBLT,
-  MIR_DBLT,
-  MIR_LDBLT,
-  MIR_BLE,
-  MIR_BLES,
-  MIR_UBLE,
-  MIR_UBLES,
-  MIR_FBLE,
-  MIR_DBLE,
-  MIR_LDBLE,
-  MIR_BGT,
-  MIR_BGTS,
-  MIR_UBGT,
-  MIR_UBGTS,
-  MIR_FBGT,
-  MIR_DBGT,
-  MIR_LDBGT,
-  MIR_BGE,
-  MIR_BGES,
-  MIR_UBGE,
-  MIR_UBGES,
-  MIR_FBGE,
-  MIR_DBGE,
-  MIR_LDBGE,
+  REP5 (INSN_EL, BEQ, BEQS, FBEQ, DBEQ, LDBEQ),
+  REP5 (INSN_EL, BNE, BNES, FBNE, DBNE, LDBNE),
+  REP7 (INSN_EL, BLT, BLTS, UBLT, UBLTS, FBLT, DBLT, LDBLT),
+  REP7 (INSN_EL, BLE, BLES, UBLE, UBLES, FBLE, DBLE, LDBLE),
+  REP7 (INSN_EL, BGT, BGTS, UBGT, UBGTS, FBGT, DBGT, LDBGT),
+  REP7 (INSN_EL, BGE, BGES, UBGE, UBGES, FBGE, DBGE, LDBGE),
   /* 1st operand is a prototype, 2nd one is ref or op containing func
      address, 3rd and subsequent ops are optional result (if result in
      the prototype is not of void type), call arguments. */
-  MIR_CALL,
-  MIR_INLINE,
+  REP2 (INSN_EL, CALL, INLINE),
   /* 1 operand insn: */
-  MIR_RET,
-  MIR_ALLOCA, /* 2 operands: result address and size  */
-  MIR_BSTART,
-  MIR_BEND, /* block start: result address; block end: address from block start */
+  INSN_EL (RET),
+  INSN_EL (ALLOCA),             /* 2 operands: result address and size  */
+  REP2 (INSN_EL, BSTART, BEND), /* block start: result addr; block end: addr from block start */
   /* Special insns: */
-  MIR_VA_ARG, /* result is arg address, operands: va_list addr and memory */
-  MIR_VA_START,
-  MIR_VA_END, /* operand is va_list */
-  MIR_LABEL,  /* One immediate operand is unique label number  */
-  MIR_INVALID_INSN,
-  MIR_INSN_BOUND, /* Should be the last  */
+  INSN_EL (VA_ARG), /* result is arg address, operands: va_list addr and memory */
+  INSN_EL (VA_START),
+  INSN_EL (VA_END), /* operand is va_list */
+  INSN_EL (LABEL),  /* One immediate operand is unique label number  */
+  INSN_EL (INVALID_INSN),
+  INSN_EL (INSN_BOUND), /* Should be the last  */
 } MIR_insn_code_t;
+
+#define TYPE_EL(t) MIR_T_##t
 
 /* Data types: */
 typedef enum {
-  /* Integer types of different size: */
-  MIR_T_I8,
-  MIR_T_U8,
-  MIR_T_I16,
-  MIR_T_U16,
-  MIR_T_I32,
-  MIR_T_U32,
-  MIR_T_I64,
-  MIR_T_U64,
-  MIR_T_F,
-  MIR_T_D,
-  MIR_T_LD /* Float or (long) double type */,
-  MIR_T_P /* Pointer */,
-  MIR_T_UNDEF,
-  MIR_T_BOUND,
+  REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
+  REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
+  TYPE_EL (P),                                          /* Pointer */
+  REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
 #if UINTPTR_MAX == 0xffffffff
@@ -329,22 +189,12 @@ typedef struct MIR_insn *MIR_label_t;
 
 typedef const char *MIR_name_t;
 
+#define OP_EL(op) MIR_OP_##op
+
 /* Operand mode */
 typedef enum {
-  MIR_OP_UNDEF,
-  MIR_OP_REG,
-  MIR_OP_HARD_REG,
-  MIR_OP_INT,
-  MIR_OP_UINT,
-  MIR_OP_FLOAT,
-  MIR_OP_DOUBLE,
-  MIR_OP_LDOUBLE,
-  MIR_OP_REF,
-  MIR_OP_STR,
-  MIR_OP_MEM,
-  MIR_OP_HARD_REG_MEM,
-  MIR_OP_LABEL,
-  MIR_OP_BOUND
+  REP8 (OP_EL, UNDEF, REG, HARD_REG, INT, UINT, FLOAT, DOUBLE, LDOUBLE),
+  REP6 (OP_EL, REF, STR, MEM, HARD_REG_MEM, LABEL, BOUND),
 } MIR_op_mode_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -446,17 +296,19 @@ typedef struct MIR_module *MIR_module_t;
 /* Definition of link of double list of MIR_item_t type elements */
 DEF_DLIST_LINK (MIR_item_t);
 
+#define ITEM_EL(i) MIR_##i##_item
+
 typedef enum {
-  MIR_func_item,
-  MIR_proto_item,
-  MIR_import_item,
-  MIR_export_item,
-  MIR_forward_item,
-  MIR_data_item,
-  MIR_ref_data_item,
-  MIR_expr_data_item,
-  MIR_bss_item
+  REP8 (ITEM_EL, func, proto, import, export, forward, data, ref_data, expr_data),
+  ITEM_EL (bss),
 } MIR_item_type_t;
+
+#undef ERR_EL
+#undef INSN_EL
+#undef TYPE_EL
+#undef OP_EL
+#undef ITEM_EL
+#undef REP_SEP
 
 /* MIR module items (function or import): */
 struct MIR_item {
