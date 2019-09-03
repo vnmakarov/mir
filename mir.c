@@ -3920,8 +3920,8 @@ static htab_hash_t insn_name_hash (insn_name_t in) {
 #define TC_EL(t) TC_##t
 #define REP_SEP ,
 enum token_code {
-  REP8 (EL, INT, FLOAT, DOUBLE, LDOUBLE, NAME, STR, NL, EOF),
-  REP5 (EL, LEFT_PAR, RIGHT_PAR, COMMA, SEMICOL, COL),
+  REP8 (TC_EL, INT, FLOAT, DOUBLE, LDOUBLE, NAME, STR, NL, EOFILE),
+  REP5 (TC_EL, LEFT_PAR, RIGHT_PAR, COMMA, SEMICOL, COL),
 };
 #undef REP_SEP
 
@@ -4141,7 +4141,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
   for (;;) {
     ch = get_char (ctx);
     switch (ch) {
-    case EOF: token->code = TC_EOF; return;
+    case EOF: token->code = TC_EOFILE; return;
     case ' ':
     case '\t': break;
     case '#':
@@ -4304,12 +4304,12 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
     if (setjmp (error_jmp_buf)) {
       while (t.code != TC_NL && t.code != EOF)
         scan_token (ctx, &t, get_string_char, unget_string_char);
-      if (t.code == TC_EOF) break;
+      if (t.code == TC_EOFILE) break;
     }
     VARR_TRUNC (label_name_t, label_names, 0);
     scan_token (ctx, &t, get_string_char, unget_string_char);
     while (t.code == TC_NL) scan_token (ctx, &t, get_string_char, unget_string_char);
-    if (t.code == TC_EOF) break;
+    if (t.code == TC_EOFILE) break;
     for (;;) { /* label_names */
       if (t.code != TC_NAME)
         process_error (ctx, MIR_syntax_error, "insn should start with label or insn name");
@@ -4513,7 +4513,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (t.code != TC_COMMA) break;
       scan_token (ctx, &t, get_string_char, unget_string_char);
     }
-    if (t.code != TC_NL && t.code != TC_EOF && t.code != TC_SEMICOL)
+    if (t.code != TC_NL && t.code != TC_EOFILE && t.code != TC_SEMICOL)
       process_error (ctx, MIR_syntax_error, "wrong insn end");
     if (module_p) {
       if (module != NULL) process_error (ctx, MIR_syntax_error, "nested module");
