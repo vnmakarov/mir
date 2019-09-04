@@ -200,7 +200,7 @@ ex100:    func v, 0
     * 100 times faster compilation speed
     * 100 times faster start-up
     * 100 times smaler code size
-    * less 10K C LOC
+    * less 15K C LOC
   * Very short optimization pipeline for speed and light-weight
   * Only the **most valuable** optimization usage:
     * **function inlining**
