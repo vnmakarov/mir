@@ -9965,14 +9965,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t expr = NL_EL (r->ops, 1);
     node_t stmt = NL_NEXT (expr);
     MIR_label_t saved_continue_label = continue_label, saved_break_label = break_label;
+    MIR_label_t start_label = MIR_new_label (ctx);
 
     assert (false_label == NULL && true_label == NULL);
     continue_label = MIR_new_label (ctx);
     break_label = MIR_new_label (ctx);
     emit_label (r);
-    emit_insn (continue_label);
+    emit_insn (start_label);
     gen (stmt, NULL, NULL, FALSE);
-    top_gen (expr, continue_label, break_label);
+    emit_insn (continue_label);
+    top_gen (expr, start_label, break_label);
     emit_insn (break_label);
     continue_label = saved_continue_label;
     break_label = saved_break_label;
