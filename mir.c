@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #include "mir.h"
@@ -2910,7 +2910,7 @@ typedef enum {
   /* MIR types. The same order as MIR types: */
   REP8 (TAG_EL, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64),
   REP6 (TAG_EL, TF, TD, TP, TV, TBLOCK, EOI),
-  TAG_EL (EOF), /* end of insn with variable number operands (e.g. a call) or end of file */
+  TAG_EL (EOFILE), /* end of insn with variable number operands (e.g. a call) or end of file */
   /* unsigned integer 0..127 is kept in one byte.  The most significant bit of the byte is 1: */
   U0_MASK = 0x7f,
   U0_FLAG = 0x80,
@@ -3317,7 +3317,7 @@ void MIR_write (MIR_context_t ctx, FILE *f) {
     fputc ('\0', f);
   }
   write_modules (ctx, f);
-  put_byte (f, TAG_EOF);
+  put_byte (f, TAG_EOFILE);
   string_finish (&output_strings, &output_string_tab);
 }
 
@@ -3478,7 +3478,7 @@ static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
     attr->u = get_uint (ctx, f, c - TAG_LAB1 + 1);
     break;
     REP6 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX)
-    REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOF)
+    REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOFILE)
     break;
     REP8 (TAG_CASE, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64)
     REP5 (TAG_CASE, TF, TD, TP, TV, TBLOCK)
@@ -3866,7 +3866,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
                        insn_name (insn_code));
       MIR_append_insn (ctx, func,
                        MIR_new_insn_arr (ctx, insn_code, n, VARR_ADDR (MIR_op_t, temp_insn_ops)));
-    } else if (tag == TAG_EOF) {
+    } else if (tag == TAG_EOFILE) {
       break;
     } else {
       (*error_func) (MIR_binary_io_error, "wrong token %d", tag);
