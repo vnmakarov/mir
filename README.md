@@ -232,20 +232,12 @@ ex100:    func v, 0
   * **Dead Code Elimination**: removing insns with unused outputs. 
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
   
-## C to MIR compiler
-  * Implemention of a small C11 (2011 ANSI C standard) to MIR compiler
-    * no optional features: variable size arrays, complex, atomic
-  * Minimal compiler code dependency.  No additional tools (like yacc/flex) are used
-  * Simplicity of implementation over speed to make code easy to learn and maintain
-    * Four passes to divide compilation on manageable sub-tasks:
-      1. Preprocessor pass generating tokens
-      2. Parsing pass generating AST (Abstract Syntax Tree). To be close ANSI standard grammar
-         as soon as possible, [**PEG**](https://en.wikipedia.org/wiki/Parsing_expression_grammar)
-         manual parser is used
-      3. Context pass checking context constraints and augmenting AST
-      4. Generation pass producing MIR
-
-  ![MIR to C](mir2c.svg)
+## C to MIR translation
+  * Currently work on 2 different ways of the translation are ongoing
+    * Implemention of a small C11 (2011 ANSI C standard) to MIR compiler.
+      See ![README.md](https://github.com/vnmakarov/mir/c2mir/README.md)
+    * Implemention of LLVM Bitcode to MIR translator.
+      See ![README.md](https://github.com/vnmakarov/mir/llvm2mir/README.md)
 
 ## Structure of the project code
  * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary
