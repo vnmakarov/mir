@@ -1235,8 +1235,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *p = bstart_builtin ();
     END_INSN;
   }
-  CASE (MIR_BEND, 1) { bend_builtin (*get_aop (bp, ops)); }
-  END_INSN;
+  SCASE (MIR_BEND, 1, bend_builtin (*get_aop (bp, ops)));
   CASE (MIR_VA_ARG, 3) {
     int64_t *r, va, tp;
 
@@ -1245,8 +1244,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *r = (uint64_t) va_arg_builtin ((void *) va, tp);
     END_INSN;
   }
-  CASE (MIR_VA_START, 1) { va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a); }
-  CASE (MIR_VA_END, 1) { va_end_interp_builtin (ctx, bp[get_i (ops)].a); }
+  SCASE (MIR_VA_START, 1, va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a));
+  SCASE (MIR_VA_END, 1, va_end_interp_builtin (ctx, bp[get_i (ops)].a));
 
   SCASE (IC_LDI8, 2, LD (iop, int64_t, int8_t));
   SCASE (IC_LDU8, 2, LD (uop, uint64_t, uint8_t));
