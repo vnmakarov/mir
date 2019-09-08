@@ -5,7 +5,8 @@ CFLAGS=-O3 -g
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
-OBJS=mir.o mir-gen.o
+OBJS=mir.o mir-gen.o l2m
+
 all: $(OBJS)
 
 mir.o: mir.c $(MIR_DEPS)
@@ -14,9 +15,29 @@ mir.o: mir.c $(MIR_DEPS)
 mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test
+llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
+	$(CC) -I. -c $(CFLAGS) -o $@ $<
+
+l2m: llvm2mir.o $(MIR_DEPS) llvm2mir/llvm2mir.h llvm2mir/llvm2mir-driver.c mir-gen.c mir-gen.h 
+	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -o l2m
+
+test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
 	@echo ==============================Test is done
       
+l2m-test: l2m-test1 l2m-test2
+
+l2m-test1: l2m
+	@echo +++++ LLVM to MIR translator test '(-O0)' +++++++
+	clang -O0 -fno-vectorize -w -c -emit-llvm sieve.c
+	@echo +++++ Interpreter +++++++ && ./l2m -i sieve.bc
+	@echo +++++ Generator +++++++ && ./l2m -g sieve.bc
+	
+l2m-test2: l2m
+	@echo +++++ LLVM to MIR translator test '(-O2)' +++++++
+	clang -O2 -fno-vectorize -w -c -emit-llvm sieve.c
+	@echo +++++ Interpreter +++++++ && ./l2m -i sieve.bc
+	@echo +++++ Generator +++++++ && ./l2m -g sieve.bc
+	
 bench: interp-bench gen-bench io-bench mir2c-bench c2mir-bench gen-speed
 	@echo ==============================Bench is done
 
@@ -148,6 +169,7 @@ htab-test:
 
 clean:
 	rm -f $(OBJS) ./a.out
+	rm -f llvm2mir.o ./l2m
 
 realclean: clean
 
