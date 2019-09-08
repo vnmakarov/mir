@@ -234,9 +234,9 @@ ex100:    func v, 0
 ## C to MIR translation
   * Currently work on 2 different ways of the translation are ongoing
     * Implemention of a small C11 (2011 ANSI C standard) to MIR compiler.
-      See ![README.md](https://github.com/vnmakarov/mir/c2mir/README.md)
+      See ![README.md](https://github.com/vnmakarov/mir/tree/master/c2mir)
     * Implemention of LLVM Bitcode to MIR translator.
-      See ![README.md](https://github.com/vnmakarov/mir/llvm2mir/README.md)
+      See ![README.md](https://github.com/vnmakarov/mir/tree/master/llvm2mir)
 
 ## Structure of the project code
  * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary
