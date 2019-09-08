@@ -3456,13 +3456,13 @@ static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
     REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8)
     attr->i = get_int (ctx, f, c - TAG_I1 + 1);
     break;
-    TAG_EL (F)
+    TAG_CASE (F)
     attr->f = get_float (ctx, f);
     break;
-    TAG_EL (D)
+    TAG_CASE (D)
     attr->d = get_double (ctx, f);
     break;
-    TAG_EL (LD)
+    TAG_CASE (LD)
     attr->ld = get_ldouble (ctx, f);
     break;
     REP4 (TAG_CASE, REG1, REG2, REG3, REG4)
@@ -3525,13 +3525,13 @@ static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t fu
     REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8)
     *op = MIR_new_int_op (ctx, attr.i);
     break;
-    TAG_EL (F)
+    TAG_CASE (F)
     *op = MIR_new_float_op (ctx, attr.f);
     break;
-    TAG_EL (D)
+    TAG_CASE (D)
     *op = MIR_new_double_op (ctx, attr.d);
     break;
-    TAG_EL (LD)
+    TAG_CASE (LD)
     *op = MIR_new_ldouble_op (ctx, attr.ld);
     break;
     REP4 (TAG_CASE, REG1, REG2, REG3, REG4)
