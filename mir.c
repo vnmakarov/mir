@@ -3440,7 +3440,7 @@ static const char *read_name (MIR_context_t ctx, FILE *f, const char *err_msg) {
   return to_str (ctx, get_uint (ctx, f, c - TAG_NAME1 + 1));
 }
 
-#define TAG_CASE(t) case TAG_##n:
+#define TAG_CASE(t) case TAG_##t:
 #define REP_SEP
 static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
   int c = get_byte (ctx, f);
