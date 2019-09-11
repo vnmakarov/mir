@@ -5,7 +5,7 @@ CFLAGS=-O3 -g
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
-OBJS=mir.o mir-gen.o l2m
+OBJS=mir.o mir-gen.o c2m l2m
 
 all: $(OBJS)
 
@@ -14,6 +14,9 @@ mir.o: mir.c $(MIR_DEPS)
 
 mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
+
+c2m: mir.o mir-gen.o
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.o c2mir/c2mir.c mir.o -ldl
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
