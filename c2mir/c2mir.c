@@ -778,7 +778,7 @@ static int get_line (void) { /* translation phase 1 and 2 */
   eof_p = c == EOF;
   if (eof_p) {
     if (VARR_LENGTH (char, cs->ln) == 0) return FALSE;
-    if (c != '\n') error (cs->pos, "no end of line at file end");
+    if (c != '\n') (pedantic_p ? error : warning) (cs->pos, "no end of line at file end");
   }
   remove_trigraphs ();
   VARR_PUSH (char, cs->ln, '\n');
