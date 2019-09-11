@@ -138,9 +138,9 @@ enum type_mode {
 
 struct type {
   struct type_qual type_qual;
-  node_t pos_node; /* set up and used only for checking type correctness */
-  /* incomplete type or array type before its adjustment: */
-  unsigned int incomplete_p : 1, arr_p : 1;
+  node_t pos_node;            /* set up and used only for checking type correctness */
+  unsigned char incomplete_p; /* incomplete type */
+  struct type *arr_type;      /* NULL or array type before its adjustment */
   /* Raw type size (w/o alignment type itself requirement but with
      element alignment requirements), undefined if mir_size_max.  */
   mir_size_t raw_size;
@@ -4574,7 +4574,8 @@ static struct type_qual type_qual_union (const struct type_qual *tq1, const stru
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
   type->pos_node = NULL;
-  type->incomplete_p = type->arr_p = FALSE;
+  type->incomplete_p = FALSE;
+  type->arr_type = NULL;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
 }
@@ -6377,7 +6378,7 @@ static struct type *adjust_type (struct type *type) {
   if (type->mode == TM_FUNC) {
     res->u.ptr_type = type;
   } else {
-    res->arr_p = TRUE;
+    res->arr_type = type;
     res->u.ptr_type = type->u.arr_type->el_type;
     res->type_qual = type->u.arr_type->ind_type_qual;
   }
@@ -8468,7 +8469,7 @@ static void gen_assign_bin_op (node_t r, struct type *assign_expr_type, op_t *op
   *op2 = gen (NL_NEXT (e), NULL, NULL, TRUE);
   *op2 = promote (*op2, t, FALSE);
   *var = *op1;
-  *op1 = force_val (*op1, ((struct expr *) e->attr)->type->arr_p);
+  *op1 = force_val (*op1, ((struct expr *) e->attr)->type->arr_type != NULL);
   *op1 = promote (*op1, t, TRUE);
   *res = get_new_temp (t);
 }
@@ -9498,14 +9499,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_IND: {
     MIR_type_t ind_t;
+    node_t arr = NL_HEAD (r->ops);
     mir_size_t size = type_size (((struct expr *) r->attr)->type);
 
     t = get_mir_type (((struct expr *) r->attr)->type);
-    op1 = gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
+    op1 = gen (arr, NULL, NULL, TRUE);
     op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     ind_t = get_mir_type (((struct expr *) NL_EL (r->ops, 1)->attr)->type);
     op2 = force_reg (op2, ind_t);
-    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_p) { /* it was an array */
+    if (((struct expr *) arr->attr)->type->arr_type != NULL) { /* it was an array */
+      size = type_size (((struct expr *) arr->attr)->type->arr_type->u.arr_type->el_type);
       op1 = force_reg_or_mem (op1, MIR_T_I64);
       assert (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM);
     } else {
@@ -10082,11 +10085,12 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
 finish:
   if (true_label != NULL) {
-    res = promote (force_val (res, ((struct expr *) r->attr)->type->arr_p), MIR_T_I64, FALSE);
+    res = promote (force_val (res, ((struct expr *) r->attr)->type->arr_type != NULL), MIR_T_I64,
+                   FALSE);
     emit2 (MIR_BT, MIR_new_label_op (ctx, true_label), res.mir_op);
     emit1 (MIR_JMP, MIR_new_label_op (ctx, false_label));
   } else if (val_p) {
-    res = force_val (res, ((struct expr *) r->attr)->type->arr_p);
+    res = force_val (res, ((struct expr *) r->attr)->type->arr_type != NULL);
   }
   if (stmt_p) curr_call_arg_area_offset = saved_call_arg_area_offset;
   return res;
