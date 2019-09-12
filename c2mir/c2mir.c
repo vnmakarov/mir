@@ -855,6 +855,10 @@ static void set_string_val (token_t t, VARR (char) * temp) {
     case '\'':
     case '\?':
     case '\"': break;
+    case 'e':
+      (pedantic_p ? error : warning) (t->pos, "non-standard escape sequence \\e");
+      curr_c = '\033';
+      break;
     case '0':
     case '1':
     case '2':
