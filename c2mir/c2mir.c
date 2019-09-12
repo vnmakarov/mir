@@ -8464,7 +8464,7 @@ static void gen_unary_op (node_t r, op_t *op, op_t *res) {
 }
 
 static void gen_assign_bin_op (node_t r, struct type *assign_expr_type, op_t *op1, op_t *op2,
-                               op_t *res, op_t *var) {
+                               op_t *var) {
   MIR_type_t t;
   node_t e = NL_HEAD (r->ops);
 
@@ -8476,7 +8476,6 @@ static void gen_assign_bin_op (node_t r, struct type *assign_expr_type, op_t *op
   *var = *op1;
   *op1 = force_val (*op1, ((struct expr *) e->attr)->type->arr_type != NULL);
   *op1 = promote (*op1, t, TRUE);
-  *res = get_new_temp (t);
 }
 
 static void gen_bin_op (node_t r, op_t *op1, op_t *op2, op_t *res) {
@@ -9441,10 +9440,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_MUL_ASSIGN:
   case N_DIV_ASSIGN:
   case N_MOD_ASSIGN:
-    gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &val, &op2, &res, &var);
+    gen_assign_bin_op (r, ((struct expr *) r->attr)->type2, &val, &op2, &var);
     emit_bin_op (r, ((struct expr *) r->attr)->type2, val, val, op2);
     t = get_op_type (var);
     t = promote_mir_int_type (t);
+    res = get_new_temp (t);
     goto assign;
     break;
   case N_ASSIGN:
