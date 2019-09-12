@@ -3640,6 +3640,7 @@ D (type_spec) {
         }
         op_append (op2, new_node2 (N_ENUM_CONST, op3, op4));
         if (!M (',')) break;
+        if (C ('}')) break;
       }
       PT ('}');
     } else if (!id_p) {
