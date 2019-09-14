@@ -1433,6 +1433,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
   assert (t->code != T_HEADER && t->code != T_BOA && t->code != T_EOA && t->code != T_EOR
           && t->code != T_EOP && t->code != T_EOFILE && t->code != T_EOU && t->code != T_PLM
           && t->code != T_RDBLNO);
+  if (t->code == T_NO_MACRO_IDENT) t->code = T_ID;
   if (t->code == T_ID && id2kw_p) {
     str_t str = str_add (t->repr, T_STR, 0, FALSE);
 
@@ -2899,24 +2900,33 @@ static void processing (int ignore_directive_p) {
     }
     if (m->replacement == NULL) { /* standard macro */
       if (strcmp (t->repr, "__STDC__") == 0) {
-        out_token (new_token (t->pos, "1", T_NUMBER, N_IGNORE));
+        out_token (new_node_token (t->pos, "1", T_NUMBER, new_i_node (1, t->pos)));
       } else if (strcmp (t->repr, "__STDC_HOSTED__") == 0) {
-        out_token (new_token (t->pos, "1", T_NUMBER, N_IGNORE));
+        out_token (new_node_token (t->pos, "1", T_NUMBER, new_i_node (1, t->pos)));
       } else if (strcmp (t->repr, "__STDC_VERSION__") == 0) {
-        out_token (new_token (t->pos, "201112L", T_NUMBER, N_IGNORE));  // ???
+        out_token (
+          new_node_token (t->pos, "201112L", T_NUMBER, new_l_node (201112, t->pos)));  // ???
       } else if (strcmp (t->repr, "__FILE__") == 0) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
-        out_token (new_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR, N_IGNORE));
+        t = new_node_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR,
+                            new_str_node (N_STR, NULL, t->pos));
+        set_string_val (t, temp_string);
+        out_token (t);
       } else if (strcmp (t->repr, "__LINE__") == 0) {
         char str[50];
 
         sprintf (str, "%d", t->pos.lno);
-        out_token (new_token (t->pos, uniq_str (str), T_NUMBER, N_IGNORE));
+        out_token (
+          new_node_token (t->pos, uniq_str (str), T_NUMBER, new_i_node (t->pos.lno, t->pos)));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
-        out_token (new_token (t->pos, date_str, T_STR, N_IGNORE));
+        t = new_node_token (t->pos, date_str, T_STR,
+                            new_str_node (N_STR, uniq_str (date_str), t->pos));
+        out_token (t);
       } else if (strcmp (t->repr, "__TIME__") == 0) {
-        out_token (new_token (t->pos, time_str, T_STR, N_IGNORE));
+        t = new_node_token (t->pos, time_str, T_STR,
+                            new_str_node (N_STR, uniq_str (date_str), t->pos));
+        out_token (t);
       } else {
         assert (FALSE);
       }
@@ -9273,7 +9283,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_CH: ll = r->u.ch; goto int_val;
   case N_STR:
     res = new_op (NULL,
-                  MIR_new_str_op (ctx, r->u.s));  // ??? what to do with decl and str in initializer
+                  MIR_new_str_op (ctx, r->u.s));  //???what to do with decl and str in initializer
     break;
   case N_COMMA:
     gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
