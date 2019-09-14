@@ -955,6 +955,7 @@ static token_t get_next_pptoken_1 (int header_p) {
           nl_p = TRUE;
         } else if (comment_char == '/') {
           comment_char = -1;
+          nl_p = TRUE;
         }
         break;
       case '/':
