@@ -15,7 +15,7 @@ mir.o: mir.c $(MIR_DEPS)
 mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-c2m: mir.o mir-gen.o
+c2m: mir.o mir-gen.o c2mir/c2mir.c
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
