@@ -2563,9 +2563,10 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
                     || code == MIR_LSH || code == MIR_LSHS || code == MIR_RSH || code == MIR_RSHS
                     || code == MIR_URSH || code == MIR_URSHS)
                    && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 0)) {
-      if (!MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1]))
-        MIR_insert_insn_before (ctx, func_item, insn,
-                                MIR_new_insn (ctx, MIR_MOV, insn->ops[0], insn->ops[1]));
+      if (!MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
+        next_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], insn->ops[1]);
+        MIR_insert_insn_before (ctx, func_item, insn, next_insn);
+      }
       MIR_remove_insn (ctx, func_item, insn);
     } else if ((code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS)
                && insn->ops[1].mode == MIR_OP_INT
@@ -2922,8 +2923,8 @@ typedef enum {
    VERSION
    NSTR
    (string)*
-   ( ((label)* (insn code) (operand)* | STRN=(func|local|import|export|forward|<data>) ...) EOI? )*
-   EOF
+   ( ((label)* (insn code) (operand)* | STRN=(func|local|import|export|forward|<data>) ...) EOI?
+   )* EOF
 
    where
    o VERSION and NSTR are unsigned tokens
