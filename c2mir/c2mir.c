@@ -3021,6 +3021,21 @@ static void pre_out (token_t t) {
     pre_last_token = t;
     if ((t = pptoken2token (t, TRUE)) == NULL) return;
   }
+  if (t->code == T_STR && VARR_LENGTH (token_t, recorded_tokens) != 0
+      && VARR_LAST (token_t, recorded_tokens)->code == T_STR) { /* concat strings */
+    token_t last_t = VARR_POP (token_t, recorded_tokens);
+
+    VARR_TRUNC (char, temp_string, 0);
+    for (const char *s = last_t->repr; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
+    assert (VARR_LAST (char, temp_string) == '"' && t->repr[0] == '"');
+    VARR_POP (char, temp_string);
+    for (const char *s = &t->repr[1]; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
+    t = last_t;
+    assert (VARR_LAST (char, temp_string) == '"');
+    VARR_PUSH (char, temp_string, '\0');
+    t->repr = uniq_str (VARR_ADDR (char, temp_string));
+    set_string_val (t, temp_string);
+  }
   VARR_PUSH (token_t, recorded_tokens, t);
 }
 
