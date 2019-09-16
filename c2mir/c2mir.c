@@ -10548,7 +10548,8 @@ static VARR (char_ptr_t) * headers;
 static VARR (char_ptr_t) * system_headers;
 
 static void init_options (int argc, const char *argv[],
-                          int (*other_option_func) (int, int, const char **)) {
+                          int (*other_option_func) (int, int, const char **, void *data),
+                          void *data) {
   const char *str;
 
   debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
@@ -10630,7 +10631,7 @@ static void init_options (int argc, const char *argv[],
         }
       }
     } else {
-      i = other_option_func (i, argc, argv);
+      i = other_option_func (i, argc, argv, data);
     }
   }
   VARR_PUSH (char_ptr_t, headers, NULL);
@@ -10664,7 +10665,7 @@ static int curr_module_num;
 
 static void compile_init (int argc, const char *argv[], int (*getc_func) (void),
                           void (*ungetc_func) (int),
-                          int other_option_func (int, int, const char **)) {
+                          int other_option_func (int, int, const char **, void *data), void *data) {
   n_errors = n_warnings = 0;
   curr_module_num = 0;
   c_getc = getc_func;
@@ -10672,7 +10673,7 @@ static void compile_init (int argc, const char *argv[], int (*getc_func) (void),
   parse_init ();
   curr_scope = NULL;
   context_init ();
-  init_options (argc, argv, other_option_func);
+  init_options (argc, argv, other_option_func, data);
   VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
   VARR_CREATE (init_object_t, init_object_path, 8);
 }
@@ -10697,6 +10698,7 @@ static int compile (const char *source_name) {
   double start_time = real_usec_time ();
   node_t r;
   unsigned n_error_before;
+  MIR_module_t m;
 
   if (verbose_p)
     fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
@@ -10720,9 +10722,9 @@ static int compile (const char *source_name) {
         if (debug_p) print_node (stderr, r, 0, TRUE);
         if (verbose_p)
           fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
-        MIR_new_module (ctx, get_module_name ());
+        m = MIR_new_module (ctx, get_module_name ());
         gen_mir (r);
-        if (asm_p && n_errors == 0) MIR_output (ctx, stderr);
+        if (asm_p && n_errors == 0) MIR_output_module (ctx, stderr, m);
         MIR_finish_module (ctx);
         if (verbose_p)
           fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
@@ -10770,7 +10772,7 @@ static const char *source_name;
 static VARR (char) * input;
 static int interp_exec_p, gen_exec_p;
 
-static int other_option_func (int i, int argc, const char *argv[]) {
+static int other_option_func (int i, int argc, const char *argv[], void *data) {
   FILE *f = NULL;
   int c;
 
@@ -10785,6 +10787,7 @@ static int other_option_func (int i, int argc, const char *argv[]) {
     code = argv[++i];
     source_name = "<command-line>";
   } else if (*argv[i] != '-') {
+    if ((*(int *) data)-- != 0) return i;
     source_name = argv[i];
     if ((f = fopen (argv[i], "r")) == NULL) {
       error (no_pos, "can not open %s -- goodbye", argv[i]);
@@ -10848,46 +10851,53 @@ static void *import_resolver (const char *name) {
 }
 
 int main (int argc, const char *argv[]) {
-  int ok_p;
+  int i, n, ok_p;
 
-  code = NULL;
-  source_name = NULL;
   interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
-  curr_char = 0;
-  compile_init (argc, argv, t_getc, t_ungetc, other_option_func);
-  if (code == NULL) {
-    code
-      = "int printf (const char *, ...);\n"
-        "#define SieveSize 819000\n"
-        "int sieve (void) {\n"
-        "  int i, k, prime, count, iter;\n"
-        "  char flags[SieveSize];\n"
-        "\n"
-        "  for (iter = 0; iter < 100; iter++) {\n"
-        "    count = 0;\n"
-        "    for (i = 0; i < SieveSize; i++)\n"
-        "      flags[i] = 1;\n"
-        "    for (i = 0; i < SieveSize; i++)\n"
-        "      if (flags[i]) {\n"
-        "	    prime = i + i + 3;\n"
-        "	    for (k = i + prime; k < SieveSize; k += prime)\n"
-        "	      flags[k] = 0;\n"
-        "	    count++;\n"
-        "      }\n"
-        "  }\n"
-        "  return count;\n"
-        "}\n"
-        "\n"
-        "int main (void) {\n"
-        "  printf (\"%d\\n\", sieve ());\n"
-        "  return 0;\n"
-        "}\n";
-    source_name = "<example>";
-  }
-  assert (source_name != NULL);
   ctx = MIR_init ();
-  if ((ok_p = compile (source_name)) && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
+  for (i = 0, ok_p = TRUE;; i++) {
+    code = NULL;
+    source_name = NULL;
+    curr_char = 0;
+    n = i;
+    VARR_TRUNC (char, input, 0);
+    compile_init (argc, argv, t_getc, t_ungetc, other_option_func, &n);
+    if (i == 0 && code == NULL) {
+      code
+        = "int printf (const char *, ...);\n"
+          "#define SieveSize 819000\n"
+          "int sieve (void) {\n"
+          "  int i, k, prime, count, iter;\n"
+          "  char flags[SieveSize];\n"
+          "\n"
+          "  for (iter = 0; iter < 100; iter++) {\n"
+          "    count = 0;\n"
+          "    for (i = 0; i < SieveSize; i++)\n"
+          "      flags[i] = 1;\n"
+          "    for (i = 0; i < SieveSize; i++)\n"
+          "      if (flags[i]) {\n"
+          "	    prime = i + i + 3;\n"
+          "	    for (k = i + prime; k < SieveSize; k += prime)\n"
+          "	      flags[k] = 0;\n"
+          "	    count++;\n"
+          "      }\n"
+          "  }\n"
+          "  return count;\n"
+          "}\n"
+          "\n"
+          "int main (void) {\n"
+          "  printf (\"%d\\n\", sieve ());\n"
+          "  return 0;\n"
+          "}\n";
+      source_name = "<example>";
+    }
+    if (code == NULL) break;
+    assert (source_name != NULL);
+    ok_p = compile (source_name) || ok_p;
+    compile_finish ();
+  }
+  if (ok_p && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
     MIR_val_t val;
     int res;
     MIR_module_t module;
@@ -10895,18 +10905,19 @@ int main (int argc, const char *argv[]) {
     uint64_t (*fun_addr) (void);
     double start_time;
 
-    module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx));
-    assert (module != NULL && DLIST_NEXT (MIR_module_t, module) == NULL);
-    for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL;
-         func = DLIST_NEXT (MIR_item_t, func))
-      if (func->item_type == MIR_func_item && strcmp (func->u.func->name, "main") == 0)
-        main_func = func;
+    for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
+         module = DLIST_NEXT (MIR_module_t, module)) {
+      for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL;
+           func = DLIST_NEXT (MIR_item_t, func))
+        if (func->item_type == MIR_func_item && strcmp (func->u.func->name, "main") == 0)
+          main_func = func;
+      MIR_load_module (ctx, module);
+    }
     if (main_func == NULL) {
-      fprintf (stderr, "%s: cannot execute program w/o main function\n", source_name);
+      fprintf (stderr, "cannot execute program w/o main function\n");
       ok_p = FALSE;
     } else {
       open_libs ();
-      MIR_load_module (ctx, module);
       MIR_load_external (ctx, "abort", fancy_abort);
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
@@ -10915,7 +10926,7 @@ int main (int argc, const char *argv[]) {
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
-          fprintf (stderr, "exit code %s: %lu\n", source_name, val.i);
+          fprintf (stderr, "exit code: %lu\n", val.i);
         }
       } else {
         MIR_gen_init (ctx);
@@ -10929,7 +10940,7 @@ int main (int argc, const char *argv[]) {
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
-          fprintf (stderr, "%s exit code: %d\n", source_name, res);
+          fprintf (stderr, "exit code: %d\n", res);
         }
         MIR_gen_finish (ctx);
       }
@@ -10937,7 +10948,6 @@ int main (int argc, const char *argv[]) {
   }
   MIR_finish (ctx);
   close_libs ();
-  compile_finish ();
   VARR_DESTROY (char, input);
   return !ok_p;
 }
