@@ -2124,7 +2124,7 @@ static void output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   fprintf (f, "\tendfunc\n");
 }
 
-static void output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
+void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
   fprintf (f, "%s:\tmodule\n", module->name);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
@@ -2135,7 +2135,7 @@ static void output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
 void MIR_output (MIR_context_t ctx, FILE *f) {
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules); module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
-    output_module (ctx, f, module);
+    MIR_output_module (ctx, f, module);
 }
 
 static MIR_insn_t insert_op_insn (MIR_context_t ctx, int out_p, MIR_item_t func_item,
