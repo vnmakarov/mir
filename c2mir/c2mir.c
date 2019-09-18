@@ -679,7 +679,7 @@ static VARR (stream_t) * streams; /* stack of streams */
 static stream_t cs, eof_s;        /* current stream and stream corresponding the last EOF */
 
 static void init_streams (void) {
-  eof_s = NULL;
+  cs = eof_s = NULL;
   VARR_CREATE (stream_t, streams, 32);
 }
 
