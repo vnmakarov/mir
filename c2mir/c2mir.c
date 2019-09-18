@@ -9943,6 +9943,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
         assert (FALSE); /* ??? not implemented */
     }
     MIR_finish_func (ctx);
+    if (decl->decl_spec.linkage == N_EXTERN) MIR_new_export (ctx, NL_HEAD (declarator->ops)->u.s);
     finish_curr_func_reg_vars ();
     break;
   }
