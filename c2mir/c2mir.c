@@ -10904,7 +10904,7 @@ int main (int argc, const char *argv[]) {
     }
     if (code == NULL) break;
     assert (source_name != NULL);
-    ok_p = compile (source_name) || ok_p;
+    ok_p = compile (source_name) && ok_p;
     compile_finish ();
   }
   if (ok_p && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
