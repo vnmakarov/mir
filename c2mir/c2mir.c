@@ -183,9 +183,13 @@ static void *reg_malloc (size_t s) {
   return mem;
 }
 
+static void reg_memory_pop (size_t mark) {
+  while (VARR_LENGTH (void_ptr_t, reg_memory) > mark) free (VARR_POP (void_ptr_t, reg_memory));
+}
+
+static size_t reg_memory_mark (void) { return VARR_LENGTH (void_ptr_t, reg_memory); }
 static void reg_memory_finish (void) {
-  for (size_t i = 0; i < VARR_LENGTH (void_ptr_t, reg_memory); i++)
-    free (VARR_GET (void_ptr_t, reg_memory, i));
+  reg_memory_pop (0);
   VARR_DESTROY (void_ptr_t, reg_memory);
 }
 
@@ -246,6 +250,15 @@ static const char *find_str_by_key (size_t key) {
 static void str_finish (void) {
   HTAB_DESTROY (str_t, str_tab);
   HTAB_DESTROY (str_t, str_key_tab);
+}
+
+static int c2mir_init (void) {
+  reg_memory_init ();
+  str_init ();
+}
+static void c2mir_finish (void) {
+  str_finish ();
+  reg_memory_finish ();
 }
 
 /* New Page */
@@ -4364,14 +4377,12 @@ static void kw_add (const char *name, token_code_t tc, size_t flags) {
 static void parse_init (void) {
   error_func = fatal_error;
   record_level = 0;
-  reg_memory_init ();
   curr_uid = 0;
   init_streams ();
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
   VARR_CREATE (token_t, buffered_tokens, 32);
   VARR_CREATE (token_t, recorded_tokens, 32);
-  str_init ();
   pre_init ();
   kw_add ("_Bool", T_BOOL, 0);
   kw_add ("_Complex", T_COMPLEX, 0);
@@ -4466,10 +4477,8 @@ static void parse_finish (void) {
   VARR_DESTROY (token_t, buffered_tokens);
   VARR_DESTROY (token_t, recorded_tokens);
   pre_finish ();
-  str_finish ();
   tpname_finish ();
   finish_streams ();
-  reg_memory_finish ();
 }
 
 #undef P
@@ -10667,7 +10676,6 @@ static void compile_init (int argc, const char *argv[], int (*getc_func) (void),
                           void (*ungetc_func) (int),
                           int other_option_func (int, int, const char **, void *data), void *data) {
   n_errors = n_warnings = 0;
-  curr_module_num = 0;
   c_getc = getc_func;
   c_ungetc = ungetc_func;
   parse_init ();
@@ -10856,7 +10864,8 @@ int main (int argc, const char *argv[]) {
   interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
   ctx = MIR_init ();
-  for (i = 0, ok_p = TRUE;; i++) {
+  c2mir_init ();
+  for (i = curr_module_num = 0, ok_p = TRUE;; i++, curr_module_num++) {
     code = NULL;
     source_name = NULL;
     curr_char = 0;
@@ -10948,6 +10957,7 @@ int main (int argc, const char *argv[]) {
   }
   MIR_finish (ctx);
   close_libs ();
+  c2mir_finish ();
   VARR_DESTROY (char, input);
   return !ok_p;
 }
