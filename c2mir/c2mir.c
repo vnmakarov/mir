@@ -7336,8 +7336,7 @@ static void check (node_t r, node_t context) {
     op1 = NL_HEAD (r->ops);
     check (op1, r);
     e = create_expr (r);
-    e->type->mode = TM_BASIC;
-    e->type->u.basic_type = TP_INT;  // ???
+    *e->type = get_ptr_int_type (FALSE);
     if (r->code == N_ALIGNOF && op1->code == N_IGNORE) {
       error (r->pos, "_Alignof of non-type");
       break;
