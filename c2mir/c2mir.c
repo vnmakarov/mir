@@ -3108,6 +3108,7 @@ static void syntax_error (const char *expected_name) {
   }
 #endif
   fprintf (stderr, "\n");
+  n_errors++;
 }
 
 static node_t top_scope, curr_scope;
