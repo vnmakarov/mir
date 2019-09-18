@@ -4938,15 +4938,26 @@ static void aux_set_type_align (struct type *type) {
           if (align < member_align) align = member_align;
         }
   }
-#ifdef ADJUST_TYPE_ALIGNMENT
-  align = ADJUST_TYPE_ALIGNMENT (align, type);
-#endif
   type->align = align;
 }
 
 static mir_size_t type_size (struct type *type) {
   assert (type->raw_size != MIR_SIZE_MAX && type->align >= 0);
   return round_size (type->raw_size, type->align);
+}
+
+static mir_size_t var_align (struct type *type) {
+  int align = type->align;
+
+  assert (type->raw_size != MIR_SIZE_MAX && align >= 0);
+#ifdef ADJUST_VAR_ALIGNMENT
+  align = ADJUST_VAR_ALIGNMENT (align, type);
+#endif
+  return align;
+}
+
+static mir_size_t var_size (struct type *type) {
+  return round_size (type->raw_size, var_align (type));
 }
 
 /* BOUND_BIT is used only if BF_P.  */
@@ -7770,9 +7781,9 @@ static void check (node_t r, node_t context) {
         decl->reg_p = TRUE;
         continue;
       }
-      ns->offset = round_size (ns->offset, type->align);
+      ns->offset = round_size (ns->offset, var_align (type));
       decl->offset = ns->offset;
-      ns->offset += type_size (type);
+      ns->offset += var_size (type);
       if (ns->size < ns->offset) ns->size = ns->offset;
       propagate_scope_size (decl->scope, top_scope);
     }
