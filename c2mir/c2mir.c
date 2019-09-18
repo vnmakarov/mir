@@ -5027,7 +5027,7 @@ static void set_type_layout (struct type *type) {
             decl->bit_offset = bits < 0 ? -1 : bound_bit - bits;
           } else { /* Finish the last unit */
             bf_p = FALSE;
-            offset = (offset + member_align - 1) / member_align;
+            offset = (offset + member_align - 1) / member_align * member_align;
             /* The offset and bit_offset do not matter, but make
                bit_offset less member_size in bits */
             decl->offset = offset + bound_bit / (member_size * MIR_CHAR_BIT);
