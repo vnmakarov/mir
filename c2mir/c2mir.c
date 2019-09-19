@@ -9112,30 +9112,37 @@ static void emit_scalar_assign (op_t var, op_t *val, MIR_type_t t, int ignore_ot
   } else {
     int width = var.decl->width;
     uint64_t mask, mask2;
-    op_t temp_op1, temp_op2, temp_op3;
+    op_t temp_op1, temp_op2, temp_op3, temp_op4;
 
     assert (var.mir_op.mode == MIR_OP_MEM);
     mask = 0xffffffffffffffff >> (64 - width);
     mask2 = ~(mask << var.decl->bit_offset);
     temp_op1 = get_new_temp (MIR_T_I64);
+    temp_op2 = get_new_temp (MIR_T_I64);
     temp_op3 = get_new_temp (MIR_T_I64);
     if (!ignore_others_p) {
-      temp_op2 = get_new_temp (MIR_T_I64);
       emit2_noopt (MIR_MOV, temp_op2.mir_op, var.mir_op);
       emit3 (MIR_AND, temp_op2.mir_op, temp_op2.mir_op, MIR_new_uint_op (ctx, mask2));
     }
     if (!signed_integer_type_p (var.decl->decl_spec.type)) {
       emit2 (MIR_MOV, temp_op1.mir_op, val->mir_op);
+      *val = temp_op3;
     } else {
       emit3 (MIR_LSH, temp_op1.mir_op, val->mir_op, MIR_new_int_op (ctx, 64 - width));
       emit3 (MIR_RSH, temp_op1.mir_op, temp_op1.mir_op, MIR_new_int_op (ctx, 64 - width));
+      *val = temp_op1;
     }
-    *val = temp_op1;
     emit3 (MIR_AND, temp_op3.mir_op, temp_op1.mir_op, MIR_new_uint_op (ctx, mask));
-    if (var.decl->bit_offset != 0)
-      emit3 (MIR_LSH, temp_op3.mir_op, temp_op3.mir_op, MIR_new_int_op (ctx, var.decl->bit_offset));
-    if (!ignore_others_p) emit3 (MIR_OR, temp_op3.mir_op, temp_op3.mir_op, temp_op2.mir_op);
-    emit2 (MIR_MOV, var.mir_op, temp_op3.mir_op);
+    temp_op4 = get_new_temp (MIR_T_I64);
+    if (var.decl->bit_offset == 0) {
+      temp_op4 = temp_op3;
+    } else {
+      emit3 (MIR_LSH, temp_op4.mir_op, temp_op3.mir_op, MIR_new_int_op (ctx, var.decl->bit_offset));
+    }
+    if (!ignore_others_p) {
+      emit3 (MIR_OR, temp_op4.mir_op, temp_op4.mir_op, temp_op2.mir_op);
+    }
+    emit2 (MIR_MOV, var.mir_op, temp_op4.mir_op);
   }
 }
 
