@@ -9214,7 +9214,10 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
         continue;
       e = init_el.init->attr;
-      if (e->const_p) convert_value (e, init_el.el_type);
+      if (e->const_p) {
+        convert_value (e, init_el.el_type);
+        e->type = init_el.el_type; /* to get the right value in the subsequent gen call */
+      }
       val = gen (init_el.init, NULL, NULL, TRUE);
       assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
               || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
