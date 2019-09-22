@@ -917,9 +917,9 @@ static void set_string_val (token_t t, VARR (char) * temp) {
       i--;
       break;
     }
-    default: error (t->pos, "wrong escape char 0x%x", curr_c); curr_c = 0;
+    default: error (t->pos, "wrong escape char 0x%x", curr_c); curr_c = -1;
     }
-    if (t->repr[0] == '\'' || curr_c != 0) VARR_PUSH (char, temp, curr_c);
+    if (t->repr[0] == '\'' || curr_c >= 0) VARR_PUSH (char, temp, curr_c);
   }
   VARR_PUSH (char, temp, '\0');
   if (t->repr[0] == '"')
