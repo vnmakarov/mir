@@ -19,7 +19,7 @@ typedef int64_t mir_llong;
 #define MIR_INT_MIN INT32_MIN
 #define MIR_INT_MAX INT32_MAX
 #define MIR_LONG_MIN INT64_MIN
-#define MIR_LONG_MAX INT32_MAX
+#define MIR_LONG_MAX INT64_MAX
 #define MIR_LLONG_MIN INT64_MIN
 #define MIR_LLONG_MAX INT64_MAX
 
@@ -32,7 +32,7 @@ typedef uint64_t mir_ullong;
 #define MIR_UCHAR_MAX UINT8_MAX
 #define MIR_USHORT_MAX UINT16_MAX
 #define MIR_UINT_MAX UINT32_MAX
-#define MIR_ULONG_MAX UINT32_MAX
+#define MIR_ULONG_MAX UINT64_MAX
 #define MIR_ULLONG_MAX UINT64_MAX
 
 typedef mir_schar mir_char;
