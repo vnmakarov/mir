@@ -1424,8 +1424,8 @@ static node_t get_int_node_from_repr (const char *repr, char **stop, int base, i
     return new_ull_node (ull, pos);
   }
   if (long_p) {
-    if (!uns_p && (base == 10 || ull <= MIR_LONG_MAX)) return new_l_node (ull, pos);
-    if (base != 10 && ull <= MIR_ULONG_MAX) return new_ul_node (ull, pos);
+    if (!uns_p && ull <= MIR_LONG_MAX) return new_l_node (ull, pos);
+    if (ull <= MIR_ULONG_MAX) return new_ul_node (ull, pos);
     if (!uns_p && (base == 10 || ull <= MIR_LLONG_MAX)) return new_ll_node (ull, pos);
     return new_ull_node (ull, pos);
   }
@@ -1437,7 +1437,7 @@ static node_t get_int_node_from_repr (const char *repr, char **stop, int base, i
   if (ull <= MIR_INT_MAX) return new_i_node (ull, pos);
   if (base != 10 && ull <= MIR_UINT_MAX) return new_u_node (ull, pos);
   if (ull <= MIR_LONG_MAX) return new_l_node (ull, pos);
-  if (base != 10 && ull <= MIR_ULONG_MAX) return new_ul_node (ull, pos);
+  if (ull <= MIR_ULONG_MAX) return new_ul_node (ull, pos);
   if (base == 10 || ull <= MIR_LLONG_MAX) return new_ll_node (ull, pos);
   return new_ull_node (ull, pos);
 }
