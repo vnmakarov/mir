@@ -204,33 +204,39 @@ enum str_flag { FLAG_EXT = 1, FLAG_C89, FLAG_EXT89 };
 
 typedef struct {
   const char *s;
-  size_t key, flags;
+  size_t len, key, flags;
 } str_t;
 
 DEF_HTAB (str_t);
 static HTAB (str_t) * str_tab;
 static HTAB (str_t) * str_key_tab;
 
-static int str_eq (str_t str1, str_t str2) { return strcmp (str1.s, str2.s) == 0; }
-static htab_hash_t str_hash (str_t str) { return mir_hash (str.s, strlen (str.s), 0x42); }
+static int str_eq (str_t str1, str_t str2) {
+  return str1.len == str2.len && memcmp (str1.s, str2.s, str1.len) == 0;
+}
+static htab_hash_t str_hash (str_t str) { return mir_hash (str.s, str.len, 0x42); }
 static int str_key_eq (str_t str1, str_t str2) { return str1.key == str2.key; }
 static htab_hash_t str_key_hash (str_t str) { return mir_hash64 (str.key, 0x24); }
 
-static const char *uniq_str (const char *str);
+static str_t uniq_cstr (const char *str);
+
+static str_t empty_str;
 
 static void str_init (void) {
   HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq);
   HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq);
+  empty_str = uniq_cstr ("");
 }
 
-static str_t str_add (const char *s, size_t key, size_t flags, int key_p) {
+static str_t str_add (const char *s, size_t len, size_t key, size_t flags, int key_p) {
   char *heap_s;
   str_t el, str;
 
   str.s = s;
+  str.len = len;
   if (HTAB_DO (str_t, str_tab, str, HTAB_FIND, el)) return el;
-  heap_s = reg_malloc (strlen (s) + 1);
-  strcpy (heap_s, s);
+  heap_s = reg_malloc (len);
+  memcpy (heap_s, s, len);
   str.s = heap_s;
   str.key = key;
   str.flags = flags;
@@ -403,7 +409,7 @@ struct node {
   DLIST_LINK (node_t) op_link;
   DLIST (node_t) ops;
   union {
-    const char *s;
+    str_t s;
     mir_char ch;
     mir_long l;
     mir_llong ll;
@@ -562,7 +568,7 @@ static node_t new_ld_node (long double ld, pos_t p) {
   n->u.ld = ld;
   return n;
 }
-static node_t new_str_node (node_code_t nc, const char *s, pos_t p) {
+static node_t new_str_node (node_code_t nc, str_t s, pos_t p) {
   node_t n = new_pos_node (nc, p);
 
   n->u.s = s;
@@ -575,7 +581,10 @@ static node_t get_op (node_t n, int nop) {
   return n;
 }
 
-static const char *uniq_str (const char *str) { return str_add (str, T_STR, 0, FALSE).s; }
+static str_t uniq_cstr (const char *str) {
+  return str_add (str, strlen (str) + 1, T_STR, 0, FALSE);
+}
+static str_t uniq_str (const char *str, size_t len) { return str_add (str, len, T_STR, 0, FALSE); }
 
 static token_t new_token (pos_t pos, const char *repr, int token_code, node_code_t node_code) {
   token_t token = reg_malloc (sizeof (struct token));
@@ -598,7 +607,7 @@ static token_t copy_token (token_t t) {
 
 static token_t new_token_wo_uniq_repr (pos_t pos, const char *repr, int token_code,
                                        node_code_t node_code) {
-  return new_token (pos, uniq_str (repr), token_code, node_code);
+  return new_token (pos, uniq_cstr (repr).s, token_code, node_code);
 }
 
 static token_t new_node_token (pos_t pos, const char *repr, int token_code, node_t node) {
@@ -636,8 +645,7 @@ static const char *get_token_name (int token_code) {
   case T_UNOP: return "unary op";
   case T_DOTS: return "...";
   default:
-    if ((s = find_str_by_key (token_code)) != NULL)  // ???
-      return s;
+    if ((s = find_str_by_key (token_code)) != NULL) return s;
     if (isprint (token_code))
       sprintf (buf, "%c", token_code);
     else
@@ -923,7 +931,7 @@ static void set_string_val (token_t t, VARR (char) * temp) {
   }
   VARR_PUSH (char, temp, '\0');
   if (t->repr[0] == '"')
-    t->node->u.s = uniq_str (VARR_ADDR (char, temp));
+    t->node->u.s = uniq_str (VARR_ADDR (char, temp), VARR_LENGTH (char, temp));
   else if (VARR_LENGTH (char, temp) == 1)
     error (t->pos, "empty char constant");
   else
@@ -932,9 +940,9 @@ static void set_string_val (token_t t, VARR (char) * temp) {
 
 static token_t new_id_token (pos_t pos, const char *id_str) {
   token_t token;
-  const char *str = uniq_str (id_str);
+  str_t str = uniq_cstr (id_str);
 
-  token = new_token (pos, str, T_ID, N_IGNORE);
+  token = new_token (pos, str.s, T_ID, N_IGNORE);
   token->node = new_str_node (N_ID, str, pos);
   return token;
 }
@@ -1023,7 +1031,8 @@ static token_t get_next_pptoken_1 (int header_p) {
         VARR_POP (char, temp_string);
         VARR_PUSH (char, temp_string, '\0');
         return new_node_token (pos, VARR_ADDR (char, symbol_text), T_HEADER,
-                               new_str_node (N_STR, uniq_str (VARR_ADDR (char, temp_string)), pos));
+                               new_str_node (N_STR, uniq_cstr (VARR_ADDR (char, temp_string)),
+                                             pos));
       } else {
         VARR_PUSH (char, symbol_text, curr_c);
         for (i = 0; i < VARR_LENGTH (char, symbol_text); i++)
@@ -1314,7 +1323,7 @@ static token_t get_next_pptoken_1 (int header_p) {
       VARR_PUSH (char, symbol_text, '\0');
       t = (stop == '\"'
              ? new_node_token (pos, VARR_ADDR (char, symbol_text), T_STR,
-                               new_str_node (N_STR, NULL, pos))
+                               new_str_node (N_STR, empty_str, pos))
              : new_node_token (pos, VARR_ADDR (char, symbol_text), T_CH, new_ch_node (' ', pos)));
       set_string_val (t, symbol_text);
       return t;
@@ -1390,7 +1399,7 @@ static token_t token_stringify (token_t t, VARR (token_t) * ts) {
   int i;
 
   if (VARR_LENGTH (token_t, ts) != 0) t = VARR_GET (token_t, ts, 0);
-  t = new_node_token (t->pos, "", T_STR, new_str_node (N_STR, "", t->pos));
+  t = new_node_token (t->pos, "", T_STR, new_str_node (N_STR, empty_str, t->pos));
   VARR_TRUNC (char, temp_string, 0);
   for (const char *s = t->repr; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
   VARR_PUSH (char, temp_string, '"');
@@ -1410,7 +1419,7 @@ static token_t token_stringify (token_t t, VARR (token_t) * ts) {
     }
   VARR_PUSH (char, temp_string, '"');
   VARR_PUSH (char, temp_string, '\0');
-  t->repr = uniq_str (VARR_ADDR (char, temp_string));
+  t->repr = uniq_cstr (VARR_ADDR (char, temp_string)).s;
   set_string_val (t, temp_string);
   return t;
 }
@@ -1448,7 +1457,7 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
           && t->code != T_RDBLNO);
   if (t->code == T_NO_MACRO_IDENT) t->code = T_ID;
   if (t->code == T_ID && id2kw_p) {
-    str_t str = str_add (t->repr, T_STR, 0, FALSE);
+    str_t str = str_add (t->repr, strlen (t->repr) + 1, T_STR, 0, FALSE);
 
     if (str.key != T_STR) {
       t->code = str.key;
@@ -1930,21 +1939,21 @@ static const char *get_include_fname (token_t t) {
   const char *fullname, *name;
 
   assert (t->code == T_STR || t->code == T_HEADER);
-  if ((name = t->node->u.s)[0] != '/') {
+  if ((name = t->node->u.s.s)[0] != '/') {
     if (t->repr[0] == '"') {
       /* Search relative to the current source dir */
       if (cs->fname != NULL) {
         fullname = get_full_name (cs->fname, name, FALSE);
-        if (file_found_p (fullname)) return uniq_str (fullname);
+        if (file_found_p (fullname)) return uniq_cstr (fullname).s;
       }
       for (size_t i = 0; header_dirs[i] != NULL; i++) {
         fullname = get_full_name (header_dirs[i], name, TRUE);
-        if (file_found_p (fullname)) return uniq_str (fullname);
+        if (file_found_p (fullname)) return uniq_cstr (fullname).s;
       }
     }
     for (size_t i = 0; system_header_dirs[i] != NULL; i++) {
       fullname = get_full_name (system_header_dirs[i], name, TRUE);
-      if (file_found_p (fullname)) return uniq_str (fullname);
+      if (file_found_p (fullname)) return uniq_cstr (fullname).s;
     }
   }
   return name;
@@ -1975,7 +1984,7 @@ static pos_t check_line_directive_args (VARR (token_t) * buffer) {
   i++;
   if (i < len && buffer_arr[i]->code == ' ') i++;
   if (i < len && buffer_arr[i]->code == T_STR) {
-    fname = buffer_arr[i]->node->u.s;
+    fname = buffer_arr[i]->node->u.s.s;
     i++;
   }
   if (i == len) {
@@ -2922,8 +2931,8 @@ static void processing (int ignore_directive_p) {
       } else if (strcmp (t->repr, "__FILE__") == 0) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
-        t = new_node_token (t->pos, uniq_str (VARR_ADDR (char, temp_string)), T_STR,
-                            new_str_node (N_STR, NULL, t->pos));
+        t = new_node_token (t->pos, uniq_cstr (VARR_ADDR (char, temp_string)).s, T_STR,
+                            new_str_node (N_STR, empty_str, t->pos));
         set_string_val (t, temp_string);
         out_token (t);
       } else if (strcmp (t->repr, "__LINE__") == 0) {
@@ -2931,14 +2940,14 @@ static void processing (int ignore_directive_p) {
 
         sprintf (str, "%d", t->pos.lno);
         out_token (
-          new_node_token (t->pos, uniq_str (str), T_NUMBER, new_i_node (t->pos.lno, t->pos)));
+          new_node_token (t->pos, uniq_cstr (str).s, T_NUMBER, new_i_node (t->pos.lno, t->pos)));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
         t = new_node_token (t->pos, date_str, T_STR,
-                            new_str_node (N_STR, uniq_str (date_str), t->pos));
+                            new_str_node (N_STR, uniq_cstr (date_str), t->pos));
         out_token (t);
       } else if (strcmp (t->repr, "__TIME__") == 0) {
         t = new_node_token (t->pos, time_str, T_STR,
-                            new_str_node (N_STR, uniq_str (date_str), t->pos));
+                            new_str_node (N_STR, uniq_cstr (date_str), t->pos));
         out_token (t);
       } else {
         assert (FALSE);
@@ -3046,7 +3055,7 @@ static void pre_out (token_t t) {
     t = last_t;
     assert (VARR_LAST (char, temp_string) == '"');
     VARR_PUSH (char, temp_string, '\0');
-    t->repr = uniq_str (VARR_ADDR (char, temp_string));
+    t->repr = uniq_cstr (VARR_ADDR (char, temp_string)).s;
     set_string_val (t, temp_string);
   }
   VARR_PUSH (token_t, recorded_tokens, t);
@@ -3134,13 +3143,13 @@ DEF_HTAB (tpname_t);
 static HTAB (tpname_t) * tpname_tab;
 
 static int tpname_eq (tpname_t tpname1, tpname_t tpname2) {
-  return tpname1.id->u.s == tpname2.id->u.s && tpname1.scope == tpname2.scope;
+  return tpname1.id->u.s.s == tpname2.id->u.s.s && tpname1.scope == tpname2.scope;
 }
 
 static htab_hash_t tpname_hash (tpname_t tpname) {
-  return (
-    mir_hash_finish (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) tpname.id->u.s),
-                                    (uint64_t) tpname.scope)));
+  return (mir_hash_finish (
+    mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) tpname.id->u.s.s),
+                   (uint64_t) tpname.scope)));
 }
 
 static void tpname_init (void) { HTAB_CREATE (tpname_t, tpname_tab, 1000, tpname_hash, tpname_eq); }
@@ -3540,7 +3549,7 @@ D (attr_spec) {
   node_t r;
 
   PTN (T_ID);
-  if (strcmp (r->u.s, "__attribute__") != 0) PTFAIL (T_ID);
+  if (strcmp (r->u.s.s, "__attribute__") != 0) PTFAIL (T_ID);
   PT ('(');
   PT ('(');
   for (;;) {
@@ -4371,7 +4380,7 @@ static void fatal_error (C_error_code_t code, const char *message) {
 }
 
 static void kw_add (const char *name, token_code_t tc, size_t flags) {
-  str_add (name, tc, flags, TRUE);
+  str_add (name, strlen (name) + 1, tc, flags, TRUE);
 }
 
 static void parse_init (void) {
@@ -4451,12 +4460,12 @@ static void add_standard_includes (void) {
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (SOURCEDIR);
     add_to_temp_string (standard_includes[i]);
-    str1 = uniq_str (VARR_ADDR (char, temp_string));
+    str1 = uniq_cstr (VARR_ADDR (char, temp_string)).s;
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (INSTALLDIR);
     add_to_temp_string ("../");
     add_to_temp_string (standard_includes[i]);
-    str2 = uniq_str (VARR_ADDR (char, temp_string));
+    str2 = uniq_cstr (VARR_ADDR (char, temp_string)).s;
 
     if ((f = fopen (str1, "r")) != NULL) {
       add_stream (f, str1);
@@ -4532,13 +4541,13 @@ DEF_HTAB (symbol_t);
 static HTAB (symbol_t) * symbol_tab;
 
 static int symbol_eq (symbol_t s1, symbol_t s2) {
-  return s1.mode == s2.mode && s1.id->u.s == s2.id->u.s && s1.scope == s2.scope;
+  return s1.mode == s2.mode && s1.id->u.s.s == s2.id->u.s.s && s1.scope == s2.scope;
 }
 
 static htab_hash_t symbol_hash (symbol_t s) {
   return (mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) s.mode),
-                                  (uint64_t) s.id->u.s),
+                                  (uint64_t) s.id->u.s.s),
                    (uint64_t) s.scope)));
 }
 
@@ -6205,7 +6214,7 @@ check_one_value:
            && (des_list = NL_HEAD (init->ops))->code == N_LIST && NL_HEAD (des_list->ops) == NULL
            && NL_EL (init->ops, 1) != NULL && (str = NL_EL (init->ops, 1))->code == N_STR))
       && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
-    len = strlen (str->u.s) + 1;
+    len = str->u.s.len;
     if (type->incomplete_p) {
       assert (len < MIR_INT_MAX);
       type->u.arr_type->size = new_i_node (len, type->u.arr_type->size->pos);
@@ -6856,7 +6865,7 @@ static void check (node_t r, node_t context) {
     arr_type->el_type->pos_node = r;
     arr_type->el_type->mode = TM_BASIC;
     arr_type->el_type->u.basic_type = TP_CHAR;
-    arr_type->size = new_i_node (strlen (r->u.s) + 1, r->pos);
+    arr_type->size = new_i_node (r->u.s.len, r->pos);
     check (arr_type->size, NULL);
     break;
   }
@@ -7618,7 +7627,7 @@ static void check (node_t r, node_t context) {
         ok_p = e1->u.u_val != 0;
       if (!ok_p) {
         assert (NL_NEXT (op1) != NULL && NL_NEXT (op1)->code == N_STR);
-        error (r->pos, "static assertion failed: \"%s\"", NL_NEXT (op1)->u.s);
+        error (r->pos, "static assertion failed: \"%s\"", NL_NEXT (op1)->u.s);  // ???
       }
     }
     break;
@@ -8799,7 +8808,7 @@ static const char *get_reg_var_name (MIR_type_t promoted_type, const char *suffi
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (prefix);
   add_to_temp_string (suffix);
-  return uniq_str (VARR_ADDR (char, temp_string));
+  return uniq_cstr (VARR_ADDR (char, temp_string)).s;
 }
 
 static const char *get_func_var_name (const char *prefix, const char *suffix) {
@@ -8809,7 +8818,7 @@ static const char *get_func_var_name (const char *prefix, const char *suffix) {
   add_to_temp_string (curr_func->u.func->name);
   add_to_temp_string ("_");
   add_to_temp_string (suffix);
-  return uniq_str (VARR_ADDR (char, temp_string));
+  return uniq_cstr (VARR_ADDR (char, temp_string)).s;
 }
 
 static const char *get_func_static_var_name (const char *suffix, decl_t decl) {
@@ -8857,7 +8866,7 @@ static void collect_args_and_func_types (struct func_type *func_type, MIR_type_t
         assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
         id = NL_HEAD (declarator->ops);
         param_type = ((decl_t) p->attr)->decl_spec.type;
-        var.name = get_param_name (&type, param_type, id->u.s);
+        var.name = get_param_name (&type, param_type, id->u.s.s);
         if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
             || !((decl_t) p->attr)->reg_p)
           VARR_PUSH (node_t, mem_params, p);
@@ -9199,7 +9208,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       }
       if (!scalar_type_p (init_el.el_type)) {
         gen_memcpy (offset + rel_offset, base, val,
-                    init_el.init->code == N_STR ? strlen (init_el.init->u.s) + 1
+                    init_el.init->code == N_STR ? init_el.init->u.s.len
                                                 : init_el.el_type->raw_size);
         rel_offset = init_el.offset + init_el.el_type->raw_size;
       } else {
@@ -9253,9 +9262,9 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         data_size = _MIR_type_size (ctx, t);
       } else if (init_el.el_type->mode == TM_ARR) {
         data_size = init_el.el_type->raw_size;
-        str_len = strlen (val.mir_op.u.str) + 1;
+        str_len = val.mir_op.u.str.len;
         if (data_size < str_len) {
-          data = MIR_new_data (ctx, global_name, MIR_T_U8, data_size, val.mir_op.u.str);
+          data = MIR_new_data (ctx, global_name, MIR_T_U8, data_size, val.mir_op.u.str.s);
         } else {
           data = MIR_new_string_data (ctx, global_name, val.mir_op.u.str);
           if (data_size > str_len) MIR_new_bss (ctx, NULL, data_size - str_len);
@@ -9370,7 +9379,12 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                            : MIR_new_double_op (ctx, ld)));
     break;
   case N_CH: ll = r->u.ch; goto int_val;
-  case N_STR: res = new_op (NULL, MIR_new_str_op (ctx, strlen (r->u.s) + 1, r->u.s)); break;
+  case N_STR:
+    res
+      = new_op (NULL,
+                MIR_new_str_op (ctx, (MIR_str_t){r->u.s.len, r->u.s.s}));  //???what to do with decl
+                                                                           // and str in initializer
+    break;
   case N_COMMA:
     gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
     res = gen (NL_EL (r->ops, 1), true_label, false_label, TRUE);
@@ -9596,7 +9610,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       assert (t != MIR_T_UNDEF);
       t = promote_mir_int_type (t);
       name
-        = get_reg_var_name (t, r->u.s, ((struct node_scope *) decl->scope->attr)->func_scope_num);
+        = get_reg_var_name (t, r->u.s.s, ((struct node_scope *) decl->scope->attr)->func_scope_num);
       reg_var = get_reg_var (ctx, t, name);
       res = new_op (decl, MIR_new_reg_op (ctx, reg_var.reg));
     }
@@ -9872,8 +9886,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     if (declarator != NULL && declarator->code != N_IGNORE && decl->item == NULL) {
       id = NL_HEAD (declarator->ops);
       name = (decl->scope != top_scope && decl->decl_spec.static_p
-                ? get_func_static_var_name (id->u.s, decl)
-                : id->u.s);
+                ? get_func_static_var_name (id->u.s.s, decl)
+                : id->u.s.s);
       if (decl->used_p && decl->scope != top_scope && decl->decl_spec.static_p) {
         decl->item = MIR_new_forward (ctx, name);
         DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
@@ -9963,7 +9977,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     curr_call_arg_area_offset = 0;
     collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type);
     curr_func
-      = MIR_new_func_arr (ctx, NL_HEAD (declarator->ops)->u.s, res_type == MIR_T_UNDEF ? 0 : 1,
+      = MIR_new_func_arr (ctx, NL_HEAD (declarator->ops)->u.s.s, res_type == MIR_T_UNDEF ? 0 : 1,
                           &res_type, VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
     decl->item = curr_func;
     if (ns->size != 0) {
@@ -9981,7 +9995,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       assert (param_declarator != NULL && param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
       param_type = param_decl->decl_spec.type;
-      name = get_param_name (&param_mir_type, param_type, param_id->u.s);
+      name = get_param_name (&param_mir_type, param_type, param_id->u.s.s);
       if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION) {
         param_reg = get_reg_var (ctx, MIR_POINTER_TYPE, name).reg;
         val = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, param_reg, 0, 1));
@@ -10013,7 +10027,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
         assert (FALSE); /* ??? not implemented */
     }
     MIR_finish_func (ctx);
-    if (decl->decl_spec.linkage == N_EXTERN) MIR_new_export (ctx, NL_HEAD (declarator->ops)->u.s);
+    if (decl->decl_spec.linkage == N_EXTERN) MIR_new_export (ctx, NL_HEAD (declarator->ops)->u.s.s);
     finish_curr_func_reg_vars ();
     break;
   }
@@ -10293,8 +10307,8 @@ static void print_char (FILE *f, int ch) {
     fprintf (f, "\\%o", ch);
 }
 
-static void print_chars (FILE *f, const char *str) {
-  while (*str != 0) print_char (f, *str++);
+static void print_chars (FILE *f, const char *str, size_t len) {
+  for (size_t i = 0; i < len; i++) print_char (f, str[i]);
 }
 
 static void print_node (FILE *f, node_t n, int indent, int attr_p);
@@ -10449,11 +10463,11 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
     goto expr;
   case N_STR:
     fprintf (f, " \"");
-    print_chars (f, n->u.s);
+    print_chars (f, n->u.s.s, n->u.s.len);
     fprintf (f, "\"");
     goto expr;
   case N_ID:
-    fprintf (f, " %s", n->u.s);
+    fprintf (f, " %s", n->u.s.s);
   expr:
     if (attr_p && n->attr != NULL) print_expr (f, n->attr);
     fprintf (f, "\n");
@@ -10719,13 +10733,13 @@ static void init_options (int argc, const char *argv[],
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (SOURCEDIR);
     add_to_temp_string (standard_include_dirs[i]);
-    str = uniq_str (VARR_ADDR (char, temp_string));
+    str = uniq_cstr (VARR_ADDR (char, temp_string)).s;
     VARR_PUSH (char_ptr_t, system_headers, str);
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (INSTALLDIR);
     add_to_temp_string ("../");
     add_to_temp_string (standard_include_dirs[i]);
-    str = uniq_str (VARR_ADDR (char, temp_string));
+    str = uniq_cstr (VARR_ADDR (char, temp_string)).s;
     VARR_PUSH (char_ptr_t, system_headers, str);
   }
 #ifdef __linux__
