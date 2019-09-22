@@ -328,7 +328,7 @@ static MIR_op_mode_t type2mode (MIR_type_t type) {
 
 typedef struct string {
   size_t num; /* string number starting with 1 */
-  const char *str;
+  MIR_str_t str;
 } string_t;
 
 DEF_VARR (string_t);
@@ -342,18 +342,20 @@ struct string_ctx {
 #define strings ctx->string_ctx->strings
 #define string_tab ctx->string_ctx->string_tab
 
-static htab_hash_t str_hash (string_t str) { return mir_hash (str.str, strlen (str.str), 0); }
-static int str_eq (string_t str1, string_t str2) { return strcmp (str1.str, str2.str) == 0; }
+static htab_hash_t str_hash (string_t str) { return mir_hash (str.str.s, str.str.len, 0); }
+static int str_eq (string_t str1, string_t str2) {
+  return str1.str.len == str2.str.len && memcmp (str1.str.s, str2.str.s, str1.str.len) == 0;
+}
 
 static void string_init (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) {
-  string_t string = {0, NULL};
+  string_t string = {0, {0, NULL}};
 
   VARR_CREATE (string_t, *strs, 0);
   VARR_PUSH (string_t, *strs, string); /* don't use 0th string */
   HTAB_CREATE (string_t, *str_tab, 1000, str_hash, str_eq);
 }
 
-static int string_find (VARR (string_t) * *strs, HTAB (string_t) * *str_tab, const char *str,
+static int string_find (VARR (string_t) * *strs, HTAB (string_t) * *str_tab, MIR_str_t str,
                         string_t *s) {
   string_t string;
 
@@ -362,15 +364,16 @@ static int string_find (VARR (string_t) * *strs, HTAB (string_t) * *str_tab, con
 }
 
 static string_t string_store (MIR_context_t ctx, VARR (string_t) * *strs,
-                              HTAB (string_t) * *str_tab, const char *str) {
+                              HTAB (string_t) * *str_tab, MIR_str_t str) {
   char *heap_str;
   string_t el, string;
 
   if (string_find (strs, str_tab, str, &el)) return el;
-  if ((heap_str = malloc (strlen (str) + 1)) == NULL)
+  if ((heap_str = malloc (str.len)) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for strings");
-  strcpy (heap_str, str);
-  string.str = heap_str;
+  memcpy (heap_str, str.s, str.len);
+  string.str.s = heap_str;
+  string.str.len = str.len;
   string.num = VARR_LENGTH (string_t, *strs);
   VARR_PUSH (string_t, *strs, string);
   HTAB_DO (string_t, *str_tab, string, HTAB_INSERT, el);
@@ -381,7 +384,7 @@ static void string_finish (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) 
   size_t i;
 
   for (i = 1; i < VARR_LENGTH (string_t, *strs); i++)
-    free ((char *) VARR_ADDR (string_t, *strs)[i].str);
+    free ((char *) VARR_ADDR (string_t, *strs)[i].str.s);
   VARR_DESTROY (string_t, *strs);
   HTAB_DESTROY (string_t, *str_tab);
 }
@@ -465,7 +468,7 @@ static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
   reg_desc_t rd;
   int res;
 
-  rd.name_num = string_store (ctx, &strings, &string_tab, name).num;
+  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
   rd.func = func;
   sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
   sc.ctx = ctx;
@@ -483,7 +486,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
 
   if (!any_p && _MIR_reserved_name_p (ctx, name))
     (*error_func) (MIR_reserved_name_error, "redefining a reserved name %s", name);
-  rd.name_num = string_store (ctx, &strings, &string_tab, name).num;
+  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
   rd.func = func;
   rd.type = type;
   rd.reg = reg; /* 0 is reserved */
@@ -577,7 +580,7 @@ static MIR_item_t find_item (MIR_context_t ctx, const char *name, MIR_module_t m
 static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->data = NULL;
   m->temp_items_num = 0;
-  m->name = string_store (ctx, &strings, &string_tab, name).str;
+  m->name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   DLIST_INIT (MIR_item_t, m->items);
 }
 
@@ -796,7 +799,7 @@ static MIR_item_t new_export_import_forward (MIR_context_t ctx, const char *name
   const char *uniq_name;
 
   item = create_item (ctx, item_type, item_name);
-  uniq_name = string_store (ctx, &strings, &string_tab, name).str;
+  uniq_name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   if (item_type == MIR_export_item)
     item->u.export = uniq_name;
   else if (item_type == MIR_import_item)
@@ -831,7 +834,8 @@ MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len) {
     free (item);
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of bss %s", name);
   }
-  if (name != NULL) name = string_store (ctx, &strings, &string_tab, name).str;
+  if (name != NULL)
+    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   item->u.bss->name = name;
   item->u.bss->len = len;
   if (name == NULL) {
@@ -873,7 +877,8 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of data %s",
                    name == NULL ? "" : name);
   }
-  if (name != NULL) name = string_store (ctx, &strings, &string_tab, name).str;
+  if (name != NULL)
+    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   data->name = name;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
@@ -887,8 +892,8 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
   return item;
 }
 
-MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, const char *str) {
-  return MIR_new_data (ctx, name, MIR_T_U8, strlen (str) + 1, str);
+MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str) {
+  return MIR_new_data (ctx, name, MIR_T_U8, str.len, str.s);
 }
 
 MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref_item) {
@@ -901,7 +906,8 @@ MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of ref data %s",
                    name == NULL ? "" : name);
   }
-  if (name != NULL) name = string_store (ctx, &strings, &string_tab, name).str;
+  if (name != NULL)
+    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   ref_data->name = name;
   ref_data->ref_item = ref_item;
   if (name == NULL) {
@@ -928,7 +934,8 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
     (*error_func) (MIR_binary_io_error,
                    "%s can not be an expr which should be non-argument, one result function",
                    MIR_item_name (ctx, expr_item));
-  if (name != NULL) name = string_store (ctx, &strings, &string_tab, name).str;
+  if (name != NULL)
+    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   expr_data->name = name;
   expr_data->expr_item = expr_item;
   if (name == NULL) {
@@ -955,7 +962,8 @@ static MIR_item_t new_proto_arr (MIR_context_t ctx, const char *name, size_t nre
     free (proto_item);
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
   }
-  proto->name = string_store (ctx, &strings, &string_tab, name).str;
+  proto->name
+    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
   memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
   proto->nres = nres;
@@ -1033,7 +1041,8 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     free (func_item);
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of func %s", name);
   }
-  func->name = string_store (ctx, &strings, &string_tab, name).str;
+  func->name
+    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   func->nres = nres;
   func->res_types = (MIR_type_t *) ((char *) func + sizeof (struct MIR_func));
   memcpy (func->res_types, res_types, nres * sizeof (MIR_type_t));
@@ -1110,7 +1119,7 @@ MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     (*error_func) (MIR_reg_type_error, "wrong type for register %s", name);
   var.type = type;
-  var.name = string_store (ctx, &strings, &string_tab, name).str;
+  var.name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   VARR_PUSH (MIR_var_t, func->vars, var);
   return create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
 }
@@ -1637,14 +1646,16 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
     func->last_temp_num++;
     if (func->last_temp_num == 0) (*error_func) (MIR_unique_reg_error, "out of unique regs");
     sprintf (temp_buff, "t%d", func->last_temp_num);
-    string = string_store (ctx, &strings, &string_tab, temp_buff);
+    string
+      = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (temp_buff) + 1, temp_buff});
     if (find_rd_by_name_num (ctx, string.num, func) == NULL)
-      return MIR_new_func_reg (ctx, func, type, string.str);
+      return MIR_new_func_reg (ctx, func, type, string.str.s);
   }
 }
 
 static reg_desc_t *get_func_rd_by_name (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
-  string_t string = string_store (ctx, &strings, &string_tab, reg_name);
+  string_t string
+    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (reg_name) + 1, reg_name});
   reg_desc_t *rd;
 
   rd = find_rd_by_name_num (ctx, string.num, func);
@@ -1668,7 +1679,7 @@ MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
 }
 
 const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  return VARR_ADDR (string_t, strings)[get_func_rd_by_reg (ctx, reg, func)->name_num].str;
+  return VARR_ADDR (string_t, strings)[get_func_rd_by_reg (ctx, reg, func)->name_num].str.s;
 }
 
 /* Functions to create operands.  */
@@ -1745,7 +1756,7 @@ MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item) {
   return op;
 }
 
-MIR_op_t MIR_new_str_op (MIR_context_t ctx, const char *str) {
+MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_STR);
@@ -1799,7 +1810,8 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
   case MIR_OP_LDOUBLE: return op1.u.ld == op2.u.ld;
   case MIR_OP_REF:
     return strcmp (MIR_item_name (ctx, op1.u.ref), MIR_item_name (ctx, op2.u.ref)) == 0;
-  case MIR_OP_STR: return strcmp (op1.u.str, op2.u.str) == 0;
+  case MIR_OP_STR:
+    return op1.u.str.len == op2.u.str.len && memcmp (op1.u.str.s, op2.u.str.s, op1.u.str.len) == 0;
   case MIR_OP_MEM:
     return (op1.u.mem.type == op2.u.mem.type && op1.u.mem.disp == op2.u.mem.disp
             && op1.u.mem.base == op2.u.mem.base && op1.u.mem.index == op2.u.mem.index
@@ -1844,7 +1856,7 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
     return mir_hash_step (mir_hash_step (h, u.u[0]), u.u[1]);
   }
   case MIR_OP_REF: return mir_hash_step (h, (uint64_t) MIR_item_name (ctx, op.u.ref));
-  case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str);
+  case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str.s);
   case MIR_OP_MEM:
     h = mir_hash_step (h, (uint64_t) op.u.mem.type);
     h = mir_hash_step (h, (uint64_t) op.u.mem.disp);
@@ -1913,29 +1925,29 @@ static void output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg);
 
 static void output_label (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_label_t label);
 
-static void out_str (FILE *f, const char *str) {
+static void out_str (FILE *f, MIR_str_t str) {
   fprintf (f, "\"");
-  for (size_t i = 0; str[i] != '\0'; i++)
-    if (str[i] == '\\')
+  for (size_t i = 0; i < str.len; i++)
+    if (str.s[i] == '\\')
       fprintf (f, "\\");
-    else if (str[i] == '"')
+    else if (str.s[i] == '"')
       fprintf (f, "\"");
-    else if (isprint (str[i]))
-      fprintf (f, "%c", str[i]);
-    else if (str[i] == '\n')
+    else if (isprint (str.s[i]))
+      fprintf (f, "%c", str.s[i]);
+    else if (str.s[i] == '\n')
       fprintf (f, "\\n");
-    else if (str[i] == '\t')
+    else if (str.s[i] == '\t')
       fprintf (f, "\\t");
-    else if (str[i] == '\v')
+    else if (str.s[i] == '\v')
       fprintf (f, "\\v");
-    else if (str[i] == '\a')
+    else if (str.s[i] == '\a')
       fprintf (f, "\\a");
-    else if (str[i] == '\b')
+    else if (str.s[i] == '\b')
       fprintf (f, "\\b");
-    else if (str[i] == '\f')
+    else if (str.s[i] == '\f')
       fprintf (f, "\\f");
     else
-      fprintf (f, "\\%03o", str[i]);
+      fprintf (f, "\\%03o", str.s[i]);
   fprintf (f, "\"");
 }
 
@@ -2092,7 +2104,7 @@ static void output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     }
     if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
       fprintf (f, " # "); /* print possible string as a comment */
-      out_str (f, (char *) data->u.els);
+      out_str (f, (MIR_str_t){data->nel, (char *) data->u.els});
     }
     fprintf (f, "\n");
     return;
@@ -2701,7 +2713,7 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 const char *_MIR_uniq_string (MIR_context_t ctx, const char *str) {
-  return string_store (ctx, &strings, &string_tab, str).str;
+  return string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (str) + 1, str}).str.s;
 }
 
 /* The next two function can be called any time relative to
@@ -2936,15 +2948,14 @@ typedef enum {
 
 static const int CURR_BIN_VERSION = 1;
 
-typedef char *char_ptr_t;
-DEF_VARR (char_ptr_t);
+DEF_VARR (MIR_str_t);
 
 DEF_VARR (uint64_t);
 
 struct io_ctx {
   VARR (string_t) * output_strings;
   HTAB (string_t) * output_string_tab;
-  VARR (char_ptr_t) * bin_strings;
+  VARR (MIR_str_t) * bin_strings;
   VARR (uint64_t) * insn_label_string_nums;
 };
 
@@ -3067,7 +3078,7 @@ static void write_ldouble (FILE *f, long double ld) {
   put_ldouble (f, ld);
 }
 
-static void write_str_tag (MIR_context_t ctx, FILE *f, const char *str, bin_tag_t start_tag) {
+static void write_str_tag (MIR_context_t ctx, FILE *f, MIR_str_t str, bin_tag_t start_tag) {
   int nb, ok_p;
   string_t string;
 
@@ -3084,14 +3095,14 @@ static void write_str_tag (MIR_context_t ctx, FILE *f, const char *str, bin_tag_
   put_uint (f, string.num - 1, nb);
 }
 
-static void write_str (MIR_context_t ctx, FILE *f, const char *str) {
+static void write_str (MIR_context_t ctx, FILE *f, MIR_str_t str) {
   write_str_tag (ctx, f, str, TAG_STR1);
 }
-static void write_name (MIR_context_t ctx, FILE *f, const char *str) {
-  write_str_tag (ctx, f, str, TAG_NAME1);
+static void write_name (MIR_context_t ctx, FILE *f, const char *name) {
+  write_str_tag (ctx, f, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
 }
 static void write_reg (MIR_context_t ctx, FILE *f, const char *reg_name) {
-  write_str_tag (ctx, f, reg_name, TAG_REG1);
+  write_str_tag (ctx, f, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
 }
 
 static void write_type (FILE *f, MIR_type_t t) { put_byte (f, TAG_TI8 + (t - MIR_T_I8)); }
@@ -3314,8 +3325,10 @@ void MIR_write (MIR_context_t ctx, FILE *f) {
   write_uint (f, CURR_BIN_VERSION);
   write_uint (f, VARR_LENGTH (string_t, output_strings) - 1);
   for (size_t i = 1; i < VARR_LENGTH (string_t, output_strings); i++) { /* output strings */
-    fputs (VARR_GET (string_t, output_strings, i).str, f);
-    fputc ('\0', f);
+    MIR_str_t str = VARR_GET (string_t, output_strings, i).str;
+
+    write_uint (f, str.len);
+    for (size_t j = 0; j < str.len; j++) fputc (str.s[j], f);
   }
   write_modules (ctx, f);
   put_byte (f, TAG_EOFILE);
@@ -3386,35 +3399,18 @@ static long double get_ldouble (MIR_context_t ctx, FILE *f) {
   return u.ld;
 }
 
-static const char *to_str (MIR_context_t ctx, uint64_t str_num) {
-  if (str_num >= VARR_LENGTH (char_ptr_t, bin_strings))
+static MIR_str_t to_str (MIR_context_t ctx, uint64_t str_num) {
+  if (str_num >= VARR_LENGTH (MIR_str_t, bin_strings))
     (*error_func) (MIR_binary_io_error, "wrong string num %lu", str_num);
-  return VARR_GET (char_ptr_t, bin_strings, str_num);
+  return VARR_GET (MIR_str_t, bin_strings, str_num);
 }
 
 static MIR_reg_t to_reg (MIR_context_t ctx, uint64_t reg_str_num, MIR_item_t func) {
-  return MIR_reg (ctx, to_str (ctx, reg_str_num), func->u.func);
+  return MIR_reg (ctx, to_str (ctx, reg_str_num).s, func->u.func);
 }
 
 static MIR_label_t to_lab (MIR_context_t ctx, uint64_t lab_num) {
   return create_label (ctx, lab_num);
-}
-
-static void read_all_strings (MIR_context_t ctx, FILE *f, uint64_t nstr) {
-  int c;
-  char *str;
-
-  VARR_TRUNC (char_ptr_t, bin_strings, 0);
-  for (uint64_t i = 0; i < nstr; i++) {
-    VARR_TRUNC (char, temp_string, 0);
-    do {
-      c = get_byte (ctx, f);
-      VARR_PUSH (char, temp_string, c);
-    } while (c != '\0');
-    str = malloc (VARR_LENGTH (char, temp_string));
-    strcpy (str, VARR_ADDR (char, temp_string));
-    VARR_PUSH (char_ptr_t, bin_strings, str);
-  }
 }
 
 static uint64_t read_uint (MIR_context_t ctx, FILE *f, const char *err_msg) {
@@ -3423,6 +3419,25 @@ static uint64_t read_uint (MIR_context_t ctx, FILE *f, const char *err_msg) {
   if (c & U0_FLAG) return c & U0_MASK;
   if (TAG_U1 > c || c > TAG_U8) (*error_func) (MIR_binary_io_error, err_msg);
   return get_uint (ctx, f, c - TAG_U1 + 1);
+}
+
+static void read_all_strings (MIR_context_t ctx, FILE *f, uint64_t nstr) {
+  int c;
+  MIR_str_t str;
+  uint64_t len, l;
+
+  VARR_TRUNC (MIR_str_t, bin_strings, 0);
+  for (uint64_t i = 0; i < nstr; i++) {
+    VARR_TRUNC (char, temp_string, 0);
+    len = read_uint (ctx, f, "wrong string length");
+    for (l = 0; l < len; l++) {
+      c = get_byte (ctx, f);
+      VARR_PUSH (char, temp_string, c);
+    }
+    str.s = memcpy (malloc (len), VARR_ADDR (char, temp_string), len);
+    str.len = len;
+    VARR_PUSH (MIR_str_t, bin_strings, str);
+  }
 }
 
 static MIR_type_t tag_type (bin_tag_t tag) { return (MIR_type_t) (tag - TAG_TI8) + MIR_T_I8; }
@@ -3438,7 +3453,7 @@ static const char *read_name (MIR_context_t ctx, FILE *f, const char *err_msg) {
   int c = get_byte (ctx, f);
 
   if (TAG_NAME1 > c || c > TAG_NAME4) (*error_func) (MIR_binary_io_error, err_msg);
-  return to_str (ctx, get_uint (ctx, f, c - TAG_NAME1 + 1));
+  return to_str (ctx, get_uint (ctx, f, c - TAG_NAME1 + 1)).s;
 }
 
 #define TAG_CASE(t) case TAG_##t:
@@ -3539,7 +3554,7 @@ static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t fu
     *op = MIR_new_reg_op (ctx, to_reg (ctx, attr.u, func));
     break;
     REP4 (TAG_CASE, NAME1, NAME2, NAME3, NAME4) {
-      const char *name = to_str (ctx, attr.u);
+      const char *name = to_str (ctx, attr.u).s;
       MIR_item_t item = find_item (ctx, name, func->module);
 
       if (item == NULL) (*error_func) (MIR_binary_io_error, "not found item %s", name);
@@ -3636,7 +3651,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
     }
     VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
     if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
-      name = to_str (ctx, attr.u);
+      name = to_str (ctx, attr.u).s;
       if (strcmp (name, "module") == 0) {
         name = read_name (ctx, f, "wrong module name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -3881,13 +3896,13 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 static void io_init (MIR_context_t ctx) {
   if ((ctx->io_ctx = malloc (sizeof (struct io_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
-  VARR_CREATE (char_ptr_t, bin_strings, 512);
+  VARR_CREATE (MIR_str_t, bin_strings, 512);
   VARR_CREATE (uint64_t, insn_label_string_nums, 64);
 }
 
 static void io_finish (MIR_context_t ctx) {
   VARR_DESTROY (uint64_t, insn_label_string_nums);
-  VARR_DESTROY (char_ptr_t, bin_strings);
+  VARR_DESTROY (MIR_str_t, bin_strings);
   free (ctx->io_ctx);
   ctx->io_ctx = NULL;
 }
@@ -3934,7 +3949,7 @@ typedef struct token {
     double d;
     long double ld;
     const char *name;
-    const char *str;
+    MIR_str_t str;
   } u;
 } token_t;
 
@@ -4116,7 +4131,10 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
   }
   VARR_PUSH (char, temp_string, 0);
   t->code = TC_STR;
-  t->u.str = string_store (ctx, &strings, &string_tab, VARR_ADDR (char, temp_string)).str;
+  t->u.str
+    = string_store (ctx, &strings, &string_tab,
+                    (MIR_str_t){VARR_LENGTH (char, temp_string), VARR_ADDR (char, temp_string)})
+        .str;
 }
 
 static int get_string_char (MIR_context_t ctx) {

@@ -199,6 +199,13 @@ typedef enum {
 
 typedef struct MIR_item *MIR_item_t;
 
+struct MIR_str {
+  size_t len;
+  const char *s;
+};
+
+typedef struct MIR_str MIR_str_t;
+
 /* An insn operand */
 typedef struct {
   void *data; /* Aux data  */
@@ -215,7 +222,7 @@ typedef struct {
     double d;
     long double ld;
     MIR_item_t ref; /* non-export/non-forward after simplification */
-    const char *str;
+    MIR_str_t str;
     MIR_mem_t mem;
     MIR_mem_t hard_reg_mem; /* Used only internally */
     MIR_label_t label;
@@ -394,7 +401,7 @@ extern MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name,
 extern MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel,
                                 const void *els); /* name can be NULL */
 extern MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name,
-                                       const char *str); /* name can be NULL */
+                                       MIR_str_t str); /* name can be NULL */
 extern MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name,
                                     MIR_item_t item); /* name can be NULL */
 extern MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name,
@@ -448,7 +455,7 @@ extern MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v);
 extern MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v);
 extern MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v);
 extern MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item);
-extern MIR_op_t MIR_new_str_op (MIR_context_t ctx, const char *str);
+extern MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str);
 extern MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
                                 MIR_reg_t index, MIR_scale_t scale);
 extern MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label);

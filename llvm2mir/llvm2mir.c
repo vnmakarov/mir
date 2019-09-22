@@ -847,7 +847,9 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
       }
       first_item = (data_p ? MIR_new_data (context, name, MIR_T_I8, VARR_LENGTH (char, string),
                                            VARR_ADDR (char, string))
-                           : MIR_new_string_data (context, name, VARR_ADDR (char, string)));
+                           : MIR_new_string_data (context, name,
+                                                  (MIR_str_t){VARR_LENGTH (char, string),
+                                                              VARR_ADDR (char, string)}));
     } else {
       LLVMTypeKind el_type_id = LLVMGetTypeKind (el_type);
       size_t start, len;
