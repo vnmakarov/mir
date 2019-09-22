@@ -4933,7 +4933,12 @@ static void aux_set_type_align (struct type *type) {
            member = NL_NEXT (member))
         if (member->code == N_MEMBER) {
           decl_t decl = member->attr;
+          node_t width = NL_EL (member->ops, 2);
+          struct expr *expr;
 
+          if (type->mode == TM_UNION && width->code != N_IGNORE && (expr = width->attr)->const_p
+              && expr->u.u_val == 0)
+            continue;
           member_align = type_align (decl->decl_spec.type);
           if (align < member_align) align = member_align;
         }
