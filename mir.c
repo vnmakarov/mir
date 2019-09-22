@@ -4186,7 +4186,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
         } while (isalpha (ch) || isdigit (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.');
         VARR_PUSH (char, temp_string, '\0');
         unget_char (ctx, ch);
-        token->u.str = _MIR_uniq_string (ctx, VARR_ADDR (char, temp_string));
+        token->u.name = _MIR_uniq_string (ctx, VARR_ADDR (char, temp_string));
         token->code = TC_NAME;
         return;
       } else if (ch == '+' || ch == '-' || isdigit (ch)) {
