@@ -1468,13 +1468,17 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
   } else if (t->code == T_NUMBER) {
     int i, base = 10, float_p = FALSE, double_p = FALSE, ldouble_p = FALSE;
     int uns_p = FALSE, long_p = FALSE, llong_p = FALSE;
-    const char *repr = t->repr;
+    const char *repr = t->repr, *start = t->repr;
     char *stop;
     int last = strlen (repr) - 1;
 
     assert (last >= 0);
     if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
       base = 16;
+    } else if (repr[0] == '0' && (repr[1] == 'b' || repr[1] == 'B')) {
+      (pedantic_p ? error : warning) (t->pos, "binary number is not a standard: %s", t->repr);
+      base = 2;
+      start += 2;
     } else if (repr[0] == '0') {
       base = 8;
     }
@@ -1522,13 +1526,13 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
     }
     errno = 0;
     if (float_p) {
-      t->node = new_f_node (strtof (repr, &stop), t->pos);
+      t->node = new_f_node (strtof (start, &stop), t->pos);
     } else if (double_p) {
-      t->node = new_d_node (strtod (repr, &stop), t->pos);
+      t->node = new_d_node (strtod (start, &stop), t->pos);
     } else if (ldouble_p) {
-      t->node = new_ld_node (strtold (repr, &stop), t->pos);
+      t->node = new_ld_node (strtold (start, &stop), t->pos);
     } else {
-      t->node = get_int_node_from_repr (repr, &stop, base, uns_p, long_p, llong_p, t->pos);
+      t->node = get_int_node_from_repr (start, &stop, base, uns_p, long_p, llong_p, t->pos);
     }
     if (stop != &repr[last + 1]) {
       fprintf (stderr, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
