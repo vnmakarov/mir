@@ -9336,7 +9336,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       }
       t = get_mir_type (init_el.el_type);
       if (e->const_addr_p) {
-        data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item);
+        data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item, e->u.i_val);
         data_size = _MIR_type_size (ctx, t);
       } else if (val.mir_op.mode != MIR_OP_STR) {
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
@@ -9371,7 +9371,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module), val.mir_op.u.str);
         DLIST_REMOVE (MIR_item_t, module->items, data);
         DLIST_PREPEND (MIR_item_t, module->items, data);
-        data = MIR_new_ref_data (ctx, global_name, data);
+        data = MIR_new_ref_data (ctx, global_name, data, 0);
         data_size = _MIR_type_size (ctx, t);
       }
       if (global_name != NULL) var.decl->item = data;

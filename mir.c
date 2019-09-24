@@ -896,7 +896,8 @@ MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t s
   return MIR_new_data (ctx, name, MIR_T_U8, str.len, str.s);
 }
 
-MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref_item) {
+MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref_item,
+                             MIR_disp_t disp) {
   MIR_item_t tab_item, item = create_item (ctx, MIR_ref_data_item, "ref data");
   MIR_ref_data_t ref_data;
 
@@ -910,6 +911,7 @@ MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref
     name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   ref_data->name = name;
   ref_data->ref_item = ref_item;
+  ref_data->disp = disp;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
   } else if ((tab_item = add_item (ctx, item)) != item) {
@@ -1439,8 +1441,8 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
          item = DLIST_NEXT (MIR_item_t, item)) {
       if (item->item_type == MIR_ref_data_item) {
         assert (item->u.ref_data->ref_item->addr != NULL);
-        memcpy (item->u.ref_data->load_addr, &item->u.ref_data->ref_item->addr,
-                _MIR_type_size (ctx, MIR_T_P));
+        addr = (char *) item->u.ref_data->ref_item->addr + item->u.ref_data->disp;
+        memcpy (item->u.ref_data->load_addr, &addr, _MIR_type_size (ctx, MIR_T_P));
         continue;
       }
       if (item->item_type != MIR_expr_data_item) continue;
@@ -2069,7 +2071,8 @@ static void output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   if (item->item_type == MIR_ref_data_item) {
     ref_data = item->u.ref_data;
     if (ref_data->name != NULL) fprintf (f, "%s:", ref_data->name);
-    fprintf (f, "\tref\t%s\n", MIR_item_name (ctx, ref_data->ref_item));
+    fprintf (f, "\tref\t%s, %" PRId64 "\n", MIR_item_name (ctx, ref_data->ref_item),
+             (int64_t) ref_data->disp);
     return;
   }
   if (item->item_type == MIR_expr_data_item) {
@@ -3218,6 +3221,7 @@ static void write_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
       write_name (ctx, f, item->u.ref_data->name);
     }
     write_name (ctx, f, MIR_item_name (ctx, item->u.ref_data->ref_item));
+    write_int (f, item->u.ref_data->disp);
     return;
   }
   if (item->item_type == MIR_expr_data_item) {
@@ -3411,6 +3415,13 @@ static MIR_reg_t to_reg (MIR_context_t ctx, uint64_t reg_str_num, MIR_item_t fun
 
 static MIR_label_t to_lab (MIR_context_t ctx, uint64_t lab_num) {
   return create_label (ctx, lab_num);
+}
+
+static int64_t read_int (MIR_context_t ctx, FILE *f, const char *err_msg) {
+  int c = get_byte (ctx, f);
+
+  if (TAG_I1 > c || c > TAG_I8) (*error_func) (MIR_binary_io_error, err_msg);
+  return get_int (ctx, f, c - TAG_I1 + 1);
 }
 
 static uint64_t read_uint (MIR_context_t ctx, FILE *f, const char *err_msg) {
@@ -3628,6 +3639,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
   token_attr_t attr;
   MIR_label_t lab;
   uint64_t nstr, nres, u;
+  int64_t i;
   MIR_op_t op;
   size_t n, nop;
   const char *name, *item_name;
@@ -3727,7 +3739,8 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
         item_name = read_name (ctx, f, "wrong ref data item name");
         if ((item = find_item (ctx, item_name, module)) == NULL)
           (*error_func) (MIR_binary_io_error, "ref data refers to non-existing item %s", item_name);
-        MIR_new_ref_data (ctx, name, item);
+        i = read_int (ctx, f, "wrong ref disp");
+        MIR_new_ref_data (ctx, name, item, i);
       } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
         name = strcmp (name, "nexpr") == 0 ? read_name (ctx, f, "wrong expr name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -4556,14 +4569,16 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_bss (ctx, name, op_addr[0].u.i);
     } else if (ref_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
-        process_error (ctx, MIR_syntax_error, "ref should have one operand");
+      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 2)
+        process_error (ctx, MIR_syntax_error, "ref should have two operands");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
       if (op_addr[0].mode != MIR_OP_REF) process_error (ctx, MIR_syntax_error, "wrong ref operand");
+      if (op_addr[1].mode != MIR_OP_INT)
+        process_error (ctx, MIR_syntax_error, "wrong ref disp operand");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
-      MIR_new_ref_data (ctx, name, op_addr[0].u.ref);
+      MIR_new_ref_data (ctx, name, op_addr[0].u.ref, op_addr[1].u.i);
     } else if (expr_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
         process_error (ctx, MIR_syntax_error, "expr should have one operand");
