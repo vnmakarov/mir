@@ -5674,16 +5674,19 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
     default: abort ();
     }
   if (type->mode == TM_BASIC && type->u.basic_type == TP_UNDEF) {
-    if (size == 0 && sign == 0)
-      error (r->pos, "no any type specifier");
-    else if (size == 0)
+    if (size == 0 && sign == 0) {
+      (pedantic_p ? error (r->pos, "no any type specifier")
+                  : warning (r->pos, "type defaults to int"));
+      type->u.basic_type = TP_INT;
+    } else if (size == 0) {
       type->u.basic_type = sign >= 0 ? TP_INT : TP_UINT;
-    else if (size == 1)
+    } else if (size == 1) {
       type->u.basic_type = sign >= 0 ? TP_SHORT : TP_USHORT;
-    else if (size == 2)
+    } else if (size == 2) {
       type->u.basic_type = sign >= 0 ? TP_LONG : TP_ULONG;
-    else
+    } else {
       type->u.basic_type = sign >= 0 ? TP_LLONG : TP_ULLONG;
+    }
   }
   set_type_qual (r, &type->type_qual, type->mode);
   if (res->align_node) {
