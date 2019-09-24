@@ -763,14 +763,12 @@ static void remove_trigraphs (void) {
     case '!': ch = '|'; break;
     case '>': ch = '}'; break;
     case '-': ch = '~'; break;
-    default: ch = 0; break;
+    default: addr[to] = addr[i]; continue;
     }
-    if (ch == 0) continue;
     to -= 2;
     addr[to] = ch;
-    len -= 2;
   }
-  VARR_TRUNC (char, cs->ln, len);
+  VARR_TRUNC (char, cs->ln, to);
 }
 
 static int ln_get (FILE *f) {
