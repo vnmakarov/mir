@@ -897,7 +897,7 @@ MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t s
 }
 
 MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref_item,
-                             MIR_disp_t disp) {
+                             int64_t disp) {
   MIR_item_t tab_item, item = create_item (ctx, MIR_ref_data_item, "ref data");
   MIR_ref_data_t ref_data;
 

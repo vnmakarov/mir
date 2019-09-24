@@ -284,7 +284,7 @@ typedef struct MIR_data {
 typedef struct MIR_ref_data {
   const char *name;    /* can be NULL */
   MIR_item_t ref_item; /* base */
-  MIR_disp_t disp;     /* disp relative to base */
+  int64_t disp;        /* disp relative to base */
   void *load_addr;
 } * MIR_ref_data_t;
 
@@ -404,7 +404,7 @@ extern MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t 
 extern MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name,
                                        MIR_str_t str); /* name can be NULL */
 extern MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item,
-                                    MIR_disp_t disp); /* name can be NULL */
+                                    int64_t disp); /* name can be NULL */
 extern MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name,
                                      MIR_item_t expr_item); /* name can be NULL */
 extern MIR_item_t MIR_new_proto_arr (MIR_context_t ctx, const char *name, size_t nres,
