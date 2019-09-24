@@ -5304,10 +5304,10 @@ static node_t process_tag (node_t r, node_t id, node_t decl_list) {
   if (!found_p) {
     symbol_insert (S_TAG, id, scope, r, NULL);
   } else if (sym.def_node->code != r->code) {
-    error (id->pos, "kind of tag %s is unmatched with previous declaration", id->u.s);
+    error (id->pos, "kind of tag %s is unmatched with previous declaration", id->u.s.s);
   } else if ((tab_decl_list = NL_EL (sym.def_node->ops, 1))->code != N_IGNORE
              && decl_list->code != N_IGNORE) {
-    error (id->pos, "tag %s redeclaration", id->u.s);
+    error (id->pos, "tag %s redeclaration", id->u.s.s);
   } else {
     if (decl_list->code != N_IGNORE) { /* swap decl lists */
       DLIST (node_t) temp = r->ops;
@@ -5331,7 +5331,7 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope, node_t d
           || scope->code == N_UNION || scope->code == N_FUNC || scope->code == N_FOR);
   decl_spec = ((decl_t) def_node->attr)->decl_spec;
   if (decl_spec.thread_local_p && !decl_spec.static_p && !decl_spec.extern_p)
-    error (id->pos, "auto %s is declared as thread local", id->u.s);
+    error (id->pos, "auto %s is declared as thread local", id->u.s.s);
   if (!symbol_find (mode, id, scope, &sym)) {
     symbol_insert (mode, id, scope, def_node, NULL);
     return;
@@ -5339,16 +5339,16 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope, node_t d
   tab_decl_spec = ((decl_t) sym.def_node->attr)->decl_spec;
   if (linkage == N_IGNORE) {
     if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p || decl_spec.type != tab_decl_spec.type)
-      error (id->pos, "repeated declaration %s", id->u.s);
+      error (id->pos, "repeated declaration %s", id->u.s.s);
   } else if (!compatible_types_p (decl_spec.type, tab_decl_spec.type, FALSE)) {
-    error (id->pos, "incompatible types of %s declarations", id->u.s);
+    error (id->pos, "incompatible types of %s declarations", id->u.s.s);
   }
   if (tab_decl_spec.thread_local_p != decl_spec.thread_local_p) {
-    error (id->pos, "thread local and non-thread local declarations of %s", id->u.s);
+    error (id->pos, "thread local and non-thread local declarations of %s", id->u.s.s);
   }
   if ((decl_spec.linkage == N_EXTERN && linkage == N_STATIC)
       || (decl_spec.linkage == N_STATIC && linkage == N_EXTERN))
-    warning (id->pos, "%s defined with external and internal linkage", id->u.s);
+    warning (id->pos, "%s defined with external and internal linkage", id->u.s.s);
   VARR_PUSH (node_t, sym.defs, def_node);
 }
 
@@ -5537,7 +5537,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
 
       set_type_pos_node (type, n);
       if (def == NULL) {
-        error (n->pos, "unknown type %s", n->u.s);
+        error (n->pos, "unknown type %s", n->u.s.s);
         init_type (type);
         type->mode = TM_BASIC;
         type->u.basic_type = TP_INT;
@@ -5604,7 +5604,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
           const_expr = NL_NEXT (id);
           check (const_expr, n);
           if (symbol_find (S_REGULAR, id, curr_scope, &sym)) {
-            error (id->pos, "enum constant %s redeclaration", id->u.s);
+            error (id->pos, "enum constant %s redeclaration", id->u.s.s);
           } else {
             symbol_insert (S_REGULAR, id, curr_scope, en, n);
           }
@@ -5854,7 +5854,7 @@ static void check_labels (node_t labels, node_t target) {
       node_t id = NL_HEAD (l->ops);
 
       if (symbol_find (S_LABEL, id, func_block_scope, &sym)) {
-        error (id->pos, "label %s redeclaration", id->u.s);
+        error (id->pos, "label %s redeclaration", id->u.s.s);
       } else {
         symbol_insert (S_LABEL, id, func_block_scope, target, NULL);
       }
@@ -6291,7 +6291,7 @@ check_one_value:
           if (type->mode != TM_STRUCT && type->mode != TM_UNION) {
             error (curr_des->pos, "field name not in struct or union initializer");
           } else if (!symbol_find (S_REGULAR, id, type->u.tag_type, &sym)) {
-            error (curr_des->pos, "unknown field %s in initializer", id->u.s);
+            error (curr_des->pos, "unknown field %s in initializer", id->u.s.s);
           } else {
             assert (sym.def_node->code == N_MEMBER);
             init_object.u.curr_member = get_adjacent_member (sym.def_node, FALSE);
@@ -6399,7 +6399,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
       def_symbol (S_REGULAR, id, top_scope, decl_node, N_EXTERN);
     if (func_p && decl->decl_spec.thread_local_p) {
       error (id->pos, "thread local function declaration");
-      if (id->code != N_IGNORE) fprintf (stderr, " of %s", id->u.s);
+      if (id->code != N_IGNORE) fprintf (stderr, " of %s", id->u.s.s);
       fprintf (stderr, "\n");
     }
   }
@@ -6422,7 +6422,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   }
   if (decl->decl_spec.linkage != N_IGNORE && scope != top_scope) {
     error (initializer->pos,
-           "initialization of %s in block scope with external or internal linkage", id->u.s);
+           "initialization of %s in block scope with external or internal linkage", id->u.s.s);
     return;
   }
   check (initializer, decl_node);
@@ -6879,13 +6879,13 @@ static void check (node_t r, node_t context) {
     e = create_expr (r);
     e->def_node = op1;
     if (op1 == NULL) {
-      error (r->pos, "undeclared identifier %s", r->u.s);
+      error (r->pos, "undeclared identifier %s", r->u.s.s);
     } else if (op1->code == N_IGNORE) {
       e->type->mode = TM_BASIC;
       e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
       decl = op1->attr;
-      if (decl->decl_spec.typedef_p) error (r->pos, "typedef name %s as an operand", r->u.s);
+      if (decl->decl_spec.typedef_p) error (r->pos, "typedef name %s as an operand", r->u.s.s);
       decl->used_p = TRUE;
       *e->type = *decl->decl_spec.type;
       if (e->type->mode != TM_FUNC) e->lvalue_node = op1;
@@ -7194,7 +7194,7 @@ static void check (node_t r, node_t context) {
 
       decl->addr_p = TRUE;
       if (decl->decl_spec.register_p)
-        error (r->pos, "address of register variable %s requested", op1->u.s);
+        error (r->pos, "address of register variable %s requested", op1->u.s.s);
       t2 = create_type (decl->decl_spec.type);
     } else if (e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->ops, 1);
@@ -7203,7 +7203,7 @@ static void check (node_t r, node_t context) {
 
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-        error (r->pos, "cannot take address of bit-field %s", NL_HEAD (declarator->ops)->u.s);
+        error (r->pos, "cannot take address of bit-field %s", NL_HEAD (declarator->ops)->u.s.s);
       }
       t2 = create_type (decl->decl_spec.type);
       if (op1->code == N_DEREF_FIELD && (e2 = NL_HEAD (op1->ops)->attr)->const_p) {
@@ -7245,9 +7245,9 @@ static void check (node_t r, node_t context) {
       t1 = t1->u.ptr_type;
     }
     if (t1->mode != TM_STRUCT && t1->mode != TM_UNION) {
-      error (r->pos, "request for member %s in something not a structure or union", op2->u.s);
+      error (r->pos, "request for member %s in something not a structure or union", op2->u.s.s);
     } else if (!symbol_find (S_REGULAR, op2, t1->u.tag_type, &sym)) {
-      error (r->pos, "%s has no member %s", t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s);
+      error (r->pos, "%s has no member %s", t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s.s);
     } else {
       assert (sym.def_node->code == N_MEMBER);
       decl = sym.def_node->attr;
@@ -7406,7 +7406,7 @@ static void check (node_t r, node_t context) {
 
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-        error (r->pos, "sizeof applied to a bit-field %s", NL_HEAD (declarator->ops)->u.s);
+        error (r->pos, "sizeof applied to a bit-field %s", NL_HEAD (declarator->ops)->u.s.s);
       }
     }
     e->const_p = TRUE;
@@ -7629,7 +7629,7 @@ static void check (node_t r, node_t context) {
         ok_p = e1->u.u_val != 0;
       if (!ok_p) {
         assert (NL_NEXT (op1) != NULL && NL_NEXT (op1)->code == N_STR);
-        error (r->pos, "static assertion failed: \"%s\"", NL_NEXT (op1)->u.s);  // ???
+        error (r->pos, "static assertion failed: \"%s\"", NL_NEXT (op1)->u.s.s);  // ???
       }
     }
     break;
@@ -7663,7 +7663,7 @@ static void check (node_t r, node_t context) {
         } else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
           error (const_expr->pos, "bit field width is negative");
         } else if (cexpr->u.i_val == 0 && declarator->code == N_DECL) {
-          error (const_expr->pos, "zero bit field width for %s", NL_HEAD (declarator->ops)->u.s);
+          error (const_expr->pos, "zero bit field width for %s", NL_HEAD (declarator->ops)->u.s.s);
         } else if ((!signed_integer_type_p (cexpr->type) && cexpr->u.u_val > int_bit_size (type))
                    || (signed_integer_type_p (cexpr->type)
                        && cexpr->u.i_val > int_bit_size (type))) {
@@ -7680,11 +7680,11 @@ static void check (node_t r, node_t context) {
       node_t id = NL_HEAD (declarator->ops);
 
       if (type->mode == TM_FUNC) {
-        error (id->pos, "field %s is declared as a function", id->u.s);
+        error (id->pos, "field %s is declared as a function", id->u.s.s);
       } else if (type->incomplete_p) {
         /* el_type is checked on completness in N_ARR */
         if (type->mode != TM_ARR || type->u.arr_type->size->code != N_IGNORE)
-          error (id->pos, "field %s has incomplete type", id->u.s);
+          error (id->pos, "field %s has incomplete type", id->u.s.s);
       }
     }
     break;
@@ -7727,9 +7727,9 @@ static void check (node_t r, node_t context) {
       NL_REMOVE (param_list->ops, p);
       if (!symbol_find (S_REGULAR, p, curr_scope, &sym)) {
         if (pedantic_p) {
-          error (p->pos, "parameter %s has no type", p->u.s);
+          error (p->pos, "parameter %s has no type", p->u.s.s);
         } else {
-          warning (p->pos, "type of parameter %s defaults to int", p->u.s);
+          warning (p->pos, "type of parameter %s defaults to int", p->u.s.s);
           decl_node
             = new_pos_node3 (N_SPEC_DECL, p->pos,
                              new_node1 (N_SHARE, new_node1 (N_LIST, new_pos_node (N_INT, p->pos))),
@@ -7750,14 +7750,14 @@ static void check (node_t r, node_t context) {
         assert (param_declarator->code == N_DECL);
         param_id = NL_HEAD (param_declarator->ops);
         if (NL_NEXT (param_declarator)->code != N_IGNORE) {
-          error (p->pos, "initialized parameter %s", param_id->u.s);
+          error (p->pos, "initialized parameter %s", param_id->u.s.s);
         }
         decl_spec_ptr = &((decl_t) decl_node->attr)->decl_spec;
         adjust_param_type (&decl_spec_ptr->type);
         decl_spec = *decl_spec_ptr;
         if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p || decl_spec.auto_p
             || decl_spec.thread_local_p) {
-          error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s);
+          error (param_id->pos, "storage specifier in a function parameter %s", param_id->u.s.s);
         }
       }
     }
@@ -7769,7 +7769,7 @@ static void check (node_t r, node_t context) {
       assert (param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->ops);
       assert (param_id->code == N_ID);
-      error (param_id->pos, "declaration for parameter %s but no such parameter", param_id->u.s);
+      error (param_id->pos, "declaration for parameter %s but no such parameter", param_id->u.s.s);
     }
     check (block, r);
     /* Process all gotos: */
@@ -7779,7 +7779,7 @@ static void check (node_t r, node_t context) {
       node_t id = NL_NEXT (NL_HEAD (n->ops));
 
       if (!symbol_find (S_LABEL, id, func_block_scope, &sym)) {
-        error (id->pos, "undefined label %s", id->u.s);
+        error (id->pos, "undefined label %s", id->u.s.s);
       } else {
         n->attr = sym.def_node;
       }
