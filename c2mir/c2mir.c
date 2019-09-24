@@ -918,7 +918,7 @@ static void set_string_val (token_t t, VARR (char) * temp) {
       if (first_p)
         error (t->pos, "wrong hexadecimal char %c", curr_c);
       else if (v > MIR_UCHAR_MAX)
-        error (t->pos, "too big hexadecimal char 0x%x", v);
+        (pedantic_p ? error : warning) (t->pos, "too big hexadecimal char 0x%x", v);
       curr_c = v;
       i--;
       break;
