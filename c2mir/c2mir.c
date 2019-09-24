@@ -4765,11 +4765,12 @@ static struct type arithmetic_conversion (const struct type *type1, const struct
 }
 
 struct expr {
-  unsigned int const_p : 1;
-  node_t lvalue_node, def_node;
+  unsigned int const_p : 1, const_addr_p : 1;
+  node_t lvalue_node;
+  node_t def_node;    /* defined for id or const address (ref) */
   struct type *type;  /* type of the result */
   struct type *type2; /* used for assign expr type */
-  union {
+  union {             /* defined for const or const addr (i_val is offset) */
     mir_llong i_val;
     mir_ullong u_val;
     mir_ldouble d_val;
@@ -6187,6 +6188,86 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
   return TRUE;
 }
 
+static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *deref) {
+  struct expr *e;
+  struct type *type;
+  decl_t decl;
+  mir_size_t size;
+
+  switch (r->code) {
+  case N_ID:
+    e = r->attr;
+    if (e->def_node->code == N_FUNC_DEF
+        || (e->def_node->code == N_SPEC_DECL
+            && ((decl_t) e->def_node->attr)->decl_spec.type->mode == TM_FUNC)) {
+      *base = e->def_node;
+      *deref = 0;
+    } else if (e->lvalue_node == NULL || (decl = e->lvalue_node->attr)->scope != top_scope) {
+      return FALSE;
+    } else {
+      *base = e->def_node;
+      *deref = e->type->arr_type == NULL;
+    }
+    *offset = 0;
+    return TRUE;
+  case N_ADDR:
+    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
+    (*deref)--;
+    return TRUE;
+  case N_DEREF:
+    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
+    (*deref)++;
+    return TRUE;
+  case N_FIELD:
+  case N_DEREF_FIELD:
+    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
+    if (*deref != (r->code == N_FIELD ? 1 : 0)) return FALSE;
+    *deref = 1;
+    e = NL_HEAD (r->ops)->attr;
+    decl = e->lvalue_node->attr;
+    *offset += decl->offset;
+    return TRUE;
+  case N_IND:
+    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_type == NULL) return FALSE;
+    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
+    if (!(e = NL_EL (r->ops, 1)->attr)->const_p) return FALSE;
+    size = type_size (((struct expr *) r->attr)->type);
+    (*deref)++;
+    *offset += e->u.i_val * size;
+    return TRUE;
+  case N_ADD:
+  case N_SUB:
+    if (NL_EL (r->ops, 1) == NULL) return FALSE;
+    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
+    if (*deref != 0 && ((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_type == NULL)
+      return FALSE;
+    if (!(e = NL_EL (r->ops, 1)->attr)->const_p) return FALSE;
+    type = ((struct expr *) r->attr)->type;
+    assert (type->mode == TM_PTR);
+    size = type->u.ptr_type->mode == TM_FUNC ? 1 : type_size (type->u.ptr_type);
+    if (r->code == N_ADD)
+      *offset += e->u.i_val * size;
+    else
+      *offset -= e->u.i_val * size;
+    return TRUE;
+  case N_CAST: return check_const_addr_p (NL_EL (r->ops, 1), base, offset, deref);
+  default: return FALSE;
+  }
+}
+
+static void setup_const_addr_p (node_t r) {
+  node_t base;
+  mir_llong offset;
+  int deref;
+  struct expr *e;
+
+  if (!check_const_addr_p (r, &base, &offset, &deref) || deref != 0) return;
+  e = r->attr;
+  e->const_addr_p = TRUE;
+  e->def_node = base;
+  e->u.i_val = offset;
+}
+
 static void check_initializer (decl_t member_decl, struct type **type_ptr, node_t initializer,
                                int const_only_p, int top_p) {
   struct type *type = *type_ptr;
@@ -6202,11 +6283,16 @@ check_one_value:
   if (initializer->code != N_LIST
       && !(initializer->code == N_STR && type->mode == TM_ARR
            && char_type_p (type->u.arr_type->el_type))) {
-    if (!(cexpr = initializer->attr)->const_p && initializer->code != N_STR && const_only_p) {
-      error (initializer->pos,
-             "initializer of non-auto or thread local object should be a constant expression");
-    } else {
+    if ((cexpr = initializer->attr)->const_p || initializer->code == N_STR || !const_only_p) {
       check_assignment_types (type, NULL, cexpr, initializer);
+    } else {
+      setup_const_addr_p (initializer);
+      if ((cexpr = initializer->attr)->const_addr_p)
+        check_assignment_types (type, NULL, cexpr, initializer);
+      else
+        error (initializer->pos,
+               "initializer of non-auto or thread local object"
+               " should be a constant expression or address");
     }
     return;
   }
@@ -6492,7 +6578,7 @@ static struct expr *create_expr (node_t r) {
   e->type2 = NULL;
   e->type->pos_node = r;
   e->lvalue_node = NULL;
-  e->const_p = FALSE;
+  e->const_p = e->const_addr_p = FALSE;
   return e;
 }
 
@@ -8930,8 +9016,8 @@ check_one_value:
       && !(initializer->code == N_STR && type->mode == TM_ARR
            && char_type_p (type->u.arr_type->el_type))) {
     cexpr = initializer->attr;
-    /* static or thread local object initialization should be const expr: */
-    assert (initializer->code == N_STR || !const_only_p || cexpr->const_p);
+    /* static or thread local object initialization should be const expr or addr: */
+    assert (initializer->code == N_STR || !const_only_p || cexpr->const_p || cexpr->const_addr_p);
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset ();
     init_el.member_decl = member_decl;
@@ -9230,21 +9316,27 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
         continue;
       e = init_el.init->attr;
-      if (e->const_p) {
-        convert_value (e, init_el.el_type);
-        e->type = init_el.el_type; /* to get the right value in the subsequent gen call */
+      if (e->const_addr_p) {
+      } else {
+        if (e->const_p) {
+          convert_value (e, init_el.el_type);
+          e->type = init_el.el_type; /* to get the right value in the subsequent gen call */
+        }
+        val = gen (init_el.init, NULL, NULL, TRUE);
+        assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
+                || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
+                || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR);
       }
-      val = gen (init_el.init, NULL, NULL, TRUE);
-      assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
-              || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
-              || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR);
       if (rel_offset < init_el.offset) { /* fill the gap: */
         data = MIR_new_bss (ctx, global_name, init_el.offset - rel_offset);
         if (global_name != NULL) var.decl->item = data;
         global_name = NULL;
       }
       t = get_mir_type (init_el.el_type);
-      if (val.mir_op.mode != MIR_OP_STR) {
+      if (e->const_addr_p) {
+        data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item);
+        data_size = _MIR_type_size (ctx, t);
+      } else if (val.mir_op.mode != MIR_OP_STR) {
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
           uint64_t u = 0;
 
