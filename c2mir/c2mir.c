@@ -10957,13 +10957,13 @@ static void *import_resolver (const char *name) {
 }
 
 int main (int argc, const char *argv[]) {
-  int i, n, ok_p;
+  int i, n, ret_code;
 
   interp_exec_p = gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
   ctx = MIR_init ();
   c2mir_init ();
-  for (i = curr_module_num = 0, ok_p = TRUE;; i++, curr_module_num++) {
+  for (i = curr_module_num = ret_code = 0;; i++, curr_module_num++) {
     code = NULL;
     source_name = NULL;
     curr_char = 0;
@@ -11001,12 +11001,11 @@ int main (int argc, const char *argv[]) {
     }
     if (code == NULL) break;
     assert (source_name != NULL);
-    ok_p = compile (source_name) && ok_p;
+    if (!compile (source_name)) ret_code = 1;
     compile_finish ();
   }
-  if (ok_p && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
+  if (ret_code == 0 && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
     MIR_val_t val;
-    int res;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
     uint64_t (*fun_addr) (void);
@@ -11022,7 +11021,7 @@ int main (int argc, const char *argv[]) {
     }
     if (main_func == NULL) {
       fprintf (stderr, "cannot execute program w/o main function\n");
-      ok_p = FALSE;
+      ret_code = 1;
     } else {
       open_libs ();
       MIR_load_external (ctx, "abort", fancy_abort);
@@ -11030,10 +11029,11 @@ int main (int argc, const char *argv[]) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
         start_time = real_usec_time ();
         MIR_interp (ctx, main_func, &val, 0);
+        ret_code = val.i;
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
-          fprintf (stderr, "exit code: %lu\n", val.i);
+          fprintf (stderr, "exit code: %lu\n", ret_code);
         }
       } else {
         MIR_gen_init (ctx);
@@ -11043,11 +11043,11 @@ int main (int argc, const char *argv[]) {
         MIR_link (ctx, MIR_set_gen_interface, import_resolver);
         fun_addr = MIR_gen (ctx, main_func);
         start_time = real_usec_time ();
-        res = fun_addr ();
+        ret_code = fun_addr ();
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
-          fprintf (stderr, "exit code: %d\n", res);
+          fprintf (stderr, "exit code: %d\n", ret_code);
         }
         MIR_gen_finish (ctx);
       }
@@ -11057,7 +11057,7 @@ int main (int argc, const char *argv[]) {
   close_libs ();
   c2mir_finish ();
   VARR_DESTROY (char, input);
-  return !ok_p;
+  return ret_code;
 }
 #endif
 
