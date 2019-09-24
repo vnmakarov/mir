@@ -10212,9 +10212,20 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
 finish:
   if (true_label != NULL) {
-    res = promote (force_val (res, ((struct expr *) r->attr)->type->arr_type != NULL), MIR_T_I64,
-                   FALSE);
-    emit2 (MIR_BT, MIR_new_label_op (ctx, true_label), res.mir_op);
+    MIR_op_t lab_op = MIR_new_label_op (ctx, true_label);
+
+    type = ((struct expr *) r->attr)->type;
+    if (!floating_type_p (type)) {
+      res = promote (force_val (res, type->arr_type != NULL), MIR_T_I64, FALSE);
+      emit2 (MIR_BT, lab_op, res.mir_op);
+    } else if (type->u.basic_type == TP_FLOAT) {
+      emit3 (MIR_FBNE, lab_op, res.mir_op, MIR_new_float_op (ctx, 0.0));
+    } else if (type->u.basic_type == TP_DOUBLE) {
+      emit3 (MIR_DBNE, lab_op, res.mir_op, MIR_new_double_op (ctx, 0.0));
+    } else {
+      assert (type->u.basic_type == TP_LDOUBLE);
+      emit3 (MIR_LDBNE, lab_op, res.mir_op, MIR_new_ldouble_op (ctx, 0.0));
+    }
     emit1 (MIR_JMP, MIR_new_label_op (ctx, false_label));
   } else if (val_p) {
     res = force_val (res, ((struct expr *) r->attr)->type->arr_type != NULL);
