@@ -8331,12 +8331,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
 static int push_const_val (node_t r, op_t *res) {
   struct expr *e = (struct expr *) r->attr;
+  MIR_type_t mir_type;
 
   if (!e->const_p) return FALSE;
   if (floating_type_p (e->type)) {
     /* MIR support only IEEE float and double */
-    *res = new_op (NULL, (get_mir_type (e->type) == MIR_T_F ? MIR_new_float_op (ctx, e->u.d_val)
-                                                            : MIR_new_double_op (ctx, e->u.d_val)));
+    mir_type = get_mir_type (e->type);
+    *res = new_op (NULL, (mir_type == MIR_T_F
+                            ? MIR_new_float_op (ctx, e->u.d_val)
+                            : mir_type == MIR_T_D ? MIR_new_double_op (ctx, e->u.d_val)
+                                                  : MIR_new_ldouble_op (ctx, e->u.d_val)));
   } else {
     assert (integer_type_p (e->type) || e->type->mode == TM_PTR);
     *res = new_op (NULL, (signed_integer_type_p (e->type) ? MIR_new_int_op (ctx, e->u.i_val)
@@ -9440,6 +9444,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   op_t res, op1, op2, var, val;
   MIR_type_t t;
   MIR_insn_code_t insn_code;
+  MIR_type_t mir_type;
   struct expr *e;
   struct type *type;
   decl_t decl;
@@ -9480,9 +9485,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   case N_LD:
     ld = r->u.ld;
   float_val:
-    res = new_op (NULL, (get_mir_type (((struct expr *) r->attr)->type) == MIR_T_F
-                           ? MIR_new_float_op (ctx, ld)
-                           : MIR_new_double_op (ctx, ld)));
+    mir_type = get_mir_type (((struct expr *) r->attr)->type);
+    res = new_op (NULL, (mir_type == MIR_T_F ? MIR_new_float_op (ctx, ld)
+                                             : mir_type == MIR_T_D ? MIR_new_double_op (ctx, ld)
+                                                                   : MIR_new_ldouble_op (ctx, ld)));
     break;
   case N_CH: ll = r->u.ch; goto int_val;
   case N_STR:
