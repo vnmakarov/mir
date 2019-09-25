@@ -146,6 +146,7 @@ struct type {
   mir_size_t raw_size;
   int align; /* type align, undefined if < 0  */
   enum type_mode mode;
+  char anonymous_member_type_p;
   union {
     enum basic_type basic_type;
     node_t tag_type; /* struct/union/enum */
@@ -4635,6 +4636,7 @@ static void init_type (struct type *type) {
   type->arr_type = NULL;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
+  type->anonymous_member_type_p = FALSE;
 }
 
 static void set_type_pos_node (struct type *type, node_t n) {
@@ -5022,6 +5024,19 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
   if (*overall_size < *offset + size) *overall_size = *offset + size;
 }
 
+static void update_anonymous_members_offset (struct type *type, mir_size_t offset) {
+  assert ((type->mode == TM_STRUCT || type->mode == TM_UNION) && type->anonymous_member_type_p);
+  assert (offset != MIR_SIZE_MAX || type->raw_size == MIR_SIZE_MAX);
+  for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL; el = NL_NEXT (el))
+    if (el->code == N_MEMBER) {
+      decl_t decl = el->attr;
+
+      decl->offset = offset == MIR_SIZE_MAX ? 0 : decl->offset + offset;
+      if (decl->decl_spec.type->anonymous_member_type_p)
+        update_anonymous_members_offset (decl->decl_spec.type,
+                                         offset == MIR_SIZE_MAX ? offset : decl->offset);
+    }
+}
 static void set_type_layout (struct type *type) {
   mir_size_t overall_size = 0;
 
@@ -5048,16 +5063,20 @@ static void set_type_layout (struct type *type) {
     mir_size_t offset = 0, prev_size = 0;
 
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-    if (!type->incomplete_p)
-      for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); member != NULL;
-           member = NL_NEXT (member))
-        if (member->code == N_MEMBER) {
-          decl_t decl = member->attr;
+    if (!type->incomplete_p) {
+      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
+           el = NL_NEXT (el))
+        if (el->code == N_MEMBER) {
+          decl_t decl = el->attr;
           int member_align;
           mir_size_t member_size;
-          node_t width = NL_EL (member->ops, 2);
+          node_t width = NL_EL (el->ops, 2);
           struct expr *expr;
+          int anon_process_p
+            = (!type->anonymous_member_type_p && decl->decl_spec.type->anonymous_member_type_p
+               && decl->decl_spec.type->raw_size == MIR_SIZE_MAX);
 
+          if (anon_process_p) update_anonymous_members_offset (decl->decl_spec.type, MIR_SIZE_MAX);
           set_type_layout (decl->decl_spec.type);
           member_size = type_size (decl->decl_spec.type);
           member_align = type_align (decl->decl_spec.type);
@@ -5083,7 +5102,9 @@ static void set_type_layout (struct type *type) {
             bits = -1;
             bound_bit = 0;
           }
+          if (anon_process_p) update_anonymous_members_offset (decl->decl_spec.type, decl->offset);
         }
+    }
   }
   /* we might need raw_size for alignment calculations */
   type->raw_size = overall_size;
@@ -5578,6 +5599,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
       new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
                      || NL_EL (decl->ops, 1)->code != N_IGNORE);
+      type->anonymous_member_type_p = !new_scope_p;
       if (decl_list->code != N_IGNORE) {
         if (new_scope_p) create_node_scope (res);
         check (decl_list, n);
