@@ -4863,6 +4863,7 @@ struct enum_value {
 };
 
 struct node_scope {
+  int frame_p; /* necessity for frame */
   unsigned func_scope_num;
   mir_size_t size, offset, call_arg_area_size;
   node_t scope;
@@ -5222,6 +5223,7 @@ static void create_node_scope (node_t node) {
 
   assert (node != curr_scope);
   ns->func_scope_num = curr_func_scope_num++;
+  ns->frame_p = FALSE;
   ns->size = ns->call_arg_area_size = 0;
   ns->offset = curr_scope == NULL ? 0 : ((struct node_scope *) curr_scope->attr)->offset;
   node->attr = ns;
@@ -5232,11 +5234,13 @@ static void create_node_scope (node_t node) {
 static void propagate_scope_size (node_t from_scope, node_t bound_scope) {
   struct node_scope *ns = (struct node_scope *) from_scope->attr;
   mir_size_t size = ns->size;
+  int frame_p = ns->frame_p;
 
   for (;;) {
     from_scope = ns->scope;
     if (from_scope == NULL || from_scope == bound_scope) break;
     ns = (struct node_scope *) from_scope->attr;
+    if (frame_p) ns->frame_p = TRUE;
     if (ns->size < size) ns->size = size;
   }
 }
@@ -7891,6 +7895,7 @@ static void check (node_t r, node_t context) {
         decl->reg_p = TRUE;
         continue;
       }
+      ns->frame_p = TRUE;
       ns->offset = round_size (ns->offset, var_align (type));
       decl->offset = ns->offset;
       ns->offset += var_size (type);
@@ -10081,7 +10086,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       = MIR_new_func_arr (ctx, NL_HEAD (declarator->ops)->u.s.s, res_type == MIR_T_UNDEF ? 0 : 1,
                           &res_type, VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
     decl->item = curr_func;
-    if (ns->size != 0) {
+    if (ns->frame_p) {
       fp_reg = MIR_new_func_reg (ctx, curr_func->u.func, MIR_T_I64, FP_NAME);
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, MIR_ALLOCA, MIR_new_reg_op (ctx, fp_reg),
