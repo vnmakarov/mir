@@ -59,7 +59,7 @@
       two or more prototype argument names can be the same
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
-       or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, const char *str)`)
+       or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str)`)
     * **Reference data**: `MIR_ref_data_item` with optional name
       (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
       * The address of the item after linking plus `disp` is used to initialize the data
@@ -129,8 +129,8 @@
     * **Float, double or long double value operands** created through API functions `MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v)`,
       `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`, and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`
       * In MIR text they are represented the same way as C floating point numbers
-    * **String operands** created through API functions `MIR_op_t MIR_new_str_op (MIR_context_t ctx, const char *str)`
-      * In MIR text they are represented the same way as C string
+    * **String operands** created through API functions `MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str)`
+      * In MIR text they are represented by `typedef struct MIR_str {size_t len; const char *s;} MIR_str_t`
       * Strings for each operand are put into memory (which can be modified) and the memory address actually presents the string
     * **Label operand** created through API function `MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label)`
       * Here `label` is a special insn created by API function `MIR_insn_t MIR_new_label (MIR_context_t ctx)`
