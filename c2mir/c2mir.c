@@ -9353,6 +9353,19 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item, e->u.i_val);
         data_size = _MIR_type_size (ctx, t);
       } else if (val.mir_op.mode != MIR_OP_STR) {
+        union {
+          int8_t i8;
+          uint8_t u8;
+          int16_t i16;
+          uint16_t u16;
+          int32_t i32;
+          uint32_t u32;
+          int64_t i64;
+          uint64_t u64;
+          float f;
+          double d;
+          long double ld;
+        } u;
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
           uint64_t u = 0;
 
@@ -9368,7 +9381,21 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
           }
           val.mir_op.u.u = u;
         }
-        data = MIR_new_data (ctx, global_name, t, 1, &val.mir_op.u);  // ??? big endian
+        switch (t) {
+        case MIR_T_I8: u.i8 = val.mir_op.u.i; break;
+        case MIR_T_U8: u.u8 = val.mir_op.u.u; break;
+        case MIR_T_I16: u.i16 = val.mir_op.u.i; break;
+        case MIR_T_U16: u.u16 = val.mir_op.u.u; break;
+        case MIR_T_I32: u.i32 = val.mir_op.u.i; break;
+        case MIR_T_U32: u.u32 = val.mir_op.u.u; break;
+        case MIR_T_I64: u.i64 = val.mir_op.u.i; break;
+        case MIR_T_U64: u.u64 = val.mir_op.u.u; break;
+        case MIR_T_F: u.f = val.mir_op.u.f; break;
+        case MIR_T_D: u.d = val.mir_op.u.d; break;
+        case MIR_T_LD: u.ld = val.mir_op.u.ld; break;
+        default: assert (FALSE);
+        }
+        data = MIR_new_data (ctx, global_name, t, 1, &u);
         data_size = _MIR_type_size (ctx, t);
       } else if (init_el.el_type->mode == TM_ARR) {
         data_size = init_el.el_type->raw_size;
