@@ -61,8 +61,8 @@
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, const char *str)`)
     * **Reference data**: `MIR_ref_data_item` with optional name
-      (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item)`
-      * The address of the item after linking is used to initialize the data
+      (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
+      * The address of the item after linking plus `disp` is used to initialize the data
     * **Expression Data**: `MIR_expr_data_item` with optional name
       (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_func_item)`)
       * Not all MIR functions can be used for expression data.  The expression function should have
