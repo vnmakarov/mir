@@ -313,7 +313,7 @@ func_spec: N_INLINE|N_NO_RETURN
 type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGNED|N_BOOL
          | (N_STRUCT|N_UNION) (N_ID?, struct_declaration_list?)
          | N_ENUM(N_ID?, N_LIST?: N_ENUM_COST(N_ID, const_expr?)*) | typedef_name
-struct_declaration_list: N_LIST: struct_declaration+
+struct_declaration_list: N_LIST: struct_declaration*
 struct_declaration: st_assert | N_MEMBER(N_SHARE(spec_qual_list), declarator?, const_expr?)
 spec_qual_list: N_LIST:(type_qual|type_spec)*
 declarator: the same as direct declarator
@@ -3664,7 +3664,12 @@ D (type_spec) {
       id_p = TRUE;
     }
     if (M ('{')) {
-      P (struct_declaration_list);
+      if (!C ('}')) {
+        P (struct_declaration_list);
+      } else {
+        (pedantic_p ? error : warning) (pos, "empty struct/union");
+        r = new_node (N_LIST);
+      }
       PT ('}');
     } else if (!id_p) {
       return &err_node;
