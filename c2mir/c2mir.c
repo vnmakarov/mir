@@ -6098,7 +6098,7 @@ static void check_assignment_types (struct type *left, struct type *right, struc
                               : code == N_RETURN
                                   ? "incompatible return-expr type in function returning a pointer"
                                   : "incompatible types in assignment to a pointer");
-        error (pos, "%s", msg);
+        (pedantic_p || right->mode != TM_PTR ? error : warning) (pos, "%s", msg);
       }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
