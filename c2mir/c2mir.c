@@ -9334,10 +9334,11 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         rel_offset = init_el.offset;
       }
       if (!scalar_type_p (init_el.el_type)) {
-        gen_memcpy (offset + rel_offset, base, val,
-                    init_el.init->code == N_STR ? init_el.init->u.s.len
-                                                : init_el.el_type->raw_size);
-        rel_offset = init_el.offset + init_el.el_type->raw_size;
+        mir_size_t s
+          = init_el.init->code == N_STR ? init_el.init->u.s.len : init_el.el_type->raw_size;
+
+        gen_memcpy (offset + rel_offset, base, val, s);
+        rel_offset = init_el.offset + s;
       } else {
         val = cast (val, get_mir_type (init_el.el_type), FALSE);
         emit_scalar_assign (new_op (init_el.member_decl,
