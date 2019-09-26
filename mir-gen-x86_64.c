@@ -1226,8 +1226,8 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
           if (u_p) type3 = MIR_T_P;
 #endif
         } else {
-          type = MIR_T_I64;
-          type2 = MIR_T_BOUND;
+          type = u_p ? MIR_T_U64 : MIR_T_I64;
+          type2 = u_p && s_p ? MIR_T_I64 : MIR_T_BOUND;
 #if MIR_PTR64
           type3 = MIR_T_P;
 #endif
