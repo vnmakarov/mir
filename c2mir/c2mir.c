@@ -6110,7 +6110,7 @@ static void check_assignment_types (struct type *left, struct type *right, struc
                ? "discarding type qualifiers in passing argument"
                : code == N_RETURN ? "return discards a type qualifier from a pointer"
                                   : "assignment discards a type qualifier from a pointer");
-      error (pos, "%s", msg);
+      (pedantic_p ? error : warning) (pos, "%s", msg);
     }
   }
 }
