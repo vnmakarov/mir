@@ -1758,8 +1758,9 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
     } else {
       replacement = find_insn_pattern_replacement (ctx, insn);
       if (replacement == NULL) {
-        fprintf (stderr, "failure:");
+        fprintf (stderr, "fatal failure in matching insn:");
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
+        exit (1);
       } else {
         gen_assert (replacement != NULL);
         out_insn (ctx, insn, replacement);
