@@ -11199,7 +11199,7 @@ int main (int argc, const char *argv[]) {
       } else {
         MIR_gen_init (ctx);
 #if MIR_GEN_DEBUG
-        MIR_gen_set_debug_file (stderr);
+        MIR_gen_set_debug_file (ctx, stderr);
 #endif
         MIR_link (ctx, MIR_set_gen_interface, import_resolver);
         fun_addr = MIR_gen (ctx, main_func);
