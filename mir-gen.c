@@ -2207,6 +2207,11 @@ static void ccp_process_bb_start_var_occ (MIR_context_t ctx, var_occ_t var_occ, 
     if (debug_file != NULL) fprintf (debug_file, " already varying\n");
 #endif
     return;
+  } else if (bb->index == 0) { /* Non-parameter at entry BB (it means using undefined value) */
+#if MIR_GEN_DEBUG
+    if (debug_file != NULL) fprintf (debug_file, " making varying\n");
+#endif
+    var_occ->val_kind = CCP_VARYING;
   }
   change_p = FALSE;
   for (edge_t e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
