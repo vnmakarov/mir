@@ -1217,6 +1217,8 @@ static void create_av_bitmaps (MIR_context_t ctx) {
         gen_assert (bb_insn->call_hard_reg_args != NULL);
         bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs, ctx);
         bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs, ctx);
+        bitmap_and_compl (bb->av_gen, bb->av_gen, memory_exprs);
+        bitmap_ior (bb->av_kill, bb->av_kill, memory_exprs);
       }
     }
   }
@@ -1314,6 +1316,7 @@ static void cse_modify (MIR_context_t ctx) {
         gen_assert (bb_insn->call_hard_reg_args != NULL);
         bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs, ctx);
         bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs, ctx);
+        bitmap_and_compl (av, av, memory_exprs);
       }
     }
   }
