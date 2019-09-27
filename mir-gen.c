@@ -1695,7 +1695,7 @@ static void initiate_ccp_info (MIR_context_t ctx) {
         && MIR_branch_code_p (bb_insn->insn->code) && bb_insn->insn->code != MIR_JMP) {
       for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
            e = DLIST_NEXT (out_edge_t, e))
-        if (DLIST_HEAD (out_edge_t, e->dst->out_edges) != NULL) /* ignore exit bb */
+        if (e->dst != DLIST_EL (bb_t, curr_cfg->bbs, 1)) /* ignore exit bb */
           e->skipped_p = TRUE;
     }
   }
