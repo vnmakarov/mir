@@ -370,7 +370,8 @@ typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
 struct const_ref {
-  size_t pc; /* where rel32 address should be in code */
+  size_t pc;             /* where rel32 address should be in code */
+  size_t next_insn_disp; /* displacement of the next insn */
   size_t const_num;
 };
 
@@ -1727,6 +1728,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
       [label_ref_num].next_insn_disp
         = VARR_LENGTH (uint8_t, result_code);
 
+    if (const_ref_num >= 0)
+      VARR_ADDR (const_ref_t, const_refs)
+      [const_ref_num].next_insn_disp
+        = VARR_LENGTH (uint8_t, result_code);
     if (ch == '\0') break;
   }
 }
