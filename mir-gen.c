@@ -736,6 +736,12 @@ static void build_func_cfg (MIR_context_t ctx) {
   if (insn != NULL) {
     bb = create_bb (ctx, NULL);
     add_bb (ctx, bb);
+    if (insn->code == MIR_LABEL) { /* Create one more BB.  First BB will be empty. */
+      prev_bb = bb;
+      bb = create_bb (ctx, NULL);
+      add_bb (ctx, bb);
+      create_edge (ctx, prev_bb, bb);
+    }
   }
   for (; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
