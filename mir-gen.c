@@ -1706,15 +1706,14 @@ static void initiate_ccp_info (MIR_context_t ctx) {
   VARR_PUSH (bb_t, ccp_bbs, DLIST_HEAD (bb_t, curr_cfg->bbs)); /* entry bb */
 }
 
-static int var_op_p (MIR_insn_t insn, size_t nop) {
-  return insn->ops[nop].mode == MIR_OP_HARD_REG || insn->ops[nop].mode == MIR_OP_REG;
-}
+static int var_op_p (MIR_op_t op) { return op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_REG; }
+static int var_insn_op_p (MIR_insn_t insn, size_t nop) { return var_op_p (insn->ops[nop]); }
 
 static enum ccp_val_kind get_op (MIR_insn_t insn, size_t nop, const_t *val) {
   MIR_op_t op;
   var_occ_t var_occ, def;
 
-  if (!var_op_p (insn, nop)) {
+  if (!var_insn_op_p (insn, nop)) {
     if ((op = insn->ops[nop]).mode == MIR_OP_INT) {
       val->uns_p = FALSE;
       val->u.i = op.u.i;
@@ -1733,14 +1732,14 @@ static enum ccp_val_kind get_op (MIR_insn_t insn, size_t nop, const_t *val) {
 }
 
 static enum ccp_val_kind get_2ops (MIR_insn_t insn, const_t *val1, int out_p) {
-  if (out_p && !var_op_p (insn, 0)) return CCP_UNKNOWN;
+  if (out_p && !var_insn_op_p (insn, 0)) return CCP_UNKNOWN;
   return get_op (insn, 1, val1);
 }
 
 static enum ccp_val_kind get_3ops (MIR_insn_t insn, const_t *val1, const_t *val2, int out_p) {
   enum ccp_val_kind res1, res2;
 
-  if (out_p && !var_op_p (insn, 0)) return CCP_UNKNOWN;
+  if (out_p && !var_insn_op_p (insn, 0)) return CCP_UNKNOWN;
   if ((res1 = get_op (insn, 1, val1)) == CCP_VARYING) return CCP_VARYING;
   if ((res2 = get_op (insn, 2, val2)) == CCP_VARYING) return CCP_VARYING;
   return res1 == CCP_UNKNOWN || res2 == CCP_UNKNOWN ? CCP_UNKNOWN : CCP_CONST;
@@ -2281,7 +2280,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
     if (debug_file != NULL) {
       if (MIR_call_code_p (insn->code)) {
         fprintf (debug_file, " -- keep all results varying");
-      } else if (get_ccp_res_op (ctx, insn, 0, &op) && var_op_p (insn, 0)) {
+      } else if (get_ccp_res_op (ctx, insn, 0, &op) && var_insn_op_p (insn, 0)) {
         var_occ = op.data;
         if (var_occ->val_kind == CCP_UNKNOWN) {
           fprintf (debug_file, " -- make the result unknown");
@@ -2299,7 +2298,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
   } else {
     def_p = FALSE;
     for (i = 0; get_ccp_res_op (ctx, insn, i, &op); i++)
-      if (var_op_p (insn, i)) {
+      if (var_op_p (op)) {
         def_p = TRUE;
         var_occ = op.data;
         ccp_push_used_insns (ctx, var_occ);
@@ -2403,7 +2402,7 @@ static int get_ccp_res_val (MIR_context_t ctx, MIR_insn_t insn, const_t *val) {
 
   if (MIR_call_code_p (insn->code) || !get_ccp_res_op (ctx, insn, 0, &op))
     return FALSE; /* call results always produce varying values */
-  if (!var_op_p (insn, 0)) return FALSE;
+  if (!var_insn_op_p (insn, 0)) return FALSE;
   var_occ = op.data;
   gen_assert (var_occ->def == NULL);
   if (var_occ->val_kind != CCP_CONST) return FALSE;
