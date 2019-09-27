@@ -1356,7 +1356,7 @@ static void setup_rip_rel_addr (MIR_disp_t rip_disp, int *mod, int *rm, int64_t 
   gen_assert (*mod < 0 && *rm < 0 && *disp32 < 0);
   setup_rm (NULL, rm, 5);
   gen_assert (int32_p (rip_disp));
-  setup_mod (mod, 2);
+  setup_mod (mod, 0);
   *disp32 = (uint32_t) rip_disp;
 }
 
