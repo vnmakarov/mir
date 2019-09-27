@@ -231,7 +231,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       MIR_insert_insn_after (ctx, curr_func_item, prev_call_insn, new_insn);
       prev_insn = DLIST_PREV (MIR_insn_t, new_insn);
       next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-      create_new_bb_insns (ctx, prev_insn, next_insn);
+      create_new_bb_insns (ctx, prev_insn, next_insn, call_insn);
       call_insn->ops[i] = mem_op;
       mem_size += type == MIR_T_LD ? 16 : 8;
       if (ext_insn != NULL) gen_add_insn_after (ctx, prev_call_insn, ext_insn);
@@ -278,7 +278,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                              MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
       new_insn = DLIST_NEXT (MIR_insn_t, new_insn);
     }
-    create_new_bb_insns (ctx, call_insn, DLIST_NEXT (MIR_insn_t, new_insn));
+    create_new_bb_insns (ctx, call_insn, DLIST_NEXT (MIR_insn_t, new_insn), call_insn);
   }
   if (mem_size != 0) {                    /* allocate/deallocate stack for args passed on stack */
     mem_size = (mem_size + 15) / 16 * 16; /* make it of several 16 bytes */
@@ -287,13 +287,13 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                       _MIR_new_hard_reg_op (ctx, SP_HARD_REG), MIR_new_int_op (ctx, mem_size));
     MIR_insert_insn_after (ctx, curr_func_item, prev_call_insn, new_insn);
     next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-    create_new_bb_insns (ctx, prev_call_insn, next_insn);
+    create_new_bb_insns (ctx, prev_call_insn, next_insn, call_insn);
     new_insn
       = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, SP_HARD_REG),
                       _MIR_new_hard_reg_op (ctx, SP_HARD_REG), MIR_new_int_op (ctx, mem_size));
     MIR_insert_insn_after (ctx, curr_func_item, call_insn, new_insn);
     next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-    create_new_bb_insns (ctx, call_insn, next_insn);
+    create_new_bb_insns (ctx, call_insn, next_insn, call_insn);
   }
 }
 
@@ -432,7 +432,7 @@ static void machinize (MIR_context_t ctx) {
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
       MIR_prepend_insn (ctx, curr_func_item, new_insn);
-      create_new_bb_insns (ctx, NULL, DLIST_NEXT (MIR_insn_t, new_insn));
+      create_new_bb_insns (ctx, NULL, DLIST_NEXT (MIR_insn_t, new_insn), NULL);
     } else {
       /* arg is on the stack */
       stack_arg_func_p = TRUE;
@@ -447,7 +447,7 @@ static void machinize (MIR_context_t ctx) {
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), mem_op);
       MIR_prepend_insn (ctx, curr_func_item, new_insn);
       next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-      create_new_bb_insns (ctx, NULL, next_insn);
+      create_new_bb_insns (ctx, NULL, next_insn, NULL);
       mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }

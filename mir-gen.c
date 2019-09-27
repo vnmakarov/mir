@@ -88,7 +88,8 @@ static void *gen_malloc (MIR_context_t ctx, size_t size) {
 static MIR_reg_t gen_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func);
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
-static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after);
+static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after,
+                                 MIR_insn_t insn_for_bb);
 static void gen_delete_insn (MIR_context_t ctx, MIR_insn_t insn);
 static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t before);
 static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t after);
@@ -399,28 +400,35 @@ static void delete_bb_insn (bb_insn_t bb_insn) {
   free (bb_insn);
 }
 
-static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after) {
+static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after,
+                                 MIR_insn_t insn_for_bb) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   bb_insn_t bb_insn, new_bb_insn;
   bb_t bb;
 
-  if (before != NULL) {
-    insn = DLIST_NEXT (MIR_insn_t, before);
-    bb_insn = before->data;
-  } else {
-    gen_assert (after != NULL);
-    insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
-    bb_insn = after->data;
-  }
-  bb = bb_insn->bb;
-  for (; insn != after; insn = DLIST_NEXT (MIR_insn_t, insn), bb_insn = new_bb_insn) {
-    new_bb_insn = create_bb_insn (ctx, insn, bb);
-    if (before != NULL)
+  if (insn_for_bb == NULL)                  /* It should be in the 1st block */
+    bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); /* Skip entry and exit blocks */
+  else
+    bb = ((bb_insn_t) insn_for_bb->data)->bb;
+  if (before != NULL && (bb_insn = before->data)->bb == bb) {
+    for (insn = DLIST_NEXT (MIR_insn_t, before); insn != after;
+         insn = DLIST_NEXT (MIR_insn_t, insn), bb_insn = new_bb_insn) {
+      new_bb_insn = create_bb_insn (ctx, insn, bb);
       DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
-    else
-      DLIST_INSERT_BEFORE (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
-    before = insn;
+    }
+  } else {
+    bb_insn = after->data;
+    gen_assert (after != NULL);
+    insn = (before == NULL ? DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns)
+                           : DLIST_NEXT (MIR_insn_t, before));
+    for (; insn != after; insn = DLIST_NEXT (MIR_insn_t, insn)) {
+      new_bb_insn = create_bb_insn (ctx, insn, bb);
+      if (bb == bb_insn->bb)
+        DLIST_INSERT_BEFORE (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
+      else
+        DLIST_APPEND (bb_insn_t, bb->bb_insns, new_bb_insn);
+    }
   }
 }
 
@@ -435,14 +443,14 @@ static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   MIR_insert_insn_before (ctx, curr_func_item, before, insn);
-  create_new_bb_insns (ctx, DLIST_PREV (MIR_insn_t, insn), before);
+  create_new_bb_insns (ctx, DLIST_PREV (MIR_insn_t, insn), before, before);
 }
 
 static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   MIR_insert_insn_after (ctx, curr_func_item, after, insn);
-  create_new_bb_insns (ctx, after, DLIST_NEXT (MIR_insn_t, insn));
+  create_new_bb_insns (ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
 }
 
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
