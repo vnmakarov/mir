@@ -146,7 +146,7 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 
 #define DEFAULT_INIT_BITMAP_BITS_NUM 256
 
-static void make_2op_insns (MIR_context_t ctx) {
+static void make_io_dup_op_insns (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_insn_t insn, next_insn;
@@ -159,13 +159,13 @@ static void make_2op_insns (MIR_context_t ctx) {
 
   gen_assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
-  for (i = 0; i < sizeof (two_op_insn_codes) / sizeof (MIR_insn_code_t); i++)
-    bitmap_set_bit_p (insn_to_consider, two_op_insn_codes[i]);
+  for (i = 0; i < sizeof (io_dup_op_insn_codes) / sizeof (MIR_insn_code_t); i++)
+    bitmap_set_bit_p (insn_to_consider, io_dup_op_insn_codes[i]);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
     if (!bitmap_bit_p (insn_to_consider, code)) continue;
-    gen_assert (MIR_insn_nops (ctx, insn) > 2 && !MIR_call_code_p (code) && code != MIR_RET);
+    gen_assert (MIR_insn_nops (ctx, insn) >= 2 && !MIR_call_code_p (code) && code != MIR_RET);
     mode = MIR_insn_op_mode (ctx, insn, 0, &out_p);
     gen_assert (out_p && mode == MIR_insn_op_mode (ctx, insn, 1, &out_p) && !out_p);
     output = insn->ops[0];
@@ -4080,7 +4080,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif /* #ifndef NO_CCP */
   ccp_clear (ctx);
-  make_2op_insns (ctx);
+  make_io_dup_op_insns (ctx);
   machinize (ctx);
   add_new_bb_insns (ctx);
 #if MIR_GEN_DEBUG

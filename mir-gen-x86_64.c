@@ -87,12 +87,13 @@ static MIR_disp_t get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type, MIR
            + (curr_func_item->u.func->vararg_p ? reg_save_area_size : 0));
 }
 
-static const MIR_insn_code_t two_op_insn_codes[] = {
+static const MIR_insn_code_t io_dup_op_insn_codes[] = {
   /* see possible patterns */
-  MIR_FADD,  MIR_DADD, MIR_LDADD, MIR_SUB,   MIR_SUBS,  MIR_FSUB, MIR_DSUB, MIR_LDSUB, MIR_MUL,
-  MIR_MULS,  MIR_FMUL, MIR_DMUL,  MIR_LDMUL, MIR_DIV,   MIR_DIVS, MIR_UDIV, MIR_FDIV,  MIR_DDIV,
-  MIR_LDDIV, MIR_MOD,  MIR_MODS,  MIR_UMOD,  MIR_UMODS, MIR_AND,  MIR_ANDS, MIR_OR,    MIR_ORS,
-  MIR_XOR,   MIR_XORS, MIR_LSH,   MIR_LSHS,  MIR_RSH,   MIR_RSHS, MIR_URSH, MIR_URSHS,
+  MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB,  MIR_SUBS,  MIR_FSUB, MIR_DSUB,  MIR_LDSUB,
+  MIR_MUL,  MIR_MULS, MIR_FMUL,  MIR_DMUL, MIR_LDMUL, MIR_DIV,  MIR_DIVS,  MIR_UDIV,
+  MIR_FDIV, MIR_DDIV, MIR_LDDIV, MIR_MOD,  MIR_MODS,  MIR_UMOD, MIR_UMODS, MIR_AND,
+  MIR_ANDS, MIR_OR,   MIR_ORS,   MIR_XOR,  MIR_XORS,  MIR_LSH,  MIR_LSHS,  MIR_RSH,
+  MIR_RSHS, MIR_URSH, MIR_URSHS, MIR_NEG,  MIR_NEGS,  MIR_FNEG, MIR_DNEG,  MIR_LDNEG,
 };
 
 typedef enum { GC_INSN_PUSH = MIR_INSN_BOUND, GC_INSN_BOUND } MIR_full_insn_code_t;
