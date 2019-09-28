@@ -1,3 +1,5 @@
+SHELL=sh
+#
 CC=gcc -fno-tree-sra -std=gnu11 -Wno-abi # latest versions of gcc has a buggy SRA
 # 2nd alternative:
 # CC=clang -std=gnu11 -Wno-abi
@@ -144,8 +146,17 @@ gen-speed:
 readme-example-test:
 	$(CC) -g -D$(TARGET) -DMIR_SCAN mir.c mir-gen.c mir-tests/readme-example.c && ./a.out
 
-c2mir-test:
+c2mir-test: c2mir-simple-test c2mir-full-test
+
+c2mir-simple-test:
 	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei
+
+c2mir-full-test: c2mir-interp-test c2mir-gen-test
+
+c2mir-interp-test: c2m
+	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-interp
+c2mir-gen-test: c2m
+	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
 
 c2mir-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
