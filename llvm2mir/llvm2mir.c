@@ -883,7 +883,13 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
         switch (mir_type) {
         case MIR_T_I8: v.i8 = LLVMConstIntGetSExtValue (op); break;
         case MIR_T_I16: v.i16 = LLVMConstIntGetSExtValue (op); break;
+#if MIR_PTR32
+        case MIR_T_P:
+#endif
         case MIR_T_I32: v.i32 = LLVMConstIntGetSExtValue (op); break;
+#if MIR_PTR64
+        case MIR_T_P:
+#endif
         case MIR_T_I64: v.i64 = LLVMConstIntGetSExtValue (op); break;
         case MIR_T_F: v.f = (float) LLVMConstRealGetDouble (op, &lose); break;
         case MIR_T_D: v.d = LLVMConstRealGetDouble (op, &lose); break;
