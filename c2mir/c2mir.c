@@ -5580,8 +5580,14 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
         *type = *decl->decl_spec.type;
         if (type->incomplete_p
             && (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ENUM)
-            && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE)
-          make_type_complete (type);
+            && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE) {
+          for (node_t scope = curr_scope; scope != type->u.tag_type;
+               scope = ((struct node_scope *) scope->attr)->scope)
+            if (scope == top_scope) { /* We are not in the struct/union anymore */
+              make_type_complete (type);
+              break;
+            }
+        }
       }
       break;
     }
