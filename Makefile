@@ -195,3 +195,9 @@ sloc:
 	@echo -n 'MIR Generator: ' && wc -l mir-gen.[ch] | awk '{last=$$1} END {print last}'
 	@echo -n 'Machine dependent code: ' && wc -l mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
 	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c mir-bitmap.h mir-mp.h mir.[ch] mir-interp.c mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
+
+gcc-test:
+	$(SHELL) c-tests/runtests.sh c-tests/use-gcc
+
+clang-test:
+	$(SHELL) c-tests/runtests.sh c-tests/use-clang

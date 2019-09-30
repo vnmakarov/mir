@@ -1,0 +1,2 @@
+# ! /bin/sh
+gcc -o ttt $* -lm && ./ttt && rm -f ./ttt && exit 0
