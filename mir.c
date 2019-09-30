@@ -1433,6 +1433,12 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
                          item->u.export);
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
+      } else if (item->item_type == MIR_forward_item) {
+        if ((tab_item = find_item (ctx, item->u.forward, m)) == NULL)
+          (*error_func) (MIR_undeclared_op_ref_error, "forward of undefined item %s",
+                         item->u.forward);
+        item->addr = tab_item->addr;
+        item->ref_def = tab_item;
       }
   }
   for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
