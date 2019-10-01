@@ -329,6 +329,16 @@ static long double get_long_double_value (LLVMValueRef op) {  // ???
 
 static void process_expr (LLVMOpcode opcode, LLVMValueRef expr);
 
+static MIR_item_t get_item (MIR_name_t name) {
+  MIR_item_t item = find_item (name);
+
+  if (item != NULL) return item;
+  item = MIR_new_forward (context, name);
+  DLIST_REMOVE (MIR_item_t, curr_mir_module->items, item);
+  DLIST_PREPEND (MIR_item_t, curr_mir_module->items, item);
+  return item;
+}
+
 static MIR_op_t get_mir_op (LLVMValueRef op, MIR_type_t mir_type) {
   unsigned bw;
   LLVMTypeRef type;
@@ -359,15 +369,13 @@ static MIR_op_t get_mir_op (LLVMValueRef op, MIR_type_t mir_type) {
     }
     if (op_id == LLVMConstantPointerNullValueKind) return MIR_new_int_op (context, 0);
     if (op_id == LLVMFunctionValueKind) {
-      MIR_item_t item = find_item (LLVMGetValueName (op));
+      MIR_item_t item = get_item (LLVMGetValueName (op));
 
-      assert (item != NULL);
       return MIR_new_ref_op (context, item);
     }
     if (op_id == LLVMGlobalVariableValueKind) {
-      MIR_item_t item = find_item (LLVMGetValueName (op));
+      MIR_item_t item = get_item (LLVMGetValueName (op));
 
-      assert (item != NULL);
       return MIR_new_ref_op (context, item);
     }
     if (op_id == LLVMConstantVectorValueKind) error ("vector constant is not implemented yet");
@@ -792,6 +800,71 @@ static void init_phi_generation (void) {
 
 static void finish_phi_generation (void) { VARR_DESTROY (set_insn_t, set_insns); }
 
+static LLVMValueRef skip_pointer_bitcast (LLVMValueRef op) {
+  LLVMTypeRef type;
+
+  while (LLVMGetValueKind (op) != LLVMGlobalVariableValueKind
+         && LLVMGetConstOpcode (op) == LLVMBitCast) {
+    LLVMTypeRef type = LLVMTypeOf (op);
+
+    assert (LLVMGetTypeKind (type) == LLVMPointerTypeKind);
+    op = LLVMGetOperand (op, 0);
+  }
+  return op;
+}
+
+static MIR_item_t gen_ref_data (LLVMValueRef op, const char *name) {
+  LLVMValueRef op0, op1;
+  MIR_op_t mir_op0;
+  LLVMTypeRef type0;
+  LLVMTypeKind type_id;
+  unsigned long el_size, index, offset = 0;
+
+  op = skip_pointer_bitcast (op);
+  if (LLVMGetValueKind (op) == LLVMGlobalVariableValueKind) {
+    mir_op0 = get_mir_op (op, MIR_T_P);
+    assert (mir_op0.mode == MIR_OP_REF);
+    return MIR_new_ref_data (context, name, mir_op0.u.ref, 0);
+  }
+  assert (LLVMGetConstOpcode (op) == LLVMGetElementPtr);
+  op0 = LLVMGetOperand (op, 0);
+  type0 = LLVMTypeOf (op0);
+  type_id = LLVMGetTypeKind (type0);
+  assert (type_id == LLVMPointerTypeKind);
+  if (LLVMGetValueKind (op0) == LLVMConstantExprValueKind
+      && LLVMGetConstOpcode (op0) == LLVMBitCast) {
+    assert (LLVMGetNumOperands (op) == 2);
+    op0 = LLVMGetOperand (op0, 0);
+    op1 = LLVMGetOperand (op, 1);
+    index = LLVMConstIntGetSExtValue (op1);
+    type0 = LLVMGetElementType (type0);
+    el_size = LLVMABISizeOfType (TD, type0);
+    offset += index * el_size;
+    mir_op0 = get_mir_op (op0, MIR_T_P);
+    assert (mir_op0.mode == MIR_OP_REF);
+    return MIR_new_ref_data (context, name, mir_op0.u.ref, offset);
+  }
+  mir_op0 = get_mir_op (op0, MIR_T_P);
+  assert (mir_op0.mode == MIR_OP_REF);
+  for (unsigned j = 1; j < LLVMGetNumOperands (op); j++) {
+    op1 = LLVMGetOperand (op, j);
+    if (type_id == LLVMStructTypeKind) {
+      assert (LLVMGetValueKind (op1) == LLVMConstantIntValueKind);
+      index = LLVMConstIntGetSExtValue (op1);
+      offset += LLVMOffsetOfElement (TD, type0, index);
+      type0 = LLVMStructGetTypeAtIndex (type0, index);
+    } else {
+      assert (LLVMGetValueKind (op1) == LLVMConstantIntValueKind);
+      type0 = LLVMGetElementType (type0);
+      el_size = LLVMABISizeOfType (TD, type0);
+      index = LLVMConstIntGetSExtValue (op1);
+      offset += index * el_size;
+    }
+    type_id = LLVMGetTypeKind (type0);
+  }
+  return MIR_new_ref_data (context, name, mir_op0.u.ref, offset);
+}
+
 DEF_VARR (char);
 static VARR (char) * string;
 
@@ -851,6 +924,7 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
                                                   (MIR_str_t){VARR_LENGTH (char, string),
                                                               VARR_ADDR (char, string)}));
     } else {
+      LLVMValueKind op_id;
       LLVMTypeKind el_type_id = LLVMGetTypeKind (el_type);
       size_t start, len;
       MIR_type_t mir_type = MIR_T_BOUND;
@@ -859,6 +933,14 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
       for (i = 0; i < LLVMGetArrayLength (type); i++) {
         op = init_id == LLVMConstantArrayValueKind ? LLVMGetOperand (init, i)
                                                    : LLVMGetElementAsConstant (init, i);
+        if ((op_id = LLVMGetValueKind (op)) == LLVMGlobalVariableValueKind
+            || op_id == LLVMConstantExprValueKind) {
+          mir_type = MIR_T_BOUND;
+          item = gen_ref_data (op, name);
+          if (first_item == NULL) first_item = item;
+          name = NULL;
+          continue;
+        }
         switch (el_type_id) {
         case LLVMIntegerTypeKind: {
           if ((n = LLVMGetIntTypeWidth (el_type)) > 64) error ("integer type > 64-bits");
@@ -877,9 +959,8 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
           item = gen_data_bss (el_type, name, op);
           if (first_item == NULL) first_item = item;
           name = NULL;
-          break;
+          continue;
         }
-        if (mir_type == MIR_T_BOUND) continue;
         switch (mir_type) {
         case MIR_T_I8: v.i8 = LLVMConstIntGetSExtValue (op); break;
         case MIR_T_I16: v.i16 = LLVMConstIntGetSExtValue (op); break;
@@ -920,8 +1001,9 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
       if (first_item == NULL) first_item = item;
     }
     if (size > len) item = MIR_new_bss (context, name, size - len);
-  } else if (init_id == LLVMConstantExprValueKind) {
-    assert (FALSE);
+  } else if (init_id == LLVMGlobalVariableValueKind || init_id == LLVMConstantExprValueKind) {
+    item = gen_ref_data (init, name);
+    if (first_item == NULL) first_item = item;
   } else {
     assert (FALSE);
   }
