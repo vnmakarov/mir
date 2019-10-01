@@ -1,0 +1,3 @@
+# ! /bin/sh
+bc_files=`echo $*|sed 's$[^ ]*/$$g'|sed 's$[.]c$.bc$g'`
+clang -O2 -fno-slp-vectorize -fno-vectorize -w -c -emit-llvm $* && llvm-link $bc_files -o __t.bc  && ./l2m -i __t.bc && rm -f $bc_files __t.bc
