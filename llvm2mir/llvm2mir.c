@@ -770,13 +770,11 @@ static void generate_edge_phi_op_eval (bb_gen_info_t bi) {
         while ((insn = DLIST_HEAD (MIR_insn_t, insns)) != NULL) {
           DLIST_REMOVE (MIR_insn_t, insns, insn);
           if (after == NULL) {
-            assert (before != NULL);
             MIR_insert_insn_before (context, curr_mir_func, before, insn);
           } else {
-            assert (before == NULL);
             MIR_insert_insn_after (context, curr_mir_func, after, insn);
-            after = insn;
           }
+          after = insn;
           prev_insn = insn;
         }
         update_set_insn (prev_insn); /* only the last insn sets up phi var */
