@@ -1780,7 +1780,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
     set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
                (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp, 4);
   }
-  while (VARR_LENGTH (uint8_t, result_code) % 8 != 0) /* Align the pool */
+  while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
     VARR_PUSH (uint8_t, result_code, 0);
   for (i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) { /* Add pool constants */
     const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
@@ -1788,6 +1788,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
     set_int64 (VARR_ADDR (uint8_t, result_code) + cr.pc,
                VARR_LENGTH (uint8_t, result_code) - cr.next_insn_disp, 4);
     put_uint64 (gen_ctx, VARR_GET (uint64_t, const_pool, cr.const_num), 8);
+    put_uint64 (gen_ctx, 0, 8); /* keep 16 bytes align */
   }
   *len = VARR_LENGTH (uint8_t, result_code);
   return VARR_ADDR (uint8_t, result_code);
