@@ -14,21 +14,25 @@ runtest () {
 	all=`expr $all + 1`
 	if test -f $t.expectrc; then expect_code=`cat $t.expectrc`; else expect_code=0; fi
 	if test -f $t.expect; then expect_out=$t.expect; else expect_out=; fi
-	$execution_program $t $add_main 2>$errf >$outf
+	another_expect=`dirname $t`/`basename $t .c`.expect
+	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
+	echo -n $t:
+	timeout 10s $execution_program $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! cmp $outf $expect_out;then
-		    echo -n $t:
 	            echo Output mismatch
 		    diff -up $expect_out $outf
 		else
 		    ok=`expr $ok + 1`
-	            echo -ne $t:"OK\r"
+	            echo -ne "OK\r"
 		fi
 	elif test $expect_code = 0; then
-		echo $t:FAIL "(code = $code)"
+	        cat $errf
+	        echo FAIL "(code = $code)"
 	else
-		echo $t:FAIL "(code = $code, expected code = $expect_code)"
+	        cat $errf
+		echo $FAIL "(code = $code, expected code = $expect_code)"
 	fi
 }
 
