@@ -10821,9 +10821,8 @@ DEF_VARR (char_ptr_t);
 static VARR (char_ptr_t) * headers;
 static VARR (char_ptr_t) * system_headers;
 
-static void init_options (int argc, const char *argv[],
-                          int (*other_option_func) (int, int, const char **, void *data),
-                          void *data) {
+static void init_options (int argc, char *argv[],
+                          int (*other_option_func) (int, int, char **, void *data), void *data) {
   const char *str;
 
   debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
@@ -10937,9 +10936,9 @@ static void finish_options (void) {
 
 static int curr_module_num;
 
-static void compile_init (int argc, const char *argv[], int (*getc_func) (void),
+static void compile_init (int argc, char *argv[], int (*getc_func) (void),
                           void (*ungetc_func) (int),
-                          int other_option_func (int, int, const char **, void *data), void *data) {
+                          int other_option_func (int, int, char **, void *data), void *data) {
   n_errors = n_warnings = 0;
   c_getc = getc_func;
   c_ungetc = ungetc_func;
@@ -11045,7 +11044,7 @@ static const char *source_name;
 static VARR (char) * input;
 static int interp_exec_p, gen_exec_p;
 
-static int other_option_func (int i, int argc, const char *argv[], void *data) {
+static int other_option_func (int i, int argc, char *argv[], void *data) {
   FILE *f = NULL;
   int c;
 
@@ -11123,7 +11122,7 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
-int main (int argc, const char *argv[]) {
+int main (int argc, char *argv[], char *env[]) {
   int i, n, ret_code;
 
   interp_exec_p = gen_exec_p = FALSE;
@@ -11175,7 +11174,7 @@ int main (int argc, const char *argv[]) {
     MIR_val_t val;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
-    uint64_t (*fun_addr) (void);
+    uint64_t (*fun_addr) (int, char *argv[], char *env[]);
     double start_time;
 
     for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
@@ -11195,7 +11194,8 @@ int main (int argc, const char *argv[]) {
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
         start_time = real_usec_time ();
-        MIR_interp (ctx, main_func, &val, 0);
+        MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = 1}, (MIR_val_t){.a = (void *) argv},
+                    (MIR_val_t){.a = (void *) env});
         ret_code = val.i;
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
@@ -11210,7 +11210,7 @@ int main (int argc, const char *argv[]) {
         MIR_link (ctx, MIR_set_gen_interface, import_resolver);
         fun_addr = MIR_gen (ctx, main_func);
         start_time = real_usec_time ();
-        ret_code = fun_addr ();
+        ret_code = fun_addr (argc, argv, env);
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
