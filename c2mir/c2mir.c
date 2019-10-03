@@ -297,7 +297,7 @@ expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD | N_CH | N_STR |
      | N_DEREF_FIELD (expr, N_ID) | N_COND (expr, expr, expr)
      | N_COMPOUND_LITERAL (type_name, initializer) | N_CALL (expr, N_LIST:(expr)*)
      | N_GENERIC (expr, N_LIST:(N_GENERIC_ASSOC (type_name?, expr))+ )
-label: N_CASE(expr) | N_DEFAULT | N_LABEL(N_ID)
+label: N_CASE(expr) | N_CASE(expr,expr) | N_DEFAULT | N_LABEL(N_ID)
 stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_SWITCH(N_LIST:(label)*, expr, stmt) | (N_WHILE|N_DO) (N_LIST:(label)*, expr, stmt)
     | N_FOR(N_LIST:(label)*,(N_LIST: declaration+ | expr)?, expr?, expr?, stmt)
@@ -4166,12 +4166,17 @@ D (st_assert) {
 D (compound_stmt);
 
 D (label) {
-  node_t r;
+  node_t r, n;
   pos_t pos;
 
   if (MP (T_CASE, pos)) {
     P (expr);
-    r = new_pos_node1 (N_CASE, pos, r);
+    n = new_pos_node1 (N_CASE, pos, r);
+    if (M (T_DOTS)) {
+      P (expr);
+      op_append (n, r);
+    }
+    r = n;
   } else if (MP (T_DEFAULT, pos)) {
     r = new_pos_node (N_DEFAULT, pos);
   } else {
@@ -4896,7 +4901,7 @@ DEF_DLIST (case_t, case_link);
 
 struct switch_attr {
   struct type type;           /* integer promoted type */
-  DLIST (case_t) case_labels; /* default if any is always a tail */
+  DLIST (case_t) case_labels; /* default case is always a tail */
 };
 
 static int basic_type_size (enum basic_type bt) {
@@ -5888,6 +5893,23 @@ static struct type *check_declarator (node_t r, int func_def_p) {
 
 static node_t curr_switch;
 
+static int check_case_expr (node_t case_expr, struct type *type, node_t target) {
+  struct expr *expr;
+
+  check (case_expr, target);
+  expr = case_expr->attr;
+  if (!expr->const_p) {
+    error (case_expr->pos, "case-expr is not a constant expression");
+    return FALSE;
+  } else if (!integer_type_p (expr->type)) {
+    error (case_expr->pos, "case-expr is not an integer type expression");
+    return FALSE;
+  } else {
+    convert_value (expr, type);
+    return TRUE;
+  }
+}
+
 static void check_labels (node_t labels, node_t target) {
   for (node_t l = NL_HEAD (labels->ops); l != NULL; l = NL_NEXT (l)) {
     if (l->code == N_LABEL) {
@@ -5906,6 +5928,7 @@ static void check_labels (node_t labels, node_t target) {
       struct switch_attr *switch_attr = curr_switch->attr;
       struct type *type = &switch_attr->type;
       node_t case_expr = l->code == N_CASE ? NL_HEAD (l->ops) : NULL;
+      node_t case_expr2 = l->code == N_CASE ? NL_EL (l->ops, 1) : NULL;
       case_t case_attr, tail = DLIST_TAIL (case_t, switch_attr->case_labels);
       int ok_p = FALSE, default_p = tail != NULL && tail->case_node->code == N_DEFAULT;
       struct expr *expr;
@@ -5917,25 +5940,18 @@ static void check_labels (node_t labels, node_t target) {
           ok_p = TRUE;
         }
       } else {
-        check (case_expr, target);
-        expr = case_expr->attr;
-        if (!expr->const_p) {
-          error (case_expr->pos, "case-expr is not a constant expression");
-        } else if (!integer_type_p (expr->type)) {
-          error (case_expr->pos, "case-expr is not an integer type expression");
-        } else {
-          convert_value (expr, type);
-          ok_p = TRUE;
-        }
+        ok_p = check_case_expr (case_expr, type, target);
+        if (case_expr2 != NULL) ok_p = check_case_expr (case_expr2, type, target) && ok_p;
       }
       if (ok_p) {
         case_attr = reg_malloc (sizeof (struct case_attr));
         case_attr->case_node = l;
         case_attr->case_target_node = target;
-        if (default_p)
+        if (default_p) {
           DLIST_INSERT_BEFORE (case_t, switch_attr->case_labels, tail, case_attr);
-        else
+        } else {
           DLIST_APPEND (case_t, switch_attr->case_labels, case_attr);
+        }
       }
     }
   }
@@ -7998,6 +8014,9 @@ static void check (node_t r, node_t context) {
     struct type t, *type;
     struct switch_attr *switch_attr;
     case_t el;
+    node_t case_expr, case_expr2, another_case_expr, another_case_expr2;
+    struct expr *e, *e2, *another_e, *another_e2;
+    int signed_p, skip_range_p;
 
     check_labels (labels, r);
     check (expr, r);
@@ -8010,14 +8029,15 @@ static void check (node_t r, node_t context) {
     } else {
       t = integer_promotion (type);
     }
+    signed_p = signed_integer_type_p (type);
     curr_switch = curr_loop_switch = r;
     switch_attr = curr_switch->attr = reg_malloc (sizeof (struct switch_attr));
     switch_attr->type = t;
     DLIST_INIT (case_t, ((struct switch_attr *) curr_switch->attr)->case_labels);
     check (stmt, r);
     for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL;
-         c = DLIST_NEXT (case_t, c)) {
-      if (c->case_node->code == N_DEFAULT) continue;
+         c = DLIST_NEXT (case_t, c)) { /* process simple cases */
+      if (c->case_node->code == N_DEFAULT || NL_EL (c->case_node->ops, 1) != NULL) continue;
       if (HTAB_DO (case_t, case_tab, c, HTAB_FIND, el)) {
         error (c->case_node->pos, "duplicate case value");
         continue;
@@ -8025,6 +8045,50 @@ static void check (node_t r, node_t context) {
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
     }
     HTAB_CLEAR (case_t, case_tab, NULL);
+    /* Check range cases against *all* simple cases or range cases *before* it. */
+    for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL;
+         c = DLIST_NEXT (case_t, c)) {
+      if (c->case_node->code == N_DEFAULT || (case_expr2 = NL_EL (c->case_node->ops, 1)) == NULL)
+        continue;
+      case_expr = NL_HEAD (c->case_node->ops);
+      e = case_expr->attr;
+      e2 = case_expr2->attr;
+      skip_range_p = FALSE;
+      for (case_t c2 = DLIST_HEAD (case_t, switch_attr->case_labels); c2 != NULL;
+           c2 = DLIST_NEXT (case_t, c2)) {
+        if (c2->case_node->code == N_DEFAULT) continue;
+        if (c2 == c) {
+          skip_range_p = TRUE;
+          continue;
+        }
+        another_case_expr = NL_HEAD (c2->case_node->ops);
+        another_case_expr2 = NL_EL (c2->case_node->ops, 1);
+        if (skip_range_p && another_case_expr2 != NULL) continue;
+        another_e = another_case_expr->attr;
+        assert (another_e->const_p && integer_type_p (another_e->type));
+        if (another_case_expr2 == NULL) {
+          if ((signed_p && e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val)
+              || (!signed_p && e->u.u_val <= another_e->u.u_val
+                  && another_e->u.u_val <= e2->u.u_val)) {
+            error (c->case_node->pos, "duplicate value in a range case");
+            break;
+          }
+        } else {
+          another_e2 = another_case_expr2->attr;
+          assert (another_e2->const_p && integer_type_p (another_e2->type));
+          if ((signed_p
+               && (e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val
+                   || e->u.i_val <= another_e2->u.i_val && another_e2->u.i_val <= e2->u.i_val))
+              || (!signed_p
+                  && (e->u.u_val <= another_e->u.u_val && another_e->u.u_val <= e2->u.u_val
+                      || e->u.u_val <= another_e2->u.u_val
+                           && another_e2->u.u_val <= e2->u.u_val))) {
+            error (c->case_node->pos, "duplicate value in a range case");
+            break;
+          }
+        }
+      }
+    }
     curr_switch = saved_switch;
     curr_loop_switch = saved_loop_switch;
     break;
@@ -10228,17 +10292,23 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t stmt = NL_NEXT (expr);
     struct switch_attr *switch_attr = r->attr;
     op_t case_reg_op;
+    struct expr *e2;
     case_t c;
     MIR_label_t saved_break_label = break_label;
+    int signed_p, short_p;
 
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
     break_label = MIR_new_label (ctx);
     case_reg_op = gen (expr, NULL, NULL, TRUE);
-    case_reg_op = force_reg (case_reg_op, get_mir_type (((struct expr *) expr->attr)->type));
+    type = ((struct expr *) expr->attr)->type;
+    signed_p = signed_integer_type_p (type);
+    mir_type = get_mir_type (type);
+    short_p = mir_type != MIR_T_I64 && mir_type != MIR_T_U64;
+    case_reg_op = force_reg (case_reg_op, mir_type);
     for (c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL; c = DLIST_NEXT (case_t, c)) {
-      MIR_label_t label = get_label (c->case_target_node);
-      node_t case_expr;
+      MIR_label_t cont_label, label = get_label (c->case_target_node);
+      node_t case_expr, case_expr2;
 
       if (c->case_node->code == N_DEFAULT) {
         assert (DLIST_NEXT (case_t, c) == NULL);
@@ -10246,10 +10316,29 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
         break;
       }
       case_expr = NL_HEAD (c->case_node->ops);
+      case_expr2 = NL_NEXT (case_expr);
       e = case_expr->attr;
       assert (e->const_p && integer_type_p (e->type));
-      emit3 (MIR_BEQ, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
-             MIR_new_int_op (ctx, e->u.i_val));
+      if (case_expr2 == NULL) {
+        emit3 (short_p ? MIR_BEQS : MIR_BEQ, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
+               MIR_new_int_op (ctx, e->u.i_val));
+      } else {
+        e2 = case_expr2->attr;
+        assert (e2->const_p && integer_type_p (e2->type));
+        cont_label = MIR_new_label (ctx);
+        if (signed_p) {
+          emit3 (short_p ? MIR_BLTS : MIR_BLT, MIR_new_label_op (ctx, cont_label),
+                 case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
+          emit3 (short_p ? MIR_BLES : MIR_BLE, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
+                 MIR_new_int_op (ctx, e2->u.i_val));
+        } else {
+          emit3 (short_p ? MIR_UBLTS : MIR_UBLT, MIR_new_label_op (ctx, cont_label),
+                 case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
+          emit3 (short_p ? MIR_UBLES : MIR_UBLE, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
+                 MIR_new_int_op (ctx, e2->u.i_val));
+        }
+        emit_insn (cont_label);
+      }
     }
     if (c == NULL) /* no default: */
       emit1 (MIR_JMP, MIR_new_label_op (ctx, break_label));
