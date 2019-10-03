@@ -1,2 +1,2 @@
 # ! /bin/sh
-clang -o ttt $* -lm && (./ttt;code=$?) && rm -f ./ttt && exit $code
+clang -O2 -o ttt $* -lm && (./ttt;code=$?) && rm -f ./ttt && exit $code
