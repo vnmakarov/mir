@@ -1008,6 +1008,19 @@ static MIR_item_t gen_data_bss (LLVMTypeRef type, const char *name, LLVMValueRef
   return first_item;
 }
 
+static MIR_reg_t mir_2nd_mem_addr_reg;
+
+static MIR_reg_t get_2nd_mem_addr_reg (void) {
+  if (mir_2nd_mem_addr_reg != 0) return mir_2nd_mem_addr_reg;
+  mir_2nd_mem_addr_reg
+    = MIR_new_func_reg (context, curr_mir_func->u.func, mir_reg_type (MIR_T_P), "$2nd_mem_addr");
+  MIR_prepend_insn (context, curr_mir_func,
+                    MIR_new_insn (context, MIR_ALLOCA,
+                                  MIR_new_reg_op (context, mir_2nd_mem_addr_reg),
+                                  MIR_new_int_op (context, 0)));
+  return mir_2nd_mem_addr_reg;
+}
+
 static void process_expr (LLVMOpcode opcode, LLVMValueRef expr) {
   int ptr_size;
   MIR_op_t mir_op0, mir_op1, mir_op2;
@@ -1281,17 +1294,39 @@ static void process_expr (LLVMOpcode opcode, LLVMValueRef expr) {
                      MIR_new_insn (context, mir_insn_code, MIR_new_reg_op (context, res_reg),
                                    mir_op0));
     break;
-  case LLVMBitCast: /* it is no-op */
+  case LLVMBitCast: { /* it is mostly no-op */
+    int float_op_p, float_res_p;
+    MIR_type_t mir_op_type;
+
     op0 = LLVMGetOperand (expr, 0);
     type = LLVMTypeOf (op0);
+    mir_op_type = get_mir_type (type);
+    mir_insn_code = mir_mov_code (mir_op_type);
+    mir_op0 = get_mir_op (op0, mir_op_type);
+    float_op_p = mir_op_type == MIR_T_F || mir_op_type == MIR_T_D || mir_op_type == MIR_T_LD;
+    type = LLVMTypeOf (expr);
     mir_type = get_mir_type (type);
-    res_reg = get_expr_res_reg (expr, mir_var_type (mir_type));
-    mir_insn_code = mir_mov_code (mir_type);
-    mir_op0 = get_mir_op (op0, mir_type);
-    MIR_append_insn (context, curr_mir_func,
-                     MIR_new_insn (context, mir_insn_code, MIR_new_reg_op (context, res_reg),
-                                   mir_op0));
+    mir_type = mir_var_type (mir_type);
+    float_res_p = mir_type == MIR_T_F || mir_type == MIR_T_D || mir_type == MIR_T_LD;
+    res_reg = get_expr_res_reg (expr, mir_type);
+    if (float_op_p == float_res_p) {
+      MIR_append_insn (context, curr_mir_func,
+                       MIR_new_insn (context, mir_insn_code, MIR_new_reg_op (context, res_reg),
+                                     mir_op0));
+    } else {
+      MIR_reg_t addr = get_2nd_mem_addr_reg ();
+
+      MIR_append_insn (context, curr_mir_func,
+                       MIR_new_insn (context, mir_insn_code,
+                                     MIR_new_mem_op (context, mir_op_type, 0, addr, 0, 1),
+                                     mir_op0));
+      MIR_append_insn (context, curr_mir_func,
+                       MIR_new_insn (context, mir_mov_code (mir_type),
+                                     MIR_new_reg_op (context, res_reg),
+                                     MIR_new_mem_op (context, mir_type, 0, addr, 0, 1)));
+    }
     break;
+  }
   case LLVMAddrSpaceCast:
     error ("address spaces are not implemented");
     break;
@@ -1454,6 +1489,7 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
         get_expr_res_reg (insn, mir_type);
       }
     }
+    mir_2nd_mem_addr_reg = 0;
     init_phi_generation ();
     /* Loop through all the basic blocks in the function: */
     for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock (func); bb;
