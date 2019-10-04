@@ -4883,6 +4883,9 @@ struct decl {
   mir_size_t offset;     /* var offset in frame or bss */
   node_t scope;          /* declaration scope */
   struct decl_spec decl_spec;
+  /* Unnamed member if this scope is anon struct/union for the member,
+     NULL otherwise: */
+  node_t containing_anon_member;
   MIR_item_t item; /* MIR_item for some declarations */
 };
 
@@ -5397,6 +5400,7 @@ static void make_type_complete (struct type *type) {
 }
 
 static int in_params_p;
+static node_t curr_anon_member;
 
 static void check (node_t node, node_t context);
 
@@ -5601,6 +5605,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       int new_scope_p;
       node_t res, id = NL_HEAD (n->ops);
       node_t decl_list = NL_NEXT (id);
+      node_t saved_anon_member = curr_anon_member;
 
       set_type_pos_node (type, n);
       res = process_tag (n, id, decl_list);
@@ -5611,6 +5616,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
                      || NL_EL (decl->ops, 1)->code != N_IGNORE);
       type->anonymous_member_type_p = !new_scope_p;
+      curr_anon_member = new_scope_p ? NULL : decl;
       if (decl_list->code != N_IGNORE) {
         if (new_scope_p) create_node_scope (res);
         check (decl_list, n);
@@ -5620,6 +5626,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
           make_type_complete (type); /* recalculate size */
         }
       }
+      curr_anon_member = saved_anon_member;
       break;
     }
     case N_ENUM: {
@@ -6504,6 +6511,7 @@ static void init_decl (decl_t decl) {
   decl->offset = 0;
   decl->bit_offset = -1;
   decl->scope = curr_scope;
+  decl->containing_anon_member = curr_anon_member;
   decl->item = NULL;
 }
 
@@ -8233,6 +8241,7 @@ static void context_init (void) {
   VARR_CREATE (node_t, gotos, 0);
   symbol_init ();
   in_params_p = FALSE;
+  curr_anon_member = NULL;
   HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq);
   VARR_CREATE (decl_t, decls_for_allocation, 1024);
 }
