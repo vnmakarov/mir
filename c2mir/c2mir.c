@@ -5948,7 +5948,10 @@ static void check_labels (node_t labels, node_t target) {
         }
       } else {
         ok_p = check_case_expr (case_expr, type, target);
-        if (case_expr2 != NULL) ok_p = check_case_expr (case_expr2, type, target) && ok_p;
+        if (case_expr2 != NULL) {
+          ok_p = check_case_expr (case_expr2, type, target) && ok_p;
+          (pedantic_p ? error : warning) (l->pos, "range cases are not a part of C standard");
+        }
       }
       if (ok_p) {
         case_attr = reg_malloc (sizeof (struct case_attr));
