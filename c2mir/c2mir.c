@@ -6147,11 +6147,24 @@ static void check_assignment_types (struct type *left, struct type *right, struc
   }
 }
 
+static int anon_struct_union_type_member_p (node_t member) {
+  decl_t decl = member->attr;
+  struct type *type;
+
+  return (decl != NULL && NL_EL (member->ops, 1)->code == N_IGNORE
+          && ((type = decl->decl_spec.type)->mode == TM_STRUCT || type->mode == TM_UNION)
+          && NL_HEAD (type->u.tag_type->ops)->code == N_IGNORE);
+}
+
 static node_t get_adjacent_member (node_t member, int next_p) {
+  decl_t decl;
+  struct type *type;
+
   assert (member->code == N_MEMBER);
-  while ((member = next_p ? NL_NEXT (member) : NL_PREV (member)) != NULL
-         && (member->code != N_MEMBER || NL_EL (member->ops, 1)->code == N_IGNORE))
-    ;
+  while ((member = next_p ? NL_NEXT (member) : NL_PREV (member)) != NULL)
+    if (member->code == N_MEMBER
+        && (NL_EL (member->ops, 1)->code != N_IGNORE || anon_struct_union_type_member_p (member)))
+      break;
   return member;
 }
 
@@ -9101,7 +9114,9 @@ static mir_size_t get_object_path_offset (void) {
       assert (init_object.container_type->mode == TM_STRUCT
               || init_object.container_type->mode == TM_UNION);
       assert (init_object.u.curr_member->code == N_MEMBER);
-      offset += ((decl_t) init_object.u.curr_member->attr)->offset;
+      if (!anon_struct_union_type_member_p (init_object.u.curr_member))
+        /* Members inside anonymous struct/union already have adjusted offset */
+        offset += ((decl_t) init_object.u.curr_member->attr)->offset;
     }
   }
   return offset;
