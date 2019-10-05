@@ -146,7 +146,7 @@ struct type {
   mir_size_t raw_size;
   int align; /* type align, undefined if < 0  */
   enum type_mode mode;
-  char anonymous_member_type_p;
+  char unnamed_anon_struct_union_member_type_p;
   union {
     enum basic_type basic_type;
     node_t tag_type; /* struct/union/enum */
@@ -4649,7 +4649,7 @@ static void init_type (struct type *type) {
   type->arr_type = NULL;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
-  type->anonymous_member_type_p = FALSE;
+  type->unnamed_anon_struct_union_member_type_p = FALSE;
 }
 
 static void set_type_pos_node (struct type *type, node_t n) {
@@ -4893,7 +4893,7 @@ struct decl {
   struct decl_spec decl_spec;
   /* Unnamed member if this scope is anon struct/union for the member,
      NULL otherwise: */
-  node_t containing_anon_member;
+  node_t containing_unnamed_anon_struct_union_member;
   MIR_item_t item; /* MIR_item for some declarations */
 };
 
@@ -5040,17 +5040,19 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
   if (*overall_size < *offset + size) *overall_size = *offset + size;
 }
 
-static void update_anonymous_members_offset (struct type *type, mir_size_t offset) {
-  assert ((type->mode == TM_STRUCT || type->mode == TM_UNION) && type->anonymous_member_type_p);
+/* Update offsets inside unnamed anonymous struct/union member. */
+static void update_members_offset (struct type *type, mir_size_t offset) {
+  assert ((type->mode == TM_STRUCT || type->mode == TM_UNION)
+          && type->unnamed_anon_struct_union_member_type_p);
   assert (offset != MIR_SIZE_MAX || type->raw_size == MIR_SIZE_MAX);
   for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL; el = NL_NEXT (el))
     if (el->code == N_MEMBER) {
       decl_t decl = el->attr;
 
       decl->offset = offset == MIR_SIZE_MAX ? 0 : decl->offset + offset;
-      if (decl->decl_spec.type->anonymous_member_type_p)
-        update_anonymous_members_offset (decl->decl_spec.type,
-                                         offset == MIR_SIZE_MAX ? offset : decl->offset);
+      if (decl->decl_spec.type->unnamed_anon_struct_union_member_type_p)
+        update_members_offset (decl->decl_spec.type,
+                               offset == MIR_SIZE_MAX ? offset : decl->offset);
     }
 }
 static void set_type_layout (struct type *type) {
@@ -5088,11 +5090,11 @@ static void set_type_layout (struct type *type) {
           mir_size_t member_size;
           node_t width = NL_EL (el->ops, 2);
           struct expr *expr;
-          int anon_process_p
-            = (!type->anonymous_member_type_p && decl->decl_spec.type->anonymous_member_type_p
-               && decl->decl_spec.type->raw_size == MIR_SIZE_MAX);
+          int anon_process_p = (!type->unnamed_anon_struct_union_member_type_p
+                                && decl->decl_spec.type->unnamed_anon_struct_union_member_type_p
+                                && decl->decl_spec.type->raw_size == MIR_SIZE_MAX);
 
-          if (anon_process_p) update_anonymous_members_offset (decl->decl_spec.type, MIR_SIZE_MAX);
+          if (anon_process_p) update_members_offset (decl->decl_spec.type, MIR_SIZE_MAX);
           set_type_layout (decl->decl_spec.type);
           member_size = type_size (decl->decl_spec.type);
           member_align = type_align (decl->decl_spec.type);
@@ -5118,7 +5120,7 @@ static void set_type_layout (struct type *type) {
             bits = -1;
             bound_bit = 0;
           }
-          if (anon_process_p) update_anonymous_members_offset (decl->decl_spec.type, decl->offset);
+          if (anon_process_p) update_members_offset (decl->decl_spec.type, decl->offset);
         }
     }
   }
@@ -5408,7 +5410,7 @@ static void make_type_complete (struct type *type) {
 }
 
 static int in_params_p;
-static node_t curr_anon_member;
+static node_t curr_unnamed_anon_struct_union_member;
 
 static void check (node_t node, node_t context);
 
@@ -5613,7 +5615,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       int new_scope_p;
       node_t res, id = NL_HEAD (n->ops);
       node_t decl_list = NL_NEXT (id);
-      node_t saved_anon_member = curr_anon_member;
+      node_t saved_unnamed_anon_struct_union_member = curr_unnamed_anon_struct_union_member;
 
       set_type_pos_node (type, n);
       res = process_tag (n, id, decl_list);
@@ -5623,8 +5625,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
       new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
                      || NL_EL (decl->ops, 1)->code != N_IGNORE);
-      type->anonymous_member_type_p = !new_scope_p;
-      curr_anon_member = new_scope_p ? NULL : decl;
+      type->unnamed_anon_struct_union_member_type_p = !new_scope_p;
+      curr_unnamed_anon_struct_union_member = new_scope_p ? NULL : decl;
       if (decl_list->code != N_IGNORE) {
         if (new_scope_p) create_node_scope (res);
         check (decl_list, n);
@@ -5634,7 +5636,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
           make_type_complete (type); /* recalculate size */
         }
       }
-      curr_anon_member = saved_anon_member;
+      curr_unnamed_anon_struct_union_member = saved_unnamed_anon_struct_union_member;
       break;
     }
     case N_ENUM: {
@@ -6157,17 +6159,11 @@ static void check_assignment_types (struct type *left, struct type *right, struc
 
 static int anon_struct_union_type_member_p (node_t member) {
   decl_t decl = member->attr;
-  struct type *type;
 
-  return (decl != NULL && NL_EL (member->ops, 1)->code == N_IGNORE
-          && ((type = decl->decl_spec.type)->mode == TM_STRUCT || type->mode == TM_UNION)
-          && NL_HEAD (type->u.tag_type->ops)->code == N_IGNORE);
+  return decl != NULL && decl->decl_spec.type->unnamed_anon_struct_union_member_type_p;
 }
 
 static node_t get_adjacent_member (node_t member, int next_p) {
-  decl_t decl;
-  struct type *type;
-
   assert (member->code == N_MEMBER);
   while ((member = next_p ? NL_NEXT (member) : NL_PREV (member)) != NULL)
     if (member->code == N_MEMBER
@@ -6535,7 +6531,7 @@ static void init_decl (decl_t decl) {
   decl->offset = 0;
   decl->bit_offset = -1;
   decl->scope = curr_scope;
-  decl->containing_anon_member = curr_anon_member;
+  decl->containing_unnamed_anon_struct_union_member = curr_unnamed_anon_struct_union_member;
   decl->item = NULL;
 }
 
@@ -8265,7 +8261,7 @@ static void context_init (void) {
   VARR_CREATE (node_t, gotos, 0);
   symbol_init ();
   in_params_p = FALSE;
-  curr_anon_member = NULL;
+  curr_unnamed_anon_struct_union_member = NULL;
   HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq);
   VARR_CREATE (decl_t, decls_for_allocation, 1024);
 }
@@ -9123,7 +9119,7 @@ static mir_size_t get_object_path_offset (void) {
               || init_object.container_type->mode == TM_UNION);
       assert (init_object.u.curr_member->code == N_MEMBER);
       if (!anon_struct_union_type_member_p (init_object.u.curr_member))
-        /* Members inside anonymous struct/union already have adjusted offset */
+        /* Members inside anon struct/union already have adjusted offset */
         offset += ((decl_t) init_object.u.curr_member->attr)->offset;
     }
   }
