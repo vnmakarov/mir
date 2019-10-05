@@ -3223,6 +3223,7 @@ static void tpname_finish (void) { HTAB_DESTROY (tpname_t, tpname_tab); }
   } while (0)
 
 typedef node_t (*nonterm_func_t) (int);
+typedef node_t (*nonterm_arg_func_t) (int, node_t);
 
 #define D(f) static node_t f (int no_err_p)
 #define DA(f) static node_t f (int no_err_p, node_t arg)
@@ -3243,20 +3244,24 @@ static int match (int c, pos_t *pos, node_code_t *node_code, node_t *node) {
 #define MC(c, pos, code) match (c, &(pos), &(code), NULL)
 #define MN(c, node) match (c, NULL, NULL, &(node))
 
-static node_t try
-  (nonterm_func_t f) {
-    node_t r;
-    size_t mark;
+static node_t try_f (nonterm_func_t f) {
+  size_t mark = record_start ();
+  node_t r = (f) (TRUE);
 
-    mark = record_start ();
-    r = (f) (TRUE);
-    record_stop (mark, r == &err_node);
-    return r;
-  }
+  record_stop (mark, r == &err_node);
+  return r;
+}
 
-#define TRY(f) \
-  try          \
-  (f)
+static node_t try_arg_f (nonterm_arg_func_t f, node_t arg) {
+  size_t mark = record_start ();
+  node_t r = (f) (TRUE, arg);
+
+  record_stop (mark, r == &err_node);
+  return r;
+}
+
+#define TRY(f) try_f (f)
+#define TRY_A(f, arg) try_arg_f (f, arg)
 
 /* Expressions: */
 D (type_name);
@@ -3468,7 +3473,7 @@ D (expr) { return right_op (no_err_p, ',', -1, assign_expr, expr); }
 /* Declarations; */
 DA (declaration_specs);
 D (sc_spec);
-D (type_spec);
+DA (type_spec);
 D (struct_declaration_list);
 D (struct_declaration);
 D (spec_qual_list);
@@ -3566,8 +3571,8 @@ D (attr_spec) {
 }
 
 DA (declaration_specs) {
-  node_t list, r;
-  int first_p, type_spec_p = FALSE;
+  node_t list, r, prev_type_spec = NULL;
+  int first_p;
   pos_t pos = curr_token->pos, spec_pos;
 
   list = new_node (N_LIST);
@@ -3579,10 +3584,10 @@ DA (declaration_specs) {
     } else if ((r = TRY (type_qual)) != &err_node) {
     } else if ((r = TRY (func_spec)) != &err_node) {
     } else if (first_p) {
-      P (type_spec);
-      type_spec_p = TRUE;
-    } else if ((r = TRY (type_spec)) != &err_node) {
-      type_spec_p = TRUE;
+      PA (type_spec, prev_type_spec);
+      prev_type_spec = r;
+    } else if ((r = TRY_A (type_spec, prev_type_spec)) != &err_node) {
+      prev_type_spec = r;
     } else if ((r = TRY (attr_spec)) != &err_node) {
       if (pedantic_p)
         error (spec_pos, "GCC attributes are not implemented");
@@ -3593,7 +3598,7 @@ DA (declaration_specs) {
       break;
     op_append (list, r);
   }
-  if (!type_spec_p && arg != NULL) {
+  if (prev_type_spec == NULL && arg != NULL) {
     if (pedantic_p) warning (pos, "type defaults to int");
     r = new_pos_node (N_INT, pos);
     op_append (list, r);
@@ -3624,7 +3629,7 @@ D (sc_spec) {
   return r;
 }
 
-D (type_spec) {
+DA (type_spec) {
   node_t op1, op2, op3, op4, r;
   int struct_p, id_p = FALSE;
   pos_t pos;
@@ -3706,8 +3711,10 @@ D (type_spec) {
       op2 = new_node (N_IGNORE);
     }
     r = new_pos_node2 (N_ENUM, pos, op1, op2);
-  } else {
+  } else if (arg == NULL) {
     P (typedef_name);
+  } else {
+    r = &err_node;
   }
   return r;
 }
@@ -3770,7 +3777,7 @@ D (struct_declaration) {
 }
 
 D (spec_qual_list) {
-  node_t list, op, r;
+  node_t list, op, r, arg = NULL;
   int first_p;
 
   list = new_node (N_LIST);
@@ -3778,7 +3785,8 @@ D (spec_qual_list) {
     if (C (T_CONST) || C (T_RESTRICT) || C (T_VOLATILE) || C (T_ATOMIC)) {
       P (type_qual);
       op = r;
-    } else if ((op = TRY (type_spec)) != &err_node) {
+    } else if ((op = TRY_A (type_spec, arg)) != &err_node) {
+      arg = op;
     } else if (first_p) {
       return &err_node;
     } else {
