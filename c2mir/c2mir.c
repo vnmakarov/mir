@@ -6253,7 +6253,7 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
   init_object_t init_object;
   mir_llong index;
 
-  if (!update_init_object_path (mark, value->code == N_LIST)) {
+  if (!update_init_object_path (mark, value->code == N_LIST || value->code == N_COMPOUND_LITERAL)) {
     error (pos, "excess elements in %s initializer", detail);
     return FALSE;
   }
@@ -6352,17 +6352,78 @@ static void setup_const_addr_p (node_t r) {
   e->u.i_val = offset;
 }
 
+static VARR (node_t) * containing_anon_members;
+
+static void process_init_field_designator (node_t designator_member, struct type *container_type) {
+  decl_t decl;
+  init_object_t init_object;
+  node_t curr_member;
+
+  assert (designator_member->code == N_MEMBER);
+  /* We can have *partial* path of containing anon members: pop them */
+  while (VARR_LENGTH (init_object_t, init_object_path) != 0) {
+    init_object = VARR_LAST (init_object_t, init_object_path);
+    if ((decl = init_object.u.curr_member->attr) == NULL
+        || !decl->decl_spec.type->unnamed_anon_struct_union_member_type_p) {
+      container_type = init_object.container_type;
+      break;
+    }
+    VARR_POP (init_object_t, init_object_path);
+  }
+  /* Now add *full* path to designator_member of containing anon members */
+  assert (VARR_LENGTH (node_t, containing_anon_members) == 0);
+  decl = designator_member->attr;
+  for (curr_member = decl->containing_unnamed_anon_struct_union_member; curr_member != NULL;
+       curr_member = decl->containing_unnamed_anon_struct_union_member) {
+    decl = curr_member->attr;
+    VARR_PUSH (node_t, containing_anon_members, curr_member);
+  }
+  while (VARR_LENGTH (node_t, containing_anon_members) != 0) {
+    init_object.u.curr_member = VARR_POP (node_t, containing_anon_members);
+    init_object.container_type = container_type;
+    VARR_PUSH (init_object_t, init_object_path, init_object);
+    container_type = (decl = init_object.u.curr_member->attr)->decl_spec.type;
+  }
+  init_object.u.curr_member = get_adjacent_member (designator_member, FALSE);
+  init_object.container_type = container_type;
+  VARR_PUSH (init_object_t, init_object_path, init_object);
+}
+
+static node_t get_compound_literal (node_t n, int *addr_p) {
+  for (int addr = 0; n != NULL; n = NL_HEAD (n->ops)) {
+    switch (n->code) {
+    case N_ADDR: addr++; break;
+    case N_DEREF: addr--; break;
+    case N_CAST: break;  // ???
+    case N_COMPOUND_LITERAL:
+      if (addr < 0) return NULL;
+      *addr_p = addr > 0;
+      return n;
+      break;
+    default: return NULL;
+    }
+    if (addr != -1 && addr != 0 && addr != 1) return NULL;
+  }
+  return NULL;
+}
 static void check_initializer (decl_t member_decl, struct type **type_ptr, node_t initializer,
                                int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
-  node_t des_list, curr_des, init, str, value, size_node, temp;
+  node_t literal, des_list, curr_des, init, str, value, size_node, temp;
   mir_llong max_index, size_val;
   size_t mark, len;
   symbol_t sym;
   struct expr *sexpr;
   init_object_t init_object;
+  int addr_p;
 
+  literal = get_compound_literal (initializer, &addr_p);
+  if (literal != NULL && !addr_p) {
+    cexpr = initializer->attr;
+    check_assignment_types (type, NULL, cexpr, initializer);
+    initializer = NL_EL (literal->ops, 1);
+  }
 check_one_value:
   if (initializer->code != N_LIST
       && !(initializer->code == N_STR && type->mode == TM_ARR
@@ -6371,7 +6432,7 @@ check_one_value:
       check_assignment_types (type, NULL, cexpr, initializer);
     } else {
       setup_const_addr_p (initializer);
-      if ((cexpr = initializer->attr)->const_addr_p)
+      if ((cexpr = initializer->attr)->const_addr_p || (literal != NULL && addr_p))
         check_assignment_types (type, NULL, cexpr, initializer);
       else
         error (initializer->pos,
@@ -6435,16 +6496,11 @@ check_one_value:
     assert (init->code == N_INIT);
     des_list = NL_HEAD (init->ops);
     value = NL_NEXT (des_list);
-    if (value->code == N_LIST && type->mode != TM_ARR && type->mode != TM_STRUCT
-        && type->mode != TM_UNION) {
-      error (init->pos, "braces around scalar initializer");
+    if ((value->code == N_LIST || value->code == N_COMPOUND_LITERAL) && type->mode != TM_ARR
+        && type->mode != TM_STRUCT && type->mode != TM_UNION) {
+      error (init->pos, value->code == N_LIST ? "braces around scalar initializer"
+                                              : "compound literal for scalar initializer");
       break;
-    }
-    if (value->code != N_LIST && const_only_p
-        && !((value->code == N_STR || ((struct expr *) value->attr)->const_p))) {
-      error (init->pos,
-             "initializer of non-auto or thread local object should be a constant expression");
-      continue;
     }
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
       if (!update_path_and_do (check_initializer, mark, value, const_only_p, &max_index, init->pos,
@@ -6454,7 +6510,6 @@ check_one_value:
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
         VARR_TRUNC (init_object_t, init_object_path, mark + 1);
         init_object = VARR_POP (init_object_t, init_object_path);
-        assert (type == init_object.container_type);
         if (curr_des->code == N_FIELD_ID) {
           node_t id = NL_HEAD (curr_des->ops);
 
@@ -6463,9 +6518,7 @@ check_one_value:
           } else if (!symbol_find (S_REGULAR, id, type->u.tag_type, &sym)) {
             error (curr_des->pos, "unknown field %s in initializer", id->u.s.s);
           } else {
-            assert (sym.def_node->code == N_MEMBER);
-            init_object.u.curr_member = get_adjacent_member (sym.def_node, FALSE);
-            VARR_PUSH (init_object_t, init_object_path, init_object);
+            process_init_field_designator (sym.def_node, init_object.container_type);
             if (!update_path_and_do (check_initializer, mark, value, const_only_p, NULL, init->pos,
                                      "struct/union"))
               break;
@@ -7611,8 +7664,9 @@ static void check (node_t r, node_t context) {
     break;
   }
   case N_COMPOUND_LITERAL: {
-    node_t list;
+    node_t list, n;
     decl_t decl;
+    int n_spec_index, addr_p;
 
     op1 = NL_HEAD (r->ops);
     list = NL_NEXT (op1);
@@ -7628,8 +7682,19 @@ static void check (node_t r, node_t context) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
-    check_initializer (NULL, &t1, list, decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
-                       FALSE);
+    for (n_spec_index = VARR_LENGTH (node_t, context_stack) - 1;
+         n_spec_index >= 0 && (n = VARR_GET (node_t, context_stack, n_spec_index)) != NULL
+         && n->code != N_SPEC_DECL;
+         n_spec_index--)
+      ;
+    if (n_spec_index < VARR_LENGTH (node_t, context_stack) - 1
+        && (n_spec_index < 0
+            || !get_compound_literal (VARR_GET (node_t, context_stack, n_spec_index + 1), &addr_p)
+            || addr_p))
+      check_initializer (NULL, &t1, list,
+                         curr_scope == top_scope || decl->decl_spec.static_p
+                           || decl->decl_spec.thread_local_p,
+                         FALSE);
     decl->decl_spec.type = t1;
     e = create_expr (r);
     e->lvalue_node = r;
@@ -9147,22 +9212,25 @@ static void collect_init_els (decl_t member_decl, struct type **type_ptr, node_t
                               int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
-  node_t des_list, curr_des, str, init, value, size_node;
+  node_t literal, des_list, curr_des, str, init, value, size_node;
   mir_llong size_val;
   size_t mark;
   symbol_t sym;
   struct expr *sexpr;
   init_el_t init_el;
-  int found_p, ok_p;
+  int addr_p, found_p, ok_p;
   init_object_t init_object;
 
+  literal = get_compound_literal (initializer, &addr_p);
+  if (literal != NULL && !addr_p) initializer = NL_EL (literal->ops, 1);
 check_one_value:
   if (initializer->code != N_LIST
       && !(initializer->code == N_STR && type->mode == TM_ARR
            && char_type_p (type->u.arr_type->el_type))) {
     cexpr = initializer->attr;
     /* static or thread local object initialization should be const expr or addr: */
-    assert (initializer->code == N_STR || !const_only_p || cexpr->const_p || cexpr->const_addr_p);
+    assert (initializer->code == N_STR || !const_only_p || cexpr->const_p || cexpr->const_addr_p
+            || (literal != NULL && addr_p));
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset ();
     init_el.member_decl = member_decl;
@@ -9211,11 +9279,8 @@ check_one_value:
     assert (init->code == N_INIT);
     des_list = NL_HEAD (init->ops);
     value = NL_NEXT (des_list);
-    assert (value->code != N_LIST || type->mode == TM_ARR || type->mode == TM_STRUCT
-            || type->mode == TM_UNION);
-    /* we cannot have initialization of static or thread local object by non-const expr: */
-    assert (value->code == N_LIST || !const_only_p || value->code == N_STR
-            || ((struct expr *) value->attr)->const_p);
+    assert ((value->code != N_LIST && value->code != N_COMPOUND_LITERAL) || type->mode == TM_ARR
+            || type->mode == TM_STRUCT || type->mode == TM_UNION);
     if ((curr_des = NL_HEAD (des_list->ops)) == NULL) {
       ok_p = update_path_and_do (collect_init_els, mark, value, const_only_p, NULL, init->pos, "");
       assert (ok_p);
@@ -9223,7 +9288,6 @@ check_one_value:
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
         VARR_TRUNC (init_object_t, init_object_path, mark + 1);
         init_object = VARR_POP (init_object_t, init_object_path);
-        assert (type == init_object.container_type);
         if (curr_des->code == N_FIELD_ID) {
           node_t id = NL_HEAD (curr_des->ops);
 
@@ -9231,9 +9295,7 @@ check_one_value:
           assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
           found_p = symbol_find (S_REGULAR, id, type->u.tag_type, &sym);
           assert (found_p); /* field should present */
-          assert (sym.def_node->code == N_MEMBER);
-          init_object.u.curr_member = get_adjacent_member (sym.def_node, FALSE);
-          VARR_PUSH (init_object_t, init_object_path, init_object);
+          process_init_field_designator (sym.def_node, init_object.container_type);
           ok_p
             = update_path_and_do (collect_init_els, mark, value, const_only_p, NULL, init->pos, "");
           assert (ok_p);
@@ -9470,7 +9532,8 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         val = gen (init_el.init, NULL, NULL, TRUE);
         assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
                 || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
-                || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR);
+                || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR
+                || val.mir_op.mode == MIR_OP_REF);
       }
       if (rel_offset < init_el.offset) { /* fill the gap: */
         data = MIR_new_bss (ctx, global_name, init_el.offset - rel_offset);
@@ -9480,6 +9543,9 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       t = get_mir_type (init_el.el_type);
       if (e->const_addr_p) {
         data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item, e->u.i_val);
+        data_size = _MIR_type_size (ctx, t);
+      } else if (val.mir_op.mode == MIR_OP_REF) {
+        data = MIR_new_ref_data (ctx, global_name, val.mir_op.u.ref, 0);
         data_size = _MIR_type_size (ctx, t);
       } else if (val.mir_op.mode != MIR_OP_STR) {
         union {
@@ -10046,8 +10112,9 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     init_start = VARR_LENGTH (init_el_t, init_els);
     collect_init_els (NULL, &decl->decl_spec.type, NL_EL (r->ops, 1),
-                      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
-                        || decl->decl_spec.static_p || decl->decl_spec.thread_local_p,
+                      decl->scope == top_scope || decl->decl_spec.linkage == N_STATIC
+                        || decl->decl_spec.linkage == N_EXTERN || decl->decl_spec.static_p
+                        || decl->decl_spec.thread_local_p,
                       TRUE);
     if (decl->scope == top_scope)
       qsort (VARR_ADDR (init_el_t, init_els) + init_start,
@@ -10062,6 +10129,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     gen_initializer (init_start, var, global_name, decl->decl_spec.type->raw_size,
                      decl->scope != top_scope && !decl->decl_spec.static_p);
     VARR_TRUNC (init_el_t, init_els, init_start);
+    if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->item;
     res = var;
     break;
   }
@@ -11073,6 +11141,7 @@ static void compile_init (int argc, char *argv[], int (*getc_func) (void),
   context_init ();
   init_options (argc, argv, other_option_func, data);
   VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
+  VARR_CREATE (node_t, containing_anon_members, 8);
   VARR_CREATE (init_object_t, init_object_path, 8);
 }
 
@@ -11140,6 +11209,7 @@ static void compile_finish (void) {
   finish_options ();
   VARR_DESTROY (node_t, call_nodes);
   VARR_DESTROY (node_t, context_stack);
+  VARR_DESTROY (node_t, containing_anon_members);
   VARR_DESTROY (init_object_t, init_object_path);
 }
 
