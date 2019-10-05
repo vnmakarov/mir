@@ -6963,6 +6963,8 @@ static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
 }
 #undef REP_SEP
 
+static VARR (node_t) * context_stack;
+
 static void check (node_t r, node_t context) {
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
@@ -6970,6 +6972,7 @@ static void check (node_t r, node_t context) {
   int expr_attr_p, stmt_p;
   mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
 
+  VARR_PUSH (node_t, context_stack, context);
   classify_node (r, &expr_attr_p, &stmt_p);
   switch (r->code) {
   case N_IGNORE:
@@ -8248,6 +8251,7 @@ static void check (node_t r, node_t context) {
   } else if (stmt_p) {
     curr_call_arg_area_offset = saved_call_arg_area_offset;
   }
+  VARR_POP (node_t, context_stack);
 }
 
 static void do_context (node_t r) {
@@ -11065,6 +11069,7 @@ static void compile_init (int argc, char *argv[], int (*getc_func) (void),
   c_ungetc = ungetc_func;
   parse_init ();
   curr_scope = NULL;
+  VARR_CREATE (node_t, context_stack, 64);
   context_init ();
   init_options (argc, argv, other_option_func, data);
   VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
@@ -11134,6 +11139,7 @@ static void compile_finish (void) {
   context_finish ();
   finish_options ();
   VARR_DESTROY (node_t, call_nodes);
+  VARR_DESTROY (node_t, context_stack);
   VARR_DESTROY (init_object_t, init_object_path);
 }
 
