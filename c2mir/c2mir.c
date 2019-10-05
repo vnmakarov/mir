@@ -6216,7 +6216,8 @@ static int update_init_object_path (size_t mark, int list_p) {
           for (init_object.u.curr_member = NL_HEAD (declaration_list->ops);
                init_object.u.curr_member != NULL
                && (init_object.u.curr_member->code != N_MEMBER
-                   || NL_EL (init_object.u.curr_member->ops, 1)->code == N_IGNORE);
+                   || (NL_EL (init_object.u.curr_member->ops, 1)->code == N_IGNORE
+                       && !anon_struct_union_type_member_p (init_object.u.curr_member)));
                init_object.u.curr_member = NL_NEXT (init_object.u.curr_member))
             ;
         } else if (init_object.container_type->mode == TM_UNION) { /* no next union member: */
