@@ -36,7 +36,7 @@ runtest () {
 	fi
 }
 
-for dir in gcc # 8cc andrewchambers_c avltree gcc helloworld lacc-tests lcc nano netlib picoc set1
+for dir in andrewchambers_c gcc # $8cc avltree helloworld *lacc-tests *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
 	echo ++++++++++++++Running tests in $dir+++++++++++++
 	if test -f c-tests/$dir/main.c;then
