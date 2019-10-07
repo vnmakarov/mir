@@ -17,7 +17,7 @@ runtest () {
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
 	echo -n $t:
-	timeout 10s $execution_program $t $add_main 2>$errf >$outf
+	timeout 30s $execution_program $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! cmp $outf $expect_out;then
