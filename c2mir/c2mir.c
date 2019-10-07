@@ -229,16 +229,25 @@ static void str_init (void) {
   empty_str = uniq_cstr ("");
 }
 
-static str_t str_add (const char *s, size_t len, size_t key, size_t flags, int key_p) {
-  char *heap_s;
+static int str_exists_p (const char *s, size_t len, str_t *tab_str) {
   str_t el, str;
 
   str.s = s;
   str.len = len;
-  if (HTAB_DO (str_t, str_tab, str, HTAB_FIND, el)) return el;
+  if (!HTAB_DO (str_t, str_tab, str, HTAB_FIND, el)) return FALSE;
+  *tab_str = el;
+  return TRUE;
+}
+
+static str_t str_add (const char *s, size_t len, size_t key, size_t flags, int key_p) {
+  char *heap_s;
+  str_t el, str;
+
+  if (str_exists_p (s, len, &el)) return el;
   heap_s = reg_malloc (len);
   memcpy (heap_s, s, len);
   str.s = heap_s;
+  str.len = len;
   str.key = key;
   str.flags = flags;
   HTAB_DO (str_t, str_tab, str, HTAB_INSERT, el);
@@ -246,7 +255,7 @@ static str_t str_add (const char *s, size_t len, size_t key, size_t flags, int k
   return str;
 }
 
-static const char *find_str_by_key (size_t key) {
+static const char *str_find_by_key (size_t key) {
   str_t el, str;
 
   str.key = key;
@@ -303,7 +312,7 @@ stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_FOR(N_LIST:(label)*,(N_LIST: declaration+ | expr)?, expr?, expr?, stmt)
     | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
     | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
-compound_stmt: N_BLOCK(N_LIST:(N_LIST:(label)*, declaration | stmt)*)
+compound_stmt: N_BLOCK(N_LIST:(label)*, N_LIST:(declaration | stmt)*)
 declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
 st_assert: N_ST_ASSERT(const_expr, N_STR)
 declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
@@ -646,7 +655,7 @@ static const char *get_token_name (int token_code) {
   case T_UNOP: return "unary op";
   case T_DOTS: return "...";
   default:
-    if ((s = find_str_by_key (token_code)) != NULL) return s;
+    if ((s = str_find_by_key (token_code)) != NULL) return s;
     if (isprint (token_code))
       sprintf (buf, "%c", token_code);
     else
@@ -7020,6 +7029,28 @@ static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
 }
 #undef REP_SEP
 
+/* Create "static const char __func__[] = "<func name>" at the
+   beginning of func_block if it is necessary.  */
+static void add__func__def (node_t func_block, str_t func_name) {
+  static const char fdecl_name[] = "__func__";
+  pos_t pos = func_block->pos;
+  node_t list, declarator, decl, decl_specs;
+  str_t str;
+
+  if (!str_exists_p (fdecl_name, strlen (fdecl_name) + 1, &str)) return;
+  decl_specs = new_pos_node (N_LIST, pos);
+  NL_APPEND (decl_specs->ops, new_pos_node (N_STATIC, pos));
+  NL_APPEND (decl_specs->ops, new_pos_node (N_CONST, pos));
+  NL_APPEND (decl_specs->ops, new_pos_node (N_CHAR, pos));
+  list = new_pos_node (N_LIST, pos);
+  NL_APPEND (list->ops, new_pos_node3 (N_ARR, pos, new_pos_node (N_IGNORE, pos),
+                                       new_pos_node (N_LIST, pos), new_pos_node (N_IGNORE, pos)));
+  declarator = new_pos_node2 (N_DECL, pos, new_str_node (N_ID, str, pos), list);
+  decl = new_pos_node3 (N_SPEC_DECL, pos, decl_specs, declarator,
+                        new_str_node (N_STR, func_name, pos));
+  NL_PREPEND (NL_EL (func_block->ops, 1)->ops, decl);
+}
+
 static VARR (node_t) * context_stack;
 
 static void check (node_t r, node_t context) {
@@ -8014,6 +8045,7 @@ static void check (node_t r, node_t context) {
       assert (param_id->code == N_ID);
       error (param_id->pos, "declaration for parameter %s but no such parameter", param_id->u.s.s);
     }
+    add__func__def (block, NL_HEAD (declarator->ops)->u.s);
     check (block, r);
     /* Process all gotos: */
     for (size_t i = 0; i < VARR_LENGTH (node_t, gotos); i++) {
