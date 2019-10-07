@@ -1,2 +1,2 @@
 # ! /bin/sh
-gcc -O2 -o ttt $* -lm && (./ttt;code=$?) && rm -f ./ttt && exit $code
+gcc -w -O2 -o ttt $* -lm && (./ttt;exit $?);code=$?; rm -f ./ttt; exit $code
