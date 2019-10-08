@@ -7470,6 +7470,16 @@ static void check (node_t r, node_t context) {
     break;
   case N_IND:
     process_bin_ops (r, &op1, &op2, &e1, &e2, &t1, &t2, r);
+    if (t1->mode != TM_PTR && t1->mode != TM_ARR && (t2->mode == TM_PTR || t2->mode == TM_ARR)) {
+      struct type *temp;
+      node_t op;
+
+      SWAP (t1, t2, temp);
+      SWAP (e1, e2, e);
+      SWAP (op1, op2, op);
+      NL_REMOVE (r->ops, op1);
+      NL_APPEND (r->ops, op1);
+    }
     e = create_expr (r);
     e->lvalue_node = r;
     e->type->mode = TM_BASIC;
