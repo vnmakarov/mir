@@ -1,2 +1,2 @@
 # ! /bin/sh
-clang -O2 -o ttt $* -lm && (./ttt;exit $?);code=$?;rm -f ./ttt; exit $code
+clang --trigraphs -O2 -o ttt $* -lm && (./ttt;exit $?);code=$?;rm -f ./ttt; exit $code
