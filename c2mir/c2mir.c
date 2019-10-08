@@ -1412,15 +1412,17 @@ static token_t token_stringify (token_t t, VARR (token_t) * ts) {
   for (const char *s = t->repr; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
   VARR_PUSH (char, temp_string, '"');
   for (i = 0; i < VARR_LENGTH (token_t, ts); i++)
-    if (VARR_GET (token_t, ts, i)->code == ' ') {
+    if (VARR_GET (token_t, ts, i)->code == ' ' || VARR_GET (token_t, ts, i)->code == '\n') {
       VARR_PUSH (char, temp_string, ' ');
     } else {
       for (const char *s = VARR_GET (token_t, ts, i)->repr; *s != 0; s++) {
         int c = VARR_LENGTH (token_t, ts) == i + 1 ? '\0' : VARR_GET (token_t, ts, i + 1)->repr[0];
 
-        /* It is an implementation defined behaviour analogous GCC/Clang: */
+        /* It is an implementation defined behaviour analogous GCC/Clang (see set_string_val): */
         if (*s == '\"'
-            || (*s == '\\' && c != 'a' && c != 'b' && c != 'f' && c != 'n' && c != 'r' && c != 't'))
+            || (*s == '\\' && c != '\\' && c != 'a' && c != 'b' && c != 'f' && c != 'n' && c != 'r'
+                && c != 'v' && c != 't' && c != '?' && c != 'e' && !('0' <= c && c <= '7')
+                && c != 'x' && c != 'X'))
           VARR_PUSH (char, temp_string, '\\');
         VARR_PUSH (char, temp_string, *s);
       }
