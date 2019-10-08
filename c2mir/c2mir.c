@@ -2117,11 +2117,18 @@ static void find_args (macro_call_t mc) { /* we have just read a parenthesis */
 #endif
   if (t->code != ')') error (t->pos, "unfinished call of macro %s", m->id->repr);
   VARR_PUSH (token_arr_t, args, arg);
-  if (params_len == 0 && VARR_LENGTH (token_arr_t, args) == 1
-      && VARR_LENGTH (token_t, VARR_GET (token_arr_t, args, 0)) == 0) {
-    temp_arr = VARR_POP (token_arr_t, args);
-    VARR_DESTROY (token_t, temp_arr);
-  } else if (VARR_LENGTH (token_arr_t, args) > params_len) {
+  if (params_len == 0 && VARR_LENGTH (token_arr_t, args) == 1) {
+    token_arr_t arr = VARR_GET (token_arr_t, args, 0);
+
+    if (VARR_LENGTH (token_t, arr) == 0
+        || (VARR_LENGTH (token_t, arr) == 1 && VARR_GET (token_t, arr, 0)->code == ' ')) {
+      temp_arr = VARR_POP (token_arr_t, args);
+      VARR_DESTROY (token_t, temp_arr);
+      mc->args = args;
+      return;
+    }
+  }
+  if (VARR_LENGTH (token_arr_t, args) > params_len) {
     t = VARR_GET (token_t, VARR_GET (token_arr_t, args, params_len), 0);
     while (VARR_LENGTH (token_arr_t, args) > params_len) {
       temp_arr = VARR_POP (token_arr_t, args);
