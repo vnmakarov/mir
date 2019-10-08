@@ -6363,14 +6363,19 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     }
     *offset = 0;
     return TRUE;
-  case N_ADDR:
-    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
-    (*deref)--;
-    return TRUE;
   case N_DEREF:
-    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
-    (*deref)++;
+  case N_ADDR: {
+    node_t op = NL_HEAD (r->ops);
+    struct expr *e = op->attr;
+
+    if (!check_const_addr_p (op, base, offset, deref)) return FALSE;
+    if (op->code != N_ID
+        || (e->def_node->code != N_FUNC_DEF
+            && (e->def_node->code != N_SPEC_DECL
+                || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC)))
+      r->code == N_DEREF ? (*deref)++ : (*deref)--;
     return TRUE;
+  }
   case N_FIELD:
   case N_DEREF_FIELD:
     if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
