@@ -3556,9 +3556,14 @@ D (st_assert);
 D (declaration) {
   int typedef_p;
   node_t op, list, decl, spec, r;
+  pos_t pos;
 
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
+  } else if (MP (';', pos)) {
+    r = new_node (N_LIST);
+    if (curr_scope == top_scope)
+      (pedantic_p ? error : warning) (pos, "extra ; outside of a function");
   } else {
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
