@@ -2207,18 +2207,23 @@ static VARR (token_t) * do_concat (VARR (token_t) * tokens) {
         j++;
       if (VARR_GET (token_t, tokens, k)->code == ' ' || VARR_GET (token_t, tokens, k)->code == '\n')
         k--;
-      if (VARR_GET (token_t, tokens, j)->code == T_PLM) {
-        if (k != i - 1 && j + 1 < len
-            && (VARR_GET (token_t, tokens, j + 1)->code == ' '
-                || VARR_GET (token_t, tokens, j + 1)->code == '\n'))
+      if (VARR_GET (token_t, tokens, j)->code == T_PLM
+          || VARR_GET (token_t, tokens, k)->code == T_PLM) {
+        if (VARR_GET (token_t, tokens, j)->code != T_PLM)
+          j--;
+        else if (j + 1 < len
+                 && (VARR_GET (token_t, tokens, j + 1)->code == ' '
+                     || VARR_GET (token_t, tokens, j + 1)->code == '\n'))
           j++;
-        del_tokens (tokens, i, j - i + 1);
-      } else if (VARR_GET (token_t, tokens, k)->code == T_PLM) {
-        if (j != i + 1 && k != 0
-            && (VARR_GET (token_t, tokens, k - 1)->code == ' '
-                || VARR_GET (token_t, tokens, k - 1)->code == '\n'))
+        if (VARR_GET (token_t, tokens, k)->code != T_PLM)
+          k++;
+        else if (k != 0
+                 && (VARR_GET (token_t, tokens, k - 1)->code == ' '
+                     || VARR_GET (token_t, tokens, k - 1)->code == '\n'))
           k--;
-        del_tokens (tokens, k, i - k + 1);
+        del_tokens (tokens, k, j - k);
+        t = new_token (t->pos, "", ' ', N_IGNORE);
+        VARR_SET (token_t, tokens, k, t);
       } else {
         t = token_concat (VARR_GET (token_t, tokens, k), VARR_GET (token_t, tokens, j));
         del_tokens (tokens, k + 1, j - k);
