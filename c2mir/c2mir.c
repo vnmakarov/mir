@@ -2401,6 +2401,39 @@ static void reverse_move_tokens (VARR (token_t) * to, VARR (token_t) * from) {
   while (VARR_LENGTH (token_t, from) != 0) VARR_PUSH (token_t, to, VARR_POP (token_t, from));
 }
 
+static void transform_to_header (VARR (token_t) * buffer) {
+  int i, j, k;
+  token_t t;
+  pos_t pos;
+
+  for (i = 0; i < VARR_LENGTH (token_t, buffer) && VARR_GET (token_t, buffer, i)->code == ' '; i++)
+    ;
+  if (i >= VARR_LENGTH (token_t, buffer)) return;
+  if ((t = VARR_GET (token_t, buffer, i))->node_code != N_LT) return;
+  pos = t->pos;
+  for (j = i + 1;
+       j < VARR_LENGTH (token_t, buffer) && VARR_GET (token_t, buffer, j)->node_code != N_GT; j++)
+    ;
+  if (j >= VARR_LENGTH (token_t, buffer)) return;
+  VARR_TRUNC (char, symbol_text, 0);
+  VARR_TRUNC (char, temp_string, 0);
+  VARR_PUSH (char, symbol_text, '<');
+  for (k = i + 1; k < j; k++) {
+    t = VARR_GET (token_t, buffer, k);
+    for (const char *s = t->repr; *s != 0; s++) {
+      VARR_PUSH (char, symbol_text, *s);
+      VARR_PUSH (char, temp_string, *s);
+    }
+  }
+  VARR_PUSH (char, symbol_text, '>');
+  VARR_PUSH (char, symbol_text, '\0');
+  VARR_PUSH (char, temp_string, '\0');
+  del_tokens (buffer, i, j - i);
+  t = new_node_token (pos, VARR_ADDR (char, symbol_text), T_HEADER,
+                      new_str_node (N_STR, uniq_cstr (VARR_ADDR (char, temp_string)), pos));
+  VARR_SET (token_t, buffer, i, t);
+}
+
 static void processing (int ignore_directive_p);
 
 static struct val eval_expr (VARR (token_t) * buffer, token_t if_token);
@@ -2518,7 +2551,8 @@ static void process_directive (void) {
       no_out_p = TRUE;
       processing (TRUE);
       no_out_p = FALSE;
-      reverse_move_tokens (temp_buffer, output_buffer);
+      move_tokens (temp_buffer, output_buffer);
+      transform_to_header (temp_buffer);
       i = 0;
       if (VARR_LENGTH (token_t, temp_buffer) != 0
           && VARR_GET (token_t, temp_buffer, 0)->code == ' ')
