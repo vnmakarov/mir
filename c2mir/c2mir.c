@@ -6326,14 +6326,17 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
   init_object = VARR_LAST (init_object_t, init_object_path);
   if (init_object.container_type->mode == TM_ARR) {
     action (NULL, &init_object.container_type->u.arr_type->el_type, value, const_only_p, FALSE);
-    if (max_index != NULL
-        && *max_index < (index = VARR_GET (init_object_t, init_object_path, mark).u.curr_index))
-      *max_index = index;
   } else if (init_object.container_type->mode == TM_STRUCT
              || init_object.container_type->mode == TM_UNION) {
     action ((decl_t) init_object.u.curr_member->attr,
             &((decl_t) init_object.u.curr_member->attr)->decl_spec.type, value, const_only_p,
             FALSE);
+  }
+  if (max_index != NULL) {
+    init_object = VARR_GET (init_object_t, init_object_path, mark);
+    if (init_object.container_type->mode == TM_ARR
+        && *max_index < (index = init_object.u.curr_index))
+      *max_index = index;
   }
   return TRUE;
 }
