@@ -10101,7 +10101,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     int add_p = FALSE;
 
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    if (op1.mir_op.mode == MIR_OP_REF) { /* array or func */
+    if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF) { /* array or func */
       res = op1;
       res.decl = NULL;
       break;
