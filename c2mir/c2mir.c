@@ -4906,7 +4906,7 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
 static struct type composite_type (struct type *tp1, struct type *tp2) {
   struct type t = *tp1;
 
-  assert (compatible_types_p (tp1, tp2, FALSE));
+  assert (compatible_types_p (tp1, tp2, TRUE));
   if (tp1->mode == TM_ARR) {
     struct arr_type *arr_type;
 
