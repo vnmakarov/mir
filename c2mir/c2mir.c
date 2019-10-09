@@ -6349,6 +6349,7 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
 static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *deref) {
   struct expr *e = r->attr;
   struct type *type;
+  node_t op1, op2, temp;
   decl_t decl;
   struct decl_spec *decl_spec;
   mir_size_t size;
@@ -6409,14 +6410,18 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     return TRUE;
   case N_ADD:
   case N_SUB:
-    if (NL_EL (r->ops, 1) == NULL) return FALSE;
-    if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
-    if (*deref != 0 && ((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_type == NULL)
-      return FALSE;
-    if (!(e = NL_EL (r->ops, 1)->attr)->const_p) return FALSE;
+    if ((op2 = NL_EL (r->ops, 1)) == NULL) return FALSE;
+    op1 = NL_HEAD (r->ops);
+    if (r->code == N_ADD && (e = op1->attr)->const_p) SWAP (op1, op2, temp);
+    if (!check_const_addr_p (op1, base, offset, deref)) return FALSE;
+    if (*deref != 0 && ((struct expr *) op1->attr)->type->arr_type == NULL) return FALSE;
+    if (!(e = op2->attr)->const_p) return FALSE;
     type = ((struct expr *) r->attr)->type;
-    assert (type->mode == TM_PTR);
-    size = type->u.ptr_type->mode == TM_FUNC ? 1 : type_size (type->u.ptr_type);
+    assert (type->mode == TM_BASIC || type->mode == TM_PTR);
+    size = (type->mode == TM_BASIC || type->u.ptr_type->mode == TM_FUNC
+              ? 1
+              : type_size (type->u.ptr_type->arr_type != NULL ? type->u.ptr_type->arr_type
+                                                              : type->u.ptr_type));
     if (r->code == N_ADD)
       *offset += e->u.i_val * size;
     else
