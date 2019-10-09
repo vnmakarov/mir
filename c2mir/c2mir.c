@@ -6393,7 +6393,7 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
     if (*deref != (r->code == N_FIELD ? 1 : 0)) return FALSE;
     *deref = 1;
-    e = NL_HEAD (r->ops)->attr;
+    e = r->attr;
     decl = e->lvalue_node->attr;
     *offset += decl->offset;
     return TRUE;
