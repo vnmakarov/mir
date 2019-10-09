@@ -6350,6 +6350,7 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
   struct expr *e = r->attr;
   struct type *type;
   decl_t decl;
+  struct decl_spec *decl_spec;
   mir_size_t size;
 
   if (e->const_p && integer_type_p (e->type)) {
@@ -6421,7 +6422,10 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     else
       *offset -= e->u.i_val * size;
     return TRUE;
-  case N_CAST: return check_const_addr_p (NL_EL (r->ops, 1), base, offset, deref);
+  case N_CAST:
+    decl_spec = NL_HEAD (r->ops)->attr;
+    if (type_size (decl_spec->type) != sizeof (mir_size_t)) return FALSE;
+    return check_const_addr_p (NL_EL (r->ops, 1), base, offset, deref);
   default: return FALSE;
   }
 }
