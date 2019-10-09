@@ -6361,6 +6361,11 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     return TRUE;
   }
   switch (r->code) {
+  case N_STR:
+    *base = r;
+    *offset = 0;
+    *deref = 0;
+    return curr_scope == top_scope;
   case N_ID:
     if (e->def_node->code == N_FUNC_DEF
         || (e->def_node->code == N_SPEC_DECL
@@ -9607,6 +9612,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
   MIR_reg_t base;
   MIR_type_t t;
   MIR_item_t data;
+  MIR_module_t module;
   struct expr *e;
 
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
@@ -9669,8 +9675,26 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       }
       t = get_mir_type (init_el.el_type);
       if (e->const_addr_p) {
-        data = MIR_new_ref_data (ctx, global_name, ((decl_t) e->def_node->attr)->item, e->u.i_val);
-        data_size = _MIR_type_size (ctx, t);
+        node_t def;
+
+        if ((def = e->def_node) == NULL) { /* constant address */
+          mir_size_t s = e->u.i_val;
+
+          data = MIR_new_data (ctx, global_name, MIR_T_P, 1, &s);
+          data_size = _MIR_type_size (ctx, MIR_T_P);
+        } else {
+          if (def->code != N_STR) {
+            data = ((decl_t) def->attr)->item;
+          } else {
+            module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+            data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module),
+                                        (MIR_str_t){def->u.s.len, def->u.s.s});
+            DLIST_REMOVE (MIR_item_t, module->items, data);
+            DLIST_PREPEND (MIR_item_t, module->items, data);
+          }
+          data = MIR_new_ref_data (ctx, global_name, data, e->u.i_val);
+          data_size = _MIR_type_size (ctx, t);
+        }
       } else if (val.mir_op.mode == MIR_OP_REF) {
         data = MIR_new_ref_data (ctx, global_name, val.mir_op.u.ref, 0);
         data_size = _MIR_type_size (ctx, t);
@@ -9729,8 +9753,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
           if (data_size > str_len) MIR_new_bss (ctx, NULL, data_size - str_len);
         }
       } else {
-        MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-
+        module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
         data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module), val.mir_op.u.str);
         DLIST_REMOVE (MIR_item_t, module->items, data);
         DLIST_PREPEND (MIR_item_t, module->items, data);
