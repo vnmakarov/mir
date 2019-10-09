@@ -3069,9 +3069,7 @@ static void pre_text_out (token_t t) { /* NULL means end of output */
     return;
   }
   pre_last_token = t;
-  if (!t->processed_p) {
-    shouldbe_pre_pos = t->pos;
-  }
+  if (!t->processed_p) shouldbe_pre_pos = t->pos;
   if (t->code == '\n') return;
   if (actual_pre_pos.fname != shouldbe_pre_pos.fname
       || actual_pre_pos.lno != shouldbe_pre_pos.lno) {
@@ -3088,7 +3086,7 @@ static void pre_text_out (token_t t) { /* NULL means end of output */
       }
       printf ("\n");
     }
-    for (i = 0; i < shouldbe_pre_pos.ln_pos; i++) printf (" ");
+    for (i = 0; i < shouldbe_pre_pos.ln_pos - 1; i++) printf (" ");
     actual_pre_pos = shouldbe_pre_pos;
   }
   printf ("%s", t->code == ' ' ? " " : t->repr);
