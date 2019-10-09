@@ -6347,14 +6347,19 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
 }
 
 static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *deref) {
-  struct expr *e;
+  struct expr *e = r->attr;
   struct type *type;
   decl_t decl;
   mir_size_t size;
 
+  if (e->const_p && integer_type_p (e->type)) {
+    *base = NULL;
+    *offset = (mir_size_t) e->u.u_val;
+    *deref = 0;
+    return TRUE;
+  }
   switch (r->code) {
   case N_ID:
-    e = r->attr;
     if (e->def_node->code == N_FUNC_DEF
         || (e->def_node->code == N_SPEC_DECL
             && ((decl_t) e->def_node->attr)->decl_spec.type->mode == TM_FUNC)) {
