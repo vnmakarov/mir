@@ -6398,11 +6398,12 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     *offset += decl->offset;
     return TRUE;
   case N_IND:
-    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->arr_type == NULL) return FALSE;
+    if (((struct expr *) NL_HEAD (r->ops)->attr)->type->mode != TM_PTR) return FALSE;
     if (!check_const_addr_p (NL_HEAD (r->ops), base, offset, deref)) return FALSE;
     if (!(e = NL_EL (r->ops, 1)->attr)->const_p) return FALSE;
-    size = type_size (((struct expr *) r->attr)->type);
-    (*deref)++;
+    type = ((struct expr *) r->attr)->type;
+    size = type_size (type->arr_type != NULL ? type->arr_type : type);
+    *deref = 1;
     *offset += e->u.i_val * size;
     return TRUE;
   case N_ADD:
