@@ -6365,7 +6365,9 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
             && ((decl_t) e->def_node->attr)->decl_spec.type->mode == TM_FUNC)) {
       *base = e->def_node;
       *deref = 0;
-    } else if (e->lvalue_node == NULL || (decl = e->lvalue_node->attr)->scope != top_scope) {
+    } else if (e->lvalue_node == NULL
+               || ((decl = e->lvalue_node->attr)->scope != top_scope
+                   && decl->decl_spec.linkage != N_IGNORE)) {
       return FALSE;
     } else {
       *base = e->def_node;
