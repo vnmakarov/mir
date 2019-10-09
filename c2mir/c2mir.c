@@ -2196,34 +2196,41 @@ static void del_tokens (VARR (token_t) * tokens, int from, int len) {
 }
 
 static VARR (token_t) * do_concat (VARR (token_t) * tokens) {
-  int i, j, k, len = VARR_LENGTH (token_t, tokens);
+  int i, j, k, empty_j_p, empty_k_p, len = VARR_LENGTH (token_t, tokens);
   token_t t;
 
   for (i = len - 1; i >= 0; i--)
-    if (VARR_GET (token_t, tokens, i)->code == T_RDBLNO) {
+    if ((t = VARR_GET (token_t, tokens, i))->code == T_RDBLNO) {
       j = i + 1;
       k = i - 1;
+      assert (k >= 0 && j < len);
       if (VARR_GET (token_t, tokens, j)->code == ' ' || VARR_GET (token_t, tokens, j)->code == '\n')
         j++;
       if (VARR_GET (token_t, tokens, k)->code == ' ' || VARR_GET (token_t, tokens, k)->code == '\n')
         k--;
-      if (VARR_GET (token_t, tokens, j)->code == T_PLM
-          || VARR_GET (token_t, tokens, k)->code == T_PLM) {
-        if (VARR_GET (token_t, tokens, j)->code != T_PLM)
+      assert (k >= 0 && j < len);
+      empty_j_p = VARR_GET (token_t, tokens, j)->code == T_PLM;
+      empty_k_p = VARR_GET (token_t, tokens, k)->code == T_PLM;
+      if (empty_j_p || empty_k_p) {
+        if (!empty_j_p)
           j--;
         else if (j + 1 < len
                  && (VARR_GET (token_t, tokens, j + 1)->code == ' '
                      || VARR_GET (token_t, tokens, j + 1)->code == '\n'))
           j++;
-        if (VARR_GET (token_t, tokens, k)->code != T_PLM)
+        if (!empty_k_p)
           k++;
         else if (k != 0
                  && (VARR_GET (token_t, tokens, k - 1)->code == ' '
                      || VARR_GET (token_t, tokens, k - 1)->code == '\n'))
           k--;
-        del_tokens (tokens, k, j - k);
-        t = new_token (t->pos, "", ' ', N_IGNORE);
-        VARR_SET (token_t, tokens, k, t);
+        if (!empty_j_p || !empty_k_p) {
+          del_tokens (tokens, k, j - k + 1);
+        } else {
+          del_tokens (tokens, k, j - k);
+          t = new_token (t->pos, "", ' ', N_IGNORE);
+          VARR_SET (token_t, tokens, k, t);
+        }
       } else {
         t = token_concat (VARR_GET (token_t, tokens, k), VARR_GET (token_t, tokens, j));
         del_tokens (tokens, k + 1, j - k);
