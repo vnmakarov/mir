@@ -4033,6 +4033,14 @@ D (type_qual_list) {
   return list;
 }
 
+D (param_type_abstract_declarator) {
+  node_t r = &err_node;
+
+  P (abstract_declarator);
+  if (C (',') || C (')')) return r;
+  return &err_node;
+}
+
 D (param_type_list) {
   node_t list, op1, op2, r = &err_node;
   int comma_p;
@@ -4042,13 +4050,16 @@ D (param_type_list) {
   for (;;) { /* parameter-list, parameter-declaration */
     PA (declaration_specs, NULL);
     op1 = r;
-    if ((op2 = TRY (declarator)) != &err_node) {
-      r = new_pos_node3 (N_SPEC_DECL, op2->pos, op1, op2, new_node (N_IGNORE));
-    } else if (!C (',') && !C (')')) {
-      P (abstract_declarator);
-      r = new_node2 (N_TYPE, op1, r);
-    } else {
+    if (C (',') || C (')')) {
       r = new_node2 (N_TYPE, op1, new_node2 (N_DECL, new_node (N_IGNORE), new_node (N_LIST)));
+    } else if ((op2 = TRY (param_type_abstract_declarator)) != &err_node) {
+      /* Try param_type_abstract_declarator first for possible func
+         type case ("<res_type> (<typedef_name>)") which can conflict with declarator ("<res_type>
+         (<new decl identifier>)")  */
+      r = new_node2 (N_TYPE, op1, op2);
+    } else {
+      P (declarator);
+      r = new_pos_node3 (N_SPEC_DECL, op2->pos, op1, r, new_node (N_IGNORE));
     }
     op_append (list, r);
     comma_p = FALSE;
