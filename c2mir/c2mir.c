@@ -10389,7 +10389,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       name = (decl->scope != top_scope && decl->decl_spec.static_p
                 ? get_func_static_var_name (id->u.s.s, decl)
                 : id->u.s.s);
-      if (decl->used_p && decl->scope != top_scope && decl->decl_spec.static_p) {
+      if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
         decl->item = MIR_new_forward (ctx, name);
         DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
         DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, decl->item);
