@@ -1701,7 +1701,7 @@ static int no_out_p; /* don't output lexs -- put them into buffer */
 static int skip_if_part_p;
 static const char *varg = "__VA_ARGS__";
 static token_t if_id; /* last processed token #if or #elif: used for error messages */
-static char date_str[100], time_str[100];
+static char date_str[50], time_str[50], date_str_repr[50], time_str_repr[50];
 
 static VARR (token_t) * output_buffer;
 
@@ -1718,12 +1718,16 @@ static void pre_init (void) {
   t = time (NULL);
   tm = localtime (&t);
   if (tm == NULL) {
-    strcpy (date_str, "\"Unknown date\"");
-    strcpy (time_str, "\"Unknown time\"");
+    strcpy (date_str_repr, "\"Unknown date\"");
+    strcpy (time_str_repr, "\"Unknown time\"");
   } else {
-    strftime (date_str, sizeof (date_str), "\"%b %d %Y\"", tm);
-    strftime (time_str, sizeof (time_str), "\"%H:%M:%S\"", tm);
+    strftime (date_str_repr, sizeof (date_str), "\"%b %d %Y\"", tm);
+    strftime (time_str_repr, sizeof (time_str), "\"%H:%M:%S\"", tm);
   }
+  strcpy (date_str, date_str_repr + 1);
+  date_str[strlen (date_str) - 1] = '\0';
+  strcpy (time_str, time_str_repr + 1);
+  time_str[strlen (time_str) - 1] = '\0';
   VARR_CREATE (token_t, temp_tokens, 128);
   VARR_CREATE (token_t, output_buffer, 2048);
   init_macros ();
@@ -3013,12 +3017,12 @@ static void processing (int ignore_directive_p) {
         out_token (
           new_node_token (t->pos, uniq_cstr (str).s, T_NUMBER, new_i_node (t->pos.lno, t->pos)));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
-        t = new_node_token (t->pos, date_str, T_STR,
+        t = new_node_token (t->pos, date_str_repr, T_STR,
                             new_str_node (N_STR, uniq_cstr (date_str), t->pos));
         out_token (t);
       } else if (strcmp (t->repr, "__TIME__") == 0) {
-        t = new_node_token (t->pos, time_str, T_STR,
-                            new_str_node (N_STR, uniq_cstr (date_str), t->pos));
+        t = new_node_token (t->pos, time_str_repr, T_STR,
+                            new_str_node (N_STR, uniq_cstr (time_str), t->pos));
         out_token (t);
       } else {
         assert (FALSE);
