@@ -771,7 +771,7 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_insn_code_t code, code_t o
   case IC_IMM_CALL: break;
   default:
     op_mode = _MIR_insn_code_op_mode (ctx, code, 0, &out_p);
-    if (!out_p) op_mode = MIR_OP_UNDEF;
+    if (op_mode == MIR_OP_BOUND || !out_p) op_mode = MIR_OP_UNDEF;
     break;
   }
   switch (op_mode) {
