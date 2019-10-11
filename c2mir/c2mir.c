@@ -10521,6 +10521,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t stmt = NL_NEXT (decls);
     struct node_scope *ns = stmt->attr;
     decl_t param_decl, decl = r->attr;
+    struct type *decl_type = decl->decl_spec.type;
     node_t param, param_declarator, param_id;
     struct type *param_type;
     MIR_insn_t insn;
@@ -10530,13 +10531,16 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
 
     assert (declarator != NULL && declarator->code == N_DECL
             && NL_HEAD (declarator->ops)->code == N_ID);
-    assert (decl->decl_spec.type->mode == TM_FUNC);
+    assert (decl_type->mode == TM_FUNC);
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
-    collect_args_and_func_types (decl->decl_spec.type->u.func_type, &res_type);
+    collect_args_and_func_types (decl_type->u.func_type, &res_type);
     curr_func
-      = MIR_new_func_arr (ctx, NL_HEAD (declarator->ops)->u.s.s, res_type == MIR_T_UNDEF ? 0 : 1,
-                          &res_type, VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars));
+      = ((decl_type->u.func_type->dots_p
+            ? MIR_new_vararg_func_arr
+            : MIR_new_func_arr) (ctx, NL_HEAD (declarator->ops)->u.s.s,
+                                 res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
+                                 VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
     decl->item = curr_func;
     if (ns->stack_var_p /* we can have empty struct only with size 0 and still need a frame: */
         || ns->size > 0) {
