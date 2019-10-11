@@ -11147,7 +11147,9 @@ static void print_node (FILE *f, node_t n, int indent, int attr_p) {
     if (n->code == N_STRUCT || n->code == N_UNION)
       fprintf (f, "\n");
     else if (attr_p && n->attr != NULL)
-      fprintf (f, ", size = %llu\n", (unsigned long long) ((struct node_scope *) n->attr)->size);
+      fprintf (f, ", size = %llu, offset = %llu\n",
+               (unsigned long long) ((struct node_scope *) n->attr)->size,
+               (unsigned long long) ((struct node_scope *) n->attr)->offset);
     print_ops (f, n, indent, attr_p);
     break;
   case N_SWITCH:
