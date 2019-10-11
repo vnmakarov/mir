@@ -767,7 +767,8 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_insn_code_t code, code_t o
   case IC_STU32:
   case IC_STI64:
   case IC_STF:
-  case IC_STD: break;
+  case IC_STD:;
+  case IC_STLD: break;
   case IC_IMM_CALL: break;
   default:
     op_mode = _MIR_insn_code_op_mode (ctx, code, 0, &out_p);
