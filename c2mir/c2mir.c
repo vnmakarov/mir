@@ -6177,7 +6177,7 @@ static void check_assignment_types (struct type *left, struct type *right, struc
   if (right == NULL) right = expr->type;
   if (arithmetic_type_p (left)) {
     if (!arithmetic_type_p (right)
-        && !(left->mode == TM_BASIC && left->u.basic_type != TP_BOOL && right->mode != TM_PTR)) {
+        && !(left->mode == TM_BASIC && left->u.basic_type == TP_BOOL && right->mode == TM_PTR)) {
       if (integer_type_p (left) && right->mode == TM_PTR) {
         msg
           = (code == N_CALL ? "using pointer without cast for integer type parameter"
