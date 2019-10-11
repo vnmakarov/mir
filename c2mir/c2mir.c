@@ -7159,7 +7159,6 @@ static void check (node_t r, node_t context) {
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2, *assign_expr_type;
   int expr_attr_p, stmt_p;
-  mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
 
   VARR_PUSH (node_t, context_stack, context);
   classify_node (r, &expr_attr_p, &stmt_p);
@@ -8455,13 +8454,13 @@ static void check (node_t r, node_t context) {
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
     if (e->const_p) convert_value (e, e->type);
+  } else if (stmt_p) {
+    curr_call_arg_area_offset = 0;
   } else if (expr_attr_p) { /* it is an error -- define any expr and type: */
     assert (!stmt_p);
     e = create_expr (r);
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
-  } else if (stmt_p) {
-    curr_call_arg_area_offset = saved_call_arg_area_offset;
   }
   VARR_POP (node_t, context_stack);
 }
@@ -9840,7 +9839,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   unsigned long long ull;
   int saved_reg_free_mark = reg_free_mark;
   int expr_attr_p, stmt_p;
-  mir_size_t saved_call_arg_area_offset = curr_call_arg_area_offset;
 
   classify_node (r, &expr_attr_p, &stmt_p);
   assert ((true_label == NULL && false_label == NULL)
@@ -10755,7 +10753,7 @@ finish:
   } else if (val_p) {
     res = force_val (res, ((struct expr *) r->attr)->type->arr_type != NULL);
   }
-  if (stmt_p) curr_call_arg_area_offset = saved_call_arg_area_offset;
+  if (stmt_p) curr_call_arg_area_offset = 0;
   return res;
 }
 
