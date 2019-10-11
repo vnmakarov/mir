@@ -4871,7 +4871,7 @@ static struct type arithmetic_conversion (const struct type *type1, const struct
 }
 
 struct expr {
-  unsigned int const_p : 1, const_addr_p : 1;
+  unsigned int const_p : 1, const_addr_p : 1, builtin_call_p : 1;
   node_t lvalue_node;
   node_t def_node;    /* defined for id or const address (ref) */
   struct type *type;  /* type of the result */
@@ -6830,7 +6830,7 @@ static struct expr *create_expr (node_t r) {
   e->type2 = NULL;
   e->type->pos_node = r;
   e->lvalue_node = NULL;
-  e->const_p = e->const_addr_p = FALSE;
+  e->const_p = e->const_addr_p = e->builtin_call_p = FALSE;
   return e;
 }
 
@@ -7153,6 +7153,9 @@ static void add__func__def (node_t func_block, str_t func_name) {
 }
 
 static VARR (node_t) * context_stack;
+
+#define BUILTIN_VA_START "__builtin_va_start"
+#define BUILTIN_VA_ARG "__builtin_va_arg"
 
 static void check (node_t r, node_t context) {
   node_t op1, op2;
@@ -7854,36 +7857,68 @@ static void check (node_t r, node_t context) {
     node_t saved_scope = curr_scope;
     struct decl_spec *decl_spec;
     mir_size_t saved_call_arg_area_offset_before_args;
+    struct type res_type;
+    int va_arg_p = FALSE, va_start_p = FALSE;
 
-    VARR_PUSH (node_t, call_nodes, r);
     op1 = NL_HEAD (r->ops);
     if (op1->code == N_ID && find_def (S_REGULAR, op1, curr_scope, NULL) == NULL) {
-      /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
-      spec_list = new_node (N_LIST);
-      op_append (spec_list, new_node (N_INT));
-      list = new_node (N_LIST);
-      op_append (list, new_node1 (N_FUNC, new_node (N_LIST)));
-      decl = new_pos_node3 (N_SPEC_DECL, op1->pos, new_node1 (N_SHARE, spec_list),
-                            new_node2 (N_DECL, copy_node (op1), list), new_node (N_IGNORE));
-      curr_scope = top_scope;
-      check (decl, NULL);
-      curr_scope = saved_scope;
-      assert (top_scope->code == N_MODULE);
-      list = NL_HEAD (top_scope->ops);
-      assert (list->code == N_LIST);
-      op_prepend (list, decl);
+      va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
+      va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
+      if (!va_arg_p && !va_start_p) {
+        /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
+        spec_list = new_node (N_LIST);
+        op_append (spec_list, new_node (N_INT));
+        list = new_node (N_LIST);
+        op_append (list, new_node1 (N_FUNC, new_node (N_LIST)));
+        decl = new_pos_node3 (N_SPEC_DECL, op1->pos, new_node1 (N_SHARE, spec_list),
+                              new_node2 (N_DECL, copy_node (op1), list), new_node (N_IGNORE));
+        curr_scope = top_scope;
+        check (decl, NULL);
+        curr_scope = saved_scope;
+        assert (top_scope->code == N_MODULE);
+        list = NL_HEAD (top_scope->ops);
+        assert (list->code == N_LIST);
+        op_prepend (list, decl);
+      }
     }
-    check (op1, r);
-    e1 = op1->attr;
-    t1 = e1->type;
-    if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
-      error (r->pos, "called object is not a function or function pointer");
-      break;
+    if (!va_arg_p && !va_start_p) VARR_PUSH (node_t, call_nodes, r);
+    arg_list = NL_NEXT (op1);
+    if (va_arg_p || va_start_p) {
+      for (arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) check (arg, r);
+      init_type (&res_type);
+      res_type.mode = TM_BASIC;
+      res_type.u.basic_type = va_arg_p ? TP_INT : TP_VOID;
+      ret_type = &res_type;
+      if (va_start_p && NL_LENGTH (arg_list->ops) != 1) {
+        error (op1->pos, "wrong number of arguments in %s call", BUILTIN_VA_START);
+      } else if (va_arg_p && NL_LENGTH (arg_list->ops) != 2) {
+        error (op1->pos, "wrong number of arguments in %s call", BUILTIN_VA_ARG);
+      } else {
+        /* first argument type ??? */
+        if (va_arg_p) {
+          arg = NL_EL (arg_list->ops, 1);
+          e2 = arg->attr;
+          t2 = e2->type;
+          if (t2->mode != TM_PTR)
+            error (arg->pos, "wrong type of 2nd argument of %s call", BUILTIN_VA_ARG);
+          else
+            ret_type = t2->u.ptr_type;
+        }
+      }
+    } else {
+      check (op1, r);
+      e1 = op1->attr;
+      t1 = e1->type;
+      if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
+        error (r->pos, "called object is not a function or function pointer");
+        break;
+      }
+      func_type = t1->u.func_type;
+      ret_type = func_type->ret_type;
     }
-    func_type = t1->u.func_type;
-    ret_type = func_type->ret_type;
     e = create_expr (r);
     *e->type = *ret_type;
+    e->builtin_call_p = va_arg_p || va_start_p;
     if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)
         && ret_type->incomplete_p) {
       error (r->pos, "function return type is incomplete");
@@ -7892,15 +7927,15 @@ static void check (node_t r, node_t context) {
       set_type_layout (ret_type);
       update_call_arg_area_offset (ret_type, TRUE);
     }
+    if (va_arg_p || va_start_p) break;
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->ops);
-    arg_list = NL_NEXT (op1);
     if (void_param_p (start_param)) { /* f(void) */
       if ((arg = NL_HEAD (arg_list->ops)) != NULL) error (arg->pos, "too many arguments");
       break;
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
-    for (node_t arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) {
+    for (arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) {
       check (arg, r);
       e2 = arg->attr;
       if (start_param == NULL || start_param->code == N_ID) continue; /* no params or ident list */
@@ -7915,9 +7950,7 @@ static void check (node_t r, node_t context) {
       param = NL_NEXT (param);
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
-    if (param != NULL) {
-      error (r->pos, "too few arguments");
-    }
+    if (param != NULL) error (r->pos, "too few arguments");
     break;
   }
   case N_GENERIC: {
@@ -10297,22 +10330,26 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   }
   case N_CALL: {
-    node_t func, param_list, param, args = NL_EL (r->ops, 1);
+    node_t func = NL_HEAD (r->ops), param_list, param, args = NL_EL (r->ops, 1);
     struct decl_spec *decl_spec;
     size_t ops_start;
-    struct type *func_type, *type = ((struct expr *) r->attr)->type;
+    struct expr *call_expr = r->attr;
+    struct type *func_type, *type = call_expr->type;
     MIR_item_t proto_item;
     mir_size_t saved_call_arg_area_offset_before_args;
+    int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
+    int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
 
     ops_start = VARR_LENGTH (MIR_op_t, ops);
-    func = NL_HEAD (r->ops);
-    func_type = ((struct expr *) func->attr)->type;
-    assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
-    func_type = func_type->u.ptr_type;
-    proto_item = func_type->u.func_type->proto_item;  // ???
-    VARR_PUSH (MIR_op_t, ops, MIR_new_ref_op (ctx, proto_item));
-    op1 = gen (func, NULL, NULL, TRUE);
-    VARR_PUSH (MIR_op_t, ops, op1.mir_op);
+    if (!va_arg_p && !va_start_p) {
+      func_type = ((struct expr *) func->attr)->type;
+      assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
+      func_type = func_type->u.ptr_type;
+      proto_item = func_type->u.func_type->proto_item;  // ???
+      VARR_PUSH (MIR_op_t, ops, MIR_new_ref_op (ctx, proto_item));
+      op1 = gen (func, NULL, NULL, TRUE);
+      VARR_PUSH (MIR_op_t, ops, op1.mir_op);
+    }
     if (scalar_type_p (type)) {
       t = get_mir_type (type);
       t = promote_mir_int_type (t);
@@ -10328,36 +10365,58 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       update_call_arg_area_offset (type, FALSE);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
+      t = MIR_T_I64;
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
-    param_list = func_type->u.func_type->param_list;
-    param = NL_HEAD (param_list->ops);
-    for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
-      op2 = gen (arg, NULL, NULL, TRUE);
-      e = arg->attr;
-      assert (param != NULL || NL_HEAD (param_list->ops) == NULL || func_type->u.func_type->dots_p);
-      if (e->type->mode == TM_STRUCT || e->type->mode == TM_UNION) {
-        assert (op2.mir_op.mode == MIR_OP_MEM);
-        op2 = mem_to_address (op2);
-      } else if (param != NULL) {
-        assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
-        decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
-        t = get_mir_type (decl_spec->type);
-        t = promote_mir_int_type (t);
-        op2 = promote (op2, t, FALSE);
+    if (va_arg_p) {
+      op1 = get_new_temp (MIR_T_I64);
+      op2 = gen (NL_HEAD (args->ops), NULL, NULL, TRUE);
+      MIR_append_insn (ctx, curr_func,
+                       MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
+                                     MIR_new_mem_op (ctx, t, 0, 0, 0, 1)));
+      op2 = get_new_temp (t);
+      MIR_append_insn (ctx, curr_func,
+                       MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
+                                     MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
+      if (res.mir_op.mode == MIR_OP_REG) {
+        res = op2;
       } else {
-        t = get_mir_type (e->type);
-        t = promote_mir_int_type (t);
-        op2 = promote (op2, t == MIR_T_F ? MIR_T_D : t, FALSE);
+        assert (res.mir_op.mode == MIR_OP_MEM);
+        res.mir_op.u.mem.base = op2.mir_op.u.reg;
       }
-      VARR_PUSH (MIR_op_t, ops, op2.mir_op);
-      if (param != NULL) param = NL_NEXT (param);
+    } else if (va_start_p) {
+      op1 = gen (NL_HEAD (args->ops), NULL, NULL, TRUE);
+      MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_VA_START, op1.mir_op));
+    } else {
+      param_list = func_type->u.func_type->param_list;
+      param = NL_HEAD (param_list->ops);
+      for (node_t arg = NL_HEAD (args->ops); arg != NULL; arg = NL_NEXT (arg)) {
+        op2 = gen (arg, NULL, NULL, TRUE);
+        e = arg->attr;
+        assert (param != NULL || NL_HEAD (param_list->ops) == NULL
+                || func_type->u.func_type->dots_p);
+        if (e->type->mode == TM_STRUCT || e->type->mode == TM_UNION) {
+          assert (op2.mir_op.mode == MIR_OP_MEM);
+          op2 = mem_to_address (op2);
+        } else if (param != NULL) {
+          assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
+          decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
+          t = get_mir_type (decl_spec->type);
+          t = promote_mir_int_type (t);
+          op2 = promote (op2, t, FALSE);
+        } else {
+          t = get_mir_type (e->type);
+          t = promote_mir_int_type (t);
+          op2 = promote (op2, t == MIR_T_F ? MIR_T_D : t, FALSE);
+        }
+        VARR_PUSH (MIR_op_t, ops, op2.mir_op);
+        if (param != NULL) param = NL_NEXT (param);
+      }
+      MIR_append_insn (ctx, curr_func,
+                       MIR_new_insn_arr (ctx, MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
+                                         VARR_ADDR (MIR_op_t, ops) + ops_start));
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
-    // VARR_SET (MIR_op_t, ops, 1, MIR_new_int_op (ctx, nargs));
-    MIR_append_insn (ctx, curr_func,
-                     MIR_new_insn_arr (ctx, MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
-                                       VARR_ADDR (MIR_op_t, ops) + ops_start));
     VARR_TRUNC (MIR_op_t, ops, ops_start);
     break;
   }
