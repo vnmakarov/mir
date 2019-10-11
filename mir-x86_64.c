@@ -37,7 +37,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
     va->gp_offset += 8;
   } else {
     a = va->overflow_arg_area;
-    va->overflow_arg_area++;
+    va->overflow_arg_area += type == MIR_T_LD ? 2 : 1;
   }
   return a;
 }
