@@ -504,7 +504,7 @@ static void machinize (MIR_context_t ctx) {
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 8, va_reg, 0, 1), treg_op);
       /* reg_save_area: treg = start sp - reg_save_area_size; mem64[va_reg + 16] = treg */
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, BP_HARD_REG),
-                               MIR_new_int_op (ctx, start_sp_from_bp_offset - reg_save_area_size));
+                               MIR_new_int_op (ctx, -reg_save_area_size));
       gen_add_insn_before (ctx, insn, new_insn);
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
       gen_delete_insn (ctx, insn);
