@@ -6516,6 +6516,7 @@ static node_t get_compound_literal (node_t n, int *addr_p) {
     case N_ADDR: addr++; break;
     case N_DEREF: addr--; break;
     case N_CAST: break;  // ???
+    case N_STR:
     case N_COMPOUND_LITERAL:
       if (addr < 0) return NULL;
       *addr_p = addr > 0;
@@ -6540,7 +6541,7 @@ static void check_initializer (decl_t member_decl, struct type **type_ptr, node_
   int addr_p;
 
   literal = get_compound_literal (initializer, &addr_p);
-  if (literal != NULL && !addr_p) {
+  if (literal != NULL && !addr_p && initializer->code != N_STR) {
     cexpr = initializer->attr;
     check_assignment_types (type, NULL, cexpr, initializer);
     initializer = NL_EL (literal->ops, 1);
@@ -7591,6 +7592,9 @@ static void check (node_t r, node_t context) {
         e->u.u_val = e2->u.u_val + decl->offset;
       }
     } else if (e1->lvalue_node->code == N_COMPOUND_LITERAL) {
+      t2 = t1;
+    } else {
+      assert (e1->lvalue_node->code == N_STR);
       t2 = t1;
     }
     e->type->mode = TM_PTR;
@@ -9406,7 +9410,8 @@ static void collect_init_els (decl_t member_decl, struct type **type_ptr, node_t
   init_object_t init_object;
 
   literal = get_compound_literal (initializer, &addr_p);
-  if (literal != NULL && !addr_p) initializer = NL_EL (literal->ops, 1);
+  if (literal != NULL && !addr_p && initializer->code != N_STR)
+    initializer = NL_EL (literal->ops, 1);
 check_one_value:
   if (initializer->code != N_LIST
       && !(initializer->code == N_STR && type->mode == TM_ARR
@@ -10195,7 +10200,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     int add_p = FALSE;
 
     op1 = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF) { /* array or func */
+    if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF
+        || op1.mir_op.mode == MIR_OP_STR) { /* array or func */
       res = op1;
       res.decl = NULL;
       break;
