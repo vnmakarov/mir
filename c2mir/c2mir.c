@@ -11061,6 +11061,7 @@ static void print_decl_spec (FILE *f, struct decl_spec *decl_spec) {
 static void print_decl (FILE *f, decl_t decl) {
   if (decl == NULL) return;
   fprintf (f, ": ");
+  if (decl->scope != NULL) fprintf (f, "scope node = %lu, ", decl->scope->uid);
   print_decl_spec (f, &decl->decl_spec);
   if (decl->addr_p) fprintf (f, ", addressable");
   if (decl->used_p) fprintf (f, ", used");
