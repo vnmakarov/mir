@@ -7986,7 +7986,7 @@ static void check (node_t r, node_t context) {
     }
     if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
       set_type_layout (ret_type);
-      update_call_arg_area_offset (ret_type, TRUE);
+      if (!va_arg_p && !va_start_p) update_call_arg_area_offset (ret_type, TRUE);
     }
     if (va_arg_p || va_start_p) break;
     param_list = func_type->param_list;
@@ -10410,7 +10410,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = get_new_temp (MIR_T_I64);
       emit3 (MIR_ADD, res.mir_op, MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
              MIR_new_int_op (ctx, curr_call_arg_area_offset + ns->size - ns->call_arg_area_size));
-      update_call_arg_area_offset (type, FALSE);
+      if (!va_arg_p && !va_start_p) update_call_arg_area_offset (type, FALSE);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
       t = MIR_T_I64;
