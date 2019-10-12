@@ -8527,11 +8527,20 @@ static void check (node_t r, node_t context) {
   default: abort ();
   }
   if (e != NULL) {
+    node_t base;
+    mir_llong offset;
+    int deref;
+
     assert (!stmt_p);
     if (context && context->code != N_ALIGNOF && context->code != N_SIZEOF
         && context->code != N_EXPR_SIZEOF)
       e->type = adjust_type (e->type);
     set_type_layout (e->type);
+    if (!e->const_p && check_const_addr_p (r, &base, &offset, &deref) && deref == 0
+        && base == NULL) {
+      e->const_p = TRUE;
+      e->u.i_val = offset;
+    }
     if (e->const_p) convert_value (e, e->type);
   } else if (stmt_p) {
     curr_call_arg_area_offset = 0;
