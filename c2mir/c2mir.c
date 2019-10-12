@@ -6271,7 +6271,7 @@ typedef struct init_object init_object_t;
 DEF_VARR (init_object_t);
 VARR (init_object_t) * init_object_path;
 
-static int update_init_object_path (size_t mark, int list_p) {
+static int update_init_object_path (size_t mark, struct type *value_type, int list_p) {
   init_object_t init_object;
   struct type *el_type;
   node_t size_node;
@@ -6321,8 +6321,11 @@ static int update_init_object_path (size_t mark, int list_p) {
     VARR_SET (init_object_t, init_object_path, VARR_LENGTH (init_object_t, init_object_path) - 1,
               init_object);
     if (list_p || scalar_type_p (el_type)) return TRUE;
-    init_object.container_type = el_type;
     assert (el_type->mode == TM_ARR || el_type->mode == TM_STRUCT || el_type->mode == TM_UNION);
+    if (el_type->mode != TM_ARR && value_type != NULL
+        && el_type->u.tag_type == value_type->u.tag_type)
+      return TRUE;
+    init_object.container_type = el_type;
     if (el_type->mode == TM_ARR) {
       init_object.u.curr_index = -1;
     } else {
@@ -6338,8 +6341,10 @@ static int update_path_and_do (void (*action) (decl_t member_decl, struct type *
                                pos_t pos, const char *detail) {
   init_object_t init_object;
   mir_llong index;
+  struct expr *value_expr = value->attr;
 
-  if (!update_init_object_path (mark, value->code == N_LIST || value->code == N_COMPOUND_LITERAL)) {
+  if (!update_init_object_path (mark, value_expr == NULL ? NULL : value_expr->type,
+                                value->code == N_LIST || value->code == N_COMPOUND_LITERAL)) {
     error (pos, "excess elements in %s initializer", detail);
     return FALSE;
   }
