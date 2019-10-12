@@ -3207,6 +3207,7 @@ static void assign (MIR_context_t ctx) {
         VARR_PUSH (size_t, loc_profit_ages, 0);
       }
       func_stack_slots_num = best_loc - MAX_HARD_REG;
+      best_loc -= slots_num - 1;
     }
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
