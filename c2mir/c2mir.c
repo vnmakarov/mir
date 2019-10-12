@@ -5349,33 +5349,13 @@ static void create_node_scope (node_t node) {
   assert (node != curr_scope);
   ns->func_scope_num = curr_func_scope_num++;
   ns->stack_var_p = FALSE;
-  ns->size = ns->call_arg_area_size = 0;
-  ns->offset = curr_scope == NULL ? 0 : ((struct node_scope *) curr_scope->attr)->offset;
+  ns->offset = ns->size = ns->call_arg_area_size = 0;
   node->attr = ns;
   ns->scope = curr_scope;
   curr_scope = node;
 }
 
-static void propagate_scope_size (node_t from_scope, node_t bound_scope) {
-  struct node_scope *ns = (struct node_scope *) from_scope->attr;
-  mir_size_t size = ns->size;
-  int stack_var_p = ns->stack_var_p;
-
-  for (;;) {
-    from_scope = ns->scope;
-    if (from_scope == NULL || from_scope == bound_scope) break;
-    ns = (struct node_scope *) from_scope->attr;
-    if (stack_var_p) ns->stack_var_p = TRUE;
-    if (ns->size < size) ns->size = size;
-  }
-}
-
-static void finish_scope (void) {
-  node_t from_scope = curr_scope;
-
-  curr_scope = ((struct node_scope *) curr_scope->attr)->scope;
-  propagate_scope_size (from_scope, curr_scope);
-}
+static void finish_scope (void) { curr_scope = ((struct node_scope *) curr_scope->attr)->scope; }
 
 static void set_type_qual (node_t r, struct type_qual *tq, enum type_mode tmode) {
   for (node_t n = NL_HEAD (r->ops); n != NULL; n = NL_NEXT (n)) switch (n->code) {
@@ -6699,7 +6679,7 @@ static void check_decl_align (struct decl_spec *decl_spec) {
 }
 
 DEF_VARR (decl_t);
-static VARR (decl_t) * decls_for_allocation;
+static VARR (decl_t) * func_decls_for_allocation;
 
 static void init_decl (decl_t decl) {
   decl->addr_p = FALSE;
@@ -6753,7 +6733,8 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   if (decl_node->code != N_MEMBER) {
     set_type_layout (decl->decl_spec.type);
     check_decl_align (&decl->decl_spec);
-    if (!decl->decl_spec.typedef_p) VARR_PUSH (decl_t, decls_for_allocation, decl);
+    if (!decl->decl_spec.typedef_p && decl->scope != top_scope && decl->scope->code != N_FUNC)
+      VARR_PUSH (decl_t, func_decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE) return;
   if (decl->decl_spec.type->incomplete_p
@@ -6776,9 +6757,10 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
                      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
                        || decl->decl_spec.thread_local_p || decl->decl_spec.static_p,
                      TRUE);
-  if (decl_node->code != N_MEMBER && !decl->decl_spec.typedef_p)
+  if (decl_node->code != N_MEMBER && !decl->decl_spec.typedef_p && decl->scope != top_scope
+      && decl->scope->code != N_FUNC)
     /* Process after initilizer because we can make type complete by it. */
-    VARR_PUSH (decl_t, decls_for_allocation, decl);
+    VARR_PUSH (decl_t, func_decls_for_allocation, decl);
 }
 
 static struct type *adjust_type (struct type *type) {
@@ -7157,6 +7139,75 @@ static void add__func__def (node_t func_block, str_t func_name) {
   decl = new_pos_node3 (N_SPEC_DECL, pos, decl_specs, declarator,
                         new_str_node (N_STR, func_name, pos));
   NL_PREPEND (NL_EL (func_block->ops, 1)->ops, decl);
+}
+
+/* Sort by decl scope nesting (more nested scope has a bigger UID) and decl size. */
+static int decl_cmp (const void *v1, const void *v2) {
+  const decl_t d1 = *(const decl_t *) v1, d2 = *(const decl_t *) v2;
+  struct type *t1 = d1->decl_spec.type, *t2 = d2->decl_spec.type;
+  mir_size_t s1 = t1->raw_size, s2 = t2->raw_size;
+
+  if (d1->scope->uid < d2->scope->uid) return -1;
+  if (d1->scope->uid > d2->scope->uid) return 1;
+  if (s1 < s2) return -1;
+  if (s1 > s2) return 1;
+  return 0;
+}
+
+static void process_func_decls_for_allocation (void) {
+  size_t i, j;
+  decl_t decl;
+  struct type *type;
+  struct node_scope *ns, *curr_ns;
+  node_t scope;
+  mir_size_t start_offset;
+
+  /* Exclude decls which will be in regs: */
+  for (i = j = 0; i < VARR_LENGTH (decl_t, func_decls_for_allocation); i++) {
+    decl = VARR_GET (decl_t, func_decls_for_allocation, i);
+    type = decl->decl_spec.type;
+    ns = decl->scope->attr;
+    if (scalar_type_p (type) && !decl->addr_p) {
+      decl->reg_p = TRUE;
+      continue;
+    }
+    VARR_SET (decl_t, func_decls_for_allocation, j, decl);
+    j++;
+  }
+  VARR_TRUNC (decl_t, func_decls_for_allocation, j);
+  qsort (VARR_ADDR (decl_t, func_decls_for_allocation), j, sizeof (decl_t), decl_cmp);
+  scope = NULL;
+  for (i = 0; i < VARR_LENGTH (decl_t, func_decls_for_allocation); i++) {
+    decl = VARR_GET (decl_t, func_decls_for_allocation, i);
+    type = decl->decl_spec.type;
+    ns = decl->scope->attr;
+    if (decl->scope != scope) { /* new scope: process upper scopes */
+      for (scope = ns->scope; scope != top_scope; scope = curr_ns->scope) {
+        curr_ns = scope->attr;
+        ns->offset += curr_ns->size;
+        curr_ns->stack_var_p = TRUE;
+      }
+      scope = decl->scope;
+      ns->stack_var_p = TRUE;
+      start_offset = ns->offset;
+    }
+    ns->offset = round_size (ns->offset, var_align (type));
+    decl->offset = ns->offset;
+    ns->offset += var_size (type);
+    ns->size = ns->offset - start_offset;
+  }
+  scope = NULL;
+  for (i = 0; i < VARR_LENGTH (decl_t, func_decls_for_allocation); i++) { /* update scope sizes: */
+    decl = VARR_GET (decl_t, func_decls_for_allocation, i);
+    ns = decl->scope->attr;
+    if (decl->scope == scope) continue;
+    /* new scope: update upper scope sizes */
+    for (scope = ns->scope; scope != top_scope; scope = curr_ns->scope) {
+      curr_ns = scope->attr;
+      if (curr_ns->size < ns->offset) curr_ns->size = ns->offset;
+      if (ns->stack_var_p) curr_ns->stack_var_p = TRUE;
+    }
+  }
 }
 
 static VARR (node_t) * context_stack;
@@ -7857,7 +7908,7 @@ static void check (node_t r, node_t context) {
     e = create_expr (r);
     e->lvalue_node = r;
     *e->type = *t1;
-    VARR_PUSH (decl_t, decls_for_allocation, decl);
+    if (curr_scope != top_scope) VARR_PUSH (decl_t, func_decls_for_allocation, decl);
     break;
   }
   case N_CALL: {
@@ -8133,13 +8184,13 @@ static void check (node_t r, node_t context) {
     symbol_t sym;
     struct node_scope *ns;
 
-    VARR_TRUNC (decl_t, decls_for_allocation, 0);
     curr_func_scope_num = 0;
     create_node_scope (block);
     func_block_scope = curr_scope;
     curr_func_def = r;
     curr_switch = curr_loop = curr_loop_switch = NULL;
     curr_call_arg_area_offset = 0;
+    VARR_TRUNC (decl_t, func_decls_for_allocation, 0);
     create_decl (top_scope, r, decl_spec, NULL, NULL);
     curr_scope = func_block_scope;
     check (declarations, r);
@@ -8215,23 +8266,8 @@ static void check (node_t r, node_t context) {
     VARR_TRUNC (node_t, gotos, 0);
     assert (curr_scope == top_scope); /* set up in the block */
     func_block_scope = top_scope;
-    /* Process decls in the original order: */
-    for (size_t i = 0; i < VARR_LENGTH (decl_t, decls_for_allocation); i++) {
-      decl_t decl = VARR_GET (decl_t, decls_for_allocation, i);
-      struct type *type = decl->decl_spec.type;
-
-      ns = (struct node_scope *) decl->scope->attr;
-      if (scalar_type_p (type) && !decl->addr_p) {
-        decl->reg_p = TRUE;
-        continue;
-      }
-      ns->stack_var_p = TRUE;
-      ns->offset = round_size (ns->offset, var_align (type));
-      decl->offset = ns->offset;
-      ns->offset += var_size (type);
-      if (ns->size < ns->offset) ns->size = ns->offset;
-      propagate_scope_size (decl->scope, top_scope);
-    }
+    process_func_decls_for_allocation ();
+    /* Add call arg area */
     ns = block->attr;
     ns->size = round_size (ns->size, MAX_ALIGNMENT);
     ns->size += ns->call_arg_area_size;
@@ -8522,14 +8558,14 @@ static void context_init (void) {
   in_params_p = FALSE;
   curr_unnamed_anon_struct_union_member = NULL;
   HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq);
-  VARR_CREATE (decl_t, decls_for_allocation, 1024);
+  VARR_CREATE (decl_t, func_decls_for_allocation, 1024);
 }
 
 static void context_finish (void) {
   VARR_DESTROY (node_t, gotos);
   symbol_finish ();
   HTAB_DESTROY (case_t, case_tab);
-  VARR_DESTROY (decl_t, decls_for_allocation);
+  VARR_DESTROY (decl_t, func_decls_for_allocation);
 }
 
 /* ------------------------ Context Checker Finish ---------------------------- */
@@ -10526,7 +10562,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   }
   case N_ST_ASSERT: /* do nothing */ break;
   case N_INIT: break;  // ???
-  case N_FUNC_DEF: {   // ?? vararg
+  case N_FUNC_DEF: {
     node_t decl_specs = NL_HEAD (r->ops);
     node_t declarator = NL_NEXT (decl_specs);
     node_t decls = NL_NEXT (declarator);
