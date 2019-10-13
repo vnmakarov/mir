@@ -90,7 +90,7 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
-int main (int argc, char *argv[]) {
+int main (int argc, char *argv[], char *env[]) {
   const char *llvm_ir_fname = NULL;
   LLVMMemoryBufferRef memory_buffer;
   LLVMModuleRef module;
@@ -100,7 +100,7 @@ int main (int argc, char *argv[]) {
   MIR_val_t val;
   int interpr_p, gen_p;
   int res;
-  uint64_t (*fun_addr) (void);
+  uint64_t (*fun_addr) (int, char *argv[], char *env[]);
   MIR_context_t context;
 
   if (argc != 2 && argc != 3) {
@@ -168,8 +168,9 @@ int main (int argc, char *argv[]) {
   MIR_load_external (context, "llvm.fabs.f64", llvm_fabs_f64);
   if (interpr_p) {
     MIR_link (context, MIR_set_interp_interface, import_resolver);
-    MIR_interp (context, main_func, &val, 0);
-    fprintf (stderr, "%s: %lu\n", llvm_ir_fname, val.i);
+    MIR_interp (context, main_func, &val, 3, (MIR_val_t){.i = 1}, (MIR_val_t){.a = (void *) argv},
+                (MIR_val_t){.a = (void *) env});
+    res = val.i;
   } else if (gen_p) {
     MIR_gen_init (context);
 #if MIR_GEN_DEBUG
@@ -177,11 +178,11 @@ int main (int argc, char *argv[]) {
 #endif
     MIR_link (context, MIR_set_gen_interface, import_resolver);
     fun_addr = MIR_gen (context, main_func);
-    res = fun_addr ();
-    fprintf (stderr, "%s: %d\n", llvm_ir_fname, res);
+    res = fun_addr (argc, argv, env);
     MIR_gen_finish (context);
   }
+  fprintf (stderr, "%s: %d\n", llvm_ir_fname, res);
   MIR_finish (context);
   close_libs ();
-  exit (0);
+  exit (res);
 }
