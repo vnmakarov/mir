@@ -2962,20 +2962,25 @@ DEF_VARR (MIR_str_t);
 DEF_VARR (uint64_t);
 
 struct io_ctx {
+  FILE *io_file;
   VARR (string_t) * output_strings;
   HTAB (string_t) * output_string_tab;
   VARR (MIR_str_t) * bin_strings;
   VARR (uint64_t) * insn_label_string_nums;
 };
 
+#define io_file ctx->io_ctx->io_file
+#define output_strings ctx->io_ctx->output_strings
 #define output_strings ctx->io_ctx->output_strings
 #define output_string_tab ctx->io_ctx->output_string_tab
 #define bin_strings ctx->io_ctx->bin_strings
 #define insn_label_string_nums ctx->io_ctx->insn_label_string_nums
 
-static void put_byte (FILE *f, int ch) {
-  if (f == NULL) return;
-  fputc (ch, f);
+typedef const void (*writer_func_t) (MIR_context_t, uint8_t);
+
+static void put_byte (MIR_context_t ctx, writer_func_t writer, int ch) {
+  if (writer == NULL) return;
+  writer (ctx, ch);
 }
 
 static int uint_length (uint64_t u) {
@@ -2986,10 +2991,10 @@ static int uint_length (uint64_t u) {
   return n;
 }
 
-static void put_uint (FILE *f, uint64_t u, int nb) {
-  if (f == NULL) return;
+static void put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int nb) {
+  if (writer == NULL) return;
   for (int n = 0; n < nb; n++) {
-    put_byte (f, u & 0xff);
+    put_byte (ctx, writer, u & 0xff);
     u >>= CHAR_BIT;
   }
 }
@@ -3004,94 +3009,95 @@ static int int_length (int64_t i) {
   return n;
 }
 
-static void put_int (FILE *f, int64_t u, int nb) {
-  if (f == NULL) return;
+static void put_int (MIR_context_t ctx, writer_func_t writer, int64_t u, int nb) {
+  if (writer == NULL) return;
   for (int n = 0; n < nb; n++) {
-    put_byte (f, u & 0xff);
+    put_byte (ctx, writer, u & 0xff);
     u >>= CHAR_BIT;
   }
 }
 
-static void put_float (FILE *f, float fl) {
+static void put_float (MIR_context_t ctx, writer_func_t writer, float fl) {
   union {
     uint32_t u;
     float f;
   } u;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   u.f = fl;
-  put_uint (f, u.u, sizeof (uint32_t));
+  put_uint (ctx, writer, u.u, sizeof (uint32_t));
 }
 
-static void put_double (FILE *f, double d) {
+static void put_double (MIR_context_t ctx, writer_func_t writer, double d) {
   union {
     uint64_t u;
     double d;
   } u;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   u.d = d;
-  put_uint (f, u.d, sizeof (uint64_t));
+  put_uint (ctx, writer, u.d, sizeof (uint64_t));
 }
 
-static void put_ldouble (FILE *f, long double ld) {
+static void put_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
   union {
     uint64_t u[2];
     long double ld;
   } u;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   u.ld = ld;
-  put_uint (f, u.u[0], sizeof (uint64_t));
-  put_uint (f, u.u[1], sizeof (uint64_t));
+  put_uint (ctx, writer, u.u[0], sizeof (uint64_t));
+  put_uint (ctx, writer, u.u[1], sizeof (uint64_t));
 }
 
 /* Write binary MIR */
 
-static void write_int (FILE *f, int64_t i) {
+static void write_int (MIR_context_t ctx, writer_func_t writer, int64_t i) {
   int nb;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   nb = int_length (i);
-  put_byte (f, TAG_I1 + nb - 1);
-  put_int (f, i, nb);
+  put_byte (ctx, writer, TAG_I1 + nb - 1);
+  put_int (ctx, writer, i, nb);
 }
 
-static void write_uint (FILE *f, uint64_t u) {
+static void write_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u) {
   int nb;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   if ((nb = uint_length (u)) == 0) {
-    put_byte (f, 0x80 | u);
+    put_byte (ctx, writer, 0x80 | u);
     return;
   }
-  put_byte (f, TAG_U1 + nb - 1);
-  put_uint (f, u, nb);
+  put_byte (ctx, writer, TAG_U1 + nb - 1);
+  put_uint (ctx, writer, u, nb);
 }
 
-static void write_float (FILE *f, float fl) {
-  if (f == NULL) return;
-  put_byte (f, TAG_F);
-  put_float (f, fl);
+static void write_float (MIR_context_t ctx, writer_func_t writer, float fl) {
+  if (writer == NULL) return;
+  put_byte (ctx, writer, TAG_F);
+  put_float (ctx, writer, fl);
 }
 
-static void write_double (FILE *f, double d) {
-  if (f == NULL) return;
-  put_byte (f, TAG_D);
-  put_double (f, d);
+static void write_double (MIR_context_t ctx, writer_func_t writer, double d) {
+  if (writer == NULL) return;
+  put_byte (ctx, writer, TAG_D);
+  put_double (ctx, writer, d);
 }
 
-static void write_ldouble (FILE *f, long double ld) {
-  if (f == NULL) return;
-  put_byte (f, TAG_LD);
-  put_ldouble (f, ld);
+static void write_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
+  if (writer == NULL) return;
+  put_byte (ctx, writer, TAG_LD);
+  put_ldouble (ctx, writer, ld);
 }
 
-static void write_str_tag (MIR_context_t ctx, FILE *f, MIR_str_t str, bin_tag_t start_tag) {
+static void write_str_tag (MIR_context_t ctx, writer_func_t writer, MIR_str_t str,
+                           bin_tag_t start_tag) {
   int nb, ok_p;
   string_t string;
 
-  if (f == NULL) {
+  if (writer == NULL) {
     string_store (ctx, &output_strings, &output_string_tab, str);
     return;
   }
@@ -3100,43 +3106,45 @@ static void write_str_tag (MIR_context_t ctx, FILE *f, MIR_str_t str, bin_tag_t 
   nb = uint_length (string.num - 1);
   mir_assert (nb <= 4);
   if (nb == 0) nb = 1;
-  put_byte (f, start_tag + nb - 1);
-  put_uint (f, string.num - 1, nb);
+  put_byte (ctx, writer, start_tag + nb - 1);
+  put_uint (ctx, writer, string.num - 1, nb);
 }
 
-static void write_str (MIR_context_t ctx, FILE *f, MIR_str_t str) {
-  write_str_tag (ctx, f, str, TAG_STR1);
+static void write_str (MIR_context_t ctx, writer_func_t writer, MIR_str_t str) {
+  write_str_tag (ctx, writer, str, TAG_STR1);
 }
-static void write_name (MIR_context_t ctx, FILE *f, const char *name) {
-  write_str_tag (ctx, f, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
+static void write_name (MIR_context_t ctx, writer_func_t writer, const char *name) {
+  write_str_tag (ctx, writer, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
 }
-static void write_reg (MIR_context_t ctx, FILE *f, const char *reg_name) {
-  write_str_tag (ctx, f, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
+static void write_reg (MIR_context_t ctx, writer_func_t writer, const char *reg_name) {
+  write_str_tag (ctx, writer, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
 }
 
-static void write_type (FILE *f, MIR_type_t t) { put_byte (f, TAG_TI8 + (t - MIR_T_I8)); }
+static void write_type (MIR_context_t ctx, writer_func_t writer, MIR_type_t t) {
+  put_byte (ctx, writer, TAG_TI8 + (t - MIR_T_I8));
+}
 
-static void write_lab (FILE *f, MIR_label_t lab) {
+static void write_lab (MIR_context_t ctx, writer_func_t writer, MIR_label_t lab) {
   int nb;
   uint64_t lab_num;
 
-  if (f == NULL) return;
+  if (writer == NULL) return;
   lab_num = lab->ops[0].u.u;
   nb = uint_length (lab_num);
   mir_assert (nb <= 4);
   if (nb == 0) nb = 1;
-  put_byte (f, TAG_LAB1 + nb - 1);
-  put_uint (f, lab_num, nb);
+  put_byte (ctx, writer, TAG_LAB1 + nb - 1);
+  put_uint (ctx, writer, lab_num, nb);
 }
 
-static void write_op (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_op_t op) {
+static void write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, MIR_op_t op) {
   switch (op.mode) {
-  case MIR_OP_REG: write_reg (ctx, f, MIR_reg_name (ctx, op.u.reg, func)); break;
-  case MIR_OP_INT: write_int (f, op.u.i); break;
-  case MIR_OP_UINT: write_uint (f, op.u.u); break;
-  case MIR_OP_FLOAT: write_float (f, op.u.f); break;
-  case MIR_OP_DOUBLE: write_double (f, op.u.d); break;
-  case MIR_OP_LDOUBLE: write_ldouble (f, op.u.ld); break;
+  case MIR_OP_REG: write_reg (ctx, writer, MIR_reg_name (ctx, op.u.reg, func)); break;
+  case MIR_OP_INT: write_int (ctx, writer, op.u.i); break;
+  case MIR_OP_UINT: write_uint (ctx, writer, op.u.u); break;
+  case MIR_OP_FLOAT: write_float (ctx, writer, op.u.f); break;
+  case MIR_OP_DOUBLE: write_double (ctx, writer, op.u.d); break;
+  case MIR_OP_LDOUBLE: write_ldouble (ctx, writer, op.u.ld); break;
   case MIR_OP_MEM: {
     bin_tag_t tag;
 
@@ -3147,47 +3155,48 @@ static void write_op (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_op_t op) 
         tag = op.u.mem.index != 0 ? TAG_MEM_DISP_INDEX : TAG_MEM_DISP;
     } else if (op.u.mem.base != 0) {
       tag = op.u.mem.index != 0 ? TAG_MEM_BASE_INDEX : TAG_MEM_BASE;
-    } else if (op.u.mem.index != 0) {
+    } else {
+      assert (op.u.mem.index != 0);
       tag = TAG_MEM_INDEX;
     }
-    put_byte (f, tag);
-    write_type (f, op.u.mem.type);
-    if (op.u.mem.disp != 0) write_int (f, op.u.mem.disp);
-    if (op.u.mem.base != 0) write_reg (ctx, f, MIR_reg_name (ctx, op.u.mem.base, func));
+    put_byte (ctx, writer, tag);
+    write_type (ctx, writer, op.u.mem.type);
+    if (op.u.mem.disp != 0) write_int (ctx, writer, op.u.mem.disp);
+    if (op.u.mem.base != 0) write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.base, func));
     if (op.u.mem.index != 0) {
-      write_reg (ctx, f, MIR_reg_name (ctx, op.u.mem.index, func));
-      write_uint (f, op.u.mem.scale);
+      write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.index, func));
+      write_uint (ctx, writer, op.u.mem.scale);
     }
     break;
   }
-  case MIR_OP_REF: write_name (ctx, f, MIR_item_name (ctx, op.u.ref)); break;
-  case MIR_OP_STR: write_str (ctx, f, op.u.str); break;
-  case MIR_OP_LABEL: write_lab (f, op.u.label); break;
+  case MIR_OP_REF: write_name (ctx, writer, MIR_item_name (ctx, op.u.ref)); break;
+  case MIR_OP_STR: write_str (ctx, writer, op.u.str); break;
+  case MIR_OP_LABEL: write_lab (ctx, writer, op.u.label); break;
   default: /* ??? HARD_REG, HARD_REG_MEM */ mir_assert (FALSE);
   }
 }
 
-static void write_insn (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_insn_t insn) {
+static void write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, MIR_insn_t insn) {
   size_t i, nops;
   MIR_insn_code_t code = insn->code;
 
   if (code == MIR_LABEL) {
-    write_lab (f, insn);
+    write_lab (ctx, writer, insn);
     return;
   }
   nops = MIR_insn_nops (ctx, insn);
-  write_uint (f, code);
+  write_uint (ctx, writer, code);
   for (i = 0; i < nops; i++) {
-    write_op (ctx, f, func, insn->ops[i]);
+    write_op (ctx, writer, func, insn->ops[i]);
   }
   if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
     /* first operand mode is undefined if it is a variable operand insn */
     mir_assert (MIR_call_code_p (code) || code == MIR_RET);
-    put_byte (f, TAG_EOI);
+    put_byte (ctx, writer, TAG_EOI);
   }
 }
 
-static void write_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
+static void write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
   MIR_proto_t proto;
@@ -3195,160 +3204,169 @@ static void write_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   size_t i, nlocals;
 
   if (item->item_type == MIR_import_item) {
-    write_name (ctx, f, "import");
-    write_name (ctx, f, item->u.import);
+    write_name (ctx, writer, "import");
+    write_name (ctx, writer, item->u.import);
     return;
   }
   if (item->item_type == MIR_export_item) {
-    write_name (ctx, f, "export");
-    write_name (ctx, f, item->u.export);
+    write_name (ctx, writer, "export");
+    write_name (ctx, writer, item->u.export);
     return;
   }
   if (item->item_type == MIR_forward_item) {
-    write_name (ctx, f, "forward");
-    write_name (ctx, f, item->u.forward);
+    write_name (ctx, writer, "forward");
+    write_name (ctx, writer, item->u.forward);
     return;
   }
   if (item->item_type == MIR_bss_item) {
     if (item->u.bss->name == NULL) {
-      write_name (ctx, f, "bss");
+      write_name (ctx, writer, "bss");
     } else {
-      write_name (ctx, f, "nbss");
-      write_name (ctx, f, item->u.bss->name);
+      write_name (ctx, writer, "nbss");
+      write_name (ctx, writer, item->u.bss->name);
     }
-    write_uint (f, item->u.bss->len);
+    write_uint (ctx, writer, item->u.bss->len);
     return;
   }
   if (item->item_type == MIR_ref_data_item) {
     if (item->u.ref_data->name == NULL) {
-      write_name (ctx, f, "ref");
+      write_name (ctx, writer, "ref");
     } else {
-      write_name (ctx, f, "nref");
-      write_name (ctx, f, item->u.ref_data->name);
+      write_name (ctx, writer, "nref");
+      write_name (ctx, writer, item->u.ref_data->name);
     }
-    write_name (ctx, f, MIR_item_name (ctx, item->u.ref_data->ref_item));
-    write_int (f, item->u.ref_data->disp);
+    write_name (ctx, writer, MIR_item_name (ctx, item->u.ref_data->ref_item));
+    write_int (ctx, writer, item->u.ref_data->disp);
     return;
   }
   if (item->item_type == MIR_expr_data_item) {
     if (item->u.expr_data->name == NULL) {
-      write_name (ctx, f, "expr");
+      write_name (ctx, writer, "expr");
     } else {
-      write_name (ctx, f, "nexpr");
-      write_name (ctx, f, item->u.expr_data->name);
+      write_name (ctx, writer, "nexpr");
+      write_name (ctx, writer, item->u.expr_data->name);
     }
-    write_name (ctx, f, MIR_item_name (ctx, item->u.expr_data->expr_item));
+    write_name (ctx, writer, MIR_item_name (ctx, item->u.expr_data->expr_item));
     return;
   }
   if (item->item_type == MIR_data_item) {
     MIR_data_t data = item->u.data;
 
     if (data->name == NULL) {
-      write_name (ctx, f, "data");
+      write_name (ctx, writer, "data");
     } else {
-      write_name (ctx, f, "ndata");
-      write_name (ctx, f, data->name);
+      write_name (ctx, writer, "ndata");
+      write_name (ctx, writer, data->name);
     }
-    write_type (f, data->el_type);
+    write_type (ctx, writer, data->el_type);
     for (i = 0; i < data->nel; i++) switch (data->el_type) {
-      case MIR_T_I8: write_int (f, ((int8_t *) data->u.els)[i]); break;
-      case MIR_T_U8: write_uint (f, ((uint8_t *) data->u.els)[i]); break;
-      case MIR_T_I16: write_int (f, ((int16_t *) data->u.els)[i]); break;
-      case MIR_T_U16: write_uint (f, ((uint16_t *) data->u.els)[i]); break;
-      case MIR_T_I32: write_int (f, ((int32_t *) data->u.els)[i]); break;
-      case MIR_T_U32: write_uint (f, ((uint32_t *) data->u.els)[i]); break;
-      case MIR_T_I64: write_int (f, ((int64_t *) data->u.els)[i]); break;
-      case MIR_T_U64: write_uint (f, ((uint64_t *) data->u.els)[i]); break;
-      case MIR_T_F: write_float (f, ((float *) data->u.els)[i]); break;
-      case MIR_T_D: write_double (f, ((double *) data->u.els)[i]); break;
+      case MIR_T_I8: write_int (ctx, writer, ((int8_t *) data->u.els)[i]); break;
+      case MIR_T_U8: write_uint (ctx, writer, ((uint8_t *) data->u.els)[i]); break;
+      case MIR_T_I16: write_int (ctx, writer, ((int16_t *) data->u.els)[i]); break;
+      case MIR_T_U16: write_uint (ctx, writer, ((uint16_t *) data->u.els)[i]); break;
+      case MIR_T_I32: write_int (ctx, writer, ((int32_t *) data->u.els)[i]); break;
+      case MIR_T_U32: write_uint (ctx, writer, ((uint32_t *) data->u.els)[i]); break;
+      case MIR_T_I64: write_int (ctx, writer, ((int64_t *) data->u.els)[i]); break;
+      case MIR_T_U64: write_uint (ctx, writer, ((uint64_t *) data->u.els)[i]); break;
+      case MIR_T_F: write_float (ctx, writer, ((float *) data->u.els)[i]); break;
+      case MIR_T_D: write_double (ctx, writer, ((double *) data->u.els)[i]); break;
       case MIR_T_LD:
-        write_ldouble (f, ((long double *) data->u.els)[i]);
+        write_ldouble (ctx, writer, ((long double *) data->u.els)[i]);
         break;
         /* only ptr as ref ??? */
-      case MIR_T_P: write_uint (f, ((uintptr_t *) data->u.els)[i]); break;
+      case MIR_T_P: write_uint (ctx, writer, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
-    put_byte (f, TAG_EOI);
+    put_byte (ctx, writer, TAG_EOI);
     return;
   }
   if (item->item_type == MIR_proto_item) {
     proto = item->u.proto;
-    write_name (ctx, f, "proto");
-    write_name (ctx, f, proto->name);
-    write_uint (f, proto->vararg_p != 0);
-    write_uint (f, proto->nres);
-    for (i = 0; i < proto->nres; i++) write_type (f, proto->res_types[i]);
+    write_name (ctx, writer, "proto");
+    write_name (ctx, writer, proto->name);
+    write_uint (ctx, writer, proto->vararg_p != 0);
+    write_uint (ctx, writer, proto->nres);
+    for (i = 0; i < proto->nres; i++) write_type (ctx, writer, proto->res_types[i]);
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
-      write_type (f, var.type);
-      write_name (ctx, f, var.name);
+      write_type (ctx, writer, var.type);
+      write_name (ctx, writer, var.name);
     }
-    put_byte (f, TAG_EOI);
+    put_byte (ctx, writer, TAG_EOI);
     return;
   }
   func = item->u.func;
-  write_name (ctx, f, "func");
-  write_name (ctx, f, func->name);
-  write_uint (f, func->vararg_p != 0);
-  write_uint (f, func->nres);
-  for (i = 0; i < func->nres; i++) write_type (f, func->res_types[i]);
+  write_name (ctx, writer, "func");
+  write_name (ctx, writer, func->name);
+  write_uint (ctx, writer, func->vararg_p != 0);
+  write_uint (ctx, writer, func->nres);
+  for (i = 0; i < func->nres; i++) write_type (ctx, writer, func->res_types[i]);
   for (i = 0; i < func->nargs; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i);
-    write_type (f, var.type);
-    write_name (ctx, f, var.name);
+    write_type (ctx, writer, var.type);
+    write_name (ctx, writer, var.name);
   }
-  put_byte (f, TAG_EOI);
+  put_byte (ctx, writer, TAG_EOI);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
   if (nlocals != 0) {
-    write_name (ctx, f, "local");
+    write_name (ctx, writer, "local");
     for (i = 0; i < nlocals; i++) {
       var = VARR_GET (MIR_var_t, func->vars, i + func->nargs);
-      write_type (f, var.type);
-      write_name (ctx, f, var.name);
+      write_type (ctx, writer, var.type);
+      write_name (ctx, writer, var.name);
     }
-    put_byte (f, TAG_EOI);
+    put_byte (ctx, writer, TAG_EOI);
   }
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
-    write_insn (ctx, f, func, insn);
-  write_name (ctx, f, "endfunc");
+    write_insn (ctx, writer, func, insn);
+  write_name (ctx, writer, "endfunc");
 }
 
-static void write_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
-  write_name (ctx, f, "module");
-  write_name (ctx, f, module->name);
+static void write_module (MIR_context_t ctx, writer_func_t writer, MIR_module_t module) {
+  write_name (ctx, writer, "module");
+  write_name (ctx, writer, module->name);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
-    write_item (ctx, f, item);
-  write_name (ctx, f, "endmodule");
+    write_item (ctx, writer, item);
+  write_name (ctx, writer, "endmodule");
 }
 
-static void write_modules (MIR_context_t ctx, FILE *f) {
+static void write_modules (MIR_context_t ctx, writer_func_t writer) {
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules); module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
-    write_module (ctx, f, module);
+    write_module (ctx, writer, module);
 }
 
-void MIR_write (MIR_context_t ctx, FILE *f) {
+void MIR_write_with_func (MIR_context_t ctx, const void (*writer) (MIR_context_t, uint8_t)) {
   string_init (&output_strings, &output_string_tab);
   write_modules (ctx, NULL); /* store strings */
-  write_uint (f, CURR_BIN_VERSION);
-  write_uint (f, VARR_LENGTH (string_t, output_strings) - 1);
+  write_uint (ctx, writer, CURR_BIN_VERSION);
+  write_uint (ctx, writer, VARR_LENGTH (string_t, output_strings) - 1);
   for (size_t i = 1; i < VARR_LENGTH (string_t, output_strings); i++) { /* output strings */
     MIR_str_t str = VARR_GET (string_t, output_strings, i).str;
 
-    write_uint (f, str.len);
-    for (size_t j = 0; j < str.len; j++) fputc (str.s[j], f);
+    write_uint (ctx, writer, str.len);
+    for (size_t j = 0; j < str.len; j++) put_byte (ctx, writer, str.s[j]);
   }
-  write_modules (ctx, f);
-  put_byte (f, TAG_EOFILE);
+  write_modules (ctx, writer);
+  put_byte (ctx, writer, TAG_EOFILE);
   string_finish (&output_strings, &output_string_tab);
+}
+
+static void file_writer (MIR_context_t ctx, uint8_t byte) { fputc (byte, io_file); }
+
+void MIR_write (MIR_context_t ctx, FILE *f) {
+  io_file = f;
+  MIR_write_with_func (ctx, file_writer);
 }
 
 /* New Page */
 
-static int get_byte (MIR_context_t ctx, FILE *f) {
-  int c = fgetc (f);
+typedef const int (*reader_func_t) (MIR_context_t);
+
+static int get_byte (MIR_context_t ctx, reader_func_t reader) {
+  int c = reader (ctx);
 
   if (c == EOF) (*error_func) (MIR_binary_io_error, "unfinished binary MIR");
   return c;
@@ -3364,48 +3382,48 @@ typedef union {
   MIR_reg_t reg;
 } token_attr_t;
 
-static uint64_t get_uint (MIR_context_t ctx, FILE *f, int nb) {
+static uint64_t get_uint (MIR_context_t ctx, reader_func_t reader, int nb) {
   uint64_t res = 0;
 
-  for (int i = 0; i < nb; i++) res |= (unsigned char) get_byte (ctx, f) << (i * CHAR_BIT);
+  for (int i = 0; i < nb; i++) res |= (unsigned char) get_byte (ctx, reader) << (i * CHAR_BIT);
   return res;
 }
 
-static int64_t get_int (MIR_context_t ctx, FILE *f, int nb) {
+static int64_t get_int (MIR_context_t ctx, reader_func_t reader, int nb) {
   int sh = (8 - nb) * CHAR_BIT;
 
   mir_assert (0 < nb && nb <= 8);
-  return (int64_t) (get_uint (ctx, f, nb) << sh) >> sh;
+  return (int64_t) (get_uint (ctx, reader, nb) << sh) >> sh;
 }
 
-static float get_float (MIR_context_t ctx, FILE *f) {
+static float get_float (MIR_context_t ctx, reader_func_t reader) {
   union {
     uint32_t u;
     float f;
   } u;
 
-  u.u = get_uint (ctx, f, sizeof (uint32_t));
+  u.u = get_uint (ctx, reader, sizeof (uint32_t));
   return u.f;
 }
 
-static double get_double (MIR_context_t ctx, FILE *f) {
+static double get_double (MIR_context_t ctx, reader_func_t reader) {
   union {
     uint64_t u;
     double d;
   } u;
 
-  u.u = get_uint (ctx, f, sizeof (uint64_t));
+  u.u = get_uint (ctx, reader, sizeof (uint64_t));
   return u.d;
 }
 
-static long double get_ldouble (MIR_context_t ctx, FILE *f) {
+static long double get_ldouble (MIR_context_t ctx, reader_func_t reader) {
   union {
     uint64_t u[2];
     long double ld;
   } u;
 
-  u.u[0] = get_uint (ctx, f, sizeof (uint64_t));
-  u.u[1] = get_uint (ctx, f, sizeof (uint64_t));
+  u.u[0] = get_uint (ctx, reader, sizeof (uint64_t));
+  u.u[1] = get_uint (ctx, reader, sizeof (uint64_t));
   return u.ld;
 }
 
@@ -3423,22 +3441,22 @@ static MIR_label_t to_lab (MIR_context_t ctx, uint64_t lab_num) {
   return create_label (ctx, lab_num);
 }
 
-static int64_t read_int (MIR_context_t ctx, FILE *f, const char *err_msg) {
-  int c = get_byte (ctx, f);
+static int64_t read_int (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
+  int c = get_byte (ctx, reader);
 
   if (TAG_I1 > c || c > TAG_I8) (*error_func) (MIR_binary_io_error, err_msg);
-  return get_int (ctx, f, c - TAG_I1 + 1);
+  return get_int (ctx, reader, c - TAG_I1 + 1);
 }
 
-static uint64_t read_uint (MIR_context_t ctx, FILE *f, const char *err_msg) {
-  int c = get_byte (ctx, f);
+static uint64_t read_uint (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
+  int c = get_byte (ctx, reader);
 
   if (c & U0_FLAG) return c & U0_MASK;
   if (TAG_U1 > c || c > TAG_U8) (*error_func) (MIR_binary_io_error, err_msg);
-  return get_uint (ctx, f, c - TAG_U1 + 1);
+  return get_uint (ctx, reader, c - TAG_U1 + 1);
 }
 
-static void read_all_strings (MIR_context_t ctx, FILE *f, uint64_t nstr) {
+static void read_all_strings (MIR_context_t ctx, reader_func_t reader, uint64_t nstr) {
   int c;
   MIR_str_t str;
   uint64_t len, l;
@@ -3446,9 +3464,9 @@ static void read_all_strings (MIR_context_t ctx, FILE *f, uint64_t nstr) {
   VARR_TRUNC (MIR_str_t, bin_strings, 0);
   for (uint64_t i = 0; i < nstr; i++) {
     VARR_TRUNC (char, temp_string, 0);
-    len = read_uint (ctx, f, "wrong string length");
+    len = read_uint (ctx, reader, "wrong string length");
     for (l = 0; l < len; l++) {
-      c = get_byte (ctx, f);
+      c = get_byte (ctx, reader);
       VARR_PUSH (char, temp_string, c);
     }
     str.s = memcpy (malloc (len), VARR_ADDR (char, temp_string), len);
@@ -3459,24 +3477,24 @@ static void read_all_strings (MIR_context_t ctx, FILE *f, uint64_t nstr) {
 
 static MIR_type_t tag_type (bin_tag_t tag) { return (MIR_type_t) (tag - TAG_TI8) + MIR_T_I8; }
 
-static MIR_type_t read_type (MIR_context_t ctx, FILE *f, const char *err_msg) {
-  int c = get_byte (ctx, f);
+static MIR_type_t read_type (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
+  int c = get_byte (ctx, reader);
 
   if (TAG_TI8 > c || c > TAG_TBLOCK) (*error_func) (MIR_binary_io_error, err_msg);
   return tag_type (c);
 }
 
-static const char *read_name (MIR_context_t ctx, FILE *f, const char *err_msg) {
-  int c = get_byte (ctx, f);
+static const char *read_name (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
+  int c = get_byte (ctx, reader);
 
   if (TAG_NAME1 > c || c > TAG_NAME4) (*error_func) (MIR_binary_io_error, err_msg);
-  return to_str (ctx, get_uint (ctx, f, c - TAG_NAME1 + 1)).s;
+  return to_str (ctx, get_uint (ctx, reader, c - TAG_NAME1 + 1)).s;
 }
 
 #define TAG_CASE(t) case TAG_##t:
 #define REP_SEP
-static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
-  int c = get_byte (ctx, f);
+static bin_tag_t read_token (MIR_context_t ctx, reader_func_t reader, token_attr_t *attr) {
+  int c = get_byte (ctx, reader);
 
   if (c & U0_FLAG) {
     attr->u = c & U0_MASK;
@@ -3484,31 +3502,31 @@ static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
   }
   switch (c) {
     REP8 (TAG_CASE, U1, U2, U3, U4, U5, U6, U7, U8)
-    attr->u = get_uint (ctx, f, c - TAG_U1 + 1);
+    attr->u = get_uint (ctx, reader, c - TAG_U1 + 1);
     break;
     REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8)
-    attr->i = get_int (ctx, f, c - TAG_I1 + 1);
+    attr->i = get_int (ctx, reader, c - TAG_I1 + 1);
     break;
     TAG_CASE (F)
-    attr->f = get_float (ctx, f);
+    attr->f = get_float (ctx, reader);
     break;
     TAG_CASE (D)
-    attr->d = get_double (ctx, f);
+    attr->d = get_double (ctx, reader);
     break;
     TAG_CASE (LD)
-    attr->ld = get_ldouble (ctx, f);
+    attr->ld = get_ldouble (ctx, reader);
     break;
     REP4 (TAG_CASE, REG1, REG2, REG3, REG4)
-    attr->u = get_uint (ctx, f, c - TAG_REG1 + 1);
+    attr->u = get_uint (ctx, reader, c - TAG_REG1 + 1);
     break;
     REP4 (TAG_CASE, NAME1, NAME2, NAME3, NAME4)
-    attr->u = get_uint (ctx, f, c - TAG_NAME1 + 1);
+    attr->u = get_uint (ctx, reader, c - TAG_NAME1 + 1);
     break;
     REP4 (TAG_CASE, STR1, STR2, STR3, STR4)
-    attr->u = get_uint (ctx, f, c - TAG_STR1 + 1);
+    attr->u = get_uint (ctx, reader, c - TAG_STR1 + 1);
     break;
     REP4 (TAG_CASE, LAB1, LAB2, LAB3, LAB4)
-    attr->u = get_uint (ctx, f, c - TAG_LAB1 + 1);
+    attr->u = get_uint (ctx, reader, c - TAG_LAB1 + 1);
     break;
     REP6 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX)
     REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOFILE)
@@ -3522,27 +3540,27 @@ static bin_tag_t read_token (MIR_context_t ctx, FILE *f, token_attr_t *attr) {
   return c;
 }
 
-static MIR_disp_t read_disp (MIR_context_t ctx, FILE *f) {
+static MIR_disp_t read_disp (MIR_context_t ctx, reader_func_t reader) {
   bin_tag_t tag;
   token_attr_t attr;
 
-  tag = read_token (ctx, f, &attr);
+  tag = read_token (ctx, reader, &attr);
   if (TAG_I1 > tag || tag > TAG_I8)
     (*error_func) (MIR_binary_io_error, "memory disp has wrong tag %d", tag);
   return attr.i;
 }
 
-static MIR_reg_t read_reg (MIR_context_t ctx, FILE *f, MIR_item_t func) {
+static MIR_reg_t read_reg (MIR_context_t ctx, reader_func_t reader, MIR_item_t func) {
   bin_tag_t tag;
   token_attr_t attr;
 
-  tag = read_token (ctx, f, &attr);
+  tag = read_token (ctx, reader, &attr);
   if (TAG_REG1 > tag || tag > TAG_REG4)
     (*error_func) (MIR_binary_io_error, "register has wrong tag %d", tag);
   return to_reg (ctx, attr.u, func);
 }
 
-static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t func) {
+static int read_operand (MIR_context_t ctx, reader_func_t reader, MIR_op_t *op, MIR_item_t func) {
   bin_tag_t tag;
   token_attr_t attr;
   MIR_type_t t;
@@ -3550,7 +3568,7 @@ static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t fu
   MIR_reg_t base, index;
   MIR_scale_t scale;
 
-  tag = read_token (ctx, f, &attr);
+  tag = read_token (ctx, reader, &attr);
   switch (tag) {
     TAG_CASE (U0)
     REP8 (TAG_CASE, U1, U2, U3, U4, U5, U6, U7, U8) *op = MIR_new_uint_op (ctx, attr.u);
@@ -3586,21 +3604,21 @@ static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t fu
     break;
     REP7 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX,
           MEM_DISP_BASE_INDEX)
-    t = read_type (ctx, f, "wrong memory type");
+    t = read_type (ctx, reader, "wrong memory type");
     disp = (tag == TAG_MEM_DISP || tag == TAG_MEM_DISP_BASE || tag == TAG_MEM_DISP_INDEX
                 || tag == TAG_MEM_DISP_BASE_INDEX
-              ? read_disp (ctx, f)
+              ? read_disp (ctx, reader)
               : 0);
     base = (tag == TAG_MEM_BASE || tag == TAG_MEM_DISP_BASE || tag == TAG_MEM_BASE_INDEX
                 || tag == TAG_MEM_DISP_BASE_INDEX
-              ? read_reg (ctx, f, func)
+              ? read_reg (ctx, reader, func)
               : 0);
     index = 0;
     scale = 0;
     if (tag == TAG_MEM_INDEX || tag == TAG_MEM_DISP_INDEX || tag == TAG_MEM_BASE_INDEX
         || tag == TAG_MEM_DISP_BASE_INDEX) {
-      index = read_reg (ctx, f, func);
-      scale = read_uint (ctx, f, "wrong memory index scale");
+      index = read_reg (ctx, reader, func);
+      scale = read_uint (ctx, reader, "wrong memory index scale");
     }
     *op = MIR_new_mem_op (ctx, t, disp, base, index, scale);
     break;
@@ -3611,35 +3629,35 @@ static int read_operand (MIR_context_t ctx, FILE *f, MIR_op_t *op, MIR_item_t fu
 }
 #undef REP_SEP
 
-static int func_proto_read (MIR_context_t ctx, FILE *f, uint64_t *nres_ptr) {
+static int func_proto_read (MIR_context_t ctx, reader_func_t reader, uint64_t *nres_ptr) {
   bin_tag_t tag;
   token_attr_t attr;
   MIR_var_t var;
-  int vararg_p = read_uint (ctx, f, "wrong vararg flag") != 0;
-  uint64_t i, nres = read_uint (ctx, f, "wrong func nres");
+  int vararg_p = read_uint (ctx, reader, "wrong vararg flag") != 0;
+  uint64_t i, nres = read_uint (ctx, reader, "wrong func nres");
 
   VARR_TRUNC (MIR_type_t, temp_types, 0);
   for (i = 0; i < nres; i++) {
-    tag = read_token (ctx, f, &attr);
+    tag = read_token (ctx, reader, &attr);
     if (TAG_TI8 > tag || tag > TAG_TBLOCK)
       (*error_func) (MIR_binary_io_error, "wrong prototype result type tag %d", tag);
     VARR_PUSH (MIR_type_t, temp_types, tag_type (tag));
   }
   VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (;;) {
-    tag = read_token (ctx, f, &attr);
+    tag = read_token (ctx, reader, &attr);
     if (tag == TAG_EOI) break;
     if (TAG_TI8 > tag || tag > TAG_TBLOCK)
       (*error_func) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
-    var.name = read_name (ctx, f, "wrong arg name");
+    var.name = read_name (ctx, reader, "wrong arg name");
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
   *nres_ptr = nres;
   return vararg_p;
 }
 
-void MIR_read (MIR_context_t ctx, FILE *f) {
+void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
   int version;
   bin_tag_t tag;
   token_attr_t attr;
@@ -3652,26 +3670,26 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
   MIR_module_t module;
   MIR_item_t func, item;
 
-  version = read_uint (ctx, f, "wrong header");
+  version = read_uint (ctx, reader, "wrong header");
   if (version > CURR_BIN_VERSION)
     (*error_func) (MIR_binary_io_error, "can not read version %d MIR binary: expected %d or less",
                    version, CURR_BIN_VERSION);
-  nstr = read_uint (ctx, f, "wrong header");
-  read_all_strings (ctx, f, nstr);
+  nstr = read_uint (ctx, reader, "wrong header");
+  read_all_strings (ctx, reader, nstr);
   module = NULL;
   func = NULL;
   for (;;) {
     VARR_TRUNC (uint64_t, insn_label_string_nums, 0);
-    tag = read_token (ctx, f, &attr);
+    tag = read_token (ctx, reader, &attr);
     while (TAG_LAB1 <= tag && tag <= TAG_LAB4) {
       VARR_PUSH (uint64_t, insn_label_string_nums, attr.u);
-      tag = read_token (ctx, f, &attr);
+      tag = read_token (ctx, reader, &attr);
     }
     VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
     if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
       name = to_str (ctx, attr.u).s;
       if (strcmp (name, "module") == 0) {
-        name = read_name (ctx, f, "wrong module name");
+        name = read_name (ctx, reader, "wrong module name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before module %s", name);
         if (module != NULL) (*error_func) (MIR_binary_io_error, "nested module %s", name);
@@ -3683,12 +3701,12 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
         MIR_finish_module (ctx);
         module = NULL;
       } else if (strcmp (name, "proto") == 0) {
-        name = read_name (ctx, f, "wrong prototype name");
+        name = read_name (ctx, reader, "wrong prototype name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before proto %s", name);
         if (module == NULL)
           (*error_func) (MIR_binary_io_error, "prototype %s outside module", name);
-        if (func_proto_read (ctx, f, &nres))
+        if (func_proto_read (ctx, reader, &nres))
           MIR_new_vararg_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                                     VARR_LENGTH (MIR_var_t, temp_vars),
                                     VARR_ADDR (MIR_var_t, temp_vars));
@@ -3696,12 +3714,12 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
           MIR_new_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                              VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
       } else if (strcmp (name, "func") == 0) {
-        name = read_name (ctx, f, "wrong func name");
+        name = read_name (ctx, reader, "wrong func name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before func %s", name);
         if (func != NULL) (*error_func) (MIR_binary_io_error, "nested func %s", name);
         if (module == NULL) (*error_func) (MIR_binary_io_error, "func %s outside module", name);
-        if (func_proto_read (ctx, f, &nres))
+        if (func_proto_read (ctx, reader, &nres))
           func = MIR_new_vararg_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                                           VARR_LENGTH (MIR_var_t, temp_vars),
                                           VARR_ADDR (MIR_var_t, temp_vars));
@@ -3716,43 +3734,43 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
         MIR_finish_func (ctx);
         func = NULL;
       } else if (strcmp (name, "export") == 0) {
-        name = read_name (ctx, f, "wrong export name");
+        name = read_name (ctx, reader, "wrong export name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "export %s should have no labels", name);
         MIR_new_export (ctx, name);
       } else if (strcmp (name, "import") == 0) {
-        name = read_name (ctx, f, "wrong import name");
+        name = read_name (ctx, reader, "wrong import name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "import %s should have no labels", name);
         MIR_new_import (ctx, name);
       } else if (strcmp (name, "forward") == 0) {
-        name = read_name (ctx, f, "wrong forward name");
+        name = read_name (ctx, reader, "wrong forward name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "forward %s should have no labels", name);
         MIR_new_forward (ctx, name);
       } else if (strcmp (name, "nbss") == 0 || strcmp (name, "bss") == 0) {
-        name = strcmp (name, "nbss") == 0 ? read_name (ctx, f, "wrong bss name") : NULL;
+        name = strcmp (name, "nbss") == 0 ? read_name (ctx, reader, "wrong bss name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "bss %s should have no labels",
                          name == NULL ? "" : name);
-        u = read_uint (ctx, f, "wrong bss len");
+        u = read_uint (ctx, reader, "wrong bss len");
         MIR_new_bss (ctx, name, u);
       } else if (strcmp (name, "nref") == 0 || strcmp (name, "ref") == 0) {
-        name = strcmp (name, "nref") == 0 ? read_name (ctx, f, "wrong ref data name") : NULL;
+        name = strcmp (name, "nref") == 0 ? read_name (ctx, reader, "wrong ref data name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "ref data %s should have no labels",
                          name == NULL ? "" : name);
-        item_name = read_name (ctx, f, "wrong ref data item name");
+        item_name = read_name (ctx, reader, "wrong ref data item name");
         if ((item = find_item (ctx, item_name, module)) == NULL)
           (*error_func) (MIR_binary_io_error, "ref data refers to non-existing item %s", item_name);
-        i = read_int (ctx, f, "wrong ref disp");
+        i = read_int (ctx, reader, "wrong ref disp");
         MIR_new_ref_data (ctx, name, item, i);
       } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
-        name = strcmp (name, "nexpr") == 0 ? read_name (ctx, f, "wrong expr name") : NULL;
+        name = strcmp (name, "nexpr") == 0 ? read_name (ctx, reader, "wrong expr name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "expr %s should have no labels",
                          name == NULL ? "" : name);
-        item_name = read_name (ctx, f, "wrong expr func name");
+        item_name = read_name (ctx, reader, "wrong expr func name");
         if ((item = find_item (ctx, item_name, module)) == NULL || item->item_type != MIR_func_item)
           (*error_func) (MIR_binary_io_error, "expr refers to non-function %s", item_name);
         MIR_new_expr_data (ctx, name, item);
@@ -3770,17 +3788,17 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
           int64_t i64;
         } v;
 
-        name = strcmp (name, "ndata") == 0 ? read_name (ctx, f, "wrong data name") : NULL;
+        name = strcmp (name, "ndata") == 0 ? read_name (ctx, reader, "wrong data name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "data %s should have no labels",
                          name == NULL ? "" : name);
-        tag = read_token (ctx, f, &attr);
+        tag = read_token (ctx, reader, &attr);
         if (TAG_TI8 > tag || tag > TAG_TBLOCK)
           (*error_func) (MIR_binary_io_error, "wrong data type tag %d", tag);
         type = tag_type (tag);
         VARR_TRUNC (uint8_t, temp_data, 0);
         for (nel = 0;; nel++) {
-          tag = read_token (ctx, f, &attr);
+          tag = read_token (ctx, reader, &attr);
           if (tag == TAG_EOI) break;
           switch (tag) {
           case TAG_U0:
@@ -3873,12 +3891,12 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "local should have no labels");
         for (;;) {
-          tag = read_token (ctx, f, &attr);
+          tag = read_token (ctx, reader, &attr);
           if (tag == TAG_EOI) break;
           if (TAG_TI8 > tag || tag > TAG_TBLOCK)
             (*error_func) (MIR_binary_io_error, "wrong local var type tag %d", tag);
           MIR_new_func_reg (ctx, func->u.func, tag_type (tag),
-                            read_name (ctx, f, "wrong local var name"));
+                            read_name (ctx, reader, "wrong local var name"));
         }
       } else {
         (*error_func) (MIR_binary_io_error, "unknown insn name %s", name);
@@ -3894,7 +3912,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
       }
       nop = insn_code_nops (ctx, insn_code);
       mir_assert (nop != 0 || MIR_call_code_p (insn_code) || insn_code == MIR_RET);
-      for (n = 0; (nop == 0 || n < nop) && read_operand (ctx, f, &op, func); n++)
+      for (n = 0; (nop == 0 || n < nop) && read_operand (ctx, reader, &op, func); n++)
         VARR_PUSH (MIR_op_t, temp_insn_ops, op);
       if (nop != 0 && n < nop)
         (*error_func) (MIR_binary_io_error, "wrong number of operands of insn %s",
@@ -3909,7 +3927,14 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
   }
   if (func != NULL) (*error_func) (MIR_binary_io_error, "unfinished func %s", func->u.func->name);
   if (module != NULL) (*error_func) (MIR_binary_io_error, "unfinished module %s", module->name);
-  if (fgetc (f) != EOF) (*error_func) (MIR_binary_io_error, "garbage at the end of file");
+  if (reader (ctx) != EOF) (*error_func) (MIR_binary_io_error, "garbage at the end of file");
+}
+
+static int file_reader (MIR_context_t ctx) { return fgetc (io_file); }
+
+void MIR_read (MIR_context_t ctx, FILE *f) {
+  io_file = f;
+  MIR_read_with_func (ctx, file_reader);
 }
 
 static void io_init (MIR_context_t ctx) {

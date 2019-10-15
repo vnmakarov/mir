@@ -484,6 +484,10 @@ extern void MIR_inline (MIR_context_t ctx, MIR_item_t func_item);
 #if MIR_IO
 extern void MIR_write (MIR_context_t ctx, FILE *f);
 extern void MIR_read (MIR_context_t ctx, FILE *f);
+
+extern void MIR_write_with_func (MIR_context_t ctx,
+                                 const void (*writer_func) (MIR_context_t, uint8_t));
+extern void MIR_read_with_func (MIR_context_t ctx, const int (*reader_func) (MIR_context_t));
 #endif
 
 #if MIR_SCAN
