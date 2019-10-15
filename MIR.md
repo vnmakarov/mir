@@ -20,8 +20,15 @@
    * API function `MIR_finish (MIR_context_t ctx)` should be called last.  It frees all internal data used to work with MIR program
    * API function `MIR_output (MIR_context_t ctx, FILE *f)` outputs MIR textual representation of the program into given file
    * API function `MIR_scan_string (MIR_context_t ctx, const char *str)` reads textual MIR representation given by a string
-   * API functions `MIR_write (MIR_context_t ctx, FILE *f)` and `MIR_read (MIR_context_t ctx, FILE *f)` outputs and reads **binary MIR representation**
-     to/from given file
+   * API functions `MIR_write (MIR_context_t ctx, FILE *f)` and
+     `MIR_read (MIR_context_t ctx, FILE *f)` outputs and reads
+     **binary MIR representation** to/from given file.  There are also
+     functions `MIR_write_with_func (MIR_context_t ctx, const void
+     (*writer_func) (MIR_context_t, uint8_t))` and `MIR_read_with_func
+     (MIR_context_t ctx, const int (*reader_func) (MIR_context_t))` to
+     output and read **binary MIR representation** through a function
+     given as an argument.  The reader function should return EOF as
+     the end of the binary MIR representation.
      * Binary MIR representation much more compact and faster to read than textual one
 
 ## MIR data type
