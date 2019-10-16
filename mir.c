@@ -1179,11 +1179,9 @@ void MIR_finish_func (MIR_context_t ctx) {
     int out_p, can_be_out_p;
 
     code = insn->code;
-    if (!curr_func->vararg_p
-        && (code == MIR_VA_START || code == MIR_VA_END || code == MIR_VA_ARG)) {
+    if (!curr_func->vararg_p && code == MIR_VA_START) {
       curr_func = NULL;
-      (*error_func) (MIR_vararg_func_error,
-                     "va_start, va_end, or va_arg are not in vararg function");
+      (*error_func) (MIR_vararg_func_error, "va_start is not in vararg function");
     } else if (code == MIR_RET && actual_nops != curr_func->nres) {
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error,
