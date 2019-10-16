@@ -6001,14 +6001,7 @@ static struct type *check_declarator (node_t r, int func_def_p) {
             break;
           } else {
             if (p != first_param) check (p, n);
-            if (p->code == N_TYPE) {
-              decl_spec_ptr = p->attr;
-            } else {
-              node_t declarator = NL_EL (p->ops, 1);
-
-              assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
-              decl_spec_ptr = &((decl_t) p->attr)->decl_spec;
-            }
+            decl_spec_ptr = get_param_decl_spec (p);
             adjust_param_type (&decl_spec_ptr->type);
           }
         }
@@ -8056,7 +8049,7 @@ static void check (node_t r, node_t context) {
         continue;
       }
       assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
-      decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
+      decl_spec = get_param_decl_spec (param);
       check_assignment_types (decl_spec->type, NULL, e2, r);
       param = NL_NEXT (param);
     }
@@ -10507,7 +10500,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
           op2 = mem_to_address (op2);
         } else if (param != NULL) {
           assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
-          decl_spec = param->code == N_TYPE ? param->attr : &((decl_t) param->attr)->decl_spec;
+          decl_spec = get_param_decl_spec (param);
           t = get_mir_type (decl_spec->type);
           t = promote_mir_int_type (t);
           op2 = promote (op2, t, FALSE);
