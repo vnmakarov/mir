@@ -16,6 +16,10 @@
 #define __SIZEOF_SHORT__ 2
 #define __SIZEOF_SIZE_T__ 8
 
+#define __BYTE_ORDER__ 1234
+#define __ORDER_LITTLE_ENDIAN__ 1234
+#define __ORDER_BIG_ENDIAN__ 4321
+
 /* Some GCC predefined macros: */
 #define __SIZE_TYPE__ unsigned long
 #define __PTRDIFF_TYPE__ long
