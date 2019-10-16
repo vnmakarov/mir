@@ -10369,11 +10369,11 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     }
     gen (cond, true_label, false_label, FALSE);
     emit_insn (true_label);
-    op1 = gen (true_expr, NULL, NULL, TRUE);
+    op1 = gen (true_expr, NULL, NULL, !void_p);
     if (!void_p) emit2 (tp_mov (t), res.mir_op, op1.mir_op);
     emit1 (MIR_JMP, MIR_new_label_op (ctx, end_label));
     emit_insn (false_label);
-    op1 = gen (false_expr, NULL, NULL, TRUE);
+    op1 = gen (false_expr, NULL, NULL, !void_p);
     if (!void_p) emit2 (tp_mov (t), res.mir_op, op1.mir_op);
     emit_insn (end_label);
     break;
