@@ -4883,6 +4883,91 @@ struct expr {
   } u;
 };
 
+struct decl_spec {
+  unsigned int typedef_p : 1, extern_p : 1, static_p : 1;
+  unsigned int auto_p : 1, register_p : 1, thread_local_p : 1;
+  unsigned int inline_p : 1, no_return_p : 1; /* func specifiers  */
+  int align;                                  // negative value means undefined
+  node_t align_node;                          //  strictest valid N_ALIGNAS node
+  node_code_t linkage;  // N_IGNORE - none, N_STATIC - internal, N_EXTERN - external
+  struct type *type;
+};
+
+struct enum_value {
+  mir_int val;
+};
+
+struct node_scope {
+  int stack_var_p; /* necessity for frame */
+  unsigned func_scope_num;
+  mir_size_t size, offset, call_arg_area_size;
+  node_t scope;
+};
+
+struct decl {
+  /* true if address is taken, reg can be used or is used: */
+  unsigned addr_p : 1, reg_p : 1, used_p : 1;
+  int bit_offset, width; /* for bitfields, -1 bit_offset for non bitfields. */
+  mir_size_t offset;     /* var offset in frame or bss */
+  node_t scope;          /* declaration scope */
+  struct decl_spec decl_spec;
+  /* Unnamed member if this scope is anon struct/union for the member,
+     NULL otherwise: */
+  node_t containing_unnamed_anon_struct_union_member;
+  MIR_item_t item; /* MIR_item for some declarations */
+};
+
+typedef struct decl *decl_t;
+
+static struct decl_spec *get_param_decl_spec (node_t param) {
+  node_t declarator;
+
+  if (param->code == N_TYPE) return param->attr;
+  declarator = NL_EL (param->ops, 1);
+  assert (param->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
+  return &((decl_t) param->attr)->decl_spec;
+}
+
+static int type_eq_p (struct type *type1, struct type *type2) {
+  if (type1->mode != type2->mode) return FALSE;
+  if (!type_qual_eq_p (&type1->type_qual, &type2->type_qual)) return FALSE;
+  switch (type1->mode) {
+  case TM_BASIC: return type1->u.basic_type == type2->u.basic_type;
+  case TM_ENUM:
+  case TM_STRUCT:
+  case TM_UNION: return type1->u.tag_type == type2->u.tag_type;
+  case TM_PTR: return type_eq_p (type1->u.ptr_type, type2->u.ptr_type);
+  case TM_ARR: {
+    struct expr *cexpr1, *cexpr2;
+    struct arr_type *at1 = type1->u.arr_type, *at2 = type2->u.arr_type;
+
+    return (at1->static_p == at2->static_p && type_eq_p (at1->el_type, at2->el_type)
+            && type_qual_eq_p (&at1->ind_type_qual, &at2->ind_type_qual)
+            && at1->size->code != N_IGNORE && at2->size->code != N_IGNORE
+            && (cexpr1 = at1->size->attr)->const_p && (cexpr2 = at2->size->attr)->const_p
+            && integer_type_p (cexpr2->type) && integer_type_p (cexpr2->type)
+            && cexpr1->u.i_val == cexpr2->u.i_val);
+  }
+  case TM_FUNC: {
+    struct func_type *ft1 = type1->u.func_type, *ft2 = type2->u.func_type;
+    struct decl_spec *ds1, *ds2;
+
+    if (ft1->dots_p != ft2->dots_p || !type_eq_p (ft1->ret_type, ft2->ret_type)
+        || NL_LENGTH (ft1->param_list->ops) != NL_LENGTH (ft2->param_list->ops))
+      return FALSE;
+    for (node_t p1 = NL_HEAD (ft1->param_list->ops), p2 = NL_HEAD (ft2->param_list->ops);
+         p1 != NULL; p1 = NL_NEXT (p1), p2 = NL_NEXT (p2)) {
+      ds1 = get_param_decl_spec (p1);
+      ds2 = get_param_decl_spec (p2);
+      if (!type_eq_p (ds1->type, ds2->type)) return FALSE;
+      // ??? other qualifiers
+    }
+    return TRUE;
+  }
+  default: return FALSE;
+  }
+}
+
 static int compatible_types_p (struct type *type1, struct type *type2, int ignore_quals_p) {
   if (type1->mode != type2->mode) {
     if (!ignore_quals_p && !type_qual_eq_p (&type1->type_qual, &type2->type_qual)) return FALSE;
@@ -4948,42 +5033,6 @@ static struct type *create_type (struct type *copy) {
     *res = *copy;
   return res;
 }
-
-struct decl_spec {
-  unsigned int typedef_p : 1, extern_p : 1, static_p : 1;
-  unsigned int auto_p : 1, register_p : 1, thread_local_p : 1;
-  unsigned int inline_p : 1, no_return_p : 1; /* func specifiers  */
-  int align;                                  // negative value means undefined
-  node_t align_node;                          //  strictest valid N_ALIGNAS node
-  node_code_t linkage;  // N_IGNORE - none, N_STATIC - internal, N_EXTERN - external
-  struct type *type;
-};
-
-struct enum_value {
-  mir_int val;
-};
-
-struct node_scope {
-  int stack_var_p; /* necessity for frame */
-  unsigned func_scope_num;
-  mir_size_t size, offset, call_arg_area_size;
-  node_t scope;
-};
-
-struct decl {
-  /* true if address is taken, reg can be used or is used: */
-  unsigned addr_p : 1, reg_p : 1, used_p : 1;
-  int bit_offset, width; /* for bitfields, -1 bit_offset for non bitfields. */
-  mir_size_t offset;     /* var offset in frame or bss */
-  node_t scope;          /* declaration scope */
-  struct decl_spec decl_spec;
-  /* Unnamed member if this scope is anon struct/union for the member,
-     NULL otherwise: */
-  node_t containing_unnamed_anon_struct_union_member;
-  MIR_item_t item; /* MIR_item for some declarations */
-};
-
-typedef struct decl *decl_t;
 
 typedef struct case_attr *case_t;
 
@@ -5453,7 +5502,8 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope, node_t d
   }
   tab_decl_spec = ((decl_t) sym.def_node->attr)->decl_spec;
   if (linkage == N_IGNORE) {
-    if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p || decl_spec.type != tab_decl_spec.type)
+    if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p
+        || !type_eq_p (decl_spec.type, tab_decl_spec.type))
       error (id->pos, "repeated declaration %s", id->u.s.s);
   } else if (!compatible_types_p (decl_spec.type, tab_decl_spec.type, FALSE)) {
     error (id->pos, "incompatible types of %s declarations", id->u.s.s);
