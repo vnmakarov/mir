@@ -6735,7 +6735,7 @@ static void init_decl (decl_t decl) {
 }
 
 static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_spec, node_t width,
-                         node_t initializer) {
+                         node_t initializer, int param_p) {
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
   node_t id, list_head, declarator;
   struct type *type;
@@ -6760,7 +6760,7 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
   if (declarator->code == N_DECL) {
     id = NL_HEAD (declarator->ops);
     list_head = NL_HEAD (NL_NEXT (id)->ops);
-    func_p = list_head && list_head->code == N_FUNC;
+    func_p = !param_p && list_head && list_head->code == N_FUNC;
     decl->decl_spec.linkage = get_id_linkage (func_p, id, scope, decl->decl_spec);
   }
   if (declarator->code == N_DECL) {
@@ -8122,7 +8122,7 @@ static void check (node_t r, node_t context) {
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
 
     if (declarator->code != N_IGNORE) {
-      create_decl (curr_scope, r, decl_spec, NULL, initializer);
+      create_decl (curr_scope, r, decl_spec, NULL, initializer, context->code == N_FUNC);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
       if (NL_HEAD (decl_spec.type->u.tag_type->ops)->code != N_ID)
         error (r->pos, "unnamed struct/union with no instances");
@@ -8163,7 +8163,7 @@ static void check (node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->ops);
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
 
-    create_decl (curr_scope, r, decl_spec, const_expr, NULL);
+    create_decl (curr_scope, r, decl_spec, const_expr, NULL, FALSE);
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
       struct expr *cexpr;
@@ -8234,7 +8234,7 @@ static void check (node_t r, node_t context) {
     curr_switch = curr_loop = curr_loop_switch = NULL;
     curr_call_arg_area_offset = 0;
     VARR_TRUNC (decl_t, func_decls_for_allocation, 0);
-    create_decl (top_scope, r, decl_spec, NULL, NULL);
+    create_decl (top_scope, r, decl_spec, NULL, NULL, FALSE);
     curr_scope = func_block_scope;
     check (declarations, r);
     /* Process parameter identifier list:  */
