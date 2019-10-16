@@ -10015,7 +10015,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                                                                            // and str in initializer
     break;
   case N_COMMA:
-    gen (NL_HEAD (r->ops), NULL, NULL, TRUE);
+    gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
     res = gen (NL_EL (r->ops, 1), true_label, false_label, TRUE);
     break;
   case N_ANDAND:
