@@ -538,12 +538,12 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
                                         : item->u.expr_data->name);
 }
 
-#if MIR_IO
+#if !MIR_NO_IO
 static void io_init (MIR_context_t ctx);
 static void io_finish (MIR_context_t ctx);
 #endif
 
-#if MIR_SCAN
+#if !MIR_NO_SCAN
 static void scan_init (MIR_context_t ctx);
 static void scan_finish (MIR_context_t ctx);
 #endif
@@ -620,10 +620,10 @@ MIR_context_t MIR_init (void) {
   VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
   VARR_CREATE (uint8_t, temp_data, 512);
-#if MIR_IO
+#if !MIR_NO_IO
   io_init (ctx);
 #endif
-#if MIR_SCAN
+#if !MIR_NO_SCAN
   scan_init (ctx);
 #endif
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
@@ -638,10 +638,10 @@ void MIR_finish (MIR_context_t ctx) {
   interp_finish (ctx);
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
-#if MIR_SCAN
+#if !MIR_NO_SCAN
   scan_finish (ctx);
 #endif
-#if MIR_IO
+#if !MIR_NO_IO
   io_finish (ctx);
 #endif
   VARR_DESTROY (uint8_t, temp_data);
@@ -2907,7 +2907,7 @@ static void code_finish (MIR_context_t ctx) {
 
 /* New Page */
 
-#if MIR_IO
+#if !MIR_NO_IO
 
 /* Input/output of binary MIR.  Major goal of binary MIR is fast
    reading, not compression ratio.  Text MIR major CPU time consumer
@@ -3951,13 +3951,13 @@ static void io_finish (MIR_context_t ctx) {
   ctx->io_ctx = NULL;
 }
 
-#endif /* if MIR_IO */
+#endif /* if !MIR_NO_IO */
 
 /* New Page */
 
 /* Reading MIR text file */
 
-#if MIR_SCAN
+#if !MIR_NO_SCAN
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -4778,7 +4778,7 @@ static void scan_finish (MIR_context_t ctx) {
   ctx->scan_ctx = NULL;
 }
 
-#endif /* if MIR_SCAN */
+#endif /* if !MIR_NO_SCAN */
 
 /* New Page */
 

@@ -22,13 +22,13 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define FALSE 0
 #define TRUE 1
 
-/* Redefine MIR_IO or/and MIR_SCAN if you need the functionality they provide.  */
-#ifndef MIR_IO
-#define MIR_IO 0
+/* Redefine MIR_NO_IO or/and MIR_NO_SCAN if you don't need the functionality they provide.  */
+#ifndef MIR_NO_IO
+#define MIR_NO_IO 0
 #endif
 
-#ifndef MIR_SCAN
-#define MIR_SCAN 0
+#ifndef MIR_NO_SCAN
+#define MIR_NO_SCAN 0
 #endif
 
 #ifdef __GNUC__
@@ -481,7 +481,7 @@ extern void MIR_output (MIR_context_t ctx, FILE *f);
 extern void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func, int mem_float_p);
 extern void MIR_inline (MIR_context_t ctx, MIR_item_t func_item);
 
-#if MIR_IO
+#if !MIR_NO_IO
 extern void MIR_write (MIR_context_t ctx, FILE *f);
 extern void MIR_read (MIR_context_t ctx, FILE *f);
 
@@ -490,7 +490,7 @@ extern void MIR_write_with_func (MIR_context_t ctx,
 extern void MIR_read_with_func (MIR_context_t ctx, const int (*reader_func) (MIR_context_t));
 #endif
 
-#if MIR_SCAN
+#if !MIR_NO_SCAN
 extern void MIR_scan_string (MIR_context_t ctx, const char *str);
 #endif
 
