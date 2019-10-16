@@ -8122,7 +8122,8 @@ static void check (node_t r, node_t context) {
     struct decl_spec decl_spec = check_decl_spec (unshared_specs, r);
 
     if (declarator->code != N_IGNORE) {
-      create_decl (curr_scope, r, decl_spec, NULL, initializer, context->code == N_FUNC);
+      create_decl (curr_scope, r, decl_spec, NULL, initializer,
+                   context != NULL && context->code == N_FUNC);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
       if (NL_HEAD (decl_spec.type->u.tag_type->ops)->code != N_ID)
         error (r->pos, "unnamed struct/union with no instances");
