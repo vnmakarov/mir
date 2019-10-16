@@ -10193,10 +10193,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     break;
   case N_ASSIGN:
     var = gen (NL_HEAD (r->ops), NULL, NULL, FALSE);
-    op2 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE);
     t = get_op_type (var);
+    op2 = gen (NL_EL (r->ops, 1), NULL, NULL, t != MIR_T_UNDEF);
     if (t == MIR_T_UNDEF) {
-      val = op2;
+      res = val = op2;
     } else {
       t = promote_mir_int_type (t);
       val = promote (op2, t, TRUE);
