@@ -9349,9 +9349,12 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
 }
 
 static void block_move (op_t var, op_t val, mir_size_t size) {
-  MIR_label_t repeat_label = MIR_new_label (ctx);
-  op_t index = get_new_temp (MIR_T_I64);
+  MIR_label_t repeat_label;
+  op_t index;
 
+  if (MIR_op_eq_p (ctx, var.mir_op, val.mir_op)) return;
+  repeat_label = MIR_new_label (ctx);
+  index = get_new_temp (MIR_T_I64);
   emit2 (MIR_MOV, index.mir_op, MIR_new_int_op (ctx, size));
   val = modify_for_block_move (val, index);
   var = modify_for_block_move (var, index);
