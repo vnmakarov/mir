@@ -3571,8 +3571,7 @@ D (declaration) {
     P (st_assert);
   } else if (MP (';', pos)) {
     r = new_node (N_LIST);
-    if (curr_scope == top_scope)
-      (pedantic_p ? error : warning) (pos, "extra ; outside of a function");
+    if (curr_scope == top_scope && pedantic_p) warning (pos, "extra ; outside of a function");
   } else {
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
