@@ -9666,6 +9666,8 @@ static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t le
   MIR_op_t treg_op, args[6];
   MIR_module_t module;
 
+  if (val.mir_op.u.mem.index == 0 && val.mir_op.u.mem.disp == disp && val.mir_op.u.mem.base == base)
+    return;
   if (memcpy_item == NULL) {
     ret_type = get_int_mir_type (sizeof (mir_size_t));
     vars[0].name = "dest";
