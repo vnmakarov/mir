@@ -4283,10 +4283,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
       while ((ch = get_char (ctx)) != '\n' && ch != EOF)
         ;
       /* Fall through: */
-    case '\n':
-      curr_lno++;
-      token->code = TC_NL;
-      return;
+    case '\n': token->code = TC_NL; return;
     case '(': token->code = TC_LEFT_PAR; return;
     case ')': token->code = TC_RIGHT_PAR; return;
     case ',': token->code = TC_COMMA; return;
