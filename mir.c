@@ -3536,8 +3536,9 @@ static void read_all_strings (MIR_context_t ctx, reader_func_t reader, uint64_t 
       c = get_byte (ctx, reader);
       VARR_PUSH (char, temp_string, c);
     }
-    str.s = memcpy (malloc (len), VARR_ADDR (char, temp_string), len);
+    str.s = VARR_ADDR (char, temp_string);
     str.len = len;
+    str = string_store (ctx, &strings, &string_tab, str).str;
     VARR_PUSH (MIR_str_t, bin_strings, str);
   }
 }
