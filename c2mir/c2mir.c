@@ -11456,9 +11456,9 @@ static void init_options (int argc, char *argv[],
         while ((t = get_next_pptoken ())->code != T_EOFILE && t->code != T_EOU)
           VARR_PUSH (token_t, repl, t);
       }
-      if ((ok_p = isalpha (id->repr[0]))) {
+      if ((ok_p = isalpha (id->repr[0]) || id->repr[0] == '_')) {
         for (int i = 1; id->repr[i] != '\0'; i++)
-          if (!isalnum (id->repr[i])) {
+          if (!isalnum (id->repr[i]) && id->repr[i] != '_') {
             ok_p = FALSE;
             break;
           }
