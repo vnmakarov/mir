@@ -2966,6 +2966,8 @@ struct io_ctx {
   VARR (MIR_str_t) * bin_strings;
   VARR (uint64_t) * insn_label_string_nums;
   VARR (MIR_label_t) * func_labels;
+  size_t output_insns_len, output_labs_len;
+  size_t output_regs_len, output_mem_len, output_int_len, output_float_len;
 };
 
 #define io_file ctx->io_ctx->io_file
@@ -2975,32 +2977,40 @@ struct io_ctx {
 #define bin_strings ctx->io_ctx->bin_strings
 #define insn_label_string_nums ctx->io_ctx->insn_label_string_nums
 #define func_labels ctx->io_ctx->func_labels
+#define output_insns_len ctx->io_ctx->output_insns_len
+#define output_labs_len ctx->io_ctx->output_labs_len
+#define output_regs_len ctx->io_ctx->output_regs_len
+#define output_mem_len ctx->io_ctx->output_mem_len
+#define output_int_len ctx->io_ctx->output_int_len
+#define output_float_len ctx->io_ctx->output_float_len
 
 typedef const void (*writer_func_t) (MIR_context_t, uint8_t);
 
-static void put_byte (MIR_context_t ctx, writer_func_t writer, int ch) {
-  if (writer == NULL) return;
+static size_t put_byte (MIR_context_t ctx, writer_func_t writer, int ch) {
+  if (writer == NULL) return 0;
   writer (ctx, ch);
+  return 1;
 }
 
-static int uint_length (uint64_t u) {
-  int n;
+static size_t uint_length (uint64_t u) {
+  size_t n;
 
   if (u <= 127) return 0;
   for (n = 0; u != 0; n++) u >>= CHAR_BIT;
   return n;
 }
 
-static void put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int nb) {
-  if (writer == NULL) return;
+static size_t put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int nb) {
+  if (writer == NULL) return 0;
   for (int n = 0; n < nb; n++) {
     put_byte (ctx, writer, u & 0xff);
     u >>= CHAR_BIT;
   }
+  return nb;
 }
 
-static int int_length (int64_t i) {
-  int n = 0;
+static size_t int_length (int64_t i) {
+  size_t n = 0;
 
   do {
     n++;
@@ -3009,97 +3019,116 @@ static int int_length (int64_t i) {
   return n;
 }
 
-static void put_int (MIR_context_t ctx, writer_func_t writer, int64_t u, int nb) {
-  if (writer == NULL) return;
+static size_t put_int (MIR_context_t ctx, writer_func_t writer, int64_t u, int nb) {
+  if (writer == NULL) return 0;
   for (int n = 0; n < nb; n++) {
     put_byte (ctx, writer, u & 0xff);
     u >>= CHAR_BIT;
   }
+  return nb;
 }
 
-static void put_float (MIR_context_t ctx, writer_func_t writer, float fl) {
+static size_t put_float (MIR_context_t ctx, writer_func_t writer, float fl) {
   union {
     uint32_t u;
     float f;
   } u;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   u.f = fl;
-  put_uint (ctx, writer, u.u, sizeof (uint32_t));
+  return put_uint (ctx, writer, u.u, sizeof (uint32_t));
 }
 
-static void put_double (MIR_context_t ctx, writer_func_t writer, double d) {
+static size_t put_double (MIR_context_t ctx, writer_func_t writer, double d) {
   union {
     uint64_t u;
     double d;
   } u;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   u.d = d;
-  put_uint (ctx, writer, u.d, sizeof (uint64_t));
+  return put_uint (ctx, writer, u.d, sizeof (uint64_t));
 }
 
-static void put_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
+static size_t put_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
   union {
     uint64_t u[2];
     long double ld;
   } u;
+  size_t len;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   u.ld = ld;
-  put_uint (ctx, writer, u.u[0], sizeof (uint64_t));
-  put_uint (ctx, writer, u.u[1], sizeof (uint64_t));
+  len = put_uint (ctx, writer, u.u[0], sizeof (uint64_t));
+  return put_uint (ctx, writer, u.u[1], sizeof (uint64_t)) + len;
 }
 
 /* Write binary MIR */
 
-static void write_int (MIR_context_t ctx, writer_func_t writer, int64_t i) {
-  int nb;
+static size_t write_int (MIR_context_t ctx, writer_func_t writer, int64_t i) {
+  size_t nb, len;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   nb = int_length (i);
   put_byte (ctx, writer, TAG_I1 + nb - 1);
-  put_int (ctx, writer, i, nb);
+  len = put_int (ctx, writer, i, nb) + 1;
+  output_int_len += len;
+  return len;
 }
 
-static void write_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u) {
-  int nb;
+static size_t write_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u) {
+  size_t nb, len;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   if ((nb = uint_length (u)) == 0) {
     put_byte (ctx, writer, 0x80 | u);
-    return;
+    return 1;
   }
   put_byte (ctx, writer, TAG_U1 + nb - 1);
-  put_uint (ctx, writer, u, nb);
+  len = put_uint (ctx, writer, u, nb) + 1;
+  output_int_len += len;
+  return len;
 }
 
-static void write_float (MIR_context_t ctx, writer_func_t writer, float fl) {
-  if (writer == NULL) return;
+static size_t write_float (MIR_context_t ctx, writer_func_t writer, float fl) {
+  size_t len;
+
+  if (writer == NULL) return 0;
   put_byte (ctx, writer, TAG_F);
-  put_float (ctx, writer, fl);
+  len = put_float (ctx, writer, fl) + 1;
+  output_float_len += len;
+  return len;
 }
 
-static void write_double (MIR_context_t ctx, writer_func_t writer, double d) {
-  if (writer == NULL) return;
+static size_t write_double (MIR_context_t ctx, writer_func_t writer, double d) {
+  size_t len;
+
+  if (writer == NULL) return 0;
   put_byte (ctx, writer, TAG_D);
-  put_double (ctx, writer, d);
+  len = put_double (ctx, writer, d) + 1;
+  output_float_len += len;
+  return len;
 }
 
-static void write_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
-  if (writer == NULL) return;
+static size_t write_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
+  size_t len;
+
+  if (writer == NULL) return 0;
   put_byte (ctx, writer, TAG_LD);
-  put_ldouble (ctx, writer, ld);
+  len = put_ldouble (ctx, writer, ld) + 1;
+  output_int_len += len;
+  return len;
 }
 
-static void write_str_tag (MIR_context_t ctx, writer_func_t writer, MIR_str_t str,
-                           bin_tag_t start_tag) {
-  int nb, ok_p;
+static size_t write_str_tag (MIR_context_t ctx, writer_func_t writer, MIR_str_t str,
+                             bin_tag_t start_tag) {
+  size_t nb, len;
+  int ok_p;
   string_t string;
 
   if (writer == NULL) {
     string_store (ctx, &output_strings, &output_string_tab, str);
-    return;
+    return 0;
   }
   ok_p = string_find (&output_strings, &output_string_tab, str, &string);
   mir_assert (ok_p && string.num >= 1);
@@ -3107,46 +3136,53 @@ static void write_str_tag (MIR_context_t ctx, writer_func_t writer, MIR_str_t st
   mir_assert (nb <= 4);
   if (nb == 0) nb = 1;
   put_byte (ctx, writer, start_tag + nb - 1);
-  put_uint (ctx, writer, string.num - 1, nb);
+  return put_uint (ctx, writer, string.num - 1, nb) + 1;
 }
 
-static void write_str (MIR_context_t ctx, writer_func_t writer, MIR_str_t str) {
-  write_str_tag (ctx, writer, str, TAG_STR1);
+static size_t write_str (MIR_context_t ctx, writer_func_t writer, MIR_str_t str) {
+  return write_str_tag (ctx, writer, str, TAG_STR1);
 }
-static void write_name (MIR_context_t ctx, writer_func_t writer, const char *name) {
-  write_str_tag (ctx, writer, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
-}
-static void write_reg (MIR_context_t ctx, writer_func_t writer, const char *reg_name) {
-  write_str_tag (ctx, writer, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
+static size_t write_name (MIR_context_t ctx, writer_func_t writer, const char *name) {
+  return write_str_tag (ctx, writer, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
 }
 
-static void write_type (MIR_context_t ctx, writer_func_t writer, MIR_type_t t) {
-  put_byte (ctx, writer, TAG_TI8 + (t - MIR_T_I8));
+static size_t write_reg (MIR_context_t ctx, writer_func_t writer, const char *reg_name) {
+  size_t len = write_str_tag (ctx, writer, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
+
+  output_regs_len += len;
+  return len;
 }
 
-static void write_lab (MIR_context_t ctx, writer_func_t writer, MIR_label_t lab) {
-  int nb;
+static size_t write_type (MIR_context_t ctx, writer_func_t writer, MIR_type_t t) {
+  return put_byte (ctx, writer, TAG_TI8 + (t - MIR_T_I8));
+}
+
+static size_t write_lab (MIR_context_t ctx, writer_func_t writer, MIR_label_t lab) {
+  size_t nb, len;
   uint64_t lab_num;
 
-  if (writer == NULL) return;
+  if (writer == NULL) return 0;
   lab_num = lab->ops[0].u.u;
   nb = uint_length (lab_num);
   mir_assert (nb <= 4);
   if (nb == 0) nb = 1;
   put_byte (ctx, writer, TAG_LAB1 + nb - 1);
-  put_uint (ctx, writer, lab_num, nb);
+  len = put_uint (ctx, writer, lab_num, nb) + 1;
+  output_labs_len += len;
+  return len;
 }
 
-static void write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, MIR_op_t op) {
+static size_t write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, MIR_op_t op) {
   switch (op.mode) {
-  case MIR_OP_REG: write_reg (ctx, writer, MIR_reg_name (ctx, op.u.reg, func)); break;
-  case MIR_OP_INT: write_int (ctx, writer, op.u.i); break;
-  case MIR_OP_UINT: write_uint (ctx, writer, op.u.u); break;
-  case MIR_OP_FLOAT: write_float (ctx, writer, op.u.f); break;
-  case MIR_OP_DOUBLE: write_double (ctx, writer, op.u.d); break;
-  case MIR_OP_LDOUBLE: write_ldouble (ctx, writer, op.u.ld); break;
+  case MIR_OP_REG: return write_reg (ctx, writer, MIR_reg_name (ctx, op.u.reg, func));
+  case MIR_OP_INT: return write_int (ctx, writer, op.u.i);
+  case MIR_OP_UINT: return write_uint (ctx, writer, op.u.u);
+  case MIR_OP_FLOAT: return write_float (ctx, writer, op.u.f);
+  case MIR_OP_DOUBLE: return write_double (ctx, writer, op.u.d);
+  case MIR_OP_LDOUBLE: return write_ldouble (ctx, writer, op.u.ld);
   case MIR_OP_MEM: {
     bin_tag_t tag;
+    size_t len;
 
     if (op.u.mem.disp != 0) {
       if (op.u.mem.base != 0)
@@ -3155,201 +3191,225 @@ static void write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, 
         tag = op.u.mem.index != 0 ? TAG_MEM_DISP_INDEX : TAG_MEM_DISP;
     } else if (op.u.mem.base != 0) {
       tag = op.u.mem.index != 0 ? TAG_MEM_BASE_INDEX : TAG_MEM_BASE;
-    } else {
-      assert (op.u.mem.index != 0);
+    } else if (op.u.mem.index != 0) {
       tag = TAG_MEM_INDEX;
+    } else {
+      tag = TAG_MEM_DISP;
     }
     put_byte (ctx, writer, tag);
-    write_type (ctx, writer, op.u.mem.type);
-    if (op.u.mem.disp != 0) write_int (ctx, writer, op.u.mem.disp);
+    len = write_type (ctx, writer, op.u.mem.type) + 1;
+    if (op.u.mem.disp != 0 || (op.u.mem.base == 0 && op.u.mem.index == 0))
+      write_int (ctx, writer, op.u.mem.disp);
     if (op.u.mem.base != 0) write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.base, func));
     if (op.u.mem.index != 0) {
-      write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.index, func));
-      write_uint (ctx, writer, op.u.mem.scale);
+      len += write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.index, func));
+      len += write_uint (ctx, writer, op.u.mem.scale);
     }
-    break;
+    output_mem_len += len;
+    return len;
   }
-  case MIR_OP_REF: write_name (ctx, writer, MIR_item_name (ctx, op.u.ref)); break;
-  case MIR_OP_STR: write_str (ctx, writer, op.u.str); break;
-  case MIR_OP_LABEL: write_lab (ctx, writer, op.u.label); break;
-  default: /* ??? HARD_REG, HARD_REG_MEM */ mir_assert (FALSE);
+  case MIR_OP_REF: return write_name (ctx, writer, MIR_item_name (ctx, op.u.ref));
+  case MIR_OP_STR: return write_str (ctx, writer, op.u.str);
+  case MIR_OP_LABEL: return write_lab (ctx, writer, op.u.label);
+  default: mir_assert (FALSE); return 0;
   }
 }
 
-static void write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t func, MIR_insn_t insn) {
+static size_t write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t func,
+                          MIR_insn_t insn) {
   size_t i, nops;
   MIR_insn_code_t code = insn->code;
+  size_t len;
 
-  if (code == MIR_LABEL) {
-    write_lab (ctx, writer, insn);
-    return;
-  }
+  if (code == MIR_LABEL) return write_lab (ctx, writer, insn);
   nops = MIR_insn_nops (ctx, insn);
-  write_uint (ctx, writer, code);
-  for (i = 0; i < nops; i++) {
-    write_op (ctx, writer, func, insn->ops[i]);
-  }
+  len = write_uint (ctx, writer, code);
+  for (i = 0; i < nops; i++) len += write_op (ctx, writer, func, insn->ops[i]);
   if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
     /* first operand mode is undefined if it is a variable operand insn */
     mir_assert (MIR_call_code_p (code) || code == MIR_RET);
     put_byte (ctx, writer, TAG_EOI);
+    len++;
   }
+  output_insns_len += len;
+  return len;
 }
 
-static void write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t item) {
+static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
   MIR_proto_t proto;
   MIR_var_t var;
-  size_t i, nlocals;
+  size_t i, nlocals, len = 0;
 
   if (item->item_type == MIR_import_item) {
-    write_name (ctx, writer, "import");
-    write_name (ctx, writer, item->u.import);
-    return;
+    len += write_name (ctx, writer, "import");
+    len += write_name (ctx, writer, item->u.import);
+    return len;
   }
   if (item->item_type == MIR_export_item) {
-    write_name (ctx, writer, "export");
-    write_name (ctx, writer, item->u.export);
-    return;
+    len += write_name (ctx, writer, "export");
+    len += write_name (ctx, writer, item->u.export);
+    return len;
   }
   if (item->item_type == MIR_forward_item) {
-    write_name (ctx, writer, "forward");
-    write_name (ctx, writer, item->u.forward);
-    return;
+    len += write_name (ctx, writer, "forward");
+    len += write_name (ctx, writer, item->u.forward);
+    return len;
   }
   if (item->item_type == MIR_bss_item) {
     if (item->u.bss->name == NULL) {
-      write_name (ctx, writer, "bss");
+      len += write_name (ctx, writer, "bss");
     } else {
-      write_name (ctx, writer, "nbss");
-      write_name (ctx, writer, item->u.bss->name);
+      len += write_name (ctx, writer, "nbss");
+      len += write_name (ctx, writer, item->u.bss->name);
     }
-    write_uint (ctx, writer, item->u.bss->len);
-    return;
+    len += write_uint (ctx, writer, item->u.bss->len);
+    return len;
   }
   if (item->item_type == MIR_ref_data_item) {
     if (item->u.ref_data->name == NULL) {
-      write_name (ctx, writer, "ref");
+      len += write_name (ctx, writer, "ref");
     } else {
-      write_name (ctx, writer, "nref");
-      write_name (ctx, writer, item->u.ref_data->name);
+      len += write_name (ctx, writer, "nref");
+      len += write_name (ctx, writer, item->u.ref_data->name);
     }
-    write_name (ctx, writer, MIR_item_name (ctx, item->u.ref_data->ref_item));
-    write_int (ctx, writer, item->u.ref_data->disp);
-    return;
+    len += write_name (ctx, writer, MIR_item_name (ctx, item->u.ref_data->ref_item));
+    len += write_int (ctx, writer, item->u.ref_data->disp);
+    return len;
   }
   if (item->item_type == MIR_expr_data_item) {
     if (item->u.expr_data->name == NULL) {
-      write_name (ctx, writer, "expr");
+      len += write_name (ctx, writer, "expr");
     } else {
-      write_name (ctx, writer, "nexpr");
-      write_name (ctx, writer, item->u.expr_data->name);
+      len += write_name (ctx, writer, "nexpr");
+      len += write_name (ctx, writer, item->u.expr_data->name);
     }
-    write_name (ctx, writer, MIR_item_name (ctx, item->u.expr_data->expr_item));
-    return;
+    len += write_name (ctx, writer, MIR_item_name (ctx, item->u.expr_data->expr_item));
+    return len;
   }
   if (item->item_type == MIR_data_item) {
     MIR_data_t data = item->u.data;
 
     if (data->name == NULL) {
-      write_name (ctx, writer, "data");
+      len += write_name (ctx, writer, "data");
     } else {
-      write_name (ctx, writer, "ndata");
-      write_name (ctx, writer, data->name);
+      len += write_name (ctx, writer, "ndata");
+      len += write_name (ctx, writer, data->name);
     }
     write_type (ctx, writer, data->el_type);
     for (i = 0; i < data->nel; i++) switch (data->el_type) {
-      case MIR_T_I8: write_int (ctx, writer, ((int8_t *) data->u.els)[i]); break;
-      case MIR_T_U8: write_uint (ctx, writer, ((uint8_t *) data->u.els)[i]); break;
-      case MIR_T_I16: write_int (ctx, writer, ((int16_t *) data->u.els)[i]); break;
-      case MIR_T_U16: write_uint (ctx, writer, ((uint16_t *) data->u.els)[i]); break;
-      case MIR_T_I32: write_int (ctx, writer, ((int32_t *) data->u.els)[i]); break;
-      case MIR_T_U32: write_uint (ctx, writer, ((uint32_t *) data->u.els)[i]); break;
-      case MIR_T_I64: write_int (ctx, writer, ((int64_t *) data->u.els)[i]); break;
-      case MIR_T_U64: write_uint (ctx, writer, ((uint64_t *) data->u.els)[i]); break;
-      case MIR_T_F: write_float (ctx, writer, ((float *) data->u.els)[i]); break;
-      case MIR_T_D: write_double (ctx, writer, ((double *) data->u.els)[i]); break;
+      case MIR_T_I8: len += write_int (ctx, writer, ((int8_t *) data->u.els)[i]); break;
+      case MIR_T_U8: len += write_uint (ctx, writer, ((uint8_t *) data->u.els)[i]); break;
+      case MIR_T_I16: len += write_int (ctx, writer, ((int16_t *) data->u.els)[i]); break;
+      case MIR_T_U16: len += write_uint (ctx, writer, ((uint16_t *) data->u.els)[i]); break;
+      case MIR_T_I32: len += write_int (ctx, writer, ((int32_t *) data->u.els)[i]); break;
+      case MIR_T_U32: len += write_uint (ctx, writer, ((uint32_t *) data->u.els)[i]); break;
+      case MIR_T_I64: len += write_int (ctx, writer, ((int64_t *) data->u.els)[i]); break;
+      case MIR_T_U64: len += write_uint (ctx, writer, ((uint64_t *) data->u.els)[i]); break;
+      case MIR_T_F: len += write_float (ctx, writer, ((float *) data->u.els)[i]); break;
+      case MIR_T_D: len += write_double (ctx, writer, ((double *) data->u.els)[i]); break;
       case MIR_T_LD:
-        write_ldouble (ctx, writer, ((long double *) data->u.els)[i]);
+        len += write_ldouble (ctx, writer, ((long double *) data->u.els)[i]);
         break;
         /* only ptr as ref ??? */
-      case MIR_T_P: write_uint (ctx, writer, ((uintptr_t *) data->u.els)[i]); break;
+      case MIR_T_P: len += write_uint (ctx, writer, ((uintptr_t *) data->u.els)[i]); break;
       default: mir_assert (FALSE);
       }
-    put_byte (ctx, writer, TAG_EOI);
-    return;
+    len += put_byte (ctx, writer, TAG_EOI);
+    return len;
   }
   if (item->item_type == MIR_proto_item) {
     proto = item->u.proto;
-    write_name (ctx, writer, "proto");
-    write_name (ctx, writer, proto->name);
-    write_uint (ctx, writer, proto->vararg_p != 0);
-    write_uint (ctx, writer, proto->nres);
+    len += write_name (ctx, writer, "proto");
+    len += write_name (ctx, writer, proto->name);
+    len += write_uint (ctx, writer, proto->vararg_p != 0);
+    len += write_uint (ctx, writer, proto->nres);
     for (i = 0; i < proto->nres; i++) write_type (ctx, writer, proto->res_types[i]);
     for (i = 0; i < VARR_LENGTH (MIR_var_t, proto->args); i++) {
       var = VARR_GET (MIR_var_t, proto->args, i);
-      write_type (ctx, writer, var.type);
-      write_name (ctx, writer, var.name);
+      len += write_type (ctx, writer, var.type);
+      len += write_name (ctx, writer, var.name);
     }
-    put_byte (ctx, writer, TAG_EOI);
-    return;
+    len += put_byte (ctx, writer, TAG_EOI);
+    return len;
   }
   func = item->u.func;
-  write_name (ctx, writer, "func");
-  write_name (ctx, writer, func->name);
-  write_uint (ctx, writer, func->vararg_p != 0);
-  write_uint (ctx, writer, func->nres);
-  for (i = 0; i < func->nres; i++) write_type (ctx, writer, func->res_types[i]);
+  len += write_name (ctx, writer, "func");
+  len += write_name (ctx, writer, func->name);
+  len += write_uint (ctx, writer, func->vararg_p != 0);
+  len += write_uint (ctx, writer, func->nres);
+  for (i = 0; i < func->nres; i++) len += write_type (ctx, writer, func->res_types[i]);
   for (i = 0; i < func->nargs; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i);
-    write_type (ctx, writer, var.type);
-    write_name (ctx, writer, var.name);
+    len += write_type (ctx, writer, var.type);
+    len += write_name (ctx, writer, var.name);
   }
-  put_byte (ctx, writer, TAG_EOI);
+  len += put_byte (ctx, writer, TAG_EOI);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
   if (nlocals != 0) {
-    write_name (ctx, writer, "local");
+    len += write_name (ctx, writer, "local");
     for (i = 0; i < nlocals; i++) {
       var = VARR_GET (MIR_var_t, func->vars, i + func->nargs);
-      write_type (ctx, writer, var.type);
-      write_name (ctx, writer, var.name);
+      len += write_type (ctx, writer, var.type);
+      len += write_name (ctx, writer, var.name);
     }
-    put_byte (ctx, writer, TAG_EOI);
+    len += put_byte (ctx, writer, TAG_EOI);
   }
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
-    write_insn (ctx, writer, func, insn);
-  write_name (ctx, writer, "endfunc");
+    len += write_insn (ctx, writer, func, insn);
+  len += write_name (ctx, writer, "endfunc");
+  return len;
 }
 
-static void write_module (MIR_context_t ctx, writer_func_t writer, MIR_module_t module) {
-  write_name (ctx, writer, "module");
-  write_name (ctx, writer, module->name);
+static size_t write_module (MIR_context_t ctx, writer_func_t writer, MIR_module_t module) {
+  size_t len = write_name (ctx, writer, "module");
+
+  len += write_name (ctx, writer, module->name);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
-    write_item (ctx, writer, item);
-  write_name (ctx, writer, "endmodule");
+    len += write_item (ctx, writer, item);
+  len += write_name (ctx, writer, "endmodule");
+  return len;
 }
 
-static void write_modules (MIR_context_t ctx, writer_func_t writer) {
+static size_t write_modules (MIR_context_t ctx, writer_func_t writer) {
+  size_t len = 0;
+
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules); module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
-    write_module (ctx, writer, module);
+    len += write_module (ctx, writer, module);
+  return len;
 }
 
 void MIR_write_with_func (MIR_context_t ctx, const void (*writer) (MIR_context_t, uint8_t)) {
+  size_t len, str_len;
+
+  output_insns_len = output_labs_len = 0;
+  output_regs_len = output_mem_len = output_int_len = output_float_len = 0;
   string_init (&output_strings, &output_string_tab);
   write_modules (ctx, NULL); /* store strings */
-  write_uint (ctx, writer, CURR_BIN_VERSION);
-  write_uint (ctx, writer, VARR_LENGTH (string_t, output_strings) - 1);
+  len = write_uint (ctx, writer, CURR_BIN_VERSION);
+  str_len = write_uint (ctx, writer, VARR_LENGTH (string_t, output_strings) - 1);
   for (size_t i = 1; i < VARR_LENGTH (string_t, output_strings); i++) { /* output strings */
     MIR_str_t str = VARR_GET (string_t, output_strings, i).str;
 
-    write_uint (ctx, writer, str.len);
-    for (size_t j = 0; j < str.len; j++) put_byte (ctx, writer, str.s[j]);
+    str_len += write_uint (ctx, writer, str.len);
+    for (size_t j = 0; j < str.len; j++) {
+      put_byte (ctx, writer, str.s[j]);
+      str_len++;
+    }
   }
-  write_modules (ctx, writer);
+  len += write_modules (ctx, writer) + str_len;
+#if 0
+  fprintf (stderr,
+           "Overall output length = %lu.  Number of strings = %lu.\n"
+           "Lengths of: strings = %lu, insns = %lu, labs = %lu,\n"
+           "   reg ops = %lu, mem ops = %lu, int ops = %lu, float ops = %lu\n",
+           len, VARR_LENGTH (string_t, output_strings), str_len, output_insns_len, output_labs_len,
+           output_regs_len, output_mem_len, output_int_len, output_float_len);
+#endif
   put_byte (ctx, writer, TAG_EOFILE);
   string_finish (&output_strings, &output_string_tab);
 }
