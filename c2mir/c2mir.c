@@ -10650,8 +10650,14 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                            decl->scope != top_scope && !decl->decl_spec.static_p);
           VARR_TRUNC (init_el_t, init_els, init_start);
         }
-        if (decl->item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p)
+        if (decl->item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p) {
           MIR_new_export (ctx, name);
+        } else if (decl->item != NULL && decl->scope != top_scope && decl->decl_spec.static_p) {
+          MIR_item_t item = MIR_new_forward (ctx, name);
+
+          DLIST_REMOVE (MIR_item_t, curr_func->module->items, item);
+          DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, item);
+        }
       }
     }
     break;
