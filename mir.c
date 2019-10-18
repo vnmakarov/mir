@@ -2956,8 +2956,8 @@ typedef enum {
 static const int CURR_BIN_VERSION = 1;
 
 DEF_VARR (MIR_str_t);
-
 DEF_VARR (uint64_t);
+DEF_VARR (MIR_label_t);
 
 struct io_ctx {
   FILE *io_file;
@@ -2965,6 +2965,7 @@ struct io_ctx {
   HTAB (string_t) * output_string_tab;
   VARR (MIR_str_t) * bin_strings;
   VARR (uint64_t) * insn_label_string_nums;
+  VARR (MIR_label_t) * func_labels;
 };
 
 #define io_file ctx->io_ctx->io_file
@@ -2973,6 +2974,7 @@ struct io_ctx {
 #define output_string_tab ctx->io_ctx->output_string_tab
 #define bin_strings ctx->io_ctx->bin_strings
 #define insn_label_string_nums ctx->io_ctx->insn_label_string_nums
+#define func_labels ctx->io_ctx->func_labels
 
 typedef const void (*writer_func_t) (MIR_context_t, uint8_t);
 
@@ -3436,7 +3438,14 @@ static MIR_reg_t to_reg (MIR_context_t ctx, uint64_t reg_str_num, MIR_item_t fun
 }
 
 static MIR_label_t to_lab (MIR_context_t ctx, uint64_t lab_num) {
-  return create_label (ctx, lab_num);
+  MIR_label_t lab;
+
+  while (lab_num >= VARR_LENGTH (MIR_label_t, func_labels))
+    VARR_PUSH (MIR_label_t, func_labels, NULL);
+  if ((lab = VARR_GET (MIR_label_t, func_labels, lab_num)) != NULL) return lab;
+  lab = create_label (ctx, lab_num);
+  VARR_SET (MIR_label_t, func_labels, lab_num, lab);
+  return lab;
 }
 
 static int64_t read_int (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
@@ -3725,6 +3734,7 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
           func = MIR_new_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                                    VARR_LENGTH (MIR_var_t, temp_vars),
                                    VARR_ADDR (MIR_var_t, temp_vars));
+        VARR_TRUNC (MIR_label_t, func_labels, 0);
       } else if (strcmp (name, "endfunc") == 0) {
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "endfunc should have no labels");
@@ -3940,9 +3950,11 @@ static void io_init (MIR_context_t ctx) {
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (MIR_str_t, bin_strings, 512);
   VARR_CREATE (uint64_t, insn_label_string_nums, 64);
+  VARR_CREATE (MIR_label_t, func_labels, 512);
 }
 
 static void io_finish (MIR_context_t ctx) {
+  VARR_DESTROY (MIR_label_t, func_labels);
   VARR_DESTROY (uint64_t, insn_label_string_nums);
   VARR_DESTROY (MIR_str_t, bin_strings);
   free (ctx->io_ctx);
