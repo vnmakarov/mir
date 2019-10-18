@@ -6282,6 +6282,7 @@ static node_t get_adjacent_member (node_t member, int next_p) {
 
 struct init_object {
   struct type *container_type;
+  int designator_p;
   union {
     mir_llong curr_index;
     node_t curr_member;
@@ -6328,12 +6329,14 @@ static int update_init_object_path (size_t mark, struct type *value_type, int li
                        && !anon_struct_union_type_member_p (init_object.u.curr_member)));
                init_object.u.curr_member = NL_NEXT (init_object.u.curr_member))
             ;
-        } else if (init_object.container_type->mode == TM_UNION) { /* no next union member: */
+        } else if (init_object.container_type->mode == TM_UNION
+                   && !init_object.designator_p) { /* no next union member: */
           init_object.u.curr_member = NULL;
         } else { /* finding the next named struct member: */
           init_object.u.curr_member = get_adjacent_member (init_object.u.curr_member, TRUE);
         }
         if (init_object.u.curr_member != NULL) {
+          init_object.designator_p = FALSE;
           el_type = ((decl_t) init_object.u.curr_member->attr)->decl_spec.type;
           break;
         }
@@ -6348,6 +6351,7 @@ static int update_init_object_path (size_t mark, struct type *value_type, int li
         && el_type->u.tag_type == value_type->u.tag_type)
       return TRUE;
     init_object.container_type = el_type;
+    init_object.designator_p = FALSE;
     if (el_type->mode == TM_ARR) {
       init_object.u.curr_index = -1;
     } else {
@@ -6524,11 +6528,13 @@ static void process_init_field_designator (node_t designator_member, struct type
   while (VARR_LENGTH (node_t, containing_anon_members) != 0) {
     init_object.u.curr_member = VARR_POP (node_t, containing_anon_members);
     init_object.container_type = container_type;
+    init_object.designator_p = FALSE;
     VARR_PUSH (init_object_t, init_object_path, init_object);
     container_type = (decl = init_object.u.curr_member->attr)->decl_spec.type;
   }
   init_object.u.curr_member = get_adjacent_member (designator_member, FALSE);
   init_object.container_type = container_type;
+  init_object.designator_p = TRUE;
   VARR_PUSH (init_object_t, init_object_path, init_object);
 }
 
@@ -6624,6 +6630,7 @@ check_one_value:
   }
   mark = VARR_LENGTH (init_object_t, init_object_path);
   init_object.container_type = type;
+  init_object.designator_p = FALSE;
   if (type->mode == TM_ARR) {
     size_node = type->u.arr_type->size;
     sexpr = size_node->attr;
@@ -6680,6 +6687,7 @@ check_one_value:
           error (curr_des->pos, "array index in initializer exceeds array bounds");
         } else {
           init_object.u.curr_index = cexpr->u.i_val - 1; /* previous el */
+          init_object.designator_p = FALSE;
           VARR_PUSH (init_object_t, init_object_path, init_object);
           if (!update_path_and_do (check_initializer, mark, value, const_only_p, &max_index,
                                    init->pos, "array"))
@@ -9546,6 +9554,7 @@ check_one_value:
   }
   mark = VARR_LENGTH (init_object_t, init_object_path);
   init_object.container_type = type;
+  init_object.designator_p = FALSE;
   if (type->mode == TM_ARR) {
     size_node = type->u.arr_type->size;
     sexpr = size_node->attr;
@@ -9587,6 +9596,7 @@ check_one_value:
           assert (type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
                   && !type->incomplete_p && size_val >= 0 && size_val > cexpr->u.u_val);
           init_object.u.curr_index = cexpr->u.i_val - 1;
+          init_object.designator_p = FALSE;
           VARR_PUSH (init_object_t, init_object_path, init_object);
           ok_p
             = update_path_and_do (collect_init_els, mark, value, const_only_p, NULL, init->pos, "");
