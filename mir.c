@@ -4244,7 +4244,8 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
     }
     VARR_PUSH (char, temp_string, c);
   }
-  VARR_PUSH (char, temp_string, 0);
+  if (VARR_LENGTH (char, temp_string) > 0 && VARR_LAST (char, temp_string) != 0)
+    VARR_PUSH (char, temp_string, 0);
   t->code = TC_STR;
   t->u.str
     = string_store (ctx, &strings, &string_tab,
