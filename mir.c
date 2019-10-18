@@ -1989,7 +1989,7 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
         else
           output_hard_reg (f, op.u.hard_reg_mem.index);
         if (op.u.mem.scale != 1) {
-          fprintf (f, " * ");
+          fprintf (f, ", ");
           output_scale (f, op.u.mem.scale);
         }
       }
