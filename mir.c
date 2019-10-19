@@ -1935,9 +1935,9 @@ static void out_str (FILE *f, MIR_str_t str) {
   fprintf (f, "\"");
   for (size_t i = 0; i < str.len; i++)
     if (str.s[i] == '\\')
-      fprintf (f, "\\");
+      fprintf (f, "\\\\");
     else if (str.s[i] == '"')
-      fprintf (f, "\"");
+      fprintf (f, "\\\"");
     else if (isprint (str.s[i]))
       fprintf (f, "%c", str.s[i]);
     else if (str.s[i] == '\n')
