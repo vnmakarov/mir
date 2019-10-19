@@ -4328,8 +4328,8 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
           token->u.ld = strtold (repr, &end);
         } else {
           token->code = TC_INT;
-          token->u.i = (sizeof (long) == sizeof (int64_t) ? strtol (repr, &end, base)
-                                                          : strtoll (repr, &end, base));
+          token->u.i = (sizeof (long) == sizeof (int64_t) ? strtoul (repr, &end, base)
+                                                          : strtoull (repr, &end, base));
         }
         mir_assert (*end == '\0');
         if (errno != 0)
