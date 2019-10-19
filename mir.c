@@ -3014,7 +3014,7 @@ static size_t int_length (int64_t i) {
 
   do {
     n++;
-    i /= (1 << CHAR_BIT);
+    i /= ((uint64_t) 1 << (CHAR_BIT - 1));
   } while (i != 0);
   return n;
 }
