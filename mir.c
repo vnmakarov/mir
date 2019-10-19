@@ -3070,6 +3070,7 @@ static size_t write_int (MIR_context_t ctx, writer_func_t writer, int64_t i) {
 
   if (writer == NULL) return 0;
   nb = int_length (i);
+  assert (nb > 0);
   put_byte (ctx, writer, TAG_I1 + nb - 1);
   len = put_int (ctx, writer, i, nb) + 1;
   output_int_len += len;
@@ -3445,7 +3446,7 @@ typedef union {
 static uint64_t get_uint (MIR_context_t ctx, reader_func_t reader, int nb) {
   uint64_t res = 0;
 
-  for (int i = 0; i < nb; i++) res |= (unsigned char) get_byte (ctx, reader) << (i * CHAR_BIT);
+  for (int i = 0; i < nb; i++) res |= (uint64_t) get_byte (ctx, reader) << (i * CHAR_BIT);
   return res;
 }
 
