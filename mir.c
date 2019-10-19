@@ -3954,7 +3954,8 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
           default: (*error_func) (MIR_binary_io_error, "wrong data value tag %d", tag);
           }
         }
-        MIR_new_data (ctx, name, type, VARR_LENGTH (uint8_t, temp_data),
+        MIR_new_data (ctx, name, type,
+                      VARR_LENGTH (uint8_t, temp_data) / _MIR_type_size (ctx, type),
                       VARR_ADDR (uint8_t, temp_data));
       } else if (strcmp (name, "local") == 0) {
         if (func == NULL) (*error_func) (MIR_binary_io_error, "local outside func");
