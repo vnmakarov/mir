@@ -4699,6 +4699,55 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_string_data (ctx, name, op_addr[0].u.str);
+    } else if (proto_p) {
+      if (module == NULL) process_error (ctx, MIR_syntax_error, "prototype outside module");
+      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
+                       VARR_ADDR (MIR_op_t, temp_insn_ops));
+      if (dots_p)
+        MIR_new_vararg_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
+                                  VARR_LENGTH (MIR_type_t, temp_types),
+                                  VARR_ADDR (MIR_type_t, temp_types),
+                                  VARR_LENGTH (MIR_var_t, temp_vars),
+                                  VARR_ADDR (MIR_var_t, temp_vars));
+      else
+        MIR_new_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
+                           VARR_LENGTH (MIR_type_t, temp_types), VARR_ADDR (MIR_type_t, temp_types),
+                           VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
+    } else if (func_p) {
+      if (module == NULL) process_error (ctx, MIR_syntax_error, "func outside module");
+      if (func != NULL) process_error (ctx, MIR_syntax_error, "nested func");
+      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
+                       VARR_ADDR (MIR_op_t, temp_insn_ops));
+      if (dots_p)
+        func = MIR_new_vararg_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
+                                        VARR_LENGTH (MIR_type_t, temp_types),
+                                        VARR_ADDR (MIR_type_t, temp_types),
+                                        VARR_LENGTH (MIR_var_t, temp_vars),
+                                        VARR_ADDR (MIR_var_t, temp_vars));
+      else
+        func
+          = MIR_new_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
+                              VARR_LENGTH (MIR_type_t, temp_types),
+                              VARR_ADDR (MIR_type_t, temp_types),
+                              VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
+      HTAB_CLEAR (label_desc_t, label_desc_tab, NULL);
+    } else if (end_func_p) {
+      if (func == NULL) process_error (ctx, MIR_syntax_error, "standalone endfunc");
+      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
+        process_error (ctx, MIR_syntax_error, "endfunc should have no params");
+      func = NULL;
+      MIR_finish_func (ctx);
+    } else if (export_p || import_p || forward_p) { /* we already created items, now do nothing: */
+      mir_assert (VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0);
+    } else if (local_p) {
+      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
+      for (i = 0; i < n; i++) {
+        if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
+          process_error (ctx, MIR_syntax_error, "wrong local var");
+        MIR_new_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
+                          (const char *) op_addr[i].u.mem.disp);
+      }
     } else if (data_type != MIR_T_BOUND) {
       union {
         uint8_t u8;
@@ -4764,55 +4813,6 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_data (ctx, name, data_type, VARR_LENGTH (uint8_t, temp_data),
                     VARR_ADDR (uint8_t, temp_data));
-    } else if (proto_p) {
-      if (module == NULL) process_error (ctx, MIR_syntax_error, "prototype outside module");
-      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
-                       VARR_ADDR (MIR_op_t, temp_insn_ops));
-      if (dots_p)
-        MIR_new_vararg_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                                  VARR_LENGTH (MIR_type_t, temp_types),
-                                  VARR_ADDR (MIR_type_t, temp_types),
-                                  VARR_LENGTH (MIR_var_t, temp_vars),
-                                  VARR_ADDR (MIR_var_t, temp_vars));
-      else
-        MIR_new_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                           VARR_LENGTH (MIR_type_t, temp_types), VARR_ADDR (MIR_type_t, temp_types),
-                           VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
-    } else if (func_p) {
-      if (module == NULL) process_error (ctx, MIR_syntax_error, "func outside module");
-      if (func != NULL) process_error (ctx, MIR_syntax_error, "nested func");
-      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
-                       VARR_ADDR (MIR_op_t, temp_insn_ops));
-      if (dots_p)
-        func = MIR_new_vararg_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                                        VARR_LENGTH (MIR_type_t, temp_types),
-                                        VARR_ADDR (MIR_type_t, temp_types),
-                                        VARR_LENGTH (MIR_var_t, temp_vars),
-                                        VARR_ADDR (MIR_var_t, temp_vars));
-      else
-        func
-          = MIR_new_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                              VARR_LENGTH (MIR_type_t, temp_types),
-                              VARR_ADDR (MIR_type_t, temp_types),
-                              VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
-      HTAB_CLEAR (label_desc_t, label_desc_tab, NULL);
-    } else if (end_func_p) {
-      if (func == NULL) process_error (ctx, MIR_syntax_error, "standalone endfunc");
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
-        process_error (ctx, MIR_syntax_error, "endfunc should have no params");
-      func = NULL;
-      MIR_finish_func (ctx);
-    } else if (export_p || import_p || forward_p) { /* we already created items, now do nothing: */
-      mir_assert (VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0);
-    } else if (local_p) {
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
-      for (i = 0; i < n; i++) {
-        if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
-          process_error (ctx, MIR_syntax_error, "wrong local var");
-        MIR_new_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
-                          (const char *) op_addr[i].u.mem.disp);
-      }
     } else {
       insn = MIR_new_insn_arr (ctx, insn_code, VARR_LENGTH (MIR_op_t, temp_insn_ops),
                                VARR_ADDR (MIR_op_t, temp_insn_ops));
