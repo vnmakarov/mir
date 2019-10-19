@@ -9629,6 +9629,18 @@ static int cmp_init_el (const void *p1, const void *p2) {
     return 0;
 }
 
+static void move_item_to_module_start (MIR_module_t module, MIR_item_t item) {
+  DLIST_REMOVE (MIR_item_t, module->items, item);
+  DLIST_PREPEND (MIR_item_t, module->items, item);
+}
+
+static void move_item_forward (MIR_item_t item) {
+  assert (curr_func != NULL);
+  if (DLIST_TAIL (MIR_item_t, curr_func->module->items) != item) return;
+  DLIST_REMOVE (MIR_item_t, curr_func->module->items, item);
+  DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, item);
+}
+
 static MIR_item_t memset_proto, memset_item;
 
 static void gen_memset (MIR_disp_t disp, MIR_reg_t base, mir_size_t len) {
@@ -9648,10 +9660,8 @@ static void gen_memset (MIR_disp_t disp, MIR_reg_t base, mir_size_t len) {
     module = curr_func->module;
     memset_proto = MIR_new_proto_arr (ctx, "memset_p", 1, &ret_type, 3, vars);
     memset_item = MIR_new_import (ctx, "memset");
-    DLIST_REMOVE (MIR_item_t, module->items, memset_proto);
-    DLIST_REMOVE (MIR_item_t, module->items, memset_item);
-    DLIST_PREPEND (MIR_item_t, module->items, memset_proto);
-    DLIST_PREPEND (MIR_item_t, module->items, memset_item);
+    move_item_to_module_start (module, memset_proto);
+    move_item_to_module_start (module, memset_item);
   }
   args[0] = MIR_new_ref_op (ctx, memset_proto);
   args[1] = MIR_new_ref_op (ctx, memset_item);
@@ -9689,10 +9699,8 @@ static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t le
     module = curr_func->module;
     memcpy_proto = MIR_new_proto_arr (ctx, "memcpy_p", 1, &ret_type, 3, vars);
     memcpy_item = MIR_new_import (ctx, "memcpy");
-    DLIST_REMOVE (MIR_item_t, module->items, memcpy_proto);
-    DLIST_REMOVE (MIR_item_t, module->items, memcpy_item);
-    DLIST_PREPEND (MIR_item_t, module->items, memcpy_proto);
-    DLIST_PREPEND (MIR_item_t, module->items, memcpy_item);
+    move_item_to_module_start (module, memcpy_proto);
+    move_item_to_module_start (module, memcpy_item);
   }
   args[0] = MIR_new_ref_op (ctx, memcpy_proto);
   args[1] = MIR_new_ref_op (ctx, memcpy_item);
@@ -9853,8 +9861,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
             module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
             data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module),
                                         (MIR_str_t){def->u.s.len, def->u.s.s});
-            DLIST_REMOVE (MIR_item_t, module->items, data);
-            DLIST_PREPEND (MIR_item_t, module->items, data);
+            move_item_to_module_start (module, data);
           }
           data = MIR_new_ref_data (ctx, global_name, data, e->u.i_val);
           data_size = _MIR_type_size (ctx, t);
@@ -9919,8 +9926,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       } else {
         module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
         data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module), val.mir_op.u.str);
-        DLIST_REMOVE (MIR_item_t, module->items, data);
-        DLIST_PREPEND (MIR_item_t, module->items, data);
+        move_item_to_module_start (module, data);
         data = MIR_new_ref_data (ctx, global_name, data, 0);
         data_size = _MIR_type_size (ctx, t);
       }
@@ -10592,8 +10598,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                 : id->u.s.s);
       if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
         decl->item = MIR_new_forward (ctx, name);
-        DLIST_REMOVE (MIR_item_t, curr_func->module->items, decl->item);
-        DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, decl->item);
+        move_item_forward (decl->item);
       } else if (decl->used_p && decl->decl_spec.linkage != N_IGNORE) {
         if (symbol_find (S_REGULAR, id,
                          decl->decl_spec.linkage == N_EXTERN ? top_scope : decl->scope, &sym)
@@ -10655,8 +10660,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
         } else if (decl->item != NULL && decl->scope != top_scope && decl->decl_spec.static_p) {
           MIR_item_t item = MIR_new_forward (ctx, name);
 
-          DLIST_REMOVE (MIR_item_t, curr_func->module->items, item);
-          DLIST_INSERT_BEFORE (MIR_item_t, curr_func->module->items, curr_func, item);
+          move_item_forward (item);
         }
       }
     }
