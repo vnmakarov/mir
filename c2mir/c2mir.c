@@ -11779,7 +11779,7 @@ int main (int argc, char *argv[], char *env[]) {
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
         start_time = real_usec_time ();
-        MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = 1}, (MIR_val_t){.a = (void *) argv},
+        MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = 3}, (MIR_val_t){.a = (void *) argv},
                     (MIR_val_t){.a = (void *) env});
         ret_code = val.i;
         if (verbose_p) {
