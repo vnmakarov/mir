@@ -4811,7 +4811,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
-      MIR_new_data (ctx, name, data_type, VARR_LENGTH (uint8_t, temp_data),
+      MIR_new_data (ctx, name, data_type,
+                    VARR_LENGTH (uint8_t, temp_data) / _MIR_type_size (ctx, data_type),
                     VARR_ADDR (uint8_t, temp_data));
     } else {
       insn = MIR_new_insn_arr (ctx, insn_code, VARR_LENGTH (MIR_op_t, temp_insn_ops),
