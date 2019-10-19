@@ -10607,6 +10607,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
             if ((decl->item = get_ref_item (VARR_GET (node_t, sym.defs, i), name)) != NULL) break;
         }
         if (decl->item == NULL) decl->item = MIR_new_import (ctx, name);
+        if (decl->scope != top_scope) move_item_forward (decl->item);
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
           && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p) {
