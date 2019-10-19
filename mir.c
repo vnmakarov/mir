@@ -4501,9 +4501,6 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       expr_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
         process_error (ctx, MIR_syntax_error, "at most one label should be used for expr");
-    } else if ((data_type = MIR_str2type (ctx, name)) != MIR_T_BOUND) {
-      if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for data");
     } else if (strcmp (name, "string") == 0) {
       string_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
@@ -4513,6 +4510,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (func == NULL) process_error (ctx, MIR_syntax_error, "local outside func");
       if (VARR_LENGTH (label_name_t, label_names) != 0)
         process_error (ctx, MIR_syntax_error, "local should have no labels");
+    } else if ((data_type = MIR_str2type (ctx, name)) != MIR_T_BOUND) {
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
+        process_error (ctx, MIR_syntax_error, "at most one label should be used for data");
     } else {
       in.name = name;
       if (!HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
