@@ -3047,7 +3047,7 @@ static size_t put_double (MIR_context_t ctx, writer_func_t writer, double d) {
 
   if (writer == NULL) return 0;
   u.d = d;
-  return put_uint (ctx, writer, u.d, sizeof (uint64_t));
+  return put_uint (ctx, writer, u.u, sizeof (uint64_t));
 }
 
 static size_t put_ldouble (MIR_context_t ctx, writer_func_t writer, long double ld) {
