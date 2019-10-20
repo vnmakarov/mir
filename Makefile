@@ -26,7 +26,7 @@ llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 l2m: llvm2mir.o $(MIR_DEPS) llvm2mir/llvm2mir.h llvm2mir/llvm2mir-driver.c mir-gen.c mir-gen.h 
 	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -o l2m
 
-test: util-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
+test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
 	@echo ==============================Test is done
       
 l2m-test: l2m-simple-test # ??? l2m-full-test
@@ -176,19 +176,19 @@ mir2c-test:
 mir2c-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -DTEST_MIR2C -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
 
-util-test: varr-test dlist-test bitmap-test htab-test
+adt-test: varr-test dlist-test bitmap-test htab-test
 
 varr-test:
-	$(CC) -g -I. util-tests/mir-varr-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-varr-test.c && ./a.out
 
 dlist-test:
-	$(CC) -g -I. util-tests/mir-dlist-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-dlist-test.c && ./a.out
 
 bitmap-test:
-	$(CC) -g -I. util-tests/mir-bitmap-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-bitmap-test.c && ./a.out
 
 htab-test:
-	$(CC) -g -I. util-tests/mir-htab-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-htab-test.c && ./a.out
 
 clean:
 	rm -f $(OBJS) ./a.out
