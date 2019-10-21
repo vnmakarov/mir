@@ -7,7 +7,7 @@ CFLAGS=-O3 -g
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
-OBJS=mir.o mir-gen.o c2m l2m
+OBJS=mir.o mir-gen.o c2m l2m  m2b b2m
 
 all: $(OBJS)
 
@@ -26,6 +26,12 @@ llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 l2m: llvm2mir.o $(MIR_DEPS) llvm2mir/llvm2mir.h llvm2mir/llvm2mir-driver.c mir-gen.c mir-gen.h 
 	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -o l2m
 
+b2m: mir.o mir-utils/b2m.c
+	$(CC) -I. $(CFLAGS) -o $@ mir.o mir-utils/b2m.c
+	
+m2b: mir.o mir-utils/m2b.c
+	$(CC) -I. $(CFLAGS) -o $@ mir.o mir-utils/m2b.c
+	
 test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
 	@echo ==============================Test is done
       
