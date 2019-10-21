@@ -6,21 +6,18 @@ int sieve (int n) {
 
   for (iter = 0; iter < n; iter++) {
     count = 0;
-    for (i = 0; i < SieveSize; i++)
-      flags[i] = 1;
+    for (i = 0; i < SieveSize; i++) flags[i] = 1;
     for (i = 0; i < SieveSize; i++)
       if (flags[i]) {
-	prime = i + i + 3;
-	for (k = i + prime; k < SieveSize; k += prime)
-	  flags[k] = 0;
-	count++;
+        prime = i + i + 3;
+        for (k = i + prime; k < SieveSize; k += prime) flags[k] = 0;
+        count++;
       }
   }
   return count;
 }
-
+void printf (const char *s, int n);
 int main (void) {
-  if (sieve (10) != 123814)
-    abort ();
+  if (sieve (10) != 123814) abort ();
   return 0;
 }
