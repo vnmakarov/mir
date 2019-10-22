@@ -2768,8 +2768,9 @@ static struct val eval_expr (VARR (token_t) * expr_buffer, token_t if_token) {
       del_tokens (expr_buffer, i + 1, j - i);
     }
   }
-  assert (VARR_LENGTH (token_t, output_buffer) == 0
-          && VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && !no_out_p);
+  if (VARR_LENGTH (macro_call_t, macro_call_stack) != 0)
+    error (if_token->pos, "#if/#elif inside a macro call");
+  assert (VARR_LENGTH (token_t, output_buffer) == 0 && !no_out_p);
   /* macro substitution */
   unget_next_pptoken (new_token (if_token->pos, "", T_EOP, N_IGNORE));
   push_back (expr_buffer);
