@@ -9077,6 +9077,8 @@ static op_t mem_to_address (op_t mem) {
       emit2 (MIR_MOV, temp.mir_op, MIR_new_reg_op (ctx, mem.mir_op.u.mem.index));
     if (mem.mir_op.u.mem.base != 0)
       emit3 (MIR_ADD, temp.mir_op, temp.mir_op, MIR_new_reg_op (ctx, mem.mir_op.u.mem.base));
+    if (mem.mir_op.u.mem.disp != 0)
+      emit3 (MIR_ADD, temp.mir_op, temp.mir_op, MIR_new_int_op (ctx, mem.mir_op.u.mem.disp));
     mem = temp;
   }
   mem.mir_op.value_mode = MIR_OP_INT;
