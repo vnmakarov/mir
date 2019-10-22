@@ -101,6 +101,17 @@ static void get_icode (struct interp_ctx *interp_ctx, MIR_val_t *v, int code) {
 #endif
 }
 
+static void push_insn_start (struct interp_ctx *interp_ctx, int code, MIR_insn_t original_insn) {
+  MIR_val_t v;
+
+  get_icode (interp_ctx, &v, code);
+  VARR_PUSH (MIR_val_t, code_varr, v);
+#if MIR_INTERP_TRACE
+  v.a = original_insn;
+  VARR_PUSH (MIR_val_t, code_varr, v);
+#endif
+}
+
 static MIR_full_insn_code_t get_int_mem_insn_code (int load_p, MIR_type_t t) {
   switch (t) {
   case MIR_T_I8: return load_p ? IC_LDI8 : IC_STI8;
@@ -153,20 +164,17 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     switch (code) {
     case MIR_MOV: /* loads, imm moves */
       if (ops[0].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, get_int_mem_insn_code (FALSE, ops[0].u.mem.type));
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, get_int_mem_insn_code (FALSE, ops[0].u.mem.type), insn);
         v.i = get_reg (ops[1], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[0]);
       } else if (ops[1].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, get_int_mem_insn_code (TRUE, ops[1].u.mem.type));
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, get_int_mem_insn_code (TRUE, ops[1].u.mem.type), insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[1]);
       } else if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT) {
-        get_icode (interp_ctx, &v, IC_MOVI);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_MOVI, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         if (ops[1].mode == MIR_OP_INT)
@@ -179,16 +187,14 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
 
         if (item->item_type == MIR_import_item && item->ref_def != NULL)
           item->addr = item->ref_def->addr;
-        get_icode (interp_ctx, &v, IC_MOVP);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_MOVP, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.a = item->addr;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
         mir_assert (ops[1].mode == MIR_OP_REG);
-        get_icode (interp_ctx, &v, code);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, code, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.i = ops[1].u.reg;
@@ -197,28 +203,24 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       break;
     case MIR_FMOV:
       if (ops[0].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_STF);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_STF, insn);
         v.i = get_reg (ops[1], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[0]);
       } else if (ops[1].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_LDF);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_LDF, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[1]);
       } else if (ops[1].mode == MIR_OP_FLOAT) {
-        get_icode (interp_ctx, &v, IC_MOVF);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_MOVF, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.f = ops[1].u.f;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
         mir_assert (ops[1].mode == MIR_OP_REG);
-        get_icode (interp_ctx, &v, code);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, code, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.i = ops[1].u.reg;
@@ -227,28 +229,24 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       break;
     case MIR_DMOV:
       if (ops[0].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_STD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_STD, insn);
         v.i = get_reg (ops[1], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[0]);
       } else if (ops[1].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_LDD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_LDD, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[1]);
       } else if (ops[1].mode == MIR_OP_DOUBLE) {
-        get_icode (interp_ctx, &v, IC_MOVD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_MOVD, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.d = ops[1].u.d;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
         mir_assert (ops[1].mode == MIR_OP_REG);
-        get_icode (interp_ctx, &v, code);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, code, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.i = ops[1].u.reg;
@@ -257,28 +255,24 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       break;
     case MIR_LDMOV:
       if (ops[0].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_STLD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_STLD, insn);
         v.i = get_reg (ops[1], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[0]);
       } else if (ops[1].mode == MIR_OP_MEM) {
-        get_icode (interp_ctx, &v, IC_LDLD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_LDLD, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[1]);
       } else if (ops[1].mode == MIR_OP_LDOUBLE) {
-        get_icode (interp_ctx, &v, IC_MOVLD);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, IC_MOVLD, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.ld = ops[1].u.ld;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
         mir_assert (ops[1].mode == MIR_OP_REG);
-        get_icode (interp_ctx, &v, code);
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        push_insn_start (interp_ctx, code, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         v.i = ops[1].u.reg;
@@ -291,8 +285,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       break;
     case MIR_JMP:
       VARR_PUSH (MIR_insn_t, branches, insn);
-      get_icode (interp_ctx, &v, code);
-      VARR_PUSH (MIR_val_t, code_varr, v);
+      push_insn_start (interp_ctx, code, insn);
       v.i = 0;
       VARR_PUSH (MIR_val_t, code_varr, v);
       break;
@@ -301,8 +294,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     case MIR_BF:
     case MIR_BFS:
       VARR_PUSH (MIR_insn_t, branches, insn);
-      get_icode (interp_ctx, &v, code);
-      VARR_PUSH (MIR_val_t, code_varr, v);
+      push_insn_start (interp_ctx, code, insn);
       v.i = 0;
       VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = get_reg (ops[1], &max_nreg);
@@ -347,8 +339,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     case MIR_LDBGT:
     case MIR_LDBGE:
       VARR_PUSH (MIR_insn_t, branches, insn);
-      get_icode (interp_ctx, &v, code);
-      VARR_PUSH (MIR_val_t, code_varr, v);
+      push_insn_start (interp_ctx, code, insn);
       v.i = 0;
       VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = get_reg (ops[1], &max_nreg);
@@ -362,8 +353,8 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         imm_call_p = (ops[1].mode == MIR_OP_REF
                       && (ops[1].u.ref->item_type == MIR_import_item
                           || ops[1].u.ref->item_type == MIR_func_item));
-      get_icode (interp_ctx, &v, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code);
-      VARR_PUSH (MIR_val_t, code_varr, v);
+      push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
+                       insn);
       if (code == MIR_RET) {
         v.i = nops;
         VARR_PUSH (MIR_val_t, code_varr, v);
@@ -398,7 +389,11 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     insn = VARR_GET (MIR_insn_t, branches, i);
     label = insn->ops[0].u.label;
     v.i = (size_t) label->data;
+#if MIR_INTERP_TRACE
+    VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + 2, v);
+#else
     VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + 1, v);
+#endif
   }
   func_item->data = func_desc
     = malloc (sizeof (struct func_desc) + VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
@@ -729,7 +724,8 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
 static void start_insn_trace (MIR_context_t ctx, const char *name, func_desc_t func_desc, code_t pc,
                               size_t nops) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
-  code_t ops = pc + 1;
+  MIR_insn_t insn = pc[1].a;
+  code_t ops = pc + 2;
 
   for (int i = 0; i < trace_insn_ident; i++) fprintf (stderr, " ");
   fprintf (stderr, "%s", name);
@@ -737,6 +733,9 @@ static void start_insn_trace (MIR_context_t ctx, const char *name, func_desc_t f
     fprintf (stderr, i == 0 ? "\t" : ", ");
     fprintf (stderr, "%" PRId64, ops[i].i);
   }
+  fprintf (stderr, "\t#");
+  MIR_output_insn (ctx, stderr, insn, func_desc->func_item->u.func, FALSE);
+  fprintf (stderr, "");
 }
 
 static void finish_insn_trace (MIR_context_t ctx, MIR_insn_code_t code, code_t ops, MIR_val_t *bp) {
@@ -828,8 +827,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   do {                                               \
     trace_insn_code = v;                             \
     start_insn_trace (ctx, #v, func_desc, pc, nops); \
-    ops = pc + 1;                                    \
-    pc += nops + 1;                                  \
+    ops = pc + 2; /* skip original insn too */       \
+    pc += nops + 2;                                  \
   } while (0)
 #else
 #define START_INSN(v, nops) \
