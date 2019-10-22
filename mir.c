@@ -3010,22 +3010,15 @@ static size_t put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int
 }
 
 static size_t int_length (int64_t i) {
+  uint64_t u = i;
   size_t n = 0;
 
-  do {
-    n++;
-    i /= ((uint64_t) 1 << (CHAR_BIT - 1));
-  } while (i != 0);
-  return n;
+  for (n = 0; u != 0; n++) u >>= CHAR_BIT;
+  return n == 0 ? 1 : n;
 }
 
-static size_t put_int (MIR_context_t ctx, writer_func_t writer, int64_t u, int nb) {
-  if (writer == NULL) return 0;
-  for (int n = 0; n < nb; n++) {
-    put_byte (ctx, writer, u & 0xff);
-    u >>= CHAR_BIT;
-  }
-  return nb;
+static size_t put_int (MIR_context_t ctx, writer_func_t writer, int64_t i, int nb) {
+  return put_uint (ctx, writer, (uint64_t) i, nb);
 }
 
 static size_t put_float (MIR_context_t ctx, writer_func_t writer, float fl) {
@@ -3451,10 +3444,7 @@ static uint64_t get_uint (MIR_context_t ctx, reader_func_t reader, int nb) {
 }
 
 static int64_t get_int (MIR_context_t ctx, reader_func_t reader, int nb) {
-  int sh = (8 - nb) * CHAR_BIT;
-
-  mir_assert (0 < nb && nb <= 8);
-  return (int64_t) (get_uint (ctx, reader, nb) << sh) >> sh;
+  return (int64_t) get_uint (ctx, reader, nb);
 }
 
 static float get_float (MIR_context_t ctx, reader_func_t reader) {
