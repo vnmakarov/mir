@@ -77,6 +77,9 @@
       * The expression function is called during linking and its result is used to initilaize the data
     * **Memory segement**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
   * Names of MIR functions, imports, and prototypes should be unique in a module
+  * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
+    and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
+    textual representation into given file
   * MIR text module syntax looks the folowing:
 ```
     <module name>: module
@@ -190,7 +193,7 @@
   * You can remove insn from the function list through API function `MIR_remove_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn)`
   * The insn should be not inserted in the list if it is already there
   * The insn should be not removed form the list if it is not there
-  * API function `MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p)` output the insn
+  * API function `MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p)` outputs the insn
     textual representation into given file with a newline at the end depending on value of `newline_p`
   * Insn has the following syntax in MIR text:
 ```
