@@ -6414,9 +6414,11 @@ static int check_const_addr_p (node_t r, node_t *base, mir_llong *offset, int *d
     *deref = 0;
     return curr_scope == top_scope;
   case N_ID:
-    if (e->def_node->code == N_FUNC_DEF
-        || (e->def_node->code == N_SPEC_DECL
-            && ((decl_t) e->def_node->attr)->decl_spec.type->mode == TM_FUNC)) {
+    if (e->def_node == NULL)
+      return FALSE;
+    else if (e->def_node->code == N_FUNC_DEF
+             || (e->def_node->code == N_SPEC_DECL
+                 && ((decl_t) e->def_node->attr)->decl_spec.type->mode == TM_FUNC)) {
       *base = e->def_node;
       *deref = 0;
     } else if (e->lvalue_node == NULL
