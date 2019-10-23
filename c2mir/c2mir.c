@@ -11705,6 +11705,9 @@ static void *import_resolver (const char *name) {
     if ((sym = dlsym (libs[i].handler, name)) != NULL) break;
   }
   if (sym == NULL) {
+    if (strcmp (name, "dlopen") == 0) return dlopen;
+    if (strcmp (name, "dlclose") == 0) return dlclose;
+    if (strcmp (name, "dlsym") == 0) return dlsym;
     fprintf (stderr, "can not load symbol %s\n", name);
     close_libs ();
     exit (1);
