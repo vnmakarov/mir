@@ -356,7 +356,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t *called_func, void *hook_a
   push_insns (push_rax, sizeof (push_rax));
   push_insns (save_pat, sizeof (save_pat));
   addr = push_insns (call_pat, sizeof (call_pat));
-  memcpy (addr + 2, called_func, sizeof (void *));
+  memcpy (addr + 2, &called_func, sizeof (void *));
   memcpy (addr + 15, &hook_address, sizeof (void *));
   push_insns (restore_pat, sizeof (restore_pat));
   push_insns (wrap_end, sizeof (wrap_end));
