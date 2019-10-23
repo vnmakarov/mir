@@ -4049,8 +4049,10 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
   MIR_simplify_func (ctx, func_item, TRUE);
 #if MIR_GEN_DEBUG
-  fprintf (stderr, "+++++++++++++MIR after simplification:\n");
-  MIR_output (ctx, stderr);
+  if (debug_file != NULL) {
+    fprintf (debug_file, "+++++++++++++MIR after simplification:\n");
+    MIR_output_item (ctx, debug_file, func_item);
+  }
 #endif
   curr_func_item = func_item;
   curr_cfg = func_item->data = gen_malloc (ctx, sizeof (struct func_cfg));
