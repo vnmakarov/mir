@@ -2526,7 +2526,7 @@ static int ccp (MIR_context_t ctx) { /* conditional constant propagation */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
 #if MIR_GEN_DEBUG
-  fprintf (stderr, "  CCP analysis:\n");
+  if (debug_file != NULL) fprintf (debug_file, "  CCP analysis:\n");
 #endif
   build_var_occ_web (ctx);
   bb_visited = temp_bitmap;
@@ -2555,7 +2555,7 @@ static int ccp (MIR_context_t ctx) { /* conditional constant propagation */
     }
   }
 #if MIR_GEN_DEBUG
-  fprintf (stderr, "  CCP modification:\n");
+  if (debug_file != NULL) fprintf (debug_file, "  CCP modification:\n");
 #endif
   return ccp_modify (ctx);
 }
@@ -3339,9 +3339,9 @@ static void rewrite (MIR_context_t ctx) {
           && MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
 #if MIR_GEN_DEBUG
         if (debug_file != NULL) {
-          fprintf (stderr, "Deleting noop move ");
+          fprintf (debug_file, "Deleting noop move ");
           MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
-          fprintf (stderr, " which was ");
+          fprintf (debug_file, " which was ");
           insn->ops[0] = out_op;
           insn->ops[1] = in_op;
           MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -3665,7 +3665,7 @@ static int substitute_op_p (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int 
     gen_assert (def_insn != NULL);
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
-      fprintf (stderr, "      changing to ");
+      fprintf (debug_file, "      changing to ");
       MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
     }
 #endif
@@ -3758,7 +3758,7 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
     bb_insn->insn = new_insn;
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
-      fprintf (stderr, "      changing to ");
+      fprintf (debug_file, "      changing to ");
       MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
     }
 #endif
@@ -3801,7 +3801,7 @@ static void combine (MIR_context_t ctx) {
       nops = MIR_insn_nops (ctx, insn);
 #if MIR_GEN_DEBUG
       if (debug_file != NULL) {
-        fprintf (stderr, "  Processing ");
+        fprintf (debug_file, "  Processing ");
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
       }
 #endif
@@ -3853,7 +3853,7 @@ static void combine (MIR_context_t ctx) {
         def_insn = hreg_refs_addr[hr].insn;
 #if MIR_GEN_DEBUG
         if (debug_file != NULL) {
-          fprintf (stderr, "      deleting now dead insn ");
+          fprintf (debug_file, "      deleting now dead insn ");
           MIR_output_insn (ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
         }
 #endif
@@ -4041,8 +4041,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item->machine_code != NULL) {
     _MIR_redirect_thunk (ctx, func_item->addr, func_item->machine_code);
 #if MIR_GEN_DEBUG
-    fprintf (stderr, "+++++++++++++The code for %s has been already generated\n",
-             MIR_item_name (ctx, func_item));
+    if (debug_file != NULL)
+      fprintf (debug_file, "+++++++++++++The code for %s has been already generated\n",
+               MIR_item_name (ctx, func_item));
 #endif
     return func_item->addr;
   }
@@ -4186,7 +4187,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   MIR_reg_t i;
 
 #ifdef TEST_MIR_GEN
-  fprintf (stderr, "Page size = %lu\n", (unsigned long) page_size);
+  if (debug_file != NULL) fprintf (debug_file, "Page size = %lu\n", (unsigned long) page_size);
 #endif
   *gen_ctx_ptr = gen_ctx = gen_malloc (ctx, sizeof (struct gen_ctx));
   gen_ctx->target_ctx = NULL;
