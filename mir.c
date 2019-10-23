@@ -101,8 +101,8 @@ static void MIR_NO_RETURN util_error (MIR_context_t ctx, const char *message) {
   (*error_func) (MIR_alloc_error, message);
 }
 
-#define TEMP_REG_NAME_PREFIX "t"
 #define HARD_REG_NAME_PREFIX "hr"
+#define TEMP_REG_NAME_PREFIX "t"
 #define TEMP_ITEM_NAME_PREFIX ".lc"
 
 int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name) {
@@ -579,7 +579,7 @@ static MIR_item_t find_item (MIR_context_t ctx, const char *name, MIR_module_t m
 
 static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->data = NULL;
-  m->temp_items_num = 0;
+  m->last_temp_item_num = 0;
   m->name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   DLIST_INIT (MIR_item_t, m->items);
 }
@@ -1651,7 +1651,7 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
   for (;;) {
     func->last_temp_num++;
     if (func->last_temp_num == 0) (*error_func) (MIR_unique_reg_error, "out of unique regs");
-    sprintf (temp_buff, "t%d", func->last_temp_num);
+    sprintf (temp_buff, "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
     string
       = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (temp_buff) + 1, temp_buff});
     if (find_rd_by_name_num (ctx, string.num, func) == NULL)
@@ -2230,9 +2230,9 @@ static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type
 }
 
 const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module) {
-  snprintf (temp_buff, sizeof (temp_buff), "%s%lu", TEMP_ITEM_NAME_PREFIX,
-            (unsigned long) module->temp_items_num);
-  module->temp_items_num++;
+  module->last_temp_item_num++;
+  snprintf (temp_buff, sizeof (temp_buff), "%s%u", TEMP_ITEM_NAME_PREFIX,
+            (unsigned) module->last_temp_item_num);
   return temp_buff;
 }
 
@@ -3484,8 +3484,22 @@ static MIR_str_t to_str (MIR_context_t ctx, uint64_t str_num) {
   return VARR_GET (MIR_str_t, bin_strings, str_num);
 }
 
+static void process_reserved_name (const char *s, const char *prefix, uint32_t *max_num) {
+  char *end;
+  uint32_t num;
+  size_t len = strlen (prefix);
+
+  if (strncmp (s, prefix, len) != 0) return;
+  num = strtoul (s + len, &end, 10);
+  assert (end > s + len && *end == '\0');
+  if (*max_num < num) *max_num = num;
+}
+
 static MIR_reg_t to_reg (MIR_context_t ctx, uint64_t reg_str_num, MIR_item_t func) {
-  return MIR_reg (ctx, to_str (ctx, reg_str_num).s, func->u.func);
+  const char *s = to_str (ctx, reg_str_num).s;
+
+  process_reserved_name (s, TEMP_REG_NAME_PREFIX, &func->u.func->last_temp_num);
+  return MIR_reg (ctx, s, func->u.func);
 }
 
 static MIR_label_t to_lab (MIR_context_t ctx, uint64_t lab_num) {
@@ -3543,11 +3557,15 @@ static MIR_type_t read_type (MIR_context_t ctx, reader_func_t reader, const char
   return tag_type (c);
 }
 
-static const char *read_name (MIR_context_t ctx, reader_func_t reader, const char *err_msg) {
+static const char *read_name (MIR_context_t ctx, reader_func_t reader, MIR_module_t module,
+                              const char *err_msg) {
   int c = get_byte (ctx, reader);
+  const char *s;
 
   if (TAG_NAME1 > c || c > TAG_NAME4) (*error_func) (MIR_binary_io_error, err_msg);
-  return to_str (ctx, get_uint (ctx, reader, c - TAG_NAME1 + 1)).s;
+  s = to_str (ctx, get_uint (ctx, reader, c - TAG_NAME1 + 1)).s;
+  process_reserved_name (s, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
+  return s;
 }
 
 #define TAG_CASE(t) case TAG_##t:
@@ -3688,7 +3706,8 @@ static int read_operand (MIR_context_t ctx, reader_func_t reader, MIR_op_t *op, 
 }
 #undef REP_SEP
 
-static int func_proto_read (MIR_context_t ctx, reader_func_t reader, uint64_t *nres_ptr) {
+static int func_proto_read (MIR_context_t ctx, reader_func_t reader, MIR_module_t module,
+                            uint64_t *nres_ptr) {
   bin_tag_t tag;
   token_attr_t attr;
   MIR_var_t var;
@@ -3709,7 +3728,7 @@ static int func_proto_read (MIR_context_t ctx, reader_func_t reader, uint64_t *n
     if (TAG_TI8 > tag || tag > TAG_TBLOCK)
       (*error_func) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
-    var.name = read_name (ctx, reader, "wrong arg name");
+    var.name = read_name (ctx, reader, module, "wrong arg name");
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
   *nres_ptr = nres;
@@ -3748,7 +3767,7 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
     if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
       name = to_str (ctx, attr.u).s;
       if (strcmp (name, "module") == 0) {
-        name = read_name (ctx, reader, "wrong module name");
+        name = read_name (ctx, reader, module, "wrong module name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before module %s", name);
         if (module != NULL) (*error_func) (MIR_binary_io_error, "nested module %s", name);
@@ -3760,12 +3779,12 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
         MIR_finish_module (ctx);
         module = NULL;
       } else if (strcmp (name, "proto") == 0) {
-        name = read_name (ctx, reader, "wrong prototype name");
+        name = read_name (ctx, reader, module, "wrong prototype name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before proto %s", name);
         if (module == NULL)
           (*error_func) (MIR_binary_io_error, "prototype %s outside module", name);
-        if (func_proto_read (ctx, reader, &nres))
+        if (func_proto_read (ctx, reader, module, &nres))
           MIR_new_vararg_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                                     VARR_LENGTH (MIR_var_t, temp_vars),
                                     VARR_ADDR (MIR_var_t, temp_vars));
@@ -3773,12 +3792,12 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
           MIR_new_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                              VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
       } else if (strcmp (name, "func") == 0) {
-        name = read_name (ctx, reader, "wrong func name");
+        name = read_name (ctx, reader, module, "wrong func name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "insn label before func %s", name);
         if (func != NULL) (*error_func) (MIR_binary_io_error, "nested func %s", name);
         if (module == NULL) (*error_func) (MIR_binary_io_error, "func %s outside module", name);
-        if (func_proto_read (ctx, reader, &nres))
+        if (func_proto_read (ctx, reader, module, &nres))
           func = MIR_new_vararg_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
                                           VARR_LENGTH (MIR_var_t, temp_vars),
                                           VARR_ADDR (MIR_var_t, temp_vars));
@@ -3794,43 +3813,46 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
         MIR_finish_func (ctx);
         func = NULL;
       } else if (strcmp (name, "export") == 0) {
-        name = read_name (ctx, reader, "wrong export name");
+        name = read_name (ctx, reader, module, "wrong export name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "export %s should have no labels", name);
         MIR_new_export (ctx, name);
       } else if (strcmp (name, "import") == 0) {
-        name = read_name (ctx, reader, "wrong import name");
+        name = read_name (ctx, reader, module, "wrong import name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "import %s should have no labels", name);
         MIR_new_import (ctx, name);
       } else if (strcmp (name, "forward") == 0) {
-        name = read_name (ctx, reader, "wrong forward name");
+        name = read_name (ctx, reader, module, "wrong forward name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "forward %s should have no labels", name);
         MIR_new_forward (ctx, name);
       } else if (strcmp (name, "nbss") == 0 || strcmp (name, "bss") == 0) {
-        name = strcmp (name, "nbss") == 0 ? read_name (ctx, reader, "wrong bss name") : NULL;
+        name
+          = strcmp (name, "nbss") == 0 ? read_name (ctx, reader, module, "wrong bss name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "bss %s should have no labels",
                          name == NULL ? "" : name);
         u = read_uint (ctx, reader, "wrong bss len");
         MIR_new_bss (ctx, name, u);
       } else if (strcmp (name, "nref") == 0 || strcmp (name, "ref") == 0) {
-        name = strcmp (name, "nref") == 0 ? read_name (ctx, reader, "wrong ref data name") : NULL;
+        name = strcmp (name, "nref") == 0 ? read_name (ctx, reader, module, "wrong ref data name")
+                                          : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "ref data %s should have no labels",
                          name == NULL ? "" : name);
-        item_name = read_name (ctx, reader, "wrong ref data item name");
+        item_name = read_name (ctx, reader, module, "wrong ref data item name");
         if ((item = find_item (ctx, item_name, module)) == NULL)
           (*error_func) (MIR_binary_io_error, "ref data refers to non-existing item %s", item_name);
         i = read_int (ctx, reader, "wrong ref disp");
         MIR_new_ref_data (ctx, name, item, i);
       } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
-        name = strcmp (name, "nexpr") == 0 ? read_name (ctx, reader, "wrong expr name") : NULL;
+        name
+          = strcmp (name, "nexpr") == 0 ? read_name (ctx, reader, module, "wrong expr name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "expr %s should have no labels",
                          name == NULL ? "" : name);
-        item_name = read_name (ctx, reader, "wrong expr func name");
+        item_name = read_name (ctx, reader, module, "wrong expr func name");
         if ((item = find_item (ctx, item_name, module)) == NULL || item->item_type != MIR_func_item)
           (*error_func) (MIR_binary_io_error, "expr refers to non-function %s", item_name);
         MIR_new_expr_data (ctx, name, item);
@@ -3848,7 +3870,8 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
           int64_t i64;
         } v;
 
-        name = strcmp (name, "ndata") == 0 ? read_name (ctx, reader, "wrong data name") : NULL;
+        name
+          = strcmp (name, "ndata") == 0 ? read_name (ctx, reader, module, "wrong data name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
           (*error_func) (MIR_binary_io_error, "data %s should have no labels",
                          name == NULL ? "" : name);
@@ -3957,7 +3980,7 @@ void MIR_read_with_func (MIR_context_t ctx, reader_func_t reader) {
           if (TAG_TI8 > tag || tag > TAG_TBLOCK)
             (*error_func) (MIR_binary_io_error, "wrong local var type tag %d", tag);
           MIR_new_func_reg (ctx, func->u.func, tag_type (tag),
-                            read_name (ctx, reader, "wrong local var name"));
+                            read_name (ctx, reader, module, "wrong local var name"));
         }
       } else {
         (*error_func) (MIR_binary_io_error, "unknown insn name %s", name);

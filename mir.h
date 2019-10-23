@@ -357,7 +357,7 @@ struct MIR_module {
   const char *name;
   DLIST (MIR_item_t) items; /* module items */
   DLIST_LINK (MIR_module_t) module_link;
-  size_t temp_items_num; /* Used only internally */
+  uint32_t last_temp_item_num; /* Used only internally */
 };
 
 /* Definition of double list of MIR_item_t type elements */
