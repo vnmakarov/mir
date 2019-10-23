@@ -2045,7 +2045,7 @@ static void output_func_proto (FILE *f, size_t nres, MIR_type_t *types, size_t n
   fprintf (f, "\n");
 }
 
-static void output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
+void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
   MIR_proto_t proto;
@@ -2147,7 +2147,7 @@ void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
   fprintf (f, "%s:\tmodule\n", module->name);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
-    output_item (ctx, f, item);
+    MIR_output_item (ctx, f, item);
   fprintf (f, "\tendmodule\n");
 }
 

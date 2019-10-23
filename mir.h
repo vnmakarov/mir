@@ -475,6 +475,7 @@ extern const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp);
 extern void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func);
 extern void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func,
                              int newline_p);
+extern void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item);
 extern void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module);
 extern void MIR_output (MIR_context_t ctx, FILE *f);
 
