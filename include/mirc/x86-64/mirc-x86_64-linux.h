@@ -84,3 +84,5 @@ typedef unsigned int char32_t;
 #define __unix 1
 #define __unix__ 1
 #define linux 1
+
+void *alloca (unsigned long);
