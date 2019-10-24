@@ -138,9 +138,8 @@ enum type_mode {
 
 struct type {
   struct type_qual type_qual;
-  node_t pos_node;            /* set up and used only for checking type correctness */
-  unsigned char incomplete_p; /* incomplete type */
-  struct type *arr_type;      /* NULL or array type before its adjustment */
+  node_t pos_node;       /* set up and used only for checking type correctness */
+  struct type *arr_type; /* NULL or array type before its adjustment */
   /* Raw type size (w/o alignment type itself requirement but with
      element alignment requirements), undefined if mir_size_max.  */
   mir_size_t raw_size;
@@ -161,7 +160,10 @@ static const struct type ENUM_INT_TYPE = {.raw_size = MIR_SIZE_MAX,
                                           .mode = TM_BASIC,
                                           .u = {.basic_type = ENUM_BASIC_INT_TYPE}};
 
+static void set_type_layout (struct type *type);
+
 static mir_size_t raw_type_size (struct type *type) {
+  if (type->raw_size == MIR_SIZE_MAX) set_type_layout (type);
   assert (type->raw_size != MIR_SIZE_MAX);
   return type->raw_size;
 }
@@ -4731,7 +4733,6 @@ static struct type_qual type_qual_union (const struct type_qual *tq1, const stru
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
   type->pos_node = NULL;
-  type->incomplete_p = FALSE;
   type->arr_type = NULL;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
@@ -4898,7 +4899,7 @@ struct enum_value {
 };
 
 struct node_scope {
-  int stack_var_p; /* necessity for frame */
+  unsigned char stack_var_p; /* necessity for frame */
   unsigned func_scope_num;
   mir_size_t size, offset, call_arg_area_size;
   node_t scope;
@@ -5079,6 +5080,8 @@ static int type_align (struct type *type) {
   return type->align;
 }
 
+static int incomplete_type_p (struct type *type);
+
 static void aux_set_type_align (struct type *type) {
   /* Should be called only from set_type_layout. */
   int align, member_align;
@@ -5098,8 +5101,10 @@ static void aux_set_type_align (struct type *type) {
     align = 0; /* error type */
   } else {
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-    align = 1;
-    if (!type->incomplete_p)
+    if (incomplete_type_p (type)) {
+      align = -1;
+    } else {
+      align = 1;
       for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); member != NULL;
            member = NL_NEXT (member))
         if (member->code == N_MEMBER) {
@@ -5113,6 +5118,7 @@ static void aux_set_type_align (struct type *type) {
           member_align = type_align (decl->decl_spec.type);
           if (align < member_align) align = member_align;
         }
+    }
   }
   type->align = align;
 }
@@ -5222,7 +5228,9 @@ static void set_type_layout (struct type *type) {
     mir_size_t offset = 0, prev_size = 0;
 
     assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-    if (!type->incomplete_p) {
+    if (incomplete_type_p (type)) {
+      overall_size = MIR_SIZE_MAX;
+    } else {
       for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
@@ -5284,6 +5292,33 @@ static int void_type_p (struct type *type) {
 
 static int void_ptr_p (struct type *type) {
   return type->mode == TM_PTR && void_type_p (type->u.ptr_type);
+}
+
+static int incomplete_type_p (struct type *type) {
+  switch (type->mode) {
+  case TM_BASIC: return type->u.basic_type == TP_VOID;
+  case TM_ENUM:
+  case TM_STRUCT:
+  case TM_UNION: {
+    node_t scope, n = type->u.tag_type;
+
+    if (NL_EL (n->ops, 1)->code == N_IGNORE) return TRUE;
+    for (scope = curr_scope; scope != NULL && scope != top_scope && scope != n;
+         scope = ((struct node_scope *) scope->attr)->scope)
+      ;
+    return scope == n;
+  }
+  case TM_PTR: return FALSE;
+  case TM_ARR: {
+    struct arr_type *arr_type = type->u.arr_type;
+
+    return (arr_type->size->code == N_IGNORE || incomplete_type_p (arr_type->el_type));
+  }
+  case TM_FUNC:
+    return ((type = type->u.func_type->ret_type) == NULL
+            || !void_type_p (type) && incomplete_type_p (type));
+  default: return FALSE;
+  }
 }
 
 static int null_const_p (struct expr *expr, struct type *type) {
@@ -5527,9 +5562,8 @@ static void def_symbol (enum symbol_mode mode, node_t id, node_t scope, node_t d
 }
 
 static void make_type_complete (struct type *type) {
-  if (!type->incomplete_p) return;
-  /* The type became complete: recalculate size: */
-  type->incomplete_p = FALSE;
+  if (incomplete_type_p (type)) return;
+  /* The type may become complete: recalculate size: */
   type->raw_size = MIR_SIZE_MAX;
   set_type_layout (type);
 }
@@ -5644,10 +5678,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
         error (n->pos, "void with sign qualifier");
       else if (size != 0)
         error (n->pos, "void with short or long");
-      else {
+      else
         type->u.basic_type = TP_VOID;
-        type->incomplete_p = TRUE;
-      }
       break;
     case N_UNSIGNED:
     case N_SIGNED:
@@ -5722,16 +5754,6 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
         decl->used_p = TRUE;
         assert (decl->decl_spec.typedef_p);
         *type = *decl->decl_spec.type;
-        if (type->incomplete_p
-            && (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ENUM)
-            && NL_EL (type->u.tag_type->ops, 1)->code != N_IGNORE) {
-          for (node_t scope = curr_scope; scope != type->u.tag_type;
-               scope = ((struct node_scope *) scope->attr)->scope)
-            if (scope == top_scope) { /* We are not in the struct/union anymore */
-              make_type_complete (type);
-              break;
-            }
-        }
       }
       break;
     }
@@ -5747,7 +5769,6 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       check_type_duplication (type, n, n->code == N_STRUCT ? "struct" : "union", size, sign);
       type->mode = n->code == N_STRUCT ? TM_STRUCT : TM_UNION;
       type->u.tag_type = res;
-      type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
       new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
                      || NL_EL (decl->ops, 1)->code != N_IGNORE);
       type->unnamed_anon_struct_union_member_type_p = !new_scope_p;
@@ -5756,10 +5777,7 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
         if (new_scope_p) create_node_scope (res);
         check (decl_list, n);
         if (new_scope_p) finish_scope ();
-        if (res != n) {
-          type->incomplete_p = TRUE;
-          make_type_complete (type); /* recalculate size */
-        }
+        if (res != n) make_type_complete (type); /* recalculate size */
       }
       curr_unnamed_anon_struct_union_member = saved_unnamed_anon_struct_union_member;
       break;
@@ -5773,9 +5791,8 @@ static struct decl_spec check_decl_spec (node_t r, node_t decl) {
       check_type_duplication (type, n, "enum", size, sign);
       type->mode = TM_ENUM;
       type->u.tag_type = res;
-      type->incomplete_p = NL_EL (res->ops, 1)->code == N_IGNORE;
       if (enum_list->code == N_IGNORE) {
-        if (type->incomplete_p) error (n->pos, "enum storage size is unknown");
+        if (incomplete_type_p (type)) error (n->pos, "enum storage size is unknown");
       } else {
         mir_int curr_val = 0;
 
@@ -5895,10 +5912,6 @@ static struct type *append_type (struct type *head, struct type *el) {
     holder = &head->u.func_type->ret_type;
   }
   *holder = append_type (*holder, el);
-  if (head->mode != TM_PTR && (*holder)->incomplete_p
-      && (head->mode != TM_FUNC || (*holder)->mode != TM_BASIC
-          || (*holder)->u.basic_type != TP_VOID))
-    head->incomplete_p = TRUE;
   return head;
 }
 
@@ -5923,7 +5936,6 @@ static void adjust_param_type (struct type **type_ptr) {
     type->mode = TM_PTR;
     type->u.ptr_type = arr_type->el_type;
     type->type_qual = arr_type->ind_type_qual;
-    type->incomplete_p = TRUE;
     make_type_complete (type);
   } else if (type->mode == TM_FUNC) {
     par_type = create_type (NULL);
@@ -5931,7 +5943,6 @@ static void adjust_param_type (struct type **type_ptr) {
     par_type->pos_node = type->pos_node;
     par_type->u.ptr_type = type;
     *type_ptr = type = par_type;
-    type->incomplete_p = TRUE;
     make_type_complete (type);
   }
 }
@@ -6117,23 +6128,15 @@ static void check_type (struct type *type, int level, int func_def_p) {
   switch (type->mode) {
   case TM_PTR: check_type (type->u.ptr_type, level + 1, FALSE); break;
   case TM_STRUCT:
-  case TM_UNION: {
-    node_t id = NL_HEAD (type->u.tag_type->ops);
-    node_t decl_list = NL_NEXT (id);
-
-    if (decl_list->code == N_IGNORE) type->incomplete_p = TRUE;
-    break;
-  }
+  case TM_UNION: break;
   case TM_ARR: {
     struct arr_type *arr_type = type->u.arr_type;
     node_t size_node = arr_type->size;
     struct type *el_type = arr_type->el_type;
 
-    if (size_node->code == N_IGNORE) {
-      type->incomplete_p = TRUE;
-    } else if (size_node->code == N_STAR) {
+    if (size_node->code == N_STAR) {
       error (size_node->pos, "variable size arrays are not supported");
-    } else {
+    } else if (size_node->code != N_IGNORE) {
       struct expr *cexpr = size_node->attr;
 
       if (!integer_type_p (cexpr->type)) {
@@ -6148,9 +6151,8 @@ static void check_type (struct type *type, int level, int func_def_p) {
     check_type (el_type, level + 1, FALSE);
     if (el_type->mode == TM_FUNC) {
       error (type->pos_node->pos, "array of functions");
-    } else if (el_type->incomplete_p) {
+    } else if (incomplete_type_p (el_type)) {
       error (type->pos_node->pos, "incomplete array element type");
-      type->incomplete_p = TRUE;
     } else if (!in_params_p || level != 0) {
       if (arr_type->static_p)
         error (type->pos_node->pos, "static should be only in parameter outermost");
@@ -6189,7 +6191,7 @@ static void check_type (struct type *type, int level, int func_def_p) {
         } else if (func_def_p) {
           if (p->code == N_TYPE)
             error (p->pos, "parameter type without a name in function definition");
-          else if (decl_spec.type->incomplete_p)
+          else if (incomplete_type_p (decl_spec.type))
             error (p->pos, "incomplete parameter type in function definition");
         }
       }
@@ -6610,7 +6612,7 @@ check_one_value:
            && NL_EL (init->ops, 1) != NULL && (str = NL_EL (init->ops, 1))->code == N_STR))
       && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
     len = str->u.s.len;
-    if (type->incomplete_p) {
+    if (incomplete_type_p (type)) {
       assert (len < MIR_INT_MAX);
       type->u.arr_type->size = new_i_node (len, type->u.arr_type->size->pos);
       check (type->u.arr_type->size, NULL);
@@ -6692,7 +6694,7 @@ check_one_value:
           error (curr_des->pos, "nonconstant array index in initializer");
         } else if (!integer_type_p (cexpr->type)) {
           error (curr_des->pos, "array index in initializer not of integer type");
-        } else if (type->incomplete_p && signed_integer_type_p (cexpr->type)
+        } else if (incomplete_type_p (type) && signed_integer_type_p (cexpr->type)
                    && cexpr->u.i_val < 0) {
           error (curr_des->pos, "negative array index in initializer for array without size");
         } else if (size_val >= 0 && size_val <= cexpr->u.u_val) {
@@ -6716,7 +6718,7 @@ check_one_value:
     struct arr_type *arr_type = reg_malloc (sizeof (struct arr_type));
 
     type = create_type (type);
-    assert (type->incomplete_p);
+    assert (incomplete_type_p (type));
     *arr_type = *type->u.arr_type;
     type->u.arr_type = arr_type;
     size_node = type->u.arr_type->size;
@@ -6799,9 +6801,9 @@ static void create_decl (node_t scope, node_t decl_node, struct decl_spec decl_s
       VARR_PUSH (decl_t, func_decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE) return;
-  if (decl->decl_spec.type->incomplete_p
+  if (incomplete_type_p (decl->decl_spec.type)
       && (decl->decl_spec.type->mode != TM_ARR
-          || decl->decl_spec.type->u.arr_type->el_type->incomplete_p)) {
+          || incomplete_type_p (decl->decl_spec.type->u.arr_type->el_type))) {
     if (decl->decl_spec.type->mode == TM_ARR
         && decl->decl_spec.type->u.arr_type->el_type->mode == TM_ARR)
       error (initializer->pos, "initialization of incomplete sub-array");
@@ -6839,7 +6841,6 @@ static struct type *adjust_type (struct type *type) {
     res->u.ptr_type = type->u.arr_type->el_type;
     res->type_qual = type->u.arr_type->ind_type_qual;
   }
-  res->incomplete_p = type->incomplete_p;
   set_type_layout (res);
   return res;
 }
@@ -7012,7 +7013,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
       }
       if (t1->mode != TM_PTR || !integer_type_p (t2)) {
         error (r->pos, "invalid operand types of +");
-      } else if (t1->u.ptr_type->incomplete_p) {
+      } else if (incomplete_type_p (t1->u.ptr_type)) {
         error (r->pos, "pointer to incomplete type as an operand of +");
       } else {
         *e->type = *t1;
@@ -7024,7 +7025,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
         }
       }
     } else if (t1->mode == TM_PTR && integer_type_p (t2)) {
-      if (t1->u.ptr_type->incomplete_p) {
+      if (incomplete_type_p (t1->u.ptr_type)) {
         error (r->pos, "pointer to incomplete type as an operand of -");
       } else {
         *e->type = *t1;
@@ -7036,7 +7037,7 @@ static struct expr *check_assign_op (node_t r, node_t op1, node_t op2, struct ex
         }
       }
     } else if (t1->mode == TM_PTR && t2->mode == TM_PTR && compatible_types_p (t1, t2, TRUE)) {
-      if (t1->u.ptr_type->incomplete_p && t2->u.ptr_type->incomplete_p) {
+      if (incomplete_type_p (t1->u.ptr_type) && incomplete_type_p (t2->u.ptr_type)) {
         error (r->pos, "pointer to incomplete type as an operand of -");
       } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
         error (r->pos, "pointer to atomic type as an operand of -");
@@ -7650,13 +7651,13 @@ static void check (node_t r, node_t context) {
       error (r->pos, "subscripted value is neither array nor pointer");
     } else if (t1->mode == TM_PTR) {
       *e->type = *t1->u.ptr_type;
-      if (t1->u.ptr_type->incomplete_p) {
+      if (incomplete_type_p (t1->u.ptr_type)) {
         error (r->pos, "pointer to incomplete type in array subscription");
       }
     } else {
       *e->type = *t1->u.arr_type->el_type;
       e->type->type_qual = t1->u.arr_type->ind_type_qual;
-      if (e->type->incomplete_p) {
+      if (incomplete_type_p (e->type)) {
         error (r->pos, "array type has incomplete element type");
       }
     }
@@ -7876,7 +7877,7 @@ static void check (node_t r, node_t context) {
     }
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
-    if (decl_spec->type->incomplete_p) {
+    if (incomplete_type_p (decl_spec->type)) {
       error (r->pos, "%s of incomplete type requested",
              r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else if (decl_spec->type->mode == TM_FUNC) {
@@ -7893,7 +7894,7 @@ static void check (node_t r, node_t context) {
     e = create_expr (r);
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;  // ???
-    if (t1->incomplete_p) {
+    if (incomplete_type_p (t1)) {
       error (r->pos, "sizeof of incomplete type requested");
     } else if (t1->mode == TM_FUNC) {
       error (r->pos, "sizeof of function type requested");
@@ -7946,9 +7947,9 @@ static void check (node_t r, node_t context) {
     t1 = decl->decl_spec.type;
     check (list, r);
     decl->addr_p = TRUE;
-    if (t1->incomplete_p
+    if (incomplete_type_p (t1)
         && (t1->mode != TM_ARR || t1->u.arr_type->size->code != N_IGNORE
-            || t1->u.arr_type->el_type->incomplete_p)) {
+            || incomplete_type_p (t1->u.arr_type->el_type))) {
       error (r->pos, "compound literal of incomplete type");
       break;
     }
@@ -8099,7 +8100,7 @@ static void check (node_t r, node_t context) {
       }
       assert (type_name->code == N_TYPE);
       decl_spec = type_name->attr;
-      if (decl_spec->type->incomplete_p) {
+      if (incomplete_type_p (decl_spec->type)) {
         error (ga->pos, "_Generic case has incomplete type");
       } else if (compatible_types_p (&t, decl_spec->type, TRUE)) {
         if (ga_case)
@@ -8110,7 +8111,7 @@ static void check (node_t r, node_t context) {
         for (ga2 = NL_HEAD (list->ops); ga2 != ga; ga2 = NL_NEXT (ga2)) {
           type_name2 = NL_HEAD (ga2->ops);
           if (type_name2->code != N_IGNORE
-              && !(t2 = ((struct decl_spec *) type_name2->attr)->type)->incomplete_p
+              && !(incomplete_type_p (t2 = ((struct decl_spec *) type_name2->attr)->type))
               && compatible_types_p (t2, decl_spec->type, TRUE)) {
             error (ga->pos, "two or more compatible generic association types");
             break;
@@ -8221,7 +8222,7 @@ static void check (node_t r, node_t context) {
 
       if (type->mode == TM_FUNC) {
         error (id->pos, "field %s is declared as a function", id->u.s.s);
-      } else if (type->incomplete_p) {
+      } else if (incomplete_type_p (type)) {
         /* el_type is checked on completness in N_ARR */
         if (type->mode != TM_ARR || type->u.arr_type->size->code != N_IGNORE)
           error (id->pos, "field %s has incomplete type", id->u.s.s);
@@ -9607,7 +9608,7 @@ check_one_value:
           cexpr = curr_des->attr;
           /* index should be in array initializer and const expr of right type and value: */
           assert (type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
-                  && !type->incomplete_p && size_val >= 0 && size_val > cexpr->u.u_val);
+                  && !incomplete_type_p (type) && size_val >= 0 && size_val > cexpr->u.u_val);
           init_object.u.curr_index = cexpr->u.i_val - 1;
           init_object.designator_p = FALSE;
           VARR_PUSH (init_object_t, init_object_path, init_object);
@@ -11149,7 +11150,7 @@ static void print_type (FILE *f, struct type *type) {
   default: assert (FALSE);
   }
   print_qual (f, type->type_qual);
-  if (type->incomplete_p) fprintf (f, ", incomplete");
+  if (incomplete_type_p (type)) fprintf (f, ", incomplete");
   if (type->raw_size != MIR_SIZE_MAX)
     fprintf (f, ", raw size = %llu", (unsigned long long) type->raw_size);
   if (type->align >= 0) fprintf (f, ", align = %d", type->align);
