@@ -5278,9 +5278,12 @@ static int int_bit_size (struct type *type) {
           * MIR_CHAR_BIT);
 }
 
+static int void_type_p (struct type *type) {
+  return type->mode == TM_BASIC && type->u.basic_type == TP_VOID;
+}
+
 static int void_ptr_p (struct type *type) {
-  return (type->mode == TM_PTR && type->u.ptr_type->mode == TM_BASIC
-          && type->u.ptr_type->u.basic_type == TP_VOID);
+  return type->mode == TM_PTR && void_type_p (type->u.ptr_type);
 }
 
 static int null_const_p (struct expr *expr, struct type *type) {
@@ -5906,7 +5909,7 @@ static int void_param_p (node_t param) {
   if (param != NULL && param->code == N_TYPE) {
     decl_spec = param->attr;
     type = decl_spec->type;
-    if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) return TRUE;
+    if (void_type_p (type)) return TRUE;
   }
   return FALSE;
 }
@@ -7798,8 +7801,7 @@ static void check (node_t r, node_t context) {
       }
       break;
     }
-    if (t2->mode == TM_BASIC && t3->mode == TM_BASIC && t2->u.basic_type == TP_VOID
-        && t3->u.basic_type == TP_VOID) {
+    if (void_type_p (t2) && void_type_p (t3)) {
       e->type->u.basic_type = TP_VOID;
     } else if ((t2->mode == TM_STRUCT || t2->mode == TM_UNION)
                && (t3->mode == TM_STRUCT || t3->mode == TM_UNION)
@@ -7916,7 +7918,7 @@ static void check (node_t r, node_t context) {
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
     *e->type = *decl_spec->type;
-    void_p = decl_spec->type->mode == TM_BASIC && decl_spec->type->u.basic_type == TP_VOID;
+    void_p = void_type_p (decl_spec->type);
     if (!void_p && !scalar_type_p (decl_spec->type)) {
       error (r->pos, "conversion to non-scalar type requested");
     } else if (!scalar_type_p (t2)) {
@@ -8566,7 +8568,7 @@ static void check (node_t r, node_t context) {
     check_labels (labels, r);
     check (expr, r);
     ret_type = type->u.func_type->ret_type;
-    if (expr->code != N_IGNORE && ret_type->mode == TM_BASIC && ret_type->u.basic_type == TP_VOID) {
+    if (expr->code != N_IGNORE && void_type_p (ret_type)) {
       error (r->pos, "return with a value in function returning void");
     } else if (expr->code == N_IGNORE
                && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
@@ -10400,7 +10402,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     MIR_label_t end_label = MIR_new_label (ctx);
     struct type *type = ((struct expr *) r->attr)->type;
     op_t addr;
-    int void_p = type->mode == TM_BASIC && type->u.basic_type == TP_VOID;
+    int void_p = void_type_p (type);
     mir_size_t size = type_size (((struct expr *) r->attr)->type);
 
     if (!void_p) t = get_mir_type (type);
@@ -10444,7 +10446,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     assert (!((struct expr *) r->attr)->const_p);
     op1 = gen (NL_EL (r->ops, 1), NULL, NULL, TRUE, NULL);
     type = ((struct expr *) r->attr)->type;
-    if (type->mode == TM_BASIC && type->u.basic_type == TP_VOID) {
+    if (void_type_p (type)) {
       res = op1;
       res.decl = NULL;
       res.mir_op.mode = MIR_OP_UNDEF;
