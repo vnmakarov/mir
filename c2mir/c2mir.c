@@ -7991,7 +7991,7 @@ static void check (node_t r, node_t context) {
     if (op1->code == N_ID && find_def (S_REGULAR, op1, curr_scope, NULL) == NULL) {
       va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
       va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
-      if (!va_arg_p && !va_start_p) {
+      if (!va_arg_p && !va_start_p && !alloca_p) {
         /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
         spec_list = new_node (N_LIST);
         op_append (spec_list, new_node (N_INT));
@@ -8260,8 +8260,9 @@ static void check (node_t r, node_t context) {
     symbol_t sym;
     struct node_scope *ns;
 
-    if (strcmp (id->u.s.s, ALLOCA) == 0) {
-      error (id->pos, "%s is a builtin function", ALLOCA);
+    if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
+        || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0) {
+      error (id->pos, "%s is a builtin function", id->u.s.s);
       break;
     }
     curr_func_scope_num = 0;
