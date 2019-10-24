@@ -8254,11 +8254,16 @@ static void check (node_t r, node_t context) {
     node_t declarator = NL_NEXT (specs);
     node_t declarations = NL_NEXT (declarator);
     node_t block = NL_NEXT (declarations);
+    node_t id = NL_HEAD (declarator->ops);
     struct decl_spec decl_spec = check_decl_spec (specs, r);
     node_t decl_node, p, next_p, param_list, param_id, param_declarator, func;
     symbol_t sym;
     struct node_scope *ns;
 
+    if (strcmp (id->u.s.s, ALLOCA) == 0) {
+      error (id->pos, "%s is a builtin function", ALLOCA);
+      break;
+    }
     curr_func_scope_num = 0;
     create_node_scope (block);
     func_block_scope = curr_scope;
@@ -8324,7 +8329,7 @@ static void check (node_t r, node_t context) {
       assert (param_id->code == N_ID);
       error (param_id->pos, "declaration for parameter %s but no such parameter", param_id->u.s.s);
     }
-    add__func__def (block, NL_HEAD (declarator->ops)->u.s);
+    add__func__def (block, id->u.s);
     check (block, r);
     /* Process all gotos: */
     for (size_t i = 0; i < VARR_LENGTH (node_t, gotos); i++) {
