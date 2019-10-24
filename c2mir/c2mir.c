@@ -5118,14 +5118,17 @@ static void aux_set_type_align (struct type *type) {
 }
 
 static mir_size_t type_size (struct type *type) {
-  assert (type->raw_size != MIR_SIZE_MAX && type->align >= 0);
-  return round_size (type->raw_size, type->align);
+  mir_size_t size = raw_type_size (type);
+
+  return round_size (size, type->align);
 }
 
 static mir_size_t var_align (struct type *type) {
-  int align = type->align;
+  int align;
 
-  assert (type->raw_size != MIR_SIZE_MAX && align >= 0);
+  raw_type_size (type); /* check */
+  align = type->align;
+  assert (align >= 0);
 #ifdef ADJUST_VAR_ALIGNMENT
   align = ADJUST_VAR_ALIGNMENT (align, type);
 #endif
@@ -5133,7 +5136,9 @@ static mir_size_t var_align (struct type *type) {
 }
 
 static mir_size_t var_size (struct type *type) {
-  return round_size (type->raw_size, var_align (type));
+  mir_size_t size = raw_type_size (type);
+
+  return round_size (size, var_align (type));
 }
 
 /* BOUND_BIT is used only if BF_P.  */
@@ -5190,6 +5195,7 @@ static void update_members_offset (struct type *type, mir_size_t offset) {
                                offset == MIR_SIZE_MAX ? offset : decl->offset);
     }
 }
+
 static void set_type_layout (struct type *type) {
   mir_size_t overall_size = 0;
 
@@ -7198,7 +7204,7 @@ static void add__func__def (node_t func_block, str_t func_name) {
 static int decl_cmp (const void *v1, const void *v2) {
   const decl_t d1 = *(const decl_t *) v1, d2 = *(const decl_t *) v2;
   struct type *t1 = d1->decl_spec.type, *t2 = d2->decl_spec.type;
-  mir_size_t s1 = t1->raw_size, s2 = t2->raw_size;
+  mir_size_t s1 = raw_type_size (t1), s2 = raw_type_size (t2);
 
   if (d1->scope->uid < d2->scope->uid) return -1;
   if (d1->scope->uid > d2->scope->uid) return 1;
@@ -8774,7 +8780,7 @@ static int get_int_mir_type_size (MIR_type_t t) {
 }
 
 static MIR_type_t get_mir_type (struct type *type) {
-  size_t size = type->raw_size;
+  size_t size = raw_type_size (type);
   int int_p = !floating_type_p (type), signed_p = signed_integer_type_p (type);
 
   if (!scalar_type_p (type)) return MIR_T_UNDEF;
@@ -9813,7 +9819,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
       val = gen (init_el.init, NULL, NULL, t != MIR_T_UNDEF, t != MIR_T_UNDEF ? NULL : &val);
       if (!scalar_type_p (init_el.el_type)) {
         mir_size_t s
-          = init_el.init->code == N_STR ? init_el.init->u.s.len : init_el.el_type->raw_size;
+          = init_el.init->code == N_STR ? init_el.init->u.s.len : raw_type_size (init_el.el_type);
 
         gen_memcpy (offset + rel_offset, base, val, s);
         rel_offset = init_el.offset + s;
@@ -9920,7 +9926,7 @@ static void gen_initializer (size_t init_start, op_t var, const char *global_nam
         data = MIR_new_data (ctx, global_name, t, 1, &u);
         data_size = _MIR_type_size (ctx, t);
       } else if (init_el.el_type->mode == TM_ARR) {
-        data_size = init_el.el_type->raw_size;
+        data_size = raw_type_size (init_el.el_type);
         str_len = val.mir_op.u.str.len;
         if (data_size < str_len) {
           data = MIR_new_data (ctx, global_name, MIR_T_U8, data_size, val.mir_op.u.str.s);
@@ -10475,7 +10481,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       var = new_op (decl, MIR_new_mem_op (ctx, t, decl->offset,
                                           MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1));
     }
-    gen_initializer (init_start, var, global_name, decl->decl_spec.type->raw_size,
+    gen_initializer (init_start, var, global_name, raw_type_size (decl->decl_spec.type),
                      decl->scope != top_scope && !decl->decl_spec.static_p);
     VARR_TRUNC (init_el_t, init_els, init_start);
     if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->item;
@@ -10618,7 +10624,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
           && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p) {
         if (initializer->code == N_IGNORE) {
           if (decl->scope != top_scope && decl->decl_spec.static_p) {
-            decl->item = MIR_new_bss (ctx, name, decl->decl_spec.type->raw_size);
+            decl->item = MIR_new_bss (ctx, name, raw_type_size (decl->decl_spec.type));
           } else if (decl->scope == top_scope && symbol_find (S_REGULAR, id, top_scope, &sym)
                      && ((curr_decl = sym.def_node->attr)->item == NULL
                          || curr_decl->item->item_type != MIR_bss_item)) {
@@ -10630,7 +10636,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                 break;
             }
             if (i >= VARR_LENGTH (node_t, sym.defs)) /* No item yet or no decl with intializer: */
-              decl->item = MIR_new_bss (ctx, name, decl->decl_spec.type->raw_size);
+              decl->item = MIR_new_bss (ctx, name, raw_type_size (decl->decl_spec.type));
           }
         } else if (initializer->code != N_IGNORE) {  // ??? general code
           init_start = VARR_LENGTH (init_el_t, init_els);
@@ -10657,7 +10663,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
                     && (var.mir_op.mode == MIR_OP_REG
                         || (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0)));
           }
-          gen_initializer (init_start, var, name, decl->decl_spec.type->raw_size,
+          gen_initializer (init_start, var, name, raw_type_size (decl->decl_spec.type),
                            decl->scope != top_scope && !decl->decl_spec.static_p);
           VARR_TRUNC (init_el_t, init_els, init_start);
         }
