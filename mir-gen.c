@@ -2644,6 +2644,10 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
     nops = MIR_insn_nops (ctx, insn);
+    if (MIR_call_code_p (insn->code)) {
+      bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
+      bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
+    }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
       for (i = 0; i < nops; i++) {
@@ -2698,11 +2702,8 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg2);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg2);
     }
-    if (MIR_call_code_p (insn->code)) {
-      bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
-      bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
+    if (MIR_call_code_p (insn->code))
       bitmap_ior (bb->live_gen, bb->live_gen, bb_insn->call_hard_reg_args);
-    }
     if (moves_p && move_p (insn)) {
       mv = get_free_move (ctx);
       mv->bb_insn = bb_insn;
