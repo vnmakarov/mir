@@ -4033,10 +4033,24 @@ static void print_code (MIR_context_t ctx, uint8_t *code, size_t code_len, void 
 }
 #endif
 
+#if MIR_GEN_DEBUG
+#include <sys/time.h>
+
+static double real_usec_time (void) {
+  struct timeval tv;
+
+  gettimeofday (&tv, NULL);
+  return tv.tv_usec + tv.tv_sec * 1000000.0;
+}
+#endif
+
 void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   uint8_t *code;
   size_t code_len;
+#if MIR_GEN_DEBUG
+  double start_time;
+#endif
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
   if (func_item->machine_code != NULL) {
@@ -4048,6 +4062,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
     return func_item->addr;
   }
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL) start_time = real_usec_time ();
+#endif
   MIR_simplify_func (ctx, func_item, TRUE);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
@@ -4174,6 +4191,11 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->machine_code);
   destroy_func_live_ranges (ctx);
   destroy_func_cfg (ctx);
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, "Generation of code for %s -- time %.0f usec\n",
+             MIR_item_name (ctx, func_item), real_usec_time () - start_time);
+#endif
   return func_item->addr;
 }
 
