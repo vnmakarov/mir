@@ -7277,6 +7277,7 @@ static VARR (node_t) * context_stack;
 
 #define BUILTIN_VA_START "__builtin_va_start"
 #define BUILTIN_VA_ARG "__builtin_va_arg"
+#define ALLOCA "alloca"
 
 static void check (node_t r, node_t context) {
   node_t op1, op2;
@@ -7981,9 +7982,10 @@ static void check (node_t r, node_t context) {
     struct decl_spec *decl_spec;
     mir_size_t saved_call_arg_area_offset_before_args;
     struct type res_type;
-    int va_arg_p = FALSE, va_start_p = FALSE;
+    int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
 
     op1 = NL_HEAD (r->ops);
+    alloca_p = op1->code == N_ID && strcmp (op1->u.s.s, ALLOCA) == 0;
     if (op1->code == N_ID && find_def (S_REGULAR, op1, curr_scope, NULL) == NULL) {
       va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
       va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
@@ -8004,16 +8006,26 @@ static void check (node_t r, node_t context) {
         op_prepend (list, decl);
       }
     }
-    if (!va_arg_p && !va_start_p) VARR_PUSH (node_t, call_nodes, r);
+    builtin_call_p = alloca_p || va_arg_p || va_start_p;
+    if (!builtin_call_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
-    if (va_arg_p || va_start_p) {
+    if (builtin_call_p) {
       for (arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) check (arg, r);
       init_type (&res_type);
-      res_type.mode = TM_BASIC;
-      res_type.u.basic_type = va_arg_p ? TP_INT : TP_VOID;
+      if (alloca_p) {  // ??? one copy
+        res_type.mode = TM_PTR;
+        res_type.u.ptr_type = create_type (NULL);
+        res_type.u.ptr_type->mode = TM_BASIC;
+        res_type.u.ptr_type->u.basic_type = TP_VOID;
+      } else {
+        res_type.mode = TM_BASIC;
+        res_type.u.basic_type = va_arg_p ? TP_INT : TP_VOID;
+      }
       ret_type = &res_type;
       if (va_start_p && NL_LENGTH (arg_list->ops) != 1) {
         error (op1->pos, "wrong number of arguments in %s call", BUILTIN_VA_START);
+      } else if (alloca_p && NL_LENGTH (arg_list->ops) != 1) {
+        error (op1->pos, "wrong number of arguments in %s call", ALLOCA);
       } else if (va_arg_p && NL_LENGTH (arg_list->ops) != 2) {
         error (op1->pos, "wrong number of arguments in %s call", BUILTIN_VA_ARG);
       } else {
@@ -8041,16 +8053,16 @@ static void check (node_t r, node_t context) {
     }
     e = create_expr (r);
     *e->type = *ret_type;
-    e->builtin_call_p = va_arg_p || va_start_p;
+    e->builtin_call_p = builtin_call_p;
     if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)
-        && ret_type->incomplete_p) {
+        && incomplete_type_p (ret_type)) {
       error (r->pos, "function return type is incomplete");
     }
     if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
       set_type_layout (ret_type);
-      if (!va_arg_p && !va_start_p) update_call_arg_area_offset (ret_type, TRUE);
+      if (!builtin_call_p) update_call_arg_area_offset (ret_type, TRUE);
     }
-    if (va_arg_p || va_start_p) break;
+    if (builtin_call_p) break;
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->ops);
     if (void_param_p (start_param)) { /* f(void) */
@@ -10501,10 +10513,12 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     mir_size_t saved_call_arg_area_offset_before_args;
     int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
     int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
+    int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
+    int builtin_call_p = alloca_p || va_arg_p || va_start_p;
     int struct_p;
 
     ops_start = VARR_LENGTH (MIR_op_t, ops);
-    if (!va_arg_p && !va_start_p) {
+    if (!builtin_call_p) {
       func_type = ((struct expr *) func->attr)->type;
       assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
       func_type = func_type->u.ptr_type;
@@ -10525,7 +10539,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       res = get_new_temp (MIR_T_I64);
       emit3 (MIR_ADD, res.mir_op, MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
              MIR_new_int_op (ctx, curr_call_arg_area_offset + ns->size - ns->call_arg_area_size));
-      if (!va_arg_p && !va_start_p) update_call_arg_area_offset (type, FALSE);
+      if (!builtin_call_p) update_call_arg_area_offset (type, FALSE);
       VARR_PUSH (MIR_op_t, ops, res.mir_op);
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
       t = MIR_T_I64;
@@ -10550,6 +10564,10 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     } else if (va_start_p) {
       op1 = gen (NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
       MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_VA_START, op1.mir_op));
+    } else if (alloca_p) {
+      res = get_new_temp (t);
+      op1 = gen (NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
+      MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_ALLOCA, res.mir_op, op1.mir_op));
     } else {
       param_list = func_type->u.func_type->param_list;
       param = NL_HEAD (param_list->ops);
