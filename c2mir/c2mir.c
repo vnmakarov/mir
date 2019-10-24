@@ -159,6 +159,8 @@ static const struct type ENUM_INT_TYPE = {.raw_size = MIR_SIZE_MAX,
                                           .align = -1,
                                           .mode = TM_BASIC,
                                           .u = {.basic_type = ENUM_BASIC_INT_TYPE}};
+static struct type VOID_TYPE
+  = {.raw_size = MIR_SIZE_MAX, .align = -1, .mode = TM_BASIC, .u = {.basic_type = TP_VOID}};
 
 static void set_type_layout (struct type *type);
 
@@ -8012,11 +8014,9 @@ static void check (node_t r, node_t context) {
     if (builtin_call_p) {
       for (arg = NL_HEAD (arg_list->ops); arg != NULL; arg = NL_NEXT (arg)) check (arg, r);
       init_type (&res_type);
-      if (alloca_p) {  // ??? one copy
+      if (alloca_p) {
         res_type.mode = TM_PTR;
-        res_type.u.ptr_type = create_type (NULL);
-        res_type.u.ptr_type->mode = TM_BASIC;
-        res_type.u.ptr_type->u.basic_type = TP_VOID;
+        res_type.u.ptr_type = &VOID_TYPE;
       } else {
         res_type.mode = TM_BASIC;
         res_type.u.basic_type = va_arg_p ? TP_INT : TP_VOID;
