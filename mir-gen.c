@@ -1421,7 +1421,7 @@ DEF_DLIST_LINK (var_occ_t);
 DEF_DLIST_TYPE (var_occ_t);
 
 /* Occurences at BB start are defs, ones at BB end are uses.  */
-typedef struct var_occ {
+struct var_occ {
   MIR_reg_t var;
   enum ccp_val_kind val_kind : 8;
   unsigned int flag : 8;
@@ -1430,7 +1430,7 @@ typedef struct var_occ {
   var_occ_t def;
   DLIST (var_occ_t) uses; /* Empty for def */
   DLIST_LINK (var_occ_t) use_link;
-} * var_occ_t;
+};
 
 DEF_DLIST_CODE (var_occ_t, use_link);
 
