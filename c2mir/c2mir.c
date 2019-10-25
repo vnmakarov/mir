@@ -11716,7 +11716,7 @@ static void t_ungetc (int c) {
 
 static const char *source_name;
 static VARR (char) * input;
-static int interp_exec_p, gen_exec_p;
+static int interp_exec_p, gen_exec_p, bin_p;
 
 static int other_option_func (int i, int argc, char *argv[], void *data) {
   FILE *f = NULL;
@@ -11729,6 +11729,8 @@ static int other_option_func (int i, int argc, char *argv[], void *data) {
     interp_exec_p = TRUE;
   } else if (strcmp (argv[i], "-eg") == 0) {
     gen_exec_p = TRUE;
+  } else if (strcmp (argv[i], "-bin") == 0) {
+    bin_p = TRUE;
   } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
     code = argv[++i];
     source_name = "<command-line>";
@@ -11847,7 +11849,7 @@ int main (int argc, char *argv[], char *env[]) {
     if (!compile (source_name)) ret_code = 1;
     compile_finish ();
   }
-  if (ret_code == 0 && !prepro_only_p && (interp_exec_p || gen_exec_p)) {
+  if (ret_code == 0 && !prepro_only_p && (bin_p || interp_exec_p || gen_exec_p)) {
     MIR_val_t val;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
@@ -11865,6 +11867,18 @@ int main (int argc, char *argv[], char *env[]) {
     if (main_func == NULL) {
       fprintf (stderr, "cannot execute program w/o main function\n");
       ret_code = 1;
+    } else if (bin_p) {
+      FILE *f = fopen ("a.bmir", "wb");
+      if (f == NULL) {
+        fprintf (stderr, "cannot open file a.bmir\n");
+        ret_code = 1;
+      } else {
+        MIR_write (ctx, f);
+        if (ferror (f) || fclose (f)) {
+          fprintf (stderr, "error in writing file a.bmir\n");
+          ret_code = 1;
+        }
+      }
     } else {
       open_libs ();
       MIR_load_external (ctx, "abort", fancy_abort);
