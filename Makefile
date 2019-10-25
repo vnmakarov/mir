@@ -179,6 +179,15 @@ c2mir-gen-test: c2m
 c2mir-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
 
+# c2mir-bin-test is very slow
+c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
+
+c2mir-bin-interp-test: mir.o mir-gen.o b2ctab
+	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-bin-interp
+
+c2mir-bin-gen-test: mir.o mir-gen.o b2ctab
+	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-bin-gen
+
 mir2c-test:
 	$(CC) -g -DTEST_MIR2C -I. mir.c mir2c/mir2c.c && ./a.out
 
