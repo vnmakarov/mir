@@ -18,6 +18,7 @@ extern void MIR_gen_set_debug_file (MIR_context_t context, FILE *f);
 #endif
 extern void *MIR_gen (MIR_context_t context, MIR_item_t func_item);
 extern void MIR_set_gen_interface (MIR_context_t context, MIR_item_t func_item);
+extern void MIR_set_lazy_gen_interface (MIR_context_t context, MIR_item_t func_item);
 extern void MIR_gen_finish (MIR_context_t context);
 
 #endif /* #ifndef MIR_GEN_H */

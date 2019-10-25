@@ -4266,6 +4266,17 @@ void MIR_gen_finish (MIR_context_t ctx) {
 
 void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) { MIR_gen (ctx, func_item); }
 
+static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
+  MIR_gen (ctx, func_item);
+  return func_item->u.func->machine_code;
+}
+
+void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
+  void *addr = _MIR_get_wrapper (ctx, func_item, gen_and_redirect);
+
+  _MIR_redirect_thunk (ctx, func_item->addr, addr);
+}
+
 /* Local Variables:                */
 /* mode: c                         */
 /* page-delimiter: "/\\* New Page" */
