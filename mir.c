@@ -788,7 +788,7 @@ static MIR_item_t create_item (MIR_context_t ctx, MIR_item_type_t item_type,
   item->item_type = item_type;
   item->ref_def = NULL;
   item->export_p = FALSE;
-  item->addr = item->machine_code = NULL;
+  item->addr = NULL;
   return item;
 }
 
@@ -1057,6 +1057,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->vararg_p = vararg_p != 0;
   func->expr_p = FALSE;
   func->n_inlines = 0;
+  func->machine_code = func->call_addr = NULL;
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = vars[i].type;
 

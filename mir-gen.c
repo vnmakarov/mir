@@ -4053,8 +4053,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
-  if (func_item->machine_code != NULL) {
-    _MIR_redirect_thunk (ctx, func_item->addr, func_item->machine_code);
+  if (func_item->u.func->machine_code != NULL) {
+    gen_assert (func_item->u.func->call_addr != NULL);
+    _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
 #if MIR_GEN_DEBUG
     if (debug_file != NULL)
       fprintf (debug_file, "+++++++++++++The code for %s has been already generated\n",
@@ -4181,14 +4182,18 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif
   code = target_translate (ctx, &code_len);
-  func_item->machine_code = _MIR_publish_code (ctx, code, code_len);
+  func_item->u.func->machine_code = func_item->u.func->call_addr
+    = _MIR_publish_code (ctx, code, code_len);
+#if MIR_GEN_CALL_TRACE
+  func_item->u.func->call_addr = _MIR_get_wrapper (ctx, called_func, print_and_execute_wrapper);
+#endif
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    print_code (ctx, code, code_len, func_item->machine_code);
+    print_code (ctx, code, code_len, func_item->u.func->machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
 #endif
-  _MIR_redirect_thunk (ctx, func_item->addr, func_item->machine_code);
+  _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
   destroy_func_live_ranges (ctx);
   destroy_func_cfg (ctx);
 #if MIR_GEN_DEBUG

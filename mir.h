@@ -261,6 +261,8 @@ typedef struct MIR_func {
   char vararg_p;           /* flag of variable number of arguments */
   char expr_p;             /* flag of that the func can be used as a linker expression */
   VARR (MIR_var_t) * vars; /* args and locals but temps */
+  void *machine_code;      /* address of generated machine code or NULL */
+  void *call_addr;         /* address to call the function, it can be the same as machine_code */
 } * MIR_func_t;
 
 typedef struct MIR_proto {
@@ -330,8 +332,7 @@ struct MIR_item {
   /* address of loaded data/bss items, function to call the function
      item, imported definition or proto object */
   void *addr;
-  void *machine_code; /* address of generated machine code */
-  char export_p;      /* true for export items (only func items) */
+  char export_p; /* true for export items (only func items) */
   union {
     MIR_func_t func;
     MIR_proto_t proto;
