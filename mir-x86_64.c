@@ -336,16 +336,17 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
                             VARR_LENGTH (uint8_t, machine_insns));
 }
 
-/* save regs; *called_func = r10; r10 = call hook_address (); restore regs; jmp *r10  */
-void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t *called_func, void *hook_address) {
+/* save regs; r10 = call hook_address (ctx, called_func); restore regs; jmp *r10
+ */
+void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   static const uint8_t push_rax[] = {0x50, /*push   %rax */};
   static const uint8_t wrap_end[] = {
     0x58,             /*pop   %rax */
     0x41, 0xff, 0xe2, /*jmpq   *%r10			   */
   };
   static const uint8_t call_pat[] = {
-    0x49, 0xbb, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs &_MIR_call_func,%r11  	   */
-    0x4d, 0x89, 0x13,                      /*mov %r10, (%r11) 		   */
+    0x48, 0xbe, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs called_func,%rsi  	   */
+    0x48, 0xbf, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs ctx,%rdi  	   */
     0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs <hook_address>,%r10  	   */
     0x41, 0xff, 0xd2,                      /*callq  *%r10			   */
     0x49, 0x89, 0xc2,                      /*mov    %rax,%r10		   */
@@ -357,7 +358,8 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t *called_func, void *hook_a
   push_insns (save_pat, sizeof (save_pat));
   addr = push_insns (call_pat, sizeof (call_pat));
   memcpy (addr + 2, &called_func, sizeof (void *));
-  memcpy (addr + 15, &hook_address, sizeof (void *));
+  memcpy (addr + 12, &ctx, sizeof (void *));
+  memcpy (addr + 22, &hook_address, sizeof (void *));
   push_insns (restore_pat, sizeof (restore_pat));
   push_insns (wrap_end, sizeof (wrap_end));
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
