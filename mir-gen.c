@@ -99,6 +99,10 @@ static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 #define MIR_GEN_DEBUG 0
 #endif
 
+#ifndef MIR_GEN_CALL_TRACE
+#define MIR_GEN_CALL_TRACE 0
+#endif
+
 typedef struct func_cfg *func_cfg_t;
 
 struct target_ctx;
@@ -4041,6 +4045,14 @@ static double real_usec_time (void) {
 
   gettimeofday (&tv, NULL);
   return tv.tv_usec + tv.tv_sec * 1000000.0;
+}
+#endif
+
+#if MIR_GEN_CALL_TRACE
+static void *print_and_execute_wrapper (MIR_context_t ctx, MIR_item_t called_func) {
+  gen_assert (called_func->item_type == MIR_func_item);
+  fprintf (stderr, "Calling %s\n", called_func->u.func->name);
+  return called_func->u.func->machine_code;
 }
 #endif
 
