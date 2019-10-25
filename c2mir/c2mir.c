@@ -11017,14 +11017,67 @@ finish:
   return res;
 }
 
+DEF_HTAB (MIR_item_t);
+static HTAB (MIR_item_t) * proto_tab;
+
+static htab_hash_t proto_hash (MIR_item_t pi) {
+  MIR_proto_t p = pi->u.proto;
+  MIR_var_t *args = VARR_ADDR (MIR_var_t, p->args);
+  uint64_t h = mir_hash_init (42);
+
+  h = mir_hash_step (h, p->nres);
+  h = mir_hash_step (h, p->vararg_p);
+  for (uint32_t i = 0; i < p->nres; i++) h = mir_hash_step (h, p->res_types[i]);
+  for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, p->args); i++) {
+    h = mir_hash_step (h, args[i].type);
+    h = mir_hash_step (h, mir_hash (args[i].name, strlen (args[i].name), 24));
+  }
+  return mir_hash_finish (h);
+}
+
+static int proto_eq (MIR_item_t pi1, MIR_item_t pi2) {
+  MIR_proto_t p1 = pi1->u.proto, p2 = pi2->u.proto;
+
+  if (p1->nres != p2->nres || p1->vararg_p != p2->vararg_p
+      || VARR_LENGTH (MIR_var_t, p1->args) != VARR_LENGTH (MIR_var_t, p2->args))
+    return FALSE;
+  for (uint32_t i = 0; i < p1->nres; i++)
+    if (p1->res_types[i] != p1->res_types[i]) return FALSE;
+
+  MIR_var_t *args1 = VARR_ADDR (MIR_var_t, p1->args), *args2 = VARR_ADDR (MIR_var_t, p2->args);
+
+  for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, p1->args); i++)
+    if (args1[i].type != args2[i].type || strcmp (args1[i].name, args2[i].name) != 0) return FALSE;
+  return TRUE;
+}
+
+static MIR_item_t get_mir_proto (int vararg_p, MIR_type_t ret_type, VARR (MIR_var_t) * vars) {
+  struct MIR_item pi, *el;
+  struct MIR_proto p;
+  char buf[30];
+  static int n = 0;
+
+  pi.u.proto = &p;
+  p.vararg_p = vararg_p;
+  p.nres = ret_type == MIR_T_UNDEF ? 0 : 1;
+  p.res_types = &ret_type;
+  p.args = vars;
+  if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
+  sprintf (buf, "proto%d", n++);
+  el = (vararg_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr) (ctx, buf, p.nres, &ret_type,
+                                                                  VARR_LENGTH (MIR_var_t, vars),
+                                                                  VARR_ADDR (MIR_var_t, vars));
+  HTAB_DO (MIR_item_t, proto_tab, el, HTAB_INSERT, el);
+  return el;
+}
+
 static void gen_mir_protos (void) {
   node_t call, func;
   struct type *type;
   struct func_type *func_type;
   MIR_type_t ret_type;
-  char buf[30];
-  int n = 0;
 
+  HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq);
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
     assert (call->code == N_CALL);
@@ -11035,13 +11088,11 @@ static void gen_mir_protos (void) {
     func_type = type->u.ptr_type->u.func_type;
     assert (func_type->param_list->code == N_LIST);
     collect_args_and_func_types (func_type, &ret_type);
-    sprintf (buf, "proto%d", n++);
     func_type->proto_item
-      = ((func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL
-            ? MIR_new_vararg_proto_arr
-            : MIR_new_proto_arr) (ctx, buf, ret_type == MIR_T_UNDEF ? 0 : 1, &ret_type,
-                                  VARR_LENGTH (MIR_var_t, vars), VARR_ADDR (MIR_var_t, vars)));
+      = get_mir_proto (func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL, ret_type,
+                       vars);
   }
+  HTAB_DESTROY (MIR_item_t, proto_tab);
 }
 
 static void gen_mir (node_t r) {
