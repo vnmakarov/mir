@@ -11649,7 +11649,7 @@ static int compile (const char *source_name) {
   if (verbose_p)
     fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
   add_stream (NULL, source_name);
-  add_standard_includes ();
+  if (!no_prepro_p) add_standard_includes ();
   pre (source_name);
   if (verbose_p)
     fprintf (stderr, "  preprocessor end    -- %.0f usec\n", real_usec_time () - start_time);
