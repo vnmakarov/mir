@@ -3492,7 +3492,7 @@ static void process_reserved_name (const char *s, const char *prefix, uint32_t *
 
   if (strncmp (s, prefix, len) != 0) return;
   num = strtoul (s + len, &end, 10);
-  assert (end > s + len && *end == '\0');
+  if (*end != '\0') return;
   if (*max_num < num) *max_num = num;
 }
 
