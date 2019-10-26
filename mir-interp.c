@@ -890,8 +890,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     START_INSN (value, nops);
 
 #if MIR_INTERP_TRACE
-#define END_INSN                                \
-  finish_insn_trace (trace_insn_code, ops, bp); \
+#define END_INSN                                     \
+  finish_insn_trace (ctx, trace_insn_code, ops, bp); \
   break
 #else
 #define END_INSN break
