@@ -157,8 +157,10 @@ ex100:    func v, 0
     /* ctx is a context created by MIR_init */
     MIR_load_module (ctx, m1); MIR_load_module (ctx, m2);
     MIR_load_external (ctx, "printf", printf);
-    MIR_link (ctx, MIR_set_interp_interface);
-    /* or MIR_gen (MIR_set_gen_interface); to generate and use the machine code */
+    MIR_link (ctx, MIR_set_interp_interface, import_resolver);
+    /* or use MIR_set_gen_interface to generate and use the machine code */
+    /* or use MIR_set_lazy_gen_interface to generate function code on its 1st call */
+    /* use MIR_gen (ctx, func) to explicitly generate the function machine code */
     MIR_interp (ctx, func, &result, 0); /* zero here is arguments number  */
     /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
@@ -271,7 +273,7 @@ ex100:    func v, 0
     | execution [2]  | **1.0** (3.1s)   | 5.9 (18.3s)     | **0.94** (2.9s)  |  2.05 (6.34s)   |
     | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [5]        | **1.0** (12.3K)  | 0.61 (7.5K)     | **120** (1480K)  |  120 (1480K)    |
+    | LOC [5]        | **1.0** (14.0K)  | 0.54 (7.5K)     | **106** (1480K)  |  106 (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and with
    using memory file system for GCC) 100 times
