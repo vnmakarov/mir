@@ -517,6 +517,10 @@ ex100:    func v
         MIR-generator will generate machine code for all loaded MIR
         functions and called functions from MIR code will execute the
         machine code
+      * If you pass `MIR_set_lazy_gen_interface` to `MIR_link`, then
+        MIR-generator will generate machine code only on the first
+        function call and called functions from MIR code will execute
+        the machine code
       * If you pass non-null `import_resolver` function, it will be
         called for defining address for import without definition.
         The function get the import name and return the address which
