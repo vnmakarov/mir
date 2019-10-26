@@ -125,9 +125,7 @@ int main (int argc, char *argv[], char *env[]) {
     exit_code = val.i;
   } else {
     MIR_gen_init (ctx);
-#if MIR_GEN_DEBUG
     MIR_gen_set_debug_file (ctx, stderr);
-#endif
     MIR_link (ctx, MIR_USE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
 #if MIR_BIN_DEBUG
