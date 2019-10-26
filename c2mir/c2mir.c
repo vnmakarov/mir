@@ -11051,11 +11051,12 @@ static int proto_eq (MIR_item_t pi1, MIR_item_t pi2) {
   return TRUE;
 }
 
+static int curr_mir_proto_num;
+
 static MIR_item_t get_mir_proto (int vararg_p, MIR_type_t ret_type, VARR (MIR_var_t) * vars) {
   struct MIR_item pi, *el;
   struct MIR_proto p;
   char buf[30];
-  static int n = 0;
 
   pi.u.proto = &p;
   p.vararg_p = vararg_p;
@@ -11063,7 +11064,7 @@ static MIR_item_t get_mir_proto (int vararg_p, MIR_type_t ret_type, VARR (MIR_va
   p.res_types = &ret_type;
   p.args = vars;
   if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
-  sprintf (buf, "proto%d", n++);
+  sprintf (buf, "proto%d", curr_mir_proto_num++);
   el = (vararg_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr) (ctx, buf, p.nres, &ret_type,
                                                                   VARR_LENGTH (MIR_var_t, vars),
                                                                   VARR_ADDR (MIR_var_t, vars));
@@ -11077,6 +11078,7 @@ static void gen_mir_protos (void) {
   struct func_type *func_type;
   MIR_type_t ret_type;
 
+  curr_mir_proto_num = 0;
   HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq);
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
