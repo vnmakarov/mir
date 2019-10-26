@@ -4216,13 +4216,13 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   return func_item->addr;
 }
 
-#if MIR_GEN_DEBUG
 void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f) {
+#if MIR_GEN_DEBUG
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   debug_file = f;
-}
 #endif
+}
 
 void MIR_gen_init (MIR_context_t ctx) {
   struct gen_ctx **gen_ctx_ptr = gen_ctx_loc (ctx), *gen_ctx;
