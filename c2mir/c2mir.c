@@ -6528,9 +6528,9 @@ static void process_init_field_designator (node_t designator_member, struct type
     init_object = VARR_LAST (init_object_t, init_object_path);
     if ((decl = init_object.u.curr_member->attr) == NULL
         || !decl->decl_spec.type->unnamed_anon_struct_union_member_type_p) {
-      container_type = init_object.container_type;
       break;
     }
+    container_type = init_object.container_type;
     VARR_POP (init_object_t, init_object_path);
   }
   /* Now add *full* path to designator_member of containing anon members */
