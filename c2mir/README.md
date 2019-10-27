@@ -16,4 +16,3 @@
 ## Current state C to MIR compiler
   * In a state of fixing numerous bugs 
   * Full x86-64 call ABI (multiple return regs, passing structures through regs) is not implemented yet
-  * Long double support is not implemented yet
