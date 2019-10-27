@@ -176,6 +176,15 @@ c2mir-interp-test: c2m
 c2mir-gen-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
 
+c2mir-bootstrap-test: c2m b2ctab
+	@ echo -n Bootstrap Test... 
+	@ ./c2m -bin -Dx86_64 -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+	@ ./b2ctab <1.bmir >mir-ctab
+	@ $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
+	@ ./a.out -bin -Dx86_64 -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c
+	@ cmp 1.bmir a.bmir && echo Passed || echo FAIL
+	@ rm -rf 1.bmir a.bmir mir-ctab
+
 c2mir-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
 
