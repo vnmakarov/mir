@@ -11,7 +11,7 @@
    The compiler implements C11 standard w/o C11 optional features:
    atomic, complex, variable size arrays. */
 
-#ifdef TEST_C2MIR
+#ifndef C2MIR_NO_DRIVER
 #define _GNU_SOURCE /* for mempcpy */
 #endif
 
@@ -11693,7 +11693,7 @@ static void compile_finish (void) {
 }
 
 /* ------------------------- Small test example ------------------------- */
-#ifdef TEST_C2MIR
+#ifndef C2MIR_NO_DRIVER
 static size_t curr_char;
 static const char *code;
 

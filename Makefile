@@ -18,7 +18,7 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
 c2m: mir.o mir-gen.o c2mir/c2mir.c
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
@@ -167,7 +167,7 @@ readme-example-test:
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
-	$(CC) -g -D$(TARGET) -DTEST_C2MIR -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei
+	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei sieve.c
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test
 
@@ -178,15 +178,15 @@ c2mir-gen-test: c2m
 
 c2mir-bootstrap-test: c2m b2ctab
 	@ echo -n Bootstrap Test... 
-	@ ./c2m -bin -Dx86_64 -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+	@ ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
 	@ ./b2ctab <1.bmir >mir-ctab
-	@ $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
-	@ ./a.out -bin -Dx86_64 -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c
+	@ $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
+	@ ./a.out -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
 	@ cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	@ rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_C2MIR -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
 
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
