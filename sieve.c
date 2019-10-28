@@ -1,5 +1,7 @@
+void printf (const char *fmt, ...);
 void abort (void);
 #define SieveSize 819000
+#define N_ITER 10
 int sieve (int n) {
   int i, k, prime, count, iter;
   char flags[SieveSize];
@@ -16,8 +18,10 @@ int sieve (int n) {
   }
   return count;
 }
-void printf (const char *s, int n);
 int main (void) {
-  if (sieve (10) != 123814) abort ();
+  int n = sieve (N_ITER);
+
+  printf ("%d iterations of sieve for %d: result = %d\n", N_ITER, SieveSize, n);
+  if (n != 123814) abort ();
   return 0;
 }
