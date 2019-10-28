@@ -11818,33 +11818,8 @@ int main (int argc, char *argv[], char *env[]) {
     VARR_TRUNC (char, input, 0);
     compile_init (argc, argv, t_getc, t_ungetc, other_option_func, &n);
     if (i == 0 && code == NULL) {
-      code
-        = "int printf (const char *, ...);\n"
-          "#define SieveSize 819000\n"
-          "int sieve (void) {\n"
-          "  int i, k, prime, count, iter;\n"
-          "  char flags[SieveSize];\n"
-          "\n"
-          "  for (iter = 0; iter < 100; iter++) {\n"
-          "    count = 0;\n"
-          "    for (i = 0; i < SieveSize; i++)\n"
-          "      flags[i] = 1;\n"
-          "    for (i = 0; i < SieveSize; i++)\n"
-          "      if (flags[i]) {\n"
-          "	    prime = i + i + 3;\n"
-          "	    for (k = i + prime; k < SieveSize; k += prime)\n"
-          "	      flags[k] = 0;\n"
-          "	    count++;\n"
-          "      }\n"
-          "  }\n"
-          "  return count;\n"
-          "}\n"
-          "\n"
-          "int main (void) {\n"
-          "  printf (\"%d\\n\", sieve ());\n"
-          "  return 0;\n"
-          "}\n";
-      source_name = "<example>";
+      fprintf (stderr, "No source file is given -- good bye.\n");
+      ret_code = 1;
     }
     if (code == NULL) break;
     assert (source_name != NULL);
