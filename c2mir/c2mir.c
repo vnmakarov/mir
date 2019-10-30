@@ -11849,10 +11849,14 @@ int main (int argc, char *argv[], char *env[]) {
         fprintf (stderr, "cannot open file a.bmir\n");
         ret_code = 1;
       } else {
+        start_time = real_usec_time ();
         MIR_write (ctx, f);
         if (ferror (f) || fclose (f)) {
           fprintf (stderr, "error in writing file a.bmir\n");
           ret_code = 1;
+        } else if (verbose_p) {
+          fprintf (stderr, "binary output      -- %.0f msec\n",
+                   (real_usec_time () - start_time) / 1000.0);
         }
       }
     } else {
