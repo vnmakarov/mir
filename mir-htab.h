@@ -52,7 +52,7 @@ typedef unsigned htab_hash_t;
 #define HTAB_DELETED_IND (HTAB_EMPTY_IND - 1)
 #define HTAB_DELETED_HASH 0
 
-enum htab_action { HTAB_FIND, HTAB_INSERT, HTAB_DELETE };
+enum htab_action { HTAB_FIND, HTAB_INSERT, HTAB_REPLACE, HTAB_DELETE };
 
 #define HTAB(T) HTAB_##T
 #define HTAB_OP(T, OP) HTAB_##T##_##OP
@@ -139,7 +139,7 @@ DEF_VARR (htab_ind_t)
     size = VARR_LENGTH (htab_ind_t, htab->entries);                                               \
     els_size = VARR_LENGTH (HTAB_EL (T), htab->els);                                              \
     HTAB_ASSERT (els_size * 2 == size, "do size", T);                                             \
-    if (action == HTAB_INSERT && htab->els_bound == els_size) {                                   \
+    if ((action == HTAB_INSERT || action == HTAB_REPLACE) && htab->els_bound == els_size) {       \
       size *= 2;                                                                                  \
       VARR_TAILOR (htab_ind_t, htab->entries, size);                                              \
       addr = VARR_ADDR (htab_ind_t, htab->entries);                                               \
@@ -170,16 +170,22 @@ DEF_VARR (htab_ind_t)
         if (el_ind == HTAB_DELETED_IND) {                                                         \
           first_deleted_entry = entry;                                                            \
         } else if (els_addr[el_ind].hash == hash && (*htab->eq_func) (els_addr[el_ind].el, el)) { \
-          *res = els_addr[el_ind].el;                                                             \
-          if (action == HTAB_DELETE) {                                                            \
+          if (action == HTAB_REPLACE) {                                                           \
+            if (htab->free_func != NULL) htab->free_func (els_addr[el_ind].el);                   \
+            els_addr[el_ind].el = el;                                                             \
+          }                                                                                       \
+          if (action != HTAB_DELETE) {                                                            \
+            *res = els_addr[el_ind].el;                                                           \
+          } else {                                                                                \
             htab->els_num--;                                                                      \
             *entry = HTAB_DELETED_IND;                                                            \
+            if (htab->free_func != NULL) htab->free_func (els_addr[el_ind].el);                   \
             els_addr[el_ind].hash = HTAB_DELETED_HASH;                                            \
           }                                                                                       \
           return TRUE;                                                                            \
         }                                                                                         \
       } else {                                                                                    \
-        if (action == HTAB_INSERT) {                                                              \
+        if (action == HTAB_INSERT || action == HTAB_REPLACE) {                                    \
           htab->els_num++;                                                                        \
           if (first_deleted_entry != NULL) entry = first_deleted_entry;                           \
           els_addr[htab->els_bound].hash = hash;                                                  \

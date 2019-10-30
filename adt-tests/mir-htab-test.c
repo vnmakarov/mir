@@ -32,13 +32,22 @@ int main (void) {
       status &= tab_el == i;
     }
     for (i = 0; i < 100; i++) {
-      status &= HTAB_DO (int, htab, i, HTAB_DELETE, tab_el);
+      status &= HTAB_DO (int, htab, i, HTAB_REPLACE, tab_el);
       status &= tab_el == i;
+      status &= HTAB_ELS_NUM (int, htab) == 100;
+    }
+    status &= sum == 9900;
+    for (i = 0; i < 100; i++) {
+      tab_el = 42;
+      status &= HTAB_DO (int, htab, i, HTAB_DELETE, tab_el);
+      status &= tab_el == 42;
       status &= HTAB_ELS_NUM (int, htab) == 100 - i - 1;
     }
+    status &= sum == 14850;
   }
   collisions = HTAB_COLLISIONS (int, htab);
   HTAB_DESTROY (int, htab);
+  status &= sum == 14850;
   fprintf (stderr, status ? "HTAB OK" : "HTAB FAILURE!");
   fprintf (stderr, ": collisions = %d\n", collisions);
   return !status;
