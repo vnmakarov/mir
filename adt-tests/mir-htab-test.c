@@ -10,7 +10,7 @@ int main (void) {
   int i, collisions, iter, tab_el, status = 1;
   HTAB (int) * htab;
 
-  HTAB_CREATE (int, htab, 4, hash, eq);
+  HTAB_CREATE_WITH_FREE_FUNC (int, htab, 4, hash, eq, f);
   status &= HTAB_ELS_NUM (int, htab) == 0;
   for (iter = 0; iter < 10; iter++) {
     for (i = 0; i < 100; i++) {

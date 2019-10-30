@@ -71,6 +71,7 @@ DEF_VARR (htab_ind_t)
     htab_size_t els_num, els_start, els_bound, collisions; \
     htab_hash_t (*hash_func) (T el);                       \
     int (*eq_func) (T el1, T el2);                         \
+    void (*free_func) (T el);                              \
     VARR (HTAB_EL (T)) * els;                              \
     VARR (htab_ind_t) * entries;                           \
   } HTAB (T);
@@ -80,7 +81,8 @@ DEF_VARR (htab_ind_t)
                                                                                                   \
   static inline void HTAB_OP (T, create) (HTAB (T) * *htab, htab_size_t min_size,                 \
                                           htab_hash_t (*hash_func) (T el),                        \
-                                          int (*eq_func) (T el1, T el2)) {                        \
+                                          int (*eq_func) (T el1, T el2),                          \
+                                          void (*free_func) (T el)) {                             \
     HTAB (T) * ht;                                                                                \
     htab_size_t i, size;                                                                          \
                                                                                                   \
@@ -93,6 +95,7 @@ DEF_VARR (htab_ind_t)
     VARR_CREATE (htab_ind_t, ht->entries, 2 * size);                                              \
     ht->hash_func = hash_func;                                                                    \
     ht->eq_func = eq_func;                                                                        \
+    ht->free_func = free_func;                                                                    \
     ht->els_num = ht->els_start = ht->els_bound = ht->collisions = 0;                             \
     for (i = 0; i < 2 * size; i++) VARR_PUSH (htab_ind_t, ht->entries, HTAB_EMPTY_IND);           \
     *htab = ht;                                                                                   \
@@ -199,7 +202,8 @@ DEF_VARR (htab_ind_t)
     return htab->collisions;                                                                      \
   }
 
-#define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ))
+#define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ, NULL))
+#define HTAB_CREATE_WITH_FREE_FUNC(T, V, S, H, EQ, F) (HTAB_OP (T, create) (&(V), S, H, EQ, F))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
 #define HTAB_CLEAR(T, V, F) (HTAB_OP (T, clear) (V, F))
 /* It returns TRUE if the element existed in the table.  */
