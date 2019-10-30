@@ -19,7 +19,7 @@ int main (void) {
       status &= HTAB_ELS_NUM (int, htab) == i + 1;
     }
     sum = 0;
-    HTAB_CLEAR (int, htab, f);
+    HTAB_CLEAR (int, htab);
     status &= sum == 4950;
     status &= HTAB_ELS_NUM (int, htab) == 0;
     for (i = 0; i < 100; i++) {

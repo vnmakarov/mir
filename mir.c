@@ -2213,7 +2213,7 @@ static void vn_finish (MIR_context_t ctx) {
   ctx->simplify_ctx = NULL;
 }
 
-static void vn_empty (MIR_context_t ctx) { HTAB_CLEAR (val_t, val_tab, NULL); }
+static void vn_empty (MIR_context_t ctx) { HTAB_CLEAR (val_t, val_tab); }
 
 static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                              MIR_insn_code_t code, MIR_op_t op1, MIR_op_t op2) {
@@ -4744,7 +4744,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                               VARR_LENGTH (MIR_type_t, temp_types),
                               VARR_ADDR (MIR_type_t, temp_types),
                               VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
-      HTAB_CLEAR (label_desc_t, label_desc_tab, NULL);
+      HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
       if (func == NULL) process_error (ctx, MIR_syntax_error, "standalone endfunc");
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)

@@ -1449,7 +1449,8 @@ static void interp_init (MIR_context_t ctx) {
   VARR_CREATE (MIR_type_t, call_arg_types_varr, 0);
   call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
   call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
-  HTAB_CREATE (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash, ff_interface_eq);
+  HTAB_CREATE_WITH_FREE_FUNC (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash,
+                              ff_interface_eq, ff_interface_clear);
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
@@ -1465,7 +1466,6 @@ static void interp_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_val_t, arg_vals_varr);
   VARR_DESTROY (MIR_val_t, call_res_args_varr);
   VARR_DESTROY (MIR_type_t, call_arg_types_varr);
-  HTAB_CLEAR (ff_interface_t, ff_interface_tab, ff_interface_clear);
   HTAB_DESTROY (ff_interface_t, ff_interface_tab);
   /* Clear func descs???  */
   free (ctx->interp_ctx);

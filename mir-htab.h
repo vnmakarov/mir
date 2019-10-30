@@ -101,30 +101,31 @@ DEF_VARR (htab_ind_t)
     *htab = ht;                                                                                   \
   }                                                                                               \
                                                                                                   \
-  static inline void HTAB_OP (T, destroy) (HTAB (T) * *htab) {                                    \
-    HTAB_ASSERT (*htab != NULL, "destroy", T);                                                    \
-    VARR_DESTROY (HTAB_EL (T), (*htab)->els);                                                     \
-    VARR_DESTROY (htab_ind_t, (*htab)->entries);                                                  \
-    free (*htab);                                                                                 \
-    *htab = NULL;                                                                                 \
-  }                                                                                               \
-                                                                                                  \
-  static inline void HTAB_OP (T, clear) (HTAB (T) * htab, void (*f) (T)) {                        \
+  static inline void HTAB_OP (T, clear) (HTAB (T) * htab) {                                       \
     htab_ind_t *addr;                                                                             \
     htab_size_t i, size;                                                                          \
     HTAB_EL (T) * els_addr;                                                                       \
                                                                                                   \
     HTAB_ASSERT (htab != NULL, "clear", T);                                                       \
-    if (f != NULL) {                                                                              \
+    if (htab->free_func != NULL) {                                                                \
       els_addr = VARR_ADDR (HTAB_EL (T), htab->els);                                              \
       size = VARR_LENGTH (HTAB_EL (T), htab->els);                                                \
       for (i = 0; i < htab->els_bound; i++)                                                       \
-        if (els_addr[i].hash != HTAB_DELETED_HASH) f (els_addr[i].el);                            \
+        if (els_addr[i].hash != HTAB_DELETED_HASH) htab->free_func (els_addr[i].el);              \
     }                                                                                             \
     htab->els_num = htab->els_start = htab->els_bound = 0;                                        \
     addr = VARR_ADDR (htab_ind_t, htab->entries);                                                 \
     size = VARR_LENGTH (htab_ind_t, htab->entries);                                               \
     for (i = 0; i < size; i++) addr[i] = HTAB_EMPTY_IND;                                          \
+  }                                                                                               \
+                                                                                                  \
+  static inline void HTAB_OP (T, destroy) (HTAB (T) * *htab) {                                    \
+    HTAB_ASSERT (*htab != NULL, "destroy", T);                                                    \
+    if ((*htab)->free_func != NULL) HTAB_OP (T, clear) (*htab);                                   \
+    VARR_DESTROY (HTAB_EL (T), (*htab)->els);                                                     \
+    VARR_DESTROY (htab_ind_t, (*htab)->entries);                                                  \
+    free (*htab);                                                                                 \
+    *htab = NULL;                                                                                 \
   }                                                                                               \
                                                                                                   \
   static inline int HTAB_OP (T, do) (HTAB (T) * htab, T el, enum htab_action action, T * res) {   \
@@ -204,8 +205,8 @@ DEF_VARR (htab_ind_t)
 
 #define HTAB_CREATE(T, V, S, H, EQ) (HTAB_OP (T, create) (&(V), S, H, EQ, NULL))
 #define HTAB_CREATE_WITH_FREE_FUNC(T, V, S, H, EQ, F) (HTAB_OP (T, create) (&(V), S, H, EQ, F))
+#define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
-#define HTAB_CLEAR(T, V, F) (HTAB_OP (T, clear) (V, F))
 /* It returns TRUE if the element existed in the table.  */
 #define HTAB_DO(T, V, A, EL, TAB_EL) (HTAB_OP (T, do) (V, A, EL, &(TAB_EL)))
 #define HTAB_ELS_NUM(T, V) (HTAB_OP (T, els_num) (V))

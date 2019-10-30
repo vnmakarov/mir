@@ -1364,7 +1364,7 @@ static void output_bb_cse_info (MIR_context_t ctx, bb_t bb) {
 static void cse_clear (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-  HTAB_CLEAR (expr_t, expr_tab, NULL);
+  HTAB_CLEAR (expr_t, expr_tab);
   while (VARR_LENGTH (expr_t, exprs) != 0) free (VARR_POP (expr_t, exprs));
   while (VARR_LENGTH (bitmap_t, var2dep_expr) != 0) {
     bitmap_t b = VARR_POP (bitmap_t, var2dep_expr);
@@ -1665,7 +1665,7 @@ static void build_var_occ_web (MIR_context_t ctx) {
 static void var_occs_clear (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-  HTAB_CLEAR (var_occ_t, var_occ_tab, NULL);
+  HTAB_CLEAR (var_occ_t, var_occ_tab);
   while (VARR_LENGTH (var_occ_t, var_occs) != 0) free (VARR_POP (var_occ_t, var_occs));
   VARR_TRUNC (bb_start_occ_list_t, bb_start_occ_list_varr, 0);
   VARR_TRUNC (var_producer_t, producer_varr, 0);

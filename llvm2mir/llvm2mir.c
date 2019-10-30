@@ -1469,7 +1469,7 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
                         : MIR_new_func_arr) (context, LLVMGetValueName (func), nres, &mir_type,
                                              VARR_LENGTH (MIR_var_t, mir_vars),
                                              VARR_ADDR (MIR_var_t, mir_vars)));
-    HTAB_CLEAR (expr_res_t, expr_res_tab, NULL);
+    HTAB_CLEAR (expr_res_t, expr_res_tab);
     mir_int_temp_reg = MIR_new_func_reg (context, curr_mir_func->u.func, MIR_T_I64, "$temp");
     for (unsigned i = 0; i < LLVMCountParams (func); i++) {
       var = VARR_GET (MIR_var_t, mir_vars, i);

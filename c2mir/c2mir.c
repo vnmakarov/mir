@@ -4662,7 +4662,11 @@ static htab_hash_t symbol_hash (symbol_t s) {
                    (uint64_t) s.scope)));
 }
 
-static void symbol_init (void) { HTAB_CREATE (symbol_t, symbol_tab, 5000, symbol_hash, symbol_eq); }
+static void symbol_clear (symbol_t sym) { VARR_DESTROY (node_t, sym.defs); }
+
+static void symbol_init (void) {
+  HTAB_CREATE_WITH_FREE_FUNC (symbol_t, symbol_tab, 5000, symbol_hash, symbol_eq, symbol_clear);
+}
 
 static int symbol_find (enum symbol_mode mode, node_t id, node_t scope, symbol_t *res) {
   int found_p;
@@ -4689,12 +4693,7 @@ static void symbol_insert (enum symbol_mode mode, node_t id, node_t scope, node_
   HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_INSERT, el);
 }
 
-static void symbol_clear (symbol_t sym) { VARR_DESTROY (node_t, sym.defs); }
-
-static void symbol_finish (void) {
-  HTAB_CLEAR (symbol_t, symbol_tab, symbol_clear);
-  HTAB_DESTROY (symbol_t, symbol_tab);
-}
+static void symbol_finish (void) { HTAB_DESTROY (symbol_t, symbol_tab); }
 
 static VARR (node_t) * gotos;
 
@@ -8447,7 +8446,7 @@ static void check (node_t r, node_t context) {
       }
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
     }
-    HTAB_CLEAR (case_t, case_tab, NULL);
+    HTAB_CLEAR (case_t, case_tab);
     /* Check range cases against *all* simple cases or range cases *before* it. */
     for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL;
          c = DLIST_NEXT (case_t, c)) {
@@ -8724,7 +8723,7 @@ static void init_reg_vars (void) {
 
 static void finish_curr_func_reg_vars (void) {
   reg_free_mark = 0;
-  HTAB_CLEAR (reg_var_t, reg_var_tab, NULL);
+  HTAB_CLEAR (reg_var_t, reg_var_tab);
 }
 
 static void finish_reg_vars (void) { HTAB_DESTROY (reg_var_t, reg_var_tab); }
