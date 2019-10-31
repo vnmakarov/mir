@@ -186,7 +186,7 @@ c2mir-bootstrap-test: c2m b2ctab
 	@ rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg && size ./a.out
+	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg sieve.c && size ./a.out
 
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
