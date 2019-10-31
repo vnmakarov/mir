@@ -214,7 +214,7 @@ DEF_VARR (htab_ind_t)
 #define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
 /* It returns TRUE if the element existed in the table.  */
-#define HTAB_DO(T, V, A, EL, TAB_EL) (HTAB_OP (T, do) (V, A, EL, &(TAB_EL)))
+#define HTAB_DO(T, V, EL, A, TAB_EL) (HTAB_OP (T, do) (V, EL, A, &(TAB_EL)))
 #define HTAB_ELS_NUM(T, V) (HTAB_OP (T, els_num) (V))
 #define HTAB_COLLISIONS(T, V) (HTAB_OP (T, collisions) (V))
 
