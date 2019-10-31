@@ -52,35 +52,19 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
 
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
 
-/* r11=<address to go to>; r10=<address of func item>; jump *r11  */
-void *_MIR_get_thunk (MIR_context_t ctx, MIR_item_t item) {
+/* r11=<address to go to>; jump *r11  */
+void *_MIR_get_thunk (MIR_context_t ctx) {
   void *res;
   static const uint8_t pattern[] = {
     0x49, 0xbb, 0,    0, 0, 0, 0, 0, 0, 0, /* 0x0: movabsq 0, r11 */
-    0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /* 0xa: movabsq 0, r10 */
     0x41, 0xff, 0xe3,                      /* 0x14: jmpq   *%r11 */
   };
   res = _MIR_publish_code (ctx, pattern, sizeof (pattern));
-  _MIR_update_code (ctx, res, 1, 12, item);
   return res;
 }
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   _MIR_update_code (ctx, thunk, 1, 2, to);
-}
-
-void *_MIR_get_thunk_target (MIR_context_t ctx, void *thunk) {
-  void *res;
-
-  memcpy (&res, (char *) thunk + 2, sizeof (void *));
-  return res;
-}
-
-MIR_item_t _MIR_get_thunk_func (MIR_context_t ctx, void *thunk) {
-  MIR_item_t res;
-
-  memcpy (&res, (char *) thunk + 12, sizeof (MIR_item_t));
-  return res;
 }
 
 static const uint8_t save_pat[] = {
@@ -182,7 +166,7 @@ static void gen_st80 (uint32_t src_offset) {
 }
 
 /* Generation: fun (fun_addr, res_arg_addresses):
-   push rbx; sp-=sp_offset; r11=fan_addr; rbx=res/arg_addrs
+   push rbx; sp-=sp_offset; r11=fun_addr; rbx=res/arg_addrs
    r10=mem[rbx,<offset>]; (arg_reg=mem[r10] or r10=mem[r10];mem[sp,sp_offset]=r10) ...
    rax=8; call *r11; sp+=offset
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
