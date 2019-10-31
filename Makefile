@@ -169,7 +169,7 @@ c2mir-test: c2mir-simple-test c2mir-full-test
 c2mir-simple-test:
 	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei sieve.c
 
-c2mir-full-test: c2mir-interp-test c2mir-gen-test
+c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-bootstrap-test
 
 c2mir-interp-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-interp
@@ -177,7 +177,7 @@ c2mir-gen-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
 
 c2mir-bootstrap-test: c2m b2ctab
-	@ echo -n Bootstrap Test... 
+	@ echo -n +++++++ C2MIR Bootstrap Test '(usually it takes about 10-20 sec) ... '
 	@ ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
 	@ ./b2ctab <1.bmir >mir-ctab
 	@ $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
