@@ -14,14 +14,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) || defined(__s390__) \
+  || defined(__m32c__) || defined(cris) || defined(__CR16__) || defined(__vax__)        \
+  || defined(__m68k__) || defined(__aarch64__) || defined(_M_AMD64) || defined(_M_IX86)
+#define MIR_HASH_UNALIGNED_ACCESS 1
+#else
+#define MIR_HASH_UNALIGNED_ACCESS 0
+#endif
+
 static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax_p) {
   size_t i, start = 0;
   uint64_t tail = 0;
 
   if (relax_p || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) {
-#if defined(__x86_64__) || defined(__i386__) || defined(__PPC64__) || defined(__s390__) \
-  || defined(__m32c__) || defined(cris) || defined(__CR16__) || defined(__vax__)        \
-  || defined(__m68k__) || defined(__aarch64__) || defined(_M_AMD64) || defined(_M_IX86)
+#if MIR_HASH_UNALIGNED_ACCESS
     if (len == sizeof (uint64_t)) return *(uint64_t *) v;
     if (len >= sizeof (uint32_t)) {
       tail = (uint64_t) * (uint32_t *) v << 32;
