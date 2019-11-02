@@ -197,7 +197,7 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
 static inline void reduce_dict_add (struct reduce_data *data, uint32_t pos) {
   uint64_t hash;
   struct reduce_el *el;
-  uint32_t prev, curr;
+  uint32_t prev, curr, num = data->curr_num++;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return;
   hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, 42) % REDUCE_TABLE_SIZE;
@@ -213,7 +213,7 @@ static inline void reduce_dict_add (struct reduce_data *data, uint32_t pos) {
       data->u.table[hash].head = data->u.table[curr].next;
   }
   data->u.table[curr].pos = pos;
-  data->u.table[curr].num = data->curr_num++;
+  data->u.table[curr].num = num;
   data->u.table[curr].next = data->u.table[hash].head;
   data->u.table[hash].head = curr;
 }
