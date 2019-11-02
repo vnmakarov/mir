@@ -20,13 +20,15 @@
 
 #define FALSE 0
 #define TRUE 1
-#define REDUCE_SYMB_TAG_LEN 3
+#define REDUCE_SYMB_TAG_LEN 3                                 /* for some application could be 4 */
 #define REDUCE_SYMB_TAG_LONG ((1 << REDUCE_SYMB_TAG_LEN) - 1) /* should be not changed */
 #define REDUCE_REF_TAG_LEN (8 - REDUCE_SYMB_TAG_LEN)
 #define REDUCE_REF_TAG_LONG ((1 << REDUCE_REF_TAG_LEN) - 1) /* should be not changed */
-#define REDUCE_START_LEN 4
-#define REDUCE_BUF_LEN (1 << 20) /* should be power of two */
-#define REDUCE_TABLE_SIZE (2 * REDUCE_BUF_LEN)
+#define REDUCE_START_LEN 4                                  /* Should be at least 4 */
+#define REDUCE_BUF_LEN (1 << 18)
+/* The following should be power of two. There will be no space saving if it is less than 1/4 of buf
+   length. */
+#define REDUCE_TABLE_SIZE (REDUCE_BUF_LEN / 4)
 #define REDUCE_MAX_SYMB_LEN (2047)
 
 typedef size_t (*reader_t) (void *start, size_t len);
@@ -43,7 +45,10 @@ struct reduce_data {
   uint32_t curr_num, buf_bound, curr_symb_len;
   uint8_t curr_symb[REDUCE_MAX_SYMB_LEN];
   uint8_t buf[REDUCE_BUF_LEN];
-  struct reduce_el table[REDUCE_TABLE_SIZE]; /* hash -> {pos, num} */
+  union {
+    struct reduce_el table[REDUCE_TABLE_SIZE]; /* hash -> {pos, num} */
+    uint32_t ind2pos[REDUCE_BUF_LEN];
+  } u;
   uint32_t el_free;
 };
 
@@ -52,7 +57,7 @@ static inline uint32_t reduce_min (uint32_t a, uint32_t b) { return a < b ? a : 
 static inline uint32_t reduce_get_new_el (struct reduce_data *data) {
   uint32_t res = data->el_free;
 
-  if (res != UINT32_MAX) data->el_free = data->table[res].next;
+  if (res != UINT32_MAX) data->el_free = data->u.table[res].next;
   return res;
 }
 
@@ -149,10 +154,10 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return 0;
   hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, 42) % REDUCE_TABLE_SIZE;
-  for (curr = data->table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
+  for (curr = data->u.table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
        prev = curr, curr = next) {
-    next = data->table[curr].next;
-    el = &data->table[curr];
+    next = data->u.table[curr].next;
+    el = &data->u.table[curr];
     len_bound = reduce_min (data->buf_bound - pos, pos - el->pos);
     if (len_bound < REDUCE_START_LEN) continue;
     s1 = &data->buf[el->pos];
@@ -192,28 +197,33 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
 static inline void reduce_dict_add (struct reduce_data *data, uint32_t pos) {
   uint64_t hash;
   struct reduce_el *el;
-  uint32_t curr;
+  uint32_t prev, curr;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return;
   hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, 42) % REDUCE_TABLE_SIZE;
   if ((curr = reduce_get_new_el (data)) == UINT32_MAX) { /* rare case: use last if any */
-    for (curr = data->table[hash].head; curr != UINT32_MAX && data->table[curr].next != UINT32_MAX;
-         curr = data->table[curr].next)
+    for (prev = UINT32_MAX, curr = data->u.table[hash].head;
+         curr != UINT32_MAX && data->u.table[curr].next != UINT32_MAX;
+         prev = curr, curr = data->u.table[curr].next)
       ;
     if (curr == UINT32_MAX) return; /* no more free els */
+    if (prev != UINT32_MAX)
+      data->u.table[prev].next = data->u.table[curr].next;
+    else
+      data->u.table[hash].head = data->u.table[curr].next;
   }
-  data->table[curr].pos = pos;
-  data->table[curr].num = data->curr_num++;
-  data->table[curr].next = data->table[hash].head;
-  data->table[hash].head = curr;
+  data->u.table[curr].pos = pos;
+  data->u.table[curr].num = data->curr_num++;
+  data->u.table[curr].next = data->u.table[hash].head;
+  data->u.table[hash].head = curr;
 }
 
 static void reduce_reset_next (struct reduce_data *data) {
   for (uint32_t i = 0; i < REDUCE_TABLE_SIZE; i++) {
-    data->table[i].next = i + 1;
-    data->table[i].head = UINT32_MAX;
+    data->u.table[i].next = i + 1;
+    data->u.table[i].head = UINT32_MAX;
   }
-  data->table[REDUCE_TABLE_SIZE - 1].next = UINT32_MAX;
+  data->u.table[REDUCE_TABLE_SIZE - 1].next = UINT32_MAX;
   data->el_free = 0;
 }
 
@@ -273,7 +283,7 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
       }
       if (sym_len > REDUCE_MAX_SYMB_LEN || pos + sym_len > REDUCE_BUF_LEN) break;
       if (reader (&data->buf[pos], sym_len) != sym_len) break;
-      for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++) data->table[curr_ind].pos = pos;
+      for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++) data->u.ind2pos[curr_ind] = pos;
     }
     ref_len = tag & REDUCE_REF_TAG_LONG;
     if (ref_len != 0) {
@@ -285,10 +295,10 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
       if ((r = reduce_uint_read (reader)) < 0) break;
       ref_ind = r;
       if (curr_ind < ref_ind) break;
-      sym_pos = data->table[curr_ind - ref_ind].pos;
+      sym_pos = data->u.ind2pos[curr_ind - ref_ind];
       if (sym_pos + ref_len > REDUCE_BUF_LEN) break;
       memcpy (&data->buf[pos], &data->buf[sym_pos], ref_len);
-      data->table[curr_ind++].pos = pos;
+      data->u.ind2pos[curr_ind++] = pos;
       pos += ref_len;
     }
     if (pos >= REDUCE_BUF_LEN) {
