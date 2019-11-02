@@ -169,13 +169,13 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
 #if !MIR_HASH_UNALIGNED_ACCESS
     if (len < REDUCE_START_LEN) continue;
 #endif
+    off = data->curr_num - el->num;
     if (best_el == NULL) {
       best_len = len;
       best_el = el;
-      best_ref_size = reduce_ref_size (best_len, best_off);
+      best_ref_size = reduce_ref_size (len, off);
       continue;
     }
-    off = data->curr_num - el->num;
     best_off = data->curr_num - best_el->num;
     ref_size = reduce_ref_size (len, off);
     if (best_len + ref_size < len + best_ref_size) {
