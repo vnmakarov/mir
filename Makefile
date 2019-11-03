@@ -38,7 +38,7 @@ b2ctab: mir.o mir-utils/b2ctab.c
 test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
 	@echo ==============================Test is done
       
-l2m-test: l2m-simple-test # ??? l2m-full-test
+l2m-test: l2m-simple-test l2m-full-test
 
 l2m-simple-test: l2m-test1 l2m-test2
 
@@ -203,7 +203,7 @@ mir2c-test:
 mir2c-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -DTEST_MIR2C -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
 
-adt-test: varr-test dlist-test bitmap-test htab-test
+adt-test: varr-test dlist-test bitmap-test htab-test reduce-test
 
 varr-test:
 	$(CC) -g -I. adt-tests/mir-varr-test.c && ./a.out
@@ -216,6 +216,9 @@ bitmap-test:
 
 htab-test:
 	$(CC) -g -I. adt-tests/mir-htab-test.c && ./a.out
+
+reduce-test:
+	$(CC) -g -I. -O3 -DNDEBUG adt-tests/mir-reduce-test.c && ./a.out < c2mir/c2mir.c
 
 clean:
 	rm -f $(OBJS) ./a.out
