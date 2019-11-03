@@ -248,9 +248,11 @@ static void reduce_reset_next (struct reduce_data *data) {
   data->el_free = 0;
 }
 
+#define REDUCE_CHECK_HASH_SEED 42
+
 static inline int reduce_do (reader_t reader, writer_t writer) {
   int err_p;
-  uint64_t hash = 42;
+  uint64_t check_hash = REDUCE_CHECK_HASH_SEED;
   uint32_t dict_len, dict_pos, base;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
 
@@ -260,7 +262,7 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
   for (;;) {
     data->buf_bound = reader (&data->buf, REDUCE_BUF_LEN);
     if (data->buf_bound == 0) break;
-    hash = mir_hash_strict (data->buf, data->buf_bound, hash);
+    check_hash = mir_hash_strict (data->buf, data->buf_bound, check_hash);
     data->curr_num = data->curr_symb_len = 0;
     reduce_reset_next (data);
     for (uint32_t pos = 0; pos < data->buf_bound;) {
@@ -278,7 +280,7 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
     }
     reduce_symb_flush (data, 0);
   }
-  reduce_hash_write (data, hash);
+  reduce_hash_write (data, check_hash);
   err_p = data->err_p;
   free (data);
   return !err_p;
@@ -287,7 +289,7 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
 static inline int reduce_undo (reader_t reader, writer_t writer) {
   uint8_t tag, s[sizeof (uint64_t)];
   uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
-  uint64_t r, hash = 42;
+  uint64_t r, check_hash = REDUCE_CHECK_HASH_SEED;
   int ret = FALSE;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
 
@@ -295,13 +297,13 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
   data->writer = writer;
   for (;;) {
     if (reader (&tag, 1) == 0) break;
-    if (tag == 0) { /* hash */
+    if (tag == 0) { /* check hash */
       if (reader (s, sizeof (s)) != sizeof (s) || reader (&tag, 1) != 0) break;
       if (pos != 0) {
-        hash = mir_hash_strict (data->buf, pos, hash);
+        check_hash = mir_hash_strict (data->buf, pos, check_hash);
         writer (&data->buf[0], pos);
       }
-      if (reduce_str2hash (s) != hash) break;
+      if (reduce_str2hash (s) != check_hash) break;
       ret = TRUE;
       break;
     }
@@ -333,7 +335,7 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
     }
     if (pos >= REDUCE_BUF_LEN) {
       if (pos != REDUCE_BUF_LEN) break;
-      hash = mir_hash_strict (data->buf, pos, hash);
+      check_hash = mir_hash_strict (data->buf, pos, check_hash);
       writer (&data->buf[0], pos);
       pos = curr_ind = 0;
     }
