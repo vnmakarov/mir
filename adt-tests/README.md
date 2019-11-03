@@ -7,3 +7,4 @@ Currently there are tests for the following ADT:
 * htab (hash tables)
 * bitmap (bit maps)
 * mp (memory pools, the tests are not implemented yet)
+* reduce (compression / decompression functions)
