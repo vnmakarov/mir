@@ -6,12 +6,14 @@
 
    A better compression (on par with LZ4) could be achieved by adding
    elements for all positions (now positions inside referenced symbols
-   are excluded) or/and increasing the buffer.  But it would slow down
-   the compression or/and increase the used memory.
+   are excluded) or/and increasing the buffer or/and increasing the
+   table.  But it would slow down the compression or/and increase the
+   used memory.
 
    Functions reduce_do/reduce_undo are the only interface functions.
 
-   Format:
+   Format of compressed data: elements*, zero byte, 8-byte check hash in little endian form
+   Format of element:
     o 8 bits tag
       (N bits for symbol length; 0 means no sym, 2^N -1 means symbol length as uint present;
       (8-N) bits for reference length; 0 means no ref, 2^(8-N) - 1 means length as uint present)
