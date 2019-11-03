@@ -162,6 +162,8 @@ static inline void reduce_output_ref (struct reduce_data *data, uint32_t offset,
   reduce_uint_write (data, offset);
 }
 
+#define REDUCE_HASH_SEED 24
+
 static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint32_t pos,
                                                  uint32_t *dict_pos) {
   uint32_t len, best_len, len_bound;
@@ -172,7 +174,7 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
   struct reduce_el *el, *best_el = NULL;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return 0;
-  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, 42) % REDUCE_TABLE_SIZE;
+  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
   for (curr = data->u.table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
        prev = curr, curr = next) {
     next = data->u.table[curr].next;
@@ -219,7 +221,7 @@ static inline void reduce_dict_add (struct reduce_data *data, uint32_t pos) {
   uint32_t prev, curr, num = data->curr_num++;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return;
-  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, 42) % REDUCE_TABLE_SIZE;
+  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
   if ((curr = reduce_get_new_el (data)) == UINT32_MAX) { /* rare case: use last if any */
     for (prev = UINT32_MAX, curr = data->u.table[hash].head;
          curr != UINT32_MAX && data->u.table[curr].next != UINT32_MAX;
