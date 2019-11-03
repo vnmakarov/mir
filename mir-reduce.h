@@ -4,6 +4,11 @@
    different format and offsets in symbol numbers instead of just
    offsets.
 
+   A better compression (on par with LZ4) could be achieved by adding
+   elements for all positions (now positions inside referenced symbols
+   are excluded) or/and increasing the buffer.  But it would slow down
+   the compression or/and increase the used memory.
+
    Functions reduce_do/reduce_undo are the only interface functions.
 
    Format:
@@ -109,6 +114,18 @@ static inline int64_t reduce_uint_read (reader_t reader) {
     v = v * 256 + (uint32_t) r;
   }
   return v;
+}
+
+static inline void reduce_hash_write (struct reduce_data *data, uint64_t h) {
+  reduce_put (data, 0); /* 0 tag */
+  for (int i = 0; i < sizeof (uint64_t); i++) reduce_put (data, (h >> i * 8) & 0xff);
+}
+
+static inline uint64_t reduce_str2hash (const uint8_t *s) {
+  uint64_t h = 0;
+
+  for (int i = 0; i < sizeof (uint64_t); i++) h |= (uint64_t) s[i] << i * 8;
+  return h;
 }
 
 static inline int reduce_symb_flush (struct reduce_data *data, int ref_tag) {
@@ -229,6 +246,7 @@ static void reduce_reset_next (struct reduce_data *data) {
 
 static inline int reduce_do (reader_t reader, writer_t writer) {
   int err_p;
+  uint64_t hash = 42;
   uint32_t dict_len, dict_pos, base;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
 
@@ -238,6 +256,7 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
   for (;;) {
     data->buf_bound = reader (&data->buf, REDUCE_BUF_LEN);
     if (data->buf_bound == 0) break;
+    hash = mir_hash_strict (data->buf, data->buf_bound, hash);
     data->curr_num = data->curr_symb_len = 0;
     reduce_reset_next (data);
     for (uint32_t pos = 0; pos < data->buf_bound;) {
@@ -255,23 +274,30 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
     }
     reduce_symb_flush (data, 0);
   }
+  reduce_hash_write (data, hash);
   err_p = data->err_p;
   free (data);
   return !err_p;
 }
 
 static inline int reduce_undo (reader_t reader, writer_t writer) {
-  uint8_t tag;
+  uint8_t tag, s[sizeof (uint64_t)];
   uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
-  uint64_t r;
+  uint64_t r, hash = 42;
   int ret = FALSE;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
 
   data->reader = reader;
   data->writer = writer;
   for (;;) {
-    if (reader (&tag, 1) == 0) {
-      if (pos != 0) writer (&data->buf[0], pos);
+    if (reader (&tag, 1) == 0) break;
+    if (tag == 0) { /* hash */
+      if (reader (s, sizeof (s)) != sizeof (s) || reader (&tag, 1) != 0) break;
+      if (pos != 0) {
+        hash = mir_hash_strict (data->buf, pos, hash);
+        writer (&data->buf[0], pos);
+      }
+      if (reduce_str2hash (s) != hash) break;
       ret = TRUE;
       break;
     }
@@ -303,6 +329,7 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
     }
     if (pos >= REDUCE_BUF_LEN) {
       if (pos != REDUCE_BUF_LEN) break;
+      hash = mir_hash_strict (data->buf, pos, hash);
       writer (&data->buf[0], pos);
       pos = curr_ind = 0;
     }
