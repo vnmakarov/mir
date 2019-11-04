@@ -1,3 +1,10 @@
+/* This file is a part of MIR project.
+  Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
+#ifndef MIR_REDUCE_H
+#define MIR_REDUCE_H
+
 /* Data compression.  Major goals are simplicity, fast decompression
    speed, moderate compression speed.  The algorithm is tuned for
    binary MIR compression and close to LZ4.  Only we use a bit
@@ -355,3 +362,5 @@ static inline int reduce_undo (reader_t reader, writer_t writer) {
   free (data);
   return ret;
 }
+
+#endif /* #ifndef MIR_REDUCE_H */
