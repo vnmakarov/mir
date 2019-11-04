@@ -12,7 +12,7 @@
 
    Functions reduce_do/reduce_undo are the only interface functions.
 
-   Format of compressed data: elements*, zero byte, 8-byte check hash in little endian form
+   Format of compressed data: "MIR", elements*, zero byte, 8-byte check hash in little endian form
    Format of element:
     o 8 bits tag
       (N bits for symbol length; 0 means no sym, 2^N -1 means symbol length as uint present;
@@ -27,6 +27,7 @@
 
 #define FALSE 0
 #define TRUE 1
+#define REDUCE_DATA_PREFIX "MIR"                              /* first chars of compressed data */
 #define REDUCE_SYMB_TAG_LEN 3                                 /* for some application could be 4 */
 #define REDUCE_SYMB_TAG_LONG ((1 << REDUCE_SYMB_TAG_LEN) - 1) /* should be not changed */
 #define REDUCE_REF_TAG_LEN (8 - REDUCE_SYMB_TAG_LEN)
@@ -255,89 +256,100 @@ static inline int reduce_do (reader_t reader, writer_t writer) {
   uint64_t check_hash = REDUCE_CHECK_HASH_SEED;
   uint32_t dict_len, dict_pos, base;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
+  char prefix[] = REDUCE_DATA_PREFIX;
+  size_t prefix_size = strlen (prefix);
 
   data->reader = reader;
   data->writer = writer;
   data->err_p = FALSE;
-  for (;;) {
-    data->buf_bound = reader (&data->buf, REDUCE_BUF_LEN);
-    if (data->buf_bound == 0) break;
-    check_hash = mir_hash_strict (data->buf, data->buf_bound, check_hash);
-    data->curr_num = data->curr_symb_len = 0;
-    reduce_reset_next (data);
-    for (uint32_t pos = 0; pos < data->buf_bound;) {
-      dict_len = reduce_dict_find_longest (data, pos, &dict_pos);
-      base = data->curr_num;
-      if (dict_len == 0) {
-        reduce_output_byte (data, pos);
-        reduce_dict_add (data, pos);
-        pos++;
-        continue;
+  if (writer (prefix, prefix_size) != prefix_size) {
+    err_p = TRUE;
+  } else {
+    for (;;) {
+      data->buf_bound = reader (&data->buf, REDUCE_BUF_LEN);
+      if (data->buf_bound == 0) break;
+      check_hash = mir_hash_strict (data->buf, data->buf_bound, check_hash);
+      data->curr_num = data->curr_symb_len = 0;
+      reduce_reset_next (data);
+      for (uint32_t pos = 0; pos < data->buf_bound;) {
+        dict_len = reduce_dict_find_longest (data, pos, &dict_pos);
+        base = data->curr_num;
+        if (dict_len == 0) {
+          reduce_output_byte (data, pos);
+          reduce_dict_add (data, pos);
+          pos++;
+          continue;
+        }
+        reduce_output_ref (data, base - dict_pos, dict_len);
+        reduce_dict_add (data, pos); /* replace */
+        pos += dict_len;
       }
-      reduce_output_ref (data, base - dict_pos, dict_len);
-      reduce_dict_add (data, pos); /* replace */
-      pos += dict_len;
+      reduce_symb_flush (data, 0);
     }
-    reduce_symb_flush (data, 0);
+    reduce_hash_write (data, check_hash);
+    err_p = data->err_p;
   }
-  reduce_hash_write (data, check_hash);
-  err_p = data->err_p;
   free (data);
   return !err_p;
 }
 
 static inline int reduce_undo (reader_t reader, writer_t writer) {
-  uint8_t tag, s[sizeof (uint64_t)];
+  uint8_t tag, hash_str[sizeof (uint64_t)];
   uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
   uint64_t r, check_hash = REDUCE_CHECK_HASH_SEED;
   int ret = FALSE;
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
+  char prefix[] = REDUCE_DATA_PREFIX, str[sizeof (prefix)];
+  size_t prefix_size = strlen (prefix);
 
   data->reader = reader;
   data->writer = writer;
-  for (;;) {
-    if (reader (&tag, 1) == 0) break;
-    if (tag == 0) { /* check hash */
-      if (reader (s, sizeof (s)) != sizeof (s) || reader (&tag, 1) != 0) break;
-      if (pos != 0) {
+  if (reader (str, prefix_size) == prefix_size && memcmp (prefix, str, prefix_size) == 0) {
+    for (;;) {
+      if (reader (&tag, 1) == 0) break;
+      if (tag == 0) { /* check hash */
+        if (reader (hash_str, sizeof (hash_str)) != sizeof (hash_str) || reader (&tag, 1) != 0)
+          break;
+        if (pos != 0) {
+          check_hash = mir_hash_strict (data->buf, pos, check_hash);
+          writer (&data->buf[0], pos);
+        }
+        if (reduce_str2hash (hash_str) != check_hash) break;
+        ret = TRUE;
+        break;
+      }
+      sym_len = tag >> REDUCE_REF_TAG_LEN;
+      if (sym_len != 0) {
+        if (sym_len == REDUCE_SYMB_TAG_LONG) {
+          if ((r = reduce_uint_read (reader)) < 0) break;
+          sym_len = r;
+        }
+        if (sym_len > REDUCE_MAX_SYMB_LEN || pos + sym_len > REDUCE_BUF_LEN) break;
+        if (reader (&data->buf[pos], sym_len) != sym_len) break;
+        for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++) data->u.ind2pos[curr_ind] = pos;
+      }
+      ref_len = tag & REDUCE_REF_TAG_LONG;
+      if (ref_len != 0) {
+        if (ref_len == REDUCE_REF_TAG_LONG) {
+          if ((r = reduce_uint_read (reader)) < 0) break;
+          ref_len = r;
+        }
+        ref_len += REDUCE_START_LEN - 1;
+        if ((r = reduce_uint_read (reader)) < 0) break;
+        ref_ind = r;
+        if (curr_ind < ref_ind) break;
+        sym_pos = data->u.ind2pos[curr_ind - ref_ind];
+        if (sym_pos + ref_len > REDUCE_BUF_LEN) break;
+        memcpy (&data->buf[pos], &data->buf[sym_pos], ref_len);
+        data->u.ind2pos[curr_ind++] = pos;
+        pos += ref_len;
+      }
+      if (pos >= REDUCE_BUF_LEN) {
+        if (pos != REDUCE_BUF_LEN) break;
         check_hash = mir_hash_strict (data->buf, pos, check_hash);
         writer (&data->buf[0], pos);
+        pos = curr_ind = 0;
       }
-      if (reduce_str2hash (s) != check_hash) break;
-      ret = TRUE;
-      break;
-    }
-    sym_len = tag >> REDUCE_REF_TAG_LEN;
-    if (sym_len != 0) {
-      if (sym_len == REDUCE_SYMB_TAG_LONG) {
-        if ((r = reduce_uint_read (reader)) < 0) break;
-        sym_len = r;
-      }
-      if (sym_len > REDUCE_MAX_SYMB_LEN || pos + sym_len > REDUCE_BUF_LEN) break;
-      if (reader (&data->buf[pos], sym_len) != sym_len) break;
-      for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++) data->u.ind2pos[curr_ind] = pos;
-    }
-    ref_len = tag & REDUCE_REF_TAG_LONG;
-    if (ref_len != 0) {
-      if (ref_len == REDUCE_REF_TAG_LONG) {
-        if ((r = reduce_uint_read (reader)) < 0) break;
-        ref_len = r;
-      }
-      ref_len += REDUCE_START_LEN - 1;
-      if ((r = reduce_uint_read (reader)) < 0) break;
-      ref_ind = r;
-      if (curr_ind < ref_ind) break;
-      sym_pos = data->u.ind2pos[curr_ind - ref_ind];
-      if (sym_pos + ref_len > REDUCE_BUF_LEN) break;
-      memcpy (&data->buf[pos], &data->buf[sym_pos], ref_len);
-      data->u.ind2pos[curr_ind++] = pos;
-      pos += ref_len;
-    }
-    if (pos >= REDUCE_BUF_LEN) {
-      if (pos != REDUCE_BUF_LEN) break;
-      check_hash = mir_hash_strict (data->buf, pos, check_hash);
-      writer (&data->buf[0], pos);
-      pos = curr_ind = 0;
     }
   }
   free (data);
