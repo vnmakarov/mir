@@ -8,6 +8,7 @@ TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 OBJS=mir.o mir-gen.o c2m l2m m2b b2m b2ctab
+Q=@
 
 all: $(OBJS)
 
@@ -177,13 +178,13 @@ c2mir-gen-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
 
 c2mir-bootstrap-test: c2m b2ctab
-	@ echo -n +++++++ C2MIR Bootstrap Test '(usually it takes about 10-20 sec) ... '
-	@ ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
-	@ ./b2ctab <1.bmir >mir-ctab
-	@ $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
-	@ ./a.out -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
-	@ cmp 1.bmir a.bmir && echo Passed || echo FAIL
-	@ rm -rf 1.bmir a.bmir mir-ctab
+	$(Q) echo -n +++++++ C2MIR Bootstrap Test '(usually it takes about 10-20 sec) ... '
+	$(Q) ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./b2ctab <1.bmir >mir-ctab
+	$(Q) $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
+	$(Q) ./a.out -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
+	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
+	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg sieve.c && size ./a.out
