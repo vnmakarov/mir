@@ -192,10 +192,10 @@ c2mir-bench:
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
 
-c2mir-bin-interp-test: mir.o mir-gen.o b2ctab
+c2mir-bin-interp-test: c2m mir.o mir-gen.o b2ctab
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-bin-interp
 
-c2mir-bin-gen-test: mir.o mir-gen.o b2ctab
+c2mir-bin-gen-test: c2m mir.o mir-gen.o b2ctab
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-bin-gen
 
 mir2c-test:
