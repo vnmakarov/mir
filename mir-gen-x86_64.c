@@ -693,8 +693,6 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
     }
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, 8));
-  gen_add_insn_before (ctx, anchor, new_insn); /* sp = bp + 8 */
   /* Restoring hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (!call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
@@ -704,6 +702,8 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
                                                          BP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (ctx, anchor, new_insn); /* hard reg = disp(sp) */
     }
+  new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, 8));
+  gen_add_insn_before (ctx, anchor, new_insn); /* sp = bp + 8 */
   new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op,
                            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, -8, SP_HARD_REG,
                                                      MIR_NON_HARD_REG, 1));
