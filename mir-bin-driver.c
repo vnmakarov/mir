@@ -120,7 +120,7 @@ int main (int argc, char *argv[], char *env[]) {
     fprintf (stderr, "Finish of loading/linking (%d funcs) -- curr_time %.0f usec\n", funcs_num,
              real_usec_time () - start_time);
 #endif
-    MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = 3}, (MIR_val_t){.a = (void *) argv},
+    MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = argc}, (MIR_val_t){.a = (void *) argv},
                 (MIR_val_t){.a = (void *) env});
     exit_code = val.i;
   } else {
