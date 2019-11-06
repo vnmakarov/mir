@@ -5,9 +5,10 @@
 static size_t output_mir_code_byte_num;
 static FILE *output_mir_code_file;
 
-static void output_mir_code_byte (MIR_context_t ctx, uint8_t byte) {
+static int output_mir_code_byte (MIR_context_t ctx, uint8_t byte) {
   fprintf (output_mir_code_file, "0x%02x, ", byte);
   if (++output_mir_code_byte_num % 16 == 0) fprintf (output_mir_code_file, "\n");
+  return 1;
 }
 
 static void output_mir_code (MIR_context_t ctx) {
