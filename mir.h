@@ -488,7 +488,7 @@ extern void MIR_write (MIR_context_t ctx, FILE *f);
 extern void MIR_read (MIR_context_t ctx, FILE *f);
 
 extern void MIR_write_with_func (MIR_context_t ctx,
-                                 const void (*writer_func) (MIR_context_t, uint8_t));
+                                 const int (*writer_func) (MIR_context_t, uint8_t));
 extern void MIR_read_with_func (MIR_context_t ctx, const int (*reader_func) (MIR_context_t));
 #endif
 
