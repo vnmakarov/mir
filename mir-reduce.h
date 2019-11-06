@@ -17,7 +17,10 @@
    table.  But it would slow down the compression or/and increase the
    used memory.
 
-   Functions reduce_do/reduce_undo are the only interface functions.
+   Functions reduce_encode, reduce_decode, reduce_encode_start,
+   reduce_encode_put, reduce_encode_finish, reduce_decode_start,
+   reduce_decode_get, reduce_decode_finish are the only interface
+   functions.
 
    Format of compressed data: "MIR", elements*, zero byte, 8-byte check hash in little endian form
    Format of element:
@@ -46,46 +49,60 @@
 #define REDUCE_TABLE_SIZE (REDUCE_BUF_LEN / 4)
 #define REDUCE_MAX_SYMB_LEN (2047)
 
-typedef size_t (*reader_t) (void *start, size_t len);
-typedef size_t (*writer_t) (const void *start, size_t len);
+typedef size_t (*reduce_reader_t) (void *start, size_t len, void *aux_data);
+typedef size_t (*reduce_writer_t) (const void *start, size_t len, void *aux_data);
 
 struct reduce_el {
   uint32_t pos, num, next, head;
 };
 
-struct reduce_data {
-  reader_t reader;
-  writer_t writer;
-  int err_p;
-  uint32_t curr_num, buf_bound, curr_symb_len;
-  uint8_t curr_symb[REDUCE_MAX_SYMB_LEN];
-  uint8_t buf[REDUCE_BUF_LEN];
-  union {
-    struct reduce_el table[REDUCE_TABLE_SIZE]; /* hash -> {pos, num} */
-    uint32_t ind2pos[REDUCE_BUF_LEN];
-  } u;
+struct reduce_encode_data {
+  reduce_writer_t writer;
   uint32_t el_free;
+  uint32_t curr_symb_len;
+  uint8_t curr_symb[REDUCE_MAX_SYMB_LEN];
+  struct reduce_el table[REDUCE_TABLE_SIZE]; /* hash -> el */
+};
+
+struct reduce_decode_data {
+  uint8_t eof_p;
+  uint32_t buf_get_pos;
+  reduce_reader_t reader;
+  uint32_t ind2pos[REDUCE_BUF_LEN];
+};
+
+struct reduce_data {
+  union {
+    struct reduce_encode_data encode;
+    struct reduce_decode_data decode;
+  } u;
+  void *aux_data;
+  uint8_t ok_p;
+  uint64_t check_hash;
+  uint32_t curr_num, buf_bound;
+  uint8_t buf[REDUCE_BUF_LEN];
 };
 
 static inline uint32_t reduce_min (uint32_t a, uint32_t b) { return a < b ? a : b; }
 
 static inline uint32_t reduce_get_new_el (struct reduce_data *data) {
-  uint32_t res = data->el_free;
+  struct reduce_encode_data *encode_data = &data->u.encode;
+  uint32_t res = encode_data->el_free;
 
-  if (res != UINT32_MAX) data->el_free = data->u.table[res].next;
+  if (res != UINT32_MAX) encode_data->el_free = encode_data->table[res].next;
   return res;
 }
 
 static inline void reduce_put (struct reduce_data *data, int byte) {
   uint8_t u = byte;
 
-  if (data->writer (&u, 1) != 1) data->err_p = TRUE;
+  if (data->u.encode.writer (&u, 1, data->aux_data) != 1) data->ok_p = FALSE;
 }
 
-static inline int reduce_get (reader_t reader) {
+static inline int reduce_get (reduce_reader_t reader, void *aux_data) {
   uint8_t u;
 
-  if (reader (&u, 1) != 1) return -1;
+  if (reader (&u, 1, aux_data) != 1) return -1;
   return u;
 }
 
@@ -110,8 +127,8 @@ static inline void reduce_uint_write (struct reduce_data *data, uint32_t u) {
   for (int i = 2; i <= n; i++) reduce_put (data, (u >> (n - i) * 8) & 0xff);
 }
 
-static inline int64_t reduce_uint_read (reader_t reader) {
-  int i, n, r = reduce_get (reader);
+static inline int64_t reduce_uint_read (reduce_reader_t reader, void *aux_data) {
+  int i, n, r = reduce_get (reader, aux_data);
   uint32_t u, v;
 
   if (r < 0) return -1;
@@ -120,7 +137,7 @@ static inline int64_t reduce_uint_read (reader_t reader) {
   assert ((u >> (8 - n)) == 1);
   v = u & (0xff >> n);
   for (i = 1; i < n; i++) {
-    if ((r = reduce_get (reader)) < 0) return -1;
+    if ((r = reduce_get (reader, aux_data)) < 0) return -1;
     v = v * 256 + (uint32_t) r;
   }
   return v;
@@ -140,23 +157,26 @@ static inline uint64_t reduce_str2hash (const uint8_t *s) {
 
 static inline int reduce_symb_flush (struct reduce_data *data, int ref_tag) {
   uint8_t u;
-  uint32_t len = data->curr_symb_len;
+  struct reduce_encode_data *encode_data = &data->u.encode;
+  uint32_t len = encode_data->curr_symb_len;
 
   if (len == 0 && ref_tag == 0) return FALSE;
   u = ((len < REDUCE_SYMB_TAG_LONG ? len : REDUCE_SYMB_TAG_LONG) << REDUCE_REF_TAG_LEN) | ref_tag;
-  data->writer (&u, 1);
+  encode_data->writer (&u, 1, data->aux_data);
   if (len >= REDUCE_SYMB_TAG_LONG) reduce_uint_write (data, len);
-  data->writer (data->curr_symb, len);
-  data->curr_symb_len = 0;
+  encode_data->writer (encode_data->curr_symb, len, data->aux_data);
+  encode_data->curr_symb_len = 0;
   return TRUE;
 }
 
 static inline void reduce_output_byte (struct reduce_data *data, uint32_t pos) {
-  if (data->curr_symb_len + 1 > REDUCE_MAX_SYMB_LEN) {
+  struct reduce_encode_data *encode_data = &data->u.encode;
+
+  if (encode_data->curr_symb_len + 1 > REDUCE_MAX_SYMB_LEN) {
     reduce_symb_flush (data, 0);
-    data->curr_symb_len = 0;
+    encode_data->curr_symb_len = 0;
   }
-  data->curr_symb[data->curr_symb_len++] = data->buf[pos];
+  encode_data->curr_symb[encode_data->curr_symb_len++] = data->buf[pos];
 }
 
 static inline void reduce_output_ref (struct reduce_data *data, uint32_t offset, uint32_t len) {
@@ -178,15 +198,19 @@ static inline uint32_t reduce_dict_find_longest (struct reduce_data *data, uint3
   uint64_t hash;
   uint32_t off, best_off, ref_size, best_ref_size;
   uint32_t curr, prev, next;
-  const char *s1, *s2;
+  const uint8_t *s1, *s2;
   struct reduce_el *el, *best_el = NULL;
+  struct reduce_encode_data *encode_data = &data->u.encode;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return 0;
-  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
-  for (curr = data->u.table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
+  /* To have the same compressed output independently of the target
+     and the used compiler, use strict hash even if it decreases
+     compression speed by 10%.  */
+  hash = mir_hash_strict (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
+  for (curr = encode_data->table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
        prev = curr, curr = next) {
-    next = data->u.table[curr].next;
-    el = &data->u.table[curr];
+    next = encode_data->table[curr].next;
+    el = &encode_data->table[curr];
     len_bound = reduce_min (data->buf_bound - pos, pos - el->pos);
     if (len_bound < REDUCE_START_LEN) continue;
     s1 = &data->buf[el->pos];
@@ -227,140 +251,210 @@ static inline void reduce_dict_add (struct reduce_data *data, uint32_t pos) {
   uint64_t hash;
   struct reduce_el *el;
   uint32_t prev, curr, num = data->curr_num++;
+  struct reduce_encode_data *encode_data = &data->u.encode;
 
   if (pos + REDUCE_START_LEN > data->buf_bound) return;
-  hash = mir_hash (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
+  hash = mir_hash_strict (&data->buf[pos], REDUCE_START_LEN, REDUCE_HASH_SEED) % REDUCE_TABLE_SIZE;
   if ((curr = reduce_get_new_el (data)) == UINT32_MAX) { /* rare case: use last if any */
-    for (prev = UINT32_MAX, curr = data->u.table[hash].head;
-         curr != UINT32_MAX && data->u.table[curr].next != UINT32_MAX;
-         prev = curr, curr = data->u.table[curr].next)
+    for (prev = UINT32_MAX, curr = encode_data->table[hash].head;
+         curr != UINT32_MAX && encode_data->table[curr].next != UINT32_MAX;
+         prev = curr, curr = encode_data->table[curr].next)
       ;
     if (curr == UINT32_MAX) return; /* no more free els */
     if (prev != UINT32_MAX)
-      data->u.table[prev].next = data->u.table[curr].next;
+      encode_data->table[prev].next = encode_data->table[curr].next;
     else
-      data->u.table[hash].head = data->u.table[curr].next;
+      encode_data->table[hash].head = encode_data->table[curr].next;
   }
-  data->u.table[curr].pos = pos;
-  data->u.table[curr].num = num;
-  data->u.table[curr].next = data->u.table[hash].head;
-  data->u.table[hash].head = curr;
+  encode_data->table[curr].pos = pos;
+  encode_data->table[curr].num = num;
+  encode_data->table[curr].next = encode_data->table[hash].head;
+  encode_data->table[hash].head = curr;
 }
 
 static void reduce_reset_next (struct reduce_data *data) {
+  struct reduce_encode_data *encode_data = &data->u.encode;
+
   for (uint32_t i = 0; i < REDUCE_TABLE_SIZE; i++) {
-    data->u.table[i].next = i + 1;
-    data->u.table[i].head = UINT32_MAX;
+    encode_data->table[i].next = i + 1;
+    encode_data->table[i].head = UINT32_MAX;
   }
-  data->u.table[REDUCE_TABLE_SIZE - 1].next = UINT32_MAX;
-  data->el_free = 0;
+  encode_data->table[REDUCE_TABLE_SIZE - 1].next = UINT32_MAX;
+  encode_data->el_free = 0;
 }
 
 #define REDUCE_CHECK_HASH_SEED 42
 
-static inline int reduce_do (reader_t reader, writer_t writer) {
-  int err_p;
-  uint64_t check_hash = REDUCE_CHECK_HASH_SEED;
-  uint32_t dict_len, dict_pos, base;
+static inline struct reduce_data *reduce_encode_start (reduce_writer_t writer, void *aux_data) {
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
   char prefix[] = REDUCE_DATA_PREFIX;
   size_t prefix_size = strlen (prefix);
 
-  data->reader = reader;
-  data->writer = writer;
-  data->err_p = FALSE;
-  if (writer (prefix, prefix_size) != prefix_size) {
-    err_p = TRUE;
-  } else {
-    for (;;) {
-      data->buf_bound = reader (&data->buf, REDUCE_BUF_LEN);
-      if (data->buf_bound == 0) break;
-      check_hash = mir_hash_strict (data->buf, data->buf_bound, check_hash);
-      data->curr_num = data->curr_symb_len = 0;
-      reduce_reset_next (data);
-      for (uint32_t pos = 0; pos < data->buf_bound;) {
-        dict_len = reduce_dict_find_longest (data, pos, &dict_pos);
-        base = data->curr_num;
-        if (dict_len == 0) {
-          reduce_output_byte (data, pos);
-          reduce_dict_add (data, pos);
-          pos++;
-          continue;
-        }
-        reduce_output_ref (data, base - dict_pos, dict_len);
-        reduce_dict_add (data, pos); /* replace */
-        pos += dict_len;
-      }
-      reduce_symb_flush (data, 0);
-    }
-    reduce_hash_write (data, check_hash);
-    err_p = data->err_p;
-  }
-  free (data);
-  return !err_p;
+  if (data == NULL) return data;
+  data->u.encode.writer = writer;
+  data->aux_data = aux_data;
+  data->check_hash = REDUCE_CHECK_HASH_SEED;
+  data->buf_bound = 0;
+  data->ok_p = writer (prefix, prefix_size, aux_data) == prefix_size;
+  return data;
 }
 
-static inline int reduce_undo (reader_t reader, writer_t writer) {
-  uint8_t tag, hash_str[sizeof (uint64_t)];
-  uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
-  uint64_t r, check_hash = REDUCE_CHECK_HASH_SEED;
-  int ret = FALSE;
+static inline void reduce_encode_buf (struct reduce_data *data) {
+  uint32_t dict_len, dict_pos, base;
+
+  if (data->buf_bound == 0) return;
+  data->check_hash = mir_hash_strict (data->buf, data->buf_bound, data->check_hash);
+  data->curr_num = data->u.encode.curr_symb_len = 0;
+  reduce_reset_next (data);
+  for (uint32_t pos = 0; pos < data->buf_bound;) {
+    dict_len = reduce_dict_find_longest (data, pos, &dict_pos);
+    base = data->curr_num;
+    if (dict_len == 0) {
+      reduce_output_byte (data, pos);
+      reduce_dict_add (data, pos);
+      pos++;
+      continue;
+    }
+    reduce_output_ref (data, base - dict_pos, dict_len);
+    reduce_dict_add (data, pos); /* replace */
+    pos += dict_len;
+  }
+  reduce_symb_flush (data, 0);
+}
+
+static inline void reduce_encode_put (struct reduce_data *data, int c) {
+  if (data->buf_bound < REDUCE_BUF_LEN) {
+    data->buf[data->buf_bound++] = c;
+    return;
+  }
+  reduce_encode_buf (data);
+  data->buf_bound = 0;
+  data->buf[data->buf_bound++] = c;
+}
+
+static inline int reduce_encode_finish (struct reduce_data *data) {
+  int ok_p;
+
+  reduce_encode_buf (data);
+  reduce_hash_write (data, data->check_hash);
+  ok_p = data->ok_p;
+  free (data);
+  return ok_p;
+}
+
+static inline struct reduce_data *reduce_decode_start (reduce_reader_t reader, void *aux_data) {
   struct reduce_data *data = malloc (sizeof (struct reduce_data));
+  struct reduce_decode_data *decode_data = &data->u.decode;
   char prefix[] = REDUCE_DATA_PREFIX, str[sizeof (prefix)];
   size_t prefix_size = strlen (prefix);
 
-  data->reader = reader;
-  data->writer = writer;
-  if (reader (str, prefix_size) == prefix_size && memcmp (prefix, str, prefix_size) == 0) {
-    for (;;) {
-      if (reader (&tag, 1) == 0) break;
-      if (tag == 0) { /* check hash */
-        if (reader (hash_str, sizeof (hash_str)) != sizeof (hash_str) || reader (&tag, 1) != 0)
-          break;
-        if (pos != 0) {
-          check_hash = mir_hash_strict (data->buf, pos, check_hash);
-          writer (&data->buf[0], pos);
-        }
-        if (reduce_str2hash (hash_str) != check_hash) break;
-        ret = TRUE;
+  if (data == NULL) return data;
+  decode_data->reader = reader;
+  data->aux_data = aux_data;
+  data->check_hash = REDUCE_CHECK_HASH_SEED;
+  decode_data->buf_get_pos = data->buf_bound = 0;
+  data->ok_p
+    = reader (str, prefix_size, aux_data) == prefix_size && memcmp (prefix, str, prefix_size) == 0;
+  decode_data->eof_p = FALSE;
+  return data;
+}
+
+static inline int reduce_decode_get (struct reduce_data *data) {
+  uint8_t tag, hash_str[sizeof (uint64_t)];
+  uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
+  uint64_t r;
+  struct reduce_decode_data *decode_data = &data->u.decode;
+  reduce_reader_t reader = decode_data->reader;
+
+  if (decode_data->buf_get_pos < data->buf_bound) return data->buf[decode_data->buf_get_pos++];
+  if (decode_data->eof_p) return -1;
+  for (;;) {
+    if (reader (&tag, 1, data->aux_data) == 0) break;
+    if (tag == 0) { /* check hash */
+      if (reader (hash_str, sizeof (hash_str), data->aux_data) != sizeof (hash_str)
+          || reader (&tag, 1, data->aux_data) != 0)
         break;
+      if (pos != 0) data->check_hash = mir_hash_strict (data->buf, pos, data->check_hash);
+      if (reduce_str2hash (hash_str) != data->check_hash) break;
+      decode_data->eof_p = TRUE;
+      decode_data->buf_get_pos = 0;
+      data->buf_bound = pos;
+      return pos == 0 ? -1 : data->buf[decode_data->buf_get_pos++];
+    }
+    sym_len = tag >> REDUCE_REF_TAG_LEN;
+    if (sym_len != 0) {
+      if (sym_len == REDUCE_SYMB_TAG_LONG) {
+        if ((r = reduce_uint_read (reader, data->aux_data)) < 0) break;
+        sym_len = r;
       }
-      sym_len = tag >> REDUCE_REF_TAG_LEN;
-      if (sym_len != 0) {
-        if (sym_len == REDUCE_SYMB_TAG_LONG) {
-          if ((r = reduce_uint_read (reader)) < 0) break;
-          sym_len = r;
-        }
-        if (sym_len > REDUCE_MAX_SYMB_LEN || pos + sym_len > REDUCE_BUF_LEN) break;
-        if (reader (&data->buf[pos], sym_len) != sym_len) break;
-        for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++) data->u.ind2pos[curr_ind] = pos;
+      if (sym_len > REDUCE_MAX_SYMB_LEN || pos + sym_len > REDUCE_BUF_LEN) break;
+      if (reader (&data->buf[pos], sym_len, data->aux_data) != sym_len) break;
+      for (uint32_t i = 0; i < sym_len; i++, pos++, curr_ind++)
+        decode_data->ind2pos[curr_ind] = pos;
+    }
+    ref_len = tag & REDUCE_REF_TAG_LONG;
+    if (ref_len != 0) {
+      if (ref_len == REDUCE_REF_TAG_LONG) {
+        if ((r = reduce_uint_read (reader, data->aux_data)) < 0) break;
+        ref_len = r;
       }
-      ref_len = tag & REDUCE_REF_TAG_LONG;
-      if (ref_len != 0) {
-        if (ref_len == REDUCE_REF_TAG_LONG) {
-          if ((r = reduce_uint_read (reader)) < 0) break;
-          ref_len = r;
-        }
-        ref_len += REDUCE_START_LEN - 1;
-        if ((r = reduce_uint_read (reader)) < 0) break;
-        ref_ind = r;
-        if (curr_ind < ref_ind) break;
-        sym_pos = data->u.ind2pos[curr_ind - ref_ind];
-        if (sym_pos + ref_len > REDUCE_BUF_LEN) break;
-        memcpy (&data->buf[pos], &data->buf[sym_pos], ref_len);
-        data->u.ind2pos[curr_ind++] = pos;
-        pos += ref_len;
-      }
-      if (pos >= REDUCE_BUF_LEN) {
-        if (pos != REDUCE_BUF_LEN) break;
-        check_hash = mir_hash_strict (data->buf, pos, check_hash);
-        writer (&data->buf[0], pos);
-        pos = curr_ind = 0;
-      }
+      ref_len += REDUCE_START_LEN - 1;
+      if ((r = reduce_uint_read (reader, data->aux_data)) < 0) break;
+      ref_ind = r;
+      if (curr_ind < ref_ind) break;
+      sym_pos = decode_data->ind2pos[curr_ind - ref_ind];
+      if (sym_pos + ref_len > REDUCE_BUF_LEN) break;
+      memcpy (&data->buf[pos], &data->buf[sym_pos], ref_len);
+      decode_data->ind2pos[curr_ind++] = pos;
+      pos += ref_len;
+    }
+    if (pos >= REDUCE_BUF_LEN) {
+      assert (pos == REDUCE_BUF_LEN);
+      data->check_hash = mir_hash_strict (data->buf, pos, data->check_hash);
+      data->buf_bound = REDUCE_BUF_LEN;
+      decode_data->buf_get_pos = 0;
+      return data->buf[decode_data->buf_get_pos++];
     }
   }
+  data->ok_p = FALSE;
+  return -1;
+}
+
+static inline int reduce_decode_finish (struct reduce_data *data) {
+  uint8_t tag;
+  int ok_p
+    = data->ok_p && data->u.decode.eof_p && data->u.decode.reader (&tag, 1, data->aux_data) == 0;
+
   free (data);
-  return ret;
+  return ok_p;
+}
+
+#define REDUCE_WRITE_IO_LEN 256
+static inline int reduce_encode (reduce_reader_t reader, reduce_writer_t writer, void *aux_data) {
+  size_t i, size;
+  uint8_t buf[REDUCE_WRITE_IO_LEN];
+  struct reduce_data *data = reduce_encode_start (writer, aux_data);
+
+  if (data == NULL) return FALSE;
+  for (;;) {
+    if ((size = reader (buf, REDUCE_WRITE_IO_LEN, data->aux_data)) == 0) break;
+    for (i = 0; i < size; i++) reduce_encode_put (data, buf[i]);
+  }
+  return reduce_encode_finish (data);
+}
+
+static inline int reduce_decode (reduce_reader_t reader, reduce_writer_t writer, void *aux_data) {
+  int c, i;
+  uint8_t buf[REDUCE_WRITE_IO_LEN];
+  struct reduce_data *data = reduce_decode_start (reader, aux_data);
+
+  if (data == NULL) return FALSE;
+  for (;;) {
+    for (i = 0; i < REDUCE_WRITE_IO_LEN && (c = reduce_decode_get (data)) >= 0; i++) buf[i] = c;
+    if (i != 0) writer (buf, i, aux_data);
+    if (c < 0) break;
+  }
+  return reduce_decode_finish (data);
 }
 
 #endif /* #ifndef MIR_REDUCE_H */
