@@ -943,13 +943,13 @@ static const struct pattern patterns[] = {
   {MIR_D2I, "r r", "F2 X 0F 2C r0 R1"},  /* cvttsd2si r0,r1 */
   {MIR_D2I, "r md", "F2 X 0F 2C r0 m1"}, /* cvttsd2si r0,m1 */
 
-  {MIR_F2D, "r r", "F3 X 0F 5A r0 R1"},  /* cvtss2sd r0,r1 */
-  {MIR_F2D, "r mf", "F3 X 0F 5A r0 m1"}, /* cvtss2sd r0,m1 */
-                                         /* fld m1;fstpl -16(sp);movsd r0,-16(sp): */
+  {MIR_F2D, "r r", "F3 0F 5A r0 R1"},  /* cvtss2sd r0,r1 */
+  {MIR_F2D, "r mf", "F3 0F 5A r0 m1"}, /* cvtss2sd r0,m1 */
+                                       /* fld m1;fstpl -16(sp);movsd r0,-16(sp): */
   {MIR_LD2D, "r mld", "DB /5 m1; DD /3 mt; F2 Y 0F 10 r0 mt"},
 
-  {MIR_D2F, "r r", "F2 X 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
-  {MIR_D2F, "r md", "F2 X 0F 5A r0 m1"}, /* cvtsd2ss r0,m1 */
+  {MIR_D2F, "r r", "F2 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
+  {MIR_D2F, "r md", "F2 0F 5A r0 m1"}, /* cvtsd2ss r0,m1 */
   /* fld m1;fstps -16(sp);movss r0, -16(sp): */
   {MIR_LD2F, "r mld", "DB /5 m1; D9 /3 mt; F3 Y 0F 10 r0 mt"},
 
