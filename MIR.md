@@ -23,12 +23,13 @@
    * API functions `MIR_write (MIR_context_t ctx, FILE *f)` and
      `MIR_read (MIR_context_t ctx, FILE *f)` outputs and reads
      **binary MIR representation** to/from given file.  There are also
-     functions `MIR_write_with_func (MIR_context_t ctx, const void
+     functions `MIR_write_with_func (MIR_context_t ctx, const int
      (*writer_func) (MIR_context_t, uint8_t))` and `MIR_read_with_func
      (MIR_context_t ctx, const int (*reader_func) (MIR_context_t))` to
      output and read **binary MIR representation** through a function
      given as an argument.  The reader function should return EOF as
-     the end of the binary MIR representation.
+     the end of the binary MIR representation, the writer function
+     should be return the number of sucessfully output bytes
      * Binary MIR representation much more compact and faster to read than textual one
 
 ## MIR data type
