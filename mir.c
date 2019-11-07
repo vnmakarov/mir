@@ -2489,12 +2489,50 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   VARR_DESTROY (MIR_op_t, ret_ops);
 }
 
+static MIR_insn_code_t reverse_branch_code (MIR_insn_code_t code) {
+  switch (code) {
+  case MIR_BT: return MIR_BF;
+  case MIR_BTS: return MIR_BFS;
+  case MIR_BF: return MIR_BT;
+  case MIR_BFS: return MIR_BTS;
+  case MIR_BEQ: return MIR_BNE;
+  case MIR_BEQS: return MIR_BNES;
+  case MIR_BNE: return MIR_BEQ;
+  case MIR_BNES: return MIR_BEQS;
+  case MIR_BLT: return MIR_BGE;
+  case MIR_BLTS: return MIR_BGES;
+  case MIR_UBLT: return MIR_UBGE;
+  case MIR_UBLTS: return MIR_UBGES;
+  case MIR_BLE: return MIR_BGT;
+  case MIR_BLES: return MIR_BGTS;
+  case MIR_UBLE: return MIR_UBGT;
+  case MIR_UBLES: return MIR_UBGTS;
+  case MIR_BGT: return MIR_BLE;
+  case MIR_BGTS: return MIR_BLES;
+  case MIR_UBGT: return MIR_UBLE;
+  case MIR_UBGTS: return MIR_UBLES;
+  case MIR_BGE: return MIR_BLT;
+  case MIR_BGES: return MIR_BLTS;
+  case MIR_UBGE: return MIR_UBLT;
+  case MIR_UBGES: return MIR_UBLTS;
+  default: assert (FALSE); return code;
+  }
+}
+
+static MIR_insn_t skip_labels (MIR_label_t label, MIR_label_t stop) {
+  for (MIR_insn_t insn = label;; insn = DLIST_NEXT (MIR_insn_t, insn))
+    if (insn == NULL || insn->code != MIR_LABEL || insn == stop) return insn;
+}
+
 static int64_t natural_alignment (int64_t s) { return s <= 2 ? s : s <= 4 ? 4 : s <= 8 ? 8 : 16; }
+
+static const int MAX_JUMP_CHAIN_LEN = 32;
 
 void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p) {
   MIR_func_t func = func_item->u.func;
-  MIR_insn_t insn, next_insn, new_insn;
+  MIR_insn_t insn, next_insn, next_next_insn, jmp_insn, new_insn;
   MIR_insn_code_t ext_code;
+  int jmps_num = 0;
 
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify: wrong func item");
@@ -2573,9 +2611,9 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
       insn->ops[1].u.i = overall_size;
       next_insn = DLIST_NEXT (MIR_insn_t, insn); /* to process the current and new insns */
     }
-    if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL
-        && insn->ops[0].u.label == next_insn && !MIR_FP_branch_code_p (code)) {
-      /* Remember signaling NAN */
+    if ((MIR_int_branch_code_p (code) || code == MIR_JMP) && insn->ops[0].mode == MIR_OP_LABEL
+        && skip_labels (next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
+      /* BR L|JMP L; <labels>L: => <labels>L: Also Remember signaling NAN*/
       MIR_remove_insn (ctx, func_item, insn);
     } else if (((code == MIR_MUL || code == MIR_MULS || code == MIR_DIV || code == MIR_DIVS)
                 && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 1)
@@ -2589,16 +2627,44 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
         MIR_insert_insn_before (ctx, func_item, insn, next_insn);
       }
       MIR_remove_insn (ctx, func_item, insn);
+    } else if (MIR_int_branch_code_p (code) && next_insn != NULL && next_insn->code == MIR_JMP
+               && insn->ops[0].mode == MIR_OP_LABEL && next_insn->ops[0].mode == MIR_OP_LABEL
+               && (skip_labels (next_insn->ops[0].u.label, insn->ops[0].u.label)
+                     == insn->ops[0].u.label
+                   || skip_labels (insn->ops[0].u.label, next_insn->ops[0].u.label)
+                        == next_insn->ops[0].u.label)) {
+      /* BR L1;JMP L2; L2:<labels>L1: or L1:<labels>L2: =>  JMP L2*/
+      MIR_remove_insn (ctx, func_item, insn);
     } else if ((code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS)
                && insn->ops[1].mode == MIR_OP_INT
                && (insn->ops[1].u.i == 0 || insn->ops[1].u.i == 1)) {
-      if ((code == MIR_BT || code == MIR_BTS) == (insn->ops[1].u.i == 1))
-        MIR_insert_insn_before (ctx, func_item, insn, MIR_new_insn (ctx, MIR_JMP, insn->ops[0]));
+      if ((code == MIR_BT || code == MIR_BTS) == (insn->ops[1].u.i == 1)) {
+        new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]);
+        MIR_insert_insn_before (ctx, func_item, insn, new_insn);
+        next_insn = new_insn;
+      }
       MIR_remove_insn (ctx, func_item, insn);
       // ??? make imm always second,  what is about mem?
+    } else if (MIR_int_branch_code_p (code) && next_insn != NULL && next_insn->code == MIR_JMP
+               && (next_next_insn = DLIST_NEXT (MIR_insn_t, next_insn)) != NULL
+               && next_next_insn->code == MIR_LABEL && insn->ops[0].mode == MIR_OP_LABEL
+               && skip_labels (next_next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
+      /* BCond L;JMP L2;<lables>L: => BNCond L2;<labels>L: */
+      insn->ops[0] = next_insn->ops[0];
+      insn->code = reverse_branch_code (insn->code);
+      MIR_remove_insn (ctx, func_item, next_insn);
+      next_insn = insn;
+    } else if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL
+               && (jmp_insn = skip_labels (insn->ops[0].u.label, NULL)) != NULL
+               && jmp_insn->code == MIR_JMP && ++jmps_num < MAX_JUMP_CHAIN_LEN) {
+      /* B L;...;L<labels>:JMP L2 => B L2; ... Also constrain processing to avoid infinite loops */
+      insn->ops[0] = jmp_insn->ops[0];
+      next_insn = insn;
+      continue;
     } else {
       _MIR_simplify_insn (ctx, func_item, insn, mem_float_p);
     }
+    jmps_num = 0;
   }
   make_one_ret (ctx, func_item);
 }
