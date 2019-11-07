@@ -59,8 +59,8 @@ int main (void) {
     fprintf (stderr, "Error in reducing input file!\n");
     return 1;
   }
-  fprintf (stderr, "original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n", input_length1,
-           output_length1, (input_length1 + 0.0) / output_length1,
+  fprintf (stderr, "Compression:   original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n",
+           input_length1, output_length1, (input_length1 + 0.0) / output_length1,
            (real_usec_time () - start) / 1000.0);
   VARR_CREATE (uint8_t, buf2, 0);
   start = real_usec_time ();
@@ -68,8 +68,8 @@ int main (void) {
     fprintf (stderr, "Corrupted input file!\n");
     return 1;
   }
-  fprintf (stderr, "original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n", input_length2,
-           output_length2, (input_length2 + 0.0) / output_length2,
+  fprintf (stderr, "Decompression: original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n",
+           input_length2, output_length2, (input_length2 + 0.0) / output_length2,
            (real_usec_time () - start) / 1000.0);
   if (VARR_LENGTH (uint8_t, orig) != VARR_LENGTH (uint8_t, buf2)) {
     fprintf (stderr, "FAIL: original and reduced/unreduced files are of different length!\n");
