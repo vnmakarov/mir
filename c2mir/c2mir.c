@@ -9387,22 +9387,30 @@ static op_t modify_for_block_move (op_t mem, op_t index) {
   return mem;
 }
 
+static void gen_memcpy (MIR_disp_t disp, MIR_reg_t base, op_t val, mir_size_t len);
+
 static void block_move (op_t var, op_t val, mir_size_t size) {
   MIR_label_t repeat_label;
   op_t index;
 
   if (MIR_op_eq_p (ctx, var.mir_op, val.mir_op)) return;
-  repeat_label = MIR_new_label (ctx);
-  index = get_new_temp (MIR_T_I64);
-  emit2 (MIR_MOV, index.mir_op, MIR_new_int_op (ctx, size));
-  val = modify_for_block_move (val, index);
-  var = modify_for_block_move (var, index);
-  emit_insn (repeat_label);
-  emit3 (MIR_SUB, index.mir_op, index.mir_op, one_op.mir_op);
-  assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
-  val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
-  emit2 (MIR_MOV, var.mir_op, val.mir_op);
-  emit3 (MIR_BGT, MIR_new_label_op (ctx, repeat_label), index.mir_op, zero_op.mir_op);
+  if (size > 5) {
+    var = mem_to_address (var);
+    assert (var.mir_op.mode == MIR_OP_REG);
+    gen_memcpy (0, var.mir_op.u.reg, val, size);
+  } else {
+    repeat_label = MIR_new_label (ctx);
+    index = get_new_temp (MIR_T_I64);
+    emit2 (MIR_MOV, index.mir_op, MIR_new_int_op (ctx, size));
+    val = modify_for_block_move (val, index);
+    var = modify_for_block_move (var, index);
+    emit_insn (repeat_label);
+    emit3 (MIR_SUB, index.mir_op, index.mir_op, one_op.mir_op);
+    assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
+    val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
+    emit2 (MIR_MOV, var.mir_op, val.mir_op);
+    emit3 (MIR_BGT, MIR_new_label_op (ctx, repeat_label), index.mir_op, zero_op.mir_op);
+  }
 }
 
 static const char *get_reg_var_name (MIR_type_t promoted_type, const char *suffix,
