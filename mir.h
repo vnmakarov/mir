@@ -379,14 +379,17 @@ static inline int MIR_call_code_p (MIR_insn_code_t code) {
   return code == MIR_CALL || code == MIR_INLINE;
 }
 
+static inline int MIR_int_branch_code_p (MIR_insn_code_t code) {
+  return (code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS || code == MIR_BEQ
+          || code == MIR_BEQS || code == MIR_BNE || code == MIR_BNES || code == MIR_BLT
+          || code == MIR_BLTS || code == MIR_UBLT || code == MIR_UBLTS || code == MIR_BLE
+          || code == MIR_BLES || code == MIR_UBLE || code == MIR_UBLES || code == MIR_BGT
+          || code == MIR_BGTS || code == MIR_UBGT || code == MIR_UBGTS || code == MIR_BGE
+          || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES);
+}
+
 static inline int MIR_branch_code_p (MIR_insn_code_t code) {
-  return (code == MIR_JMP || code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS
-          || code == MIR_BEQ || code == MIR_BEQS || code == MIR_BNE || code == MIR_BNES
-          || code == MIR_BLT || code == MIR_BLTS || code == MIR_UBLT || code == MIR_UBLTS
-          || code == MIR_BLE || code == MIR_BLES || code == MIR_UBLE || code == MIR_UBLES
-          || code == MIR_BGT || code == MIR_BGTS || code == MIR_UBGT || code == MIR_UBGTS
-          || code == MIR_BGE || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES
-          || MIR_FP_branch_code_p (code));
+  return (code == MIR_JMP || MIR_int_branch_code_p (code) || MIR_FP_branch_code_p (code));
 }
 
 /* Use only the following API to create MIR code.  */
