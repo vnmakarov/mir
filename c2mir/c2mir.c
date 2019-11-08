@@ -10520,24 +10520,28 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     node_t func = NL_HEAD (r->ops), param_list, param, args = NL_EL (r->ops, 1);
     struct decl_spec *decl_spec;
     size_t ops_start;
-    struct expr *call_expr = r->attr;
+    struct expr *call_expr = r->attr, *func_expr;
     struct type *func_type, *type = call_expr->type;
     MIR_item_t proto_item;
     mir_size_t saved_call_arg_area_offset_before_args;
     int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
     int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
     int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
-    int builtin_call_p = alloca_p || va_arg_p || va_start_p;
+    int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
     int struct_p;
 
     ops_start = VARR_LENGTH (MIR_op_t, ops);
     if (!builtin_call_p) {
-      func_type = ((struct expr *) func->attr)->type;
+      func_expr = func->attr;
+      func_type = func_expr->type;
       assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
       func_type = func_type->u.ptr_type;
       proto_item = func_type->u.func_type->proto_item;  // ???
       VARR_PUSH (MIR_op_t, ops, MIR_new_ref_op (ctx, proto_item));
       op1 = gen (func, NULL, NULL, TRUE, NULL);
+      if (op1.mir_op.mode == MIR_OP_REF && func->code == N_ID
+          && ((decl_t) func_expr->def_node->attr)->decl_spec.inline_p)
+        inline_p = TRUE;
       VARR_PUSH (MIR_op_t, ops, op1.mir_op);
     }
     if (scalar_type_p (type)) {
@@ -10608,7 +10612,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
         if (param != NULL) param = NL_NEXT (param);
       }
       MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn_arr (ctx, MIR_CALL, VARR_LENGTH (MIR_op_t, ops) - ops_start,
+                       MIR_new_insn_arr (ctx, (inline_p ? MIR_INLINE : MIR_CALL),
+                                         VARR_LENGTH (MIR_op_t, ops) - ops_start,
                                          VARR_ADDR (MIR_op_t, ops) + ops_start));
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
