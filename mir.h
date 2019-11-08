@@ -255,7 +255,7 @@ DEF_VARR (MIR_var_t);
 /* Function definition */
 typedef struct MIR_func {
   const char *name;
-  DLIST (MIR_insn_t) insns;
+  DLIST (MIR_insn_t) insns, original_insns;
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
   char vararg_p;           /* flag of variable number of arguments */
@@ -532,6 +532,8 @@ extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
+extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
+extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
                                 int mem_float_p);
 

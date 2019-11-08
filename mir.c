@@ -1055,6 +1055,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   tab_item = add_item (ctx, func_item);
   mir_assert (tab_item == func_item);
   DLIST_INIT (MIR_insn_t, func->insns);
+  DLIST_INIT (MIR_insn_t, func->original_insns);
   VARR_CREATE (MIR_var_t, func->vars, nargs + 8);
   func->nargs = nargs;
   func->last_temp_num = 0;
@@ -1921,6 +1922,50 @@ void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) 
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_insn: wrong func item");
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
   free (insn);
+}
+
+void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
+  MIR_func_t func;
+  MIR_insn_t insn, new_insn;
+
+  mir_assert (func_item->item_type == MIR_func_item);
+  func = func_item->u.func;
+  mir_assert (DLIST_HEAD (MIR_insn_t, func->original_insns) == NULL);
+  func->original_insns = func->insns;
+  DLIST_INIT (MIR_insn_t, func->insns);
+  for (insn = DLIST_HEAD (MIR_insn_t, func->original_insns); insn != NULL;
+       insn = DLIST_NEXT (MIR_insn_t, insn)) { /* copy insns and collect label info */
+    new_insn = MIR_copy_insn (ctx, insn);
+    DLIST_APPEND (MIR_insn_t, func->insns, new_insn);
+    if (insn->code == MIR_LABEL) {
+      mir_assert (insn->data == NULL);
+      insn->data = new_insn;
+      VARR_PUSH (MIR_insn_t, temp_insns, insn);
+      continue;
+    }
+    if (!MIR_branch_code_p (insn->code)) continue;
+    VARR_PUSH (MIR_insn_t, temp_insns2, new_insn);
+  }
+  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) { /* redirect new label operands */
+    new_insn = VARR_POP (MIR_insn_t, temp_insns2);
+    new_insn->ops[0].u.label = new_insn->ops[0].u.label->data;
+  }
+  while (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) { /* reset data */
+    insn = VARR_POP (MIR_insn_t, temp_insns);
+    insn->data = NULL;
+  }
+}
+
+void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
+  MIR_func_t func;
+  MIR_insn_t insn;
+
+  mir_assert (func_item->item_type == MIR_func_item);
+  func = func_item->u.func;
+  while ((insn = DLIST_HEAD (MIR_insn_t, func->insns)) != NULL)
+    MIR_remove_insn (ctx, func_item, insn);
+  func->insns = func->original_insns;
+  DLIST_INIT (MIR_insn_t, func->original_insns);
 }
 
 static void output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (NULL, tp)); }
