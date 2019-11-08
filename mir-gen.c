@@ -4086,6 +4086,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif
   curr_func_item = func_item;
+  _MIR_duplicate_func_insns (ctx, func_item);
   curr_cfg = func_item->data = gen_malloc (ctx, sizeof (struct func_cfg));
   build_func_cfg (ctx);
 #if MIR_GEN_DEBUG
@@ -4213,6 +4214,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     fprintf (debug_file, "Generation of code for %s -- time %.0f usec\n",
              MIR_item_name (ctx, func_item), real_usec_time () - start_time);
 #endif
+  _MIR_restore_func_insns (ctx, func_item);
   return func_item->addr;
 }
 
