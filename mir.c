@@ -26,7 +26,7 @@ struct interp_ctx;
 struct MIR_context {
   struct gen_ctx *gen_ctx; /* should be the 1st member */
   MIR_error_func_t error_func;
-  VARR (MIR_insn_t) * temp_insns;
+  VARR (MIR_insn_t) * temp_insns, *temp_insns2;
   VARR (MIR_op_t) * temp_insn_ops;
   VARR (MIR_var_t) * temp_vars;
   VARR (MIR_type_t) * temp_types;
@@ -54,6 +54,7 @@ struct MIR_context {
 
 #define error_func ctx->error_func
 #define temp_insns ctx->temp_insns
+#define temp_insns2 ctx->temp_insns2
 #define temp_insn_ops ctx->temp_insn_ops
 #define temp_vars ctx->temp_vars
 #define temp_types ctx->temp_types
@@ -612,6 +613,7 @@ MIR_context_t MIR_init (void) {
   string_init (&strings, &string_tab);
   reg_init (ctx);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
+  VARR_CREATE (MIR_insn_t, temp_insns2, 0);
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
   VARR_CREATE (MIR_var_t, temp_vars, 0);
   VARR_CREATE (MIR_type_t, temp_types, 0);
@@ -654,6 +656,7 @@ void MIR_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (size_t, insn_nops);
   VARR_DESTROY (MIR_op_t, temp_insn_ops);
+  VARR_DESTROY (MIR_insn_t, temp_insns2);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   VARR_DESTROY (MIR_type_t, temp_types);
   code_finish (ctx);
@@ -2490,6 +2493,17 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   VARR_DESTROY (MIR_op_t, ret_ops);
 }
 
+static void remove_unused_labels (MIR_context_t ctx, MIR_item_t func_item) {
+  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) {
+    MIR_insn_t label = VARR_POP (MIR_insn_t, temp_insns2);
+    int64_t label_num = label->ops[0].u.i;
+
+    if (label_num < VARR_LENGTH (uint8_t, temp_data) && VARR_GET (uint8_t, temp_data, label_num))
+      continue;
+    MIR_remove_insn (ctx, func_item, label);
+  }
+}
+
 static MIR_insn_code_t reverse_branch_code (MIR_insn_code_t code) {
   switch (code) {
   case MIR_BT: return MIR_BF;
@@ -2563,6 +2577,8 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
     }
   }
   VARR_TRUNC (MIR_insn_t, temp_insns, 0);
+  VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+  VARR_TRUNC (uint8_t, temp_data, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
     MIR_op_t temp_op;
@@ -2581,6 +2597,7 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
       insn->ops[0] = temp_op;
     }
     if (code == MIR_RET) VARR_PUSH (MIR_insn_t, temp_insns, insn);
+    if (code == MIR_LABEL) VARR_PUSH (MIR_insn_t, temp_insns2, insn);
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (code == MIR_ALLOCA
         && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT)) {
@@ -2663,11 +2680,18 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
       next_insn = insn;
       continue;
     } else {
+      if (MIR_branch_code_p (code)) {
+        int64_t label_num = insn->ops[0].u.label->ops[0].u.i;
+
+        while (label_num >= VARR_LENGTH (uint8_t, temp_data)) VARR_PUSH (uint8_t, temp_data, FALSE);
+        VARR_SET (uint8_t, temp_data, label_num, TRUE);
+      }
       _MIR_simplify_insn (ctx, func_item, insn, mem_float_p);
     }
     jmps_num = 0;
   }
   make_one_ret (ctx, func_item);
+  remove_unused_labels (ctx, func_item);
 }
 
 static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t new_reg) {
