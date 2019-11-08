@@ -1626,7 +1626,8 @@ MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...) {
 }
 
 MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn) {
-  size_t size = sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (insn->nops - 1);
+  size_t size
+    = sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (insn->nops == 0 ? 0 : insn->nops - 1);
   MIR_insn_t new_insn = malloc (size);
 
   if (new_insn == NULL)
