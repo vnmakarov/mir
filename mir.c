@@ -1409,6 +1409,9 @@ void MIR_load_external (MIR_context_t ctx, const char *name, void *addr) {
   setup_global (ctx, name, addr, NULL);
 }
 
+static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p);
+static void process_inlines (MIR_context_t ctx, MIR_item_t func_item);
+
 void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_item_t item),
                void *import_resolver (const char *)) {
   MIR_item_t item, tab_item, expr_item;
@@ -1431,7 +1434,10 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
     m = VARR_GET (MIR_module_t, modules_to_link, i);
     for (item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
          item = DLIST_NEXT (MIR_item_t, item))
-      if (item->item_type == MIR_import_item) {
+      if (item->item_type == MIR_func_item) {
+        assert (item->data == NULL);
+        if (simplify_func (ctx, item, TRUE)) item->data = (void *) 1;
+      } else if (item->item_type == MIR_import_item) {
         if ((tab_item = find_item (ctx, item->u.import, &environment_module)) == NULL) {
           if (import_resolver == NULL || (addr = import_resolver (item->u.import)) == NULL)
             (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item %s",
@@ -1460,7 +1466,10 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
     m = VARR_GET (MIR_module_t, modules_to_link, i);
     for (item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
          item = DLIST_NEXT (MIR_item_t, item)) {
-      if (item->item_type == MIR_ref_data_item) {
+      if (item->item_type == MIR_func_item && item->data != NULL) {
+        process_inlines (ctx, item);
+        item->data = NULL;
+      } else if (item->item_type == MIR_ref_data_item) {
         assert (item->u.ref_data->ref_item->addr != NULL);
         addr = (char *) item->u.ref_data->ref_item->addr + item->u.ref_data->disp;
         memcpy (item->u.ref_data->load_addr, &addr, _MIR_type_size (ctx, MIR_T_P));
@@ -2612,11 +2621,11 @@ static int64_t natural_alignment (int64_t s) { return s <= 2 ? s : s <= 4 ? 4 : 
 
 static const int MAX_JUMP_CHAIN_LEN = 32;
 
-void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p) {
+static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, next_insn, next_next_insn, jmp_insn, new_insn;
   MIR_insn_code_t ext_code;
-  int jmps_num = 0;
+  int jmps_num = 0, inline_p = FALSE;
 
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_simplify: wrong func item");
@@ -2698,6 +2707,7 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
       insn->ops[1].u.i = overall_size;
       next_insn = DLIST_NEXT (MIR_insn_t, insn); /* to process the current and new insns */
     }
+    if (code == MIR_INLINE) inline_p = TRUE;
     if ((MIR_int_branch_code_p (code) || code == MIR_JMP) && insn->ops[0].mode == MIR_OP_LABEL
         && skip_labels (next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
       /* BR L|JMP L; <labels>L: => <labels>L: Also Remember signaling NAN*/
@@ -2761,6 +2771,7 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
   }
   make_one_ret (ctx, func_item);
   remove_unused_labels (ctx, func_item);
+  return inline_p;
 }
 
 static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t new_reg) {
@@ -2779,7 +2790,7 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 
 /* Only simplified code should be inlined because we need already
    extensions and one return.  */
-void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
+static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   int alloca_p;
   size_t i, actual_nops, nargs, nvars;
   MIR_type_t type, *res_types;
