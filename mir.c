@@ -2310,7 +2310,7 @@ const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module) {
 }
 
 void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
-                      MIR_insn_code_t code, int mem_float_p) {
+                      MIR_insn_code_t code, int keep_ref_p, int mem_float_p) {
   MIR_op_t new_op, mem_op, *op = &insn->ops[nop];
   MIR_insn_t new_insn;
   MIR_func_t func = func_item->u.func;
@@ -2326,12 +2326,13 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
   }
   if (code == MIR_VA_ARG && nop == 2) return; /* do nothing: this operand is used as a type */
   switch (op->mode) {
+  case MIR_OP_REF:
+    if (keep_ref_p) break;
   case MIR_OP_INT:
   case MIR_OP_UINT:
   case MIR_OP_FLOAT:
   case MIR_OP_DOUBLE:
   case MIR_OP_LDOUBLE:
-  case MIR_OP_REF:
   case MIR_OP_STR:
     mir_assert (!out_p);
     if (op->mode == MIR_OP_REF) {
@@ -2486,7 +2487,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
   op->value_mode = value_mode;
 }
 
-void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
+void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int keep_ref_p,
                          int mem_float_p) {
   int out_p;
   MIR_insn_code_t code = insn->code;
@@ -2494,7 +2495,8 @@ void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
 
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
-    MIR_simplify_op (ctx, func_item, insn, i, out_p, code, mem_float_p);
+    MIR_simplify_op (ctx, func_item, insn, i, out_p, code,
+                     insn->code == MIR_INLINE && i == 1 && keep_ref_p, mem_float_p);
   }
 }
 
@@ -2753,7 +2755,7 @@ void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p
         while (label_num >= VARR_LENGTH (uint8_t, temp_data)) VARR_PUSH (uint8_t, temp_data, FALSE);
         VARR_SET (uint8_t, temp_data, label_num, TRUE);
       }
-      _MIR_simplify_insn (ctx, func_item, insn, mem_float_p);
+      _MIR_simplify_insn (ctx, func_item, insn, TRUE, mem_float_p);
     }
     jmps_num = 0;
   }

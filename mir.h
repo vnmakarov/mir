@@ -535,7 +535,7 @@ extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t 
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
-                                int mem_float_p);
+                                int keep_ref_p, int mem_float_p);
 
 extern const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module);
 
