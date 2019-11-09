@@ -1924,6 +1924,29 @@ void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) 
   free (insn);
 }
 
+static void store_labels_for_duplication (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t new_insn) {
+  if (MIR_branch_code_p (insn->code)) {
+    VARR_PUSH (MIR_insn_t, temp_insns2, new_insn);
+  } else if (insn->code == MIR_LABEL) {
+    mir_assert (insn->data == NULL);
+    insn->data = new_insn;
+    VARR_PUSH (MIR_insn_t, temp_insns, insn);
+  }
+}
+
+static void redirect_duplicated_labels (MIR_context_t ctx) {
+  MIR_insn_t insn;
+
+  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) { /* redirect new label operands */
+    insn = VARR_POP (MIR_insn_t, temp_insns2);
+    insn->ops[0].u.label = insn->ops[0].u.label->data;
+  }
+  while (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) { /* reset data */
+    insn = VARR_POP (MIR_insn_t, temp_insns);
+    insn->data = NULL;
+  }
+}
+
 void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_func_t func;
   MIR_insn_t insn, new_insn;
@@ -1933,27 +1956,15 @@ void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   mir_assert (DLIST_HEAD (MIR_insn_t, func->original_insns) == NULL);
   func->original_insns = func->insns;
   DLIST_INIT (MIR_insn_t, func->insns);
+  VARR_TRUNC (MIR_insn_t, temp_insns, 0);
+  VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->original_insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) { /* copy insns and collect label info */
     new_insn = MIR_copy_insn (ctx, insn);
     DLIST_APPEND (MIR_insn_t, func->insns, new_insn);
-    if (insn->code == MIR_LABEL) {
-      mir_assert (insn->data == NULL);
-      insn->data = new_insn;
-      VARR_PUSH (MIR_insn_t, temp_insns, insn);
-      continue;
-    }
-    if (!MIR_branch_code_p (insn->code)) continue;
-    VARR_PUSH (MIR_insn_t, temp_insns2, new_insn);
+    store_labels_for_duplication (ctx, insn, new_insn);
   }
-  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) { /* redirect new label operands */
-    new_insn = VARR_POP (MIR_insn_t, temp_insns2);
-    new_insn->ops[0].u.label = new_insn->ops[0].u.label->data;
-  }
-  while (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) { /* reset data */
-    insn = VARR_POP (MIR_insn_t, temp_insns);
-    insn->data = NULL;
-  }
+  redirect_duplicated_labels (ctx);
 }
 
 void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
