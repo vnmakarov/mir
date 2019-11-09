@@ -483,9 +483,6 @@ extern void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item);
 extern void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module);
 extern void MIR_output (MIR_context_t ctx, FILE *f);
 
-extern void MIR_simplify_func (MIR_context_t ctx, MIR_item_t func, int mem_float_p);
-extern void MIR_inline (MIR_context_t ctx, MIR_item_t func_item);
-
 #if !MIR_NO_IO
 extern void MIR_write (MIR_context_t ctx, FILE *f);
 extern void MIR_read (MIR_context_t ctx, FILE *f);
