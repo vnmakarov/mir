@@ -4076,12 +4076,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     return func_item->addr;
   }
 #if MIR_GEN_DEBUG
-  if (debug_file != NULL) start_time = real_usec_time ();
-#endif
-  MIR_simplify_func (ctx, func_item, TRUE);
-#if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after simplification:\n");
+    start_time = real_usec_time ();
+    fprintf (debug_file, "+++++++++++++MIR before generator:\n");
     MIR_output_item (ctx, debug_file, func_item);
   }
 #endif
