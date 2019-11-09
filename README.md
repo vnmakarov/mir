@@ -219,6 +219,7 @@ ex100:    func v, 0
   * More detail **JIT compiler pipeline**:
 ![MIR generator](mir-gen.svg)
   * **Simplify**: lowering MIR
+  * **Inline**: inlining MIR calls
   * **Build CFG**: builing Control Flow Graph (basic blocks and CFG edges)
   * **Global Common Sub-Expression Elimination**: reusing calculated values
   * **Dead Code Elimination**: removing insns with unused outputs
