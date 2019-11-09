@@ -1478,10 +1478,7 @@ static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t 
   MIR_val_t *bp;
 
   mir_assert (func_item->item_type == MIR_func_item);
-  if (func_item->data == NULL) {
-    MIR_simplify_func (ctx, func_item, FALSE);
-    generate_icode (ctx, func_item);
-  }
+  if (func_item->data == NULL) generate_icode (ctx, func_item);
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
   bp[0].a = va;
@@ -1511,10 +1508,7 @@ void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *re
   MIR_val_t *bp;
 
   mir_assert (func_item->item_type == MIR_func_item);
-  if (func_item->data == NULL) {
-    MIR_simplify_func (ctx, func_item, FALSE);
-    generate_icode (ctx, func_item);
-  }
+  if (func_item->data == NULL) generate_icode (ctx, func_item);
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
   bp[0].a = va;
