@@ -2778,7 +2778,9 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
     call = func_insn;
     mir_assert (call->ops[1].mode == MIR_OP_REF);
     called_func_item = call->ops[1].u.ref;
-    while (called_func_item != NULL && called_func_item->item_type == MIR_import_item)
+    while (called_func_item != NULL
+           && (called_func_item->item_type == MIR_import_item
+               || called_func_item->item_type == MIR_forward_item))
       called_func_item = called_func_item->ref_def;
     if (called_func_item == NULL || called_func_item->item_type != MIR_func_item) continue;
     called_func = called_func_item->u.func;
