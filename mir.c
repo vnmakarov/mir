@@ -2827,6 +2827,9 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
     /* Add new insns: */
     ret_reg = 0;
     alloca_p = FALSE;
+    VARR_TRUNC (MIR_insn_t, temp_insns, 0);
+    VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+    VARR_TRUNC (uint8_t, temp_data, 0);
     for (insn = DLIST_HEAD (MIR_insn_t, called_func->insns); insn != NULL;
          insn = DLIST_NEXT (MIR_insn_t, insn)) {
       actual_nops = MIR_insn_nops (ctx, insn);
@@ -2850,6 +2853,7 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
         }
       if (new_insn->code != MIR_RET) {
         MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
+        store_labels_for_duplication (ctx, insn, new_insn);
       } else {
         /* should be the last insn after simplification */
         mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && call->ops[0].mode == MIR_OP_REF
@@ -2870,6 +2874,7 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
         }
       }
     }
+    redirect_duplicated_labels (ctx);
     if (alloca_p) {
       temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
       new_insn = MIR_new_insn (ctx, MIR_BSTART, MIR_new_reg_op (ctx, temp_reg));
