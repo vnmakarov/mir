@@ -19,13 +19,12 @@ int main (void) {
   fprintf (stderr, "\n++++++ Hi func before simplification:\n");
   MIR_output (ctx, stderr);
 #endif
-  MIR_simplify_func (ctx, func, TRUE);
+  MIR_load_module (ctx, m);
+  MIR_link (ctx, MIR_set_interp_interface, NULL);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ Hi func after simplification:\n");
   MIR_output (ctx, stderr);
 #endif
-  MIR_load_module (ctx, m);
-  MIR_link (ctx, MIR_set_interp_interface, NULL);
   MIR_interp (ctx, func, &val, 0);
   fprintf (stderr, "func hi returns %ld\n", (long) val.i);
   MIR_finish (ctx);

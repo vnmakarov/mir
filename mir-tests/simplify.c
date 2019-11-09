@@ -10,8 +10,8 @@ int main (void) {
 
   func1 = create_mir_func_with_loop (ctx, &m);
   func2 = create_mir_example2 (ctx, &m);
-  MIR_simplify_func (ctx, func1, TRUE);
-  MIR_simplify_func (ctx, func2, TRUE);
+  MIR_load_module (ctx, m);
+  MIR_link (ctx, MIR_set_interp_interface, NULL);
   fprintf (stderr, "Simplified code:\n");
   MIR_output (ctx, stderr);
   MIR_finish (ctx);

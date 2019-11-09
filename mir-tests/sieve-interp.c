@@ -17,13 +17,12 @@ int main (void) {
   MIR_output (ctx, stderr);
 #endif
   start_time = real_sec_time ();
-  MIR_simplify_func (ctx, func, TRUE);
+  MIR_load_module (ctx, m);
+  MIR_link (ctx, MIR_set_interp_interface, NULL);
 #if MIR_INTERP_DEBUG
   fprintf (stderr, "++++++ SIEVE after simplification:\n");
   MIR_output (ctx, stderr);
 #endif
-  MIR_load_module (ctx, m);
-  MIR_link (ctx, MIR_set_interp_interface, NULL);
   fprintf (stderr, "Interpreter init finish: %.3f ms\n", (real_sec_time () - start_time) * 1000.0);
   start_time = real_sec_time ();
 #if MIR_C_INTERFACE

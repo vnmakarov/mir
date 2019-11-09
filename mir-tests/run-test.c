@@ -37,27 +37,19 @@ int main (int argc, char *argv[]) {
   if (!gen_p && !interpr_p) MIR_output (ctx, stderr);
   main_func = NULL;
   for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f = DLIST_NEXT (MIR_item_t, f))
-    if (f->item_type == MIR_func_item) {
-      MIR_simplify_func (ctx, f, TRUE);
-      if (strcmp (f->u.func->name, "main") == 0) main_func = f;
-    }
-  if (!gen_p && !interpr_p) {
-    fprintf (stderr, "+++++++++++++++++++After simplification:+++++++++++++++\n");
-    MIR_output (ctx, stderr);
-  }
+    if (f->item_type == MIR_func_item && strcmp (f->u.func->name, "main") == 0) main_func = f;
   if (main_func == NULL) {
     fprintf (stderr, "%s: cannot execute program w/o main function\n", argv[0]);
     exit (1);
   }
   MIR_load_module (ctx, mir_module);
+  if (!gen_p && !interpr_p) {
+    fprintf (stderr, "+++++++++++++++++++After simplification:+++++++++++++++\n");
+    MIR_output (ctx, stderr);
+  }
   MIR_load_external (ctx, "abort", abort);
   MIR_load_external (ctx, "exit", exit);
   MIR_load_external (ctx, "printf", printf);
-  MIR_inline (ctx, main_func);
-  if (!gen_p && !interpr_p) {
-    fprintf (stderr, "+++++++++++++++++++After inlining:+++++++++++++++\n");
-    MIR_output (ctx, stderr);
-  }
   if (interpr_p) {
     MIR_link (ctx, MIR_set_interp_interface, NULL);
     MIR_interp (ctx, main_func, &val, 0);
@@ -72,6 +64,10 @@ int main (int argc, char *argv[]) {
     res = fun_addr ();
     fprintf (stderr, "%s: %d\n", mir_fname, res);
     MIR_gen_finish (ctx);
+  } else {
+    MIR_link (ctx, MIR_set_interp_interface, NULL);
+    fprintf (stderr, "+++++++++++++++++++After inlining:+++++++++++++++\n");
+    MIR_output (ctx, stderr);
   }
   MIR_finish (ctx);
   exit (0);

@@ -17,7 +17,6 @@ int main (void) {
   MIR_load_external (ctx, "prd", prd);
   m = create_args_module (ctx);
   func = DLIST_TAIL (MIR_item_t, m->items);
-  MIR_simplify_func (ctx, func, TRUE);
   MIR_load_module (ctx, m);
   MIR_link (ctx, MIR_set_interp_interface, NULL);
 #if MIR_C_INTERFACE
