@@ -39,7 +39,7 @@ b2ctab: mir.o mir-utils/b2ctab.c
 test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
 	@echo ==============================Test is done
       
-l2m-test: l2m-simple-test l2m-full-test
+l2m-test: l2m-simple-test # l2m-full-test
 
 l2m-simple-test: l2m-test1 l2m-test2
 
