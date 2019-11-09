@@ -139,21 +139,18 @@ int main (int argc, char *argv[], char *env[]) {
   if (!gen_p && !interpr_p) MIR_output (context, stderr);
   main_func = NULL;
   for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f = DLIST_NEXT (MIR_item_t, f))
-    if (f->item_type == MIR_func_item) {
-      if (!gen_p && !interpr_p) MIR_simplify_func (context, f, TRUE);
-      if (strcmp (f->u.func->name, "main") == 0) main_func = f;
-    }
-  if (!gen_p && !interpr_p) {
-    fprintf (stderr, "++++++ Test after simplification:\n");
-    MIR_output (context, stderr);
-    exit (0);
-  }
+    if (f->item_type == MIR_func_item && strcmp (f->u.func->name, "main") == 0) main_func = f;
   if (main_func == NULL) {
     fprintf (stderr, "%s: cannot execute program w/o main function\n", argv[0]);
     exit (1);
   }
   open_libs ();
   MIR_load_module (context, mir_module);
+  if (!gen_p && !interpr_p) {
+    fprintf (stderr, "++++++ Test after simplification:\n");
+    MIR_output (context, stderr);
+    exit (0);
+  }
   MIR_load_external (context, "abort", fancy_abort);
   MIR_load_external (context, "llvm.floor.f64", floor);
   MIR_load_external (context, "llvm.memset.p0i8.i32", llvm_memset_p0i8_i32);
