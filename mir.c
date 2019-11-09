@@ -50,6 +50,7 @@ struct MIR_context {
   struct io_ctx *io_ctx;
   struct scan_ctx *scan_ctx;
   struct interp_ctx *interp_ctx;
+  size_t inlined_calls, inline_insns_before, inline_insns_after;
 };
 
 #define error_func ctx->error_func
@@ -70,6 +71,9 @@ struct MIR_context {
 #define curr_label_num ctx->curr_label_num
 #define all_modules ctx->all_modules
 #define modules_to_link ctx->modules_to_link
+#define inlined_calls ctx->inlined_calls
+#define inline_insns_before ctx->inline_insns_before
+#define inline_insns_after ctx->inline_insns_after
 
 static void util_error (MIR_context_t ctx, const char *message);
 #define MIR_VARR_ERROR util_error
@@ -634,6 +638,7 @@ MIR_context_t MIR_init (void) {
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq);
   code_init (ctx);
   interp_init (ctx);
+  inlined_calls = inline_insns_before = inline_insns_after = 0;
   return ctx;
 }
 
@@ -664,6 +669,12 @@ void MIR_finish (MIR_context_t ctx) {
     (*error_func) (MIR_finish_error, "finish when function %s is not finished", curr_func->name);
   if (curr_module != NULL)
     (*error_func) (MIR_finish_error, "finish when module %s is not finished", curr_module->name);
+#if 0
+  if (inlined_calls != 0)
+    fprintf (stderr, "inlined calls = %lu, insns before = %lu, insns_after = %lu, ratio = %.2f\n",
+             inlined_calls, inline_insns_before, inline_insns_after,
+             (double) inline_insns_after / inline_insns_before);
+#endif
   free (ctx->string_ctx);
   free (ctx);
   ctx = NULL;
