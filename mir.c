@@ -2769,6 +2769,14 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
   VARR_SET (MIR_reg_t, inline_reg_map, old_reg, new_reg);
 }
 
+#ifndef MIR_MAX_INSNS_FOR_INLINE
+#define MIR_MAX_INSNS_FOR_INLINE 200
+#endif
+
+#ifndef MIR_MAX_FUNC_INLINE_GROWTH
+#define MIR_MAX_FUNC_INLINE_GROWTH 30
+#endif
+
 /* Only simplified code should be inlined because we need already
    extensions and one return.  */
 void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
@@ -2780,12 +2788,16 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_label;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
+  size_t func_insns_num, called_func_insns_num;
   char buff[50];
 
   mir_assert (func_item->item_type == MIR_func_item);
   func = func_item->u.func;
+  func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
   for (func_insn = DLIST_HEAD (MIR_insn_t, func->insns); func_insn != NULL;
        func_insn = next_func_insn) {
+    inline_insns_before++;
+    inline_insns_after++;
     next_func_insn = DLIST_NEXT (MIR_insn_t, func_insn);
     if (func_insn->code != MIR_INLINE) continue;
     call = func_insn;
@@ -2795,9 +2807,20 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
            && (called_func_item->item_type == MIR_import_item
                || called_func_item->item_type == MIR_forward_item))
       called_func_item = called_func_item->ref_def;
-    if (called_func_item == NULL || called_func_item->item_type != MIR_func_item) continue;
+    if (called_func_item == NULL || called_func_item->item_type != MIR_func_item
+        || func_item == called_func_item) { /* Simplify function operand in the inline insn */
+      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      continue;
+    }
     called_func = called_func_item->u.func;
-    if (called_func->vararg_p) continue;
+    called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
+    if (called_func->vararg_p || called_func_insns_num > MIR_MAX_INSNS_FOR_INLINE
+        || called_func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * func_insns_num / 100) {
+      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      continue;
+    }
+    func_insns_num += called_func_insns_num;
+    inlined_calls++;
     res_types = call->ops[0].u.ref->u.proto->res_types;
     ret_label = MIR_new_label (ctx);
     MIR_insert_insn_after (ctx, func_item, call, ret_label);
@@ -2834,6 +2857,7 @@ void MIR_inline (MIR_context_t ctx, MIR_item_t func_item) {
     VARR_TRUNC (uint8_t, temp_data, 0);
     for (insn = DLIST_HEAD (MIR_insn_t, called_func->insns); insn != NULL;
          insn = DLIST_NEXT (MIR_insn_t, insn)) {
+      inline_insns_after++;
       actual_nops = MIR_insn_nops (ctx, insn);
       new_insn = MIR_copy_insn (ctx, insn);
       mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_START
