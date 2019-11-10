@@ -388,8 +388,7 @@ typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
 
 struct target_ctx {
-  int alloca_p;
-  int stack_arg_func_p;
+  unsigned char alloca_p, stack_arg_func_p, leaf_p;
   int start_sp_from_bp_offset;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
@@ -401,6 +400,7 @@ struct target_ctx {
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
 #define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
+#define leaf_p gen_ctx->target_ctx->leaf_p
 #define start_sp_from_bp_offset gen_ctx->target_ctx->start_sp_from_bp_offset
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
@@ -452,6 +452,7 @@ static void machinize (MIR_context_t ctx) {
     }
   }
   alloca_p = FALSE;
+  leaf_p = TRUE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
@@ -539,6 +540,7 @@ static void machinize (MIR_context_t ctx) {
       gen_delete_insn (ctx, insn);
     } else if (MIR_call_code_p (code)) {
       machinize_call (ctx, insn);
+      leaf_p = FALSE;
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
     } else if (code == MIR_RET) {
@@ -640,6 +642,8 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
   func = curr_func_item->u.func;
   for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
     if (!call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) saved_hard_regs_num++;
+  if (leaf_p && !alloca_p && saved_hard_regs_num == 0 && !func->vararg_p && stack_slots_num == 0)
+    return;
   sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
   sp_reg_op.u.hard_reg = SP_HARD_REG;
   fp_reg_op.u.hard_reg = BP_HARD_REG;
