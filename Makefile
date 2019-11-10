@@ -75,6 +75,7 @@ io-test:
 	$(CC) -g mir.c mir-tests/io.c && ./a.out
 
 io-bench:
+	@echo ========io-bench can take upto 2 min===============
 	$(CC) $(CFLAGS) -DNDEBUG mir.c mir-tests/io-bench.c && ./a.out
 
 interp-loop:
