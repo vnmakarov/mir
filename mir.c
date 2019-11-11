@@ -1950,7 +1950,7 @@ void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) 
 }
 
 static void store_labels_for_duplication (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t new_insn) {
-  if (MIR_branch_code_p (insn->code)) {
+  if (MIR_branch_code_p (insn->code) || insn->code == MIR_SWITCH) {
     VARR_PUSH (MIR_insn_t, temp_insns2, new_insn);
   } else if (insn->code == MIR_LABEL) {
     mir_assert (insn->data == NULL);
@@ -1963,8 +1963,15 @@ static void redirect_duplicated_labels (MIR_context_t ctx) {
   MIR_insn_t insn;
 
   while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) { /* redirect new label operands */
+    size_t start_label_nop = 0, bound_label_nop = 1, n;
+
     insn = VARR_POP (MIR_insn_t, temp_insns2);
-    insn->ops[0].u.label = insn->ops[0].u.label->data;
+    if (insn->code == MIR_SWITCH) {
+      start_label_nop = 1;
+      bound_label_nop = start_label_nop + insn->nops - 1;
+    }
+    for (n = start_label_nop; n < bound_label_nop; n++)
+      insn->ops[n].u.label = insn->ops[n].u.label->data;
   }
   while (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) { /* reset data */
     insn = VARR_POP (MIR_insn_t, temp_insns);
@@ -2764,11 +2771,20 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       next_insn = insn;
       continue;
     } else {
-      if (MIR_branch_code_p (code)) {
-        int64_t label_num = insn->ops[0].u.label->ops[0].u.i;
+      if (MIR_branch_code_p (code) || code == MIR_SWITCH) {
+        int64_t label_num;
+        size_t start_label_nop = 0, bound_label_nop = 1, n;
 
-        while (label_num >= VARR_LENGTH (uint8_t, temp_data)) VARR_PUSH (uint8_t, temp_data, FALSE);
-        VARR_SET (uint8_t, temp_data, label_num, TRUE);
+        if (code == MIR_SWITCH) {
+          start_label_nop = 1;
+          bound_label_nop = start_label_nop + insn->nops - 1;
+        }
+        for (n = start_label_nop; n < bound_label_nop; n++) {
+          label_num = insn->ops[n].u.label->ops[0].u.i;
+          while (label_num >= VARR_LENGTH (uint8_t, temp_data))
+            VARR_PUSH (uint8_t, temp_data, FALSE);
+          VARR_SET (uint8_t, temp_data, label_num, TRUE);
+        }
       }
       _MIR_simplify_insn (ctx, func_item, insn, TRUE, mem_float_p);
     }
