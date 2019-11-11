@@ -301,6 +301,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_LDBGE, "ldbge", {MIR_OP_LABEL, MIR_OP_LDOUBLE, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
   {MIR_CALL, "call", {MIR_OP_BOUND}},
   {MIR_INLINE, "inline", {MIR_OP_BOUND}},
+  {MIR_SWITCH, "switch", {MIR_OP_BOUND}},
   {MIR_RET, "ret", {MIR_OP_BOUND}},
   {MIR_ALLOCA, "alloca", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BSTART, "bstart", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_BOUND}},
@@ -1223,15 +1224,14 @@ void MIR_finish_func (MIR_context_t ctx) {
         mir_assert (insn->ops[i].mode == MIR_OP_MEM);
         continue; /* We checked the operand during insn creation -- skip va_arg type  */
       }
-      if (code != MIR_RET) {
+      if (code == MIR_SWITCH) {
+        out_p = FALSE;
+        expected_mode = i == 0 ? MIR_OP_INT : MIR_OP_LABEL;
+      } else if (code != MIR_RET) {
         expected_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
       } else {
         out_p = FALSE;
-        expected_mode = (curr_func->res_types[i] == MIR_T_F
-                           ? MIR_OP_FLOAT
-                           : curr_func->res_types[i] == MIR_T_D
-                               ? MIR_OP_DOUBLE
-                               : curr_func->res_types[i] == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
+        expected_mode = type2mode (curr_func->res_types[i]);
       }
       can_be_out_p = TRUE;
       switch (insn->ops[i].mode) {
@@ -1544,7 +1544,10 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   unsigned mode;
 
   if (nop >= nops) return MIR_OP_BOUND;
-  if (MIR_call_code_p (code)) {
+  if (code == MIR_RET || code == MIR_SWITCH) {
+    *out_p = FALSE;
+    return insn->ops[nop].mode; /* should be already checked in MIR_finish_func */
+  } else if (MIR_call_code_p (code)) {
     MIR_op_t proto_op = insn->ops[0];
     MIR_proto_t proto;
 
@@ -1587,9 +1590,11 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
   MIR_proto_t proto;
   size_t i = 0, expected_nops = insn_code_nops (ctx, code);
 
-  if (!MIR_call_code_p (code) && code != MIR_RET && nops != expected_nops) {
+  if (!MIR_call_code_p (code) && code != MIR_RET && code != MIR_SWITCH && nops != expected_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands for insn %s",
                    insn_descs[code].name);
+  } else if (code == MIR_SWITCH) {
+    if (nops < 2) (*error_func) (MIR_ops_num_error, "number of MIR_SWITCH operands is less 2");
   } else if (MIR_call_code_p (code)) {
     if (nops < 2) (*error_func) (MIR_ops_num_error, "wrong number of call operands");
     if (ops[0].mode != MIR_OP_REF || ops[0].u.ref->item_type != MIR_proto_item)
@@ -1627,10 +1632,10 @@ MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...) {
   va_list argp;
   size_t nops = insn_code_nops (ctx, code);
 
-  if (MIR_call_code_p (code) || code == MIR_RET)
+  if (MIR_call_code_p (code) || code == MIR_RET || code == MIR_SWITCH)
     (*error_func) (MIR_call_op_error,
-                   "Use only MIR_new_insn_arr or MIR_new_{call,ret}_insn for creating a call/ret "
-                   "insn");
+                   "Use only MIR_new_insn_arr or MIR_new_{call,ret}_insn for creating a "
+                   "call/ret/switch insn");
   va_start (argp, code);
   return new_insn (ctx, code, nops, argp);
 }

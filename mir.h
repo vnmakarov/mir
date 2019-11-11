@@ -116,6 +116,10 @@ typedef enum {
      address, 3rd and subsequent ops are optional result (if result in
      the prototype is not of void type), call arguments. */
   REP2 (INSN_EL, CALL, INLINE),
+  /* 1st operand is an index, subsequent ops are labels to which goto
+     according the index (1st label has index zero).  The insn
+     behaviour is undefined if there is no label for the index. */
+  INSN_EL (SWITCH),
   /* 1 operand insn: */
   INSN_EL (RET),
   INSN_EL (ALLOCA),             /* 2 operands: result address and size  */
