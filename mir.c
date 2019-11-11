@@ -3460,7 +3460,7 @@ static size_t write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t fu
   for (i = 0; i < nops; i++) len += write_op (ctx, writer, func, insn->ops[i]);
   if (insn_descs[code].op_modes[0] == MIR_OP_BOUND) {
     /* first operand mode is undefined if it is a variable operand insn */
-    mir_assert (MIR_call_code_p (code) || code == MIR_RET);
+    mir_assert (MIR_call_code_p (code) || code == MIR_RET || code == MIR_SWITCH);
     put_byte (ctx, writer, TAG_EOI);
     len++;
   }
@@ -4260,7 +4260,8 @@ void MIR_read_with_func (MIR_context_t ctx, const int (*reader) (MIR_context_t))
         MIR_append_insn (ctx, func, lab);
       }
       nop = insn_code_nops (ctx, insn_code);
-      mir_assert (nop != 0 || MIR_call_code_p (insn_code) || insn_code == MIR_RET);
+      mir_assert (nop != 0 || MIR_call_code_p (insn_code) || insn_code == MIR_RET
+                  || insn_code == MIR_SWITCH);
       for (n = 0; (nop == 0 || n < nop) && read_operand (ctx, &op, func); n++)
         VARR_PUSH (MIR_op_t, temp_insn_ops, op);
       if (nop != 0 && n < nop)
