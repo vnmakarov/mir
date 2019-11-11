@@ -4833,8 +4833,10 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             MIR_new_forward (ctx, name);
             push_op_p = FALSE;
           } else if (!module_p && !end_module_p && !proto_p && !func_p && !end_func_p && !local_p
-                     && MIR_branch_code_p (insn_code)
-                     && VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0) {
+                     && ((MIR_branch_code_p (insn_code)
+                          && VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0)
+                         || (insn_code == MIR_SWITCH
+                             && VARR_LENGTH (MIR_op_t, temp_insn_ops) > 0))) {
             op = MIR_new_label_op (ctx, create_label_desc (ctx, name));
           } else if (!expr_p && !ref_p && func_reg_p (ctx, func->u.func, name)) {
             op.mode = MIR_OP_REG;
