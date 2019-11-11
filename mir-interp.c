@@ -355,7 +355,11 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_func_item));
       push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
                        insn);
-      if (code == MIR_RET) {
+      if (code == MIR_SWITCH) {
+        VARR_PUSH (MIR_insn_t, branches, insn);
+        v.i = nops;
+        VARR_PUSH (MIR_val_t, code_varr, v);
+      } else if (code == MIR_RET) {
         v.i = nops;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else if (MIR_call_code_p (code)) {
@@ -377,6 +381,9 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         } else if (code == MIR_VA_ARG && i == 2) { /* type */
           mir_assert (ops[i].mode == MIR_OP_MEM);
           v.i = ops[i].u.mem.type;
+        } else if (code == MIR_SWITCH && i > 0) {
+          mir_assert (ops[i].mode == MIR_OP_LABEL);
+          v.i = 0;
         } else {
           mir_assert (ops[i].mode == MIR_OP_REG);
           v.i = get_reg (ops[i], &max_nreg);
@@ -386,14 +393,23 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     }
   }
   for (i = 0; i < VARR_LENGTH (MIR_insn_t, branches); i++) {
+    size_t start_label_nop = 0, bound_label_nop = 1, start_label_loc = 1, n;
+
     insn = VARR_GET (MIR_insn_t, branches, i);
-    label = insn->ops[0].u.label;
-    v.i = (size_t) label->data;
+    if (insn->code == MIR_SWITCH) {
+      start_label_nop = 1;
+      bound_label_nop = start_label_nop + insn->nops - 1;
+      start_label_loc++; /* we put nops for MIR_SWITCH */
+    }
+    for (n = start_label_nop; n < bound_label_nop; n++) {
+      label = insn->ops[n].u.label;
+      v.i = (size_t) label->data;
 #if MIR_INTERP_TRACE
-    VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + 2, v);
+      VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + n + start_label_loc + 1, v);
 #else
-    VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + 1, v);
+      VARR_SET (MIR_val_t, code_varr, (size_t) insn->data + n + start_label_loc, v);
 #endif
+    }
   }
   func_item->data = func_desc
     = malloc (sizeof (struct func_desc) + VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
@@ -864,7 +880,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_BLE, MIR_BLES, MIR_UBLE, MIR_UBLES, MIR_FBLE, MIR_DBLE, MIR_LDBLE, MIR_BGT);
     REP8 (LAB_EL, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT, MIR_LDBGT, MIR_BGE, MIR_BGES);
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
-    REP3 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_RET);
+    REP4 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_SWITCH, MIR_RET);
     REP6 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND, MIR_VA_ARG, MIR_VA_START, MIR_VA_END);
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
     REP8 (LAB_EL, IC_LDD, IC_LDLD, IC_STI8, IC_STU8, IC_STI16, IC_STU16, IC_STI32, IC_STU32);
@@ -1212,6 +1228,15 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_CALL, 0, pc = call_insn_execute (ctx, pc, bp, ops, FALSE));
   SCASE (IC_IMM_CALL, 0, pc = call_insn_execute (ctx, pc, bp, ops, TRUE));
   SCASE (MIR_INLINE, 0, mir_assert (FALSE));
+
+  CASE (MIR_SWITCH, 0) {
+    int64_t nops = get_i (ops); /* #ops */
+    int64_t index = *get_iop (bp, ops + 1);
+
+    mir_assert (index + 1 < nops);
+    pc = code + get_i (ops + index + 2);
+    END_INSN;
+  }
 
   CASE (MIR_RET, 0) {
     int64_t nops = get_i (ops); /* #ops */
