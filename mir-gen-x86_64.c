@@ -396,6 +396,7 @@ struct target_ctx {
   VARR (uint64_t) * const_pool;
   VARR (const_ref_t) * const_refs;
   VARR (label_ref_t) * label_refs;
+  VARR (uint64_t) * abs_address_locs;
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
@@ -408,6 +409,7 @@ struct target_ctx {
 #define const_pool gen_ctx->target_ctx->const_pool
 #define const_refs gen_ctx->target_ctx->const_refs
 #define label_refs gen_ctx->target_ctx->label_refs
+#define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 
 static void machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -1439,6 +1441,15 @@ static void set_int64 (uint8_t *addr, int64_t v, int nb) {
   }
 }
 
+static int64_t get_int64 (uint8_t *addr, int nb) {
+  int64_t v = 0;
+  int i, sh = (8 - nb) * 8;
+
+  for (i = nb - 1; i >= 0; i--) v = (v << 8) | addr[i];
+  if (sh > 0) v = (v << sh) >> sh; /* make it signed */
+  return v;
+}
+
 static size_t add_to_const_pool (struct gen_ctx *gen_ctx, uint64_t v) {
   uint64_t *addr = VARR_ADDR (uint64_t, const_pool);
   size_t n, len = VARR_LENGTH (uint64_t, const_pool);
@@ -1798,6 +1809,16 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
   return VARR_ADDR (uint8_t, result_code);
 }
 
+static void target_rebase (MIR_context_t ctx, uint8_t *base) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  uint64_t loc;
+
+  for (size_t i = 0; i < VARR_LENGTH (uint64_t, abs_address_locs); i++) {
+    loc = VARR_GET (uint64_t, abs_address_locs, i);
+    set_int64 (base + loc, (int64_t) (base + get_int64 (base + loc, 8)), 8);
+  }
+}
+
 static void target_init (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
@@ -1806,6 +1827,7 @@ static void target_init (MIR_context_t ctx) {
   VARR_CREATE (uint64_t, const_pool, 0);
   VARR_CREATE (const_ref_t, const_refs, 0);
   VARR_CREATE (label_ref_t, label_refs, 0);
+  VARR_CREATE (uint64_t, abs_address_locs, 0);
   patterns_init (ctx);
 }
 
@@ -1817,6 +1839,7 @@ static void target_finish (MIR_context_t ctx) {
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);
   VARR_DESTROY (label_ref_t, label_refs);
+  VARR_DESTROY (uint64_t, abs_address_locs);
   free (gen_ctx->target_ctx);
   gen_ctx->target_ctx = NULL;
 }
