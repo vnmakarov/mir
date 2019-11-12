@@ -4216,7 +4216,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
-    print_code (ctx, code, code_len, func_item->u.func->machine_code);
+    print_code (ctx, func_item->u.func->machine_code, code_len, func_item->u.func->machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   }
 #endif
