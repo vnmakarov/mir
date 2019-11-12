@@ -109,8 +109,11 @@ interp-test12:
 interp-test13:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test13.mir
 
+interp-test14:
+	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test14.mir
+
 interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8\
-             interp-test9 interp-test10 interp-test11 interp-test12 interp-test13
+             interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
 
 interp-bench:
 	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
