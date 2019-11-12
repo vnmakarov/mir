@@ -2429,7 +2429,7 @@ static int ccp_modify (MIR_context_t ctx) {
   bb_insn_t bb_insn, next_bb_insn;
   const_t val;
   MIR_op_t op;
-  MIR_insn_t insn;
+  MIR_insn_t insn, prev_insn, first_insn;
   int res, change_p = FALSE;
 
 #ifndef NDEBUG
