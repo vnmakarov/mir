@@ -1546,7 +1546,8 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   if (nop >= nops) return MIR_OP_BOUND;
   if (code == MIR_RET || code == MIR_SWITCH) {
     *out_p = FALSE;
-    return insn->ops[nop].mode; /* should be already checked in MIR_finish_func */
+    /* should be already checked in MIR_finish_func */
+    return nop == 0 && code == MIR_SWITCH ? MIR_OP_INT : insn->ops[nop].mode;
   } else if (MIR_call_code_p (code)) {
     MIR_op_t proto_op = insn->ops[0];
     MIR_proto_t proto;
