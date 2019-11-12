@@ -153,7 +153,10 @@ gen-test12:
 gen-test13:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test13.mir
 
-gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13
+gen-test14:
+	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test14.mir
+
+gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14
 	$(CC) -g -D$(TARGET) -DTEST_GEN_LOOP -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 	$(CC) -g -D$(TARGET) -DTEST_GEN_SIEVE -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 
