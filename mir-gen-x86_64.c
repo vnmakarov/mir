@@ -1054,6 +1054,9 @@ static const struct pattern patterns[] = {
 
   {MIR_JMP, "l", "E9 l0"}, /* 32-bit offset jmp */
 
+  /* movq TableAddress,r11; mov (r11,r,8),r11; jmp *r11; TableContent */
+  {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3"},
+
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
 
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE, "0F 85")  /* 1. int compare and branch */
