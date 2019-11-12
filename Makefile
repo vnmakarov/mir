@@ -3,7 +3,7 @@ SHELL=sh
 CC=gcc -fno-tree-sra -std=gnu11 -Wno-abi # latest versions of gcc has a buggy SRA
 # 2nd alternative:
 # CC=clang -std=gnu11 -Wno-abi
-CFLAGS=-O3 -g
+CFLAGS=-O3 -g -DNDEBUG 
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
@@ -19,7 +19,7 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
 c2m: mir.o mir-gen.o c2mir/c2mir.c
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
+	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
@@ -76,7 +76,7 @@ io-test:
 
 io-bench:
 	@echo ========io-bench can take upto 2 min===============
-	$(CC) $(CFLAGS) -DNDEBUG mir.c mir-tests/io-bench.c && ./a.out
+	$(CC) $(CFLAGS) mir.c mir-tests/io-bench.c && ./a.out
 
 interp-loop:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/loop-interp.c && ./a.out
@@ -116,9 +116,9 @@ interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi int
              interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
 
 interp-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) mir.c mir-tests/sieve-interp.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) mir.c mir-tests/sieve-interp.c && ./a.out && size ./a.out
 
 gen-test1:
 	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test1.mir
@@ -161,12 +161,12 @@ gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 
 	$(CC) -g -D$(TARGET) -DTEST_GEN_SIEVE -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 
 gen-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 
 gen-speed:
 	if type valgrind  > /dev/null 2>&1; then \
-	  $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -DTEST_GEN_SIEVE -DTEST_GENERATION_ONLY mir.c mir-gen.c mir-tests/loop-sieve-gen.c && valgrind --tool=lackey ./a.out; \
+	  $(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_SIEVE -DTEST_GENERATION_ONLY mir.c mir-gen.c mir-tests/loop-sieve-gen.c && valgrind --tool=lackey ./a.out; \
 	fi
 
 readme-example-test:
@@ -188,13 +188,13 @@ c2mir-bootstrap-test: c2m b2ctab
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test '(usually it takes about 10-20 sec) ... '
 	$(Q) ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./b2ctab <1.bmir >mir-ctab
-	$(Q) $(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
+	$(Q) $(CC) $(CFLAGS) -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
 	$(Q) ./a.out -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg sieve.c && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg sieve.c && size ./a.out
 
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
@@ -209,7 +209,7 @@ mir2c-test:
 	$(CC) -g -DTEST_MIR2C -I. mir.c mir2c/mir2c.c && ./a.out
 
 mir2c-bench:
-	$(CC) $(CFLAGS) -DNDEBUG -DTEST_MIR2C -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
+	$(CC) $(CFLAGS) -DTEST_MIR2C -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
 
 adt-test: varr-test dlist-test bitmap-test htab-test reduce-test
 
