@@ -752,7 +752,7 @@ static void build_func_cfg (MIR_context_t ctx) {
     if (insn->data == NULL) add_new_bb_insn (ctx, insn, bb);
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
-        && (MIR_branch_code_p (insn->code) || insn->code == MIR_RET
+        && (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
             || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
       if (next_insn->code == MIR_LABEL && (label_bb_insn = next_insn->data) != NULL)
@@ -760,7 +760,8 @@ static void build_func_cfg (MIR_context_t ctx) {
       else
         bb = create_bb (ctx, next_insn);
       add_bb (ctx, bb);
-      if (insn->code != MIR_JMP && insn->code != MIR_RET) create_edge (ctx, prev_bb, bb);
+      if (insn->code != MIR_JMP && insn->code != MIR_RET && insn->code != MIR_SWITCH)
+        create_edge (ctx, prev_bb, bb);
     }
     for (i = 0; i < nops; i++)
       if ((op = &insn->ops[i])->mode == MIR_OP_LABEL) {
@@ -837,7 +838,7 @@ static void add_new_bb_insns (MIR_context_t ctx) {
        insn = DLIST_NEXT (MIR_insn_t, insn))
     if (insn->data != NULL) {
       bb = (last_bb_insn = insn->data)->bb;
-      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET) {
+      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH) {
         bb = DLIST_NEXT (bb_t, bb);
         last_bb_insn = NULL;
       }
@@ -1138,10 +1139,10 @@ static void create_exprs (MIR_context_t ctx) {
       expr_t e;
       MIR_insn_t insn = bb_insn->insn;
 
-      if (!MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_LABEL
-          && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
-          && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_END
-          && !move_p (insn)
+      if (!MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_SWITCH
+          && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+          && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
+          && insn->code != MIR_VA_END && !move_p (insn)
           && !imm_move_p (insn)
           /* After simplification we have only one store form: mem = reg.
              It is unprofitable to add the reg as an expression.  */
@@ -1184,7 +1185,7 @@ static void create_av_bitmaps (MIR_context_t ctx) {
       MIR_insn_t insn = bb_insn->insn;
 
       if (MIR_branch_code_p (bb_insn->insn->code) || insn->code == MIR_RET
-          || insn->code == MIR_LABEL)
+          || insn->code == MIR_SWITCH || insn->code == MIR_LABEL)
         continue;
       if (!MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
           && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_END
@@ -1248,7 +1249,8 @@ static void cse_modify (MIR_context_t ctx) {
       MIR_insn_t new_insn, insn = bb_insn->insn;
 
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_LABEL)
+      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+          || insn->code == MIR_LABEL)
         continue;
       if (!MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
           && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_END
@@ -1696,7 +1698,8 @@ static void initiate_ccp_info (MIR_context_t ctx) {
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) != NULL
-        && MIR_branch_code_p (bb_insn->insn->code) && bb_insn->insn->code != MIR_JMP) {
+        && MIR_branch_code_p (bb_insn->insn->code) && bb_insn->insn->code != MIR_JMP
+        && bb_insn->insn->code != MIR_SWITCH) {
       for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
            e = DLIST_NEXT (out_edge_t, e))
         if (e->dst != DLIST_EL (bb_t, curr_cfg->bbs, 1)) /* ignore exit bb */
@@ -2343,7 +2346,7 @@ static void ccp_process_insn (MIR_context_t ctx, bb_insn_t bb_insn) {
     MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
   }
 #endif
-  if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP) {
+  if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH) {
     ccp_make_insn_update (ctx, insn);
     return;
   }
@@ -2386,7 +2389,8 @@ static void ccp_process_bb (MIR_context_t ctx, bb_t bb) {
     ccp_make_insn_update (ctx, bb_insn->insn);
   }
   if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL
-      || !MIR_branch_code_p (bb_insn->insn->code) || bb_insn->insn->code == MIR_JMP) {
+      || !MIR_branch_code_p (bb_insn->insn->code) || bb_insn->insn->code == MIR_JMP
+      || bb_insn->insn->code == MIR_SWITCH) {
     for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
       gen_assert (!e->skipped_p);
       if (!bitmap_bit_p (bb_visited, e->dst->index) && !e->dst->flag) {
