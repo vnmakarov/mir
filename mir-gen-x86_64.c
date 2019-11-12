@@ -380,6 +380,7 @@ typedef struct const_ref const_ref_t;
 DEF_VARR (const_ref_t);
 
 struct label_ref {
+  int abs_addr_p;
   size_t label_val_disp, next_insn_disp;
   MIR_label_t label;
 };
@@ -751,6 +752,7 @@ struct pattern {
      R[0-2] = n-th operand in ModRM:rm with mod == 3
      m[0-2] = n-th operand is mem
      mt = temp memory in red zone (-16(sp))
+     mT = switch table memory (h11,r,8)
      ap = 2 and 3 operand forms address by plus (1st reg to base, 2nd reg to index, disp to disp)
      am = 2 and 3 operand forms address by mult (1st reg to index and mult const to scale)
      ad<value> - forms address: 1th operand is base reg and <value> is displacement
@@ -758,6 +760,7 @@ struct pattern {
      I[0-2] - n-th operand in 4 byte immediate (should be imm of type i32)
      J[0-2] - n-th operand in 8 byte immediate
      P[0-2] - n-th operand in 8 byte address
+     T     - absolute 8-byte switch table address
      l[0-2] - n-th operand-label in 32-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
@@ -1476,6 +1479,8 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *r
 static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacement) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   const char *p, *insn_str;
+  label_ref_t lr;
+  int switch_table_addr_start = -1;
 
   if (insn->code == MIR_ALLOCA
       && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
@@ -1491,7 +1496,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
     int imm64_p = FALSE;
     uint64_t imm64, v;
     MIR_op_t op;
-    int const_ref_num = -1, label_ref_num = -1;
+    int const_ref_num = -1, label_ref_num = -1, switch_table_addr_p = FALSE;
 
     for (p = insn_str; (ch = *p) != '\0' && ch != ';'; p++) {
       if ((d1 = hex_value (ch = *p)) >= 0) {
@@ -1557,6 +1562,14 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
           setup_base (&rex_b, &base, SP_HARD_REG);
           setup_mod (&mod, 1);
           disp8 = (uint8_t) -16;
+        } else if (ch == 'T') {
+          MIR_op_t mem;
+
+          op = insn->ops[0];
+          gen_assert (op.mode == MIR_OP_HARD_REG);
+          mem = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R11_HARD_REG, op.u.hard_reg, 8);
+          setup_mem (mem.u.hard_reg_mem, &mod, &rm, &scale, &base, &rex_b, &index, &rex_x, &disp8,
+                     &disp32);
         } else {
           gen_assert ('0' <= ch && ch <= '2');
           op = insn->ops[ch - '0'];
@@ -1634,13 +1647,17 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         else
           imm64 = (uint64_t) op.u.ref->addr;
         break;
+      case 'T': {
+        gen_assert (!switch_table_addr_p && switch_table_addr_start < 0);
+        switch_table_addr_p = TRUE;
+        break;
+      }
       case 'l': {
-        label_ref_t lr;
-
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '2');
         op = insn->ops[ch - '0'];
         gen_assert (op.mode == MIR_OP_LABEL);
+        lr.abs_addr_p = FALSE;
         lr.label_val_disp = lr.next_insn_disp = 0;
         lr.label = op.u.label;
         gen_assert (label_ref_num < 0 && disp32 < 0);
@@ -1739,6 +1756,11 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
     if (imm32 >= 0) put_uint64 (gen_ctx, imm32, 4);
     if (imm64_p) put_uint64 (gen_ctx, imm64, 8);
 
+    if (switch_table_addr_p) {
+      switch_table_addr_start = VARR_LENGTH (uint8_t, result_code);
+      put_uint64 (gen_ctx, 0, 8);
+    }
+
     if (label_ref_num >= 0)
       VARR_ADDR (label_ref_t, label_refs)
       [label_ref_num].next_insn_disp
@@ -1749,6 +1771,19 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
       [const_ref_num].next_insn_disp
         = VARR_LENGTH (uint8_t, result_code);
     if (ch == '\0') break;
+  }
+  if (switch_table_addr_start < 0) return;
+  gen_assert (insn->code == MIR_SWITCH);
+  VARR_PUSH (uint64_t, abs_address_locs, switch_table_addr_start);
+  set_int64 (&VARR_ADDR (uint8_t, result_code)[switch_table_addr_start],
+             (int64_t) VARR_LENGTH (uint8_t, result_code), 8);
+  for (size_t i = 1; i < insn->nops; i++) {
+    gen_assert (insn->ops[i].mode == MIR_OP_LABEL);
+    lr.abs_addr_p = TRUE;
+    lr.label_val_disp = VARR_LENGTH (uint8_t, result_code);
+    lr.label = insn->ops[i].u.label;
+    VARR_PUSH (label_ref_t, label_refs, lr);
+    put_uint64 (gen_ctx, 0, 8);
   }
 }
 
@@ -1772,6 +1807,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
   VARR_TRUNC (uint64_t, const_pool, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);
   VARR_TRUNC (label_ref_t, label_refs, 0);
+  VARR_TRUNC (uint64_t, abs_address_locs, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
@@ -1792,8 +1828,14 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
   for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
     label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
 
-    set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-               (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp, 4);
+    if (!lr.abs_addr_p) {
+      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+                 (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp, 4);
+    } else {
+      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+                 (int64_t) get_label_disp (lr.label), 8);
+      VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
+    }
   }
   while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
     VARR_PUSH (uint8_t, result_code, 0);
