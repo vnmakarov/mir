@@ -2491,7 +2491,19 @@ static int ccp_modify (MIR_context_t ctx) {
     }
     if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL) continue;
     insn = bb_insn->insn;
-    if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP
+    first_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
+    if (first_insn->code == MIR_LABEL && (prev_insn = DLIST_PREV (MIR_insn_t, first_insn)) != NULL
+        && prev_insn->code == MIR_JMP && prev_insn->ops[0].u.label == first_insn) {
+#if MIR_GEN_DEBUG
+      if (debug_file != NULL) {
+        fprintf (debug_file, "  removing useless jump insn ");
+        MIR_output_insn (ctx, debug_file, prev_insn, curr_func_item->u.func, TRUE);
+        fprintf (debug_file, "\n");
+      }
+#endif
+      gen_delete_insn (ctx, prev_insn);
+    }
+    if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH
         || ccp_branch_update (insn, &res) != CCP_CONST)
       continue;
     change_p = TRUE;
