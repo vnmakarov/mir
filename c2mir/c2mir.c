@@ -10034,8 +10034,29 @@ static void emit_bin_op (node_t r, struct type *type, op_t res, op_t op1, op_t o
   }
 }
 
+static int signed_case_compare (const void *v1, const void *v2) {
+  case_t c1 = *(const case_t *) v1, c2 = *(const case_t *) v2;
+  struct expr *e1 = NL_HEAD (c1->case_node->ops)->attr;
+  struct expr *e2 = NL_HEAD (c2->case_node->ops)->attr;
+
+  assert (e1->u.i_val != e2->u.i_val);
+  return e1->u.i_val < e2->u.i_val ? -1 : 1;
+}
+
+static int unsigned_case_compare (const void *v1, const void *v2) {
+  case_t c1 = *(const case_t *) v1, c2 = *(const case_t *) v2;
+  struct expr *e1 = NL_HEAD (c1->case_node->ops)->attr;
+  struct expr *e2 = NL_HEAD (c2->case_node->ops)->attr;
+
+  assert (e1->u.u_val != e2->u.u_val);
+  return e1->u.u_val < e2->u.u_val ? -1 : 1;
+}
+
 DEF_VARR (MIR_op_t);
-static VARR (MIR_op_t) * ops;
+static VARR (MIR_op_t) * ops, *switch_ops;
+
+DEF_VARR (case_t);
+static VARR (case_t) * switch_cases;
 
 static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int val_p,
                  op_t *desirable_dest) {
@@ -10847,6 +10868,8 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     case_t c;
     MIR_label_t saved_break_label = break_label;
     int signed_p, short_p;
+    size_t len;
+    mir_ullong range = 0;
 
     assert (false_label == NULL && true_label == NULL);
     emit_label (r);
@@ -10857,42 +10880,86 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     mir_type = get_mir_type (type);
     short_p = mir_type != MIR_T_I64 && mir_type != MIR_T_U64;
     case_reg_op = force_reg (case_reg_op, mir_type);
-    for (c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL; c = DLIST_NEXT (case_t, c)) {
-      MIR_label_t cont_label, label = get_label (c->case_target_node);
-      node_t case_expr, case_expr2;
+    if (switch_attr->min_val_case != NULL) {
+      e = NL_HEAD (switch_attr->min_val_case->case_node->ops)->attr;
+      e2 = NL_HEAD (switch_attr->max_val_case->case_node->ops)->attr;
+      range = signed_p ? e2->u.i_val - e->u.i_val : e2->u.u_val - e->u.u_val;
+    }
+    len = DLIST_LENGTH (case_t, switch_attr->case_labels);
+    if (!switch_attr->ranges_p && len > 4 && range != 0 && range / len < 3) { /* use MIR_SWITCH */
+      mir_ullong curr_val, prev_val, n;
+      op_t index = get_new_temp (MIR_T_I64);
+      MIR_label_t label = break_label;
 
+      c = DLIST_TAIL (case_t, switch_attr->case_labels);
       if (c->case_node->code == N_DEFAULT) {
         assert (DLIST_NEXT (case_t, c) == NULL);
-        emit1 (MIR_JMP, MIR_new_label_op (ctx, label));
-        break;
+        label = get_label (c->case_target_node);
       }
-      case_expr = NL_HEAD (c->case_node->ops);
-      case_expr2 = NL_NEXT (case_expr);
-      e = case_expr->attr;
-      assert (e->const_p && integer_type_p (e->type));
-      if (case_expr2 == NULL) {
-        emit3 (short_p ? MIR_BEQS : MIR_BEQ, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
-               MIR_new_int_op (ctx, e->u.i_val));
-      } else {
-        e2 = case_expr2->attr;
-        assert (e2->const_p && integer_type_p (e2->type));
-        cont_label = MIR_new_label (ctx);
-        if (signed_p) {
-          emit3 (short_p ? MIR_BLTS : MIR_BLT, MIR_new_label_op (ctx, cont_label),
-                 case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
-          emit3 (short_p ? MIR_BLES : MIR_BLE, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
-                 MIR_new_int_op (ctx, e2->u.i_val));
-        } else {
-          emit3 (short_p ? MIR_UBLTS : MIR_UBLT, MIR_new_label_op (ctx, cont_label),
-                 case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
-          emit3 (short_p ? MIR_UBLES : MIR_UBLE, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
-                 MIR_new_int_op (ctx, e2->u.i_val));
+      emit3 (short_p ? MIR_SUBS : MIR_SUB, index.mir_op, case_reg_op.mir_op,
+             signed_p ? MIR_new_int_op (ctx, e->u.i_val) : MIR_new_uint_op (ctx, e->u.u_val));
+      emit3 (short_p ? MIR_UBGTS : MIR_UBGT, MIR_new_label_op (ctx, label), index.mir_op,
+             MIR_new_uint_op (ctx, range));
+      VARR_TRUNC (case_t, switch_cases, 0);
+      for (c = DLIST_HEAD (case_t, switch_attr->case_labels);
+           c != NULL && c->case_node->code != N_DEFAULT; c = DLIST_NEXT (case_t, c))
+        VARR_PUSH (case_t, switch_cases, c);
+      qsort (VARR_ADDR (case_t, switch_cases), VARR_LENGTH (case_t, switch_cases), sizeof (case_t),
+             signed_p ? signed_case_compare : unsigned_case_compare);
+      VARR_TRUNC (MIR_op_t, switch_ops, 0);
+      VARR_PUSH (MIR_op_t, switch_ops, index.mir_op);
+      for (size_t i = 0; i < VARR_LENGTH (case_t, switch_cases); i++) {
+        c = VARR_GET (case_t, switch_cases, i);
+        e2 = NL_HEAD (c->case_node->ops)->attr;
+        curr_val = signed_p ? e2->u.i_val - e->u.i_val : e2->u.u_val - e->u.u_val;
+        if (i != 0) {
+          for (n = prev_val + 1; n < curr_val; n++)
+            VARR_PUSH (MIR_op_t, switch_ops, MIR_new_label_op (ctx, label));
         }
-        emit_insn (cont_label);
+        VARR_PUSH (MIR_op_t, switch_ops, MIR_new_label_op (ctx, get_label (c->case_target_node)));
+        prev_val = curr_val;
       }
+      emit_insn (MIR_new_insn_arr (ctx, MIR_SWITCH, VARR_LENGTH (MIR_op_t, switch_ops),
+                                   VARR_ADDR (MIR_op_t, switch_ops)));
+    } else {
+      for (c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL;
+           c = DLIST_NEXT (case_t, c)) {
+        MIR_label_t cont_label, label = get_label (c->case_target_node);
+        node_t case_expr, case_expr2;
+
+        if (c->case_node->code == N_DEFAULT) {
+          assert (DLIST_NEXT (case_t, c) == NULL);
+          emit1 (MIR_JMP, MIR_new_label_op (ctx, label));
+          break;
+        }
+        case_expr = NL_HEAD (c->case_node->ops);
+        case_expr2 = NL_NEXT (case_expr);
+        e = case_expr->attr;
+        assert (e->const_p && integer_type_p (e->type));
+        if (case_expr2 == NULL) {
+          emit3 (short_p ? MIR_BEQS : MIR_BEQ, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
+                 MIR_new_int_op (ctx, e->u.i_val));
+        } else {
+          e2 = case_expr2->attr;
+          assert (e2->const_p && integer_type_p (e2->type));
+          cont_label = MIR_new_label (ctx);
+          if (signed_p) {
+            emit3 (short_p ? MIR_BLTS : MIR_BLT, MIR_new_label_op (ctx, cont_label),
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
+            emit3 (short_p ? MIR_BLES : MIR_BLE, MIR_new_label_op (ctx, label), case_reg_op.mir_op,
+                   MIR_new_int_op (ctx, e2->u.i_val));
+          } else {
+            emit3 (short_p ? MIR_UBLTS : MIR_UBLT, MIR_new_label_op (ctx, cont_label),
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
+            emit3 (short_p ? MIR_UBLES : MIR_UBLE, MIR_new_label_op (ctx, label),
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e2->u.i_val));
+          }
+          emit_insn (cont_label);
+        }
+      }
+      if (c == NULL) /* no default: */
+        emit1 (MIR_JMP, MIR_new_label_op (ctx, break_label));
     }
-    if (c == NULL) /* no default: */
-      emit1 (MIR_JMP, MIR_new_label_op (ctx, break_label));
     top_gen (stmt, NULL, NULL);
     emit_insn (break_label);
     break_label = saved_break_label;
@@ -11134,6 +11201,8 @@ static void gen_mir (node_t r) {
   VARR_CREATE (node_t, mem_params, 16);
   gen_mir_protos ();
   VARR_CREATE (MIR_op_t, ops, 32);
+  VARR_CREATE (MIR_op_t, switch_ops, 128);
+  VARR_CREATE (case_t, switch_cases, 64);
   VARR_CREATE (init_el_t, init_els, 128);
   memset_proto = memset_item = memcpy_proto = memcpy_item = NULL;
   top_gen (r, NULL, NULL);
@@ -11141,6 +11210,8 @@ static void gen_mir (node_t r) {
   VARR_DESTROY (MIR_var_t, vars);
   VARR_DESTROY (node_t, mem_params);
   VARR_DESTROY (MIR_op_t, ops);
+  VARR_DESTROY (MIR_op_t, switch_ops);
+  VARR_DESTROY (case_t, switch_cases);
   VARR_DESTROY (init_el_t, init_els);
 }
 
