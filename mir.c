@@ -1393,7 +1393,12 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
         || item->item_type == MIR_ref_data_item || item->item_type == MIR_expr_data_item) {
       item = load_bss_data_section (ctx, item, FALSE);
     } else if (item->item_type == MIR_func_item) {
-      if (item->addr == NULL) item->addr = _MIR_get_thunk (ctx);
+      if (item->addr == NULL) {
+        item->addr = _MIR_get_thunk (ctx);
+#ifdef MIR_DEBUG
+        fprintf (stderr, "%016lx: %s\n", (size_t) item->addr, item->u.func->name);
+#endif
+      }
       _MIR_redirect_thunk (ctx, item->addr, undefined_interface);
     }
     if (item->export_p) { /* update global item table */
