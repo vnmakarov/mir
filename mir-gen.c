@@ -3810,6 +3810,9 @@ static void combine (MIR_context_t ctx) {
   MIR_op_t temp_op, *op;
   MIR_reg_t hr, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int iter, out_p, change_p;
+#if MIR_GEN_DEBUG
+  size_t insns_num = 0, deleted_insns_num = 0;
+#endif
 
   hreg_refs_addr = VARR_ADDR (hreg_ref_t, hreg_refs);
   hreg_ref_ages_addr = VARR_ADDR (size_t, hreg_ref_ages);
@@ -3821,6 +3824,7 @@ static void combine (MIR_context_t ctx) {
       insn = bb_insn->insn;
       nops = MIR_insn_nops (ctx, insn);
 #if MIR_GEN_DEBUG
+      if (insn->code != MIR_LABEL) insns_num++;
       if (debug_file != NULL) {
         fprintf (debug_file, "  Processing ");
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -3873,6 +3877,7 @@ static void combine (MIR_context_t ctx) {
         if (hreg_ref_ages_addr[hr] != curr_bb_hreg_ref_age || hreg_refs_addr[hr].del_p) continue;
         def_insn = hreg_refs_addr[hr].insn;
 #if MIR_GEN_DEBUG
+        deleted_insns_num++;
         if (debug_file != NULL) {
           fprintf (debug_file, "      deleting now dead insn ");
           MIR_output_insn (ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
@@ -3905,6 +3910,11 @@ static void combine (MIR_context_t ctx) {
       clear_bb_insn_dead_vars (bb_insn); /* dead notes are outdated now -- remove them */
     }
   }
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", deleted_insns_num, insns_num,
+             100.0 * deleted_insns_num / insns_num);
+#endif
 }
 
 static void init_selection (MIR_context_t ctx) {
