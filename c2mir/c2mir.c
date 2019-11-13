@@ -5048,7 +5048,9 @@ struct case_attr {
 DEF_DLIST (case_t, case_link);
 
 struct switch_attr {
-  struct type type;           /* integer promoted type */
+  struct type type; /* integer promoted type */
+  int ranges_p;
+  case_t min_val_case, max_val_case;
   DLIST (case_t) case_labels; /* default case is always a tail */
 };
 
@@ -8435,6 +8437,8 @@ static void check (node_t r, node_t context) {
     curr_switch = curr_loop_switch = r;
     switch_attr = curr_switch->attr = reg_malloc (sizeof (struct switch_attr));
     switch_attr->type = t;
+    switch_attr->ranges_p = FALSE;
+    switch_attr->min_val_case = switch_attr->max_val_case = NULL;
     DLIST_INIT (case_t, ((struct switch_attr *) curr_switch->attr)->case_labels);
     check (stmt, r);
     for (case_t c = DLIST_HEAD (case_t, switch_attr->case_labels); c != NULL;
@@ -8445,6 +8449,17 @@ static void check (node_t r, node_t context) {
         continue;
       }
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
+      if (switch_attr->min_val_case == NULL) {
+        switch_attr->min_val_case = switch_attr->max_val_case = c;
+        continue;
+      }
+      e = NL_HEAD (c->case_node->ops)->attr;
+      e2 = NL_HEAD (switch_attr->min_val_case->case_node->ops)->attr;
+      if (signed_p ? e->u.i_val < e2->u.i_val : e->u.u_val < e2->u.u_val)
+        switch_attr->min_val_case = c;
+      e2 = NL_HEAD (switch_attr->max_val_case->case_node->ops)->attr;
+      if (signed_p ? e->u.i_val > e2->u.i_val : e->u.u_val > e2->u.u_val)
+        switch_attr->max_val_case = c;
     }
     HTAB_CLEAR (case_t, case_tab);
     /* Check range cases against *all* simple cases or range cases *before* it. */
@@ -8452,6 +8467,7 @@ static void check (node_t r, node_t context) {
          c = DLIST_NEXT (case_t, c)) {
       if (c->case_node->code == N_DEFAULT || (case_expr2 = NL_EL (c->case_node->ops, 1)) == NULL)
         continue;
+      switch_attr->ranges_p = TRUE;
       case_expr = NL_HEAD (c->case_node->ops);
       e = case_expr->attr;
       e2 = case_expr2->attr;
