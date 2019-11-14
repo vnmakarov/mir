@@ -811,6 +811,29 @@ static void print_CFG (MIR_context_t ctx, int bb_p, int insns_p,
     }
   }
 }
+
+static void print_loop_subtree (MIR_context_t ctx, loop_node_t root, int level) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  for (int i = 0; i < 2 * level + 2; i++) fprintf (debug_file, " ");
+  if (root->bb != NULL) {
+    gen_assert (DLIST_HEAD (loop_node_t, root->children) == NULL);
+    fprintf (debug_file, "BB%-3lu\n", (unsigned long) root->bb->index);
+    return;
+  }
+  fprintf (debug_file, "Loop%-3lu\n", (unsigned long) root->index);
+  for (loop_node_t node = DLIST_HEAD (loop_node_t, root->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    print_loop_subtree (ctx, node, level + 1);
+}
+
+static void print_loop_tree (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  fprintf (debug_file, "Loop Tree:\n");
+  print_loop_subtree (ctx, curr_cfg->root_loop_node, 0);
+}
+
 #endif
 
 static mv_t get_free_move (MIR_context_t ctx) {
@@ -4291,11 +4314,13 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     print_CFG (ctx, FALSE, TRUE, NULL);
   }
 #endif
+  build_loop_tree (ctx);
   calculate_func_cfg_live_info (ctx, TRUE);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     add_bb_insn_dead_vars (ctx);
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
+    print_loop_tree (ctx);
     print_CFG (ctx, TRUE, FALSE, output_bb_live_info);
   }
 #endif
