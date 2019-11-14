@@ -175,7 +175,7 @@ readme-example-test:
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
-	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v -ei sieve.c
+	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v sieve.c -ei
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-bootstrap-test
 
@@ -194,7 +194,7 @@ c2mir-bootstrap-test: c2m b2ctab
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bench:
-	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v -eg sieve.c && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v sieve.c -eg && size ./a.out
 
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
