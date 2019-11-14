@@ -11817,7 +11817,8 @@ static void t_ungetc (int c) {
 
 static const char *source_name;
 static VARR (char) * input;
-static int interp_exec_p, gen_exec_p, bin_p;
+static int interp_exec_p, gen_exec_p, lazy_gen_exec_p, bin_p;
+static VARR (char_ptr_t) * exec_argv;
 
 static int other_option_func (int i, int argc, char *argv[], void *data) {
   FILE *f = NULL;
@@ -11826,10 +11827,17 @@ static int other_option_func (int i, int argc, char *argv[], void *data) {
   if (strcmp (argv[i], "-i") == 0) {
     f = stdin;
     source_name = "<stdin>";
-  } else if (strcmp (argv[i], "-ei") == 0) {
-    interp_exec_p = TRUE;
-  } else if (strcmp (argv[i], "-eg") == 0) {
-    gen_exec_p = TRUE;
+  } else if (strcmp (argv[i], "-ei") == 0 || strcmp (argv[i], "-eg") == 0
+             || strcmp (argv[i], "-el") == 0) {
+    VARR_TRUNC (char_ptr_t, exec_argv, 0);
+    if (strcmp (argv[i], "-ei") == 0)
+      interp_exec_p = TRUE;
+    else if (strcmp (argv[i], "-eg") == 0)
+      gen_exec_p = TRUE;
+    else
+      lazy_gen_exec_p = TRUE;
+    VARR_PUSH (char_ptr_t, exec_argv, "c2m");
+    for (i++; i < argc; i++) VARR_PUSH (char_ptr_t, exec_argv, argv[i]);
   } else if (strcmp (argv[i], "-bin") == 0) {
     bin_p = TRUE;
   } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
@@ -11905,8 +11913,9 @@ static void *import_resolver (const char *name) {
 int main (int argc, char *argv[], char *env[]) {
   int i, n, ret_code;
 
-  interp_exec_p = gen_exec_p = FALSE;
+  interp_exec_p = gen_exec_p = lazy_gen_exec_p = FALSE;
   VARR_CREATE (char, input, 100);
+  VARR_CREATE (char_ptr_t, exec_argv, 32);
   ctx = MIR_init ();
   c2mir_init ();
   for (i = curr_module_num = ret_code = 0;; i++, curr_module_num++) {
@@ -11925,11 +11934,12 @@ int main (int argc, char *argv[], char *env[]) {
     if (!compile (source_name)) ret_code = 1;
     compile_finish ();
   }
-  if (ret_code == 0 && !prepro_only_p && (bin_p || interp_exec_p || gen_exec_p)) {
+  if (ret_code == 0 && !prepro_only_p
+      && (bin_p || interp_exec_p || gen_exec_p || lazy_gen_exec_p)) {
     MIR_val_t val;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
-    uint64_t (*fun_addr) (int, char *argv[], char *env[]);
+    uint64_t (*fun_addr) (int, void *argv, char *env[]);
     double start_time;
 
     for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
@@ -11965,7 +11975,8 @@ int main (int argc, char *argv[], char *env[]) {
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
         start_time = real_usec_time ();
-        MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = 3}, (MIR_val_t){.a = (void *) argv},
+        MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = VARR_LENGTH (char_ptr_t, exec_argv)},
+                    (MIR_val_t){.a = (void *) VARR_ADDR (char_ptr_t, exec_argv)},
                     (MIR_val_t){.a = (void *) env});
         ret_code = val.i;
         if (verbose_p) {
@@ -11978,10 +11989,12 @@ int main (int argc, char *argv[], char *env[]) {
 #if MIR_GEN_DEBUG
         MIR_gen_set_debug_file (ctx, stderr);
 #endif
-        MIR_link (ctx, MIR_set_gen_interface, import_resolver);
+        MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
+                  import_resolver);
         fun_addr = MIR_gen (ctx, main_func);
         start_time = real_usec_time ();
-        ret_code = fun_addr (argc, argv, env);
+        ret_code
+          = fun_addr (VARR_LENGTH (char_ptr_t, exec_argv), VARR_ADDR (char_ptr_t, exec_argv), env);
         if (verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
@@ -11994,6 +12007,7 @@ int main (int argc, char *argv[], char *env[]) {
   MIR_finish (ctx);
   close_libs ();
   c2mir_finish ();
+  VARR_DESTROY (char_ptr_t, exec_argv);
   VARR_DESTROY (char, input);
   return ret_code;
 }
