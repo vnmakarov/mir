@@ -3399,6 +3399,13 @@ static void assign (MIR_context_t ctx) {
       func_stack_slots_num = best_loc - MAX_HARD_REG;
       best_loc -= slots_num - 1;
     }
+#if MIR_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3lu) -- %lu\n",
+               MIR_reg_name (ctx, reg, curr_func_item->u.func), reg2var (gen_ctx, reg), breg,
+               curr_breg_infos[breg].freq, (unsigned long) best_loc);
+    }
+#endif
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
