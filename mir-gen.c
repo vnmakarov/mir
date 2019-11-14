@@ -113,6 +113,9 @@ struct lr_ctx;
 struct ra_ctx;
 struct selection_ctx;
 
+typedef struct loop_node *loop_node_t;
+DEF_VARR (loop_node_t);
+
 struct gen_ctx {
   MIR_item_t curr_func_item;
 #if MIR_GEN_DEBUG
@@ -121,7 +124,7 @@ struct gen_ctx {
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, all_vars;
   bitmap_t call_used_hard_regs;
   func_cfg_t curr_cfg;
-  size_t curr_bb_index;
+  size_t curr_bb_index, curr_loop_node_index;
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct cse_ctx *cse_ctx;
@@ -129,6 +132,7 @@ struct gen_ctx {
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
+  VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
 };
 
 static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct gen_ctx **) ctx; }
@@ -142,6 +146,10 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define call_used_hard_regs gen_ctx->call_used_hard_regs
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
+#define curr_loop_node_index gen_ctx->curr_loop_node_index
+#define loop_nodes gen_ctx->loop_nodes
+#define queue_nodes gen_ctx->queue_nodes
+#define loop_entries gen_ctx->loop_entries
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -263,9 +271,24 @@ struct bb {
   DLIST (bb_insn_t) bb_insns;
   size_t freq;
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
+  loop_node_t loop_node;
 };
 
 DEF_DLIST (bb_t, bb_link);
+
+DEF_DLIST_LINK (loop_node_t);
+DEF_DLIST_TYPE (loop_node_t);
+
+struct loop_node {
+  size_t index;
+  bb_t bb; /* NULL for internal tree node  */
+  loop_node_t entry;
+  loop_node_t parent;
+  DLIST (loop_node_t) children;
+  DLIST_LINK (loop_node_t) children_link;
+};
+
+DEF_DLIST_CODE (loop_node_t, children_link);
 
 DEF_DLIST_LINK (func_cfg_t);
 
@@ -322,6 +345,7 @@ struct func_cfg {
   DLIST (bb_t) bbs;
   DLIST (mv_t) used_moves;
   DLIST (mv_t) free_moves;
+  loop_node_t root_loop_node;
 };
 
 static DLIST (dead_var_t) free_dead_vars;
@@ -551,6 +575,99 @@ static void enumerate_bbs (MIR_context_t ctx) {
   DFS (DLIST_HEAD (bb_t, curr_cfg->bbs), &pre, &rpost);
 }
 
+static loop_node_t top_loop_node (bb_t bb) {
+  for (loop_node_t loop_node = bb->loop_node;; loop_node = loop_node->parent)
+    if (loop_node->parent == NULL) return loop_node;
+}
+
+static loop_node_t create_loop_node (MIR_context_t ctx, bb_t bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  loop_node_t loop_node = gen_malloc (ctx, sizeof (struct loop_node));
+
+  loop_node->index = curr_loop_node_index++;
+  loop_node->bb = bb;
+  if (bb != NULL) bb->loop_node = loop_node;
+  loop_node->parent = NULL;
+  loop_node->entry = NULL;
+  DLIST_INIT (loop_node_t, loop_node->children);
+  return loop_node;
+}
+
+static void process_loop (MIR_context_t ctx, bb_t entry_bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  edge_t e;
+  loop_node_t loop_node, new_loop_node, queue_node;
+  bb_t loop_bb, queue_bb;
+
+  VARR_TRUNC (loop_node_t, loop_nodes, 0);
+  VARR_TRUNC (loop_node_t, queue_nodes, 0);
+  bitmap_clear (temp_bitmap);
+  for (e = DLIST_HEAD (in_edge_t, entry_bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+    if (e->back_edge_p && e->src != entry_bb) {
+      loop_node = top_loop_node (e->src);
+      if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)) continue;
+      VARR_PUSH (loop_node_t, loop_nodes, loop_node);
+      VARR_PUSH (loop_node_t, queue_nodes, loop_node);
+    }
+  while (VARR_LENGTH (loop_node_t, queue_nodes) != 0) {
+    queue_node = VARR_POP (loop_node_t, queue_nodes);
+    if ((queue_bb = queue_node->bb) == NULL) queue_bb = queue_node->entry->bb; /* subloop */
+    /* entry block is achieved which means multiple entry loop -- just ignore */
+    if (queue_bb == DLIST_HEAD (bb_t, curr_cfg->bbs)) return;
+    for (e = DLIST_HEAD (in_edge_t, queue_bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+      if (e->src != entry_bb) {
+        loop_node = top_loop_node (e->src);
+        if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)) continue;
+        VARR_PUSH (loop_node_t, loop_nodes, loop_node);
+        VARR_PUSH (loop_node_t, queue_nodes, loop_node);
+      }
+  }
+  loop_node = entry_bb->loop_node;
+  VARR_PUSH (loop_node_t, loop_nodes, loop_node);
+  new_loop_node = create_loop_node (ctx, NULL);
+  new_loop_node->entry = loop_node;
+  while (VARR_LENGTH (loop_node_t, loop_nodes) != 0) {
+    loop_node = VARR_POP (loop_node_t, loop_nodes);
+    DLIST_APPEND (loop_node_t, new_loop_node->children, loop_node);
+    loop_node->parent = new_loop_node;
+  }
+}
+
+static int compare_bb_loop_nodes (const void *p1, const void *p2) {
+  bb_t bb1 = (*(const loop_node_t *) p1)->bb, bb2 = (*(const loop_node_t *) p2)->bb;
+
+  return bb1->rpost > bb2->rpost ? -1 : bb1->rpost < bb2->rpost ? 1 : 0;
+}
+
+static void build_loop_tree (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  loop_node_t loop_node;
+  edge_t e;
+
+  curr_loop_node_index = 0;
+  enumerate_bbs (ctx);
+  VARR_TRUNC (loop_node_t, loop_entries, 0);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    loop_node = create_loop_node (ctx, bb);
+    loop_node->entry = loop_node;
+    for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+      if (e->back_edge_p) {
+        VARR_PUSH (loop_node_t, loop_entries, loop_node);
+        break;
+      }
+  }
+  qsort (VARR_ADDR (loop_node_t, loop_entries), VARR_LENGTH (loop_node_t, loop_entries),
+         sizeof (loop_node_t), compare_bb_loop_nodes);
+  for (size_t i = 0; i < VARR_LENGTH (loop_node_t, loop_entries); i++)
+    process_loop (ctx, VARR_GET (loop_node_t, loop_entries, i)->bb);
+  curr_cfg->root_loop_node = create_loop_node (ctx, NULL);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    if ((loop_node = top_loop_node (bb)) != curr_cfg->root_loop_node) {
+      DLIST_APPEND (loop_node_t, curr_cfg->root_loop_node->children, loop_node);
+      loop_node->parent = curr_cfg->root_loop_node;
+    }
+}
+
 static void update_min_max_reg (MIR_context_t ctx, MIR_reg_t reg) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
@@ -729,6 +846,7 @@ static void build_func_cfg (MIR_context_t ctx) {
   DLIST_INIT (mv_t, curr_cfg->free_moves);
   curr_cfg->max_reg = 0;
   curr_cfg->min_reg = 0;
+  curr_cfg->root_loop_node = NULL;
   curr_bb_index = 0;
   for (i = 0; i < VARR_LENGTH (MIR_var_t, curr_func_item->u.func->vars); i++) {
     var = VARR_GET (MIR_var_t, curr_func_item->u.func->vars, i);
@@ -4267,6 +4385,9 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
   gen_ctx->selection_ctx = NULL;
+  VARR_CREATE (loop_node_t, loop_nodes, 32);
+  VARR_CREATE (loop_node_t, queue_nodes, 32);
+  VARR_CREATE (loop_node_t, loop_entries, 16);
   init_dead_vars ();
   init_data_flow (ctx);
   init_cse (ctx);
@@ -4301,6 +4422,9 @@ void MIR_gen_finish (MIR_context_t ctx) {
   target_finish (ctx);
   finish_dead_vars ();
   free (gen_ctx->data_flow_ctx);
+  VARR_DESTROY (loop_node_t, loop_nodes);
+  VARR_DESTROY (loop_node_t, queue_nodes);
+  VARR_DESTROY (loop_node_t, loop_entries);
   free (gen_ctx);
 }
 
