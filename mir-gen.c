@@ -226,7 +226,8 @@ struct edge {
   bb_t src, dst;
   DLIST_LINK (in_edge_t) in_link;
   DLIST_LINK (out_edge_t) out_link;
-  unsigned int skipped_p : 1; /* used for CCP */
+  unsigned char back_edge_p;
+  unsigned char skipped_p; /* used for CCP */
 };
 
 DEF_DLIST (in_edge_t, in_link);
@@ -503,7 +504,7 @@ static edge_t create_edge (MIR_context_t ctx, bb_t src, bb_t dst) {
   e->dst = dst;
   DLIST_APPEND (in_edge_t, dst->in_edges, e);
   DLIST_APPEND (out_edge_t, src->out_edges, e);
-  e->skipped_p = FALSE;
+  e->back_edge_p = e->skipped_p = FALSE;
   return e;
 }
 
@@ -532,12 +533,13 @@ static void delete_bb (MIR_context_t ctx, bb_t bb) {
 static void DFS (bb_t bb, size_t *pre, size_t *rpost) {
   edge_t e;
 
-  bb->pre = *pre;
-  (*pre)++;
+  bb->pre = (*pre)++;
   for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
-    if (e->dst->pre == 0) DFS (e->dst, pre, rpost);
-  bb->rpost = *rpost;
-  (*rpost)--;
+    if (e->dst->pre == 0)
+      DFS (e->dst, pre, rpost);
+    else if (e->dst->rpost == 0)
+      e->back_edge_p = TRUE;
+  bb->rpost = (*rpost)--;
 }
 
 static void enumerate_bbs (MIR_context_t ctx) {
