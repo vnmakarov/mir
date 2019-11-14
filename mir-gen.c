@@ -3488,6 +3488,7 @@ static void rewrite (MIR_context_t ctx) {
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg;
   int out_p, first_in_p;
+  size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
@@ -3531,23 +3532,37 @@ static void rewrite (MIR_context_t ctx) {
         default: /* do nothing */ break;
         }
       }
-      if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
-           || insn->code == MIR_LDMOV)
-          && MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
+      insns_num++;
+      if (insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
+          || insn->code == MIR_LDMOV) {
+        movs_num++;
+        if (MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
 #if MIR_GEN_DEBUG
-        if (debug_file != NULL) {
-          fprintf (debug_file, "Deleting noop move ");
-          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
-          fprintf (debug_file, " which was ");
-          insn->ops[0] = out_op;
-          insn->ops[1] = in_op;
-          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        }
+          if (debug_file != NULL) {
+            fprintf (debug_file, "Deleting noop move ");
+            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+            fprintf (debug_file, " which was ");
+            insn->ops[0] = out_op;
+            insn->ops[1] = in_op;
+            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+          }
 #endif
-        gen_delete_insn (ctx, insn);
+          deleted_movs_num++;
+          gen_delete_insn (ctx, insn);
+        }
       }
     }
   }
+#if MIR_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file,
+             "Deleting moves: %lu deleted noop moves out of %lu non-conflicting moves (%.1f%%), "
+             "out of %lu all moves (%.1f), out of %lu all insns (%.1f)\n",
+             (unsigned long) deleted_movs_num, (unsigned long) curr_cfg->non_conflicting_moves,
+             deleted_movs_num * 100.0 / curr_cfg->non_conflicting_moves, (unsigned long) movs_num,
+             deleted_movs_num * 100.0 / movs_num, (unsigned long) insns_num,
+             deleted_movs_num * 100.0 / insns_num);
+#endif
 }
 
 static void init_ra (MIR_context_t ctx) {
