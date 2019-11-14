@@ -302,6 +302,7 @@ DEF_DLIST_LINK (src_mv_t);
 
 struct mv {
   bb_insn_t bb_insn;
+  size_t freq;
   DLIST_LINK (mv_t) mv_link;
   DLIST_LINK (dst_mv_t) dst_link;
   DLIST_LINK (src_mv_t) src_link;
@@ -341,6 +342,7 @@ static void print_const (FILE *f, const_t c) {
 
 struct func_cfg {
   MIR_reg_t min_reg, max_reg;
+  size_t non_conflicting_moves;
   VARR (reg_info_t) * breg_info; /* bregs */
   DLIST (bb_t) bbs;
   DLIST (mv_t) used_moves;
@@ -2772,7 +2774,16 @@ static int live_trans_func (bb_t bb) {
   return bitmap_ior_and_compl (bb->live_in, bb->live_gen, bb->live_out, bb->live_kill);
 }
 
-static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
+static int bb_loop_level (bb_t bb) {
+  loop_node_t loop_node;
+  int level = -1;
+
+  for (loop_node = bb->loop_node; loop_node->parent != NULL; loop_node = loop_node->parent) level++;
+  gen_assert (level >= 0);
+  return level;
+}
+
+static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   size_t nops, i, niter, bb_freq, mvs_num = 0;
@@ -2789,6 +2800,9 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   bitmap_clear (bb->live_gen);
   bitmap_clear (bb->live_kill);
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
+  bb_freq = 1;
+  if (moves_p)
+    for (int i = bb_loop_level (bb); i > 0; i--) bb_freq *= 5;
   for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
@@ -2810,7 +2824,7 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
             bitmap_clear_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.reg));
             bitmap_set_bit_p (bb->live_kill, reg2var (gen_ctx, op.u.reg));
           }
-          breg_infos[reg2breg (gen_ctx, op.u.reg)].freq++;
+          breg_infos[reg2breg (gen_ctx, op.u.reg)].freq += bb_freq;
           break;
         case MIR_OP_HARD_REG:
           if (!out_p && niter != 0)
@@ -2824,11 +2838,11 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
           if (niter == 0) break;
           if (op.u.mem.base != 0) {
             bitmap_set_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.mem.base));
-            breg_infos[reg2breg (gen_ctx, op.u.mem.base)].freq++;
+            breg_infos[reg2breg (gen_ctx, op.u.mem.base)].freq += bb_freq;
           }
           if (op.u.mem.index != 0) {
             bitmap_set_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.mem.index));
-            breg_infos[reg2breg (gen_ctx, op.u.mem.index)].freq++;
+            breg_infos[reg2breg (gen_ctx, op.u.mem.index)].freq += bb_freq;
           }
           break;
         case MIR_OP_HARD_REG_MEM:
@@ -2856,12 +2870,21 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
     if (moves_p && move_p (insn)) {
       mv = get_free_move (ctx);
       mv->bb_insn = bb_insn;
+      mv->freq = bb_freq;
       if (insn->ops[0].mode == MIR_OP_REG)
         DLIST_APPEND (dst_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[0].u.reg)].dst_moves, mv);
       if (insn->ops[1].mode == MIR_OP_REG)
         DLIST_APPEND (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
+      mvs_num++;
+#if MIR_GEN_DEBUG
+      if (debug_file != NULL) {
+        fprintf (debug_file, "  move with freq %10lu:", (unsigned long) mv->freq);
+        MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+      }
+#endif
     }
   }
+  return mvs_num;
 }
 
 static void initiate_live_info (MIR_context_t ctx, int moves_p) {
@@ -2884,7 +2907,8 @@ static void initiate_live_info (MIR_context_t ctx, int moves_p) {
     VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
   }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    initiate_bb_live_info (ctx, bb, moves_p);
+    mvs_num += initiate_bb_live_info (ctx, bb, moves_p);
+  if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
 }
 
 static void calculate_func_cfg_live_info (MIR_context_t ctx, int moves_p) {
@@ -3254,7 +3278,7 @@ static int breg_freq_compare_func (const void *a1, const void *a2) {
   return ((int) bf2.freq - (int) bf1.freq);
 }
 
-static void setup_loc_profit_from_op (MIR_context_t ctx, MIR_op_t op) {
+static void setup_loc_profit_from_op (MIR_context_t ctx, MIR_op_t op, size_t freq) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t loc;
   size_t *curr_loc_profits = VARR_ADDR (size_t, loc_profits);
@@ -3266,10 +3290,10 @@ static void setup_loc_profit_from_op (MIR_context_t ctx, MIR_op_t op) {
            == MIR_NON_HARD_REG)
     return;
   if (curr_loc_profit_ages[loc] == curr_age)
-    curr_loc_profits[loc]++; /* should be freq */
+    curr_loc_profits[loc] += freq;
   else {
     curr_loc_profit_ages[loc] = curr_age;
-    curr_loc_profits[loc] = 1; /* should be freq */
+    curr_loc_profits[loc] += freq;
   }
 }
 
@@ -3279,9 +3303,9 @@ static void setup_loc_profits (MIR_context_t ctx, MIR_reg_t breg) {
   reg_info_t *info = &curr_breg_infos[breg];
 
   for (mv = DLIST_HEAD (dst_mv_t, info->dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
-    setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1]);
+    setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1], mv->freq);
   for (mv = DLIST_HEAD (src_mv_t, info->src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
-    setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1]);
+    setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1], mv->freq);
 }
 
 static void assign (MIR_context_t ctx) {
