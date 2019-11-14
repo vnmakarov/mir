@@ -119,9 +119,14 @@ int main (int argc, char *argv[], char *env[]) {
 #if MIR_BIN_DEBUG
     fprintf (stderr, "Finish of loading/linking (%d funcs) -- curr_time %.0f usec\n", funcs_num,
              real_usec_time () - start_time);
+    start_time = real_usec_time ();
 #endif
     MIR_interp (ctx, main_func, &val, 3, (MIR_val_t){.i = argc}, (MIR_val_t){.a = (void *) argv},
                 (MIR_val_t){.a = (void *) env});
+#if MIR_BIN_DEBUG
+    fprintf (stderr, "Finish of execution -- overall execution time %.0f usec\n",
+	     real_usec_time () - start_time);
+#endif
     exit_code = val.i;
   } else {
     MIR_gen_init (ctx);
@@ -136,16 +141,19 @@ int main (int argc, char *argv[], char *env[]) {
              funcs_num, real_usec_time () - start_time);
 #endif
     fun_addr = MIR_gen (ctx, main_func);
+#if MIR_BIN_DEBUG
+    start_time = real_usec_time ();
+#endif
     exit_code = fun_addr (argc, argv, env);
+#if MIR_BIN_DEBUG
+    fprintf (stderr,
+	     (MIR_USE_GEN
+              ? "Finish of execution -- overall execution time %.0f usec\n"
+              : "Finish of generation and execution -- overall execution time %.0f usec\n"),
+	     real_usec_time () - start_time);
+#endif
     MIR_gen_finish (ctx);
   }
-#if MIR_BIN_DEBUG
-  fprintf (stderr,
-           (MIR_USE_GEN || MIR_USE_INTERP
-              ? "Finish of execution -- curr_time %.0f usec\n"
-              : "Finish of generation and execution -- curr_time %.0f usec\n"),
-           real_usec_time () - start_time);
-#endif
   MIR_finish (ctx);
   close_libs ();
   return exit_code;
