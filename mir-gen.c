@@ -2752,11 +2752,11 @@ static int live_trans_func (bb_t bb) {
 static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
-  size_t nops, i, niter;
-  MIR_reg_t nregs, n, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  size_t nops, i, niter, bb_freq, mvs_num = 0;
+  MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
   int out_p;
-  mv_t mv, next_mv;
+  mv_t mv;
   reg_info_t *breg_infos;
 
   gen_assert (bb->live_in != NULL && bb->live_out != NULL && bb->live_gen != NULL
@@ -2765,20 +2765,6 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   bitmap_clear (bb->live_out);
   bitmap_clear (bb->live_gen);
   bitmap_clear (bb->live_kill);
-  for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
-    next_mv = DLIST_NEXT (mv_t, mv);
-    free_move (ctx, mv);
-  }
-  VARR_TRUNC (reg_info_t, curr_cfg->breg_info, 0);
-  nregs = get_nregs (ctx);
-  for (n = 0; n < nregs; n++) {
-    reg_info_t ri;
-
-    ri.freq = ri.calls_num = 0;
-    DLIST_INIT (dst_mv_t, ri.dst_moves);
-    DLIST_INIT (src_mv_t, ri.src_moves);
-    VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
-  }
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
@@ -2857,7 +2843,23 @@ static void initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
 
 static void initiate_live_info (MIR_context_t ctx, int moves_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t nregs, n;
+  mv_t mv, next_mv;
+  reg_info_t ri;
+  size_t mvs_num = 0;
 
+  for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
+    next_mv = DLIST_NEXT (mv_t, mv);
+    free_move (ctx, mv);
+  }
+  VARR_TRUNC (reg_info_t, curr_cfg->breg_info, 0);
+  nregs = get_nregs (ctx);
+  for (n = 0; n < nregs; n++) {
+    ri.freq = ri.calls_num = 0;
+    DLIST_INIT (dst_mv_t, ri.dst_moves);
+    DLIST_INIT (src_mv_t, ri.src_moves);
+    VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
+  }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     initiate_bb_live_info (ctx, bb, moves_p);
 }
