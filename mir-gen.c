@@ -313,11 +313,13 @@ DEF_DLIST (dst_mv_t, dst_link);
 DEF_DLIST (src_mv_t, src_link);
 
 struct reg_info {
-  long freq, thread_freq; /* thread accumulated freq, defined for first thread breg */
-  size_t live_length;
+  long freq;
   size_t calls_num;
+  /* The followd members are defined and used only in RA */
+  long thread_freq; /* thread accumulated freq, defined for first thread breg */
   /* first/next breg of the same thread, MIR_MAX_REG_NUM is end mark  */
   MIR_reg_t thread_first, thread_next;
+  size_t live_length; /* # of program points where breg lives */
   DLIST (dst_mv_t) dst_moves;
   DLIST (src_mv_t) src_moves;
 };
@@ -345,7 +347,7 @@ static void print_const (FILE *f, const_t c) {
 
 struct func_cfg {
   MIR_reg_t min_reg, max_reg;
-  size_t non_conflicting_moves;
+  size_t non_conflicting_moves;  /* # of moves with non-conflicting regs */
   VARR (reg_info_t) * breg_info; /* bregs */
   DLIST (bb_t) bbs;
   DLIST (mv_t) used_moves, free_moves;
