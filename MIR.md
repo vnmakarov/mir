@@ -311,6 +311,12 @@
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
     | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**     |
 
+### MIR switch insn
+  * The first operand of `MIR_SWITCH` insn should have an integer value from 0 to `N - 1` inclusive
+  * The rest operands should be `N` labels, where `N > 0`
+  * Execution of the insn will be an jump on the label corresponding to the first operand value
+  * If the first operand value is out of the range of permitted values, the execution result is undefined
+
 ### MIR integer comparison and branch insn
   * The first operand of the insn should be label.  Label will be the next executed insn if the result of comparison is non-zero
 
