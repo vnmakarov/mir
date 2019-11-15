@@ -3447,9 +3447,14 @@ static void assign (MIR_context_t ctx) {
     }
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
-      fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3lu) -- %lu\n",
+      MIR_reg_t thread_breg = curr_breg_infos[breg].thread_first;
+
+      fprintf (debug_file,
+               " Assigning to %s:var=%3u, breg=%3u (freq %-3ld), thread breg=%3u (freq %-3ld) -- "
+               "%lu\n",
                MIR_reg_name (ctx, reg, curr_func_item->u.func), reg2var (gen_ctx, reg), breg,
-               curr_breg_infos[breg].freq, (unsigned long) best_loc);
+               curr_breg_infos[breg].freq, thread_breg, curr_breg_infos[thread_breg].thread_freq,
+               (unsigned long) best_loc);
     }
 #endif
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
