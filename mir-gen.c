@@ -3293,7 +3293,7 @@ static void setup_loc_profit_from_op (MIR_context_t ctx, MIR_op_t op, size_t fre
     curr_loc_profits[loc] += freq;
   else {
     curr_loc_profit_ages[loc] = curr_age;
-    curr_loc_profits[loc] += freq;
+    curr_loc_profits[loc] = freq;
   }
 }
 
