@@ -9374,10 +9374,7 @@ static MIR_label_t get_label (node_t target) {
 static MIR_label_t continue_label, break_label;
 
 static void top_gen (node_t r, MIR_label_t true_label, MIR_label_t false_label) {
-  int saved_reg_free_mark = reg_free_mark;
-
   gen (r, true_label, false_label, FALSE, NULL);
-  reg_free_mark = saved_reg_free_mark; /* free used temp regs */
 }
 
 static op_t modify_for_block_move (op_t mem, op_t index) {
@@ -10070,7 +10067,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
   long double ld;
   long long ll;
   unsigned long long ull;
-  int saved_reg_free_mark = reg_free_mark;
   int expr_attr_p, stmt_p;
 
   classify_node (r, &expr_attr_p, &stmt_p);
@@ -10774,6 +10770,7 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     assert (declarator != NULL && declarator->code == N_DECL
             && NL_HEAD (declarator->ops)->code == N_ID);
     assert (decl_type->mode == TM_FUNC);
+    reg_free_mark = 0;
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
     collect_args_and_func_types (decl_type->u.func_type, &res_type);
@@ -11060,7 +11057,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
     emit_label (r);
     if (NL_EL (r->ops, 1)->code == N_IGNORE) {
       emit_insn (MIR_new_ret_insn (ctx, 0));
-      reg_free_mark = saved_reg_free_mark; /* free used temp regs */
       break;
     }
     if (!scalar_p) {
@@ -11078,7 +11074,6 @@ static op_t gen (node_t r, MIR_label_t true_label, MIR_label_t false_label, int 
       block_move (var, val, size);
       emit_insn (MIR_new_ret_insn (ctx, 0));
     }
-    reg_free_mark = saved_reg_free_mark;
     break;
   }
   case N_EXPR:
