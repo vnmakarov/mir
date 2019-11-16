@@ -1292,7 +1292,7 @@ static void create_exprs (MIR_context_t ctx) {
           && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
           && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
           && insn->code != MIR_VA_END && !move_p (insn)
-          && !imm_move_p (insn)
+          && (!imm_move_p (insn) || insn->ops[1].mode == MIR_OP_REF)
           /* After simplification we have only one store form: mem = reg.
              It is unprofitable to add the reg as an expression.  */
           && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM
@@ -1339,7 +1339,7 @@ static void create_av_bitmaps (MIR_context_t ctx) {
       if (!MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
           && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_END
           && !move_p (insn)
-          && !imm_move_p (insn)
+          && (!imm_move_p (insn) || insn->ops[1].mode == MIR_OP_REF)
           /* See create_expr comments: */
           && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
         if (!find_expr (ctx, insn, &e)) {
@@ -1404,7 +1404,7 @@ static void cse_modify (MIR_context_t ctx) {
       if (!MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
           && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_END
           && !move_p (insn)
-          && !imm_move_p (insn)
+          && (!imm_move_p (insn) || insn->ops[1].mode == MIR_OP_REF)
           /* See create_expr comments: */
           && insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM) {
         if (!find_expr (ctx, insn, &e)) {
