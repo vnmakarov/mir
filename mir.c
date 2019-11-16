@@ -3069,6 +3069,7 @@ struct machine_code_ctx {
 uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
   size_t len;
+  code_holder_t ch;
   int new_p = TRUE;
 
   if ((len = VARR_LENGTH (code_holder_t, code_holders)) > 0) {
@@ -3081,39 +3082,61 @@ uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_
       new_p = FALSE;
       start = ch_ptr->start;
       len = ch_ptr->bound - start;
+      ch = *ch_ptr;
     }
   }
   if (new_p) {
-    code_holder_t ch;
     size_t npages = (code_len + page_size - 1) / page_size;
 
     len = page_size * npages;
-    mem = (uint8_t *) mmap (NULL, len, PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    mem = (uint8_t *) mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED) return NULL;
     start = ch.start = mem;
     ch.free = mem + code_len;
     ch.bound = mem + len;
     VARR_PUSH (code_holder_t, code_holders, ch);
   }
+  mprotect (ch.start, ch.bound - ch.start, PROT_WRITE | PROT_EXEC);
   memcpy (mem, code, code_len);
+  mprotect (ch.start, ch.bound - ch.start, PROT_EXEC);
   return mem;
 }
 
-void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc, MIR_code_reloc_t relocs) {
-  for (size_t i = 0; i < nloc; i++)
-    memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
+void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
+                           const MIR_code_reloc_t *relocs) {
+  size_t i, len, start, max_offset = 0;
+
+  for (i = 0; i < nloc; i++)
+    if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
+  start = (size_t) base / page_size * page_size;
+  len = (size_t) base + max_offset + sizeof (void *) - start;
+  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
+  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
 }
 
 void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
+  size_t start, len, offset, max_offset = 0;
+  void *value;
   va_list args;
 
   va_start (args, nloc);
   for (size_t i = 0; i < nloc; i++) {
-    size_t offset = va_arg (args, size_t);
-    void *value = va_arg (args, void *);
-
+    offset = va_arg (args, size_t);
+    value = va_arg (args, void *);
+    if (max_offset < offset) max_offset = offset;
+  }
+  va_end (args);
+  start = (size_t) base / page_size * page_size;
+  len = (size_t) base + max_offset + sizeof (void *) - start;
+  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  va_start (args, nloc);
+  for (size_t i = 0; i < nloc; i++) {
+    offset = va_arg (args, size_t);
+    value = va_arg (args, void *);
     memcpy (base + offset, &value, sizeof (void *));
   }
+  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
   va_end (args);
 }
 

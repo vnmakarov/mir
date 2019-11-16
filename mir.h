@@ -557,10 +557,10 @@ struct MIR_code_reloc {
   void *value;
 };
 
-typedef struct MIR_code_reloc *MIR_code_reloc_t;
+typedef struct MIR_code_reloc MIR_code_reloc_t;
 
 extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
-                                  MIR_code_reloc_t relocs);
+                                  const MIR_code_reloc_t *relocs);
 extern void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...);
 
 extern void *va_arg_builtin (void *p, uint64_t t);
