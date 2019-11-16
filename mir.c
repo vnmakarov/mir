@@ -2812,11 +2812,11 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 #endif
 
 #ifndef MIR_MAX_FUNC_INLINE_GROWTH
-#define MIR_MAX_FUNC_INLINE_GROWTH 30
+#define MIR_MAX_FUNC_INLINE_GROWTH 50
 #endif
 
 #ifndef MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE
-#define MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE MIR_MAX_FUNC_INLINE_GROWTH
+#define MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE MIR_MAX_INSNS_FOR_INLINE
 #endif
 
 /* Only simplified code should be inlined because we need already
