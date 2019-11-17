@@ -226,7 +226,8 @@ ex100:    func v, 0
   * **Sparse Conditional Constant Propagation**: constant propagation
     and removing death paths of CFG
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
-  * **Building Live Info**: calculating live in and live out for the basic blocks
+  * **Find Loops**: finding natural loops and building loop tree
+  * **Build Live Info**: calculating live in and live out for the basic blocks
   * **Build Live Ranges**: calculating program point ranges for registers
   * **Assign**: priority-based assigning hard regs and stack slots to registers
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
