@@ -62,7 +62,7 @@ l2m-test2: l2m
 	@echo +++++ Interpreter +++++++ && ./l2m -i sieve.bc
 	@echo +++++ Generator +++++++ && ./l2m -g sieve.bc
 	
-bench: interp-bench gen-bench io-bench mir2c-bench c2mir-bench gen-speed
+bench: interp-bench gen-bench io-bench mir2c-bench c2mir-sieve-bench gen-speed
 	@echo ==============================Bench is done
 
 mir-test:
@@ -193,7 +193,7 @@ c2mir-bootstrap-test: c2m b2ctab
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
-c2mir-bench:
+c2mir-sieve-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v sieve.c -eg && size ./a.out
 
 # c2mir-bin-test is very slow
