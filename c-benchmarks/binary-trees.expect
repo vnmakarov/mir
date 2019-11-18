@@ -1,0 +1,11 @@
+stretch tree of depth 21	 check: 4194303
+1048576	 trees of depth 4	 check: 32505856
+262144	 trees of depth 6	 check: 33292288
+65536	 trees of depth 8	 check: 33488896
+16384	 trees of depth 10	 check: 33538048
+4096	 trees of depth 12	 check: 33550336
+1024	 trees of depth 14	 check: 33553408
+256	 trees of depth 16	 check: 33554176
+64	 trees of depth 18	 check: 33554368
+16	 trees of depth 20	 check: 33554416
+long lived tree of depth 20	 check: 2097151
