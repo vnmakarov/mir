@@ -10,16 +10,16 @@
                                                    ------------------	   -------------
                                                                                   |
                                                                                   v
-    --------      -------------      ------------       -----------     ----------------------
-   | Assign |<---| Build Live  |<---| Build Live |<---| Machinize |<---|  Sparse Conditional  |
-    --------     |   Ranges    |    |    Info    |      -----------    | Constant Propagation |
-       |          -------------      ------------                       ----------------------
-       |
-       v
-    ---------     ---------     -------------      ---------------
-   | Rewrite |-->| Combine |-->|  Dead Code  |--->|   Generate    |---> Machine Insns
-    ---------     ---------    | Elimination |    | machine insns |
-                                -------------      ---------------
+    -------------      ------------      ---------      -----------     ----------------------
+   | Build Live  |<---| Build Live |<---| Finding |<---| Machinize |<--|  Sparse Conditional  |
+   |   Ranges    |    |    Info    |    |  Loops  |     -----------    | Constant Propagation |
+    -------------      ------------      ---------                      ----------------------
+         |
+         v
+    ---------     ---------     ---------     -------------      ---------------
+   |  Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |--->|   Generate    |---> Machine
+    ---------     ---------     ---------    | Elimination |    | machine insns |      Insns
+                                              -------------      ---------------
 
 
 
