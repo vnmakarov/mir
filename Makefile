@@ -196,6 +196,9 @@ c2mir-bootstrap-test: c2m b2ctab
 c2mir-sieve-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v sieve.c -eg && size ./a.out
 
+c2mir-bench:
+	$(SHELL) c-benchmarks/run-benchmarks.sh
+
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test
 
