@@ -67,7 +67,7 @@ runbench () {
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf"
 }
 
-for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve
+for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat
 do
     b=c-benchmarks/$bench
     if test -f $b.arg; then arg=`cat $b.arg`; else arg=; fi
