@@ -1251,7 +1251,13 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
 #endif
         }
       }
-      if (op.u.mem.type != type && op.u.mem.type != type2 && op.u.mem.type != type3) return FALSE;
+      if (op.u.hard_reg_mem.type != type && op.u.hard_reg_mem.type != type2
+          && op.u.hard_reg_mem.type != type3)
+        return FALSE;
+      if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG && op.u.hard_reg_mem.scale != 1
+          && op.u.hard_reg_mem.scale != 2 && op.u.hard_reg_mem.scale != 4
+          && op.u.hard_reg_mem.scale != 8)
+        return FALSE;
       break;
     }
     case 'l':
