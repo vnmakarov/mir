@@ -30,6 +30,7 @@
    Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.
+   Finding Loops: Building loop tree which is used in subsequent register allocation.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.
    Assign: Priority-based assigning hard regs and stack slots to registers.
