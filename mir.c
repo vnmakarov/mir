@@ -2534,26 +2534,33 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_op_t reg_op, ret_reg_op;
   MIR_func_t func = func_item->u.func;
   MIR_type_t *res_types = func->res_types;
-  MIR_insn_t ret_label, insn;
+  MIR_insn_t ret_label, insn, first_ret_insn;
   VARR (MIR_op_t) * ret_ops;
+  int one_last_ret_p;
 
-  if (VARR_LENGTH (MIR_insn_t, temp_insns) == 1
-      && VARR_GET (MIR_insn_t, temp_insns, 0) == DLIST_TAIL (MIR_insn_t, func->insns))
-    return;
+  one_last_ret_p
+    = (VARR_LENGTH (MIR_insn_t, temp_insns) == 1
+       && VARR_GET (MIR_insn_t, temp_insns, 0) == DLIST_TAIL (MIR_insn_t, func->insns));
   ret_label = NULL;
-  if (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) {
+  if (one_last_ret_p) {
+    first_ret_insn = VARR_GET (MIR_insn_t, temp_insns, 0);
+  } else {
     ret_label = MIR_new_label (ctx);
     MIR_append_insn (ctx, func_item, ret_label);
   }
   VARR_CREATE (MIR_op_t, ret_ops, 16);
   for (i = 0; i < func->nres; i++) {
-    mov_code
-      = (res_types[i] == MIR_T_F
-           ? MIR_FMOV
-           : res_types[i] == MIR_T_D ? MIR_DMOV : res_types[i] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
-    ret_reg = _MIR_new_temp_reg (ctx, mov_code == MIR_MOV ? MIR_T_I64 : res_types[i], func);
-    ret_reg_op = MIR_new_reg_op (ctx, ret_reg);
-    VARR_PUSH (MIR_op_t, ret_ops, ret_reg_op);
+    if (one_last_ret_p) {
+      ret_reg_op = first_ret_insn->ops[i];
+    } else {
+      mov_code
+        = (res_types[i] == MIR_T_F
+             ? MIR_FMOV
+             : res_types[i] == MIR_T_D ? MIR_DMOV : res_types[i] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      ret_reg = _MIR_new_temp_reg (ctx, mov_code == MIR_MOV ? MIR_T_I64 : res_types[i], func);
+      ret_reg_op = MIR_new_reg_op (ctx, ret_reg);
+      VARR_PUSH (MIR_op_t, ret_ops, ret_reg_op);
+    }
     switch (res_types[i]) {
     case MIR_T_I8: ext_code = MIR_EXT8; break;
     case MIR_T_U8: ext_code = MIR_UEXT8; break;
@@ -2563,28 +2570,34 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
     case MIR_T_U32: ext_code = MIR_UEXT32; break;
     default: ext_code = MIR_INVALID_INSN; break;
     }
-    if (ext_code != MIR_INVALID_INSN)
+    if (ext_code == MIR_INVALID_INSN) continue;
+    if (one_last_ret_p)
+      MIR_insert_insn_before (ctx, func_item, first_ret_insn,
+                              MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
+    else
       MIR_append_insn (ctx, func_item, MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
   }
-  MIR_append_insn (ctx, func_item,
-                   MIR_new_insn_arr (ctx, MIR_RET, func->nres, VARR_ADDR (MIR_op_t, ret_ops)));
-  for (i = 0; i < VARR_LENGTH (MIR_insn_t, temp_insns); i++) {
-    insn = VARR_GET (MIR_insn_t, temp_insns, i);
-    mir_assert (func->nres == MIR_insn_nops (ctx, insn));
-    for (j = 0; j < func->nres; j++) {
-      mov_code
-        = (res_types[j] == MIR_T_F
-             ? MIR_FMOV
-             : res_types[j] == MIR_T_D ? MIR_DMOV : res_types[j] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
-      reg_op = insn->ops[j];
-      mir_assert (reg_op.mode == MIR_OP_REG);
-      ret_reg_op = VARR_GET (MIR_op_t, ret_ops, j);
+  if (!one_last_ret_p) {
+    MIR_append_insn (ctx, func_item,
+                     MIR_new_insn_arr (ctx, MIR_RET, func->nres, VARR_ADDR (MIR_op_t, ret_ops)));
+    for (i = 0; i < VARR_LENGTH (MIR_insn_t, temp_insns); i++) {
+      insn = VARR_GET (MIR_insn_t, temp_insns, i);
+      mir_assert (func->nres == MIR_insn_nops (ctx, insn));
+      for (j = 0; j < func->nres; j++) {
+        mov_code = (res_types[j] == MIR_T_F
+                      ? MIR_FMOV
+                      : res_types[j] == MIR_T_D ? MIR_DMOV
+                                                : res_types[j] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+        reg_op = insn->ops[j];
+        mir_assert (reg_op.mode == MIR_OP_REG);
+        ret_reg_op = VARR_GET (MIR_op_t, ret_ops, j);
+        MIR_insert_insn_before (ctx, func_item, insn,
+                                MIR_new_insn (ctx, mov_code, ret_reg_op, reg_op));
+      }
       MIR_insert_insn_before (ctx, func_item, insn,
-                              MIR_new_insn (ctx, mov_code, ret_reg_op, reg_op));
+                              MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, ret_label)));
+      MIR_remove_insn (ctx, func_item, insn);
     }
-    MIR_insert_insn_before (ctx, func_item, insn,
-                            MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, ret_label)));
-    MIR_remove_insn (ctx, func_item, insn);
   }
   VARR_DESTROY (MIR_op_t, ret_ops);
 }
