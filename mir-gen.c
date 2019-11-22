@@ -4026,7 +4026,7 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
 #if MIR_GEN_DEBUG
     if (debug_file != NULL) {
       fprintf (debug_file, "      changing to ");
-      MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
+      print_bb_insn (ctx, bb_insn, TRUE);
     }
 #endif
     VARR_PUSH (MIR_reg_t, dead_def_regs, op.u.hard_reg); /* to delete def_insn */
