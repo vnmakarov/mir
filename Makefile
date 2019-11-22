@@ -62,7 +62,7 @@ l2m-test2: l2m
 	@echo +++++ Interpreter +++++++ && ./l2m -i sieve.bc
 	@echo +++++ Generator +++++++ && ./l2m -g sieve.bc
 	
-bench: interp-bench gen-bench io-bench mir2c-bench c2mir-sieve-bench gen-speed
+bench: interp-bench gen-bench io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
 	@echo ==============================Bench is done
 
 mir-test:
