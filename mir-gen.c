@@ -4005,7 +4005,8 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
 
   if (code != MIR_BT && code != MIR_BF && code != MIR_BTS && code != MIR_BFS) return NULL;
   op = insn->ops[1];
-  if (!safe_hreg_substitution_p (ctx, op.u.hard_reg, bb_insn)) return NULL;
+  if (op.mode != MIR_OP_HARD_REG || !safe_hreg_substitution_p (ctx, op.u.hard_reg, bb_insn))
+    return NULL;
   def_insn = hreg_refs_addr[op.u.hard_reg].insn;
   if ((code = get_combined_br_code (code == MIR_BT || code == MIR_BTS, def_insn->code))
       == MIR_INSN_BOUND)
