@@ -408,6 +408,27 @@ static void clear_bb_insn_dead_vars (bb_insn_t bb_insn) {
   }
 }
 
+static void remove_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t hr) {
+  dead_var_t dv, next_dv;
+
+  gen_assert (hr <= MAX_HARD_REG);
+  for (dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars); dv != NULL; dv = next_dv) {
+    next_dv = DLIST_NEXT (dead_var_t, dv);
+    if (dv->var != hr) continue;
+    DLIST_REMOVE (dead_var_t, bb_insn->dead_vars, dv);
+    free_dead_var (dv);
+  }
+}
+
+static void move_bb_insn_dead_vars (bb_insn_t bb_insn, bb_insn_t from_bb_insn) {
+  dead_var_t dv;
+
+  while ((dv = DLIST_HEAD (dead_var_t, from_bb_insn->dead_vars)) != NULL) {
+    DLIST_REMOVE (dead_var_t, from_bb_insn->dead_vars, dv);
+    DLIST_APPEND (dead_var_t, bb_insn->dead_vars, dv);
+  }
+}
+
 static bb_insn_t create_bb_insn (MIR_context_t ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn_t bb_insn = gen_malloc (ctx, sizeof (struct bb_insn));
 
@@ -3660,6 +3681,7 @@ struct hreg_ref { /* We keep track of the last hard reg ref in this struct. */
 typedef struct hreg_ref hreg_ref_t;
 
 DEF_VARR (hreg_ref_t);
+DEF_VARR (MIR_op_t);
 
 struct selection_ctx {
   VARR (size_t) * hreg_ref_ages;
@@ -3668,8 +3690,10 @@ struct selection_ctx {
   size_t *hreg_ref_ages_addr;
   size_t curr_bb_hreg_ref_age;
   size_t last_mem_ref_insn_num;
-  /* Output registers of def insns to delete the def insns after the substitution */
-  VARR (MIR_reg_t) * dead_def_regs;
+  VARR (MIR_reg_t) * insn_hard_regs; /* registers considered for substitution */
+  VARR (size_t) * changed_op_numbers;
+  VARR (MIR_op_t) * last_right_ops;
+  bitmap_t hard_regs_bitmap;
 };
 
 #define hreg_ref_ages gen_ctx->selection_ctx->hreg_ref_ages
@@ -3678,7 +3702,10 @@ struct selection_ctx {
 #define hreg_ref_ages_addr gen_ctx->selection_ctx->hreg_ref_ages_addr
 #define curr_bb_hreg_ref_age gen_ctx->selection_ctx->curr_bb_hreg_ref_age
 #define last_mem_ref_insn_num gen_ctx->selection_ctx->last_mem_ref_insn_num
-#define dead_def_regs gen_ctx->selection_ctx->dead_def_regs
+#define insn_hard_regs gen_ctx->selection_ctx->insn_hard_regs
+#define changed_op_numbers gen_ctx->selection_ctx->changed_op_numbers
+#define last_right_ops gen_ctx->selection_ctx->last_right_ops
+#define hard_regs_bitmap gen_ctx->selection_ctx->hard_regs_bitmap
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
@@ -3813,142 +3840,232 @@ static int safe_hreg_substitution_p (MIR_context_t ctx, MIR_reg_t hr, bb_insn_t 
           && hreg_refs_addr[hr].def_p && find_bb_insn_dead_var (bb_insn, hr) != NULL);
 }
 
-static int substitute_op_p (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int first_p) {
+static void combine_process_hard_reg (MIR_context_t ctx, MIR_reg_t hr, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  MIR_insn_t def_insn = NULL;
-  bb_insn_t bb_insn = insn->data;
-  MIR_op_t src_op, op = insn->ops[nop];
-  MIR_reg_t def_hr = MIR_NON_HARD_REG;
-  size_t def_insn_num;
-  int successfull_change_p = FALSE;
 
-  if (first_p && op.mode == MIR_OP_HARD_REG
-      && safe_hreg_substitution_p (ctx, op.u.hard_reg, bb_insn)) {
-    /* It is not safe to substitute if there is another use after def insn before
-       the current as we delete def insn after	substitution. */
-    def_hr = op.u.hard_reg;
-    if (!hreg_refs_addr[def_hr].def_p) return FALSE;
-    gen_assert (!hreg_refs_addr[def_hr].del_p);
-    def_insn = hreg_refs_addr[def_hr].insn;
-    if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV
-        && def_insn->code != MIR_LDMOV)
-      return FALSE;
-    if (obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[def_hr].insn_num))
-      return FALSE; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
-    gen_assert (hreg_refs_addr[def_hr].nop == 0);
-    insn->ops[nop] = def_insn->ops[1];
-    successfull_change_p = insn_ok_p (ctx, insn);
-  } else if (op.mode == MIR_OP_HARD_REG_MEM) {
-    MIR_op_t src_op2;
-    int change_p = FALSE;
-
-    if (!first_p && safe_hreg_substitution_p (ctx, op.u.hard_reg_mem.index, bb_insn)) {
-      def_hr = op.u.hard_reg_mem.index;
-      def_insn = hreg_refs_addr[def_hr].insn;
-      def_insn_num = hreg_refs_addr[def_hr].insn_num;
-      gen_assert (hreg_refs_addr[def_hr].nop == 0 && !hreg_refs_addr[def_hr].del_p);
-      src_op = def_insn->ops[1];
-      if (src_op.mode != MIR_OP_HARD_REG || obsolete_hard_reg_op_p (ctx, src_op, def_insn_num))
-        ;
-      else if (def_insn->code == MIR_ADD) { /* index = r + const */
-        gen_assert (src_op.u.hard_reg != MIR_NON_HARD_REG);
-        if ((src_op2 = def_insn->ops[2]).mode == MIR_OP_INT) {
-          insn->ops[nop].u.hard_reg_mem.index = src_op.u.hard_reg;
-          insn->ops[nop].u.hard_reg_mem.disp += src_op2.u.i * insn->ops[nop].u.hard_reg_mem.scale;
-          change_p = TRUE;
-        }
-      } else if (def_insn->code == MIR_MUL && op.u.mem.scale >= 1 && op.u.mem.scale <= MIR_MAX_SCALE
-                 && (src_op2 = def_insn->ops[2]).mode == MIR_OP_INT && src_op2.u.i >= 1
-                 && src_op2.u.i <= MIR_MAX_SCALE
-                 && insn->ops[nop].u.hard_reg_mem.scale * src_op2.u.i <= MIR_MAX_SCALE) {
-        /* index = r * const */
-        gen_assert (src_op.u.hard_reg != MIR_NON_HARD_REG && src_op2.u.i != 1);
-        insn->ops[nop].u.hard_reg_mem.index = src_op.u.hard_reg;
-        insn->ops[nop].u.hard_reg_mem.scale *= src_op2.u.i;
-        change_p = TRUE;
-      }
-    } else if (first_p && safe_hreg_substitution_p (ctx, op.u.hard_reg_mem.base, bb_insn)) {
-      def_hr = op.u.hard_reg_mem.base;
-      def_insn = hreg_refs_addr[def_hr].insn;
-      def_insn_num = hreg_refs_addr[def_hr].insn_num;
-      gen_assert (MIR_call_code_p (def_insn->code) || hreg_refs_addr[def_hr].nop == 0);
-      gen_assert (!hreg_refs_addr[def_hr].del_p);
-      src_op = def_insn->ops[1];
-      if (obsolete_hard_reg_op_p (ctx, src_op, def_insn_num))
-        ;
-      else if (def_insn->code == MIR_MOV) {
-        if (src_op.mode == MIR_OP_HARD_REG) { /* base = r */
-          insn->ops[nop].u.hard_reg_mem.base = src_op.u.hard_reg;
-          change_p = TRUE;
-        } else if (src_op.mode == MIR_OP_INT) { /* base = const */
-          insn->ops[nop].u.hard_reg_mem.base = src_op.u.hard_reg;
-          insn->ops[nop].u.hard_reg_mem.disp += src_op.u.i;
-          change_p = TRUE;
-        }
-      } else if (src_op.mode != MIR_OP_HARD_REG) { /* Do nothing */
-      } else if (def_insn->code == MIR_ADD) {
-        gen_assert (src_op.u.hard_reg != MIR_NON_HARD_REG);
-        src_op2 = def_insn->ops[2];
-        if (obsolete_hard_reg_op_p (ctx, src_op2, def_insn_num))
-          ;
-        else if (src_op2.mode == MIR_OP_HARD_REG
-                 && op.u.hard_reg_mem.index == MIR_NON_HARD_REG) { /* base = r1 + r2 */
-          insn->ops[nop].u.hard_reg_mem.base = src_op.u.hard_reg;
-          insn->ops[nop].u.hard_reg_mem.index = src_op2.u.hard_reg;
-          insn->ops[nop].u.hard_reg_mem.scale = 1;
-          change_p = TRUE;
-        } else if (src_op2.mode == MIR_OP_INT) { /* base = r + const */
-          insn->ops[nop].u.hard_reg_mem.base = src_op.u.hard_reg;
-          insn->ops[nop].u.hard_reg_mem.disp += src_op2.u.i;
-          change_p = TRUE;
-        }
-      } else if (def_insn->code == MIR_MUL && op.u.hard_reg_mem.index == MIR_NON_HARD_REG
-                 && (src_op2 = def_insn->ops[2]).mode == MIR_OP_INT && src_op2.u.i >= 1
-                 && src_op2.u.i <= MIR_MAX_SCALE) { /* base = r * const */
-        gen_assert (src_op.u.hard_reg != MIR_NON_HARD_REG && src_op2.u.i != 1);
-        insn->ops[nop].u.hard_reg_mem.base = MIR_NON_HARD_REG;
-        insn->ops[nop].u.hard_reg_mem.index = src_op.u.hard_reg;
-        insn->ops[nop].u.hard_reg_mem.scale = src_op2.u.i;
-        change_p = TRUE;
-      }
-    }
-    if (change_p) {
-      if (insn->ops[nop].u.hard_reg_mem.base != MIR_NON_HARD_REG
-          && insn->ops[nop].u.hard_reg_mem.index != MIR_NON_HARD_REG
-          && insn->ops[nop].u.hard_reg_mem.scale == 1
-          && !insn_ok_p (ctx, insn)) { /* swap base, index */
-        MIR_reg_t temp = insn->ops[nop].u.hard_reg_mem.base;
-
-        insn->ops[nop].u.hard_reg_mem.base = insn->ops[nop].u.hard_reg_mem.index;
-        insn->ops[nop].u.hard_reg_mem.index = temp;
-      }
-      successfull_change_p = insn_ok_p (ctx, insn);
-    }
-  }
-  if (!successfull_change_p)
-    insn->ops[nop] = op;
-  else {
-    gen_assert (def_insn != NULL);
-#if MIR_GEN_DEBUG
-    if (debug_file != NULL) {
-      fprintf (debug_file, "      changing to ");
-      MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-    }
-#endif
-    VARR_PUSH (MIR_reg_t, dead_def_regs, def_hr); /* to delete def_insn */
-  }
-  return successfull_change_p;
+  if (!safe_hreg_substitution_p (ctx, hr, bb_insn) || !bitmap_set_bit_p (hard_regs_bitmap, hr))
+    return;
+  VARR_PUSH (MIR_reg_t, insn_hard_regs, hr);
 }
 
-static int combine_op (MIR_context_t ctx, MIR_insn_t insn, size_t nop) {
-  int first_p, op_change_p, change_p = FALSE;
-
-  for (first_p = TRUE;; first_p = !first_p) {
-    /* Memory can have 2 susbtitutions (base and index registers).  */
-    if (!(op_change_p = substitute_op_p (ctx, insn, nop, first_p)) && !first_p) break;
-    if (op_change_p) change_p = TRUE;
+static void combine_process_op (MIR_context_t ctx, const MIR_op_t *op_ref, bb_insn_t bb_insn) {
+  if (op_ref->mode == MIR_OP_HARD_REG) {
+    combine_process_hard_reg (ctx, op_ref->u.hard_reg, bb_insn);
+  } else if (op_ref->mode == MIR_OP_HARD_REG_MEM) {
+    if (op_ref->u.hard_reg_mem.base != MIR_NON_HARD_REG)
+      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.base, bb_insn);
+    if (op_ref->u.hard_reg_mem.index != MIR_NON_HARD_REG)
+      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.index, bb_insn);
   }
-  return change_p;
+}
+
+static void combine_delete_insn (MIR_context_t ctx, MIR_insn_t def_insn, bb_insn_t bb_insn) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t hr;
+
+  gen_assert (def_insn->ops[0].mode == MIR_OP_HARD_REG);
+  hr = def_insn->ops[0].u.hard_reg;
+  if (hreg_ref_ages_addr[hr] != curr_bb_hreg_ref_age || hreg_refs_addr[hr].del_p) return;
+#if MIR_GEN_DEBUG
+  // deleted_insns_num++;
+  if (debug_file != NULL) {
+    fprintf (debug_file, "      deleting now dead insn ");
+    print_bb_insn (ctx, def_insn->data, TRUE);
+  }
+#endif
+  remove_bb_insn_dead_var (bb_insn, hr);
+  move_bb_insn_dead_vars (bb_insn, def_insn->data);
+  /* We should delete the def insn here because of possible
+     substitution of the def insn 'r0 = ... r0 ...'.  We still
+     need valid entry for def here to find obsolete definiton,
+     e.g. "hr1 = hr0; hr0 = ...; hr0 = ... (deleted); ...= ...hr1..." */
+  gen_delete_insn (ctx, def_insn);
+  hreg_refs_addr[hr].del_p = TRUE; /* to exclude repetitive deletion */
+}
+
+static int64_t power2 (int64_t p) {
+  int64_t n = 1;
+
+  if (p < 0) return 0;
+  while (p-- > 0) n *= 2;
+  return n;
+}
+
+static int64_t int_log2 (int64_t i) {
+  int64_t n;
+
+  for (n = 0; (i & 1) == 0; n++, i >>= 1)
+    ;
+  return i == 1 ? n : -1;
+}
+
+static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_insn_code_t code, new_code;
+  MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
+  size_t i, nops = insn->nops;
+  int out_p, insn_change_p, insn_hr_change_p, op_change_p, mem_reg_change_p, success_p;
+  MIR_op_t *op_ref, *src_op_ref, *src_op2_ref;
+  MIR_reg_t hr;
+  int64_t scale, sh;
+
+  if (nops == 0) return FALSE;
+  VARR_TRUNC (MIR_op_t, last_right_ops, 0);
+  for (i = 0; i < nops; i++) VARR_PUSH (MIR_op_t, last_right_ops, insn->ops[i]);
+  VARR_TRUNC (MIR_reg_t, insn_hard_regs, 0);
+  bitmap_clear (hard_regs_bitmap);
+  for (i = 0; i < nops; i++) {
+    MIR_insn_op_mode (ctx, insn, i, &out_p);
+    if (out_p && insn->ops[i].mode != MIR_OP_HARD_REG_MEM) continue;
+    combine_process_op (ctx, &insn->ops[i], bb_insn);
+  }
+  insn_change_p = FALSE;
+  while (VARR_LENGTH (MIR_reg_t, insn_hard_regs) != 0) {
+    hr = VARR_POP (MIR_reg_t, insn_hard_regs);
+    if (!hreg_refs_addr[hr].def_p) continue;
+    gen_assert (!hreg_refs_addr[hr].del_p);
+    def_insn = hreg_refs_addr[hr].insn;
+    if (obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
+      continue; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
+    insn_hr_change_p = FALSE;
+    for (i = 0; i < nops; i++) { /* Change all hr occurences: */
+      op_ref = &insn->ops[i];
+      op_change_p = FALSE;
+      MIR_insn_op_mode (ctx, insn, i, &out_p);
+      if (!out_p && op_ref->mode == MIR_OP_HARD_REG && op_ref->u.hard_reg == hr) {
+        if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV
+            && def_insn->code != MIR_LDMOV)
+          break;
+        /* It is not safe to substitute if there is another use after def insn before
+           the current as we delete def insn after substitution. */
+        insn->ops[i] = def_insn->ops[1];
+        insn_hr_change_p = op_change_p = TRUE;
+      } else if (op_ref->mode == MIR_OP_HARD_REG_MEM) {
+        src_op_ref = &def_insn->ops[1];
+        if (op_ref->u.hard_reg_mem.index == hr) {
+          mem_reg_change_p = FALSE;
+          if (src_op_ref->mode != MIR_OP_HARD_REG) {
+          } else if (def_insn->code == MIR_MOV) { /* index = r */
+            insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
+            mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+          } else if (def_insn->code == MIR_ADD) { /* index = r + const */
+            gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG);
+            if ((src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT) {
+              insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
+              insn->ops[i].u.hard_reg_mem.disp
+                += src_op2_ref->u.i * insn->ops[i].u.hard_reg_mem.scale;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            }
+          } else if ((def_insn->code == MIR_MUL || def_insn->code == MIR_LSH)
+                     && op_ref->u.mem.scale >= 1 && op_ref->u.mem.scale <= MIR_MAX_SCALE
+                     && (src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT) {
+            scale = def_insn->code == MIR_MUL ? src_op2_ref->u.i : power2 (src_op2_ref->u.i);
+            if (scale >= 1 && scale <= MIR_MAX_SCALE
+                && insn->ops[i].u.hard_reg_mem.scale * scale <= MIR_MAX_SCALE) {
+              /* index = r * const */
+              gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG);
+              insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
+              insn->ops[i].u.hard_reg_mem.scale *= scale;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            }
+          }
+          if (!mem_reg_change_p) break;
+        }
+        if (op_ref->u.hard_reg_mem.base == hr) {
+          mem_reg_change_p = FALSE;
+          op_ref = &insn->ops[i];
+          if (def_insn->code == MIR_MOV) {
+            if (src_op_ref->mode == MIR_OP_HARD_REG) { /* base = r */
+              insn->ops[i].u.hard_reg_mem.base = src_op_ref->u.hard_reg;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            } else if (src_op_ref->mode == MIR_OP_INT) { /* base = const */
+              if (insn->ops[i].u.hard_reg_mem.scale != 1) {
+                insn->ops[i].u.hard_reg_mem.base = MIR_NON_HARD_REG;
+              } else {
+                insn->ops[i].u.hard_reg_mem.base = insn->ops[i].u.hard_reg_mem.index;
+                insn->ops[i].u.hard_reg_mem.index = MIR_NON_HARD_REG;
+              }
+              insn->ops[i].u.hard_reg_mem.disp += src_op_ref->u.i;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            }
+          } else if (src_op_ref->mode != MIR_OP_HARD_REG) { /* Can do nothing */
+            ;
+          } else if (def_insn->code == MIR_ADD) {
+            gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG);
+            src_op2_ref = &def_insn->ops[2];
+            if (src_op2_ref->mode == MIR_OP_HARD_REG
+                && op_ref->u.hard_reg_mem.index == MIR_NON_HARD_REG) { /* base = r1 + r2 */
+              insn->ops[i].u.hard_reg_mem.base = src_op_ref->u.hard_reg;
+              insn->ops[i].u.hard_reg_mem.index = src_op2_ref->u.hard_reg;
+              insn->ops[i].u.hard_reg_mem.scale = 1;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            } else if (src_op2_ref->mode == MIR_OP_INT) { /* base = r + const */
+              insn->ops[i].u.hard_reg_mem.base = src_op_ref->u.hard_reg;
+              insn->ops[i].u.hard_reg_mem.disp += src_op2_ref->u.i;
+              mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+            }
+          } else if (def_insn->code == MIR_MUL && op_ref->u.hard_reg_mem.index == MIR_NON_HARD_REG
+                     && (src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT
+                     && src_op2_ref->u.i >= 1
+                     && src_op2_ref->u.i <= MIR_MAX_SCALE) { /* base = r * const */
+            gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG && src_op2_ref->u.i != 1);
+            insn->ops[i].u.hard_reg_mem.base = MIR_NON_HARD_REG;
+            insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
+            insn->ops[i].u.hard_reg_mem.scale = src_op2_ref->u.i;
+            mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
+          }
+          if (!mem_reg_change_p) {
+            if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i); /* index was changed */
+            break;
+          }
+        }
+      }
+      if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i);
+    }
+    code = insn->code;
+    if (i >= nops && (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS)
+        && insn->ops[2].mode == MIR_OP_INT && (sh = int_log2 (insn->ops[2].u.i)) >= 0) {
+      switch (code) {
+      case MIR_MUL: new_code = MIR_LSH; break;
+      case MIR_MULS: new_code = MIR_LSHS; break;
+      case MIR_UDIV: new_code = MIR_URSH; break;
+      case MIR_UDIVS: new_code = MIR_URSHS; break;
+      default: gen_assert (FALSE);
+      }
+      new_insn = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
+      MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
+      if (!insn_ok_p (ctx, new_insn)) {
+        MIR_remove_insn (ctx, curr_func_item, new_insn);
+      } else {
+        MIR_remove_insn (ctx, curr_func_item, insn);
+        new_insn->data = bb_insn;
+        bb_insn->insn = new_insn;
+        insn = new_insn;
+      }
+      insn_hr_change_p = TRUE;
+    }
+    if (insn_hr_change_p) {
+      if ((success_p = i >= nops && insn_ok_p (ctx, insn))) insn_change_p = TRUE;
+      while (VARR_LENGTH (size_t, changed_op_numbers)) {
+        i = VARR_POP (size_t, changed_op_numbers);
+        if (success_p)
+          VARR_SET (MIR_op_t, last_right_ops, i, insn->ops[i]);
+        else
+          insn->ops[i] = VARR_GET (MIR_op_t, last_right_ops, i); /* restore changed operands */
+      }
+      if (success_p) {
+        gen_assert (def_insn != NULL);
+        combine_delete_insn (ctx, def_insn, bb_insn);
+#if MIR_GEN_DEBUG
+        if (debug_file != NULL) {
+          fprintf (debug_file, "      changing to ");
+          print_bb_insn (ctx, bb_insn, TRUE);
+        }
+#endif
+      }
+    }
+  }
+  return insn_change_p;
 }
 
 static MIR_insn_code_t get_combined_br_code (int true_p, MIR_insn_code_t cmp_code) {
@@ -4029,7 +4146,7 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
       print_bb_insn (ctx, bb_insn, TRUE);
     }
 #endif
-    VARR_PUSH (MIR_reg_t, dead_def_regs, op.u.hard_reg); /* to delete def_insn */
+    combine_delete_insn (ctx, def_insn, bb_insn);
     return new_insn;
   }
 }
@@ -4052,10 +4169,11 @@ static void combine (MIR_context_t ctx) {
   MIR_insn_code_t code, new_code;
   MIR_insn_t insn, new_insn, def_insn;
   bb_insn_t bb_insn;
-  size_t nops, i, curr_insn_num;
-  MIR_op_t temp_op, *op;
+  size_t iter, nops, i, curr_insn_num;
+  MIR_op_t temp_op, *op_ref;
   MIR_reg_t hr, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int iter, out_p, change_p;
+  int out_p, change_p, block_change_p;
+  int64_t p;
 #if MIR_GEN_DEBUG
   size_t insns_num = 0, deleted_insns_num = 0;
 #endif
@@ -4063,98 +4181,80 @@ static void combine (MIR_context_t ctx) {
   hreg_refs_addr = VARR_ADDR (hreg_ref_t, hreg_refs);
   hreg_ref_ages_addr = VARR_ADDR (size_t, hreg_ref_ages);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    curr_bb_hreg_ref_age++;
-    last_mem_ref_insn_num = 0; /* means undef */
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns), curr_insn_num = 1; bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn), curr_insn_num++) {
-      insn = bb_insn->insn;
-      nops = MIR_insn_nops (ctx, insn);
+    do {
 #if MIR_GEN_DEBUG
-      if (insn->code != MIR_LABEL) insns_num++;
-      if (debug_file != NULL) {
-        fprintf (debug_file, "  Processing ");
-        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-      }
+      if (debug_file != NULL) fprintf (debug_file, "Processing bb%d\n", bb->index);
 #endif
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
-      if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
-        setup_hreg_ref (ctx, early_clobbered_hard_reg1, insn, 0 /* whatever */, curr_insn_num,
-                        TRUE);
-      if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
-        setup_hreg_ref (ctx, early_clobbered_hard_reg2, insn, 0 /* whatever */, curr_insn_num,
-                        TRUE);
-      VARR_TRUNC (MIR_reg_t, dead_def_regs, 0);
-      if (MIR_call_code_p (code = insn->code)) {
-        for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
-          if (bitmap_bit_p (call_used_hard_regs, hr)) {
-            setup_hreg_ref (ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
-          }
-      } else if (code == MIR_RET) {
-        /* ret is transformed in machinize and should be not modified after that */
-      } else if ((new_insn = combine_branch_and_cmp (ctx, bb_insn)) != NULL) {
-        insn = new_insn;
+      block_change_p = FALSE;
+      curr_bb_hreg_ref_age++;
+      last_mem_ref_insn_num = 0; /* means undef */
+      for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns), curr_insn_num = 1; bb_insn != NULL;
+           bb_insn = DLIST_NEXT (bb_insn_t, bb_insn), curr_insn_num++) {
+        insn = bb_insn->insn;
         nops = MIR_insn_nops (ctx, insn);
-      } else {
-        for (iter = 0; iter < 2; iter++) {
-          change_p = FALSE;
-          for (i = 0; i < nops; i++) {
-            MIR_insn_op_mode (ctx, insn, i, &out_p);
-            if ((!out_p || insn->ops[i].mode != MIR_OP_HARD_REG) && combine_op (ctx, insn, i))
-              change_p = TRUE;
-          }
-          if (iter == 0) {
-            if ((new_code = commutative_insn_code (insn->code)) == MIR_INSN_BOUND) break;
+#if MIR_GEN_DEBUG
+        if (insn->code != MIR_LABEL) insns_num++;
+        if (debug_file != NULL) {
+          fprintf (debug_file, "  Processing ");
+          print_bb_insn (ctx, bb_insn, TRUE);
+        }
+#endif
+        get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+        if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
+          setup_hreg_ref (ctx, early_clobbered_hard_reg1, insn, 0 /* whatever */, curr_insn_num,
+                          TRUE);
+        if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
+          setup_hreg_ref (ctx, early_clobbered_hard_reg2, insn, 0 /* whatever */, curr_insn_num,
+                          TRUE);
+        if (MIR_call_code_p (code = insn->code)) {
+          for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
+            if (bitmap_bit_p (call_used_hard_regs, hr)) {
+              setup_hreg_ref (ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
+            }
+        } else if (code == MIR_RET) {
+          /* ret is transformed in machinize and should be not modified after that */
+        } else if ((new_insn = combine_branch_and_cmp (ctx, bb_insn)) != NULL) {
+          insn = new_insn;
+          nops = MIR_insn_nops (ctx, insn);
+          block_change_p = TRUE;
+        } else {
+          change_p = combine_substitute (ctx, bb_insn);
+          if (!change_p && (new_code = commutative_insn_code (insn->code)) != MIR_INSN_BOUND) {
             insn->code = new_code;
             temp_op = insn->ops[1];
             insn->ops[1] = insn->ops[2];
             insn->ops[2] = temp_op;
-          } else if (!change_p) {
-            gen_assert (commutative_insn_code (insn->code) == code);
-            insn->code = code;
-            temp_op = insn->ops[1];
-            insn->ops[1] = insn->ops[2];
-            insn->ops[2] = temp_op;
+            if (combine_substitute (ctx, bb_insn))
+              change_p = TRUE;
+            else {
+              insn->code = code;
+              temp_op = insn->ops[1];
+              insn->ops[1] = insn->ops[2];
+              insn->ops[2] = temp_op;
+            }
           }
+          if (change_p) block_change_p = TRUE;
         }
-      }
 
-      for (size_t i = 0; i < VARR_LENGTH (MIR_reg_t, dead_def_regs); i++) {
-        hr = VARR_GET (MIR_reg_t, dead_def_regs, i);
-        if (hreg_ref_ages_addr[hr] != curr_bb_hreg_ref_age || hreg_refs_addr[hr].del_p) continue;
-        def_insn = hreg_refs_addr[hr].insn;
-#if MIR_GEN_DEBUG
-        deleted_insns_num++;
-        if (debug_file != NULL) {
-          fprintf (debug_file, "      deleting now dead insn ");
-          MIR_output_insn (ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
-        }
-#endif
-        /* We should delete the def insn here because of possible
-           substitution of the def insn 'r0 = ... r0 ...'.  We still
-           need valid entry for def her to find obsolete definiton,
-           e.g. "hr1 = hr0; hr0 = ...; hr0 = ... (deleted); ...= ...hr1..." */
-        gen_delete_insn (ctx, def_insn);
-        hreg_refs_addr[hr].del_p = TRUE; /* to exclude repetitive deletion */
-      }
-      for (iter = 0; iter < 2; iter++) {
-        for (i = 0; i < nops; i++) {
-          op = &insn->ops[i];
-          MIR_insn_op_mode (ctx, insn, i, &out_p);
-          if (op->mode == MIR_OP_HARD_REG && !iter == !out_p) {
-            /* process in ops on 0th iteration and out ops on 1th iteration */
-            setup_hreg_ref (ctx, op->u.hard_reg, insn, i, curr_insn_num, iter == 1);
-          } else if (op->mode == MIR_OP_HARD_REG_MEM) {
-            if (out_p && iter == 1)
-              last_mem_ref_insn_num = curr_insn_num;
-            else if (iter == 0) {
-              setup_hreg_ref (ctx, op->u.hard_reg_mem.base, insn, i, curr_insn_num, FALSE);
-              setup_hreg_ref (ctx, op->u.hard_reg_mem.index, insn, i, curr_insn_num, FALSE);
+        for (iter = 0; iter < 2; iter++) { /* update hreg ref info: */
+          for (i = 0; i < nops; i++) {
+            op_ref = &insn->ops[i];
+            MIR_insn_op_mode (ctx, insn, i, &out_p);
+            if (op_ref->mode == MIR_OP_HARD_REG && !iter == !out_p) {
+              /* process in ops on 0th iteration and out ops on 1th iteration */
+              setup_hreg_ref (ctx, op_ref->u.hard_reg, insn, i, curr_insn_num, iter == 1);
+            } else if (op_ref->mode == MIR_OP_HARD_REG_MEM) {
+              if (out_p && iter == 1)
+                last_mem_ref_insn_num = curr_insn_num;
+              else if (iter == 0) {
+                setup_hreg_ref (ctx, op_ref->u.hard_reg_mem.base, insn, i, curr_insn_num, FALSE);
+                setup_hreg_ref (ctx, op_ref->u.hard_reg_mem.index, insn, i, curr_insn_num, FALSE);
+              }
             }
           }
         }
       }
-      clear_bb_insn_dead_vars (bb_insn); /* dead notes are outdated now -- remove them */
-    }
+    } while (block_change_p);
   }
 #if MIR_GEN_DEBUG
   if (debug_file != NULL)
@@ -4171,7 +4271,10 @@ static void init_selection (MIR_context_t ctx) {
   curr_bb_hreg_ref_age = 0;
   VARR_CREATE (size_t, hreg_ref_ages, MAX_HARD_REG + 1);
   VARR_CREATE (hreg_ref_t, hreg_refs, MAX_HARD_REG + 1);
-  VARR_CREATE (MIR_reg_t, dead_def_regs, MAX_HARD_REG + 1);
+  VARR_CREATE (MIR_reg_t, insn_hard_regs, 0);
+  VARR_CREATE (size_t, changed_op_numbers, 16);
+  VARR_CREATE (MIR_op_t, last_right_ops, 16);
+  hard_regs_bitmap = bitmap_create2 (MAX_HARD_REG + 1);
   for (MIR_reg_t i = 0; i <= MAX_HARD_REG; i++) {
     VARR_PUSH (hreg_ref_t, hreg_refs, hreg_ref);
     VARR_PUSH (size_t, hreg_ref_ages, 0);
@@ -4183,7 +4286,10 @@ static void finish_selection (MIR_context_t ctx) {
 
   VARR_DESTROY (size_t, hreg_ref_ages);
   VARR_DESTROY (hreg_ref_t, hreg_refs);
-  VARR_DESTROY (MIR_reg_t, dead_def_regs);
+  VARR_DESTROY (MIR_reg_t, insn_hard_regs);
+  VARR_DESTROY (size_t, changed_op_numbers);
+  VARR_DESTROY (MIR_op_t, last_right_ops);
+  bitmap_destroy (hard_regs_bitmap);
   free (gen_ctx->selection_ctx);
   gen_ctx->selection_ctx = NULL;
 }
