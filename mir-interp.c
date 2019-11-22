@@ -352,6 +352,8 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       if (MIR_call_code_p (code))
         imm_call_p = (ops[1].mode == MIR_OP_REF
                       && (ops[1].u.ref->item_type == MIR_import_item
+                          || ops[1].u.ref->item_type == MIR_export_item
+                          || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
       push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
                        insn);
