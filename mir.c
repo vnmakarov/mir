@@ -2840,7 +2840,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, old_reg, new_reg, temp_reg;
-  MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_label;
+  MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_insn, ret_label;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
   size_t func_insns_num, called_func_insns_num;
@@ -2941,11 +2941,11 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         /* should be the last insn after simplification */
         mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && call->ops[0].mode == MIR_OP_REF
                     && call->ops[0].u.ref->item_type == MIR_proto_item);
-        free (new_insn);
         mir_assert (called_func->nres == actual_nops);
+        ret_insn = new_insn;
         for (i = 0; i < actual_nops; i++) {
-          mir_assert (new_insn->ops[i].mode == MIR_OP_REG);
-          ret_reg = new_insn->ops[i].u.reg;
+          mir_assert (ret_insn->ops[i].mode == MIR_OP_REG);
+          ret_reg = ret_insn->ops[i].u.reg;
           new_insn = MIR_new_insn (ctx,
                                    res_types[i] == MIR_T_F
                                      ? MIR_FMOV
@@ -2955,6 +2955,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
                                    call->ops[i + 2], MIR_new_reg_op (ctx, ret_reg));
           MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
         }
+        free (ret_insn);
       }
     }
     redirect_duplicated_labels (ctx);
