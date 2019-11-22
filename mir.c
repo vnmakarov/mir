@@ -2857,7 +2857,10 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     next_func_insn = DLIST_NEXT (MIR_insn_t, func_insn);
     if (func_insn->code != MIR_INLINE) continue;
     call = func_insn;
-    mir_assert (call->ops[1].mode == MIR_OP_REF);
+    if (call->ops[1].mode != MIR_OP_REF) {
+      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      continue;
+    }
     called_func_item = call->ops[1].u.ref;
     while (called_func_item != NULL
            && (called_func_item->item_type == MIR_import_item
