@@ -2828,8 +2828,8 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 #define MIR_MAX_FUNC_INLINE_GROWTH 50
 #endif
 
-#ifndef MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE
-#define MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE MIR_MAX_INSNS_FOR_INLINE
+#ifndef MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE
+#define MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE MIR_MAX_INSNS_FOR_INLINE
 #endif
 
 /* Only simplified code should be inlined because we need already
@@ -2872,7 +2872,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
     if (called_func->vararg_p || called_func_insns_num > MIR_MAX_INSNS_FOR_INLINE
         || (called_func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * func_insns_num / 100
-            && func_insns_num > MIR_MAX_FUNC_SIZE_FOR_UNCONDITIONAL_INLINE)) {
+            && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
       MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
