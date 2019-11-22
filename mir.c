@@ -2847,6 +2847,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   char buff[50];
 
   mir_assert (func_item->item_type == MIR_func_item);
+  vn_empty (ctx);
   func = func_item->u.func;
   func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
   for (func_insn = DLIST_HEAD (MIR_insn_t, func->insns); func_insn != NULL;
