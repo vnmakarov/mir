@@ -2523,7 +2523,8 @@ void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
     MIR_simplify_op (ctx, func_item, insn, i, out_p, code,
-                     insn->code == MIR_INLINE && i == 1 && keep_ref_p, mem_float_p);
+                     (insn->code == MIR_INLINE || insn->code == MIR_CALL) && i == 1 && keep_ref_p,
+                     mem_float_p);
   }
 }
 
@@ -2738,7 +2739,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       insn->ops[1].u.i = overall_size;
       next_insn = DLIST_NEXT (MIR_insn_t, insn); /* to process the current and new insns */
     }
-    if (code == MIR_INLINE) inline_p = TRUE;
+    if (code == MIR_INLINE || code == MIR_CALL) inline_p = TRUE;
     if ((MIR_int_branch_code_p (code) || code == MIR_JMP) && insn->ops[0].mode == MIR_OP_LABEL
         && skip_labels (next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
       /* BR L|JMP L; <labels>L: => <labels>L: Also Remember signaling NAN*/
@@ -2824,6 +2825,10 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 #define MIR_MAX_INSNS_FOR_INLINE 200
 #endif
 
+#ifndef MIR_MAX_INSNS_FOR_CALL_INLINE
+#define MIR_MAX_INSNS_FOR_CALL_INLINE 50
+#endif
+
 #ifndef MIR_MAX_FUNC_INLINE_GROWTH
 #define MIR_MAX_FUNC_INLINE_GROWTH 50
 #endif
@@ -2855,7 +2860,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     inline_insns_before++;
     inline_insns_after++;
     next_func_insn = DLIST_NEXT (MIR_insn_t, func_insn);
-    if (func_insn->code != MIR_INLINE) continue;
+    if (func_insn->code != MIR_INLINE && func_insn->code != MIR_CALL) continue;
     call = func_insn;
     if (call->ops[1].mode != MIR_OP_REF) {
       MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
@@ -2873,7 +2878,9 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     }
     called_func = called_func_item->u.func;
     called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
-    if (called_func->vararg_p || called_func_insns_num > MIR_MAX_INSNS_FOR_INLINE
+    if (called_func->vararg_p
+        || called_func_insns_num > (func_insn->code == MIR_CALL ? MIR_MAX_INSNS_FOR_CALL_INLINE
+                                                                : MIR_MAX_INSNS_FOR_INLINE)
         || (called_func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * func_insns_num / 100
             && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
       MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
