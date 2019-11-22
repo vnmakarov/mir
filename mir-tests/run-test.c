@@ -50,6 +50,8 @@ int main (int argc, char *argv[]) {
   MIR_load_external (ctx, "abort", abort);
   MIR_load_external (ctx, "exit", exit);
   MIR_load_external (ctx, "printf", printf);
+  MIR_load_external (ctx, "malloc", malloc);
+  MIR_load_external (ctx, "free", free);
   if (interpr_p) {
     MIR_link (ctx, MIR_set_interp_interface, NULL);
     MIR_interp (ctx, main_func, &val, 0);
