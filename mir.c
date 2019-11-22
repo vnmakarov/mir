@@ -2898,7 +2898,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       VARR_PUSH_ARR (char, temp_string, var.name, strlen (var.name) + 1);
       new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, temp_string));
       set_inline_reg_map (ctx, old_reg, new_reg);
-      if (i < nargs) { /* Parameter passing */
+      if (i < nargs && call->nops > i + 2 + called_func->nres) { /* Parameter passing */
         new_insn
           = MIR_new_insn (ctx,
                           type == MIR_T_F
