@@ -184,12 +184,19 @@ c2mir-interp-test: c2m
 c2mir-gen-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
 
-c2mir-bootstrap-test: c2m b2ctab
-	$(Q) echo -n +++++++ C2MIR Bootstrap Test '(usually it takes about 10-20 sec) ... '
-	$(Q) ./c2m -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+c2mir-bootstrap-test: c2m
+	$(Q) echo -n +++++++ C2MIR Bootstrap Test '... '
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -el -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c 
+	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
+	$(Q) rm -rf 1.bmir a.bmir
+
+c2mir-bootstrap-test2: c2m b2ctab
+	$(Q) echo -n +++++++ C2MIR Bootstrap Test 2 '(usually it takes about 10-20 sec) ... '
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./b2ctab <1.bmir >mir-ctab
 	$(Q) $(CC) $(CFLAGS) -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
-	$(Q) ./a.out -bin -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
+	$(Q) ./a.out -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
