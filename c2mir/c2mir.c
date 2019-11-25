@@ -33,7 +33,10 @@
 #error "undefined or unsupported generation target for C"
 #endif
 
-static int debug_p, verbose_p, asm_p, no_prepro_p, prepro_only_p, syntax_only_p, pedantic_p;
+static int debug_p, verbose_p, asm_p, object_p;
+static int no_prepro_p, prepro_only_p, syntax_only_p, pedantic_p;
+static const char *output_file_name;
+static FILE *prepro_output_file; /* non-null for prepro_only_p */
 /* Dirs to search include files in "" and in <>.  End mark is NULL. */
 static const char **header_dirs, **system_header_dirs;
 
@@ -1569,8 +1572,6 @@ static token_t pptoken2token (token_t t, int id2kw_p) {
 /* It is a token based prerpocessor.
    It is input preprocessor tokens and output is (parser) tokens */
 
-static VARR (char) * temp_string;
-
 static void add_to_temp_string (const char *str) {
   size_t i, len;
 
@@ -3079,9 +3080,10 @@ static pos_t shouldbe_pre_pos, actual_pre_pos;
 
 static void pre_text_out (token_t t) { /* NULL means end of output */
   int i;
+  FILE *f = prepro_output_file;
 
   if (t == NULL && pre_last_token != NULL && pre_last_token->code == '\n') {
-    printf ("\n");
+    fprintf (f, "\n");
     return;
   }
   pre_last_token = t;
@@ -3091,21 +3093,21 @@ static void pre_text_out (token_t t) { /* NULL means end of output */
       || actual_pre_pos.lno != shouldbe_pre_pos.lno) {
     if (actual_pre_pos.fname == shouldbe_pre_pos.fname && actual_pre_pos.lno < shouldbe_pre_pos.lno
         && actual_pre_pos.lno + 4 >= shouldbe_pre_pos.lno) {
-      for (; actual_pre_pos.lno != shouldbe_pre_pos.lno; actual_pre_pos.lno++) printf ("\n");
+      for (; actual_pre_pos.lno != shouldbe_pre_pos.lno; actual_pre_pos.lno++) fprintf (f, "\n");
     } else {
-      if (pre_last_token != NULL) printf ("\n");
-      printf ("#line %d", shouldbe_pre_pos.lno);
+      if (pre_last_token != NULL) fprintf (f, "\n");
+      fprintf (f, "#line %d", shouldbe_pre_pos.lno);
       if (actual_pre_pos.fname != shouldbe_pre_pos.fname) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
-        printf (" %s", VARR_ADDR (char, temp_string));
+        fprintf (f, " %s", VARR_ADDR (char, temp_string));
       }
-      printf ("\n");
+      fprintf (f, "\n");
     }
-    for (i = 0; i < shouldbe_pre_pos.ln_pos - 1; i++) printf (" ");
+    for (i = 0; i < shouldbe_pre_pos.ln_pos - 1; i++) fprintf (f, " ");
     actual_pre_pos = shouldbe_pre_pos;
   }
-  printf ("%s", t->code == ' ' ? " " : t->repr);
+  fprintf (f, "%s", t->code == ' ' ? " " : t->repr);
 }
 
 static VARR (token_t) * recorded_tokens;
@@ -11591,7 +11593,9 @@ static void init_options (int argc, char *argv[],
                           int (*other_option_func) (int, int, char **, void *data), void *data) {
   const char *str;
 
-  debug_p = verbose_p = asm_p = no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
+  debug_p = verbose_p = asm_p = object_p = FALSE;
+  output_file_name = NULL;
+  no_prepro_p = prepro_only_p = syntax_only_p = pedantic_p = FALSE;
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
   for (int i = 1; i < argc; i++) {
@@ -11599,6 +11603,8 @@ static void init_options (int argc, char *argv[],
       verbose_p = debug_p = TRUE;
     } else if (strcmp (argv[i], "-S") == 0) {
       asm_p = TRUE;
+    } else if (strcmp (argv[i], "-c") == 0) {
+      object_p = TRUE;
     } else if (strcmp (argv[i], "-v") == 0) {
       verbose_p = TRUE;
     } else if (strcmp (argv[i], "-E") == 0) {
@@ -11609,6 +11615,11 @@ static void init_options (int argc, char *argv[],
       no_prepro_p = TRUE;
     } else if (strcmp (argv[i], "-pedantic") == 0) {
       pedantic_p = TRUE;
+    } else if (strcmp (argv[i], "-o") == 0) {
+      if (i + 1 >= argc)
+        fprintf (stderr, "-o without argument\n");
+      else
+        output_file_name = argv[++i];
     } else if (strncmp (argv[i], "-I", 2) == 0) {
       char *i_dir;
       const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
@@ -11719,6 +11730,9 @@ static void compile_init (int argc, char *argv[], int (*getc_func) (void),
 }
 
 #include <sys/time.h>
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 static double real_usec_time (void) {
   struct timeval tv;
@@ -11734,11 +11748,39 @@ static const char *get_module_name (void) {
   return str;
 }
 
+#define COMMAND_LINE_SOURCE_NAME "<command-line>"
+#define STDIN_SOURCE_NAME "<stdin>"
+
+static const char *get_base_name (const char *name, const char *suffix) {
+#ifdef _WIN32
+  const char *res = strrchr (name, '\\');
+#else
+  const char *res = strrchr (name, '/');
+#endif
+  if (res != NULL) name = res + 1;
+  VARR_TRUNC (char, temp_string, 0);
+  VARR_PUSH_ARR (char, temp_string, name,
+                 (res = strrchr (name, '.')) == NULL ? strlen (name) : res - name);
+  VARR_PUSH_ARR (char, temp_string, suffix, strlen (suffix) + 1); /* including zero byte */
+  return VARR_ADDR (char, temp_string);
+}
+
+static FILE *get_output_file (const char **base_name, const char *source_name, const char *suffix) {
+  FILE *f;
+
+  *base_name = get_base_name (source_name, suffix);
+  if ((f = fopen (*base_name, "wb")) != NULL) return f;
+  fprintf (stderr, "cannot create file %s\n", *base_name);
+  exit (1);  // ???
+}
+
 static int compile (const char *source_name) {
   double start_time = real_usec_time ();
   node_t r;
   unsigned n_error_before;
   MIR_module_t m;
+  const char *base_name;
+  FILE *f;
 
   if (verbose_p)
     fprintf (stderr, "compiler init end           -- %.0f usec\n", real_usec_time () - start_time);
@@ -11764,7 +11806,18 @@ static int compile (const char *source_name) {
           fprintf (stderr, "  context checker end -- %.0f usec\n", real_usec_time () - start_time);
         m = MIR_new_module (ctx, get_module_name ());
         gen_mir (r);
-        if (asm_p && n_errors == 0) MIR_output_module (ctx, stderr, m);
+        if ((asm_p || object_p) && n_errors == 0) {
+          if (strcmp (source_name, COMMAND_LINE_SOURCE_NAME) == 0) {
+            MIR_output_module (ctx, stderr, m);
+          } else {
+            f = get_output_file (&base_name, source_name, asm_p ? ".mir" : ".bmir");
+            (asm_p ? MIR_output_module : MIR_write_module) (ctx, f, m);
+            if (ferror (f) || fclose (f)) {
+              fprintf (stderr, "error in writing file %s\n", base_name);
+              n_errors++;
+            }
+          }
+        }
         MIR_finish_module (ctx);
         if (verbose_p)
           fprintf (stderr, "  generator end       -- %.0f usec\n", real_usec_time () - start_time);
@@ -11786,42 +11839,33 @@ static void compile_finish (void) {
   VARR_DESTROY (init_object_t, init_object_path);
 }
 
-/* ------------------------- Small test example ------------------------- */
 #ifndef C2MIR_NO_DRIVER
-static size_t curr_char;
-static const char *code;
+static size_t curr_char, code_len;
+static const uint8_t *code;
 
-static int t_getc (void) {
-  int c = code[curr_char];
-
-  if (c == 0)
-    c = EOF;
-  else
-    curr_char++;
-  return c;
-}
+static int t_getc (void) { return curr_char >= code_len ? EOF : code[curr_char++]; }
 
 static void t_ungetc (int c) {
   if (c == EOF) {
-    assert (code[curr_char] == 0);
+    assert (curr_char >= code_len);
   } else {
     assert (curr_char != 0 && code[curr_char - 1] == c);
     curr_char--;
   }
 }
 
-static const char *source_name;
-static VARR (char) * input;
-static int interp_exec_p, gen_exec_p, lazy_gen_exec_p, bin_p;
+DEF_VARR (uint8_t);
+
+static VARR (uint8_t) * input;
+static int interp_exec_p, gen_exec_p, lazy_gen_exec_p;
 static VARR (char_ptr_t) * exec_argv;
+static VARR (char_ptr_t) * source_file_names;
 
 static int other_option_func (int i, int argc, char *argv[], void *data) {
-  FILE *f = NULL;
   int c;
 
   if (strcmp (argv[i], "-i") == 0) {
-    f = stdin;
-    source_name = "<stdin>";
+    VARR_PUSH (char_ptr_t, source_file_names, STDIN_SOURCE_NAME);
   } else if (strcmp (argv[i], "-ei") == 0 || strcmp (argv[i], "-eg") == 0
              || strcmp (argv[i], "-el") == 0) {
     VARR_TRUNC (char_ptr_t, exec_argv, 0);
@@ -11833,28 +11877,15 @@ static int other_option_func (int i, int argc, char *argv[], void *data) {
       lazy_gen_exec_p = TRUE;
     VARR_PUSH (char_ptr_t, exec_argv, "c2m");
     for (i++; i < argc; i++) VARR_PUSH (char_ptr_t, exec_argv, argv[i]);
-  } else if (strcmp (argv[i], "-bin") == 0) {
-    bin_p = TRUE;
-  } else if (strcmp (argv[i], "-c") == 0 && i + 1 < argc) {
-    code = argv[++i];
-    source_name = "<command-line>";
+  } else if (strcmp (argv[i], "-s") == 0 && i + 1 < argc) {
+    code = (uint8_t *) argv[++i];
+    code_len = strlen ((char *) code);
   } else if (*argv[i] != '-') {
-    if ((*(int *) data)-- != 0) return i;
-    source_name = argv[i];
-    if ((f = fopen (argv[i], "r")) == NULL) {
-      error (no_pos, "can not open %s -- goodbye", argv[i]);
-      exit (1);
-    }
+    VARR_PUSH (char_ptr_t, source_file_names, argv[i]);
   } else {
     finish_options ();
     error (no_pos, "unknow command line option %s (use -h for usage) -- goodbye", argv[i]);
     exit (1);
-  }
-  if (f) {
-    while ((c = getc (f)) != EOF) VARR_PUSH (char, input, c);
-    VARR_PUSH (char, input, 0);
-    code = VARR_ADDR (char, input);
-    fclose (f);
   }
   return i;
 }
@@ -11898,6 +11929,7 @@ static void *import_resolver (const char *name) {
     if (strcmp (name, "dlopen") == 0) return dlopen;
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
+    if (strcmp (name, "stat") == 0) return stat;
     fprintf (stderr, "can not load symbol %s\n", name);
     close_libs ();
     exit (1);
@@ -11905,32 +11937,129 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
+static int read_func (MIR_context_t ctx) { return t_getc (); }
+
 int main (int argc, char *argv[], char *env[]) {
-  int i, n, ret_code;
+  int i, ret_code;
+  size_t len;
+  const char *source_name;
 
   interp_exec_p = gen_exec_p = lazy_gen_exec_p = FALSE;
-  VARR_CREATE (char, input, 100);
+  VARR_CREATE (uint8_t, input, 100);
+  VARR_CREATE (char_ptr_t, source_file_names, 32);
   VARR_CREATE (char_ptr_t, exec_argv, 32);
   ctx = MIR_init ();
   c2mir_init ();
+  prepro_output_file = NULL;
   for (i = curr_module_num = ret_code = 0;; i++, curr_module_num++) {
     code = NULL;
     source_name = NULL;
     curr_char = 0;
-    n = i;
-    VARR_TRUNC (char, input, 0);
-    compile_init (argc, argv, t_getc, t_ungetc, other_option_func, &n);
-    if (i == 0 && code == NULL) {
-      fprintf (stderr, "No source file is given -- good bye.\n");
+    VARR_TRUNC (uint8_t, input, 0);
+    VARR_TRUNC (char_ptr_t, source_file_names, 0);
+    compile_init (argc, argv, t_getc, t_ungetc, other_option_func, NULL);
+    if (i == 0) {
+      if (code == NULL && VARR_LENGTH (char_ptr_t, source_file_names) == 0) {
+        fprintf (stderr, "No source file is given -- good bye.\n");
+        exit (1);
+      }
+      if (code != NULL && VARR_LENGTH (char_ptr_t, source_file_names) > 0) {
+        fprintf (stderr, "-s and other sources on the command line -- good bye.\n");
+        exit (1);
+      }
+      for (size_t j = 0; j < VARR_LENGTH (char_ptr_t, source_file_names); j++)
+        if (strcmp (VARR_GET (char_ptr_t, source_file_names, j), STDIN_SOURCE_NAME) == 0
+            && VARR_LENGTH (char_ptr_t, source_file_names) > 1) {
+          fprintf (stderr, "-i and sources on the command line -- good bye.\n");
+          exit (1);
+        }
+      if (output_file_name == NULL && prepro_only_p) {
+        prepro_output_file = stdout;
+      } else if (output_file_name != NULL) {
+#if defined(__unix__) || defined(__APPLE__)
+        if (VARR_LENGTH (char_ptr_t, source_file_names) == 1) {
+          source_name = VARR_GET (char_ptr_t, source_file_names, 0);
+          if (strcmp (source_name, STDIN_SOURCE_NAME) != 0) {
+            struct stat stat1, stat2;
+
+            stat (source_name, &stat1);
+            stat (output_file_name, &stat2);
+            if (stat1.st_dev == stat2.st_dev && stat1.st_ino == stat2.st_ino) {
+              fprintf (stderr, "-o %s will rewrite input source file %s -- good bye.\n",
+                       output_file_name, source_name);
+              exit (1);
+            }
+          }
+        }
+#endif
+        if (prepro_only_p) {
+          if (output_file_name != NULL
+              && (prepro_output_file = fopen (output_file_name, "wb")) == NULL) {
+            fprintf (stderr, "cannot create file %s -- good bye.\n", output_file_name);
+            exit (1);
+          }
+        } else if ((asm_p || object_p) && VARR_LENGTH (char_ptr_t, source_file_names) > 1) {
+          fprintf (stderr, "-S or -c with -o for multiple files -- good bye.\n");
+          exit (1);
+        }
+      }
+    }
+    if (code != NULL) { /* command line script: */
+      if (i > 0) break;
+      source_name = COMMAND_LINE_SOURCE_NAME;
+    } else if (code == NULL) { /* stdin input or files give on the command line: */
+      int c;
+      FILE *f;
+
+      if (i >= VARR_LENGTH (char_ptr_t, source_file_names)) break;
+      source_name = VARR_GET (char_ptr_t, source_file_names, i);
+      if (strcmp (source_name, STDIN_SOURCE_NAME) == 0) {
+        f = stdin;
+      } else if ((f = fopen (source_name, "r")) == NULL) {
+        error (no_pos, "can not open %s -- goodbye", source_name);
+        exit (1);
+      }
+      while ((c = getc (f)) != EOF) VARR_PUSH (uint8_t, input, c);
+      code_len = VARR_LENGTH (uint8_t, input);
+      VARR_PUSH (uint8_t, input, 0);
+      code = VARR_ADDR (uint8_t, input);
+      fclose (f);
+    }
+    assert (source_name != NULL);
+    len = strlen (source_name);
+    if (len >= 5 && strcmp (source_name + len - 5, ".bmir") == 0) {
+      MIR_read_with_func (ctx, read_func);
+    } else if (len >= 4 && strcmp (source_name + len - 4, ".mir") == 0) {
+      DLIST (MIR_module_t) *mlist = MIR_get_module_list (ctx);
+      MIR_module_t m, last_m = DLIST_TAIL (MIR_module_t, *mlist);
+      const char *base_name;
+      FILE *f;
+
+      code_len++; /* include zero byte */
+      MIR_scan_string (ctx, (char *) code);
+      if (!asm_p && !prepro_only_p && !syntax_only_p && object_p) {
+        f = get_output_file (&base_name, source_name, ".bmir");
+        for (m = last_m == NULL ? DLIST_HEAD (MIR_module_t, *mlist)
+                                : DLIST_NEXT (MIR_module_t, last_m);
+             m != NULL; m = DLIST_NEXT (MIR_module_t, m))
+          MIR_write_module (ctx, f, m);
+        if (ferror (f) || fclose (f)) {
+          fprintf (stderr, "error in writing file %s\n", base_name);
+          ret_code = 1;
+        }
+      }
+    } else if (!compile (source_name)) {
       ret_code = 1;
     }
-    if (code == NULL) break;
-    assert (source_name != NULL);
-    if (!compile (source_name)) ret_code = 1;
     compile_finish ();
   }
-  if (ret_code == 0 && !prepro_only_p
-      && (bin_p || interp_exec_p || gen_exec_p || lazy_gen_exec_p)) {
+  if (prepro_output_file != NULL
+      && (ferror (prepro_output_file)
+          || (prepro_output_file != stdout && fclose (prepro_output_file)))) {
+    fprintf (stderr, "error in writing to file %s\n", output_file_name);
+    ret_code = 1;
+  }
+  if (ret_code == 0 && !prepro_only_p && !syntax_only_p && !asm_p && !object_p) {
     MIR_val_t val;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
@@ -11946,18 +12075,20 @@ int main (int argc, char *argv[], char *env[]) {
       MIR_load_module (ctx, module);
     }
     if (main_func == NULL) {
-      fprintf (stderr, "cannot execute program w/o main function\n");
+      fprintf (stderr, "cannot link program w/o main function\n");
       ret_code = 1;
-    } else if (bin_p) {
-      FILE *f = fopen ("a.bmir", "wb");
+    } else if (!interp_exec_p && !gen_exec_p && !lazy_gen_exec_p) {
+      const char *file_name = output_file_name == NULL ? "a.bmir" : output_file_name;
+      FILE *f = fopen (file_name, "wb");
+
       if (f == NULL) {
-        fprintf (stderr, "cannot open file a.bmir\n");
+        fprintf (stderr, "cannot open file %s\n", file_name);
         ret_code = 1;
       } else {
         start_time = real_usec_time ();
         MIR_write (ctx, f);
         if (ferror (f) || fclose (f)) {
-          fprintf (stderr, "error in writing file a.bmir\n");
+          fprintf (stderr, "error in writing file %s\n", file_name);
           ret_code = 1;
         } else if (verbose_p) {
           fprintf (stderr, "binary output      -- %.0f msec\n",
@@ -12002,8 +12133,9 @@ int main (int argc, char *argv[], char *env[]) {
   MIR_finish (ctx);
   close_libs ();
   c2mir_finish ();
+  VARR_DESTROY (char_ptr_t, source_file_names);
   VARR_DESTROY (char_ptr_t, exec_argv);
-  VARR_DESTROY (char, input);
+  VARR_DESTROY (uint8_t, input);
   return ret_code;
 }
 #endif
