@@ -275,7 +275,7 @@ ex100:    func v, 0
     | execution [2]  | **1.0** (3.1s)   | 5.9 (18.3s)     | **0.94** (2.9s)  |  2.05 (6.34s)   |
     | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
     | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [5]        | **1.0** (14.0K)  | 0.54 (7.5K)     | **106** (1480K)  |  106 (1480K)    |
+    | LOC [5]        | **1.0** (15.0K)  | 0.53 (8K)       | **99** (1480K)   |  99  (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and with
    using memory file system for GCC) 100 times
@@ -295,7 +295,7 @@ ex100:    func v, 0
   * [**QBE**](https://github.com/8l/qbe):
     * It is small (10K C lines)
     * It uses SSA based IR (kind of simplified LLVM IR)
-    * It has the same optimizations as MIR-generator plus aliasing and loop analysis for better RA but QBE has no inlining
+    * It has the same optimizations as MIR-generator plus aliasing but QBE has no inlining
     * It generates assembler code which makes QBE 30 slower in machine code generation than MIR-generator
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
