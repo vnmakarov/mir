@@ -3662,12 +3662,12 @@ static size_t write_module (MIR_context_t ctx, writer_func_t writer, MIR_module_
   return len;
 }
 
-static size_t write_modules (MIR_context_t ctx, writer_func_t writer) {
+static size_t write_modules (MIR_context_t ctx, writer_func_t writer, MIR_module_t module) {
   size_t len = 0;
 
-  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules); module != NULL;
-       module = DLIST_NEXT (MIR_module_t, module))
-    len += write_module (ctx, writer, module);
+  for (MIR_module_t m = DLIST_HEAD (MIR_module_t, all_modules); m != NULL;
+       m = DLIST_NEXT (MIR_module_t, m))
+    if (module == NULL || m == module) len += write_module (ctx, writer, m);
   return len;
 }
 
@@ -3680,7 +3680,8 @@ static size_t reduce_writer (const void *start, size_t len, void *aux_data) {
   return n;
 }
 
-void MIR_write_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t, uint8_t)) {
+void MIR_write_module_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t, uint8_t),
+                                 MIR_module_t module) {
   size_t len, str_len;
 
   io_writer = writer;
@@ -3691,7 +3692,7 @@ void MIR_write_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t,
   output_insns_len = output_labs_len = 0;
   output_regs_len = output_mem_len = output_int_len = output_float_len = 0;
   string_init (&output_strings, &output_string_tab);
-  write_modules (ctx, NULL); /* store strings */
+  write_modules (ctx, NULL, module); /* store strings */
   len = write_uint (ctx, reduce_writer, CURR_BIN_VERSION);
   str_len = write_uint (ctx, reduce_writer, VARR_LENGTH (string_t, output_strings) - 1);
   for (size_t i = 1; i < VARR_LENGTH (string_t, output_strings); i++) { /* output strings */
@@ -3703,7 +3704,7 @@ void MIR_write_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t,
       str_len++;
     }
   }
-  len += write_modules (ctx, reduce_writer) + str_len;
+  len += write_modules (ctx, reduce_writer, module) + str_len;
 #if 0
   fprintf (stderr,
            "Overall output length = %lu.  Number of strings = %lu.\n"
@@ -3720,12 +3721,18 @@ void MIR_write_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t,
 #endif
 }
 
+void MIR_write_with_func (MIR_context_t ctx, const int (*writer) (MIR_context_t, uint8_t)) {
+  MIR_write_module_with_func (ctx, writer, NULL);
+}
+
 static int file_writer (MIR_context_t ctx, uint8_t byte) { return fputc (byte, io_file); }
 
-void MIR_write (MIR_context_t ctx, FILE *f) {
+void MIR_write_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
   io_file = f;
-  MIR_write_with_func (ctx, file_writer);
+  MIR_write_module_with_func (ctx, file_writer, module);
 }
+
+void MIR_write (MIR_context_t ctx, FILE *f) { MIR_write_module (ctx, f, NULL); }
 
 /* New Page */
 

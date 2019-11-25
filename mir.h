@@ -489,10 +489,13 @@ extern void MIR_output (MIR_context_t ctx, FILE *f);
 
 #if !MIR_NO_IO
 extern void MIR_write (MIR_context_t ctx, FILE *f);
+extern void MIR_write_module (MIR_context_t ctx, FILE *f, MIR_module_t module);
 extern void MIR_read (MIR_context_t ctx, FILE *f);
-
 extern void MIR_write_with_func (MIR_context_t ctx,
                                  const int (*writer_func) (MIR_context_t, uint8_t));
+extern void MIR_write_module_with_func (MIR_context_t ctx,
+                                        const int (*writer_func) (MIR_context_t, uint8_t),
+                                        MIR_module_t module);
 extern void MIR_read_with_func (MIR_context_t ctx, const int (*reader_func) (MIR_context_t));
 #endif
 
