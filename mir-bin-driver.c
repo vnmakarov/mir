@@ -16,6 +16,9 @@ static int read_byte (MIR_context_t ctx) {
 }
 
 #include <dlfcn.h>
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/stat.h>
+#endif
 
 static struct lib {
   char *name;
@@ -42,6 +45,9 @@ static void *import_resolver (const char *name) {
   if (strcmp (name, "dlopen") == 0) return dlopen;
   if (strcmp (name, "dlsym") == 0) return dlsym;
   if (strcmp (name, "dlclose") == 0) return dlclose;
+#if defined(__unix__) || defined(__APPLE__)
+  if (strcmp (name, "stat") == 0) return stat;
+#endif
   for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++) {
     if ((sym = dlsym (libs[i].handler, name)) != NULL) break;
   }
@@ -125,7 +131,7 @@ int main (int argc, char *argv[], char *env[]) {
                 (MIR_val_t){.a = (void *) env});
 #if MIR_BIN_DEBUG
     fprintf (stderr, "Finish of execution -- overall execution time %.0f usec\n",
-	     real_usec_time () - start_time);
+             real_usec_time () - start_time);
 #endif
     exit_code = val.i;
   } else {
@@ -147,10 +153,10 @@ int main (int argc, char *argv[], char *env[]) {
     exit_code = fun_addr (argc, argv, env);
 #if MIR_BIN_DEBUG
     fprintf (stderr,
-	     (MIR_USE_GEN
-              ? "Finish of execution -- overall execution time %.0f usec\n"
-              : "Finish of generation and execution -- overall execution time %.0f usec\n"),
-	     real_usec_time () - start_time);
+             (MIR_USE_GEN
+                ? "Finish of execution -- overall execution time %.0f usec\n"
+                : "Finish of generation and execution -- overall execution time %.0f usec\n"),
+             real_usec_time () - start_time);
 #endif
     MIR_gen_finish (ctx);
   }
