@@ -4034,14 +4034,13 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       }
       new_insn = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
       MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
-      if (!insn_ok_p (ctx, new_insn)) {
-        MIR_remove_insn (ctx, curr_func_item, new_insn);
-      } else {
-        MIR_remove_insn (ctx, curr_func_item, insn);
-        new_insn->data = bb_insn;
-        bb_insn->insn = new_insn;
-        insn = new_insn;
+      if (insn_ok_p (ctx, new_insn)) {
+        insn->code = new_insn->code;
+        insn->ops[0] = new_insn->ops[0];
+        insn->ops[1] = new_insn->ops[1];
+        insn->ops[2] = new_insn->ops[2];
       }
+      MIR_remove_insn (ctx, curr_func_item, new_insn);
       insn_hr_change_p = TRUE;
     }
     if (insn_hr_change_p) {
