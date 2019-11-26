@@ -292,7 +292,7 @@ ex100:    func v, 0
 
 ## MIR project competitors
   * I only see three projects which could be considered or adapted as real universal light-weight JIT competitors
-  * [**QBE**](https://github.com/8l/qbe):
+  * [**QBE**](https://c9x.me/compile/):
     * It is small (10K C lines)
     * It uses SSA based IR (kind of simplified LLVM IR)
     * It has the same optimizations as MIR-generator plus aliasing but QBE has no inlining
