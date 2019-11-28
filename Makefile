@@ -246,12 +246,12 @@ realclean: clean
 
 sloc:
 	@echo -n 'C2MIR: ' && wc -l c2mir/c2mir.c | awk '{last=$$1} END {print last}'
-	@echo -n 'ADT: ' && wc -l mir-bitmap.h mir-mp.h | awk '{last=$$1} END {print last}'
+	@echo -n 'ADT: ' && wc -l mir-dlist.h mir-hash.h mir-htab.h mir-varr.h mir-reduce.h mir-bitmap.h mir-mp.h | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR API: ' && wc -l mir.[ch] | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR Interpreter: ' && wc -l mir-interp.c | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR Generator: ' && wc -l mir-gen.[ch] | awk '{last=$$1} END {print last}'
 	@echo -n 'Machine dependent code: ' && wc -l mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
-	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c mir-bitmap.h mir-mp.h mir.[ch] mir-interp.c mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
+	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c mir-dlist.h mir-hash.h mir-htab.h mir-varr.h mir-reduce.h mir-bitmap.h mir-mp.h mir.[ch] mir-interp.c mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
 
 gcc-test:
 	$(SHELL) c-tests/runtests.sh c-tests/use-gcc
