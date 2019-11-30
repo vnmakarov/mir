@@ -18,8 +18,8 @@ mir.o: mir.c $(MIR_DEPS)
 mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -D$(TARGET) -o $@ $<
 
-c2m: mir.o mir-gen.o c2mir/c2mir.c
-	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.o c2mir/c2mir.c mir.o -ldl -o $@
+c2m: mir.o mir-gen.o c2mir/c2mir.h c2mir/c2mir.c c2mir/c2mir-driver.c
+	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o -ldl -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
@@ -186,22 +186,22 @@ c2mir-gen-test: c2m
 
 c2mir-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test '... '
-	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -el -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c 
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -el -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c 
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test2: c2m b2ctab
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test 2 '(usually it takes about 10-20 sec) ... '
-	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./b2ctab <1.bmir >mir-ctab
 	$(Q) $(CC) $(CFLAGS) -D$(TARGET) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -ldl
-	$(Q) ./a.out -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c
+	$(Q) ./a.out -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-sieve-bench:
-	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c mir.c -ldl && ./a.out -v sieve.c -eg && size ./a.out
+	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -ldl && ./a.out -v sieve.c -eg && size ./a.out
 
 c2mir-bench: c2m
 	$(SHELL) c-benchmarks/run-benchmarks.sh
