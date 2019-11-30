@@ -175,7 +175,7 @@ readme-example-test:
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
-	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c -ldl && ./a.out -S -v sieve.c -ei
+	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -ldl && ./a.out -v sieve.c -ei
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-bootstrap-test
 
