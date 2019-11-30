@@ -13,8 +13,15 @@
 
   ![C to MIR](c2mir.svg)
 
-## How to use C to MIR compiler
-  * The compiler has options `-E`, `-c`, `-S`, and `-o` as other C compilers:
+  C to MIR compiler can be use as a library to make it as a part of
+  your code.  The compiler can be used as a separate program as usual C
+  compiler.
+  
+## C to MIR compiler as usual C compiler
+  The project makefile builds program `c2m` which can compile C and
+  MIR files given on the command line and produce MIR code or execute
+  it:
+  * The compiler `c2m` has options `-E`, `-c`, `-S`, and `-o` as other C compilers:
     * `-E` stops the compiler after preprocessing and output the
       preprocessed file into standard output or into file given after
       option `-o`
@@ -65,6 +72,38 @@
 	c2m part1.c part2.c -eg                                          # variant 3
 ```
 
+## C to MIR compiler as a library
+  The compiler can be used as a library and can be made a part of your
+  program.  It can take C code from a file or memory. The all compiler
+  code is contained in file `c2mir.c`. Its interface is described in
+  file `c2mir.h`:
+  * Function `c2mir_init (MIR_context ctx)` initializes the compiler to generate MIR code in context `ctx`
+  * Function `c2mir_finish (MIR_context ctx)` finishes the compiler to
+    work in context `ctx`.  It frees some common memory used by the compiler
+    worked in context `ctx`
+  * Function `c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
+                             void (*ungetc_func) (int), const char *source_name, FILE *output_file)`
+    compiles one C code file.  Function returns zero in case of
+    successful compilation. It frees all memory used to compile the
+    file.  So you can compile a lot of files in the same context
+    without program memory growth.  Functions `getc_func` and
+    `ungetc_func` provide access to the compiled C code which can be
+    in a file or memory.  Name of the source file used for diagnostic
+    is given by parameter `source_name`.  Parameter `output_file` is
+    analogous to one given by option `-o` of `c2m`.  Parameter ops is
+    a pointer to a structure defining the compiler options:
+    * Member `message_file` defines where to report errors and
+      warnings.  If its value is NULL, there will be no any output
+    * Members `macro_commands_num` and `macro_commands` direct compiler as options `-D` and `-U` of `c2m`
+    * Members `include_dirs_num` and `include_dirs` direct compiler as options `-I`
+    * Members `debug_p`, `verbose_p`, `no_prepro_p`, `prepro_only_p`,
+      `syntax_only_p`, `pedantic_p`, `asm_p`, and `object_p` direct
+      the compiler as options `-d`, `-v`, `-fpreprocessed`, `-E`,
+      `-fsyntax-only`, `-pedantic`, `-S`, and `-c` of `c2m`.  If all values of `prepro_only_p`,
+      `syntax_only_p`, `asm_p`, and `object_p are zero, there will be no output files, only
+      the generated MIR module will be kept in memory of the context `ctx`
+    * Member `module_num` defines index in the generated MIR module name (if there is any)
+    
 ## Current state C to MIR compiler
   * **On Oct 25 we achieved a successful bootstrap**
     * `c2m` compiles own sources and generate binary MIR, this binary
