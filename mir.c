@@ -15,6 +15,7 @@ DEF_VARR (char);
 DEF_VARR (uint8_t);
 
 struct gen_ctx;
+struct c2mir_ctx;
 struct string_ctx;
 struct reg_ctx;
 struct simplify_ctx;
@@ -24,7 +25,8 @@ struct scan_ctx;
 struct interp_ctx;
 
 struct MIR_context {
-  struct gen_ctx *gen_ctx; /* should be the 1st member */
+  struct gen_ctx *gen_ctx;     /* should be the 1st member */
+  struct c2mir_ctx *c2mir_ctx; /* should be the 2nd member */
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) * temp_insns, *temp_insns2;
   VARR (MIR_op_t) * temp_insn_ops;

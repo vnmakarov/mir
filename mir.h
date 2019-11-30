@@ -509,7 +509,7 @@ extern void MIR_load_external (MIR_context_t ctx, const char *name, void *addr);
 extern void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_item_t item),
                       void *(*import_resolver) (const char *) );
 
-/* Interpreters: */
+/* Interpreter: */
 typedef union {
   MIR_insn_code_t ic;
   void *a;
@@ -528,6 +528,7 @@ extern void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_va
                                  size_t nargs, MIR_val_t *vals, va_list va);
 extern void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item);
 
+/* Private: */
 extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
