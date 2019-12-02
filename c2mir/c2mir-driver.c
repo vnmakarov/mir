@@ -151,7 +151,13 @@ static int fancy_printf (const char *fmt, ...) { abort (); }
 static struct lib {
   char *name;
   void *handler;
-} libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
+} libs[] = {
+#ifdef __GLIBC__
+  {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}
+#else
+  {"/lib/libc.so", NULL},
+#endif
+};
 
 static void close_libs (void) {
   for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++)
