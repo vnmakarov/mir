@@ -367,7 +367,11 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
   }
   case MIR_RET:
     fprintf (f, "return ");
-    out_op (ctx, f, ops[0]);
+    if (insn->nops > 1) {
+      fprintf (stderr, "return with multiple values is not implemented\n");
+      exit (1);
+    }
+    if (insn->nops != 0) out_op (ctx, f, ops[0]);
     fprintf (f, ";\n");
     break;
   case MIR_LABEL:
