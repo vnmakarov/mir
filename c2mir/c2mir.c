@@ -929,15 +929,18 @@ static int get_line (c2m_ctx_t c2m_ctx) { /* translation phase 1 and 2 */
 }
 
 static int cs_get (c2m_ctx_t c2m_ctx) {
+  size_t len = VARR_LENGTH (char, cs->ln);
+  
   for (;;) {
-    if (VARR_LENGTH (char, cs->ln) == 2 && VARR_GET (char, cs->ln, 1) == '\\') {
+    if (len == 2 && VARR_GET (char, cs->ln, 1) == '\\') {
       assert (VARR_GET (char, cs->ln, 0) == '\n');
-    } else if (VARR_LENGTH (char, cs->ln) > 0) {
+    } else if (len > 0) {
       cs->pos.ln_pos++;
       return VARR_POP (char, cs->ln);
     }
     if (cs->fname == NULL || !get_line (c2m_ctx)) return EOF;
-    assert (VARR_LENGTH (char, cs->ln) > 0);
+    len = VARR_LENGTH (char, cs->ln);
+    assert (len > 0);
     cs->pos.ln_pos = 0;
     cs->pos.lno++;
   }
