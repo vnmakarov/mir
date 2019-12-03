@@ -466,7 +466,7 @@ void MIR_module2c (MIR_context_t ctx, FILE *f, MIR_module_t m) {
 }
 
 /* ------------------------- Small test example ------------------------- */
-#ifdef TEST_MIR2C
+#if defined(TEST_MIR2C)
 
 #include "mir-tests/scan-sieve.h"
 #include "mir-tests/scan-hi.h"
@@ -480,6 +480,43 @@ int main (int argc, const char *argv[]) {
   m = create_hi_module (ctx);
   MIR_module2c (ctx, stdout, m);
   MIR_finish (ctx);
+  return 0;
+}
+#elif defined(MIR2C)
+
+DEF_VARR (char);
+
+int main (int argc, const char *argv[]) {
+  int c;
+  FILE *f;
+  VARR (char) * input;
+  MIR_module_t m;
+  MIR_context_t ctx = MIR_init ();
+
+  if (argc == 1)
+    f = stdin;
+  else if (argc == 2) {
+    if ((f = fopen (argv[1], "r")) == NULL) {
+      fprintf (stderr, "%s: cannot open file %s\n", argv[0], argv[1]);
+      exit (1);
+    }
+  } else {
+    fprintf (stderr, "usage: %s < file or %s mir-file\n", argv[0], argv[0]);
+    exit (1);
+  }
+  VARR_CREATE (char, input, 0);
+  while ((c = getc (f)) != EOF) VARR_PUSH (char, input, c);
+  VARR_PUSH (char, input, 0);
+  if (ferror (f)) {
+    fprintf (stderr, "%s: error in reading input file\n", argv[0]);
+    exit (1);
+  }
+  fclose (f);
+  MIR_scan_string (ctx, VARR_ADDR (char, input));
+  m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+  MIR_module2c (ctx, stdout, m);
+  MIR_finish (ctx);
+  VARR_DESTROY (char, input);
   return 0;
 }
 #endif
