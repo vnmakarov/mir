@@ -13,7 +13,7 @@
 
   ![C to MIR](c2mir.svg)
 
-  C to MIR compiler can be use as a library to make it as a part of
+  C to MIR compiler can be used as a library to make it as a part of
   your code.  The compiler can be used as a separate program as usual C
   compiler.
   
