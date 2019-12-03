@@ -1677,7 +1677,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
         fprintf (options->message_file, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
       error (c2m_ctx, t->pos, "wrong number: %s", t->repr);
     } else if (errno) {
-      error (c2m_ctx, t->pos, "number %s is out of range", t->repr);
+      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range", t->repr);
     }
   }
   return t;
