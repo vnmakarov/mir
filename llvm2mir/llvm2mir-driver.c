@@ -60,34 +60,23 @@ static double llvm_fabs_f64 (double v) { return fabs (v); }
 static struct lib {
   char *name;
   void *handler;
-} libs[] = {
-#ifdef __GLIBC__
-  {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}
-#else
-  {"/lib/libc.so", NULL},
-#endif
-};
+} std_libs[] = { {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL} };
 
 static void close_libs (void) {
-  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++)
-    if (libs[i].handler != NULL) dlclose (libs[i].handler);
+  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+    if (std_libs[i].handler != NULL) dlclose (std_libs[i].handler);
 }
 
 static void open_libs (void) {
-  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++)
-    if ((libs[i].handler = dlopen (libs[i].name, RTLD_LAZY)) == NULL) {
-      fprintf (stderr, "can not open lib %s\n", libs[i].name);
-      close_libs ();
-      exit (1);
-    }
+  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+    std_libs[i].handler = dlopen (std_libs[i].name, RTLD_LAZY);
 }
 
 static void *import_resolver (const char *name) {
   void *sym = NULL;
 
-  for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++) {
-    if ((sym = dlsym (libs[i].handler, name)) != NULL) break;
-  }
+  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+    if (std_libs[i].handler != NULL && (sym = dlsym (std_libs[i].handler, name)) != NULL) break;
   if (sym == NULL) {
     fprintf (stderr, "can not load symbol %s\n", name);
     close_libs ();
