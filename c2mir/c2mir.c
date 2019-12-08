@@ -930,7 +930,7 @@ static int get_line (c2m_ctx_t c2m_ctx) { /* translation phase 1 and 2 */
 
 static int cs_get (c2m_ctx_t c2m_ctx) {
   size_t len = VARR_LENGTH (char, cs->ln);
-  
+
   for (;;) {
     if (len == 2 && VARR_GET (char, cs->ln, 1) == '\\') {
       assert (VARR_GET (char, cs->ln, 0) == '\n');
@@ -1677,7 +1677,8 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
         fprintf (options->message_file, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
       error (c2m_ctx, t->pos, "wrong number: %s", t->repr);
     } else if (errno) {
-      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range", t->repr);
+      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
+                                               t->repr);
     }
   }
   return t;
@@ -6600,6 +6601,7 @@ static int update_path_and_do (c2m_ctx_t c2m_ctx,
                                pos_t pos, const char *detail) {
   init_object_t init_object;
   mir_llong index;
+  struct type *el_type;
   struct expr *value_expr = value->attr;
 
   if (!update_init_object_path (c2m_ctx, mark, value_expr == NULL ? NULL : value_expr->type,
@@ -6609,8 +6611,12 @@ static int update_path_and_do (c2m_ctx_t c2m_ctx,
   }
   init_object = VARR_LAST (init_object_t, init_object_path);
   if (init_object.container_type->mode == TM_ARR) {
-    action (c2m_ctx, NULL, &init_object.container_type->u.arr_type->el_type, value, const_only_p,
-            FALSE);
+    el_type = init_object.container_type->u.arr_type->el_type;
+    action (c2m_ctx, NULL,
+            (value->code == N_STR && char_type_p (el_type)
+               ? &init_object.container_type
+               : &init_object.container_type->u.arr_type->el_type),
+            value, const_only_p, FALSE);
   } else if (init_object.container_type->mode == TM_STRUCT
              || init_object.container_type->mode == TM_UNION) {
     action (c2m_ctx, (decl_t) init_object.u.curr_member->attr,
