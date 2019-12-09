@@ -1112,9 +1112,14 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       case '*':
         if (comment_char < 0) goto end_ws;
         if (comment_char != '*') break;
-        VARR_PUSH (char, symbol_text, '*');
         curr_c = cs_get (c2m_ctx);
-        if (curr_c == '/') comment_char = -1;
+        if (curr_c == '/') {
+          comment_char = -1;
+          VARR_PUSH (char, symbol_text, '*');
+        } else {
+          cs_unget (c2m_ctx, curr_c);
+          curr_c = '*';
+        }
         break;
       default:
         if (comment_char < 0) goto end_ws;
