@@ -82,12 +82,12 @@
     work in context `ctx`.  It frees some common memory used by the compiler
     worked in context `ctx`
   * Function `c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                             void (*ungetc_func) (int), const char *source_name, FILE *output_file)`
+                             const char *source_name, FILE *output_file)`
     compiles one C code file.  Function returns zero in case of
     successful compilation. It frees all memory used to compile the
     file.  So you can compile a lot of files in the same context
-    without program memory growth.  Functions `getc_func` and
-    `ungetc_func` provide access to the compiled C code which can be
+    without program memory growth.  Function `getc_func` provides
+    access to the compiled C code which can be
     in a file or memory.  Name of the source file used for diagnostic
     is given by parameter `source_name`.  Parameter `output_file` is
     analogous to one given by option `-o` of `c2m`.  Parameter ops is
