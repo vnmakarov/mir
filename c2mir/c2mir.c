@@ -49,12 +49,16 @@ typedef struct pos {
 
 static const pos_t no_pos = {NULL, -1, -1};
 
+typedef struct c2m_ctx *c2m_ctx_t;
+
 typedef struct stream {
-  FILE *f;                        /* the current file, NULL for top level file */
-  const char *fname;              /* NULL only for sting stream */
+  FILE *f;                        /* the current file, NULL for top-level or string stream */
+  const char *fname;              /* NULL only for preprocessor string stream */
+  int (*getc_func) (c2m_ctx_t);   /* get function for top-level or string stream */
   VARR (char) * ln;               /* stream current line in reverse order */
   pos_t pos;                      /* includes file name used for reports */
-  fpos_t fpos;                    /* file pos to resume stream */
+  fpos_t fpos;                    /* file pos to resume file stream */
+  const char *start, *curr;       /* non NULL only for string stream  */
   int ifs_length_at_stream_start; /* length of ifs at the stream start */
 } * stream_t;
 
@@ -109,7 +113,6 @@ struct parse_ctx;
 struct check_ctx;
 struct gen_ctx;
 
-typedef struct c2m_ctx *c2m_ctx_t;
 struct c2m_ctx {
   jmp_buf env;
   struct c2mir_options *options;
@@ -124,8 +127,7 @@ struct c2m_ctx {
   HTAB (str_t) * str_key_tab;
   str_t empty_str;
   unsigned long curr_uid;
-  int (*c_getc) (void);
-  void (*c_ungetc) (int c);
+  int (*c_getc) (void); /* c2mir interface get function */
   unsigned n_errors, n_warnings;
   VARR (char) * symbol_text, *temp_string;
   VARR (token_t) * recorded_tokens, *buffered_tokens;
@@ -157,7 +159,6 @@ typedef struct c2m_ctx *c2m_ctx_t;
 #define empty_str c2m_ctx->empty_str
 #define curr_uid c2m_ctx->curr_uid
 #define c_getc c2m_ctx->c_getc
-#define c_ungetc c2m_ctx->c_ungetc
 #define n_errors c2m_ctx->n_errors
 #define n_warnings c2m_ctx->n_warnings
 #define symbol_text c2m_ctx->symbol_text
@@ -836,7 +837,7 @@ static void finish_streams (c2m_ctx_t c2m_ctx) {
   VARR_DESTROY (stream_t, streams);
 }
 
-static stream_t new_stream (FILE *f, const char *fname) {
+static stream_t new_stream (FILE *f, const char *fname, int (*getc_func) (c2m_ctx_t)) {
   stream_t s = malloc (sizeof (struct stream));
 
   VARR_CREATE (char, s->ln, 128);
@@ -845,19 +846,36 @@ static stream_t new_stream (FILE *f, const char *fname) {
   s->pos.lno = 0;
   s->pos.ln_pos = 0;
   s->ifs_length_at_stream_start = 0;
+  s->start = s->curr = NULL;
+  s->getc_func = getc_func;
   return s;
 }
 
-static void add_stream (c2m_ctx_t c2m_ctx, FILE *f, const char *fname) {
+static void add_stream (c2m_ctx_t c2m_ctx, FILE *f, const char *fname,
+                        int (*getc_func) (c2m_ctx_t)) {
   assert (fname != NULL);
   if (cs != NULL && cs->f != NULL && cs->f != stdin) {
     fgetpos (cs->f, &cs->fpos);
     fclose (cs->f);
     cs->f = NULL;
   }
-  cs = new_stream (f, fname);
+  cs = new_stream (f, fname, getc_func);
   VARR_PUSH (stream_t, streams, cs);
 }
+
+static int str_getc (c2m_ctx_t c2m_ctx) {
+  if (*cs->curr == '\0') return EOF;
+  return *cs->curr++;
+}
+
+static void add_string_stream (c2m_ctx_t c2m_ctx, const char *pos_fname, const char *str) {
+  pos_t pos;
+
+  add_stream (c2m_ctx, NULL, pos_fname, str_getc);
+  cs->start = cs->curr = str;
+}
+
+static int string_stream_p (stream_t s) { return s->getc_func != NULL; }
 
 static void change_stream_pos (c2m_ctx_t c2m_ctx, pos_t pos) { cs->pos = pos; }
 
@@ -892,9 +910,9 @@ static void remove_trigraphs (c2m_ctx_t c2m_ctx) {
   VARR_TRUNC (char, cs->ln, to);
 }
 
-static int ln_get (c2m_ctx_t c2m_ctx, FILE *f) {
-  if (f == NULL) return c_getc (); /* top level */
-  return fgetc (f);
+static int ln_get (c2m_ctx_t c2m_ctx) {
+  if (cs->f == NULL) return cs->getc_func (c2m_ctx); /* top level */
+  return fgetc (cs->f);
 }
 
 static char *reverse (VARR (char) * v) {
@@ -914,7 +932,7 @@ static int get_line (c2m_ctx_t c2m_ctx) { /* translation phase 1 and 2 */
   int c, eof_p = 0;
 
   VARR_TRUNC (char, cs->ln, 0);
-  for (c = ln_get (c2m_ctx, cs->f); c != EOF && c != '\n'; c = ln_get (c2m_ctx, cs->f))
+  for (c = ln_get (c2m_ctx); c != EOF && c != '\n'; c = ln_get (c2m_ctx))
     VARR_PUSH (char, cs->ln, c);
   eof_p = c == EOF;
   if (eof_p) {
@@ -954,7 +972,7 @@ static void cs_unget (c2m_ctx_t c2m_ctx, int c) {
 static void set_string_stream (c2m_ctx_t c2m_ctx, const char *str, pos_t pos,
                                void (*transform) (const char *, VARR (char) *)) {
   /* read from string str */
-  cs = new_stream (NULL, NULL);
+  cs = new_stream (NULL, NULL, NULL);
   VARR_PUSH (stream_t, streams, cs);
   cs->pos = pos;
   if (transform != NULL) {
@@ -1346,7 +1364,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
         return new_token (c2m_ctx, pos, "<EOU>", T_EOU, N_IGNORE);
       }
       cs = VARR_LAST (stream_t, streams);
-      if (cs->f == NULL && cs->fname != NULL && VARR_LENGTH (stream_t, streams) > 1) {
+      if (cs->f == NULL && cs->fname != NULL && !string_stream_p (cs)) {
         if ((cs->f = fopen (cs->fname, "r")) == NULL) {
           if (options->message_file != NULL)
             fprintf (options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
@@ -1914,7 +1932,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname) {
     if (options->message_file != NULL) fprintf (f, "error in opening file %s\n", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
-  add_stream (c2m_ctx, f, fname);
+  add_stream (c2m_ctx, f, fname, NULL);
   cs->ifs_length_at_stream_start = VARR_LENGTH (ifstate_t, ifs);
 }
 
@@ -4786,9 +4804,9 @@ static void add_standard_includes (c2m_ctx_t c2m_ctx) {
     str2 = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
 
     if ((f = fopen (str1, "r")) != NULL) {
-      add_stream (c2m_ctx, f, str1);
+      add_stream (c2m_ctx, f, str1, NULL);
     } else if ((f = fopen (str2, "r")) != NULL) {
-      add_stream (c2m_ctx, f, str2);
+      add_stream (c2m_ctx, f, str2, NULL);
     } else {
       if (options->message_file != NULL)
         fprintf (options->message_file, "Cannot open %s or %s -- good bye\n", str1, str2);
@@ -12027,14 +12045,12 @@ static void process_macro_commands (MIR_context_t ctx) {
       undefine_cmd_macro (c2m_ctx, options->macro_commands[i].name);
 }
 
-static void compile_init (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                          void (*ungetc_func) (int)) {
+static void compile_init (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void)) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
   options = ops;
   n_errors = n_warnings = 0;
   c_getc = getc_func;
-  c_ungetc = ungetc_func;
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
   parse_init (ctx);
@@ -12081,8 +12097,10 @@ static const char *get_module_name (MIR_context_t ctx) {
   return str;
 }
 
+static int top_level_getc (c2m_ctx_t c2m_ctx) { return c_getc (); }
+
 int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                   void (*ungetc_func) (int), const char *source_name, FILE *output_file) {
+                   const char *source_name, FILE *output_file) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   double start_time = real_usec_time ();
   node_t r;
@@ -12095,11 +12113,11 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
     compile_finish (ctx);
     return 1;
   }
-  compile_init (ctx, ops, getc_func, ungetc_func);
+  compile_init (ctx, ops, getc_func);
   if (options->verbose_p && options->message_file != NULL)
     fprintf (options->message_file, "C2MIR init end           -- %.0f usec\n",
              real_usec_time () - start_time);
-  add_stream (c2m_ctx, NULL, source_name);
+  add_stream (c2m_ctx, NULL, source_name, top_level_getc);
   if (!options->no_prepro_p) add_standard_includes (c2m_ctx);
   pre (c2m_ctx, source_name);
   if (options->verbose_p && options->message_file != NULL)

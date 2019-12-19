@@ -132,15 +132,6 @@ static void init_options (int argc, char *argv[]) {
 
 static int t_getc (void) { return curr_char >= code_len ? EOF : code[curr_char++]; }
 
-static void t_ungetc (int c) {
-  if (c == EOF) {
-    assert (curr_char >= code_len);
-  } else {
-    assert (curr_char != 0 && code[curr_char - 1] == c);
-    curr_char--;
-  }
-}
-
 static void fancy_abort (void) {
   fprintf (stderr, "Test failed\n");
   abort ();
@@ -151,7 +142,7 @@ static int fancy_printf (const char *fmt, ...) { abort (); }
 static struct lib {
   char *name;
   void *handler;
-} std_libs[] = { {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL} };
+} std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
 
 static void close_libs (void) {
   for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
@@ -321,7 +312,7 @@ int main (int argc, char *argv[], char *env[]) {
                    ? NULL
                    : get_output_file (&base_name, source_name, options.asm_p ? ".mir" : ".bmir"));
 
-      if (!c2mir_compile (ctx, &options, t_getc, t_ungetc, source_name, f)) ret_code = 1;
+      if (!c2mir_compile (ctx, &options, t_getc, source_name, f)) ret_code = 1;
     }
   }
   if (options.prepro_output_file != NULL
