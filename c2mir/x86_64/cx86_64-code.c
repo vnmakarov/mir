@@ -2,8 +2,10 @@
    Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-static const char *standard_includes[]
-  = {"include/mirc/mirc.h", "include/mirc/x86-64/mirc-x86_64-linux.h"};
+#include "../mirc.h"
+#include "mirc-x86_64-linux.h"
+
+static const char *standard_includes[] = {mirc, x86_64_mirc};
 
 static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/x86-64/"};
 

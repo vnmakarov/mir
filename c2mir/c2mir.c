@@ -25,7 +25,7 @@
 #include "c2mir.h"
 
 #ifdef __x86_64__
-#include "cx86_64.h"
+#include "x86_64/cx86_64.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -298,7 +298,7 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
 }
 
 #ifdef __x86_64__
-#include "cx86_64-code.c"
+#include "x86_64/cx86_64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -4790,28 +4790,11 @@ static void parse_init (MIR_context_t ctx) {
 
 static void add_standard_includes (c2m_ctx_t c2m_ctx) {
   FILE *f;
-  const char *str1, *str2;
+  const char *str;
 
   for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, SOURCEDIR);
-    add_to_temp_string (c2m_ctx, standard_includes[i]);
-    str1 = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, INSTALLDIR);
-    add_to_temp_string (c2m_ctx, "../");
-    add_to_temp_string (c2m_ctx, standard_includes[i]);
-    str2 = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-
-    if ((f = fopen (str1, "r")) != NULL) {
-      add_stream (c2m_ctx, f, str1, NULL);
-    } else if ((f = fopen (str2, "r")) != NULL) {
-      add_stream (c2m_ctx, f, str2, NULL);
-    } else {
-      if (options->message_file != NULL)
-        fprintf (options->message_file, "Cannot open %s or %s -- good bye\n", str1, str2);
-      longjmp (c2m_ctx->env, 1);
-    }
+    str = standard_includes[i];
+    add_string_stream (c2m_ctx, "<environment>", str);
   }
 }
 
