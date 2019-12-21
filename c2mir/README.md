@@ -52,6 +52,10 @@
       not processed by C to MIR compiler. Such arguments are passed to
       generated and executed MIR program
     * The executed program can use functions from libraries `libc` and `libm`.  They are always available
+      * Option `-lxxx` makes library `libxxx` available for the program execution
+      * Option `-Lxxx` adds library directory `xxx` to search libraries given by options `-lxxx`.  The search
+        starts with the standard library directory and continues in directories
+	given by preceding `-L` options in their order on the command line
     * To generate stand-alone executable see utility `b2ctab` description in directory `mir-utils`
   * Options `-D` and `-U` are analogous to ones used in other C
     compilers for macro manipulations on the command line
@@ -61,7 +65,6 @@
     checking of C files without MIR code generation
   * Option `-pedantic` is used for stricter diagnostic about C
     standard conformance.  It might be useful as C2MIR implements some GCC extensions of C
-    standard
   * Besides C files, MIR textual files with suffix `.mir` and MIR
     binary files with suffix `.bmir` can be given on the command line.
     In this case these MIR files are read and added to generated MIR code
