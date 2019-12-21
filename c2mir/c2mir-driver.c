@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <dlfcn.h>
 #include <sys/time.h>
 #if defined(__unix__) || defined(__APPLE__)
@@ -8,6 +9,32 @@
 
 #include "c2mir.h"
 #include "mir-gen.h"
+
+struct lib {
+  char *name;
+  void *handler;
+};
+
+typedef struct lib lib_t;
+
+#if defined(__unix__)
+#if UINTPTR_MAX == 0xffffffff
+static lib_t std_libs[] = {{"/lib/libc.so.6", NULL}, {"/lib/libm.so.6", NULL}};
+static const char *std_lib_dir = "/lib";
+#elif UINTPTR_MAX == 0xffffffffffffffff
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
+static const char *std_lib_dir = "/lib64";
+#else
+#error cannot recognize 32- or 64-bit target
+#endif
+static const char *lib_suffix = ".so";
+#endif
+
+#ifdef _WIN32
+static const int slash = '\\';
+#else
+static const int slash = '/';
+#endif
 
 static double real_usec_time (void) {
   struct timeval tv;
@@ -41,9 +68,57 @@ typedef struct c2mir_macro_command macro_command_t;
 DEF_VARR (macro_command_t);
 static VARR (macro_command_t) * macro_commands;
 
+static void close_std_libs (void) {
+  for (int i = 0; i < sizeof (std_libs) / sizeof (lib_t); i++)
+    if (std_libs[i].handler != NULL) dlclose (std_libs[i].handler);
+}
+
+static void open_std_libs (void) {
+  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+    std_libs[i].handler = dlopen (std_libs[i].name, RTLD_LAZY);
+}
+
+DEF_VARR (lib_t);
+static VARR (lib_t) * cmdline_libs;
+static VARR (char_ptr_t) * lib_dirs;
+
+static void *open_lib (const char *dir, const char *name) {
+  const char *last_slash = strrchr (dir, slash);
+
+  VARR_TRUNC (char, temp_string, 0);
+  VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
+  if (last_slash[1] != '\0') VARR_PUSH (char, temp_string, slash);
+  VARR_PUSH_ARR (char, temp_string, "lib", 3);
+  VARR_PUSH_ARR (char, temp_string, name, strlen (name));
+  VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
+  VARR_PUSH (char, temp_string, 0);
+  return dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY);
+}
+
+static void process_cmdline_lib (char *lib_name) {
+  lib_t lib;
+
+  lib.name = lib_name;
+  for (size_t i = 0; i < VARR_LENGTH (char_ptr_t, lib_dirs); i++)
+    if ((lib.handler = open_lib (VARR_GET (char_ptr_t, lib_dirs, i), lib_name)) != NULL) break;
+  if (lib.handler == NULL) {
+    fprintf (stderr, "cannot find library lib%s -- good bye\n", lib_name);
+    exit (1);
+  }
+  VARR_PUSH (lib_t, cmdline_libs, lib);
+}
+
+static void close_cmdline_libs (void) {
+  void *handler;
+
+  for (size_t i = 0; i < VARR_LENGTH (lib_t, cmdline_libs); i++)
+    if ((handler = VARR_GET (lib_t, cmdline_libs, i).handler) != NULL) dlclose (handler);
+}
+
 static void init_options (int argc, char *argv[]) {
   const char *str;
   int c;
+  int incl_p, ldir_p;
 
   options.message_file = stderr;
   options.debug_p = options.verbose_p = options.asm_p = options.object_p = FALSE;
@@ -74,14 +149,18 @@ static void init_options (int argc, char *argv[]) {
         fprintf (stderr, "-o without argument\n");
       else
         options.output_file_name = argv[++i];
-    } else if (strncmp (argv[i], "-I", 2) == 0) {
-      char *i_dir;
+    } else if ((incl_p = strncmp (argv[i], "-I", 2) == 0)
+               || (ldir_p = strncmp (argv[i], "-L", 2) == 0) || strncmp (argv[i], "-l", 2) == 0) {
+      char *arg;
       const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
 
       if (*dir == '\0') continue;
-      i_dir = malloc (strlen (dir) + 1);
-      strcpy (i_dir, dir);
-      VARR_PUSH (char_ptr_t, headers, i_dir);
+      arg = malloc (strlen (dir) + 1);
+      strcpy (arg, dir);
+      if (incl_p || ldir_p)
+        VARR_PUSH (char_ptr_t, incl_p ? headers : lib_dirs, arg);
+      else
+        process_cmdline_lib (arg);
     } else if (strncmp (argv[i], "-U", 2) == 0 || strncmp (argv[i], "-D", 2) == 0) {
       char *str;
       const char *bound, *def = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
@@ -139,33 +218,23 @@ static void fancy_abort (void) {
 
 static int fancy_printf (const char *fmt, ...) { abort (); }
 
-static struct lib {
-  char *name;
-  void *handler;
-} std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
-
-static void close_libs (void) {
-  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
-    if (std_libs[i].handler != NULL) dlclose (std_libs[i].handler);
-}
-
-static void open_libs (void) {
-  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
-    std_libs[i].handler = dlopen (std_libs[i].name, RTLD_LAZY);
-}
-
 static void *import_resolver (const char *name) {
-  void *sym = NULL;
+  void *handler, *sym = NULL;
 
   for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
-    if (std_libs[i].handler != NULL && (sym = dlsym (std_libs[i].handler, name)) != NULL) break;
+    if ((handler = std_libs[i].handler) != NULL && (sym = dlsym (handler, name)) != NULL) break;
+  if (sym == NULL)
+    for (int i = 0; i < VARR_LENGTH (lib_t, cmdline_libs); i++)
+      if ((handler = VARR_GET (lib_t, cmdline_libs, i).handler) != NULL
+          && (sym = dlsym (handler, name)) != NULL)
+        break;
   if (sym == NULL) {
     if (strcmp (name, "dlopen") == 0) return dlopen;
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
     if (strcmp (name, "stat") == 0) return stat;
     fprintf (stderr, "can not load symbol %s\n", name);
-    close_libs ();
+    close_std_libs ();
     exit (1);
   }
   return sym;
@@ -174,11 +243,8 @@ static void *import_resolver (const char *name) {
 static int read_func (MIR_context_t ctx) { return t_getc (); }
 
 static const char *get_base_name (const char *name, const char *suffix) {
-#ifdef _WIN32
-  const char *res = strrchr (name, '\\');
-#else
-  const char *res = strrchr (name, '/');
-#endif
+  const char *res = strrchr (name, slash);
+
   if (res != NULL) name = res + 1;
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, name,
@@ -206,6 +272,9 @@ int main (int argc, char *argv[], char *env[]) {
   VARR_CREATE (uint8_t, input, 100);
   VARR_CREATE (char_ptr_t, source_file_names, 32);
   VARR_CREATE (char_ptr_t, exec_argv, 32);
+  VARR_CREATE (lib_t, cmdline_libs, 16);
+  VARR_CREATE (char_ptr_t, lib_dirs, 16);
+  VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dir);
   ctx = MIR_init ();
   c2mir_init (ctx);
   options.prepro_output_file = NULL;
@@ -360,7 +429,7 @@ int main (int argc, char *argv[], char *env[]) {
         }
       }
     } else {
-      open_libs ();
+      open_std_libs ();
       MIR_load_external (ctx, "abort", fancy_abort);
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
@@ -394,12 +463,15 @@ int main (int argc, char *argv[], char *env[]) {
       }
     }
   }
-  close_libs ();
+  close_cmdline_libs ();
+  close_std_libs ();
   c2mir_finish (ctx);
   MIR_finish (ctx);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (char_ptr_t, headers);
   VARR_DESTROY (macro_command_t, macro_commands);
+  VARR_DESTROY (char_ptr_t, lib_dirs);
+  VARR_DESTROY (lib_t, cmdline_libs);
   VARR_DESTROY (char_ptr_t, source_file_names);
   VARR_DESTROY (char_ptr_t, exec_argv);
   VARR_DESTROY (uint8_t, input);
