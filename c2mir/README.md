@@ -86,7 +86,7 @@
     worked in context `ctx`
   * Function `c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
                              const char *source_name, FILE *output_file)`
-    compiles one C code file.  Function returns zero in case of
+    compiles one C code file.  Function returns true (non-zero) in case of
     successful compilation. It frees all memory used to compile the
     file.  So you can compile a lot of files in the same context
     without program memory growth.  Function `getc_func` provides
