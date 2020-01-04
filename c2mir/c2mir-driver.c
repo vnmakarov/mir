@@ -36,6 +36,12 @@ static const int slash = '\\';
 static const int slash = '/';
 #endif
 
+#if defined(__APPLE__)
+static lib_t std_libs[] = {{"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib", NULL}};
+static const char *std_lib_dir = "/usr/lib";
+static const char *lib_suffix = ".dylib";
+#endif
+
 static double real_usec_time (void) {
   struct timeval tv;
 
