@@ -378,6 +378,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
           v.a = ops[i].u.ref;
         } else if (i == 1 && imm_call_p) {
           mir_assert (ops[i].u.ref->item_type == MIR_import_item
+                      || ops[i].u.ref->item_type == MIR_export_item
                       || ops[i].u.ref->item_type == MIR_func_item);
           v.a = ops[i].u.ref->addr;
         } else if (code == MIR_VA_ARG && i == 2) { /* type */
