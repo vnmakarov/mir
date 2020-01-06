@@ -1,9 +1,12 @@
 SHELL=sh
-#
-CC=gcc -fno-tree-sra -std=gnu11 -Wno-abi # latest versions of gcc has a buggy SRA
-# 2nd alternative:
-# CC=clang -std=gnu11 -Wno-abi
-CFLAGS=-O3 -g -DNDEBUG 
+
+ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 1)
+  CC += -std=gnu11 -Wno-abi
+else
+  CC += -fno-tree-sra -std=gnu11 -Wno-abi
+endif
+
+CFLAGS=-O3 -g -DNDEBUG
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
