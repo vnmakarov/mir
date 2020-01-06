@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <errno.h>
 #include <setjmp.h>
+#include <math.h>
 #include "time.h"
 
 #include "c2mir.h"
@@ -1700,8 +1701,12 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
         fprintf (options->message_file, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
       error (c2m_ctx, t->pos, "wrong number: %s", t->repr);
     } else if (errno) {
-      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
-                                               t->repr);
+      if (float_p || double_p || ldouble_p) {
+        warning (c2m_ctx, t->pos, "number %s is out of range -- using IEEE infinity", t->repr);
+      } else {
+        (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
+                                                 t->repr);
+      }
     }
   }
   return t;
@@ -7328,13 +7333,15 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
         } else if ((floating_type_p (&t) && e2->u.d_val == 0.0)
                    || (signed_integer_type_p (&t) && e2->u.i_val == 0)
                    || (integer_type_p (&t) && !signed_integer_type_p (&t) && e2->u.u_val == 0)) {
-          error (c2m_ctx, r->pos, "Division by zero");
-          if (floating_type_p (&t))
-            e->u.d_val = 0.0;
-          else if (signed_integer_type_p (&t))
-            e->u.i_val = 0;
-          else
-            e->u.u_val = 0;
+          if (floating_type_p (&t)) {
+            e->u.d_val = nanl (""); /* Use NaN */
+          } else {
+            if (signed_integer_type_p (&t))
+              e->u.i_val = 0;
+            else
+              e->u.u_val = 0;
+            error (c2m_ctx, r->pos, "Division by zero");
+          }
         } else if (r->code != N_MOD && floating_type_p (&t)) {
           e->u.d_val = e1->u.d_val / e2->u.d_val;
         } else if (signed_integer_type_p (&t)) {  // ??? zero
