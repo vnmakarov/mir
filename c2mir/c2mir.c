@@ -12091,10 +12091,10 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
   MIR_module_t m;
   const char *base_name;
 
-  if (c2m_ctx == NULL) return 1;
+  if (c2m_ctx == NULL) return 0;
   if (setjmp (c2m_ctx->env)) {
     compile_finish (ctx);
-    return 1;
+    return 0;
   }
   compile_init (ctx, ops, getc_func);
   if (options->verbose_p && options->message_file != NULL)
