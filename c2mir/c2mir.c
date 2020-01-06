@@ -7330,7 +7330,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
             e->u.i_val = e1->u.i_val * e2->u.i_val;
           else
             e->u.u_val = e1->u.u_val * e2->u.u_val;
-        } else if ((floating_type_p (&t) && e2->u.d_val == 0.0)
+        } else if ((floating_type_p (&t) && e1->u.d_val == 0.0 && e2->u.d_val == 0.0)
                    || (signed_integer_type_p (&t) && e2->u.i_val == 0)
                    || (integer_type_p (&t) && !signed_integer_type_p (&t) && e2->u.u_val == 0)) {
           if (floating_type_p (&t)) {
