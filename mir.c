@@ -528,6 +528,7 @@ static void push_data (MIR_context_t ctx, uint8_t *els, size_t size) {
 }
 
 const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
+  mir_assert (item != NULL);
   return (item->item_type == MIR_func_item
             ? item->u.func->name
             : item->item_type == MIR_proto_item
@@ -949,6 +950,7 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of expr data %s",
                    name == NULL ? "" : name);
   }
+  mir_assert (expr_item != NULL);
   if (expr_item->item_type != MIR_func_item || expr_item->u.func->vararg_p
       || expr_item->u.func->nargs != 0 || expr_item->u.func->nres != 1)
     (*error_func) (MIR_binary_io_error,
@@ -1139,9 +1141,10 @@ MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
   MIR_var_t var;
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
-    (*error_func) (MIR_reg_type_error, "wrong type for register %s", name);
+    (*error_func) (MIR_reg_type_error, "wrong type for register %s: got '%s'", name, type_str(type));
   var.type = type;
   var.name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  mir_assert (func != NULL);
   VARR_PUSH (MIR_var_t, func->vars, var);
   return create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
 }
@@ -1205,7 +1208,8 @@ void MIR_finish_func (MIR_context_t ctx) {
     } else if (code == MIR_RET && actual_nops != curr_func->nres) {
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error,
-                     "number of operands in return does not correspond number of function returns");
+                     "in instruction '%s': number of operands in return does not correspond number of function returns. Expected %d, got %d",
+                     insn_descs[code].name, curr_func->nres, actual_nops);
     } else if (MIR_call_code_p (code))
       expr_p = FALSE;
     for (i = 0; i < actual_nops; i++) {
@@ -1249,7 +1253,7 @@ void MIR_finish_func (MIR_context_t ctx) {
           mir_assert (rd != NULL && insn->ops[i].u.mem.base == rd->reg);
           if (type2mode (rd->type) != MIR_OP_INT) {
             curr_func = NULL;
-            (*error_func) (MIR_reg_type_error, "base reg of non-integer type");
+            (*error_func) (MIR_reg_type_error, "in instruction '%s': base reg of non-integer type for operand #%d", insn_descs[code].name, i+1);
           }
         }
         if (insn->ops[i].u.mem.index != 0) {
@@ -1257,7 +1261,7 @@ void MIR_finish_func (MIR_context_t ctx) {
           mir_assert (rd != NULL && insn->ops[i].u.mem.index == rd->reg);
           if (type2mode (rd->type) != MIR_OP_INT) {
             curr_func = NULL;
-            (*error_func) (MIR_reg_type_error, "index reg of non-integer type");
+            (*error_func) (MIR_reg_type_error, "in instruction '%s': index reg of non-integer type for operand #%d", insn_descs[code].name, i+1);
           }
         }
         mode = type2mode (insn->ops[i].u.mem.type);
@@ -1278,11 +1282,12 @@ void MIR_finish_func (MIR_context_t ctx) {
       if (expected_mode != MIR_OP_UNDEF
           && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
         curr_func = NULL;
-        (*error_func) (MIR_op_mode_error, "unexpected operand mode");
+        (*error_func) (MIR_op_mode_error, "in instruction '%s': unexpected operand mode for operand #%d. Got '%s', expected '%s'",
+                                          insn_descs[code].name, i+1, type_str(mode), type_str(expected_mode));
       }
       if (out_p && !can_be_out_p) {
         curr_func = NULL;
-        (*error_func) (MIR_out_op_error, "wrong operand for insn output");
+        (*error_func) (MIR_out_op_error, "in instruction '%s': wrong operand #%d for insn output", insn_descs[code].name, i+1);
       }
     }
   }
@@ -1389,6 +1394,7 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
 }
 
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
+  mir_assert (m != NULL);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
     if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item
@@ -1533,14 +1539,16 @@ static size_t insn_code_nops (MIR_context_t ctx, MIR_insn_code_t code) { /* 0 fo
   return VARR_GET (size_t, insn_nops, code);
 }
 
-size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn) { return insn->nops; }
+size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn) { mir_assert (insn != NULL); return insn->nops; }
 
 MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                       int *out_p) {
   unsigned mode;
+  mir_assert (out_p != NULL);
 
   if (nop >= insn_code_nops (ctx, code)) return MIR_OP_BOUND;
   mode = insn_descs[code].op_modes[nop];
+  mir_assert (out_p != NULL);
   *out_p = (mode & OUTPUT_FLAG) != 0;
   return *out_p ? mode ^ OUTPUT_FLAG : mode;
 }
@@ -1551,6 +1559,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   unsigned mode;
 
   if (nop >= nops) return MIR_OP_BOUND;
+  mir_assert (out_p != NULL);
   if (code == MIR_RET || code == MIR_SWITCH) {
     *out_p = FALSE;
     /* should be already checked in MIR_finish_func */
@@ -1597,6 +1606,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
   MIR_insn_t insn;
   MIR_proto_t proto;
   size_t i = 0, expected_nops = insn_code_nops (ctx, code);
+  mir_assert (ops != NULL);
 
   if (!MIR_call_code_p (code) && code != MIR_RET && code != MIR_SWITCH && nops != expected_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands for insn %s",
@@ -1663,8 +1673,9 @@ MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...) {
 }
 
 MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn) {
-  size_t size
-    = sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (insn->nops == 0 ? 0 : insn->nops - 1);
+  size_t size;
+  mir_assert (insn != NULL);
+  size = sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (insn->nops == 0 ? 0 : insn->nops - 1);
   MIR_insn_t new_insn = malloc (size);
 
   if (new_insn == NULL)
@@ -1688,6 +1699,7 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     (*error_func) (MIR_reg_type_error, "wrong type %s for temporary register", type_str (type));
+  mir_assert (func != NULL);
   for (;;) {
     func->last_temp_num++;
     if (func->last_temp_num == 0) (*error_func) (MIR_unique_reg_error, "out of unique regs");
@@ -1925,12 +1937,14 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
 }
 
 void MIR_append_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) {
+  mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_append_insn: wrong func item");
   DLIST_APPEND (MIR_insn_t, func_item->u.func->insns, insn);
 }
 
 void MIR_prepend_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) {
+  mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_prepend_insn: wrong func item");
   DLIST_PREPEND (MIR_insn_t, func_item->u.func->insns, insn);
@@ -1938,6 +1952,7 @@ void MIR_prepend_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn)
 
 void MIR_insert_insn_after (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t after,
                             MIR_insn_t insn) {
+  mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_insert_insn_after: wrong func item");
   DLIST_INSERT_AFTER (MIR_insn_t, func_item->u.func->insns, after, insn);
@@ -1945,12 +1960,14 @@ void MIR_insert_insn_after (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t 
 
 void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t before,
                              MIR_insn_t insn) {
+  mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_insert_insn_before: wrong func item");
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
 void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) {
+  mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     (*error_func) (MIR_wrong_param_value_error, "MIR_remove_insn: wrong func item");
   DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
@@ -1991,7 +2008,7 @@ void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_func_t func;
   MIR_insn_t insn, new_insn;
 
-  mir_assert (func_item->item_type == MIR_func_item);
+  mir_assert (func_item != NULL && func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   mir_assert (DLIST_HEAD (MIR_insn_t, func->original_insns) == NULL);
   func->original_insns = func->insns;
@@ -2011,7 +2028,7 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_func_t func;
   MIR_insn_t insn;
 
-  mir_assert (func_item->item_type == MIR_func_item);
+  mir_assert (func_item != NULL && func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   while ((insn = DLIST_HEAD (MIR_insn_t, func->insns)) != NULL)
     MIR_remove_insn (ctx, func_item, insn);
@@ -2114,6 +2131,7 @@ static void output_label (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_label
 void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func, int newline_p) {
   size_t i, nops;
 
+  mir_assert (insn != NULL);
   if (insn->code == MIR_LABEL) {
     output_label (ctx, f, func, insn);
     if (newline_p) fprintf (f, ":\n");
@@ -2157,6 +2175,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_expr_data_t expr_data;
   size_t i, nlocals;
 
+  mir_assert(f != NULL && item != NULL);
   if (item->item_type == MIR_export_item) {
     fprintf (f, "\texport\t%s\n", item->u.export);
     return;
@@ -2246,6 +2265,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
 }
 
 void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
+  mir_assert(f != NULL && module != NULL);
   fprintf (f, "%s:\tmodule\n", module->name);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
@@ -2254,6 +2274,7 @@ void MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module) {
 }
 
 void MIR_output (MIR_context_t ctx, FILE *f) {
+  mir_assert(f != NULL);
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, all_modules); module != NULL;
        module = DLIST_NEXT (MIR_module_t, module))
     MIR_output_module (ctx, f, module);
@@ -2332,6 +2353,7 @@ static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type
 }
 
 const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module) {
+  mir_assert (module != NULL);
   module->last_temp_item_num++;
   snprintf (temp_buff, sizeof (temp_buff), "%s%u", TEMP_ITEM_NAME_PREFIX,
             (unsigned) module->last_temp_item_num);
@@ -2340,6 +2362,7 @@ const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module) {
 
 void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
                       MIR_insn_code_t code, int keep_ref_p, int mem_float_p) {
+  mir_assert (insn != NULL && func_item != NULL);
   MIR_op_t new_op, mem_op, *op = &insn->ops[nop];
   MIR_insn_t new_insn;
   MIR_func_t func = func_item->u.func;
@@ -2519,6 +2542,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
 void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int keep_ref_p,
                          int mem_float_p) {
   int out_p;
+  mir_assert (insn != NULL);
   MIR_insn_code_t code = insn->code;
   size_t i, nops = MIR_insn_nops (ctx, insn);
 
@@ -3136,6 +3160,7 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
                            const MIR_code_reloc_t *relocs) {
   size_t i, len, start, max_offset = 0;
 
+  mir_assert (relocs != NULL);
   for (i = 0; i < nloc; i++)
     if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
   start = (size_t) base / page_size * page_size;
