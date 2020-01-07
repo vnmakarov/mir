@@ -21,5 +21,5 @@ struct c2mir_options {
 
 void c2mir_init (MIR_context_t ctx);
 void c2mir_finish (MIR_context_t ctx);
-int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                   const char *source_name, FILE *output_file);
+int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
+                   void *getc_data, const char *source_name, FILE *output_file);

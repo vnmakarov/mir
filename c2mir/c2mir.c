@@ -128,7 +128,8 @@ struct c2m_ctx {
   HTAB (str_t) * str_key_tab;
   str_t empty_str;
   unsigned long curr_uid;
-  int (*c_getc) (void); /* c2mir interface get function */
+  int (*c_getc) (void *); /* c2mir interface get function */
+  void *c_getc_data;
   unsigned n_errors, n_warnings;
   VARR (char) * symbol_text, *temp_string;
   VARR (token_t) * recorded_tokens, *buffered_tokens;
@@ -160,6 +161,7 @@ typedef struct c2m_ctx *c2m_ctx_t;
 #define empty_str c2m_ctx->empty_str
 #define curr_uid c2m_ctx->curr_uid
 #define c_getc c2m_ctx->c_getc
+#define c_getc_data c2m_ctx->c_getc_data
 #define n_errors c2m_ctx->n_errors
 #define n_warnings c2m_ctx->n_warnings
 #define symbol_text c2m_ctx->symbol_text
@@ -12035,12 +12037,14 @@ static void process_macro_commands (MIR_context_t ctx) {
       undefine_cmd_macro (c2m_ctx, options->macro_commands[i].name);
 }
 
-static void compile_init (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void)) {
+static void compile_init (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
+                          void *getc_data) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
   options = ops;
   n_errors = n_warnings = 0;
   c_getc = getc_func;
+  c_getc_data = getc_data;
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
   parse_init (ctx);
@@ -12087,10 +12091,10 @@ static const char *get_module_name (MIR_context_t ctx) {
   return str;
 }
 
-static int top_level_getc (c2m_ctx_t c2m_ctx) { return c_getc (); }
+static int top_level_getc (c2m_ctx_t c2m_ctx) { return c_getc (c_getc_data); }
 
-int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                   const char *source_name, FILE *output_file) {
+int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
+                   void *getc_data, const char *source_name, FILE *output_file) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   double start_time = real_usec_time ();
   node_t r;
@@ -12103,7 +12107,7 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
     compile_finish (ctx);
     return 0;
   }
-  compile_init (ctx, ops, getc_func);
+  compile_init (ctx, ops, getc_func, getc_data);
   if (options->verbose_p && options->message_file != NULL)
     fprintf (options->message_file, "C2MIR init end           -- %.0f usec\n",
              real_usec_time () - start_time);

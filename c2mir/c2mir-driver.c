@@ -215,7 +215,7 @@ static void init_options (int argc, char *argv[]) {
   options.macro_commands = VARR_ADDR (macro_command_t, macro_commands);
 }
 
-static int t_getc (void) { return curr_char >= code_len ? EOF : code[curr_char++]; }
+static int t_getc (void *data) { return curr_char >= code_len ? EOF : code[curr_char++]; }
 
 static void fancy_abort (void) {
   fprintf (stderr, "Test failed\n");
@@ -246,7 +246,7 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
-static int read_func (MIR_context_t ctx) { return t_getc (); }
+static int read_func (MIR_context_t ctx) { return t_getc (NULL); }
 
 static const char *get_base_name (const char *name, const char *suffix) {
   const char *res = strrchr (name, slash);
@@ -387,7 +387,7 @@ int main (int argc, char *argv[], char *env[]) {
                    ? NULL
                    : get_output_file (&base_name, source_name, options.asm_p ? ".mir" : ".bmir"));
 
-      if (!c2mir_compile (ctx, &options, t_getc, source_name, f)) ret_code = 1;
+      if (!c2mir_compile (ctx, &options, t_getc, NULL, source_name, f)) ret_code = 1;
     }
   }
   if (options.prepro_output_file != NULL
