@@ -3089,10 +3089,12 @@ DEF_VARR (code_holder_t);
 struct machine_code_ctx {
   VARR (code_holder_t) * code_holders;
   size_t page_size;
+  VARR (uint8_t) * machine_insns;
 };
 
 #define code_holders ctx->machine_code_ctx->code_holders
 #define page_size ctx->machine_code_ctx->page_size
+#define machine_insns ctx->machine_code_ctx->machine_insns
 
 uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len) {
   uint8_t *start, *mem;
