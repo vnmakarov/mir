@@ -16,6 +16,9 @@
   C to MIR compiler can be used as a library to make it as a part of
   your code.  The compiler can be used as a separate program as usual C
   compiler.
+
+  To recognize compilation by C-to-MIR compiler, compiler specific
+  macros `__mirc__` and `__MIRC__` defined as 1 can be used.
   
 ## C to MIR compiler as usual C compiler
   The project makefile builds program `c2m` which can compile C and

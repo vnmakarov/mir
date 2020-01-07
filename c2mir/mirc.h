@@ -1,5 +1,6 @@
 static const char mirc[]
   = "#define __mirc__ 1\n"
+    "#define __MIRC__ 1\n"
     "#define __STDC_HOSTED__ 1\n"
     "//#define __STDC_ISO_10646__ 201103L\n"
     "#define __STDC_NO_ATOMICS__ 1\n"
