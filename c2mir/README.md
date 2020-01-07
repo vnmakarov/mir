@@ -84,14 +84,15 @@
   * Function `c2mir_finish (MIR_context ctx)` finishes the compiler to
     work in context `ctx`.  It frees some common memory used by the compiler
     worked in context `ctx`
-  * Function `c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void),
-                             const char *source_name, FILE *output_file)`
+  * Function `c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
+                             void *getc_data, const char *source_name, FILE *output_file)`
     compiles one C code file.  Function returns true (non-zero) in case of
     successful compilation. It frees all memory used to compile the
     file.  So you can compile a lot of files in the same context
     without program memory growth.  Function `getc_func` provides
     access to the compiled C code which can be
-    in a file or memory.  Name of the source file used for diagnostic
+    in a file or memory.  The function will get `getc_data` every its call as its argument.
+    Name of the source file used for diagnostic
     is given by parameter `source_name`.  Parameter `output_file` is
     analogous to one given by option `-o` of `c2m`.  Parameter ops is
     a pointer to a structure defining the compiler options:
