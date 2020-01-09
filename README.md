@@ -14,17 +14,17 @@
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
   * MIR consists of **modules**
     * Each module can contain **functions** and some declarations and data
-    * Each function has **signature** (parameters and return types), (currently) **local variables**
+    * Each function has **signature** (parameters and return types), **local variables**
       (including function arguments) and **instructions**
-      * Each local variable has **type** which can be only 64-bit integer, float, or double
+      * Each local variable has **type** which can be only 64-bit integer, float, double, or long double
       * Each instruction has **opcode** and **operands**
         * Operand can be a local variable
 	  (or a function argument), **immediate**, **memory**, **label**, or **reference**
-          * Immediate operand can be 64-bit integer, float or double value
+          * Immediate operand can be 64-bit integer, float, double, or long double value
 	  * Memory operand has a **type**, **displacement**, **base** and **index** integer local variable,
 	    and integer constant as a **scale** for the index
 	    * Memory type can be 8-, 16-, 32-, 64-bit signed or unsigned integer type,
-	      float type, or double type
+	      float type, double, or long double type
 	      * When integer memory value is used it is expanded with sign or zero promoting
 	        to 64-bit integer value first
 	  * Label operand has name and used for control flow instructions
@@ -32,27 +32,28 @@
 	    in other MIR modules, or for C external functions or declarations
 	* opcode describes what the instruction does
 	* There are **conversion instructions** for conversion between different
-	  32- and 64-bit signed and unsigned values, float and double values
+	  32- and 64-bit signed and unsigned values, float, double, and long double values
 	* There are **arithmetic instructions** (addition, subtraction, multiplication, division,
-	  modulo) working on 32- and 64-bit signed and unsigned values, float and double values
+	  modulo) working on 32- and 64-bit signed and unsigned values, float, double, and long double values
 	* There are **logical instructions** (and, or, xor, different shifts) working on
 	  32- and 64-bit signed and unsigned values
 	* There are **comparison instructions**  working on 32- and 64-bit
-	  signed and unsigned values, float and double values
+	  signed and unsigned values, float, double, and long double values
 	* There are **branch insns** (uncoditional jump, and jump on zero or non-zero value)
 	  which take a label as one their operand
 	* There are **combined comparison and branch instructions** taking a label as one operand
-	  and two 32- and 64-bit signed and unsigned values, float and double values
+	  and two 32- and 64-bit signed and unsigned values, float, double, and long double values
+	* There is **switch** instruction to jump to a label from labels given as operands depending on index given as the first operand
 	* There are **function and procedural call instructions**
 	* There are **return instructions** working on 32- and 64-bit
-	  integer values, float and double values
+	  integer values, float, double, and long double values
 
 ## MIR Example
-  * You can create MIR through **API** consisting functions for creation of modules,
+  * You can create MIR through **API** consisting of functions for creation of modules,
     functions, instructions, operands etc
   * You can also create MIR from MIR **binary** or **text** file
   * The best way to get a feel about MIR is to use textual MIR representation
-  * Example of sieve on C
+  * Example of Eratosthenes sieve on C
 ```
 #define Size 819000
 int sieve (int N) {
@@ -119,13 +120,13 @@ ex100:    func v, 0
 ```
 
   * `func` describes signature of the function (taking 32-bit signed
-    integer argument and returning 32-bit signed integer value), stack
-    frame size (819000) and function argument `N` which will be local
+    integer argument and returning 32-bit signed integer value)
+    and function argument `N` which will be local
     variable of 64-bit signed integer type
     * Function results are described first by their types and have no names.
       Parameters always have names and go after the result description
-    * Function my have more one result but possible number and combination
-      of result types are machine defined
+    * Function may have more one result but possible number and combination
+      of result types are currently machine defined
   * You can write several instructions on one line if you separate them by `;`
   * The instruction result, if any, is always the first operand
   * We use 64-bit instructions in calculations
@@ -149,8 +150,10 @@ ex100:    func v, 0
   * After loading modules, you should link the loaded modules
     * Linking modules resolves imported module references, initializes data,
       and set up call interfaces
-  * After linking, you can interpret functions from the modules or create machine code
-    for the functions with MIR JIT compiler (generator) call this code
+  * After linking, you can interpret functions from the modules or call machine code
+    for the functions generated with MIR JIT compiler (generator).  What way the function can be executed
+    is usually defined by set up interface.  How the generated code is produced (lazily on the first call or ahead of time)
+    can be also dependent on the interface 
   * Running code from above example could look the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
 ```
@@ -165,15 +168,11 @@ ex100:    func v, 0
     /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
 
-  * If you generate machine code for a function, you should also generate
-    code for all called functions.  In the future a lazy automatic
-    generation of called functions will be implemented.
-
 ## The current state of MIR project
 
   ![Current MIR](mir3.svg)
 
-  * MIR support of **longjump** is not implemented yet
+  * You can use C **setjmp/longjmp** functions to implement **longjump** in MIR
   * Binary MIR code is usually upto **10 times more compact** and upto **10 times faster to read**
     than analagous MIR textual code
   * MIR interpreter is about 6-10 times slower than code generated by MIR JIT compiler
@@ -182,7 +181,7 @@ ex100:    func v, 0
 ## The possible future state of MIR project
   ![Future MIR](mirall.svg)
 
-  * WASM to MIR and MIR to WASM translation should be pretty straitforward
+  * WASM to MIR translation should be pretty straitforward
     * Only small WASM runtime for WASM floating point round insns needed to be provided for MIR
   * Implementation of Java byte code to/from MIR and LLVM IR to/from MIR compilers
     will be a challenge:
@@ -263,7 +262,8 @@ ex100:    func v, 0
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
- * Files `c2mir/c2mir.c`, `c2mir/cx86_64-code.c`, and `c2mir/cx86_64.h` contain code for
+ * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
+   C to MIR compiler.  Files in directory `c2mir/x86_64` contain x86_64 machine-dependent code for
    C to MIR compiler
    
 ## Playing with current MIR project code
