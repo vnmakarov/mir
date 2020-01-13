@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* See C11 7.20 */
 #ifndef _STDINT_H
 #define _STDINT_H 1

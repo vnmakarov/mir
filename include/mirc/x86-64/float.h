@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* See C11 5.2.4.2.2 */
 #ifndef __FLOAT_H
 #define __FLOAT_H

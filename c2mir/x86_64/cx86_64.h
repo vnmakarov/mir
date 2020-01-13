@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018, 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 #include <stdint.h>

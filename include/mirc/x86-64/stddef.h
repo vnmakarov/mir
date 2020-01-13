@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* See C11 7.19 */
 #ifndef __STDDEF_H
 #define __STDDEF_H
@@ -7,7 +11,7 @@ typedef unsigned long size_t;
 typedef long double max_align_t;
 typedef unsigned int wchar_t;
 
-#define NULL ((void *)0)
+#define NULL ((void *) 0)
 #define offsetof(type, member_designator) ((size_t) & ((type *) 0)->member_designator)
 
 #endif /* #ifndef __STDDEF_H */

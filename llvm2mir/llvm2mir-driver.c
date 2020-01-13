@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2019 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 
    Driver to translate bitcode into MIR and execute the generated MIR.
 */
@@ -60,7 +60,7 @@ static double llvm_fabs_f64 (double v) { return fabs (v); }
 static struct lib {
   char *name;
   void *handler;
-} std_libs[] = { {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL} };
+} std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
 
 static void close_libs (void) {
   for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)

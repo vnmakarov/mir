@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* See 5.2.4.2 */
 #ifndef __LIMITS_H
 #define __LIMITS_H
