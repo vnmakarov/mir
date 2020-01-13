@@ -1,0 +1,16 @@
+name: benchmark
+
+on: [push]
+
+jobs:
+  bench:
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: make bench
+      run: make bench
