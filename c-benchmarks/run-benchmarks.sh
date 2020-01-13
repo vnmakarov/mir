@@ -2,7 +2,6 @@
 # Run run-benchmarks.sh
 #
 
-CC=gcc
 temp=c-benchmarks/__temp.out
 temp2=c-benchmarks/__temp2.out
 errf=c-benchmarks/__temp.err
@@ -62,12 +61,17 @@ runbench () {
   base_time=0.01
   inputf=
   if test -f $bench.expect; then expect_out=$bench.expect; else expect_out=; fi
-  run "$CC -O2" "$CC -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" first
-  if type clang >/dev/null 2>&1; then
-     run "clang -O2" "clang -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+  first=first
+  if type gcc >/dev/null 2>&1; then
+      run "gcc -O2" "gcc -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
+      first=
   fi
-#  run "$CC -O0" "$CC -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
-  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf"
+  if type clang >/dev/null 2>&1; then
+      run "clang -O2" "clang -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
+      first=
+  fi
+#  run "gcc -O0" "gcc -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first"
 }
 
 for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat  # ackermann fib random 
