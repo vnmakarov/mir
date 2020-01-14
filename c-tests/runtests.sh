@@ -8,6 +8,11 @@ all=0
 ok=0
 execution_program=$1
 
+ECHO=echo
+if test -x /bin/echo;then
+ECHO=/bin/echo
+fi
+
 runtest () {
 	t=$1
 	add_main=$2
@@ -16,29 +21,29 @@ runtest () {
 	if test -f $t.expect; then expect_out=$t.expect; else expect_out=; fi
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
-	echo -n $t:
+	$ECHO -n $t:
 	timeout 30s $execution_program $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! cmp $outf $expect_out;then
-	            echo Output mismatch
+	            $ECHO Output mismatch
 		    diff -up $expect_out $outf
 		else
 		    ok=`expr $ok + 1`
-	            echo -ne "OK\r"
+	            $ECHO -ne "OK\r"
 		fi
 	elif test $expect_code = 0; then
 	        cat $errf
-	        echo FAIL "(code = $code)"
+	        $ECHO FAIL "(code = $code)"
 	else
 	        cat $errf
-		echo $FAIL "(code = $code, expected code = $expect_code)"
+		$ECHO $FAIL "(code = $code, expected code = $expect_code)"
 	fi
 }
 
 for dir in new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
-	echo ++++++++++++++Running tests in $dir+++++++++++++
+	$ECHO ++++++++++++++Running tests in $dir+++++++++++++
 	if test -f c-tests/$dir/main.c;then
 	   runtest c-tests/$dir/main.c
 	   continue;
@@ -50,5 +55,5 @@ do
 	done
 done
 
-echo Tests $all, Success tests $ok
+$ECHO Tests $all, Success tests $ok
 rm -f $outf $errf
