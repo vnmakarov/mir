@@ -5559,7 +5559,7 @@ static int incomplete_type_p (c2m_ctx_t c2m_ctx, struct type *type) {
   }
   case TM_FUNC:
     return ((type = type->u.func_type->ret_type) == NULL
-            || !void_type_p (type) && incomplete_type_p (c2m_ctx, type));
+            || (!void_type_p (type) && incomplete_type_p (c2m_ctx, type)));
   default: return FALSE;
   }
 }
@@ -8751,12 +8751,12 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           another_e2 = another_case_expr2->attr;
           assert (another_e2->const_p && integer_type_p (another_e2->type));
           if ((signed_p
-               && (e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val
-                   || e->u.i_val <= another_e2->u.i_val && another_e2->u.i_val <= e2->u.i_val))
+               && ((e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val)
+                   || (e->u.i_val <= another_e2->u.i_val && another_e2->u.i_val <= e2->u.i_val)))
               || (!signed_p
-                  && (e->u.u_val <= another_e->u.u_val && another_e->u.u_val <= e2->u.u_val
-                      || e->u.u_val <= another_e2->u.u_val
-                           && another_e2->u.u_val <= e2->u.u_val))) {
+                  && ((e->u.u_val <= another_e->u.u_val && another_e->u.u_val <= e2->u.u_val)
+                      || (e->u.u_val <= another_e2->u.u_val
+                          && another_e2->u.u_val <= e2->u.u_val)))) {
             error (c2m_ctx, c->case_node->pos, "duplicate value in a range case");
             break;
           }
