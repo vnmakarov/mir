@@ -12087,7 +12087,7 @@ static const char *get_module_name (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   static char str[50];
 
-  sprintf (str, "M%d", options->module_num);
+  sprintf (str, "M%ld", (long) options->module_num);
   return str;
 }
 
