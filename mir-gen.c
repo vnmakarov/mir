@@ -4182,7 +4182,7 @@ static void combine (MIR_context_t ctx) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     do {
 #if MIR_GEN_DEBUG
-      if (debug_file != NULL) fprintf (debug_file, "Processing bb%d\n", bb->index);
+      if (debug_file != NULL) fprintf (debug_file, "Processing bb%lu\n", (unsigned long) bb->index);
 #endif
       block_change_p = FALSE;
       curr_bb_hreg_ref_age++;
