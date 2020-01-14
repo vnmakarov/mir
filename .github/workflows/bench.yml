@@ -1,6 +1,6 @@
 name: benchmark
 
-on: [push]
+on: [release]
 
 jobs:
   bench:
