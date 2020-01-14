@@ -56,10 +56,10 @@ int main (void) {
   start_execution_time = real_usec_time ();
 #if defined(TEST_GEN_LOOP)
   res = fun (arg);
-  fprintf (stderr, "fun (%ld) -> %ld", arg, res);
+  fprintf (stderr, "fun (%ld) -> %ld", arg, (long) res);
 #else
   res = fun ();
-  fprintf (stderr, "sieve () -> %ld", res);
+  fprintf (stderr, "sieve () -> %ld", (long) res);
 #endif
   fprintf (stderr, " -- call %.0f usec, memory used = %.1f KB\n",
            real_usec_time () - start_execution_time, ((char *) sbrk (0) - start_heap) / 1000.0);
