@@ -123,7 +123,7 @@ static inline void _reduce_uint_write (struct reduce_data *data, uint32_t u) {
   assert (u < (1 << 7 * 4));
   for (n = 1; n <= 4 && u >= (1 << 7 * n); n++)
     ;
-  _reduce_put (data, (1 << (8 - n)) | (u >> (n - 1) * 8) & 0xff); /* tag */
+  _reduce_put (data, (1 << (8 - n)) | ((u >> (n - 1) * 8) & 0xff)); /* tag */
   for (int i = 2; i <= n; i++) _reduce_put (data, (u >> (n - i) * 8) & 0xff);
 }
 
