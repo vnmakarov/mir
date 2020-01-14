@@ -10,11 +10,17 @@ CFLAGS=-O3 -g -DNDEBUG
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
-OBJS=mir.o mir-gen.o c2m l2m m2b b2m b2ctab
+OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
 Q=@
 
-all: $(OBJS)
+L2M-TEST=
+ifneq ($(shell test -f /usr/include/llvm-c/Core.h|echo 1), 1)
+OBJS += l2m
+L2M-TEST += l2m-test
+endif
 
+all: $(OBJS)
+     
 mir.o: mir.c $(MIR_DEPS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
@@ -39,7 +45,7 @@ b2m: mir.o mir-utils/b2m.c
 b2ctab: mir.o mir-utils/b2ctab.c
 	$(CC) -I. $(CFLAGS) -o $@ mir.o mir-utils/b2ctab.c
 	
-test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test l2m-test
+test: adt-test mir-test io-test scan-test interp-test gen-test readme-example-test mir2c-test c2mir-test $(L2M-TEST)
 	@echo ==============================Test is done
       
 l2m-test: l2m-simple-test # l2m-full-test
