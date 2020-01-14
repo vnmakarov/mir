@@ -450,7 +450,7 @@ int main (int argc, char *argv[], char *env[]) {
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);
-          fprintf (stderr, "exit code: %lu\n", ret_code);
+          fprintf (stderr, "exit code: %lu\n", (long unsigned) ret_code);
         }
       } else {
         MIR_gen_init (ctx);
