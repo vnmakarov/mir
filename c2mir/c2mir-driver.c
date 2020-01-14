@@ -19,11 +19,13 @@ typedef struct lib lib_t;
 
 #if defined(__unix__)
 #if UINTPTR_MAX == 0xffffffff
-static lib_t std_libs[] = {{"/lib/libc.so.6", NULL}, {"/lib/libm.so.6", NULL}};
-static const char *std_lib_dir = "/lib";
+static lib_t std_libs[] = {{"/lib/libc.so.6", NULL}, {"/lib32/libc.so.6", NULL},
+			   {"/lib/libm.so.6", NULL}, {"/lib32/libm.so.6", NULL}};
+static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
-static const char *std_lib_dir = "/lib64";
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
+			   {"/lib64/libm.so.6", NULL}, {"/lib/x86_64-linux-gnu/libm.so.6", NULL}};
+static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #else
 #error cannot recognize 32- or 64-bit target
 #endif
@@ -38,7 +40,7 @@ static const int slash = '/';
 
 #if defined(__APPLE__)
 static lib_t std_libs[] = {{"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib", NULL}};
-static const char *std_lib_dir = "/usr/lib";
+static const char *std_lib_dirs[] = {"/usr/lib"};
 static const char *lib_suffix = ".dylib";
 #endif
 
@@ -280,7 +282,8 @@ int main (int argc, char *argv[], char *env[]) {
   VARR_CREATE (char_ptr_t, exec_argv, 32);
   VARR_CREATE (lib_t, cmdline_libs, 16);
   VARR_CREATE (char_ptr_t, lib_dirs, 16);
-  VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dir);
+  for (i = 0; i < sizeof (std_lib_dirs) / sizeof (char_ptr_t); i++)
+    VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[i]);
   ctx = MIR_init ();
   c2mir_init (ctx);
   options.prepro_output_file = NULL;
