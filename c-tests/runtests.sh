@@ -13,10 +13,12 @@ if test -x /bin/echo;then
 ECHO=/bin/echo
 fi
 
-if type gtimeout >/dev/null 2>&1;then
-    TIMEOUT=gtimeout
+if type timeout >/dev/null 2>&1;then
+    TIMEOUT="timeout 30s"
+elif type gtimeout >/dev/null 2>&1;then
+    TIMEOUT="gtimeout 30s"
 else
-    TIMEOUT=timeout
+    TIMEOUT=
 fi
 
 runtest () {
@@ -28,7 +30,7 @@ runtest () {
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
 	$ECHO -n $t:
-	$TIMEOUT 30s $execution_program $t $add_main 2>$errf >$outf
+	$TIMEOUT $execution_program $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! cmp $outf $expect_out;then
