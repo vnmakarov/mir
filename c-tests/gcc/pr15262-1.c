@@ -14,6 +14,8 @@ struct A
 
 int foo () { return 3; }
 
+#include <stdlib.h>
+
 main ()
 {
   struct A loc, *locp;
