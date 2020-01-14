@@ -12,7 +12,7 @@ jobs:
     
     steps:
     - name: update
-      run: apt update -y
+      run: sudo apt update -y
     - uses: actions/checkout@v1
     - name: make test
       run: make test
