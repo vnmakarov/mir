@@ -1,3 +1,7 @@
+<p>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abuild"><img alt="GitHub MIR build status" src="https://github.com/vnmakarov/mir/workflows/build/badge.svg"></a>
+</p>
+
 # MIR Project
   * MIR means **M**edium **I**nternal **R**epresentation
   * MIR project goal is to provide a basis to implement fast and light weight interpreters and JITs
