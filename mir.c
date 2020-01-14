@@ -723,6 +723,25 @@ const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp) {
   return str;
 }
 
+static const char *mode_str (MIR_op_mode_t mode) {
+  switch (mode) {
+  case MIR_OP_REG: return "reg";
+  case MIR_OP_HARD_REG: return "hard_reg";
+  case MIR_OP_INT: return "int";
+  case MIR_OP_UINT: return "uint";
+  case MIR_OP_FLOAT: return "float";
+  case MIR_OP_DOUBLE: return "double";
+  case MIR_OP_LDOUBLE: return "ldouble";
+  case MIR_OP_REF: return "ref";
+  case MIR_OP_STR: return "str";
+  case MIR_OP_MEM: return "mem";
+  case MIR_OP_HARD_REG_MEM: return "hard_reg_mem";
+  case MIR_OP_LABEL: return "label";
+  case MIR_OP_BOUND: return "bound";
+  default: return "";
+  }
+}
+
 static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
   int replace_p;
   MIR_item_t tab_item;
@@ -1291,7 +1310,7 @@ void MIR_finish_func (MIR_context_t ctx) {
         (*error_func) (MIR_op_mode_error,
                        "in instruction '%s': unexpected operand mode for operand #%d. Got '%s', "
                        "expected '%s'",
-                       insn_descs[code].name, i + 1, type_str (mode), type_str (expected_mode));
+                       insn_descs[code].name, i + 1, mode_str (mode), mode_str (expected_mode));
       }
       if (out_p && !can_be_out_p) {
         curr_func = NULL;
