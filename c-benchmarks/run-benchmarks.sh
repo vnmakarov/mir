@@ -42,9 +42,9 @@ run () {
     $preparation 2>$errf
     if test $? != 0; then echo "$2": FAIL; cat $errf; return 1; fi
   fi
-  if test x$inputf == x; then inputf=/dev/null;fi
+  if test x$inputf = x; then inputf=/dev/null;fi
   if (time -p $program < $inputf) >$temp 2>$temp2; then ok=y;fi
-  if test x$ok == x;then echo $program: FAILED; return 1; fi
+  if test x$ok = x;then echo $program: FAILED; return 1; fi
   if test x$expect_out != x && ! cmp $expect_out $temp; then
     echo Unexpected output:
     diff -up $expect_out $temp
