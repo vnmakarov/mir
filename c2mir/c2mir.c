@@ -11957,9 +11957,9 @@ static void init_include_dirs (MIR_context_t ctx) {
     str = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
     VARR_PUSH (char_ptr_t, system_headers, str);
   }
-#ifdef __linux__
+#if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
-#if defined(__x86_64__)
+#if defined(__linux__) || defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
 #endif
 #endif
