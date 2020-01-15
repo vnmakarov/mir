@@ -12,4 +12,4 @@ branches:
     - master
 sudo: false # only for faster builds
 script:
-  - make test
+  - make Q=strace c2mir-boostrap-test
