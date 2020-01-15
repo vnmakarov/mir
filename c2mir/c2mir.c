@@ -2953,16 +2953,12 @@ static node_t parse_pre_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr) {
   return NULL;
 }
 
-static struct val eval (c2m_ctx_t c2m_ctx, node_t tree);
-
-static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, token_t if_token) {
+static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
   int i, j, k, len;
-  token_t t, id, ppt;
+  token_t t, id;
   const char *res;
   struct macro macro_struct;
   macro_t tab_macro;
-  VARR (token_t) * temp_buffer;
-  node_t tree;
 
   for (i = 0; i < VARR_LENGTH (token_t, expr_buffer); i++) {
     /* Change defined ident and defined (ident) */
@@ -2995,6 +2991,17 @@ static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, to
       del_tokens (expr_buffer, i + 1, j - i);
     }
   }
+}
+
+static struct val eval (c2m_ctx_t c2m_ctx, node_t tree);
+
+static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, token_t if_token) {
+  int i, j;
+  token_t t, ppt;
+  VARR (token_t) * temp_buffer;
+  node_t tree;
+
+  replace_defined (c2m_ctx, expr_buffer);
   if (VARR_LENGTH (macro_call_t, macro_call_stack) != 0)
     error (c2m_ctx, if_token->pos, "#if/#elif inside a macro call");
   assert (VARR_LENGTH (token_t, output_buffer) == 0 && !no_out_p);
@@ -3003,6 +3010,7 @@ static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, to
   push_back (c2m_ctx, expr_buffer);
   no_out_p = TRUE;
   processing (c2m_ctx, TRUE);
+  replace_defined (c2m_ctx, output_buffer);
   no_out_p = FALSE;
   reverse_move_tokens (c2m_ctx, expr_buffer, output_buffer);
   VARR_CREATE (token_t, temp_buffer, VARR_LENGTH (token_t, expr_buffer));
