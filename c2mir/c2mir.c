@@ -2794,6 +2794,12 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
     for (t1 = get_next_pptoken (c2m_ctx); t1->code != '\n'; t1 = get_next_pptoken (c2m_ctx))
       add_to_temp_string (c2m_ctx, t1->repr);
     error (c2m_ctx, t->pos, "%s", VARR_ADDR (char, temp_string));
+  } else if (!options->pedantic_p && strcmp (t->repr, "warning") == 0) {
+    VARR_TRUNC (char, temp_string, 0);
+    add_to_temp_string (c2m_ctx, "#warning");
+    for (t1 = get_next_pptoken (c2m_ctx); t1->code != '\n'; t1 = get_next_pptoken (c2m_ctx))
+      add_to_temp_string (c2m_ctx, t1->repr);
+    warning (c2m_ctx, t->pos, "%s", VARR_ADDR (char, temp_string));
   } else if (strcmp (t->repr, "pragma") == 0) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
     check_pragma (c2m_ctx, t, temp_buffer);
