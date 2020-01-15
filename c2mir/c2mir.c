@@ -1936,7 +1936,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname) {
 
   assert (fname != NULL);
   if ((f = fopen (fname, "r")) == NULL) {
-    if (options->message_file != NULL) fprintf (f, "error in opening file %s\n", fname);
+    if (options->message_file != NULL) fprintf (stderr, "error in opening file %s\n", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
   add_stream (c2m_ctx, f, fname, NULL);
@@ -11959,6 +11959,9 @@ static void init_include_dirs (MIR_context_t ctx) {
   }
 #ifdef __linux__
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
+#if defined(__x86_64__)
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
+#endif
 #endif
   VARR_PUSH (char_ptr_t, system_headers, NULL);
   header_dirs = (const char **) VARR_ADDR (char_ptr_t, headers);
