@@ -3790,7 +3790,8 @@ D (cond_expr) {
 D (assign_expr) { return right_op (c2m_ctx, no_err_p, T_ASSIGN, '=', cond_expr, assign_expr); }
 D (expr) { return right_op (c2m_ctx, no_err_p, ',', -1, assign_expr, expr); }
 
-/* Declarations; */
+/* Declarations: */
+D (attr_spec);
 DA (declaration_specs);
 D (sc_spec);
 DA (type_spec);
@@ -3812,10 +3813,40 @@ D (typedef_name);
 D (initializer);
 D (st_assert);
 
+D (asm_spec) {
+  node_t r;
+
+  PTN (T_ID);
+  if (strcmp (r->u.s.s, "__asm") != 0) PTFAIL (T_ID);
+  PT ('(');
+  while (! C (')')) {
+    PT (T_STR);
+  }
+  PT (')');
+  return NULL;
+}
+
+static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
+  node_t r;
+
+  if ((r = TRY (attr_spec)) != err_node) {
+    if (options->pedantic_p)
+      error (c2m_ctx, pos, "GCC attributes are not implemented");
+    else
+      /*warning (c2m_ctx, pos, "GCC attributes are not implemented -- ignoring them")*/;
+  } else if ((r = TRY (asm_spec)) != err_node) {
+    if (options->pedantic_p)
+      error (c2m_ctx, pos, "asm is not implemented");
+    else
+      /*warning (c2m_ctx, pos, "asm is not implemented -- ignoring it")*/;
+  }
+  return r;
+}
+
 D (declaration) {
   int typedef_p;
   node_t op, list, decl, spec, r;
-  pos_t pos;
+  pos_t pos, last_pos;
 
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
@@ -3826,6 +3857,7 @@ D (declaration) {
   } else {
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
+    last_pos = spec->pos;
     list = new_node (c2m_ctx, N_LIST);
     if (C (';')) {
       op_append (list, new_node3 (c2m_ctx, N_SPEC_DECL, spec, new_node (c2m_ctx, N_IGNORE),
@@ -3837,6 +3869,7 @@ D (declaration) {
       for (;;) { /* init-declarator */
         P (declarator);
         decl = r;
+	last_pos = decl->pos;
         assert (decl->code == N_DECL);
         if (typedef_p) {
           op = NL_HEAD (decl->ops);
@@ -3853,6 +3886,7 @@ D (declaration) {
       }
     }
     r = list;
+    try_attr_spec (c2m_ctx, last_pos);
     PT (';');
   }
   return r;
@@ -3914,11 +3948,7 @@ DA (declaration_specs) {
       prev_type_spec = r;
     } else if ((r = TRY_A (type_spec, prev_type_spec)) != err_node) {
       prev_type_spec = r;
-    } else if ((r = TRY (attr_spec)) != err_node) {
-      if (options->pedantic_p)
-        error (c2m_ctx, spec_pos, "GCC attributes are not implemented");
-      else
-        warning (c2m_ctx, spec_pos, "GCC attributes are not implemented -- ignoring them");
+    } else if ((r = try_attr_spec (c2m_ctx, spec_pos)) != err_node) {
       continue;
     } else
       break;
