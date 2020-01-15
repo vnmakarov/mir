@@ -365,7 +365,7 @@ static inline struct reduce_data *reduce_decode_start (reduce_reader_t reader, v
 static inline int reduce_decode_get (struct reduce_data *data) {
   uint8_t tag, hash_str[sizeof (uint64_t)];
   uint32_t sym_len, ref_len, ref_ind, sym_pos, pos = 0, curr_ind = 0;
-  uint64_t r;
+  int64_t r;
   struct _reduce_decode_data *decode_data = &data->u.decode;
   reduce_reader_t reader = decode_data->reader;
 
