@@ -1552,17 +1552,17 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
 }
 
 static const char *insn_name (MIR_insn_code_t code) {
-  return code < 0 || code >= MIR_INSN_BOUND ? "" : insn_descs[code].name;
+  return (unsigned) code >= MIR_INSN_BOUND ? "" : insn_descs[code].name;
 }
 
 const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code) {
-  if (code < 0 || code >= MIR_INSN_BOUND)
+  if ((unsigned) code >= MIR_INSN_BOUND)
     (*error_func) (MIR_wrong_param_value_error, "MIR_insn_name: wrong insn code %d", (int) code);
   return insn_descs[code].name;
 }
 
 static size_t insn_code_nops (MIR_context_t ctx, MIR_insn_code_t code) { /* 0 for calls */
-  if (code < 0 || code >= MIR_INSN_BOUND)
+  if ((unsigned) code >= MIR_INSN_BOUND)
     (*error_func) (MIR_wrong_param_value_error, "insn_code_nops: wrong insn code %d", (int) code);
   return VARR_GET (size_t, insn_nops, code);
 }
