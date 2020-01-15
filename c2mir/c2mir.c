@@ -11720,7 +11720,7 @@ static void print_expr (MIR_context_t ctx, FILE *f, struct expr *e) {
   if (e->const_p) {
     fprintf (f, ", const = ");
     if (!integer_type_p (e->type)) {
-      fprintf (f, " %.*Lg\n", LDBL_DECIMAL_DIG, (long double) e->u.d_val);
+      fprintf (f, " %.*Lg\n", LDBL_MANT_DIG, (long double) e->u.d_val);
     } else if (signed_integer_type_p (e->type)) {
       fprintf (f, "%lld", (long long) e->u.i_val);
     } else {
@@ -11749,9 +11749,9 @@ static void print_node (MIR_context_t ctx, FILE *f, node_t n, int indent, int at
   case N_U: fprintf (f, " %lluu", (unsigned long long) n->u.ul); goto expr;
   case N_UL: fprintf (f, " %lluul", (unsigned long long) n->u.ul); goto expr;
   case N_ULL: fprintf (f, " %lluull", (unsigned long long) n->u.ull); goto expr;
-  case N_F: fprintf (f, " %.*g", FLT_DECIMAL_DIG, (double) n->u.f); goto expr;
-  case N_D: fprintf (f, " %.*g", DBL_DECIMAL_DIG, (double) n->u.d); goto expr;
-  case N_LD: fprintf (f, " %.*Lg", LDBL_DECIMAL_DIG, (long double) n->u.ld); goto expr;
+  case N_F: fprintf (f, " %.*g", FLT_MANT_DIG, (double) n->u.f); goto expr;
+  case N_D: fprintf (f, " %.*g", DBL_MANT_DIG, (double) n->u.d); goto expr;
+  case N_LD: fprintf (f, " %.*Lg", LDBL_MANT_DIG, (long double) n->u.ld); goto expr;
   case N_CH:
     fprintf (f, " '");
     print_char (f, n->u.ch);
