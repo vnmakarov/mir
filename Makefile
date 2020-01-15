@@ -6,7 +6,7 @@ else
   CC += -fno-tree-sra -std=gnu11 -Wno-abi
 endif
 
-CFLAGS=-O3 -g -DNDEBUG
+CFLAGS=-O2 -g -DNDEBUG
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c

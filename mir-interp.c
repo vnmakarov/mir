@@ -731,7 +731,8 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
   } while (0)
 
 #if defined(__GNUC__) && !defined(__clang__)
-#define OPTIMIZE __attribute__ ((__optimize__ ("O3"))) __attribute__ ((__optimize__ ("-fno-ipa-cp-clone")))
+#define OPTIMIZE \
+  __attribute__ ((__optimize__ ("O2"))) __attribute__ ((__optimize__ ("-fno-ipa-cp-clone")))
 #else
 #define OPTIMIZE
 #endif
