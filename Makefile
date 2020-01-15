@@ -1,12 +1,13 @@
 SHELL=sh
 
-ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 1)
-  CC += -std=gnu11 -Wno-abi
-else
-  CC += -fno-tree-sra -std=gnu11 -Wno-abi
+CC += -std=gnu11 -Wno-abi
+ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
+  ifeq ($(shell $(CC) -fno-tree-sra 2>&1 | grep -c 'fno-tree-sra'), 0)
+     CC += -fno-tree-sra -std=gnu11 -Wno-abi
+  endif
 endif
 
-CFLAGS=-O2 -g -DNDEBUG
+CFLAGS=-O3 -g -DNDEBUG
 TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
