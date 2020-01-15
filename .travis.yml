@@ -14,4 +14,4 @@ before-script:
   - sudo apt-get -qq update
   - sudo apt-get -y install libc6-dev
 script:
-  - make c2mir-test
+  - make Q=strace c2mir-bootstrap-test
