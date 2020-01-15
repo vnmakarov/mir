@@ -1111,13 +1111,15 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       case '\r':
       case '\v': break;
       case '\n':
-        cs->pos.ln_pos = 0;
         if (comment_char < 0) {
           nl_p = TRUE;
+          pos = cs->pos;
         } else if (comment_char == '/') {
           comment_char = -1;
           nl_p = TRUE;
+          pos = cs->pos;
         }
+        cs->pos.ln_pos = 0;
         break;
       case '/':
         if (comment_char >= 0) break;
@@ -1156,7 +1158,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
     if (VARR_LENGTH (char, symbol_text) != 0) {
       cs_unget (c2m_ctx, curr_c);
       VARR_PUSH (char, symbol_text, '\0');
-      return new_token_wo_uniq_repr (c2m_ctx, cs->pos, VARR_ADDR (char, symbol_text),
+      return new_token_wo_uniq_repr (c2m_ctx, nl_p ? pos : cs->pos, VARR_ADDR (char, symbol_text),
                                      nl_p ? '\n' : ' ', N_IGNORE);
     }
     if (header_p && (curr_c == '<' || curr_c == '\"')) {
