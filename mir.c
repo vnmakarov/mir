@@ -4463,7 +4463,7 @@ enum token_code {
 #undef REP_SEP
 
 typedef struct token {
-  enum token_code code;
+  int code; /* enum token_code and EOF */
   union {
     int64_t i;
     float f;
