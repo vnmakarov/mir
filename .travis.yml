@@ -1,0 +1,15 @@
+language: c
+os:
+ - linux
+ - osx
+dist: bionic
+arch:
+ - amd64
+git:
+  quiet: true
+branches:
+  only:
+    - master
+sudo: false # only for faster builds
+script:
+  - make test
