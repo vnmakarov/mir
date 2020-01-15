@@ -606,12 +606,16 @@ static node_t new_node (c2m_ctx_t c2m_ctx, node_code_t nc) {
   return n;
 }
 
-static node_t copy_node (c2m_ctx_t c2m_ctx, node_t n) {
+static node_t copy_node_with_pos (c2m_ctx_t c2m_ctx, node_t n, pos_t pos) {
   node_t r = new_node (c2m_ctx, n->code);
 
-  r->pos = n->pos;
+  r->pos = pos;
   r->u = n->u;
   return r;
+}
+
+static node_t copy_node (c2m_ctx_t c2m_ctx, node_t n) {
+  return copy_node_with_pos (c2m_ctx, n, n->pos);
 }
 
 static node_t new_pos_node (c2m_ctx_t c2m_ctx, node_code_t nc, pos_t p) {
@@ -737,10 +741,10 @@ static token_t new_token (c2m_ctx_t c2m_ctx, pos_t pos, const char *repr, int to
   return token;
 }
 
-static token_t copy_token (c2m_ctx_t c2m_ctx, token_t t) {
-  token_t token = new_token (c2m_ctx, t->pos, t->repr, t->code, t->node_code);
+static token_t copy_token (c2m_ctx_t c2m_ctx, token_t t, pos_t pos) {
+  token_t token = new_token (c2m_ctx, pos, t->repr, t->code, t->node_code);
 
-  if (t->node != NULL) token->node = copy_node (c2m_ctx, t->node);
+  if (t->node != NULL) token->node = copy_node_with_pos (c2m_ctx, t->node, pos);
   return token;
 }
 
@@ -2100,7 +2104,7 @@ static void push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
 #endif
 }
 
-static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
+static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens, pos_t pos) {
 #ifdef C2MIR_PREPRO_DEBUG
   fprintf (stderr, "# copy & push back (macro call depth %d):",
            VARR_LENGTH (macro_call_t, macro_call_stack));
@@ -2109,7 +2113,7 @@ static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
 #ifdef C2MIR_PREPRO_DEBUG
     fprintf (stderr, " <%s>", get_token_str (VARR_GET (token_t, tokens, i)));
 #endif
-    unget_next_pptoken (c2m_ctx, copy_token (c2m_ctx, VARR_GET (token_t, tokens, i)));
+    unget_next_pptoken (c2m_ctx, copy_token (c2m_ctx, VARR_GET (token_t, tokens, i), pos));
   }
 #ifdef C2MIR_PREPRO_DEBUG
   fprintf (stderr, "\n");
@@ -2503,7 +2507,7 @@ static void process_replacement (c2m_ctx_t c2m_ctx, macro_call_t mc) {
 #ifdef C2MIR_PREPRO_DEBUG
           fprintf (stderr, "# push back <EOA> for macro %s call\n", mc->macro->id->repr);
 #endif
-          copy_and_push_back (c2m_ctx, arg);
+          copy_and_push_back (c2m_ctx, arg, mc->pos);
           unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_BOA, N_IGNORE));
 #ifdef C2MIR_PREPRO_DEBUG
           fprintf (stderr, "# push back <BOA> for macro %s call\n", mc->macro->id->repr);
@@ -2516,7 +2520,7 @@ static void process_replacement (c2m_ctx_t c2m_ctx, macro_call_t mc) {
     } else if (t->code != ' ') {
       sharp_pos = -1;
     }
-    if (copy_p) t = copy_token (c2m_ctx, t);
+    if (copy_p) t = copy_token (c2m_ctx, t, mc->pos);
     add_token (mc->repl_buffer, t);
   }
 }
@@ -3270,7 +3274,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
 #endif
       mc = new_macro_call (m, t->pos);
       add_tokens (mc->repl_buffer, m->replacement);
-      copy_and_push_back (c2m_ctx, do_concat (c2m_ctx, mc->repl_buffer));
+      copy_and_push_back (c2m_ctx, do_concat (c2m_ctx, mc->repl_buffer), mc->pos);
       m->ignore_p = TRUE;
       VARR_PUSH (macro_call_t, macro_call_stack, mc);
     } else { /* macro with parameters */
