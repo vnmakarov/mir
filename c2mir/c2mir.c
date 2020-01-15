@@ -560,7 +560,7 @@ struct node {
 DEF_DLIST_CODE (node_t, op_link);
 
 struct token {
-  token_code_t code : 16;
+  int code : 16; /* token_code_t and EOF */
   int processed_p : 16;
   pos_t pos;
   node_code_t node_code;
