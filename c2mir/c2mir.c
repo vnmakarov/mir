@@ -1741,6 +1741,7 @@ DEF_VARR (token_arr_t);
 
 typedef struct macro_call {
   macro_t macro;
+  pos_t pos;
   /* Var array of arguments, each arg is var array of tokens, NULL for args absence: */
   VARR (token_arr_t) * args;
   int repl_pos;                 /* position in macro replacement */
@@ -1853,10 +1854,11 @@ static void finish_macros (c2m_ctx_t c2m_ctx) {
   if (macro_tab != NULL) HTAB_DESTROY (macro_t, macro_tab);
 }
 
-static macro_call_t new_macro_call (macro_t m) {
+static macro_call_t new_macro_call (macro_t m, pos_t pos) {
   macro_call_t mc = malloc (sizeof (struct macro_call));
 
   mc->macro = m;
+  mc->pos = pos;
   mc->repl_pos = 0;
   mc->args = NULL;
   VARR_CREATE (token_t, mc->repl_buffer, 64);
@@ -3266,7 +3268,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
 #ifdef C2MIR_PREPRO_DEBUG
       fprintf (stderr, "# push back <EOR>\n");
 #endif
-      mc = new_macro_call (m);
+      mc = new_macro_call (m, t->pos);
       add_tokens (mc->repl_buffer, m->replacement);
       copy_and_push_back (c2m_ctx, do_concat (c2m_ctx, mc->repl_buffer));
       m->ignore_p = TRUE;
@@ -3288,7 +3290,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
         out_token (c2m_ctx, t);
         continue;
       }
-      mc = new_macro_call (m);
+      mc = new_macro_call (m, t->pos);
       find_args (c2m_ctx, mc);
       VARR_PUSH (macro_call_t, macro_call_stack, mc);
       process_replacement (c2m_ctx, mc);
