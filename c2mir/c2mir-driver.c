@@ -19,12 +19,16 @@ typedef struct lib lib_t;
 
 #if defined(__unix__)
 #if UINTPTR_MAX == 0xffffffff
-static lib_t std_libs[] = {{"/lib/libc.so.6", NULL}, {"/lib32/libc.so.6", NULL},
-			   {"/lib/libm.so.6", NULL}, {"/lib32/libm.so.6", NULL}};
+static lib_t std_libs[] = {{"/lib/libc.so.6", NULL},
+                           {"/lib32/libc.so.6", NULL},
+                           {"/lib/libm.so.6", NULL},
+                           {"/lib32/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
-			   {"/lib64/libm.so.6", NULL}, {"/lib/x86_64-linux-gnu/libm.so.6", NULL}};
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
+                           {"/lib64/libm.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #else
 #error cannot recognize 32- or 64-bit target
@@ -352,7 +356,7 @@ int main (int argc, char *argv[], char *env[]) {
       if (strcmp (source_name, STDIN_SOURCE_NAME) == 0) {
         f = stdin;
       } else if ((f = fopen (source_name, "r")) == NULL) {
-        fprintf (stderr, "can not open %s -- goodbye", source_name);
+        fprintf (stderr, "can not open %s -- goodbye\n", source_name);
         exit (1);
       }
       while ((c = getc (f)) != EOF) VARR_PUSH (uint8_t, input, c);
