@@ -3869,6 +3869,7 @@ D (declaration) {
     if (curr_scope == top_scope && options->pedantic_p)
       warning (c2m_ctx, pos, "extra ; outside of a function");
   } else {
+    try_attr_spec (c2m_ctx, curr_token->pos);
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
     last_pos = spec->pos;
