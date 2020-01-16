@@ -31,9 +31,9 @@ static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
   case MIR_OP_REG: fprintf (f, "%s", MIR_reg_name (ctx, op.u.reg, curr_func)); break;
   case MIR_OP_INT: fprintf (f, "%" PRId64, op.u.i); break;
   case MIR_OP_UINT: fprintf (f, "%" PRIu64, op.u.u); break;
-  case MIR_OP_FLOAT: fprintf (f, "%.*gf", FLT_DECIMAL_DIG, op.u.f); break;
-  case MIR_OP_DOUBLE: fprintf (f, "%.*g", DBL_DECIMAL_DIG, op.u.d); break;
-  case MIR_OP_LDOUBLE: fprintf (f, "%.*lgl", LDBL_DECIMAL_DIG, op.u.d); break;
+  case MIR_OP_FLOAT: fprintf (f, "%.*gf", FLT_MANT_DIG, op.u.f); break;
+  case MIR_OP_DOUBLE: fprintf (f, "%.*g", DBL_MANT_DIG, op.u.d); break;
+  case MIR_OP_LDOUBLE: fprintf (f, "%.*lgl", LDBL_MANT_DIG, op.u.d); break;
   case MIR_OP_REF: fprintf (f, "%s", MIR_item_name (ctx, op.u.ref)); break;
   case MIR_OP_MEM: {
     MIR_reg_t no_reg = 0;
