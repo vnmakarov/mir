@@ -24,8 +24,10 @@ void test1 (void *ptr)
 
 void test2 (char *ptr)
 {
+#ifndef __APPLE__
   if (mempcpy(ptr,ptr,8) != ptr+8)
     abort ();
+#endif
 }
 
 void test3 (void *ptr)
