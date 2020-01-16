@@ -1,5 +1,6 @@
 <p>
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abuild"><img alt="GitHub MIR build status" src="https://github.com/vnmakarov/mir/workflows/build/badge.svg"></a>
+<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=tests"></a>
 </p>
 
 # MIR Project
