@@ -3897,11 +3897,11 @@ D (declaration) {
         }
         op_append (list, new_pos_node3 (c2m_ctx, N_SPEC_DECL, decl->pos,
                                         new_node1 (c2m_ctx, N_SHARE, spec), decl, r));
+        try_attr_spec (c2m_ctx, last_pos);
         if (!M (',')) break;
       }
     }
     r = list;
-    try_attr_spec (c2m_ctx, last_pos);
     PT (';');
   }
   return r;
