@@ -12027,10 +12027,16 @@ static void init_include_dirs (MIR_context_t ctx) {
     VARR_PUSH (char_ptr_t, system_headers, str);
   }
 #if defined(__APPLE__) || defined(__unix__)
-  VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
-#if defined(__linux__) || defined(__x86_64__)
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/local/include");
+#if defined(__APPLE__)
+  VARR_PUSH (char_ptr_t, system_headers,
+             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/"
+             "MacOSX.sdk/usr/include");
+#endif
+#if defined(__linux__) && defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
 #endif
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
 #endif
   VARR_PUSH (char_ptr_t, system_headers, NULL);
   header_dirs = (const char **) VARR_ADDR (char_ptr_t, headers);
