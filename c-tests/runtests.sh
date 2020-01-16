@@ -9,8 +9,10 @@ ok=0
 execution_program=$1
 
 ECHO=echo
-if test -x /bin/echo;then
-ECHO=/bin/echo
+if test x$BASH_VERSION != x;then
+  set +o posix
+elif test -x /bin/echo;then
+  ECHO=/bin/echo
 fi
 
 if type timeout >/dev/null 2>&1;then
