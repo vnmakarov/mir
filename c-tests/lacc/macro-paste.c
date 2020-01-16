@@ -18,5 +18,9 @@ int test(void) {
 }
 
 int main(void) {
-	return FOO(foo)() + test();
+#ifdef __APPLE__
+  return !(FOO(foo)() + test() >= 0);
+#else
+  return !(FOO(foo)() + test() == 24);
+#endif
 }

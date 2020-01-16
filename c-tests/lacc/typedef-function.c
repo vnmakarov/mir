@@ -15,5 +15,9 @@ int bar(bar_fn fn) {
 }
 
 int main(void) {
-	return foo(atoi) + bar(isalnum);
+#ifdef __APPLE__
+  return !(foo(atoi) + bar(isalnum) == 11);
+#else
+  return !(foo(atoi) + bar(isalnum) == 18);
+#endif
 }
