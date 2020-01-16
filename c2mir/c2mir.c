@@ -3842,6 +3842,7 @@ D (asm_spec) {
 static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
   node_t r;
 
+  if (options->pedantic_p) return NULL;
   if ((r = TRY (attr_spec)) != err_node) {
     if (options->pedantic_p)
       error (c2m_ctx, pos, "GCC attributes are not implemented");
