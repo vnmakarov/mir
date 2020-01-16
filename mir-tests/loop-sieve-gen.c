@@ -56,7 +56,7 @@ int main (void) {
   start_execution_time = real_usec_time ();
 #if defined(TEST_GEN_LOOP)
   res = fun (arg);
-  fprintf (stderr, "fun (%ld) -> %ld", arg, (long) res);
+  fprintf (stderr, "fun (%ld) -> %ld", (long) arg, (long) res);
 #else
   res = fun ();
   fprintf (stderr, "sieve () -> %ld", (long) res);
