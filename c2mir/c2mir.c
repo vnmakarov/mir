@@ -10906,8 +10906,8 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
   case N_EXPR_SIZEOF: assert (FALSE); break;
   case N_CAST:
     assert (!((struct expr *) r->attr)->const_p);
-    op1 = gen (ctx, NL_EL (r->ops, 1), NULL, NULL, TRUE, NULL);
     type = ((struct expr *) r->attr)->type;
+    op1 = gen (ctx, NL_EL (r->ops, 1), NULL, NULL, !void_type_p (type), NULL);
     if (void_type_p (type)) {
       res = op1;
       res.decl = NULL;
