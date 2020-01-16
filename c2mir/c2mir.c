@@ -2854,12 +2854,22 @@ static node_t pre_cond_expr (c2m_ctx_t c2m_ctx);
 
 /* Expressions: */
 static node_t pre_primary_expr (c2m_ctx_t c2m_ctx) {
-  node_t r;
+  node_t r, n;
 
-  if (pre_match (c2m_ctx, T_NUMBER, NULL, NULL, &r) || pre_match (c2m_ctx, T_CH, NULL, NULL, &r))
-    return r;
+  if (pre_match (c2m_ctx, T_CH, NULL, NULL, &r)) return r;
+  if (pre_match (c2m_ctx, T_NUMBER, NULL, NULL, &n)) {
+    if (!pre_match (c2m_ctx, '(', NULL, NULL, NULL)) return n;
+    if (!pre_match (c2m_ctx, ')', NULL, NULL, NULL)) {
+      for (;;) {
+        if ((r = pre_cond_expr (c2m_ctx)) == NULL) return NULL;
+        if (pre_match (c2m_ctx, ')', NULL, NULL, NULL)) break;
+        if (!pre_match (c2m_ctx, ',', NULL, NULL, NULL)) return NULL;
+      }
+    }
+    return new_pos_node (c2m_ctx, N_IGNORE, n->pos); /* error only during evaluation */
+  }
   if (pre_match (c2m_ctx, '(', NULL, NULL, NULL)) {
-    if ((r = pre_cond_expr (c2m_ctx)) == NULL) return r;
+    if ((r = pre_cond_expr (c2m_ctx)) == NULL) return NULL;
     if (pre_match (c2m_ctx, ')', NULL, NULL, NULL)) return r;
   }
   return NULL;
@@ -3084,6 +3094,11 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
   } while (0)
 
   switch (tree->code) {
+  case N_IGNORE:
+    error (c2m_ctx, tree->pos, "wrong preprocessor expression");
+    res.uns_p = FALSE;
+    res.u.i_val = 0;
+    break;
   case N_CH:
     res.uns_p = !char_is_signed_p () || MIR_CHAR_MAX > MIR_INT_MAX;
     if (res.uns_p)
