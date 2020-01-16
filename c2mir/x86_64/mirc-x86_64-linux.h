@@ -79,11 +79,23 @@ static char x86_64_mirc[]
     "typedef unsigned short char16_t;\n"
     "typedef unsigned int char32_t;\n"
     "\n"
+#if defined(__linux__)
     "#define __gnu_linux__ 1\n"
     "#define __linux 1\n"
     "#define __linux__ 1\n"
+    "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
-    "#define linux 1\n"
+#elif defined(__APPLE__)
+    "#define __APPLE__ 1\n"
+    "typedef struct {\n"
+    "  unsigned int gp_offset;\n"
+    "  unsigned int fp_offset;\n"
+    "  void *overflow_arg_area;\n"
+    "  void *reg_save_area;\n"
+    "} __darwin_va_list[1];\n"
+#else
+#error Uknown OS
+#endif
     "\n"
     "void *alloca (unsigned long);\n";
