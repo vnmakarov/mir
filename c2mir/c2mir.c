@@ -3819,7 +3819,7 @@ D (asm_spec) {
   PTN (T_ID);
   if (strcmp (r->u.s.s, "__asm") != 0) PTFAIL (T_ID);
   PT ('(');
-  while (! C (')')) {
+  while (!C (')')) {
     PT (T_STR);
   }
   PT (')');
@@ -3869,7 +3869,7 @@ D (declaration) {
       for (;;) { /* init-declarator */
         P (declarator);
         decl = r;
-	last_pos = decl->pos;
+        last_pos = decl->pos;
         assert (decl->code == N_DECL);
         if (typedef_p) {
           op = NL_HEAD (decl->ops);
@@ -5846,7 +5846,11 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
   if (linkage == N_IGNORE) {
     if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p
         || !type_eq_p (decl_spec.type, tab_decl_spec.type))
-      error (c2m_ctx, id->pos, "repeated declaration %s", id->u.s.s);
+#ifdef __APPLE__
+      /* a hack to use our definition instead of macosx for non-GNU compiler */
+      if (strcmp (id->u.s.s, "__darwin_va_list") != 0)
+#endif
+        error (c2m_ctx, id->pos, "repeated declaration %s", id->u.s.s);
   } else if (!compatible_types_p (decl_spec.type, tab_decl_spec.type, FALSE)) {
     error (c2m_ctx, id->pos, "incompatible types of %s declarations", id->u.s.s);
   }
