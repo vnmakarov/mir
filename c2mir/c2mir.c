@@ -1767,7 +1767,7 @@ struct pre_ctx {
   VARR (macro_call_t) * macro_call_stack;
   VARR (token_t) * pre_expr;
   token_t pre_last_token;
-  pos_t should_be_pre_pos, actual_pre_pos;
+  pos_t actual_pre_pos;
   unsigned long pptokens_num;
 };
 
@@ -1786,7 +1786,6 @@ struct pre_ctx {
 #define macro_call_stack c2m_ctx->pre_ctx->macro_call_stack
 #define pre_expr c2m_ctx->pre_ctx->pre_expr
 #define pre_last_token c2m_ctx->pre_ctx->pre_last_token
-#define should_be_pre_pos c2m_ctx->pre_ctx->should_be_pre_pos
 #define actual_pre_pos c2m_ctx->pre_ctx->actual_pre_pos
 #define pptokens_num c2m_ctx->pre_ctx->pptokens_num
 
@@ -3333,29 +3332,29 @@ static void pre_text_out (c2m_ctx_t c2m_ctx, token_t t) { /* NULL means end of o
     fprintf (f, "\n");
     return;
   }
-  pre_last_token = t;
-  if (!t->processed_p) should_be_pre_pos = t->pos;
-  if (t->code == '\n') return;
-  if (actual_pre_pos.fname != should_be_pre_pos.fname
-      || actual_pre_pos.lno != should_be_pre_pos.lno) {
-    if (actual_pre_pos.fname == should_be_pre_pos.fname
-        && actual_pre_pos.lno < should_be_pre_pos.lno
-        && actual_pre_pos.lno + 4 >= should_be_pre_pos.lno) {
-      for (; actual_pre_pos.lno != should_be_pre_pos.lno; actual_pre_pos.lno++) fprintf (f, "\n");
+  if (t->code == '\n') {
+    pre_last_token = t;
+    return;
+  }
+  if (actual_pre_pos.fname != t->pos.fname || actual_pre_pos.lno != t->pos.lno) {
+    if (actual_pre_pos.fname == t->pos.fname && actual_pre_pos.lno < t->pos.lno
+        && actual_pre_pos.lno + 4 >= t->pos.lno) {
+      for (; actual_pre_pos.lno != t->pos.lno; actual_pre_pos.lno++) fprintf (f, "\n");
     } else {
       if (pre_last_token != NULL) fprintf (f, "\n");
-      fprintf (f, "#line %d", should_be_pre_pos.lno);
-      if (actual_pre_pos.fname != should_be_pre_pos.fname) {
+      fprintf (f, "#line %d", t->pos.lno);
+      if (actual_pre_pos.fname != t->pos.fname) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
         fprintf (f, " %s", VARR_ADDR (char, temp_string));
       }
       fprintf (f, "\n");
     }
-    for (i = 0; i < should_be_pre_pos.ln_pos - 1; i++) fprintf (f, " ");
-    actual_pre_pos = should_be_pre_pos;
+    for (i = 0; i < t->pos.ln_pos - 1; i++) fprintf (f, " ");
+    actual_pre_pos = t->pos;
   }
   fprintf (f, "%s", t->code == ' ' ? " " : t->repr);
+  pre_last_token = t;
 }
 
 static void pre_out (c2m_ctx_t c2m_ctx, token_t t) {
@@ -3393,9 +3392,8 @@ static void common_pre_out (c2m_ctx_t c2m_ctx, token_t t) {
 static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
   pre_last_token = NULL;
   actual_pre_pos.fname = NULL;
-  should_be_pre_pos.fname = start_source_name;
-  should_be_pre_pos.lno = 0;
-  should_be_pre_pos.ln_pos = 0;
+  actual_pre_pos.lno = 0;
+  actual_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
   if (!options->no_prepro_p) {
