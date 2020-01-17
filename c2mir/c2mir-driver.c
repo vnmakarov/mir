@@ -128,9 +128,7 @@ static void close_cmdline_libs (void) {
 }
 
 static void init_options (int argc, char *argv[]) {
-  const char *str;
-  int c;
-  int incl_p, ldir_p;
+  int incl_p, ldir_p = FALSE; /* to remove an uninitialized warning */
 
   options.message_file = stderr;
   options.debug_p = options.verbose_p = options.asm_p = options.object_p = FALSE;
@@ -227,8 +225,6 @@ static void fancy_abort (void) {
   fprintf (stderr, "Test failed\n");
   abort ();
 }
-
-static int fancy_printf (const char *fmt, ...) { abort (); }
 
 static void *import_resolver (const char *name) {
   void *handler, *sym = NULL;
