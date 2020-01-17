@@ -11549,7 +11549,7 @@ static int proto_eq (MIR_item_t pi1, MIR_item_t pi2) {
       || VARR_LENGTH (MIR_var_t, p1->args) != VARR_LENGTH (MIR_var_t, p2->args))
     return FALSE;
   for (uint32_t i = 0; i < p1->nres; i++)
-    if (p1->res_types[i] != p1->res_types[i]) return FALSE;
+    if (p1->res_types[i] != p2->res_types[i]) return FALSE;
 
   MIR_var_t *args1 = VARR_ADDR (MIR_var_t, p1->args), *args2 = VARR_ADDR (MIR_var_t, p2->args);
 
