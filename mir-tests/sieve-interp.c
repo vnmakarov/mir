@@ -7,7 +7,6 @@
 int main (void) {
   MIR_module_t m;
   MIR_item_t func;
-  MIR_val_t val;
   double start_time;
   MIR_context_t ctx = MIR_init ();
 
@@ -32,6 +31,7 @@ int main (void) {
   fprintf (stderr, "C interface SIEVE -> %" PRId64 ": %.3f sec\n", res,
            real_sec_time () - start_time);
 #else
+  MIR_val_t val;
   MIR_interp (ctx, func, &val, 0);
   fprintf (stderr, "SIEVE -> %" PRId64 ": %.3f sec\n", val.i, real_sec_time () - start_time);
 #endif
