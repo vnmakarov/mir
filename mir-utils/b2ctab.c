@@ -11,14 +11,6 @@ static int output_mir_code_byte (MIR_context_t ctx, uint8_t byte) {
   return 1;
 }
 
-static void output_mir_code (MIR_context_t ctx) {
-  output_mir_code_file = stdout;
-  fprintf (output_mir_code_file, "static const uint8_t mir_code[] = {\n");
-  output_mir_code_byte_num = 0;
-  MIR_write_with_func (ctx, output_mir_code_byte);
-  fprintf (output_mir_code_file, "};\n");
-}
-
 int main (int argc, char *argv[]) {
   MIR_context_t ctx = MIR_init ();
 
