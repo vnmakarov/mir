@@ -12,7 +12,7 @@
    * **This code is in initial stages of development.  It is present
      only for familiarization with the project.  There is absolutely
      no warranty that MIR will not be changed in the future and the
-     code will work for any tests except ones given here and on platforms other than x86_64 Linux.**
+     code will work for any tests except ones given here and on platforms other than x86_64 Linux/OSX**
   
 ## MIR
   * MIR is strongly typed
