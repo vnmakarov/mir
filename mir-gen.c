@@ -625,7 +625,7 @@ static void process_loop (MIR_context_t ctx, bb_t entry_bb) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   edge_t e;
   loop_node_t loop_node, new_loop_node, queue_node;
-  bb_t loop_bb, queue_bb;
+  bb_t queue_bb;
 
   VARR_TRUNC (loop_node_t, loop_nodes, 0);
   VARR_TRUNC (loop_node_t, queue_nodes, 0);
@@ -1941,7 +1941,7 @@ static enum ccp_val_kind get_2isops (MIR_insn_t insn, int32_t *p, int out_p) {
   return CCP_CONST;
 }
 
-static enum ccp_val_kind get_2usops (MIR_insn_t insn, uint32_t *p, int out_p) {
+static enum ccp_val_kind MIR_UNUSED get_2usops (MIR_insn_t insn, uint32_t *p, int out_p) {
   const_t val;
   enum ccp_val_kind res;
 
@@ -2453,8 +2453,8 @@ static void ccp_process_active_edge (MIR_context_t ctx, edge_t e) {
 }
 
 static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  int i, def_p;
+  struct gen_ctx *gen_ctx MIR_UNUSED = *gen_ctx_loc (ctx);
+  int i, def_p MIR_UNUSED;
   MIR_op_t op;
   var_occ_t var_occ;
 
@@ -2480,6 +2480,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
 #endif
   } else {
     def_p = FALSE;
+    var_occ = NULL; /* to remove an initilized warning */
     for (i = 0; get_ccp_res_op (ctx, insn, i, &op); i++)
       if (var_op_p (op)) {
         def_p = TRUE;
@@ -2504,7 +2505,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
 }
 
 static void ccp_process_insn (MIR_context_t ctx, bb_insn_t bb_insn) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  struct gen_ctx *gen_ctx MIR_UNUSED = *gen_ctx_loc (ctx);
   int res;
   enum ccp_val_kind ccp_res;
   edge_t e;
@@ -2928,6 +2929,7 @@ static void initiate_live_info (MIR_context_t ctx, int moves_p) {
   nregs = get_nregs (ctx);
   for (n = 0; n < nregs; n++) {
     ri.freq = ri.thread_freq = ri.calls_num = 0;
+    ri.live_length = 0;
     ri.thread_first = n;
     ri.thread_next = MIR_MAX_REG_NUM;
     DLIST_INIT (dst_mv_t, ri.dst_moves);
@@ -3303,7 +3305,7 @@ struct ra_ctx {
 static void process_move_to_form_thread (MIR_context_t ctx, mv_t mv) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_op_t op1 = mv->bb_insn->insn->ops[0], op2 = mv->bb_insn->insn->ops[1];
-  MIR_reg_t i, breg1, breg2, breg1_first, breg2_first, last;
+  MIR_reg_t breg1, breg2, breg1_first, breg2_first, last;
 
   if (op1.mode != MIR_OP_REG || op2.mode != MIR_OP_REG) return;
   breg1 = reg2breg (gen_ctx, op1.u.reg);
@@ -3558,7 +3560,11 @@ static void rewrite (MIR_context_t ctx) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn;
   size_t nops, i;
-  MIR_op_t *op, in_op, out_op, mem_op;
+  MIR_op_t *op, mem_op;
+#if MIR_GEN_DEBUG
+  MIR_op_t in_op = MIR_new_int_op (ctx, 0),
+           out_op = MIR_new_int_op (ctx, 0); /* To remove unitilized warning */
+#endif
   MIR_mem_t mem;
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg;
@@ -3574,10 +3580,12 @@ static void rewrite (MIR_context_t ctx) {
       for (i = 0; i < nops; i++) {
         op = &insn->ops[i];
         data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
+#if MIR_GEN_DEBUG
         if (out_p)
           out_op = *op; /* we don't care about multiple call outputs here */
         else
           in_op = *op;
+#endif
         switch (op->mode) {
         case MIR_OP_REG:
           hard_reg
@@ -4025,6 +4033,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
     code = insn->code;
     if (i >= nops && (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS)
         && insn->ops[2].mode == MIR_OP_INT && (sh = int_log2 (insn->ops[2].u.i)) >= 0) {
+      new_code = code; /* to remove an initialized warning */
       switch (code) {
       case MIR_MUL: new_code = MIR_LSH; break;
       case MIR_MULS: new_code = MIR_LSHS; break;
@@ -4166,13 +4175,12 @@ static void setup_hreg_ref (MIR_context_t ctx, MIR_reg_t hr, MIR_insn_t insn, si
 static void combine (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_code_t code, new_code;
-  MIR_insn_t insn, new_insn, def_insn;
+  MIR_insn_t insn, new_insn;
   bb_insn_t bb_insn;
   size_t iter, nops, i, curr_insn_num;
   MIR_op_t temp_op, *op_ref;
-  MIR_reg_t hr, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int out_p, change_p, block_change_p;
-  int64_t p;
 #if MIR_GEN_DEBUG
   size_t insns_num = 0, deleted_insns_num = 0;
 #endif
@@ -4438,7 +4446,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   uint8_t *code;
   size_t code_len;
 #if MIR_GEN_DEBUG
-  double start_time;
+  double start_time = 0.0;
 #endif
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
