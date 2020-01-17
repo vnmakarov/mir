@@ -197,8 +197,8 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
                                                   uint32_t *dict_pos) {
   uint32_t len, best_len, len_bound;
   uint64_t hash;
-  uint32_t off, best_off, ref_size, best_ref_size;
-  uint32_t curr, prev, next;
+  uint32_t off, ref_size, best_ref_size;
+  uint32_t curr, next;
   const uint8_t *s1, *s2;
   struct _reduce_el *el, *best_el = NULL;
   struct _reduce_encode_data *encode_data = &data->u.encode;
@@ -209,8 +209,7 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
      compression speed by 10%.  */
   hash
     = mir_hash_strict (&data->buf[pos], _REDUCE_START_LEN, _REDUCE_HASH_SEED) % _REDUCE_TABLE_SIZE;
-  for (curr = encode_data->table[hash].head, prev = UINT32_MAX; curr != UINT32_MAX;
-       prev = curr, curr = next) {
+  for (curr = encode_data->table[hash].head; curr != UINT32_MAX; curr = next) {
     next = encode_data->table[curr].next;
     el = &encode_data->table[curr];
     len_bound = _reduce_min (data->buf_bound - pos, pos - el->pos);
@@ -236,7 +235,6 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
       best_ref_size = _reduce_ref_size (len, off);
       continue;
     }
-    best_off = data->curr_num - best_el->num;
     ref_size = _reduce_ref_size (len, off);
     if (best_len + ref_size < len + best_ref_size) {
       best_len = len;
@@ -251,7 +249,6 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
 
 static inline void _reduce_dict_add (struct reduce_data *data, uint32_t pos) {
   uint64_t hash;
-  struct _reduce_el *el;
   uint32_t prev, curr, num = data->curr_num++;
   struct _reduce_encode_data *encode_data = &data->u.encode;
 
