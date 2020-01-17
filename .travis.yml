@@ -2,9 +2,9 @@ language: c
 os:
  - linux
  - osx
-jobs:
-  allow_failures:
-    - os: osx
+#jobs:
+#  allow_failures:
+#    - os: osx
 dist: bionic
 arch:
  - amd64
