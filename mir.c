@@ -105,7 +105,7 @@ static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const c
   exit (1);
 }
 
-static void MIR_NO_RETURN util_error (MIR_context_t ctx, const char *message) {
+static void MIR_NO_RETURN MIR_UNUSED util_error (MIR_context_t ctx, const char *message) {
   (*error_func) (MIR_alloc_error, message);
 }
 
@@ -470,21 +470,6 @@ static void reg_init (MIR_context_t ctx) {
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_ctx_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq);
   HTAB_CREATE (size_ctx_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq);
-}
-
-static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
-  size_ctx_t sc, tab_sc;
-  reg_desc_t rd;
-  int res;
-
-  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
-  rd.func = func;
-  sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  sc.ctx = ctx;
-  VARR_PUSH (reg_desc_t, reg_descs, rd);
-  res = HTAB_DO (size_ctx_t, namenum2rdn_tab, sc, HTAB_FIND, tab_sc);
-  VARR_POP (reg_desc_t, reg_descs);
-  return res;
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
@@ -1589,6 +1574,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   size_t nargs, nops = MIR_insn_nops (ctx, insn);
   unsigned mode;
 
+  *out_p = FALSE; /* to remove unitialized warning */
   if (nop >= nops) return MIR_OP_BOUND;
   mir_assert (out_p != NULL);
   if (code == MIR_RET || code == MIR_SWITCH) {
@@ -2592,7 +2578,7 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_op_t reg_op, ret_reg_op;
   MIR_func_t func = func_item->u.func;
   MIR_type_t *res_types = func->res_types;
-  MIR_insn_t ret_label, insn, first_ret_insn;
+  MIR_insn_t ret_label, insn, first_ret_insn = NULL;
   VARR (MIR_op_t) * ret_ops;
   int one_last_ret_p;
 
@@ -3470,7 +3456,7 @@ static size_t write_ldouble (MIR_context_t ctx, writer_func_t writer, long doubl
 
 static size_t write_str_tag (MIR_context_t ctx, writer_func_t writer, MIR_str_t str,
                              bin_tag_t start_tag) {
-  size_t nb, len;
+  size_t nb;
   int ok_p;
   string_t string;
 
@@ -4112,6 +4098,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
   return vararg_p;
 }
 
+#ifndef MIR_NO_BIN_COMPRESSION
 static size_t reduce_reader (void *start, size_t len, void *data) {
   MIR_context_t ctx = data;
   size_t i;
@@ -4120,6 +4107,7 @@ static size_t reduce_reader (void *start, size_t len, void *data) {
   for (i = 0; i < len && (c = io_reader (ctx)) != EOF; i++) ((char *) start)[i] = c;
   return i;
 }
+#endif
 
 void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t)) {
   int version;
@@ -4503,8 +4491,9 @@ struct scan_ctx {
 #define label_names ctx->scan_ctx->label_names
 #define label_desc_tab ctx->scan_ctx->label_desc_tab
 
-static void MIR_NO_RETURN process_error (MIR_context_t ctx, enum MIR_error_type error_type,
-                                         const char *message) {
+static void MIR_NO_RETURN MIR_UNUSED process_error (MIR_context_t ctx,
+                                                    enum MIR_error_type error_type,
+                                                    const char *message) {
   (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
   longjmp (error_jmp_buf, TRUE);
 }
@@ -4777,6 +4766,21 @@ MIR_type_t MIR_str2type (MIR_context_t ctx, const char *type_name) {
   if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
   if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
   return MIR_T_BOUND;
+}
+
+static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
+  size_ctx_t sc, tab_sc;
+  reg_desc_t rd;
+  int res;
+
+  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
+  rd.func = func;
+  sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
+  sc.ctx = ctx;
+  VARR_PUSH (reg_desc_t, reg_descs, rd);
+  res = HTAB_DO (size_ctx_t, namenum2rdn_tab, sc, HTAB_FIND, tab_sc);
+  VARR_POP (reg_desc_t, reg_descs);
+  return res;
 }
 
 static void read_func_proto (MIR_context_t ctx, size_t nops, MIR_op_t *ops) {
