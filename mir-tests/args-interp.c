@@ -9,7 +9,6 @@ static void prd (double d) { printf ("%f\n", d); }
 int main (void) {
   MIR_module_t m;
   MIR_item_t func;
-  MIR_val_t v[19];
   MIR_context_t ctx = MIR_init ();
 
   MIR_load_external (ctx, "pri", pri);
@@ -28,6 +27,7 @@ int main (void) {
                            0x0007, 0x00000008, 0x100000009, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0,
                            10.0);
 #else
+  MIR_val_t v[19];
   v[0].i = 0x01;
   v[1].i = 0x0002;
   v[2].i = 0x00000003;
