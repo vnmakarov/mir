@@ -28,8 +28,10 @@ static inline void mir_htab_assert_fail (const char *op, const char *var) {
 #endif
 
 #ifdef __GNUC__
+#define MIR_HTAB_UNUSED __attribute__ ((unused))
 #define MIR_HTAB_NO_RETURN __attribute__ ((noreturn))
 #else
+#define MIR_HTAB_UNUSED
 #define MIR_HTAB_NO_RETURN
 #endif
 
@@ -56,6 +58,7 @@ enum htab_action { HTAB_FIND, HTAB_INSERT, HTAB_REPLACE, HTAB_DELETE };
 
 #define HTAB(T) HTAB_##T
 #define HTAB_OP(T, OP) HTAB_##T##_##OP
+#define HTAB_OP_DEF(T, OP) MIR_HTAB_UNUSED HTAB_OP (T, OP)
 
 DEF_VARR (htab_ind_t)
 
@@ -79,10 +82,10 @@ DEF_VARR (htab_ind_t)
 #define DEF_HTAB(T)                                                                               \
   HTAB_T (T)                                                                                      \
                                                                                                   \
-  static inline void HTAB_OP (T, create) (HTAB (T) * *htab, htab_size_t min_size,                 \
-                                          htab_hash_t (*hash_func) (T el),                        \
-                                          int (*eq_func) (T el1, T el2),                          \
-                                          void (*free_func) (T el)) {                             \
+  static inline void HTAB_OP_DEF (T, create) (HTAB (T) * *htab, htab_size_t min_size,             \
+                                              htab_hash_t (*hash_func) (T el),                    \
+                                              int (*eq_func) (T el1, T el2),                      \
+                                              void (*free_func) (T el)) {                         \
     HTAB (T) * ht;                                                                                \
     htab_size_t i, size;                                                                          \
                                                                                                   \
@@ -101,7 +104,7 @@ DEF_VARR (htab_ind_t)
     *htab = ht;                                                                                   \
   }                                                                                               \
                                                                                                   \
-  static inline void HTAB_OP (T, clear) (HTAB (T) * htab) {                                       \
+  static inline void HTAB_OP_DEF (T, clear) (HTAB (T) * htab) {                                   \
     htab_ind_t *addr;                                                                             \
     htab_size_t i, size;                                                                          \
     HTAB_EL (T) * els_addr;                                                                       \
@@ -119,7 +122,7 @@ DEF_VARR (htab_ind_t)
     for (i = 0; i < size; i++) addr[i] = HTAB_EMPTY_IND;                                          \
   }                                                                                               \
                                                                                                   \
-  static inline void HTAB_OP (T, destroy) (HTAB (T) * *htab) {                                    \
+  static inline void HTAB_OP_DEF (T, destroy) (HTAB (T) * *htab) {                                \
     HTAB_ASSERT (*htab != NULL, "destroy", T);                                                    \
     if ((*htab)->free_func != NULL) HTAB_OP (T, clear) (*htab);                                   \
     VARR_DESTROY (HTAB_EL (T), (*htab)->els);                                                     \
@@ -128,7 +131,8 @@ DEF_VARR (htab_ind_t)
     *htab = NULL;                                                                                 \
   }                                                                                               \
                                                                                                   \
-  static inline int HTAB_OP (T, do) (HTAB (T) * htab, T el, enum htab_action action, T * res) {   \
+  static inline int HTAB_OP_DEF (T, do) (HTAB (T) * htab, T el, enum htab_action action,          \
+                                         T * res) {                                               \
     htab_ind_t ind, el_ind, *entry, *first_deleted_entry = NULL;                                  \
     htab_hash_t hash, peterb;                                                                     \
     htab_size_t els_size, size, mask, start, bound, i;                                            \
@@ -200,11 +204,11 @@ DEF_VARR (htab_ind_t)
     }                                                                                             \
   }                                                                                               \
                                                                                                   \
-  static inline htab_size_t HTAB_OP (T, els_num) (HTAB (T) * htab) {                              \
+  static inline htab_size_t HTAB_OP_DEF (T, els_num) (HTAB (T) * htab) {                          \
     HTAB_ASSERT (htab != NULL, "els_num", T);                                                     \
     return htab->els_num;                                                                         \
   }                                                                                               \
-  static inline htab_size_t HTAB_OP (T, collisions) (HTAB (T) * htab) {                           \
+  static inline htab_size_t HTAB_OP_DEF (T, collisions) (HTAB (T) * htab) {                       \
     HTAB_ASSERT (htab != NULL, "collisions", T);                                                  \
     return htab->collisions;                                                                      \
   }
