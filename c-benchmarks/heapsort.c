@@ -20,7 +20,7 @@ gen_random(double max) {
 }
 
 void
-heapsort(int n, double *ra) {
+heap_sort(int n, double *ra) {
     int i, j;
     int ir = n;
     int l = (n >> 1) + 1;
@@ -64,7 +64,7 @@ main(int argc, char *argv[]) {
     ary[i] = gen_random(1);
     }
 
-    heapsort(N, ary);
+    heap_sort(N, ary);
 
     printf("%.10g\n", ary[N]);
 
