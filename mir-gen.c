@@ -4583,7 +4583,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     = _MIR_publish_code (ctx, code, code_len);
   target_rebase (ctx, func_item->u.func->machine_code);
 #if MIR_GEN_CALL_TRACE
-  func_item->u.func->call_addr = _MIR_get_wrapper (ctx, called_func, print_and_execute_wrapper);
+  func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
