@@ -318,7 +318,9 @@ static void reg_memory_pop (c2m_ctx_t c2m_ctx, size_t mark) {
   while (VARR_LENGTH (void_ptr_t, reg_memory) > mark) free (VARR_POP (void_ptr_t, reg_memory));
 }
 
-static size_t reg_memory_mark (c2m_ctx_t c2m_ctx) { return VARR_LENGTH (void_ptr_t, reg_memory); }
+static size_t MIR_UNUSED reg_memory_mark (c2m_ctx_t c2m_ctx) {
+  return VARR_LENGTH (void_ptr_t, reg_memory);
+}
 static void reg_memory_finish (c2m_ctx_t c2m_ctx) {
   reg_memory_pop (c2m_ctx, 0);
   VARR_DESTROY (void_ptr_t, reg_memory);
@@ -876,8 +878,6 @@ static int str_getc (c2m_ctx_t c2m_ctx) {
 }
 
 static void add_string_stream (c2m_ctx_t c2m_ctx, const char *pos_fname, const char *str) {
-  pos_t pos;
-
   add_stream (c2m_ctx, NULL, pos_fname, str_getc);
   cs->start = cs->curr = str;
 }
@@ -3186,7 +3186,10 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
     cond = v1.uns_p ? v1.u.u_val != 0 : v1.u.i_val != 0;
     res = eval (c2m_ctx, NL_EL (tree->ops, cond ? 1 : 2));
     break;
-  default: assert (FALSE);
+  default:
+    res.uns_p = FALSE;
+    res.u.i_val = 0;
+    assert (FALSE);
   }
   return res;
 }
@@ -4863,7 +4866,6 @@ static void parse_init (MIR_context_t ctx) {
 #endif
 
 static void add_standard_includes (c2m_ctx_t c2m_ctx) {
-  FILE *f;
   const char *str;
 
   for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
@@ -5230,7 +5232,7 @@ struct decl {
 };
 
 static struct decl_spec *get_param_decl_spec (node_t param) {
-  node_t declarator;
+  node_t MIR_UNUSED declarator;
 
   if (param->code == N_TYPE) return param->attr;
   declarator = NL_EL (param->ops, 1);
@@ -5816,6 +5818,7 @@ static node_t process_tag (c2m_ctx_t c2m_ctx, node_t r, node_t id, node_t decl_l
   scope = curr_scope;
   while (scope != top_scope && (scope->code == N_STRUCT || scope->code == N_UNION))
     scope = ((struct node_scope *) scope->attr)->scope;
+  sym.def_node = NULL; /* to remove uninitialized warning */
   if (decl_list->code != N_IGNORE) {
     found_p = symbol_find (c2m_ctx, S_TAG, id, scope, &sym);
   } else {
@@ -6392,7 +6395,6 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
       node_t case_expr2 = l->code == N_CASE ? NL_EL (l->ops, 1) : NULL;
       case_t case_attr, tail = DLIST_TAIL (case_t, switch_attr->case_labels);
       int ok_p = FALSE, default_p = tail != NULL && tail->case_node->code == N_DEFAULT;
-      struct expr *expr;
 
       if (case_expr == NULL) {
         if (default_p) {
@@ -6882,17 +6884,19 @@ static node_t get_compound_literal (node_t n, int *addr_p) {
   }
   return NULL;
 }
+
 static void check_initializer (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type **type_ptr,
                                node_t initializer, int const_only_p, int top_p) {
   struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t literal, des_list, curr_des, init, str, value, size_node, temp;
-  mir_llong max_index, size_val;
+  mir_llong max_index;
+  mir_llong size_val = 0; /* to remove an uninitialized warning */
   size_t mark, len;
   symbol_t sym;
   struct expr *sexpr;
   init_object_t init_object;
-  int addr_p;
+  int addr_p = FALSE; /* to remove an uninitialized warning */
 
   literal = get_compound_literal (initializer, &addr_p);
   if (literal != NULL && !addr_p && initializer->code != N_STR) {
@@ -7071,7 +7075,8 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
                          struct decl_spec decl_spec, node_t width, node_t initializer,
                          int param_p) {
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
-  node_t id, list_head, declarator;
+  node_t id = NULL; /* to remove an uninitialized warning */
+  node_t list_head, declarator;
   struct type *type;
   decl_t decl = reg_malloc (c2m_ctx, sizeof (struct decl));
 
@@ -7230,7 +7235,8 @@ static void get_int_node (c2m_ctx_t c2m_ctx, node_t *op, struct expr **e, struct
 static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, node_t op2,
                                      struct expr *e1, struct expr *e2, struct type *t1,
                                      struct type *t2) {
-  struct expr *e, *te;
+  struct expr *e = NULL;
+  struct expr *te;
   struct type t, *tt;
 
   switch (r->code) {
@@ -7425,7 +7431,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
       }
     }
     break;
-  default: assert (FALSE);
+  default: e = NULL; assert (FALSE);
   }
   return e;
 }
@@ -7538,7 +7544,7 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
   struct type *type;
   struct node_scope *ns, *curr_ns;
   node_t scope;
-  mir_size_t start_offset;
+  mir_size_t start_offset = 0; /* to remove an uninitialized warning */
 
   /* Exclude decls which will be in regs: */
   for (i = j = 0; i < VARR_LENGTH (decl_t, func_decls_for_allocation); i++) {
@@ -8297,7 +8303,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     break;
   }
   case N_CALL: {
-    struct func_type *func_type;
+    struct func_type *func_type = NULL; /* to remove an uninitialized warning */
     struct type *ret_type;
     node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
     node_t saved_scope = curr_scope;
@@ -9199,7 +9205,7 @@ static MIR_type_t get_int_mir_type (size_t size) {
   return size == 1 ? MIR_T_I8 : size == 2 ? MIR_T_I16 : size == 4 ? MIR_T_I32 : MIR_T_I64;
 }
 
-static int get_int_mir_type_size (MIR_type_t t) {
+static int MIR_UNUSED get_int_mir_type_size (MIR_type_t t) {
   return (t == MIR_T_I8 || t == MIR_T_U8
             ? 1
             : t == MIR_T_I16 || t == MIR_T_U16 ? 2 : t == MIR_T_I32 || t == MIR_T_U32 ? 4 : 8);
@@ -9948,12 +9954,13 @@ static void collect_init_els (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type
   struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t literal, des_list, curr_des, str, init, value, size_node;
-  mir_llong size_val;
+  mir_llong MIR_UNUSED size_val = 0; /* to remove an uninitialized warning */
   size_t mark;
   symbol_t sym;
   struct expr *sexpr;
   init_el_t init_el;
-  int addr_p, found_p, ok_p;
+  int addr_p = FALSE; /* to remove an uninitialized warning */
+  int MIR_UNUSED found_p, MIR_UNUSED ok_p;
   init_object_t init_object;
 
   literal = get_compound_literal (initializer, &addr_p);
@@ -9983,6 +9990,7 @@ check_one_value:
       && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
+    init_el.member_decl = NULL;
     init_el.el_type = type;
     init_el.init = str;
     VARR_PUSH (init_el_t, init_els, init_el);
@@ -10458,10 +10466,10 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
                  int val_p, op_t *desirable_dest) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   op_t res, op1, op2, var, val;
-  MIR_type_t t;
+  MIR_type_t t = MIR_T_UNDEF; /* to remove an uninitialized warning */
   MIR_insn_code_t insn_code;
   MIR_type_t mir_type;
-  struct expr *e;
+  struct expr *e = NULL; /* to remove an uninitialized warning */
   struct type *type;
   decl_t decl;
   long double ld;
@@ -10958,7 +10966,8 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     struct decl_spec *decl_spec;
     size_t ops_start;
     struct expr *call_expr = r->attr, *func_expr;
-    struct type *func_type, *type = call_expr->type;
+    struct type *func_type = NULL; /* to remove an uninitialized warning */
+    struct type *type = call_expr->type;
     MIR_item_t proto_item;
     mir_size_t saved_call_arg_area_offset_before_args;
     int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
@@ -11460,7 +11469,6 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     struct type *ret_type = func_type->u.func_type->ret_type;
     int scalar_p = scalar_type_p (ret_type);
     mir_size_t size = type_size (c2m_ctx, ret_type);
-    MIR_reg_t ret_addr_reg;
 
     assert (false_label == NULL && true_label == NULL);
     emit_label (ctx, r);
@@ -12180,7 +12188,6 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
   node_t r;
   unsigned n_error_before;
   MIR_module_t m;
-  const char *base_name;
 
   if (c2m_ctx == NULL) return 0;
   if (setjmp (c2m_ctx->env)) {
@@ -12224,7 +12231,8 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
           } else if (output_file != NULL) {
             (options->asm_p ? MIR_output_module : MIR_write_module) (ctx, output_file, m);
             if (ferror (output_file) || fclose (output_file)) {
-              fprintf (options->message_file, "C2MIR error in writing file %s\n", base_name);
+              fprintf (options->message_file, "C2MIR error in writing mir for source file %s\n",
+                       source_name);
               n_errors++;
             }
           }
