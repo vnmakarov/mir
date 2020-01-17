@@ -53,10 +53,8 @@ ex100:    func\n\
 
 int main (void) {
   double start_time = real_usec_time ();
-  double start_execution_time;
   MIR_module_t m1, m2;
   MIR_item_t f1, f2;
-  uint64_t res;
   MIR_context_t ctx = MIR_init ();
 
   fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
