@@ -318,6 +318,7 @@ static void get_builtin (MIR_context_t ctx, MIR_insn_code_t code, MIR_item_t *pr
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_type_t res_type;
 
+  *func_import_item = *proto_item = NULL; /* to remove uninitialized warning */
   switch (code) {
   case MIR_UI2F:
     res_type = MIR_T_F;
@@ -1484,6 +1485,7 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *r
   n = add_to_const_pool (gen_ctx, v);
   setup_rip_rel_addr (0, mod, rm, disp32);
   cr.pc = 0;
+  cr.next_insn_disp = 0;
   cr.const_num = n;
   VARR_PUSH (const_ref_t, const_refs, cr);
   return VARR_LENGTH (const_ref_t, const_refs) - 1;
@@ -1507,7 +1509,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
     int prefix = -1, disp8 = -1, imm8 = -1, lb = -1;
     int64_t disp32 = -1, imm32 = -1;
     int imm64_p = FALSE;
-    uint64_t imm64, v;
+    uint64_t imm64 = 0, v;
     MIR_op_t op;
     int const_ref_num = -1, label_ref_num = -1, switch_table_addr_p = FALSE;
 
