@@ -756,7 +756,6 @@ static void start_insn_trace (MIR_context_t ctx, const char *name, func_desc_t f
   }
   fprintf (stderr, "\t#");
   MIR_output_insn (ctx, stderr, insn, func_desc->func_item->u.func, FALSE);
-  fprintf (stderr, "");
 }
 
 static void finish_insn_trace (MIR_context_t ctx, MIR_insn_code_t code, code_t ops, MIR_val_t *bp) {
