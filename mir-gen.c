@@ -3381,6 +3381,7 @@ static void assign (MIR_context_t ctx) {
   bitmap_t *point_used_locs_addr;
   breg_info_t breg_info;
 
+  func_stack_slots_num = 0;
   if (nregs == 0) return;
   curr_breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   VARR_TRUNC (MIR_reg_t, breg_renumber, 0);
@@ -3420,7 +3421,6 @@ static void assign (MIR_context_t ctx) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (point_used_locs_addr[j], i);
   }
-  func_stack_slots_num = 0;
   bitmap_clear (func_assigned_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
     breg = VARR_GET (breg_info_t, sorted_bregs, i).breg;
