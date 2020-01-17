@@ -806,6 +806,7 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
   case MIR_OP_LDOUBLE:
     fprintf (stderr, "\t# res = %.*Le", LDBL_DECIMAL_DIG, bp[ops[0].i].ld);
     break;
+  default: assert (FALSE);
   }
   fprintf (stderr, "\n");
 }
