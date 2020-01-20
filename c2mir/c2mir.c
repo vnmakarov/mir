@@ -3043,7 +3043,12 @@ static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, to
     VARR_PUSH (token_t, temp_buffer, t);
   }
   no_out_p = TRUE;
-  tree = parse_pre_expr (c2m_ctx, temp_buffer);
+  if (VARR_LENGTH (token_t, temp_buffer) != 0) {
+    tree = parse_pre_expr (c2m_ctx, temp_buffer);
+  } else {
+    error (c2m_ctx, if_token->pos, "empty preprocessor expression");
+    tree = NULL;
+  }
   no_out_p = FALSE;
   VARR_DESTROY (token_t, temp_buffer);
   if (tree == NULL) {
