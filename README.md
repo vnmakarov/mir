@@ -7,6 +7,7 @@
   * MIR means **M**edium **I**nternal **R**epresentation
   * MIR project goal is to provide a basis to implement fast and light weight interpreters and JITs
   * Plans to try MIR light-weight JIT first for CRuby or/and MRuby implementation
+  * Motivations for the project can be found in ![this blog post](https://developers.redhat.com/blog/2020/01/20/mir-a-lightweight-jit-compiler-project)
 
 ## Disclaimer
    * **This code is in initial stages of development.  It is present
