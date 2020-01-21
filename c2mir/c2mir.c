@@ -1820,6 +1820,8 @@ static void new_std_macro (c2m_ctx_t c2m_ctx, const char *id_str) {
 }
 
 static void init_macros (c2m_ctx_t c2m_ctx) {
+  VARR (token_t) * params;
+
   VARR_CREATE (macro_t, macros, 2048);
   HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq);
   /* Standard macros : */
@@ -1827,6 +1829,10 @@ static void init_macros (c2m_ctx_t c2m_ctx) {
   new_std_macro (c2m_ctx, "__TIME__");
   new_std_macro (c2m_ctx, "__FILE__");
   new_std_macro (c2m_ctx, "__LINE__");
+  VARR_CREATE (token_t, params, 1);
+  VARR_PUSH (token_t, params, new_id_token (c2m_ctx, no_pos, "$"));
+  if (!options->pedantic_p)
+    new_macro (c2m_ctx, new_id_token (c2m_ctx, no_pos, "__has_include"), params, NULL);
 }
 
 static macro_t new_macro (c2m_ctx_t c2m_ctx, token_t id, VARR (token_t) * params,
@@ -2646,9 +2652,24 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p);
 
 static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, token_t if_token);
 
+static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, pos_t err_pos) {
+  int i;
+
+  transform_to_header (c2m_ctx, buffer);
+  i = 0;
+  if (VARR_LENGTH (token_t, buffer) != 0 && VARR_GET (token_t, buffer, 0)->code == ' ') i++;
+  if (i != VARR_LENGTH (token_t, buffer) - 1
+      || (VARR_GET (token_t, buffer, i)->code != T_STR
+          && VARR_GET (token_t, buffer, i)->code != T_HEADER)) {
+    error (c2m_ctx, err_pos, "wrong #include");
+    return NULL;
+  }
+  return get_include_fname (c2m_ctx, VARR_GET (token_t, buffer, i));
+}
+
 static void process_directive (c2m_ctx_t c2m_ctx) {
   token_t t, t1;
-  int i, true_p;
+  int true_p;
   VARR (token_t) * temp_buffer;
   pos_t pos;
   struct macro macro;
@@ -2760,18 +2781,10 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       processing (c2m_ctx, TRUE);
       no_out_p = FALSE;
       move_tokens (temp_buffer, output_buffer);
-      transform_to_header (c2m_ctx, temp_buffer);
-      i = 0;
-      if (VARR_LENGTH (token_t, temp_buffer) != 0
-          && VARR_GET (token_t, temp_buffer, 0)->code == ' ')
-        i++;
-      if (i != VARR_LENGTH (token_t, temp_buffer) - 1
-          || (VARR_GET (token_t, temp_buffer, i)->code != T_STR
-              && VARR_GET (token_t, temp_buffer, i)->code != T_HEADER)) {
+      if ((name = get_header_name (c2m_ctx, temp_buffer, t->pos)) == NULL) {
         error (c2m_ctx, t->pos, "wrong #include");
         goto ret;
       }
-      name = get_include_fname (c2m_ctx, VARR_GET (token_t, temp_buffer, i));
     }
     if (VARR_LENGTH (stream_t, streams) >= max_nested_includes + 1) {
       error (c2m_ctx, t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
@@ -3199,6 +3212,30 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
   return res;
 }
 
+static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t macro_id) {
+  macro_call_t mc;
+  token_t t1 = get_next_pptoken (c2m_ctx), t2 = NULL;
+
+  if (t1->code == T_EOR) {
+    pop_macro_call (c2m_ctx);
+    t1 = get_next_pptoken (c2m_ctx);
+  }
+  if (t1->code == ' ' || t1->code == '\n') {
+    t2 = t1;
+    t1 = get_next_pptoken (c2m_ctx);
+  }
+  if (t1->code != '(') { /* no args: it is not a macro call */
+    unget_next_pptoken (c2m_ctx, t1);
+    if (t2 != NULL) unget_next_pptoken (c2m_ctx, t2);
+    out_token (c2m_ctx, macro_id);
+    return NULL;
+  }
+  mc = new_macro_call (m, macro_id->pos);
+  find_args (c2m_ctx, mc);
+  VARR_PUSH (macro_call_t, macro_call_stack, mc);
+  return mc;
+}
+
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
   token_t t, t1, t2;
   struct macro macro_struct;
@@ -3287,6 +3324,31 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
         t = new_node_token (c2m_ctx, t->pos, time_str_repr, T_STR,
                             new_str_node (c2m_ctx, N_STR, uniq_cstr (c2m_ctx, time_str), t->pos));
         out_token (c2m_ctx, t);
+      } else if (strcmp (t->repr, "__has_include") == 0) {
+        int res;
+        VARR (token_t) * arg;
+        const char *name;
+        FILE *f;
+
+        if ((mc = try_param_macro_call (c2m_ctx, m, t)) != NULL) {
+          unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOR, N_IGNORE));
+          if (VARR_LENGTH (token_arr_t, mc->args) != 1) {
+            res = 0;
+          } else {
+            arg = VARR_LAST (token_arr_t, mc->args);
+            if ((name = get_header_name (c2m_ctx, arg, t->pos)) != NULL) {
+              res = ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
+            } else {
+              error (c2m_ctx, t->pos, "wrong arg of predefined __has_include");
+              res = 0;
+            }
+          }
+          m->ignore_p = TRUE;
+          unget_next_pptoken (c2m_ctx,
+                              new_node_token (c2m_ctx, t->pos,
+                                              uniq_cstr (c2m_ctx, res ? "1" : "0").s, T_NUMBER,
+                                              new_i_node (c2m_ctx, res, t->pos)));
+        }
       } else {
         assert (FALSE);
       }
@@ -3307,26 +3369,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       copy_and_push_back (c2m_ctx, do_concat (c2m_ctx, mc->repl_buffer), mc->pos);
       m->ignore_p = TRUE;
       VARR_PUSH (macro_call_t, macro_call_stack, mc);
-    } else { /* macro with parameters */
-      t2 = NULL;
-      t1 = get_next_pptoken (c2m_ctx);
-      if (t1->code == T_EOR) {
-        pop_macro_call (c2m_ctx);
-        t1 = get_next_pptoken (c2m_ctx);
-      }
-      if (t1->code == ' ' || t1->code == '\n') {
-        t2 = t1;
-        t1 = get_next_pptoken (c2m_ctx);
-      }
-      if (t1->code != '(') { /* no args: it is not a macro call */
-        unget_next_pptoken (c2m_ctx, t1);
-        if (t2 != NULL) unget_next_pptoken (c2m_ctx, t2);
-        out_token (c2m_ctx, t);
-        continue;
-      }
-      mc = new_macro_call (m, t->pos);
-      find_args (c2m_ctx, mc);
-      VARR_PUSH (macro_call_t, macro_call_stack, mc);
+    } else if ((mc = try_param_macro_call (c2m_ctx, m, t)) != NULL) { /* macro with parameters */
       process_replacement (c2m_ctx, mc);
     }
   }
