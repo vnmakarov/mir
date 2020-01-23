@@ -6,13 +6,15 @@ int main (int argc, char *argv[]) {
   MIR_item_t func;
   MIR_module_t m;
   MIR_context_t ctx;
+  char *str;
 
   if (argc != 2) {
     fprintf (stderr, "Usage: %s <mir file name>\n", argv[0]);
     exit (1);
   }
   ctx = MIR_init ();
-  MIR_scan_string (ctx, read_file (argv[1]));
+  str = read_file (argv[1]);
+  MIR_scan_string (ctx, str);
   m = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_load_module (ctx, m);
@@ -25,5 +27,6 @@ int main (int argc, char *argv[]) {
   MIR_gen (ctx, func);
   MIR_gen_finish (ctx);
   MIR_finish (ctx);
+  free (str);
   exit (0);
 }
