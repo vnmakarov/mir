@@ -12063,6 +12063,7 @@ static void print_node (MIR_context_t ctx, FILE *f, node_t n, int indent, int at
 static void init_include_dirs (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   const char *str;
+  int added_p = FALSE;
 
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
@@ -12086,14 +12087,21 @@ static void init_include_dirs (MIR_context_t ctx) {
   }
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/local/include");
+#endif
+#ifdef ADDITIONAL_INCLUDE_PATH
+  if (ADDITIONAL_INCLUDE_PATH[0] != 0) {
+    added_p = TRUE;
+    VARR_PUSH (char_ptr_t, system_headers, ADDITIONAL_INCLUDE_PATH);
+  }
+#endif
 #if defined(__APPLE__)
-  VARR_PUSH (char_ptr_t, system_headers,
-             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/"
-             "MacOSX.sdk/usr/include");
+  if (! added_p)
+    VARR_PUSH (char_ptr_t, system_headers, "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include");
 #endif
 #if defined(__linux__) && defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
 #endif
+#if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
 #endif
   VARR_PUSH (char_ptr_t, system_headers, NULL);
