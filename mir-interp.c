@@ -841,7 +841,7 @@ static code_t call_insn_execute (MIR_context_t ctx, code_t pc, MIR_val_t *bp, co
 static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *bp,
                            MIR_val_t *results) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
-  code_t pc, ops, code = func_desc->code;
+  code_t pc, ops, code;
 
 #if MIR_INTERP_TRACE
   MIR_full_insn_code_t trace_insn_code;
@@ -927,6 +927,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     END_INSN;                  \
   }
 
+  code = func_desc->code;
   pc = code;
 
 #if DIRECT_THREADED_DISPATCH
