@@ -1,4 +1,36 @@
+TARGET := unknown
+ADDITIONAL_INCLUDE_PATH:=
+ifeq ($(OS),Windows_NT)
+    ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
+        TARGET := x86_64
+    else
+        ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+            TARGET := x86_64
+        endif
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        XCRUN := $(shell xcrun --show-sdk-path >/dev/null 2>&1 && echo yes || echo no)
+        ifeq ($(XCRUN),yes)
+            ADDITIONAL_INCLUDE_PATH := $(shell xcrun --show-sdk-path)/usr/include
+        endif
+    endif
+    UNAME_P := $(shell uname -p)
+    ifeq ($(UNAME_P),x86_64)
+        TARGET := x86_64
+    else
+        ifeq ($(UNAME_P),i386)
+            TARGET := x86_64
+	endif
+    endif
+endif
+
 CC += -std=gnu11 -Wno-abi
+ifneq ($(ADDITIONAL_INCLUDE_PATH),)
+  CC += -DADDITIONAL_INCLUDE_PATH=\"$(ADDITIONAL_INCLUDE_PATH)\"
+endif
+
 ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
   ifeq ($(shell $(CC) -fno-tree-sra 2>&1 | grep -c 'fno-tree-sra'), 0)
      CC += -fno-tree-sra
@@ -6,7 +38,6 @@ ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
 endif
 
 CFLAGS=-O3 -g -DNDEBUG
-TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
