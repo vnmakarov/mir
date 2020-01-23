@@ -579,6 +579,10 @@ static void delete_bb (MIR_context_t ctx, bb_t bb) {
     delete_edge (e);
   }
   DLIST_REMOVE (bb_t, curr_cfg->bbs, bb);
+  bitmap_destroy (bb->in);
+  bitmap_destroy (bb->out);
+  bitmap_destroy (bb->gen);
+  bitmap_destroy (bb->kill);
   free (bb);
 }
 
@@ -694,6 +698,18 @@ static void build_loop_tree (MIR_context_t ctx) {
       DLIST_APPEND (loop_node_t, curr_cfg->root_loop_node->children, loop_node);
       loop_node->parent = curr_cfg->root_loop_node;
     }
+}
+
+static void destroy_loop_tree (MIR_context_t ctx, loop_node_t root) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  loop_node_t node, next;
+
+  if (root->bb == NULL)
+    for (node = DLIST_HEAD (loop_node_t, root->children); node != NULL; node = next) {
+      next = DLIST_NEXT (loop_node_t, node);
+      destroy_loop_tree (ctx, node);
+    }
+  free (root);
 }
 
 static void update_min_max_reg (MIR_context_t ctx, MIR_reg_t reg) {
@@ -976,10 +992,6 @@ static void destroy_func_cfg (MIR_context_t ctx) {
   }
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
-    bitmap_destroy (bb->in);
-    bitmap_destroy (bb->out);
-    bitmap_destroy (bb->gen);
-    bitmap_destroy (bb->kill);
     delete_bb (ctx, bb);
   }
   for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
@@ -4593,6 +4605,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
   destroy_func_live_ranges (ctx);
+  destroy_loop_tree (ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (ctx);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL)
