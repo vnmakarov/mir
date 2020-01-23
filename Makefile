@@ -86,19 +86,19 @@ io-bench:
 	@echo ========io-bench can take upto 2 min===============
 	$(CC) $(CFLAGS) mir.c mir-tests/io-bench.c && ./a.out
 
-interp-loop:
+interp-test1:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/loop-interp.c && ./a.out
-interp-loop-c:
+interp-test2:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out
-interp-sieve:
+interp-test3:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/sieve-interp.c && ./a.out
-interp-sieve-c:
+interp-test4:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/sieve-interp.c && ./a.out
-interp-hi:
+interp-test5:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/hi-interp.c && ./a.out
-interp-args:
+interp-test6:
 	$(CC) -g -D$(TARGET) mir.c mir-tests/args-interp.c && ./a.out
-interp-args-c:
+interp-test7:
 	$(CC) -g -D$(TARGET) -DMIR_C_INTERFACE=1 mir.c mir-tests/args-interp.c && ./a.out
 interp-test8:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test8.mir
@@ -120,7 +120,7 @@ interp-test13:
 interp-test14:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test14.mir
 
-interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8\
+interp-test: interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7 interp-test8\
              interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
 
 interp-bench:
