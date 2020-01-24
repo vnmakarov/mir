@@ -3,6 +3,12 @@
 #include "../mir-gen.h"
 #include "test-read.h"
 
+static char *program_str = NULL;
+static void our_exit (int code) {
+  if (program_str != NULL) free (program_str);
+  exit (code);
+}
+
 int main (int argc, char *argv[]) {
   const char *mir_fname = NULL;
   MIR_module_t mir_module;
@@ -28,11 +34,12 @@ int main (int argc, char *argv[]) {
   }
   mir_fname = argv[argc - 1];
   ctx = MIR_init ();
-  MIR_scan_string (ctx, read_file (mir_fname));
+  program_str = read_file (mir_fname);
+  MIR_scan_string (ctx, program_str);
   mir_module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx));
   if (DLIST_NEXT (MIR_module_t, mir_module) != NULL) {
     fprintf (stderr, "%s: there should be one module in the file %s\n", argv[0], mir_fname);
-    exit (1);
+    our_exit (1);
   }
   if (!gen_p && !interpr_p) MIR_output (ctx, stderr);
   main_func = NULL;
@@ -40,7 +47,7 @@ int main (int argc, char *argv[]) {
     if (f->item_type == MIR_func_item && strcmp (f->u.func->name, "main") == 0) main_func = f;
   if (main_func == NULL) {
     fprintf (stderr, "%s: cannot execute program w/o main function\n", argv[0]);
-    exit (1);
+    our_exit (1);
   }
   MIR_load_module (ctx, mir_module);
   if (!gen_p && !interpr_p) {
@@ -48,7 +55,7 @@ int main (int argc, char *argv[]) {
     MIR_output (ctx, stderr);
   }
   MIR_load_external (ctx, "abort", abort);
-  MIR_load_external (ctx, "exit", exit);
+  MIR_load_external (ctx, "exit", our_exit);
   MIR_load_external (ctx, "printf", printf);
   MIR_load_external (ctx, "malloc", malloc);
   MIR_load_external (ctx, "free", free);
@@ -72,5 +79,5 @@ int main (int argc, char *argv[]) {
     MIR_output (ctx, stderr);
   }
   MIR_finish (ctx);
-  exit (0);
+  our_exit (0);
 }

@@ -13,6 +13,7 @@ static char *read_file (const char *name) {
   str = (char *) malloc (len + 1);
   if (fread (str, 1, len, f) != len) {
     fprintf (stderr, "file %s was changed\n", name);
+    free (str);
     exit (1);
   }
   str[len] = 0;

@@ -1,4 +1,36 @@
+TARGET := unknown
+ADDITIONAL_INCLUDE_PATH:=
+ifeq ($(OS),Windows_NT)
+    ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
+        TARGET := x86_64
+    else
+        ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+            TARGET := x86_64
+        endif
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        XCRUN := $(shell xcrun --show-sdk-path >/dev/null 2>&1 && echo yes || echo no)
+        ifeq ($(XCRUN),yes)
+            ADDITIONAL_INCLUDE_PATH := $(shell xcrun --show-sdk-path)/usr/include
+        endif
+    endif
+    UNAME_P := $(shell uname -p)
+    ifeq ($(UNAME_P),x86_64)
+        TARGET := x86_64
+    else
+        ifeq ($(UNAME_P),i386)
+            TARGET := x86_64
+	endif
+    endif
+endif
+
 CC += -std=gnu11 -Wno-abi
+ifneq ($(ADDITIONAL_INCLUDE_PATH),)
+  CC += -DADDITIONAL_INCLUDE_PATH=\"$(ADDITIONAL_INCLUDE_PATH)\"
+endif
+
 ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
   ifeq ($(shell $(CC) -fno-tree-sra 2>&1 | grep -c 'fno-tree-sra'), 0)
      CC += -fno-tree-sra
@@ -6,7 +38,6 @@ ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
 endif
 
 CFLAGS=-O3 -g -DNDEBUG
-TARGET=x86_64
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h mir-gen-$(TARGET).c
 OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
@@ -86,19 +117,19 @@ io-bench:
 	@echo ========io-bench can take upto 2 min===============
 	$(CC) $(CFLAGS) mir.c mir-tests/io-bench.c && ./a.out
 
-interp-loop:
+interp-test1:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/loop-interp.c && ./a.out
-interp-loop-c:
+interp-test2:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out
-interp-sieve:
+interp-test3:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/sieve-interp.c && ./a.out
-interp-sieve-c:
+interp-test4:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/sieve-interp.c && ./a.out
-interp-hi:
+interp-test5:
 	$(CC) -g -D$(TARGET) -DMIR_INTERP_DEBUG=1 mir.c mir-tests/hi-interp.c && ./a.out
-interp-args:
+interp-test6:
 	$(CC) -g -D$(TARGET) mir.c mir-tests/args-interp.c && ./a.out
-interp-args-c:
+interp-test7:
 	$(CC) -g -D$(TARGET) -DMIR_C_INTERFACE=1 mir.c mir-tests/args-interp.c && ./a.out
 interp-test8:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test8.mir
@@ -120,7 +151,7 @@ interp-test13:
 interp-test14:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test14.mir
 
-interp-test: interp-loop interp-loop-c interp-sieve interp-sieve-c interp-hi interp-args interp-args-c interp-test8\
+interp-test: interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7 interp-test8\
              interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
 
 interp-bench:

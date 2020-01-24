@@ -1944,12 +1944,12 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
   free (c2m_ctx->pre_ctx);
 }
 
-static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname) {
+static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_pos) {
   FILE *f;
 
   assert (fname != NULL);
   if ((f = fopen (fname, "r")) == NULL) {
-    if (options->message_file != NULL) fprintf (stderr, "error in opening file %s\n", fname);
+    if (options->message_file != NULL) error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
   add_stream (c2m_ctx, f, fname, NULL);
@@ -2790,7 +2790,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
-    add_include_stream (c2m_ctx, name);
+    add_include_stream (c2m_ctx, name, t->pos);
   } else if (strcmp (t->repr, "line") == 0) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
     unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOP, N_IGNORE));
@@ -12063,6 +12063,7 @@ static void print_node (MIR_context_t ctx, FILE *f, node_t n, int indent, int at
 static void init_include_dirs (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   const char *str;
+  int added_p = FALSE;
 
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
@@ -12086,14 +12087,21 @@ static void init_include_dirs (MIR_context_t ctx) {
   }
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/local/include");
+#endif
+#ifdef ADDITIONAL_INCLUDE_PATH
+  if (ADDITIONAL_INCLUDE_PATH[0] != 0) {
+    added_p = TRUE;
+    VARR_PUSH (char_ptr_t, system_headers, ADDITIONAL_INCLUDE_PATH);
+  }
+#endif
 #if defined(__APPLE__)
-  VARR_PUSH (char_ptr_t, system_headers,
-             "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/"
-             "MacOSX.sdk/usr/include");
+  if (! added_p)
+    VARR_PUSH (char_ptr_t, system_headers, "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include");
 #endif
 #if defined(__linux__) && defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
 #endif
+#if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
 #endif
   VARR_PUSH (char_ptr_t, system_headers, NULL);

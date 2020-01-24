@@ -141,7 +141,7 @@ struct insn_desc {
   unsigned op_modes[4];
 };
 
-#define OUTPUT_FLAG (1 << 31)
+#define OUTPUT_FLAG (1 << 30)
 
 static const struct insn_desc insn_descs[] = {
   {MIR_MOV, "mov", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
