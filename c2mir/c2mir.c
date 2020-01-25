@@ -9343,6 +9343,8 @@ static void emit_insn_opt (MIR_context_t ctx, MIR_insn_t insn) {
     MIR_insn_op_mode (ctx, tail, 0, &out_p);
     if (out_p) {
       tail->ops[0] = insn->ops[0];
+      MIR_append_insn (ctx, curr_func, insn);
+      MIR_remove_insn (ctx, curr_func, insn);
       return;
     }
   }
@@ -12097,8 +12099,9 @@ static void init_include_dirs (MIR_context_t ctx) {
   }
 #endif
 #if defined(__APPLE__)
-  if (! added_p)
-    VARR_PUSH (char_ptr_t, system_headers, "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include");
+  if (!added_p)
+    VARR_PUSH (char_ptr_t, system_headers,
+               "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include");
 #endif
 #if defined(__linux__) && defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
