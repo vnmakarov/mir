@@ -667,19 +667,19 @@ static void remove_item (MIR_context_t ctx, MIR_item_t item) {
   case MIR_export_item:
   case MIR_forward_item: break;
   case MIR_data_item:
-    if (item->addr != NULL && item->section_start_p) free (item->addr);
+    if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.data);
     break;
   case MIR_ref_data_item:
-    if (item->addr != NULL && item->section_start_p) free (item->addr);
+    if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.ref_data);
     break;
   case MIR_expr_data_item:
-    if (item->addr != NULL && item->section_start_p) free (item->addr);
+    if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.expr_data);
     break;
   case MIR_bss_item:
-    if (item->addr != NULL && item->section_start_p) free (item->addr);
+    if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.bss);
     break;
   default: mir_assert (FALSE);
