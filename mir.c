@@ -667,19 +667,19 @@ static void remove_item (MIR_context_t ctx, MIR_item_t item) {
   case MIR_export_item:
   case MIR_forward_item: break;
   case MIR_data_item:
-    if (item->addr != NULL && item->u.data->name != NULL) free (item->addr);
+    if (item->addr != NULL && item->section_start_p) free (item->addr);
     free (item->u.data);
     break;
   case MIR_ref_data_item:
-    if (item->addr != NULL && item->u.ref_data->name != NULL) free (item->addr);
+    if (item->addr != NULL && item->section_start_p) free (item->addr);
     free (item->u.ref_data);
     break;
   case MIR_expr_data_item:
-    if (item->addr != NULL && item->u.expr_data->name != NULL) free (item->addr);
+    if (item->addr != NULL && item->section_start_p) free (item->addr);
     free (item->u.expr_data);
     break;
   case MIR_bss_item:
-    if (item->addr != NULL && item->u.bss->name != NULL) free (item->addr);
+    if (item->addr != NULL && item->section_start_p) free (item->addr);
     free (item->u.bss);
     break;
   default: mir_assert (FALSE);
@@ -890,6 +890,7 @@ static MIR_item_t create_item (MIR_context_t ctx, MIR_item_type_t item_type,
   item->item_type = item_type;
   item->ref_def = NULL;
   item->export_p = FALSE;
+  item->section_head_p = FALSE;
   item->addr = NULL;
   return item;
 }
@@ -1451,6 +1452,7 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
       (*error_func) (MIR_alloc_error, "Not enough memory to allocate data/bss %s",
                      name == NULL ? "" : name);
     }
+    item->section_head_p = TRUE;
   }
   /* Set up section memory: */
   for (last_item = item, curr_item = item, addr = item->addr;

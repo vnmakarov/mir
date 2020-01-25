@@ -337,6 +337,8 @@ struct MIR_item {
      item, imported definition or proto object */
   void *addr;
   char export_p; /* true for export items (only func items) */
+  /* defined for data-bss after loading. True if it is a start of allocated section */
+  char section_head_p;
   union {
     MIR_func_t func;
     MIR_proto_t proto;
