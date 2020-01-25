@@ -60,6 +60,22 @@ static struct c2mir_options options;
 static size_t curr_char, code_len;
 static const uint8_t *code;
 
+typedef void *void_ptr_t;
+
+DEF_VARR (void_ptr_t);
+static VARR (void_ptr_t) * allocated;
+
+static void *reg_malloc (size_t s) {
+  void *res = malloc (s);
+
+  if (res == NULL) {
+    fprintf (stderr, "c2m: no memory\n");
+    exit (1);
+  }
+  VARR_PUSH (void_ptr_t, allocated, res);
+  return res;
+}
+
 DEF_VARR (char);
 static VARR (char) * temp_string;
 
@@ -165,7 +181,7 @@ static void init_options (int argc, char *argv[]) {
       const char *dir = strlen (argv[i]) == 2 && i + 1 < argc ? argv[++i] : argv[i] + 2;
 
       if (*dir == '\0') continue;
-      arg = malloc (strlen (dir) + 1);
+      arg = reg_malloc (strlen (dir) + 1);
       strcpy (arg, dir);
       if (incl_p || ldir_p)
         VARR_PUSH (char_ptr_t, incl_p ? headers : lib_dirs, arg);
@@ -180,7 +196,7 @@ static void init_options (int argc, char *argv[]) {
         macro_command.name = def;
       } else {
         macro_command.def_p = TRUE;
-        macro_command.name = str = malloc (strlen (def) + 1);
+        macro_command.name = str = reg_malloc (strlen (def) + 1);
         strcpy (str, def);
         if ((bound = strchr (def, '=')) == NULL) {
           macro_command.def = "1";
@@ -277,6 +293,7 @@ int main (int argc, char *argv[], char *env[]) {
   MIR_context_t ctx;
 
   interp_exec_p = gen_exec_p = lazy_gen_exec_p = FALSE;
+  VARR_CREATE (void_ptr_t, allocated, 100);
   VARR_CREATE (uint8_t, input, 100);
   VARR_CREATE (char_ptr_t, source_file_names, 32);
   VARR_CREATE (char_ptr_t, exec_argv, 32);
@@ -484,5 +501,8 @@ int main (int argc, char *argv[], char *env[]) {
   VARR_DESTROY (char_ptr_t, source_file_names);
   VARR_DESTROY (char_ptr_t, exec_argv);
   VARR_DESTROY (uint8_t, input);
+  for (size_t i = 0; i < VARR_LENGTH (void_ptr_t, allocated); i++)
+    free (VARR_GET (void_ptr_t, allocated, i));
+  VARR_DESTROY (void_ptr_t, allocated);
   return ret_code;
 }
