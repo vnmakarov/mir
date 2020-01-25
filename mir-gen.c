@@ -3945,7 +3945,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
     if (!hreg_refs_addr[hr].def_p) continue;
     gen_assert (!hreg_refs_addr[hr].del_p);
     def_insn = hreg_refs_addr[hr].insn;
-    if (obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
+    if (def_insn->nops > 1 && obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
       continue; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
     insn_hr_change_p = FALSE;
     for (i = 0; i < nops; i++) { /* Change all hr occurences: */
