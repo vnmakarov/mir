@@ -10,7 +10,7 @@ This directory contains some usefull utility:
   containing an array initialized by the MIR binary
 
   * You can generate a standalone program executing the MIR binary by
-    `cc -O2 -fno-tree-sra mir.o mir-gen.o mir-binary-driver.c -ldl`
+    `cc -O2 -fno-tree-sra mir.o mir-gen.o mir-bin-driver.c -ldl`
 
   * The program reads MIR binary from the array and execute it by
     interpreter (if you add `-DMIR_USE_INTERP` to the above
