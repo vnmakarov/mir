@@ -2,8 +2,8 @@ name: benchmark
 
 on:
   schedule:
-    # Run at 17:30 on Monday
-    - cron:  '30 17 * * 6'
+    # Run at 22:30 UTC on Monday
+    - cron:  '30 22 * * 6'
 
 jobs:
   bench:
