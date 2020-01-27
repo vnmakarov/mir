@@ -1,0 +1,19 @@
+name: benchmark
+
+on:
+  schedule:
+    # Run at 17:30 on Monday
+    - cron:  '30 17 * * 6'
+
+jobs:
+  bench:
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: make bench
+      run: make bench
