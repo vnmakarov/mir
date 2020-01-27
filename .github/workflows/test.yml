@@ -1,0 +1,16 @@
+name: test
+
+on: [push]
+
+jobs:
+  test:
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: make test
+      run: make test
