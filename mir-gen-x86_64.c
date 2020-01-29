@@ -18,7 +18,7 @@ enum {
 static const MIR_reg_t MAX_HARD_REG = ST1_HARD_REG;
 static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
 
-static int locs_num (MIR_reg_t loc, MIR_type_t type) {
+static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
   return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1;
 }
 
@@ -29,7 +29,7 @@ const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = X
 const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_HARD_REG;
 const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = MIR_NON_HARD_REG;
 
-static inline int hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
+static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
   /* For LD we need x87 stack regs and it is too complicated so no
      hard register allocation for LD: */
@@ -37,7 +37,7 @@ static inline int hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   return type == MIR_T_F || type == MIR_T_D ? hard_reg >= XMM0_HARD_REG : hard_reg < XMM0_HARD_REG;
 }
 
-static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
+static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
   return (hard_reg == BP_HARD_REG || hard_reg == SP_HARD_REG || hard_reg == TEMP_INT_HARD_REG1
           || hard_reg == TEMP_INT_HARD_REG2 || hard_reg == TEMP_FLOAT_HARD_REG1
@@ -46,7 +46,7 @@ static inline int fixed_hard_reg_p (MIR_reg_t hard_reg) {
           || hard_reg == ST1_HARD_REG);
 }
 
-static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
   return !(hard_reg == BX_HARD_REG || (hard_reg >= R12_HARD_REG && hard_reg <= R15_HARD_REG));
 }
@@ -79,7 +79,8 @@ static inline int call_used_hard_reg_p (MIR_reg_t hard_reg) {
 
 static const int reg_save_area_size = 176;
 
-static MIR_disp_t get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type, MIR_reg_t slot) {
+static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
+                                                MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
@@ -417,7 +418,7 @@ struct target_ctx {
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
 
-static void machinize (MIR_context_t ctx) {
+static void target_machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_type_t type, mem_type, res_type;
@@ -637,8 +638,8 @@ static void dsave (MIR_context_t ctx, MIR_insn_t anchor, int disp, MIR_reg_t har
            _MIR_new_hard_reg_op (ctx, hard_reg));
 }
 
-static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
-                                size_t stack_slots_num) {
+static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
+                                       size_t stack_slots_num) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
@@ -649,7 +650,7 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
   for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
-    if (!call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) saved_hard_regs_num++;
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) saved_hard_regs_num++;
   if (leaf_p && !alloca_p && saved_hard_regs_num == 0 && !func->vararg_p && stack_slots_num == 0)
     return;
   sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
@@ -694,7 +695,7 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
   bp_saved_reg_offset = block_size + (func->vararg_p ? reg_save_area_size : 0);
   /* Saving callee saved hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
-    if (!call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       assert (i <= R15_HARD_REG); /* xmm regs are always callee-clobbered */
       new_insn = MIR_new_insn (ctx, MIR_MOV,
                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
@@ -707,7 +708,7 @@ static void make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
   /* Restoring hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
-    if (!call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
                                                          (int64_t) (n++ * 8) - bp_saved_reg_offset,
@@ -1092,7 +1093,7 @@ static const struct pattern patterns[] = {
   {MIR_RET, "$", "C3"}, /* ret ax, dx, xmm0, xmm1, st0, st1  */
 };
 
-static void get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
+static void target_get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
   MIR_insn_code_t code = insn->code;
 
   *hr1 = *hr2 = MIR_NON_HARD_REG;
@@ -1807,7 +1808,7 @@ static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
   return long_jump_opcode[1] - 0x10;
 }
 
-static int insn_ok_p (MIR_context_t ctx, MIR_insn_t insn) {
+static int target_insn_ok_p (MIR_context_t ctx, MIR_insn_t insn) {
   return find_insn_pattern_replacement (ctx, insn) != NULL;
 }
 

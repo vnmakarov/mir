@@ -1382,7 +1382,8 @@ static void create_av_bitmaps (MIR_context_t ctx) {
         }
         bitmap_set_bit_p (bb->av_gen, e->num);
       }
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                           &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -1483,7 +1484,8 @@ static void cse_modify (MIR_context_t ctx) {
           insn = new_insn;
         }
       }
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                           &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -2895,7 +2897,8 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
         }
       }
     }
-    get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+    target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                         &early_clobbered_hard_reg2);
     if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg1);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg1);
@@ -3012,7 +3015,8 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
         if (live_start1_p) add_bb_insn_dead_var (ctx, bb_insn, var);
         if (live_start2_p) add_bb_insn_dead_var (ctx, bb_insn, var2);
       }
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                           &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -3215,7 +3219,8 @@ static void build_live_ranges (MIR_context_t ctx) {
         default: /* do nothing */ break;
         }
       }
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                           &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
         incr_p |= make_reg_live (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
         incr_p |= make_reg_dead (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
@@ -3451,12 +3456,12 @@ static void assign (MIR_context_t ctx) {
     best_profit = 0;
     type = MIR_reg_type (ctx, reg, curr_func_item->u.func);
     for (loc = 0; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
-      if (loc <= MAX_HARD_REG && !hard_reg_type_ok_p (loc, type)) continue;
-      slots_num = locs_num (loc, type);
+      if (loc <= MAX_HARD_REG && !target_hard_reg_type_ok_p (loc, type)) continue;
+      slots_num = target_locs_num (loc, type);
       for (k = 0; k < slots_num; k++)
         if ((loc + k <= MAX_HARD_REG
-             && (fixed_hard_reg_p (loc + k)
-                 || (call_used_hard_reg_p (loc + k) && curr_breg_infos[breg].calls_num > 0)))
+             && (target_fixed_hard_reg_p (loc + k)
+                 || (target_call_used_hard_reg_p (loc + k) && curr_breg_infos[breg].calls_num > 0)))
             || bitmap_bit_p (conflict_locs, loc + k))
           break;
       if (k < slots_num) continue;
@@ -3471,7 +3476,7 @@ static void assign (MIR_context_t ctx) {
       }
       if (best_loc != MIR_NON_HARD_REG && loc == MAX_HARD_REG) break;
     }
-    slots_num = locs_num (best_loc, type);
+    slots_num = target_locs_num (best_loc, type);
     if (best_loc <= MAX_HARD_REG) {
       for (k = 0; k < slots_num; k++) bitmap_set_bit_p (func_assigned_hard_regs, best_loc + k);
     } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
@@ -3548,7 +3553,7 @@ static MIR_reg_t change_reg (MIR_context_t ctx, MIR_op_t *mem_op, MIR_reg_t reg,
     code = MIR_LDMOV;
     hard_reg = first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
   }
-  offset = get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
+  offset = target_get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
   *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
   if (hard_reg == MIR_NON_HARD_REG) return hard_reg;
   hard_reg_op = _MIR_new_hard_reg_op (ctx, hard_reg);
@@ -4055,7 +4060,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       }
       new_insn = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
       MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
-      if (insn_ok_p (ctx, new_insn)) {
+      if (target_insn_ok_p (ctx, new_insn)) {
         insn->code = new_insn->code;
         insn->ops[0] = new_insn->ops[0];
         insn->ops[1] = new_insn->ops[1];
@@ -4065,7 +4070,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       insn_hr_change_p = TRUE;
     }
     if (insn_hr_change_p) {
-      if ((success_p = i >= nops && insn_ok_p (ctx, insn))) insn_change_p = TRUE;
+      if ((success_p = i >= nops && target_insn_ok_p (ctx, insn))) insn_change_p = TRUE;
       while (VARR_LENGTH (size_t, changed_op_numbers)) {
         i = VARR_POP (size_t, changed_op_numbers);
         if (success_p)
@@ -4153,7 +4158,7 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
     return NULL;
   new_insn = MIR_new_insn (ctx, code, insn->ops[0], def_insn->ops[1], def_insn->ops[2]);
   MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
-  if (!insn_ok_p (ctx, new_insn)) {
+  if (!target_insn_ok_p (ctx, new_insn)) {
     MIR_remove_insn (ctx, curr_func_item, new_insn);
     return NULL;
   } else {
@@ -4218,7 +4223,8 @@ static void combine (MIR_context_t ctx) {
           print_bb_insn (ctx, bb_insn, TRUE);
         }
 #endif
-        get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+        target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                             &early_clobbered_hard_reg2);
         if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
           setup_hreg_ref (ctx, early_clobbered_hard_reg1, insn, 0 /* whatever */, curr_insn_num,
                           TRUE);
@@ -4389,7 +4395,8 @@ static void dead_code_elimination (MIR_context_t ctx) {
         default: break;
         }
       }
-      get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1, &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
+                                           &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -4532,7 +4539,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif /* #ifndef NO_CCP */
   ccp_clear (ctx);
   make_io_dup_op_insns (ctx);
-  machinize (ctx);
+  target_machinize (ctx);
   add_new_bb_insns (ctx);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
@@ -4583,7 +4590,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif
 #endif /* #ifndef NO_COMBINE */
-  make_prolog_epilog (ctx, func_assigned_hard_regs, func_stack_slots_num);
+  target_make_prolog_epilog (ctx, func_assigned_hard_regs, func_stack_slots_num);
 #if MIR_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
@@ -4654,7 +4661,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_selection (ctx);
   call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
   for (i = 0; i <= MAX_HARD_REG; i++)
-    if (call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
+    if (target_call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
   insn_to_consider = bitmap_create2 (1024);
   target_init (ctx);
 }
