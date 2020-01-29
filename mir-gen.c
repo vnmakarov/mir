@@ -1382,8 +1382,8 @@ static void create_av_bitmaps (MIR_context_t ctx) {
         }
         bitmap_set_bit_p (bb->av_gen, e->num);
       }
-      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                           &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                            &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -1484,8 +1484,8 @@ static void cse_modify (MIR_context_t ctx) {
           insn = new_insn;
         }
       }
-      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                           &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                            &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -2897,8 +2897,8 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
         }
       }
     }
-    target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                         &early_clobbered_hard_reg2);
+    target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                          &early_clobbered_hard_reg2);
     if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg1);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg1);
@@ -3015,8 +3015,8 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
         if (live_start1_p) add_bb_insn_dead_var (ctx, bb_insn, var);
         if (live_start2_p) add_bb_insn_dead_var (ctx, bb_insn, var2);
       }
-      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                           &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                            &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
@@ -3219,8 +3219,8 @@ static void build_live_ranges (MIR_context_t ctx) {
         default: /* do nothing */ break;
         }
       }
-      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                           &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                            &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
         incr_p |= make_reg_live (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
         incr_p |= make_reg_dead (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
@@ -4223,8 +4223,8 @@ static void combine (MIR_context_t ctx) {
           print_bb_insn (ctx, bb_insn, TRUE);
         }
 #endif
-        target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                             &early_clobbered_hard_reg2);
+        target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                              &early_clobbered_hard_reg2);
         if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
           setup_hreg_ref (ctx, early_clobbered_hard_reg1, insn, 0 /* whatever */, curr_insn_num,
                           TRUE);
@@ -4395,8 +4395,8 @@ static void dead_code_elimination (MIR_context_t ctx) {
         default: break;
         }
       }
-      target_get_early_clobbered_hard_reg (insn, &early_clobbered_hard_reg1,
-                                           &early_clobbered_hard_reg2);
+      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                            &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
         bitmap_clear_bit_p (live, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)

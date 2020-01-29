@@ -1093,7 +1093,7 @@ static const struct pattern patterns[] = {
   {MIR_RET, "$", "C3"}, /* ret ax, dx, xmm0, xmm1, st0, st1  */
 };
 
-static void target_get_early_clobbered_hard_reg (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
+static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
   MIR_insn_code_t code = insn->code;
 
   *hr1 = *hr2 = MIR_NON_HARD_REG;
