@@ -175,6 +175,7 @@ static void make_io_dup_op_insns (MIR_context_t ctx) {
   func = curr_func_item->u.func;
   for (i = 0; target_io_dup_op_insn_codes[i] != MIR_INSN_BOUND; i++)
     bitmap_set_bit_p (insn_to_consider, target_io_dup_op_insn_codes[i]);
+  if (bitmap_empty_p (insn_to_consider)) return;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
