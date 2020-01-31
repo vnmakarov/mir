@@ -745,7 +745,7 @@ struct pattern {
      l - label which can be present by 32-bit
      [0-9] - an operand matching n-th operand (n should be less than given operand number)
 
-     Remmeber we have no float or (long) double immediate at this stage. They are represented by
+     Remember we have no float or (long) double immediate at this stage. They are represented by
      a reference to data item.  */
   const char *pattern;
   /* Replacement elements:
