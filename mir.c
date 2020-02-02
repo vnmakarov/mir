@@ -3252,6 +3252,21 @@ uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_
   return add_code (ctx, ch_ptr, code, code_len);
 }
 
+uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size) {
+  code_holder_t *ch_ptr = get_last_code_holder (ctx, size);
+
+  return ch_ptr == NULL ? NULL : ch_ptr->free;
+}
+
+uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t *code,
+                                    size_t code_len) {
+  code_holder_t *ch_ptr = get_last_code_holder (ctx, 0);
+
+  if (ch_ptr == NULL || ch_ptr->free != addr || ch_ptr->free + code_len >= ch_ptr->bound)
+    return NULL;
+  return add_code (ctx, ch_ptr, code, code_len);
+}
+
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
                            const MIR_code_reloc_t *relocs) {
   size_t i, len, start, max_offset = 0;
