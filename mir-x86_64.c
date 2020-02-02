@@ -349,7 +349,3 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
                             VARR_LENGTH (uint8_t, machine_insns));
 }
-
-static void machine_init (MIR_context_t ctx) { VARR_CREATE (uint8_t, machine_insns, 1024); }
-
-static void machine_finish (MIR_context_t ctx) { VARR_DESTROY (uint8_t, machine_insns); }

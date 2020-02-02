@@ -3285,15 +3285,12 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
   va_end (args);
 }
 
-static void machine_init (MIR_context_t ctx);
-static void machine_finish (MIR_context_t ctx);
-
 static void code_init (MIR_context_t ctx) {
   if ((ctx->machine_code_ctx = malloc (sizeof (struct machine_code_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   page_size = sysconf (_SC_PAGE_SIZE);
   VARR_CREATE (code_holder_t, code_holders, 128);
-  machine_init (ctx);
+  VARR_CREATE (uint8_t, machine_insns, 1024);
 }
 
 static void code_finish (MIR_context_t ctx) {
@@ -3302,7 +3299,7 @@ static void code_finish (MIR_context_t ctx) {
     munmap (ch.start, ch.bound - ch.start);
   }
   VARR_DESTROY (code_holder_t, code_holders);
-  machine_finish (ctx);
+  VARR_DESTROY (uint8_t, machine_insns);
   free (ctx->machine_code_ctx);
   ctx->machine_code_ctx = NULL;
 }
