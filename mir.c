@@ -3210,40 +3210,46 @@ struct machine_code_ctx {
 #define page_size ctx->machine_code_ctx->page_size
 #define machine_insns ctx->machine_code_ctx->machine_insns
 
-uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len) {
-  uint8_t *start, *mem;
-  size_t len;
-  code_holder_t ch;
+static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
+  uint8_t *mem, *free_adddr;
+  size_t len, npages;
+  code_holder_t ch, *ch_ptr;
   int new_p = TRUE;
 
   if ((len = VARR_LENGTH (code_holder_t, code_holders)) > 0) {
-    code_holder_t *ch_ptr = VARR_ADDR (code_holder_t, code_holders) + len - 1;
-    uint8_t *free_addr = (uint8_t *) ((uint64_t) (ch_ptr->free + 15) / 16 * 16); /* align */
-
-    if (free_addr + code_len < ch_ptr->bound) {
-      mem = free_addr;
-      ch_ptr->free = free_addr + code_len;
-      new_p = FALSE;
-      start = ch_ptr->start;
-      len = ch_ptr->bound - start;
-      ch = *ch_ptr;
-    }
+    ch_ptr = VARR_ADDR (code_holder_t, code_holders) + len - 1;
+    ch_ptr->free = (uint8_t *) ((uint64_t) (ch_ptr->free + 15) / 16 * 16); /* align */
+    if (ch_ptr->free + size <= ch_ptr->bound) return ch_ptr;
   }
-  if (new_p) {
-    size_t npages = (code_len + page_size - 1) / page_size;
+  npages = (size + page_size) / page_size;
+  len = page_size * npages;
+  mem = (uint8_t *) mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (mem == MAP_FAILED) return NULL;
+  ch.start = mem;
+  ch.free = mem;
+  ch.bound = mem + len;
+  VARR_PUSH (code_holder_t, code_holders, ch);
+  len = VARR_LENGTH (code_holder_t, code_holders);
+  return VARR_ADDR (code_holder_t, code_holders) + len - 1;
+}
 
-    len = page_size * npages;
-    mem = (uint8_t *) mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (mem == MAP_FAILED) return NULL;
-    start = ch.start = mem;
-    ch.free = mem + code_len;
-    ch.bound = mem + len;
-    VARR_PUSH (code_holder_t, code_holders, ch);
-  }
-  mprotect (ch.start, ch.bound - ch.start, PROT_WRITE | PROT_EXEC);
+static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_t *code,
+                          size_t code_len) {
+  uint8_t *mem = ch_ptr->free;
+
+  ch_ptr->free += code_len;
+  mir_assert (ch_ptr->free <= ch_ptr->bound);
+  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE | PROT_EXEC);
   memcpy (mem, code, code_len);
-  mprotect (ch.start, ch.bound - ch.start, PROT_EXEC);
+  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_EXEC);
   return mem;
+}
+
+uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len) {
+  code_holder_t *ch_ptr;
+
+  if ((ch_ptr = get_last_code_holder (ctx, code_len)) == NULL) return NULL;
+  return add_code (ctx, ch_ptr, code, code_len);
 }
 
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
