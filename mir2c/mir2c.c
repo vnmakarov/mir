@@ -388,7 +388,7 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
 
   if (item->item_type == MIR_export_item) return;
   if (item->item_type == MIR_import_item) {
-    fprintf (f, "extern char %s[];\n", item->u.import);
+    fprintf (f, "extern char %s[];\n", item->u.import_id);
     return;
   }
   if (item->item_type == MIR_forward_item) {  // ???
