@@ -519,11 +519,11 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
             : item->item_type == MIR_proto_item
                 ? item->u.proto->name
                 : item->item_type == MIR_import_item
-                    ? item->u.import
+                    ? item->u.import_id
                     : item->item_type == MIR_export_item
-                        ? item->u.export
+                        ? item->u.export_id
                         : item->item_type == MIR_forward_item
-                            ? item->u.forward
+                            ? item->u.forward_id
                             : item->item_type == MIR_bss_item
                                 ? item->u.bss->name
                                 : item->item_type == MIR_data_item
@@ -819,14 +819,15 @@ static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
   case MIR_import_item:
     if (item->item_type != MIR_import_item)
       (*error_func) (MIR_import_export_error,
-                     "existing module definition %s already defined as import", tab_item->u.import);
+                     "existing module definition %s already defined as import",
+                     tab_item->u.import_id);
     item = tab_item;
     break;
   case MIR_export_item:
   case MIR_forward_item:
     replace_p = FALSE;
     if (item->item_type == MIR_import_item) {
-      (*error_func) (MIR_import_export_error, "export/forward of import %s", item->u.import);
+      (*error_func) (MIR_import_export_error, "export/forward of import %s", item->u.import_id);
     } else if (item->item_type != MIR_export_item && item->item_type != MIR_forward_item) {
       replace_p = TRUE;
       DLIST_APPEND (MIR_item_t, curr_module->items, item);
@@ -867,7 +868,7 @@ static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
       DLIST_APPEND (MIR_item_t, curr_module->items, item);
       item->ref_def = tab_item;
     } else if (item->item_type == MIR_import_item) {
-      (*error_func) (MIR_import_export_error, "import of local definition %s", item->u.import);
+      (*error_func) (MIR_import_export_error, "import of local definition %s", item->u.import_id);
     } else {
       (*error_func) (MIR_repeated_decl_error, "Repeated item declaration %s",
                      MIR_item_name (ctx, item));
@@ -904,11 +905,11 @@ static MIR_item_t new_export_import_forward (MIR_context_t ctx, const char *name
   item = create_item (ctx, item_type, item_name);
   uniq_name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   if (item_type == MIR_export_item)
-    item->u.export = uniq_name;
+    item->u.export_id = uniq_name;
   else if (item_type == MIR_import_item)
-    item->u.import = uniq_name;
+    item->u.import_id = uniq_name;
   else
-    item->u.forward = uniq_name;
+    item->u.forward_id = uniq_name;
   if (create_only_p) return item;
   if ((tab_item = add_item (ctx, item)) != item) {
     free (item);
@@ -1545,26 +1546,26 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
         assert (item->data == NULL);
         if (simplify_func (ctx, item, TRUE)) item->data = (void *) 1;
       } else if (item->item_type == MIR_import_item) {
-        if ((tab_item = find_item (ctx, item->u.import, &environment_module)) == NULL) {
-          if (import_resolver == NULL || (addr = import_resolver (item->u.import)) == NULL)
+        if ((tab_item = find_item (ctx, item->u.import_id, &environment_module)) == NULL) {
+          if (import_resolver == NULL || (addr = import_resolver (item->u.import_id)) == NULL)
             (*error_func) (MIR_undeclared_op_ref_error, "import of undefined item %s",
-                           item->u.import);
-          MIR_load_external (ctx, item->u.import, addr);
-          tab_item = find_item (ctx, item->u.import, &environment_module);
+                           item->u.import_id);
+          MIR_load_external (ctx, item->u.import_id, addr);
+          tab_item = find_item (ctx, item->u.import_id, &environment_module);
           mir_assert (tab_item != NULL);
         }
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
       } else if (item->item_type == MIR_export_item) {
-        if ((tab_item = find_item (ctx, item->u.export, m)) == NULL)
+        if ((tab_item = find_item (ctx, item->u.export_id, m)) == NULL)
           (*error_func) (MIR_undeclared_op_ref_error, "export of undefined item %s",
-                         item->u.export);
+                         item->u.export_id);
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
       } else if (item->item_type == MIR_forward_item) {
-        if ((tab_item = find_item (ctx, item->u.forward, m)) == NULL)
+        if ((tab_item = find_item (ctx, item->u.forward_id, m)) == NULL)
           (*error_func) (MIR_undeclared_op_ref_error, "forward of undefined item %s",
-                         item->u.forward);
+                         item->u.forward_id);
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
       }
@@ -2267,15 +2268,15 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
 
   mir_assert (f != NULL && item != NULL);
   if (item->item_type == MIR_export_item) {
-    fprintf (f, "\texport\t%s\n", item->u.export);
+    fprintf (f, "\texport\t%s\n", item->u.export_id);
     return;
   }
   if (item->item_type == MIR_import_item) {
-    fprintf (f, "\timport\t%s\n", item->u.import);
+    fprintf (f, "\timport\t%s\n", item->u.import_id);
     return;
   }
   if (item->item_type == MIR_forward_item) {
-    fprintf (f, "\tforward\t%s\n", item->u.forward);
+    fprintf (f, "\tforward\t%s\n", item->u.forward_id);
     return;
   }
   if (item->item_type == MIR_bss_item) {
@@ -3669,17 +3670,17 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
 
   if (item->item_type == MIR_import_item) {
     len += write_name (ctx, writer, "import");
-    len += write_name (ctx, writer, item->u.import);
+    len += write_name (ctx, writer, item->u.import_id);
     return len;
   }
   if (item->item_type == MIR_export_item) {
     len += write_name (ctx, writer, "export");
-    len += write_name (ctx, writer, item->u.export);
+    len += write_name (ctx, writer, item->u.export_id);
     return len;
   }
   if (item->item_type == MIR_forward_item) {
     len += write_name (ctx, writer, "forward");
-    len += write_name (ctx, writer, item->u.forward);
+    len += write_name (ctx, writer, item->u.forward_id);
     return len;
   }
   if (item->item_type == MIR_bss_item) {

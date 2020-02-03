@@ -342,9 +342,9 @@ struct MIR_item {
   union {
     MIR_func_t func;
     MIR_proto_t proto;
-    MIR_name_t import;
-    MIR_name_t export;
-    MIR_name_t forward;
+    MIR_name_t import_id;
+    MIR_name_t export_id;
+    MIR_name_t forward_id;
     MIR_data_t data;
     MIR_ref_data_t ref_data;
     MIR_expr_data_t expr_data;
