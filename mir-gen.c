@@ -3555,7 +3555,8 @@ static MIR_reg_t change_reg (MIR_context_t ctx, MIR_op_t *mem_op, MIR_reg_t reg,
     hard_reg = first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
   }
   offset = target_get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
-  *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, BP_HARD_REG, MIR_NON_HARD_REG, 0);
+  *mem_op
+    = _MIR_new_hard_reg_mem_op (ctx, type, offset, HARD_REG_FRAME_POINTER, MIR_NON_HARD_REG, 0);
   if (hard_reg == MIR_NON_HARD_REG) return hard_reg;
   hard_reg_op = _MIR_new_hard_reg_op (ctx, hard_reg);
   if (out_p) {
@@ -4361,7 +4362,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
           && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
           && insn->code != MIR_VA_START && insn->code != MIR_VA_END
           && !(insn->ops[0].mode == MIR_OP_HARD_REG
-               && (insn->ops[0].u.hard_reg == BP_HARD_REG
+               && (insn->ops[0].u.hard_reg == HARD_REG_FRAME_POINTER
                    || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
 #if MIR_GEN_DEBUG
         if (debug_file != NULL) {
