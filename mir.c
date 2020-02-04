@@ -3268,6 +3268,16 @@ uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t
   return add_code (ctx, ch_ptr, code, code_len);
 }
 
+void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code, size_t code_len) {
+  size_t len, start;
+
+  start = (size_t) addr / page_size * page_size;
+  len = (size_t) addr + code_len - start;
+  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  memcpy (addr, code, code_len);
+  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+}
+
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
                            const MIR_code_reloc_t *relocs) {
   size_t i, len, start, max_offset = 0;
