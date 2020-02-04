@@ -16,12 +16,16 @@ else
             ADDITIONAL_INCLUDE_PATH := $(shell xcrun --show-sdk-path)/usr/include
         endif
     endif
-    UNAME_P := $(shell uname -p)
-    ifeq ($(UNAME_P),x86_64)
+    UNAME_M := $(shell uname -m)
+    ifeq ($(UNAME_M),x86_64)
         TARGET := x86_64
     else
-        ifeq ($(UNAME_P),i386)
+        ifeq ($(UNAME_M),i386)
             TARGET := x86_64
+	else
+            ifeq ($(UNAME_M),aarch64)
+    	       TARGET := aarch64
+	    endif
 	endif
     endif
 endif
