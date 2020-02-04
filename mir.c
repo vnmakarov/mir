@@ -3242,7 +3242,7 @@ static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_
   mir_assert (ch_ptr->free <= ch_ptr->bound);
   mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE | PROT_EXEC);
   memcpy (mem, code, code_len);
-  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_EXEC);
+  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_READ | PROT_EXEC);
   return mem;
 }
 
