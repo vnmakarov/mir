@@ -2,6 +2,8 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+#define VA_LIST_IS_ARRAY_P 1
+
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   static const uint8_t bstart_code[] = {
     0x48, 0x8d, 0x44, 0x24, 0x08, /* rax = rsp + 8 (lea) */

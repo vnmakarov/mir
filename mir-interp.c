@@ -1504,8 +1504,14 @@ static void interp_finish (MIR_context_t ctx) {
   ctx->interp_ctx = NULL;
 }
 
+#if VA_LIST_IS_ARRAY_P
+typedef va_list va_t;
+#else
+typedef va_list *va_t;
+#endif
+
 static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results,
-                             size_t nargs, MIR_val_t *vals, va_list va) {
+                             size_t nargs, MIR_val_t *vals, va_t va) {
   func_desc_t func_desc;
   MIR_val_t *bp;
 
@@ -1519,7 +1525,12 @@ static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t 
   bp[0].i = 0;
   memcpy (&bp[1], vals, sizeof (MIR_val_t) * nargs);
   eval (ctx, func_desc, bp, results);
-  if (va != NULL) va_end (va);
+  if (va != NULL)
+#if VA_LIST_IS_ARRAY_P
+    va_end (va);
+#else
+    va_end (*va);
+#endif
 }
 
 void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...) {
@@ -1531,7 +1542,11 @@ void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, si
     arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   va_start (argp, nargs);
   for (i = 0; i < nargs; i++) arg_vals[i] = va_arg (argp, MIR_val_t);
+#if VA_LIST_IS_ARRAY_P
   interp_arr_varg (ctx, func_item, results, nargs, arg_vals, argp);
+#else
+  interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &argp);
+#endif
 }
 
 void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
@@ -1543,7 +1558,11 @@ void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *re
   if (func_item->data == NULL) generate_icode (ctx, func_item);
   func_desc = get_func_desc (func_item);
   bp = alloca ((func_desc->nregs + 1) * sizeof (MIR_val_t));
+#if VA_LIST_IS_ARRAY_P
   bp[0].a = va;
+#else
+  bp[0].a = &va;
+#endif
   bp++;
   if (func_desc->nregs < nargs + 1) nargs = func_desc->nregs - 1;
   bp[0].i = 0;
@@ -1595,7 +1614,11 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     default: mir_assert (FALSE);
     }
   }
+#if VA_LIST_IS_ARRAY_P
   interp_arr_varg (ctx, func_item, results, nargs, arg_vals, va);
+#else
+  interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &va);
+#endif
 }
 
 static void redirect_interface_to_interp (MIR_context_t ctx, MIR_item_t func_item) {
