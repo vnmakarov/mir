@@ -154,6 +154,8 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
+#elif defined(__aarch64__)
+#include "mir-gen-aarch64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
