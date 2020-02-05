@@ -25,8 +25,10 @@
 
 #include "c2mir.h"
 
-#ifdef __x86_64__
+#if defined(__x86_64__)
 #include "x86_64/cx86_64.h"
+#elif defined(__aarch64__)
+#include "aarch64/caarch64.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -300,8 +302,10 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   return type->raw_size;
 }
 
-#ifdef __x86_64__
+#if defined(__x86_64__)
 #include "x86_64/cx86_64-code.c"
+#elif defined(__aarch64__)
+#include "aarch64/caarch64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -12105,6 +12109,8 @@ static void init_include_dirs (MIR_context_t ctx) {
 #endif
 #if defined(__linux__) && defined(__x86_64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
+#elif defined(__linux__) && defined(__aarch64__)
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/aarch64-linux-gnu");
 #endif
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
