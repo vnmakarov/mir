@@ -206,21 +206,23 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0xa8c17bf3, /* ldp x19,x30,[sp],16 */
     0xd65f03c0, /* ret x30 */
   };
-  uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, pat, offset_imm;
+  uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, pat, offset_imm, scale;
   uint32_t *addr;
   const uint32_t temp_reg = 9; /* x9 or v9 */
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (ctx, prolog, sizeof (prolog));
+  mir_assert (sizeof (long double) == 16);
   for (size_t i = 0; i < nargs; i++) { /* args */
-    offset_imm = (((i + nres) * sizeof (long double) >> 3) << 10);
+    scale = arg_types[i] == MIR_T_F ? 2 : arg_types[i] == MIR_T_LD ? 4 : 3;
+    offset_imm = (((i + nres) * sizeof (long double) << 10)) >> scale;
     if ((MIR_T_I8 <= arg_types[i] && arg_types[i] <= MIR_T_U64) || arg_types[i] == MIR_T_P) {
       if (n_xregs < 8) {
         pat = ld_pat | offset_imm | n_xregs++;
       } else {
         pat = ld_pat | offset_imm | temp_reg;
         push_insns (ctx, &pat, sizeof (pat));
-        pat = st_pat | ((sp_offset >> 3) << 10) | temp_reg;
+        pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg;
         sp_offset += 8;
       }
       push_insns (ctx, &pat, sizeof (pat));
@@ -233,7 +235,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         pat |= offset_imm | temp_reg;
         push_insns (ctx, &pat, sizeof (pat));
         pat = arg_types[i] == MIR_T_F ? sts_pat : arg_types[i] == MIR_T_D ? std_pat : stld_pat;
-        pat |= ((sp_offset >> 3) << 10) | temp_reg;
+        pat |= ((sp_offset >> scale) << 10) | temp_reg;
         sp_offset += arg_types[i] == MIR_T_LD ? 16 : 8;
       }
       push_insns (ctx, &pat, sizeof (pat));
@@ -249,7 +251,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     |= sp_offset << 10;
   n_xregs = n_vregs = 0;
   for (size_t i = 0; i < nres; i++) { /* results */
-    offset_imm = (i * sizeof (long double) >> 3) << 10;
+    offset_imm = i * sizeof (long double) << 10;
+    offset_imm >>= res_types[i] == MIR_T_F ? 2 : res_types[i] == MIR_T_D ? 3 : 4;
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
         && n_xregs < 8) {
       pat = ld_pat | offset_imm | n_xregs++;
@@ -298,7 +301,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0xf84107e9, /* ldr x9, sp, 16 */
     0xd65f03c0, /* ret x30 */
   };
-  uint32_t pat, imm, n_xregs, n_vregs, offset;
+  uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
   uint32_t nres = func_item->u.func->nres;
   MIR_type_t *results = func_item->u.func->res_types;
 
@@ -315,8 +318,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   gen_call_addr (ctx, NULL, 9, handler);
   /* move results: */
   n_xregs = n_vregs = offset = 0;
+  mir_assert (sizeof (long double) == 16);
   for (uint32_t i = 0; i < nres; i++) {
-    mir_assert (offset < (1 << 15));
     if ((results[i] == MIR_T_F || results[i] == MIR_T_D || results[i] == MIR_T_LD) && n_vregs < 8) {
       pat = results[i] == MIR_T_F ? lds_pat : results[i] == MIR_T_D ? ldd_pat : ldld_pat;
       pat |= n_vregs;
@@ -327,7 +330,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     } else {
       (*error_func) (MIR_ret_error, "aarch64 can not handle this combination of return values");
     }
-    pat |= ((offset >> 3) << 10);
+    offset_imm = offset >> (results[i] == MIR_T_F ? 2 : results[i] == MIR_T_LD ? 4 : 3);
+    mir_assert (offset_imm < (1 << 12));
+    pat |= offset_imm << 10;
     push_insns (ctx, &pat, sizeof (pat));
     offset += 16;
   }
