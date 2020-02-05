@@ -5,29 +5,29 @@ printf_p:	proto  p:fmt, ...
 abort_p:	proto
 main:		func i64
 		local d:s, ld:l, ld:l1, ld:l2, ld:r, i64:i, f:f, d:d
-		call printf_p, printf, "10.15: double = %.25E, long double = %.25LE\n", 10.15, 10.15L
+		call printf_p, printf, "10.56: double = %.25E, long double = %.25LE\n", 10.56, 10.56L
 		dmov s, 10.0E200
 		ldmov l, 10.0E200L
 		dmul s, s, s
 		ldmul l, l, l
 		call printf_p, printf, "10.0E400: double = %E, long double = %LE\n", s, l
-		ldmov l1, 10.15E10L
+		ldmov l1, 10.56E10L
 		ldmov l2, 3.3E10L
  		ldadd r, l1, l2
 		call printf_p, printf, "add: %.25LE\n", r
-		ldbeq O1, r, 1.3450000000000000000000000E+11L
+		ldbeq O1, r, 1.3860000000000000000000000E+11L
 		call abort_p, abort
 O1:		ldsub r, l1, l2
 		call printf_p, printf, "sub: %.25LE\n", r
-		ldbeq O2, r, 6.850000E+10L
+		ldbeq O2, r, 7.260000E+10L
 		call abort_p, abort
 O2: 		ldmul r, l1, l2
 		call printf_p, printf, "mul: %.25LE\n", r
-		ldbeq O3, r, 3.349500E+21L
+		ldbeq O3, r, 3.484800E+21L
 		call abort_p, abort
 O3: 		lddiv r, l1, l2
 		call printf_p, printf, "div: %.25LE\n", r
-		ldbeq O4, r, 3.0757575757575757575100484E+00L
+		ldbeq O4, r, 3.2E+00L
 		call abort_p, abort
 O4:		ldeq i, l1, l2
 		call printf_p, printf, "eq: %ld\n", i
@@ -102,8 +102,8 @@ C5:		f2ld l2, 10.3333333333333f
 		ldbeq C6, l2, 1.0333333015441894531250000E+01L
 		call abort_p, abort
 C6:		d2ld l2, 10.333333333333333333333333
-		call printf_p, printf, "%.25LE\n", l2
-		ldbeq C7, l2, 1.0333333333333333925452280E+01L
+		call printf_p, printf, "%.38LE\n", l2
+		ldbeq C7, l2, 1.03333333333333339254522798000834882259E+01L
 		call abort_p, abort
 C7:		ret 0
 		endfunc
