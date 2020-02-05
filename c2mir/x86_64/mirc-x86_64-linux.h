@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 static char x86_64_mirc[]
   = "#define __amd64 1\n"
     "#define __amd64__ 1\n"
@@ -9,7 +13,7 @@ static char x86_64_mirc[]
     "#define __SIZEOF_DOUBLE__ 8\n"
     "#define __SIZEOF_FLOAT__ 4\n"
     "#define __SIZEOF_INT__ 4\n"
-    "#define __SIZEOF_LONG_DOUBLE__ 8\n"
+    "#define __SIZEOF_LONG_DOUBLE__ 16\n"
     "#define __SIZEOF_LONG_LONG__ 8\n"
     "#define __SIZEOF_LONG__ 8\n"
     "#define __SIZEOF_POINTER__ 8\n"
