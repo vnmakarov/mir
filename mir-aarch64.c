@@ -274,7 +274,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
-  static const uint32_t save_x9_pat = 0xf81f0fe9; /* str x9, [sp,-16]! */
+  static const uint32_t save_x19_pat = 0xf81f0ff3; /* str x19, [sp,-16]! */
   static const uint32_t prepare_pat[] = {
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
     0x910003e8, /* mov x8, sp # va_list addr         */
@@ -298,7 +298,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0xf94003fe, /* ldr x30, [sp] */
     0xd2800009, /* mov x9, 224+(nres+1)*16 */
     0x8b2963ff, /* add sp, sp, x9 */
-    0xf84107e9, /* ldr x9, sp, 16 */
+    0xf84107f3, /* ldr x19, sp, 16 */
     0xd65f03c0, /* ret x30 */
   };
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
@@ -306,7 +306,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t *results = func_item->u.func->res_types;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
-  push_insns (ctx, &save_x9_pat, sizeof (save_x9_pat));
+  push_insns (ctx, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (ctx, save_insns, sizeof (save_insns));
   push_insns (ctx, prepare_pat, sizeof (prepare_pat));
   imm = (nres + 1) * 16;
