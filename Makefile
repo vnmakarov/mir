@@ -30,7 +30,7 @@ else
     endif
 endif
 
-CC += -std=gnu11 -Wno-abi
+CC += -std=gnu11 -Wno-abi -fsigned-char
 ifneq ($(ADDITIONAL_INCLUDE_PATH),)
   CC += -DADDITIONAL_INCLUDE_PATH=\"$(ADDITIONAL_INCLUDE_PATH)\"
 endif
