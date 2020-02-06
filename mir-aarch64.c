@@ -255,11 +255,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     offset_imm >>= res_types[i] == MIR_T_F ? 2 : res_types[i] == MIR_T_D ? 3 : 4;
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
         && n_xregs < 8) {
-      pat = ld_pat | offset_imm | n_xregs++;
+      pat = st_pat | offset_imm | n_xregs++;
       push_insns (ctx, &pat, sizeof (pat));
     } else if ((res_types[i] == MIR_T_F || res_types[i] == MIR_T_D || res_types[i] == MIR_T_LD)
                && n_vregs < 8) {
-      pat = res_types[i] == MIR_T_F ? lds_pat : res_types[i] == MIR_T_D ? ldd_pat : ldld_pat;
+      pat = res_types[i] == MIR_T_F ? sts_pat : res_types[i] == MIR_T_D ? std_pat : stld_pat;
       pat |= offset_imm | n_vregs++;
       push_insns (ctx, &pat, sizeof (pat));
     } else {
