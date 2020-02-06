@@ -284,6 +284,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0xb9001d09, /* str w9,[x8, 28]  #va_list.vr_offs */
     0x910383e9, /* add x9, sp, #224 # gr_top */
     0xf9000509, /* str x9,[x8, 8] # va_list.gr_top */
+    0x91004129, /* add x9, x9, #16 # stack */
     0xf9000109, /* str x9,[x8] # valist.stack */
     0x910283e9, /* add x9, sp, #160 # vr_top*/
     0xf9000909, /* str x9,[x8, 16] # va_list.vr_top */
