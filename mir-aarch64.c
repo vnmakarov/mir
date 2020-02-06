@@ -154,25 +154,25 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
 
 /* save r0-r7, v0-v7 */
 static const uint32_t save_insns[] = {
-  0xa9bf07e0, /* stp R0, R1, [SP, #-16]! */
-  0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
-  0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
   0xa9bf1fe6, /* stp R6, R7, [SP, #-16]! */
-  0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
-  0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
-  0xadbf17e4, /* stp Q4, Q5, [SP, #-32]! */
+  0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
+  0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
+  0xa9bf07e0, /* stp R0, R1, [SP, #-16]! */
   0xadbf1fe6, /* stp Q6, Q7, [SP, #-32]! */
+  0xadbf17e4, /* stp Q4, Q5, [SP, #-32]! */
+  0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
+  0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
 };
 
 static const uint32_t restore_insns[] = {
-  0xacc11fe6, /* ldp Q6, Q7, SP, #32 */
-  0xacc117e4, /* ldp Q4, Q5, SP, #32 */
-  0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
   0xacc107e0, /* ldp Q0, Q1, SP, #32 */
-  0xa8c11fe6, /* ldp R6, R7, SP, #16 */
-  0xa8c117e4, /* ldp R4, R5, SP, #16 */
-  0xa8c10fe2, /* ldp R2, R3, SP, #16 */
+  0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
+  0xacc117e4, /* ldp Q4, Q5, SP, #32 */
+  0xacc11fe6, /* ldp Q6, Q7, SP, #32 */
   0xa8c107e0, /* ldp R0, R1, SP, #16 */
+  0xa8c10fe2, /* ldp R2, R3, SP, #16 */
+  0xa8c117e4, /* ldp R4, R5, SP, #16 */
+  0xa8c11fe6, /* ldp R6, R7, SP, #16 */
 };
 
 static const uint32_t ld_pat = 0xf9400260;   /* ldr x, [x19], offset */
