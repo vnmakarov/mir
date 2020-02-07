@@ -20,6 +20,8 @@
 ## MIR
   * MIR is strongly typed
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
+  * [MIR.md](https://github.com/vnmakarov/mir/blob/master/MIR.md) contains detail description of MIR and its API.
+    Here is a brief MIR description:
   * MIR consists of **modules**
     * Each module can contain **functions** and some declarations and data
     * Each function has **signature** (parameters and return types), **local variables**
@@ -265,14 +267,14 @@ ex100:    func v, 0
    by hashtables
  * File `mir-interp.c` contains code for interpretation of MIR code.  It is included in `mir.c`
    and never compiled separately
- * Files `mir-gen.h`, `mir-gen.c`, and `mir-gen-x86_64.c` contain code for MIR JIT compiler
-   * File `mir-gen-x86_64.c` is machine dependent code of JIT compiler
+ * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, and `mir-gen-aarch64.c` contain code for MIR JIT compiler
+   * Files `mir-gen-x86_64.c` and `mir-gen-aarch64.c` is machine dependent code of JIT compiler
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
-   C to MIR compiler.  Files in directory `c2mir/x86_64` contain x86_64 machine-dependent code for
-   C to MIR compiler
+   C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64` contain correspondingly
+   x86_64 and aarch64 machine-dependent code for C to MIR compiler
    
 ## Playing with current MIR project code
   * MIR project is far away from any serious usage
@@ -331,3 +333,7 @@ ex100:    func v, 0
       big- (70K LOC of Rust-), SSA-, Apache License
     * [**NanoJIT**](https://github.com/dibyendumajumdar/nanojit), standalone+, medium (40K C++ LOC), only simple RA-,
       Mozilla Public License
+
+## Porting MIR
+  * Currently MIR works on x86_64 Linux and MacOS and aarch64 Linux port is in progress
+  * [HOW-TO-PORT-MIR.md](https://github.com/vnmakarov/mir/blob/master/HOW-TO-PORT-MIR.md) outlines process of porting MIR
