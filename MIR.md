@@ -393,7 +393,10 @@
   * `MIR_VA_ARG` takes va_list and any memory operand and returns
     address of the next argument in the 1st insn operand.  The memory
     operand type defines the type of the argument
-
+  * va_list operand can be memory with undefined type.  In this case
+    address of the va_list is not in the memory but is the
+    memory address
+  
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`

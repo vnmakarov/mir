@@ -51,7 +51,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->__vr_top + va->__vr_offs;
     va->__vr_offs += 16;
   } else if (!fp_p && va->__gr_offs < 0) {
-    a = (char *) va->__vr_top + va->__gr_offs;
+    a = (char *) va->__gr_top + va->__gr_offs;
     va->__gr_offs += 8;
   } else {
     if (type == MIR_T_LD)
@@ -154,35 +154,31 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
 
 /* save r0-r7, v0-v7 */
 static const uint32_t save_insns[] = {
-  0xa9bf07e0, /* stp R0, R1, [SP, #-16]! */
-  0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
-  0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
   0xa9bf1fe6, /* stp R6, R7, [SP, #-16]! */
-  0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
-  0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
-  0xadbf17e4, /* stp Q4, Q5, [SP, #-32]! */
+  0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
+  0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
+  0xa9bf07e0, /* stp R0, R1, [SP, #-16]! */
   0xadbf1fe6, /* stp Q6, Q7, [SP, #-32]! */
+  0xadbf17e4, /* stp Q4, Q5, [SP, #-32]! */
+  0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
+  0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
 };
 
 static const uint32_t restore_insns[] = {
-  0xacc11fe6, /* ldp Q6, Q7, SP, #32 */
-  0xacc117e4, /* ldp Q4, Q5, SP, #32 */
-  0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
   0xacc107e0, /* ldp Q0, Q1, SP, #32 */
-  0xa8c11fe6, /* ldp R6, R7, SP, #16 */
-  0xa8c117e4, /* ldp R4, R5, SP, #16 */
-  0xa8c10fe2, /* ldp R2, R3, SP, #16 */
+  0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
+  0xacc117e4, /* ldp Q4, Q5, SP, #32 */
+  0xacc11fe6, /* ldp Q6, Q7, SP, #32 */
   0xa8c107e0, /* ldp R0, R1, SP, #16 */
+  0xa8c10fe2, /* ldp R2, R3, SP, #16 */
+  0xa8c117e4, /* ldp R4, R5, SP, #16 */
+  0xa8c11fe6, /* ldp R6, R7, SP, #16 */
 };
 
 static const uint32_t ld_pat = 0xf9400260;   /* ldr x, [x19], offset */
 static const uint32_t lds_pat = 0xbd400260;  /* ldr s, [x19], offset */
 static const uint32_t ldd_pat = 0xfd400260;  /* ldr d, [x19], offset */
 static const uint32_t ldld_pat = 0x3dc00260; /* ldr q, [x19], offset */
-static const uint32_t st_pat = 0xf9000260;   /* str x, [x19], offset */
-static const uint32_t sts_pat = 0xbd000260;  /* str s, [x19], offset */
-static const uint32_t std_pat = 0xfd000260;  /* str d, [x19], offset */
-static const uint32_t stld_pat = 0x3d800260; /* str q, [x19], offset */
 
 /* Generation: fun (fun_addr, res_arg_addresses):
    push x19, x30; sp-=sp_offset; x9=fun_addr; x19=res/arg_addrs
@@ -206,9 +202,13 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0xa8c17bf3, /* ldp x19,x30,[sp],16 */
     0xd65f03c0, /* ret x30 */
   };
-  uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, pat, offset_imm, scale;
+  static const uint32_t st_pat = 0xf9000000;   /* str x, [xn|sp], offset */
+  static const uint32_t sts_pat = 0xbd000000;  /* str s, [xn|sp], offset */
+  static const uint32_t std_pat = 0xfd000000;  /* str d, [xn|sp], offset */
+  static const uint32_t stld_pat = 0x3d800000; /* str q, [xn|sp], offset */
+  uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, pat, offset_imm, scale, sp = 31;
   uint32_t *addr;
-  const uint32_t temp_reg = 9; /* x9 or v9 */
+  const uint32_t temp_reg = 8; /* x8 or v9 */
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (ctx, prolog, sizeof (prolog));
@@ -222,7 +222,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       } else {
         pat = ld_pat | offset_imm | temp_reg;
         push_insns (ctx, &pat, sizeof (pat));
-        pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg;
+        pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
         sp_offset += 8;
       }
       push_insns (ctx, &pat, sizeof (pat));
@@ -235,7 +235,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         pat |= offset_imm | temp_reg;
         push_insns (ctx, &pat, sizeof (pat));
         pat = arg_types[i] == MIR_T_F ? sts_pat : arg_types[i] == MIR_T_D ? std_pat : stld_pat;
-        pat |= ((sp_offset >> scale) << 10) | temp_reg;
+        pat |= ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
         sp_offset += arg_types[i] == MIR_T_LD ? 16 : 8;
       }
       push_insns (ctx, &pat, sizeof (pat));
@@ -255,12 +255,12 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     offset_imm >>= res_types[i] == MIR_T_F ? 2 : res_types[i] == MIR_T_D ? 3 : 4;
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
         && n_xregs < 8) {
-      pat = ld_pat | offset_imm | n_xregs++;
+      pat = st_pat | offset_imm | n_xregs++ | (19 << 5);
       push_insns (ctx, &pat, sizeof (pat));
     } else if ((res_types[i] == MIR_T_F || res_types[i] == MIR_T_D || res_types[i] == MIR_T_LD)
                && n_vregs < 8) {
-      pat = res_types[i] == MIR_T_F ? lds_pat : res_types[i] == MIR_T_D ? ldd_pat : ldld_pat;
-      pat |= offset_imm | n_vregs++;
+      pat = res_types[i] == MIR_T_F ? sts_pat : res_types[i] == MIR_T_D ? std_pat : stld_pat;
+      pat |= offset_imm | n_vregs++ | (19 << 5);
       push_insns (ctx, &pat, sizeof (pat));
     } else {
       (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
@@ -274,7 +274,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
-  static const uint32_t save_x9_pat = 0xf81f0fe9; /* str x9, [sp,-16]! */
+  static const uint32_t save_x19_pat = 0xf81f0ff3; /* str x19, [sp,-16]! */
   static const uint32_t prepare_pat[] = {
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
     0x910003e8, /* mov x8, sp # va_list addr         */
@@ -284,6 +284,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0xb9001d09, /* str w9,[x8, 28]  #va_list.vr_offs */
     0x910383e9, /* add x9, sp, #224 # gr_top */
     0xf9000509, /* str x9,[x8, 8] # va_list.gr_top */
+    0x91004129, /* add x9, x9, #16 # stack */
     0xf9000109, /* str x9,[x8] # valist.stack */
     0x910283e9, /* add x9, sp, #160 # vr_top*/
     0xf9000909, /* str x9,[x8, 16] # va_list.vr_top */
@@ -298,7 +299,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0xf94003fe, /* ldr x30, [sp] */
     0xd2800009, /* mov x9, 224+(nres+1)*16 */
     0x8b2963ff, /* add sp, sp, x9 */
-    0xf84107e9, /* ldr x9, sp, 16 */
+    0xf84107f3, /* ldr x19, sp, 16 */
     0xd65f03c0, /* ret x30 */
   };
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
@@ -306,7 +307,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t *results = func_item->u.func->res_types;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
-  push_insns (ctx, &save_x9_pat, sizeof (save_x9_pat));
+  push_insns (ctx, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (ctx, save_insns, sizeof (save_insns));
   push_insns (ctx, prepare_pat, sizeof (prepare_pat));
   imm = (nres + 1) * 16;

@@ -88,7 +88,6 @@ static char aarch64_mirc[]
     "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
-#error Uknown OS
 #endif
     "\n"
     "void *alloca (unsigned long);\n";

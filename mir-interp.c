@@ -731,7 +731,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
     *((mem_type *) a) = v;                  \
   } while (0)
 
-#if defined(__GNUC__) && !defined(__clang__)
+#if !MIR_INTERP_TRACE && defined(__GNUC__) && !defined(__clang__)
 #define OPTIMIZE \
   __attribute__ ((__optimize__ ("O2"))) __attribute__ ((__optimize__ ("-fno-ipa-cp-clone")))
 #else
@@ -806,7 +806,7 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
   case MIR_OP_LDOUBLE:
     fprintf (stderr, "\t# res = %.*Le", LDBL_DECIMAL_DIG, bp[ops[0].i].ld);
     break;
-  default: assert (FALSE);
+  default: assert (op_mode == MIR_OP_UNDEF);
   }
   fprintf (stderr, "\n");
 }
