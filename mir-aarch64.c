@@ -51,7 +51,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->__vr_top + va->__vr_offs;
     va->__vr_offs += 16;
   } else if (!fp_p && va->__gr_offs < 0) {
-    a = (char *) va->__vr_top + va->__gr_offs;
+    a = (char *) va->__gr_top + va->__gr_offs;
     va->__gr_offs += 8;
   } else {
     if (type == MIR_T_LD)
