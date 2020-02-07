@@ -328,9 +328,8 @@ static void check_and_prepare_insn_descs (MIR_context_t ctx) {
 }
 
 static MIR_op_mode_t type2mode (MIR_type_t type) {
-  return (type == MIR_T_F
-            ? MIR_OP_FLOAT
-            : type == MIR_T_D ? MIR_OP_DOUBLE : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
+  return (type == MIR_T_UNDEF ? MIR_OP_UNDEF : type == MIR_T_F ? MIR_OP_FLOAT
+	  : type == MIR_T_D ? MIR_OP_DOUBLE : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
 }
 
 /* New Page */
@@ -775,6 +774,7 @@ static const char *type_str (MIR_type_t tp) {
   case MIR_T_D: return "d";
   case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
+  case MIR_T_UNDEF: return "undef";
   default: return "";
   }
 }
@@ -802,6 +802,7 @@ static const char *mode_str (MIR_op_mode_t mode) {
   case MIR_OP_HARD_REG_MEM: return "hard_reg_mem";
   case MIR_OP_LABEL: return "label";
   case MIR_OP_BOUND: return "bound";
+  case MIR_OP_UNDEF: return "undef";
   default: return "";
   }
 }
