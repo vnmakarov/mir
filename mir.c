@@ -1577,6 +1577,10 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
       if (item->item_type == MIR_func_item && item->data != NULL) {
         process_inlines (ctx, item);
         item->data = NULL;
+#if 0
+	fprintf (stderr, "+++++ Function after inlining:\n");
+	MIR_output_item (ctx, stderr, func_item);
+#endif
       } else if (item->item_type == MIR_ref_data_item) {
         assert (item->u.ref_data->ref_item->addr != NULL);
         addr = (char *) item->u.ref_data->ref_item->addr + item->u.ref_data->disp;
@@ -2929,6 +2933,10 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
   }
   make_one_ret (ctx, func_item);
   remove_unused_labels (ctx, func_item);
+#if 0
+  fprintf (stderr, "+++++ Function after simplification:\n");
+  MIR_output_item (ctx, stderr, func_item);
+#endif
   return inline_p;
 }
 
