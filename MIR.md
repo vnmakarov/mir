@@ -3,7 +3,7 @@
   * MIR textual representation is assembler like.  Each directive or insn should be put on a separate line
   * In MIR textual syntax we use
     * `[]` for optional construction
-    * `{}` for repeation zero or more times
+    * `{}` for repeating zero or more times
     * `<>` for some informal construction description or construction already described or will be described
   
 ## MIR context
@@ -29,7 +29,7 @@
      output and read **binary MIR representation** through a function
      given as an argument.  The reader function should return EOF as
      the end of the binary MIR representation, the writer function
-     should be return the number of sucessfully output bytes
+     should be return the number of successfully output bytes
      * Binary MIR representation much more compact and faster to read than textual one
 
 ## MIR data type
@@ -46,7 +46,7 @@
        or IEEE quad precision FP values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
      * `MIR_T_V` representing any value absence (void type)
-   * MIR textual representation of the types are correpondinly `i8`,
+   * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
      and `v`
    
@@ -75,13 +75,13 @@
       (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_func_item)`)
       * Not all MIR functions can be used for expression data.  The expression function should have
         only one result, have no arguments, not use any call or any instruction with memory
-      * The expression function is called during linking and its result is used to initilaize the data
-    * **Memory segement**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
+      * The expression function is called during linking and its result is used to initialize the data
+    * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
   * Names of MIR functions, imports, and prototypes should be unique in a module
   * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
     and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
     textual representation into given file
-  * MIR text module syntax looks the folowing:
+  * MIR text module syntax looks the following:
 ```
     <module name>: module
                    {<module item>}
@@ -112,7 +112,7 @@
       in any combination
   * MIR function creation is finished by calling API function `MIR_finish_func (MIR_context_t ctx)`
   * You can create only one MIR function at any given time
-  * MIR text function syntax looks the folowing (arg-var always has a name besides type):
+  * MIR text function syntax looks the following (arg-var always has a name besides type):
 ```
     <function name>: func {<result type>, } [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
@@ -125,7 +125,7 @@
     * You can create function variables even after finishing the
       function creation.  This can be used to modify function insns,
       e.g. for optimizations
-  * Non-argument variable declaration syntax in MIR textual representation looks the folowing:
+  * Non-argument variable declaration syntax in MIR textual representation looks the following:
 ```
     local [ <var type>:<var name> {, <var type>:<var name>} ]
 ```
@@ -136,7 +136,7 @@
   * There are following operands:
     * Signed or unsigned **64-bit integer value operands** created through API functions
       `MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v)` and `MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v)`
-      * In MIR text they are represented the same way as C integer numbers (e.g. octal, decimal, hexdecimal ones)
+      * In MIR text they are represented the same way as C integer numbers (e.g. octal, decimal, hexadecimal ones)
     * **Float, double or long double value operands** created through API functions `MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v)`,
       `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`, and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`
       * In MIR text they are represented the same way as C floating point numbers
@@ -149,7 +149,7 @@
     * **Reference operands** created through API function `MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item)`
       * In MIR text, they are represented by the corresponding item name
     * **Register (variable) operands** created through API function `MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg)`
-      * In MIR text they are represented by the correspoding variable name
+      * In MIR text they are represented by the corresponding variable name
       * Value of type `MIR_reg_t` is returned by function `MIR_new_func_reg`
         or can be gotten by function `MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func)`, e.g. for argument-variables
     * **Memory operands** consists of type, displacement, base
@@ -180,7 +180,7 @@
   * MIR insn can be created through API functions `MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...)`
     and `MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nops, MIR_op_t *ops)`
     * Number of operands and their types should be what is expected by the insn being created
-    * You can not use `MIR_new_insn` for creation of call and ret insns as these insns have variable number of operands.
+    * You can not use `MIR_new_insn` for the creation of call and ret insns as these insns have a variable number of operands.
       To create such insns you should use `MIR_new_insn_arr` or special functions
       `MIR_insn_t MIR_new_call_insn (MIR_context_t ctx, size_t nops, ...)` and `MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...)`
   * You can get insn name and number of insn operands through API functions
@@ -190,7 +190,7 @@
   * You can insert a created insn in the middle of function insn list through API functions
     `MIR_insert_insn_after (MIR_context_t ctx, MIR_item_t func, MIR_insn_t after, MIR_insn_t insn)` and
     `MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func, MIR_insn_t before, MIR_insn_t insn)`
-    * The insn `after` and `before` should be alread in the list
+    * The insn `after` and `before` should be already in the list
   * You can remove insn from the function list through API function `MIR_remove_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn)`
   * The insn should be not inserted in the list if it is already there
   * The insn should be not removed form the list if it is not there
@@ -200,7 +200,7 @@
 ```
 	  {<label name>:} [<insn name> <operand> {, <operand>}]
 ```
-  * More one insn can be put on the same line by separting the insns by `;`
+  * More one insn can be put on the same line by separating the insns by `;`
 
 ### MIR move insns
   * There are following MIR move insns:
@@ -267,10 +267,10 @@
 
 ### MIR floating point insns
   * If insn has prefix `F` in insn name, the insn is single precision float point insn.  Its operands should have `MIR_T_F` type
-  * If insn has prefix `D` in insn name, the insn is doble precision float point insn.  Its operands should have `MIR_T_D` type
+  * If insn has prefix `D` in insn name, the insn is double precision float point insn.  Its operands should have `MIR_T_D` type
   * Otherwise, insn has prefix `LD` in insn name and the insn is a long double insn.
     Its operands should have `MIR_T_LD` type.
-  * The result of comparison insn is a 64-bit integer value, so the result oeprand should be of integer type
+  * The result of comparison insn is a 64-bit integer value, so the result operand should be of integer type
   
     | Insn Code                            | Nops |   Description                                                  |
     |--------------------------------------|-----:|----------------------------------------------------------------|
@@ -305,7 +305,7 @@
 
     | Insn Code               | Nops |   Description                                                 |
     |-------------------------|-----:|---------------------------------------------------------------|
-    | `MIR_JMP`               | 1    | uncontional jump to the label                                 |
+    | `MIR_JMP`               | 1    | unconditional jump to the label                                 |
     | `MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**  |
     | `MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**  |
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
