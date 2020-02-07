@@ -1371,8 +1371,12 @@ void MIR_finish_func (MIR_context_t ctx) {
         break;
       }
       insn->ops[i].value_mode = mode;
-      if (expected_mode != MIR_OP_UNDEF
-          && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
+      if (mode == MIR_OP_UNDEF && insn->ops[i].mode == MIR_OP_MEM
+	  && ((code == MIR_VA_START && i == 0) || (code == MIR_VA_ARG && i == 1)
+	      || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
+	insn->ops[i].value_mode = expected_mode;
+      } else if (expected_mode != MIR_OP_UNDEF
+		 && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
         curr_func = NULL;
         (*error_func) (MIR_op_mode_error,
                        "in instruction '%s': unexpected operand mode for operand #%d. Got '%s', "
@@ -1545,7 +1549,7 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
          item = DLIST_NEXT (MIR_item_t, item))
       if (item->item_type == MIR_func_item) {
         assert (item->data == NULL);
-        if (simplify_func (ctx, item, TRUE)) item->data = (void *) 1;
+        if (simplify_func (ctx, item, TRUE)) item->data = (void *) 1; /* flag inlining */
       } else if (item->item_type == MIR_import_item) {
         if ((tab_item = find_item (ctx, item->u.import_id, &environment_module)) == NULL) {
           if (import_resolver == NULL || (addr = import_resolver (item->u.import_id)) == NULL)
@@ -2610,6 +2614,10 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     mem_op.u.mem.scale = 0;
     if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
+    } else if (((code == MIR_VA_START && nop == 0) || (code == MIR_VA_ARG && nop == 1)
+		|| (code == MIR_VA_END && nop == 0))
+	       && mem_op.u.mem.type == MIR_T_UNDEF) {
+      *op = MIR_new_reg_op (ctx, addr_reg);
     } else {
       type = (mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D
                   || mem_op.u.mem.type == MIR_T_LD
