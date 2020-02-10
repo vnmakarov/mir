@@ -98,8 +98,6 @@ static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {
   MIR_NEG,   MIR_NEGS,  MIR_FNEG,  MIR_DNEG, MIR_LDNEG, MIR_INSN_BOUND,
 };
 
-typedef enum { GC_INSN_PUSH = MIR_INSN_BOUND, GC_INSN_BOUND } MIR_full_insn_code_t;
-
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
   switch (type) {
   case MIR_T_I8: return MIR_EXT8;
