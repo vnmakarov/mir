@@ -16,7 +16,7 @@ enum {
 #undef REP_SEP
 
 static const MIR_reg_t MAX_HARD_REG = ST1_HARD_REG;
-static const MIR_reg_t HARD_REG_FRAME_POINTER = BP_HARD_REG;
+static const MIR_reg_t FP_HARD_REG = BP_HARD_REG;
 
 static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
   return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1;
@@ -451,7 +451,7 @@ static void target_machinize (MIR_context_t ctx) {
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type,
                                          mem_size + 8 /* ret */
                                            + start_sp_from_bp_offset,
-                                         BP_HARD_REG, MIR_NON_HARD_REG, 1);
+                                         FP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), mem_op);
       MIR_prepend_insn (ctx, curr_func_item, new_insn);
       next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
@@ -507,12 +507,12 @@ static void target_machinize (MIR_context_t ctx) {
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_U32, 4, va_reg, 0, 1),
                MIR_new_int_op (ctx, fp_offset));
       /* overflow_arg_area_reg: treg = start sp + 8; mem64[va_reg + 8] = treg */
-      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, BP_HARD_REG),
+      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, 8 /*ret*/ + start_sp_from_bp_offset));
       gen_add_insn_before (ctx, insn, new_insn);
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 8, va_reg, 0, 1), treg_op);
       /* reg_save_area: treg = start sp - reg_save_area_size; mem64[va_reg + 16] = treg */
-      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, BP_HARD_REG),
+      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, -reg_save_area_size));
       gen_add_insn_before (ctx, insn, new_insn);
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
@@ -654,7 +654,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
     return;
   sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
   sp_reg_op.u.hard_reg = SP_HARD_REG;
-  fp_reg_op.u.hard_reg = BP_HARD_REG;
+  fp_reg_op.u.hard_reg = FP_HARD_REG;
   /* Prologue: */
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   new_insn
@@ -699,7 +699,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
       new_insn = MIR_new_insn (ctx, MIR_MOV,
                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
                                                          (int64_t) (n++ * 8) - bp_saved_reg_offset,
-                                                         BP_HARD_REG, MIR_NON_HARD_REG, 1),
+                                                         FP_HARD_REG, MIR_NON_HARD_REG, 1),
                                _MIR_new_hard_reg_op (ctx, i));
       gen_add_insn_before (ctx, anchor, new_insn); /* disp(sp) = saved hard reg */
     }
@@ -711,7 +711,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
       new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
                                                          (int64_t) (n++ * 8) - bp_saved_reg_offset,
-                                                         BP_HARD_REG, MIR_NON_HARD_REG, 1));
+                                                         FP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (ctx, anchor, new_insn); /* hard reg = disp(sp) */
     }
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, 8));
