@@ -4455,7 +4455,7 @@ static void print_code (MIR_context_t ctx, uint8_t *code, size_t code_len, void 
            cfname, cfname, bfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname,
            bfname);
 #endif
-  fprintf (stderr, command);
+  fprintf (stderr, "%s\n", command);
   if ((f = popen (command, "r")) == NULL) return;
   while ((ch = fgetc (f)) != EOF) fprintf (debug_file, "%c", ch);
   pclose (f);
