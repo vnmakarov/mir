@@ -4421,13 +4421,28 @@ static void print_code (MIR_context_t ctx, uint8_t *code, size_t code_len, void 
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   size_t i;
   int ch;
-  char cfname[30], bfname[30];
+  char cfname[30];
   char command[500];
-  FILE *f, *bf;
+  FILE *f;
+#if !defined(__APPLE__)
+  char bfname[30];
+  FILE *bf;
+#endif
 
   sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
-  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
   if ((f = fopen (cfname, "w")) == NULL) return;
+#if defined(__APPLE__)
+  fprintf (f, "unsigned char code[] = {");
+  for (i = 0; i < code_len; i++) {
+    if (i != 0) fprintf (f, ", ");
+    fprintf (f, "0x%x", code[i]);
+  }
+  fprintf (f, "};\n");
+  fclose (f);
+  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
+           cfname, cfname, cfname, cfname, cfname);
+#else
+  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
   if ((bf = fopen (bfname, "w")) == NULL) return;
   fprintf (f, "void code (void) {}\n");
   for (i = 0; i < code_len; i++) fputc (code[i], bf);
@@ -4439,6 +4454,7 @@ static void print_code (MIR_context_t ctx, uint8_t *code, size_t code_len, void 
            "%s.o %s %s",
            cfname, cfname, bfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname,
            bfname);
+#endif
   fprintf (stderr, command);
   if ((f = popen (command, "r")) == NULL) return;
   while ((ch = fgetc (f)) != EOF) fprintf (debug_file, "%c", ch);
