@@ -92,8 +92,8 @@ static size_t get_label_disp (MIR_insn_t insn);
 static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after,
                                  MIR_insn_t insn_for_bb);
 static void gen_delete_insn (MIR_context_t ctx, MIR_insn_t insn);
-static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t before);
-static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t after);
+static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t insn);
+static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t insn);
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
 #ifndef MIR_GEN_DEBUG
