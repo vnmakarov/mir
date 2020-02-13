@@ -2184,7 +2184,7 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
   case MIR_OP_UINT: fprintf (f, "%" PRIu64, op.u.u); break;
   case MIR_OP_FLOAT: fprintf (f, "%.*ef", FLT_MANT_DIG, op.u.f); break;
   case MIR_OP_DOUBLE: fprintf (f, "%.*e", DBL_MANT_DIG, op.u.d); break;
-  case MIR_OP_LDOUBLE: fprintf (f, "%.*Le", LDBL_MANT_DIG, op.u.ld); break;
+  case MIR_OP_LDOUBLE: fprintf (f, "%.*LeL", LDBL_MANT_DIG, op.u.ld); break;
   case MIR_OP_MEM:
   case MIR_OP_HARD_REG_MEM: {
     MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_HARD_REG;
@@ -2322,7 +2322,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
       case MIR_T_F: fprintf (f, "%.*ef", FLT_MANT_DIG, ((float *) data->u.els)[i]); break;
       case MIR_T_D: fprintf (f, "%.*e", DBL_MANT_DIG, ((double *) data->u.els)[i]); break;
       case MIR_T_LD:
-        fprintf (f, "%.*Le", LDBL_MANT_DIG, ((long double *) data->u.els)[i]);
+        fprintf (f, "%.*LeL", LDBL_MANT_DIG, ((long double *) data->u.els)[i]);
         break;
         /* only ptr as ref ??? */
       case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
