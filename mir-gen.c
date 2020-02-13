@@ -478,8 +478,8 @@ static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
       DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
     }
   } else {
-    bb_insn = after->data;
     gen_assert (after != NULL);
+    bb_insn = after->data;
     insn = (before == NULL ? DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns)
                            : DLIST_NEXT (MIR_insn_t, before));
     for (; insn != after; insn = DLIST_NEXT (MIR_insn_t, insn)) {
