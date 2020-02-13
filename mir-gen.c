@@ -3961,7 +3961,9 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
     if (!hreg_refs_addr[hr].def_p) continue;
     gen_assert (!hreg_refs_addr[hr].del_p);
     def_insn = hreg_refs_addr[hr].insn;
-    if (def_insn->nops > 1 && obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
+    if ((def_insn->nops > 1 && obsolete_op_p (ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
+        || (def_insn->nops > 2
+            && obsolete_op_p (ctx, def_insn->ops[2], hreg_refs_addr[hr].insn_num)))
       continue; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
     insn_hr_change_p = FALSE;
     for (i = 0; i < nops; i++) { /* Change all hr occurences: */
@@ -4358,7 +4360,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
       nops = MIR_insn_nops (ctx, insn);
       reg_def_p = FALSE;
       dead_p = TRUE;
-      for (i = 0; i < nops; i++) {
+      for (i = 0; i < nops; i++) { /* process output reg: */
         op = insn->ops[i];
         MIR_insn_op_mode (ctx, insn, i, &out_p);
         if (!out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG)) continue;
