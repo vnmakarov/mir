@@ -109,7 +109,7 @@ static size_t gen_mov_addr (MIR_context_t ctx, int reg, void *addr) {
 
 static void gen_call_addr (MIR_context_t ctx, void *base_addr, int temp_reg, void *call_addr) {
   static const uint32_t call_pat1 = 0x94000000; /* bl x */
-  static const uint32_t call_pat2 = 0xd63f0120; /* blr x */
+  static const uint32_t call_pat2 = 0xd63f0000; /* blr x */
   uint32_t insn;
   int64_t offset = (uint32_t *) call_addr - (uint32_t *) base_addr;
 
