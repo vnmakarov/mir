@@ -95,14 +95,6 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
 static const int int_reg_save_area_size = 8 * 8;
 static const int reg_save_area_size = 8 * 8 + 8 * 16;
 
-static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
-                                                MIR_reg_t slot) {
-  /* slot is 0, 1, ... */
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  return ((MIR_disp_t) (slot + (type == MIR_T_LD ? 2 : 1)) * 8 + 32);
-}
-
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
@@ -524,6 +516,15 @@ struct target_ctx {
 #define label_refs gen_ctx->target_ctx->label_refs
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
+
+static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
+                                                MIR_reg_t slot) {
+  /* slot is 0, 1, ... */
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t offset = curr_func_item->u.func->vararg_p || stack_arg_func_p ? 32 : 16;
+  
+  return ((MIR_disp_t) slot * 8 + offset);
+}
 
 static void target_machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
