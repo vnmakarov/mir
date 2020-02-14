@@ -158,7 +158,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0, vr_args = 0;
+  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -199,7 +199,6 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
-    if (vr_args < 8 && (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD)) vr_args++;
     ext_insn = NULL;
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, func));
