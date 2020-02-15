@@ -247,7 +247,7 @@ c2mir-sieve-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -lm -ldl && ./a.out -v sieve.c -eg && size ./a.out
 
 c2mir-bench: c2m
-	$(SHELL) c-benchmarks/run-benchmarks.sh
+	c-benchmarks/run-benchmarks.sh
 
 # c2mir-bin-test is very slow
 c2mir-bin-test: c2mir-bin-interp-test c2mir-bin-gen-test

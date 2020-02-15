@@ -95,14 +95,6 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
 static const int int_reg_save_area_size = 8 * 8;
 static const int reg_save_area_size = 8 * 8 + 8 * 16;
 
-static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
-                                                MIR_reg_t slot) {
-  /* slot is 0, 1, ... */
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  return ((MIR_disp_t) (slot + (type == MIR_T_LD ? 2 : 1)) * 8 + 32);
-}
-
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
@@ -158,7 +150,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0, vr_args = 0;
+  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -199,7 +191,6 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
-    if (vr_args < 8 && (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD)) vr_args++;
     ext_insn = NULL;
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, func));
@@ -525,6 +516,15 @@ struct target_ctx {
 #define label_refs gen_ctx->target_ctx->label_refs
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
+
+static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
+                                                MIR_reg_t slot) {
+  /* slot is 0, 1, ... */
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t offset = curr_func_item->u.func->vararg_p || stack_arg_func_p ? 32 : 16;
+  
+  return ((MIR_disp_t) slot * 8 + offset);
+}
 
 static void target_machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
