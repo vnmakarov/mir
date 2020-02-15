@@ -335,5 +335,5 @@ ex100:    func v, 0
       Mozilla Public License
 
 ## Porting MIR
-  * Currently MIR works on x86_64 Linux and MacOS and aarch64 Linux port is in progress
+  * Currently MIR works on x86_64 and aarch64 Linux and x86_64 MacOS
   * [HOW-TO-PORT-MIR.md](https://github.com/vnmakarov/mir/blob/master/HOW-TO-PORT-MIR.md) outlines process of porting MIR
