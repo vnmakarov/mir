@@ -93,21 +93,23 @@ int main (int argc, char *argv[], char *env[]) {
   char *message;
   MIR_item_t f, main_func;
   MIR_val_t val;
-  int interpr_p, gen_p;
+  int interpr_p, gen_p, gen_debug_p;
   int res;
   uint64_t (*fun_addr) (int, char *argv[], char *env[]);
   MIR_context_t context;
 
-  if (argc != 2 && argc != 3) {
-    fprintf (stderr, "%s: [-i|-g] <input bitcode file>\n", argv[0]);
+  if (2 <= argc && argc <= 4) {
+    fprintf (stderr, "%s: [-dg] [-i|-g] <input bitcode file>\n", argv[0]);
     exit (1);
   }
-  interpr_p = gen_p = FALSE;
+  interpr_p = gen_p = gen_debug_p = FALSE;
   for (int i = 1; i < argc; i++)
     if (strcmp (argv[i], "-i") == 0) {
       interpr_p = TRUE;
     } else if (strcmp (argv[i], "-g") == 0) {
       gen_p = TRUE;
+    } else if (strcmp (argv[i], "-dg") == 0) {
+      gen_debug_p = TRUE;
     } else if (argv[i][0] == '-') {
       fprintf (stderr, "%s: unknown option %s\n", argv[0], argv[i]);
       exit (1);
@@ -165,9 +167,7 @@ int main (int argc, char *argv[], char *env[]) {
     res = val.i;
   } else if (gen_p) {
     MIR_gen_init (context);
-#if MIR_GEN_DEBUG
-    MIR_gen_set_debug_file (context, stderr);
-#endif
+    if (gen_debug_p) MIR_gen_set_debug_file (context, stderr);
     MIR_link (context, MIR_set_gen_interface, import_resolver);
     fun_addr = MIR_gen (context, main_func);
     res = fun_addr (argc, argv, env);
