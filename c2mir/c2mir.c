@@ -9326,6 +9326,29 @@ static void emit_insn (MIR_context_t ctx, MIR_insn_t insn) {
   MIR_append_insn (ctx, curr_func, insn);
 }
 
+/* BCOND T, L1; JMP L2; L1: => BNCOND T, L2; L1:
+   JMP L; L: => L: */
+static void emit_label_insn_opt (MIR_context_t ctx, MIR_insn_t insn) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_insn_code_t rev_code;
+  MIR_insn_t last, prev;
+
+  assert (insn->code == MIR_LABEL);
+  if ((last = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) != NULL
+      && (prev = DLIST_PREV (MIR_insn_t, last)) != NULL && last->code == MIR_JMP
+      && (rev_code = MIR_reverse_branch_code (prev->code)) != MIR_INSN_BOUND
+      && prev->ops[0].mode == MIR_OP_LABEL && prev->ops[0].u.label == insn) {
+    prev->ops[0] = last->ops[0];
+    prev->code = rev_code;
+    MIR_remove_insn (ctx, curr_func, last);
+  }
+  if ((last = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) != NULL && last->code == MIR_JMP
+      && last->ops[0].mode == MIR_OP_LABEL && last->ops[0].u.label == insn) {
+    MIR_remove_insn (ctx, curr_func, last);
+  }
+  MIR_append_insn (ctx, curr_func, insn);
+}
+
 /* Change t1 = expr; v = t1 to v = expr */
 static void emit_insn_opt (MIR_context_t ctx, MIR_insn_t insn) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
@@ -9818,7 +9841,7 @@ static void emit_label (MIR_context_t ctx, node_t r) {
   assert (labels->code == N_LIST);
   if (NL_HEAD (labels->ops) == NULL) return;
   if (labels->attr == NULL) labels->attr = MIR_new_label (ctx);
-  emit_insn (ctx, labels->attr);
+  emit_label_insn_opt (ctx, labels->attr);
 }
 
 static MIR_label_t get_label (MIR_context_t ctx, node_t target) {
@@ -9875,7 +9898,7 @@ static void block_move (MIR_context_t ctx, op_t var, op_t val, mir_size_t size) 
     emit2 (ctx, MIR_MOV, index.mir_op, MIR_new_int_op (ctx, size));
     val = modify_for_block_move (ctx, val, index);
     var = modify_for_block_move (ctx, var, index);
-    emit_insn (ctx, repeat_label);
+    emit_label_insn_opt (ctx, repeat_label);
     emit3 (ctx, MIR_SUB, index.mir_op, index.mir_op, one_op.mir_op);
     assert (var.mir_op.mode == MIR_OP_MEM && val.mir_op.mode == MIR_OP_MEM);
     val.mir_op.u.mem.type = var.mir_op.u.mem.type = MIR_T_I8;
@@ -10587,19 +10610,19 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
       assert (t_label != NULL && f_label != NULL);
       gen (ctx, NL_HEAD (r->ops), r->code == N_ANDAND ? temp_label : t_label,
            r->code == N_ANDAND ? f_label : temp_label, FALSE, NULL);
-      emit_insn (ctx, temp_label);
+      emit_label_insn_opt (ctx, temp_label);
       gen (ctx, NL_EL (r->ops, 1), t_label, f_label, FALSE, NULL);
       if (make_val_p) {
         MIR_label_t end_label = MIR_new_label (ctx);
 
         type = ((struct expr *) r->attr)->type;
         res = get_new_temp (ctx, get_mir_type (ctx, type));
-        emit_insn (ctx, t_label);
+        emit_label_insn_opt (ctx, t_label);
         emit2 (ctx, MIR_MOV, res.mir_op, one_op.mir_op);
         emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-        emit_insn (ctx, f_label);
+        emit_label_insn_opt (ctx, f_label);
         emit2 (ctx, MIR_MOV, res.mir_op, zero_op.mir_op);
-        emit_insn (ctx, end_label);
+        emit_label_insn_opt (ctx, end_label);
       }
       true_label = false_label = NULL;
     } else if (true_label != NULL) {
@@ -10631,12 +10654,12 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
 
       res = get_new_temp (ctx, MIR_T_I64);
       gen (ctx, NL_HEAD (r->ops), t_label, f_label, FALSE, NULL);
-      emit_insn (ctx, t_label);
+      emit_label_insn_opt (ctx, t_label);
       emit2 (ctx, MIR_MOV, res.mir_op, zero_op.mir_op);
       emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-      emit_insn (ctx, f_label);
+      emit_label_insn_opt (ctx, f_label);
       emit2 (ctx, MIR_MOV, res.mir_op, one_op.mir_op);
-      emit_insn (ctx, end_label);
+      emit_label_insn_opt (ctx, end_label);
     }
     break;
   case N_ADD:
@@ -10927,7 +10950,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
 
     if (!void_p) t = get_mir_type (ctx, type);
     gen (ctx, cond, true_label, false_label, FALSE, NULL);
-    emit_insn (ctx, true_label);
+    emit_label_insn_opt (ctx, true_label);
     op1 = gen (ctx, true_expr, NULL, NULL, !void_p && t != MIR_T_UNDEF, NULL);
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
@@ -10943,7 +10966,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
     }
     emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-    emit_insn (ctx, false_label);
+    emit_label_insn_opt (ctx, false_label);
     op1 = gen (ctx, false_expr, NULL, NULL, !void_p && t != MIR_T_UNDEF, NULL);
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
@@ -10956,7 +10979,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         block_move (ctx, res, op1, size);
       }
     }
-    emit_insn (ctx, end_label);
+    emit_label_insn_opt (ctx, end_label);
     break;
   }
   case N_ALIGNOF:
@@ -11315,12 +11338,12 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     assert (false_label == NULL && true_label == NULL);
     emit_label (ctx, r);
     top_gen (ctx, expr, if_label, else_label);
-    emit_insn (ctx, if_label);
+    emit_label_insn_opt (ctx, if_label);
     gen (ctx, if_stmt, NULL, NULL, FALSE, NULL);
     emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-    emit_insn (ctx, else_label);
+    emit_label_insn_opt (ctx, else_label);
     gen (ctx, else_stmt, NULL, NULL, FALSE, NULL);
-    emit_insn (ctx, end_label);
+    emit_label_insn_opt (ctx, end_label);
     break;
   }
   case N_SWITCH: {
@@ -11419,14 +11442,14 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
             emit3 (ctx, short_p ? MIR_UBLES : MIR_UBLE, MIR_new_label_op (ctx, label),
                    case_reg_op.mir_op, MIR_new_int_op (ctx, e2->u.i_val));
           }
-          emit_insn (ctx, cont_label);
+          emit_label_insn_opt (ctx, cont_label);
         }
       }
       if (c == NULL) /* no default: */
         emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, break_label));
     }
     top_gen (ctx, stmt, NULL, NULL);
-    emit_insn (ctx, break_label);
+    emit_label_insn_opt (ctx, break_label);
     break_label = saved_break_label;
     break;
   }
@@ -11440,11 +11463,11 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     continue_label = MIR_new_label (ctx);
     break_label = MIR_new_label (ctx);
     emit_label (ctx, r);
-    emit_insn (ctx, start_label);
+    emit_label_insn_opt (ctx, start_label);
     gen (ctx, stmt, NULL, NULL, FALSE, NULL);
-    emit_insn (ctx, continue_label);
+    emit_label_insn_opt (ctx, continue_label);
     top_gen (ctx, expr, start_label, break_label);
-    emit_insn (ctx, break_label);
+    emit_label_insn_opt (ctx, break_label);
     continue_label = saved_continue_label;
     break_label = saved_break_label;
     break;
@@ -11459,12 +11482,12 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     continue_label = MIR_new_label (ctx);
     break_label = MIR_new_label (ctx);
     emit_label (ctx, r);
-    emit_insn (ctx, continue_label);
+    emit_label_insn_opt (ctx, continue_label);
     top_gen (ctx, expr, stmt_label, break_label);
-    emit_insn (ctx, stmt_label);
+    emit_label_insn_opt (ctx, stmt_label);
     gen (ctx, stmt, NULL, NULL, FALSE, NULL);
-    emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, continue_label));
-    emit_insn (ctx, break_label);
+    top_gen (ctx, expr, stmt_label, break_label);
+    emit_label_insn_opt (ctx, break_label);
     continue_label = saved_continue_label;
     break_label = saved_break_label;
     break;
@@ -11474,7 +11497,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     node_t cond = NL_NEXT (init);
     node_t iter = NL_NEXT (cond);
     node_t stmt = NL_NEXT (iter);
-    MIR_label_t start_label = MIR_new_label (ctx), stmt_label = MIR_new_label (ctx);
+    MIR_label_t stmt_label = MIR_new_label (ctx);
     MIR_label_t saved_continue_label = continue_label, saved_break_label = break_label;
 
     assert (false_label == NULL && true_label == NULL);
@@ -11482,15 +11505,18 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     break_label = MIR_new_label (ctx);
     emit_label (ctx, r);
     top_gen (ctx, init, NULL, NULL);
-    emit_insn (ctx, start_label);
     if (cond->code != N_IGNORE) /* non-empty condition: */
       top_gen (ctx, cond, stmt_label, break_label);
-    emit_insn (ctx, stmt_label);
+    emit_label_insn_opt (ctx, stmt_label);
     gen (ctx, stmt, NULL, NULL, FALSE, NULL);
-    emit_insn (ctx, continue_label);
+    emit_label_insn_opt (ctx, continue_label);
     top_gen (ctx, iter, NULL, NULL);
-    emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, start_label));
-    emit_insn (ctx, break_label);
+    if (cond->code == N_IGNORE) { /* empty condition: */
+      emit1 (ctx, MIR_JMP, MIR_new_label_op (ctx, stmt_label));
+    } else {
+      top_gen (ctx, cond, stmt_label, break_label);
+    }
+    emit_label_insn_opt (ctx, break_label);
     continue_label = saved_continue_label;
     break_label = saved_break_label;
     break;
