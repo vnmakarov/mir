@@ -9,6 +9,10 @@ static void our_exit (int code) {
   exit (code);
 }
 
+#ifndef TEST_GEN_DEBUG
+#define TEST_GEN_DEBUG 0
+#endif
+
 int main (int argc, char *argv[]) {
   const char *mir_fname = NULL;
   MIR_module_t mir_module;
@@ -65,7 +69,7 @@ int main (int argc, char *argv[]) {
     fprintf (stderr, "%s: %lu\n", mir_fname, (unsigned long) val.i);
   } else if (gen_p) {
     MIR_gen_init (ctx);
-#if MIR_GEN_DEBUG
+#if TEST_GEN_DEBUG
     MIR_gen_set_debug_file (ctx, stderr);
 #endif
     MIR_link (ctx, MIR_set_gen_interface, NULL);

@@ -9,8 +9,12 @@
 #include <inttypes.h>
 #include <unistd.h>
 
+#ifndef TEST_GEN_DEBUG
+#define TEST_GEN_DEBUG 0
+#endif
+
 int main (void) {
-  const int N = MIR_GEN_DEBUG ? 1 : 1000;
+  const int N = TEST_GEN_DEBUG ? 1 : 1000;
   double start_time = real_usec_time ();
   char *start_heap = sbrk (0);
   double start_execution_time;
@@ -33,7 +37,7 @@ int main (void) {
 #else
     funcs[i] = create_mir_func_sieve (ctx, NULL, &m);
 #endif
-#if MIR_GEN_DEBUG
+#if TEST_GEN_DEBUG
     if (i == 0) {
       fprintf (stderr, "+++++++++++++original MIR:\n");
       MIR_output (ctx, stderr);
@@ -44,7 +48,7 @@ int main (void) {
   for (int i = 0; i < N; i++) MIR_load_module (ctx, funcs[i]->module);
   MIR_gen_init (ctx);
   fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
-#if MIR_GEN_DEBUG
+#if TEST_GEN_DEBUG
   MIR_gen_set_debug_file (ctx, stderr);
 #endif
   MIR_link (ctx, MIR_set_gen_interface, NULL);

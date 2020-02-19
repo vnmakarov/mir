@@ -2,6 +2,10 @@
 #include "../mir-gen.h"
 #include "test-read.h"
 
+#ifndef TEST_GEN_DEBUG
+#define TEST_GEN_DEBUG 0
+#endif
+
 int main (int argc, char *argv[]) {
   MIR_item_t func;
   MIR_module_t m;
@@ -20,7 +24,7 @@ int main (int argc, char *argv[]) {
   MIR_load_module (ctx, m);
   MIR_link (ctx, NULL, NULL);
   MIR_gen_init (ctx);
-#if MIR_GEN_DEBUG
+#if TEST_GEN_DEBUG
   fprintf (stderr, "\n==============================%s============================\n", argv[1]);
   MIR_gen_set_debug_file (ctx, stderr);
 #endif

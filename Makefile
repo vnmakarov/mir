@@ -164,34 +164,34 @@ interp-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) mir.c mir-tests/sieve-interp.c && ./a.out && size ./a.out
 
 gen-test1:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test1.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test1.mir
 gen-test2:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test2.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test2.mir
 gen-test3:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test3.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test3.mir
 gen-test4:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test4.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test4.mir
 gen-test5:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test5.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test5.mir
 gen-test6:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test6.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test6.mir
 gen-test7:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test7.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test7.mir
 
 gen-test8:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test8.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test8.mir
 
 gen-test9:
-	$(CC) -g -D$(TARGET) -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test9.mir
+	$(CC) -g -D$(TARGET) -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test9.mir
 
 gen-test10:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test10.mir
 
 gen-test11:
-	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c -DMIR_GEN_DEBUG=1 && ./a.out -g mir-tests/test11.mir
+	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 && ./a.out -g mir-tests/test11.mir
 
 gen-test12:
-	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c -DMIR_GEN_DEBUG=1 && ./a.out -g mir-tests/test12.mir
+	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 && ./a.out -g mir-tests/test12.mir
 
 gen-test13:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test13.mir
@@ -200,8 +200,8 @@ gen-test14:
 	$(CC) -g -D$(TARGET) mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test14.mir
 
 gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14
-	$(CC) -g -D$(TARGET) -DTEST_GEN_LOOP -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
-	$(CC) -g -D$(TARGET) -DTEST_GEN_SIEVE -DMIR_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
+	$(CC) -g -D$(TARGET) -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
+	$(CC) -g -D$(TARGET) -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
 
 gen-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
