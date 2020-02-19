@@ -4,29 +4,41 @@
 
 temp=c-benchmarks/__temp.out
 temp2=c-benchmarks/__temp2.out
+temp3=c-benchmarks/__temp3.out
 errf=c-benchmarks/__temp.err
 
 if test x`echo -n` != "x-n";then NECHO="echo -n"; else NECHO=printf; fi
 
+rm -f $temp3
+
 percent () {
-  echo `awk "BEGIN {if ($2==0) print \"Inf\"; else printf \"%.2fx\n\", $1/$2;}"`
+    val=`awk "BEGIN {if ($2==0) print \"Inf\"; else printf \"%.2f\n\", $1/$2;}"`
+    echo "$val"x
+    if test x$c2m != x; then
+	echo $val >>$temp3
+    fi
+}
+
+skip () {
+    l=$1
+    n=$2
+    while test $l -le $n; do $NECHO " "; l=`expr $l + 1`; done
 }
 
 print_time() {
     title="$1"
     secs=$2
+    c2m=$3
     if test "x$NECHO" = x; then
 	echo $title:
 	echo "   " $secs
     else
 	n=$title:
 	$NECHO "$n"
-	l=${#n}
-	while test $l -le 40; do $NECHO " "; l=`expr $l + 1`; done
+	skip ${#n} 40
 	$NECHO "$secs"
-	l=${#secs}
-	while test $l -le 10; do $NECHO " "; l=`expr $l + 1`; done
-        echo " " `percent $base_time $secs`
+	skip ${#secs} 10
+        echo " " `percent $base_time $secs $c2m`
     fi
 }
 
@@ -37,6 +49,7 @@ run () {
   expect_out=$4
   inputf=$5
   flag=$6
+  c2m=$7
   ok=
   if test x"$preparation" != x; then
     $preparation 2>$errf
@@ -52,7 +65,7 @@ run () {
   fi
   secs=`egrep 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t//`
   if test x$flag != x;then base_time=$secs;fi
-  print_time "$title" $secs
+  print_time "$title" $secs $c2m
 }
 
 runbench () {
@@ -71,7 +84,7 @@ runbench () {
       first=
   fi
 #  run "gcc -O0" "gcc -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
-  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first"
+  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first" 1
 }
 
 for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat  # ackermann fib random 
@@ -82,4 +95,14 @@ do
     runbench $b $arg
 done
 
-rm -f $temp $temp2 $errf
+s="C2M Average:"
+$NECHO $s
+skip ${#s} 53
+awk '{f = f + $1} END {printf "%0.2fx\n", f / NR;}' < $temp3
+
+s="C2M Geomean:"
+$NECHO $s
+skip ${#s} 53
+awk 'BEGIN {f = 1.0} {f = f * $1} END {printf "%0.2fx\n", f ^  (1.0/NR);}' < $temp3
+
+rm -f $temp $temp2 $temp3 $errf
