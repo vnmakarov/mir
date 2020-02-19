@@ -64,6 +64,7 @@ static double real_usec_time (void) {
 }
 
 static struct c2mir_options options;
+static int gen_debug_p;
 
 static size_t curr_char, code_len;
 static const uint8_t *code;
@@ -158,12 +159,15 @@ static void init_options (int argc, char *argv[]) {
   options.debug_p = options.verbose_p = options.asm_p = options.object_p = FALSE;
   options.output_file_name = NULL;
   options.no_prepro_p = options.prepro_only_p = options.syntax_only_p = options.pedantic_p = FALSE;
+  gen_debug_p = FALSE;
   VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (macro_command_t, macro_commands, 0);
   for (int i = 1; i < argc; i++) {
     if (strcmp (argv[i], "-d") == 0) {
       options.verbose_p = options.debug_p = TRUE;
+    } else if (strcmp (argv[i], "-dg") == 0) {
+      gen_debug_p = TRUE;
     } else if (strcmp (argv[i], "-S") == 0) {
       options.asm_p = TRUE;
     } else if (strcmp (argv[i], "-c") == 0) {
@@ -479,9 +483,7 @@ int main (int argc, char *argv[], char *env[]) {
         }
       } else {
         MIR_gen_init (ctx);
-#if MIR_GEN_DEBUG
-        MIR_gen_set_debug_file (ctx, stderr);
-#endif
+        if (gen_debug_p) MIR_gen_set_debug_file (ctx, stderr);
         MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
                   import_resolver);
         fun_addr = MIR_gen (ctx, main_func);
