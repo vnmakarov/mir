@@ -328,8 +328,11 @@ static void check_and_prepare_insn_descs (MIR_context_t ctx) {
 }
 
 static MIR_op_mode_t type2mode (MIR_type_t type) {
-  return (type == MIR_T_UNDEF ? MIR_OP_UNDEF : type == MIR_T_F ? MIR_OP_FLOAT
-	  : type == MIR_T_D ? MIR_OP_DOUBLE : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
+  return (type == MIR_T_UNDEF
+            ? MIR_OP_UNDEF
+            : type == MIR_T_F
+                ? MIR_OP_FLOAT
+                : type == MIR_T_D ? MIR_OP_DOUBLE : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
 }
 
 /* New Page */
@@ -1372,11 +1375,11 @@ void MIR_finish_func (MIR_context_t ctx) {
       }
       insn->ops[i].value_mode = mode;
       if (mode == MIR_OP_UNDEF && insn->ops[i].mode == MIR_OP_MEM
-	  && ((code == MIR_VA_START && i == 0) || (code == MIR_VA_ARG && i == 1)
-	      || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
-	insn->ops[i].value_mode = expected_mode;
+          && ((code == MIR_VA_START && i == 0) || (code == MIR_VA_ARG && i == 1)
+              || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
+        insn->ops[i].value_mode = expected_mode;
       } else if (expected_mode != MIR_OP_UNDEF
-		 && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
+                 && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
         curr_func = NULL;
         (*error_func) (MIR_op_mode_error,
                        "in instruction '%s': unexpected operand mode for operand #%d. Got '%s', "
@@ -2615,8 +2618,8 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
     } else if (((code == MIR_VA_START && nop == 0) || (code == MIR_VA_ARG && nop == 1)
-		|| (code == MIR_VA_END && nop == 0))
-	       && mem_op.u.mem.type == MIR_T_UNDEF) {
+                || (code == MIR_VA_END && nop == 0))
+               && mem_op.u.mem.type == MIR_T_UNDEF) {
       *op = MIR_new_reg_op (ctx, addr_reg);
     } else {
       type = (mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D
@@ -2744,7 +2747,7 @@ static void remove_unused_labels (MIR_context_t ctx, MIR_item_t func_item) {
   }
 }
 
-static MIR_insn_code_t reverse_branch_code (MIR_insn_code_t code) {
+MIR_insn_code_t MIR_reverse_branch_code (MIR_insn_code_t code) {
   switch (code) {
   case MIR_BT: return MIR_BF;
   case MIR_BTS: return MIR_BFS;
@@ -2770,7 +2773,7 @@ static MIR_insn_code_t reverse_branch_code (MIR_insn_code_t code) {
   case MIR_BGES: return MIR_BLTS;
   case MIR_UBGE: return MIR_UBLT;
   case MIR_UBGES: return MIR_UBLTS;
-  default: assert (FALSE); return code;
+  default: return MIR_INSN_BOUND;
   }
 }
 
@@ -2786,7 +2789,7 @@ static const int MAX_JUMP_CHAIN_LEN = 32;
 static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p) {
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, next_insn, next_next_insn, jmp_insn, new_insn;
-  MIR_insn_code_t ext_code;
+  MIR_insn_code_t ext_code, rev_code;
   int jmps_num = 0, inline_p = FALSE;
 
   if (func_item->item_type != MIR_func_item)
@@ -2904,13 +2907,14 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       }
       MIR_remove_insn (ctx, func_item, insn);
       // ??? make imm always second,  what is about mem?
-    } else if (MIR_int_branch_code_p (code) && next_insn != NULL && next_insn->code == MIR_JMP
+    } else if ((rev_code = MIR_reverse_branch_code (insn->code)) != MIR_INSN_BOUND
+               && next_insn != NULL && next_insn->code == MIR_JMP
                && (next_next_insn = DLIST_NEXT (MIR_insn_t, next_insn)) != NULL
                && next_next_insn->code == MIR_LABEL && insn->ops[0].mode == MIR_OP_LABEL
                && skip_labels (next_next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
       /* BCond L;JMP L2;<lables>L: => BNCond L2;<labels>L: */
       insn->ops[0] = next_insn->ops[0];
-      insn->code = reverse_branch_code (insn->code);
+      insn->code = rev_code;
       MIR_remove_insn (ctx, func_item, next_insn);
       next_insn = insn;
     } else if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL

@@ -481,6 +481,8 @@ extern void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func, MIR_insn
                                     MIR_insn_t insn);
 extern void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func, MIR_insn_t insn);
 
+extern MIR_insn_code_t MIR_reverse_branch_code (MIR_insn_code_t code);
+
 extern const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp);
 extern void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func);
 extern void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func,
@@ -567,7 +569,8 @@ struct MIR_code_reloc {
 
 typedef struct MIR_code_reloc MIR_code_reloc_t;
 
-extern void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code, size_t code_len);
+extern void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
+                              size_t code_len);
 extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
                                   const MIR_code_reloc_t *relocs);
 extern void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...);
