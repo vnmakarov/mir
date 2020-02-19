@@ -33,6 +33,13 @@
 #error "undefined or unsupported generation target for C"
 #endif
 
+#define SWAP(a1, a2, t) \
+  do {                  \
+    t = a1;             \
+    a1 = a2;            \
+    a2 = t;             \
+  } while (0)
+
 typedef enum {
   C_alloc_error,
   C_unfinished_comment,
@@ -931,11 +938,7 @@ static char *reverse (VARR (char) * v) {
   int i, j, temp, last = (int) VARR_LENGTH (char, v) - 1;
 
   if (last >= 0 && addr[last] == '\0') last--;
-  for (i = last, j = 0; i > j; i--, j++) {
-    temp = addr[i];
-    addr[i] = addr[j];
-    addr[j] = temp;
-  }
+  for (i = last, j = 0; i > j; i--, j++) SWAP (addr[i], addr[j], temp);
   return addr;
 }
 
@@ -5187,13 +5190,6 @@ static struct type integer_promotion (const struct type *type) {
   return res;
 }
 
-#define SWAP(a1, a2, t) \
-  do {                  \
-    t = a1;             \
-    a1 = a2;            \
-    a2 = t;             \
-  } while (0)
-
 static struct type arithmetic_conversion (const struct type *type1, const struct type *type2) {
   struct type res, t1, t2;
 
@@ -5888,10 +5884,8 @@ static node_t process_tag (c2m_ctx_t c2m_ctx, node_t r, node_t id, node_t decl_l
     error (c2m_ctx, id->pos, "tag %s redeclaration", id->u.s.s);
   } else {
     if (decl_list->code != N_IGNORE) { /* swap decl lists */
-      DLIST (node_t) temp = r->ops;
-
-      r->ops = sym.def_node->ops;
-      sym.def_node->ops = temp;
+      DLIST (node_t) temp;
+      SWAP (r->ops, sym.def_node->ops, temp);
     }
     r = sym.def_node;
   }
