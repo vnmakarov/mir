@@ -8,8 +8,8 @@
 
 #include "mir.h"
 
-#ifndef MIR_GEN_DEBUG
-#define MIR_GEN_DEBUG 0
+#ifndef MIR_NO_GEN_DEBUG
+#define MIR_NO_GEN_DEBUG 0
 #endif
 
 extern void MIR_gen_init (MIR_context_t context);
