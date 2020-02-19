@@ -10726,8 +10726,10 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     t = get_mir_type (ctx, type);
     var = gen (ctx, NL_HEAD (r->ops), NULL, NULL, FALSE, NULL);
     op1 = force_val (ctx, var, FALSE);
-    res = get_new_temp (ctx, t);
-    emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
+    if (val_p || true_label != NULL) {
+      res = get_new_temp (ctx, t);
+      emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
+    }
     val = promote (ctx, op1, t, TRUE);
     op2 = promote (ctx,
                    type->mode != TM_PTR
@@ -10777,7 +10779,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     t = get_op_type (ctx, var);
     op2
       = gen (ctx, NL_EL (r->ops, 1), NULL, NULL, t != MIR_T_UNDEF, t != MIR_T_UNDEF ? NULL : &var);
-    if (t == MIR_T_UNDEF) {
+    if ((!val_p && true_label == NULL) || t == MIR_T_UNDEF) {
       res = var;
       val = op2;
     } else {
@@ -10790,7 +10792,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
       assert (t != MIR_T_UNDEF);
       val = cast (ctx, val, get_mir_type (ctx, ((struct expr *) r->attr)->type), FALSE);
       emit_scalar_assign (ctx, var, &val, t, FALSE);
-      if (r->code != N_POST_INC && r->code != N_POST_DEC)
+      if ((val_p || true_label != NULL) && r->code != N_POST_INC && r->code != N_POST_DEC)
         emit2_noopt (ctx, tp_mov (t), res.mir_op, val.mir_op);
     } else { /* block move */
       mir_size_t size = type_size (c2m_ctx, ((struct expr *) r->attr)->type);
