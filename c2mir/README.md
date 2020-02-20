@@ -68,6 +68,8 @@
     checking of C files without MIR code generation
   * Option `-pedantic` is used for stricter diagnostic about C
     standard conformance.  It might be useful as C2MIR implements some GCC extensions of C
+  * Option `-dg` is used for debuging MIR-generator.  It results in dumping debug information
+    about MIR-generator work to `stderr`
   * Besides C files, MIR textual files with suffix `.mir` and MIR
     binary files with suffix `.bmir` can be given on the command line.
     In this case these MIR files are read and added to generated MIR code
