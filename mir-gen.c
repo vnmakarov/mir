@@ -1357,10 +1357,15 @@ static void make_obsolete_var_exprs (size_t nel, void *data) {
 
 static void create_av_bitmaps (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t exprs_num = VARR_LENGTH (expr_t, exprs);
+  bitmap_t all_expr_bitmap = temp_bitmap2;
 
+  bitmap_clear (all_expr_bitmap);
+  bitmap_set_bit_range_p (all_expr_bitmap, 0, exprs_num);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bitmap_clear (bb->av_in);
     bitmap_clear (bb->av_out);
+    if (bb != DLIST_HEAD (bb_t, curr_cfg->bbs)) bitmap_copy (bb->av_out, all_expr_bitmap);
     bitmap_clear (bb->av_kill);
     bitmap_clear (bb->av_gen);
     curr_bb_av_gen = bb->av_gen;
