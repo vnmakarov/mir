@@ -83,7 +83,24 @@ int main (void) {
   status &= bitmap_bit_p (b3, 120);
   status &= bitmap_bit_count (b3) == 3;
 
-  fprintf (stderr, status ? "DLIST OK\n" : "DLIST FAILURE!\n");
+  bitmap_clear (b1);
+  status &= bitmap_set_bit_range_p (b1, 1, 62);
+  for (int i = 1; i <= 62; i++) status &= bitmap_clear_bit_p (b1, i);
+  status &= bitmap_empty_p (b1);
+
+  status &= bitmap_set_bit_range_p (b1, 30, 362);
+  for (int i = 30; i < 362 + 30; i++) status &= bitmap_clear_bit_p (b1, i);
+  status &= bitmap_empty_p (b1);
+
+  status &= bitmap_set_bit_range_p (b1, 1, 62);
+  status &= bitmap_clear_bit_range_p (b1, 1, 62);
+  status &= bitmap_empty_p (b1);
+
+  status &= bitmap_set_bit_range_p (b1, 30, 362);
+  status &= bitmap_clear_bit_range_p (b1, 30, 362);
+  status &= bitmap_empty_p (b1);
+
+  fprintf (stderr, status ? "BITMAP OK\n" : "BITMAP FAILURE!\n");
   bitmap_destroy (b1);
   bitmap_destroy (b2);
   bitmap_destroy (b3);
