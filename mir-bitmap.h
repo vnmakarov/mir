@@ -99,6 +99,40 @@ static inline int bitmap_clear_bit_p (bitmap_t bm, size_t nb) {
   return res;
 }
 
+static inline int bitmap_set_or_clear_bit_range_p (bitmap_t bm, size_t nb, size_t len, int set_p) {
+  size_t nw, lsh, rsh, range_len;
+  bitmap_el_t mask, *addr;
+  int res = 0;
+
+  bitmap_expand (bm, nb + len);
+  addr = VARR_ADDR (bitmap_el_t, bm);
+  while (len > 0) {
+    nw = nb / BITMAP_WORD_BITS;
+    lsh = nb % BITMAP_WORD_BITS;
+    rsh = len >= BITMAP_WORD_BITS - lsh ? 0 : BITMAP_WORD_BITS - (nb + len) % BITMAP_WORD_BITS;
+    mask = ((~(bitmap_el_t) 0) >> (rsh + lsh)) << lsh;
+    if (set_p) {
+      res |= (~addr[nw] & mask) != 0;
+      addr[nw] |= mask;
+    } else {
+      res |= (addr[nw] & mask) != 0;
+      addr[nw] &= ~mask;
+    }
+    range_len = BITMAP_WORD_BITS - rsh - lsh;
+    len -= range_len;
+    nb += range_len;
+  }
+  return res;
+}
+
+static inline int bitmap_set_bit_range_p (bitmap_t bm, size_t nb, size_t len) {
+  return bitmap_set_or_clear_bit_range_p (bm, nb, len, TRUE);
+}
+
+static inline int bitmap_clear_bit_range_p (bitmap_t bm, size_t nb, size_t len) {
+  return bitmap_set_or_clear_bit_range_p (bm, nb, len, FALSE);
+}
+
 static inline void bitmap_copy (bitmap_t dst, const_bitmap_t src) {
   size_t dst_len = VARR_LENGTH (bitmap_el_t, dst);
   size_t src_len = VARR_LENGTH (bitmap_el_t, src);
