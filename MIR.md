@@ -271,40 +271,40 @@
     Its operands should have `MIR_T_LD` type.
   * The result of comparison insn is a 64-bit integer value, so the result operand should be of integer type
   
-    | Insn Code                            | Nops |   Description                                                  |
-    |--------------------------------------|-----:|----------------------------------------------------------------|
-    | `MIR_F2I`, `MIR_D2I`, `MIR_LD2I`     | 2    | transforming floating point value into 64-bit integer          |
-    | `MIR_F2D`                            | 2    | transforming single to double precision FP value               |
-    | `MIR_F2LD`                           | 2    | transforming single precision to long double FP value          |
-    | `MIR_D2F`                            | 2    | transforming double to single precision FP value               |
-    | `MIR_D2LD`                           | 2    | transforming double precision to long double FP value          |
-    | `MIR_LD2F`                           | 2    | transforming long double to single precision FP value          |
-    | `MIR_LD2D`                           | 2    | transforming long double to double precision FP value          |
-    | `MIR_I2F`, `MIR_I2D`, `MIR_I2LD`     | 2    | transforming floating point value into 64-bit integer          |
-    | `MIR_UI2F`, `MIR_UI2D`, `MIR_UI2LD`  | 2    | transforming floating point value into unsigned 64-bit integer |
-    | `MIR_FNEG`, `MIR_DNEG`, `MIR_LDNEG`  | 2    | changing sign of floating point value                          |
-    | `MIR_FADD`, `MIR_FSUB`               | 3    | **single** precision addition and subtraction                  |
-    | `MIR_DADD`, `MIR_DSUB`               | 3    | **double** precision addition and subtraction                  |
-    | `MIR_LDADD`, `MIR_LDSUB`             | 3    | **long double** addition and subtraction                       |
-    | `MIR_FMUL`, `MIR_FDIV`               | 3    | **single** precision multiplication and divison                |
-    | `MIR_DMUL`, `MIR_DDIV`               | 3    | **double** precision multiplication and divison                |
-    | `MIR_LDMUL`, `MIR_LDDIV`             | 3    | **long double** multiplication and divison                     |
-    | `MIR_FEQ`, `MIR_FNE`                 | 3    | equality/inequality of **single** precision values             |
-    | `MIR_DEQ`, `MIR_DNE`                 | 3    | equality/inequality of **double** precision values             |
-    | `MIR_LDEQ`, `MIR_LDNE`               | 3    | equality/inequality of **long double** values                  |
-    | `MIR_FLT`, `MIR_FLE`                 | 3    | **single** precision less than/less than or equal              |
-    | `MIR_DLT`, `MIR_DLE`                 | 3    | **double** precision less than/less than or equal              |
-    | `MIR_LDLT`, `MIR_LDLE`               | 3    | **long double** less than/less than or equal                   |
-    | `MIR_FGT`, `MIR_FGE`                 | 3    | **single** precision greater than/greater than or equal        |
-    | `MIR_DGT`, `MIR_DGE`                 | 3    | **double** precision greater than/greater than or equal        |
-    | `MIR_LDGT`, `MIR_LDGE`               | 3    | **long double** greater than/greater than or equal             |
+    | Insn Code                            | Nops |   Description                                                   |
+    |--------------------------------------|-----:|-----------------------------------------------------------------|
+    | `MIR_F2I`, `MIR_D2I`, `MIR_LD2I`     | 2    | transforming floating point value into 64-bit integer           |
+    | `MIR_F2D`                            | 2    | transforming single to double precision FP value                |
+    | `MIR_F2LD`                           | 2    | transforming single precision to long double FP value           |
+    | `MIR_D2F`                            | 2    | transforming double to single precision FP value                |
+    | `MIR_D2LD`                           | 2    | transforming double precision to long double FP value           |
+    | `MIR_LD2F`                           | 2    | transforming long double to single precision FP value           |
+    | `MIR_LD2D`                           | 2    | transforming long double to double precision FP value           |
+    | `MIR_I2F`, `MIR_I2D`, `MIR_I2LD`     | 2    | transforming 64-bit integer into a floating point value         |
+    | `MIR_UI2F`, `MIR_UI2D`, `MIR_UI2LD`  | 2    | transforming unsigned 64-bit integer into a floating point value|
+    | `MIR_FNEG`, `MIR_DNEG`, `MIR_LDNEG`  | 2    | changing sign of floating point value                           |
+    | `MIR_FADD`, `MIR_FSUB`               | 3    | **single** precision addition and subtraction                   |
+    | `MIR_DADD`, `MIR_DSUB`               | 3    | **double** precision addition and subtraction                   |
+    | `MIR_LDADD`, `MIR_LDSUB`             | 3    | **long double** addition and subtraction                        |
+    | `MIR_FMUL`, `MIR_FDIV`               | 3    | **single** precision multiplication and divison                 |
+    | `MIR_DMUL`, `MIR_DDIV`               | 3    | **double** precision multiplication and divison                 |
+    | `MIR_LDMUL`, `MIR_LDDIV`             | 3    | **long double** multiplication and divison                      |
+    | `MIR_FEQ`, `MIR_FNE`                 | 3    | equality/inequality of **single** precision values              |
+    | `MIR_DEQ`, `MIR_DNE`                 | 3    | equality/inequality of **double** precision values              |
+    | `MIR_LDEQ`, `MIR_LDNE`               | 3    | equality/inequality of **long double** values                   |
+    | `MIR_FLT`, `MIR_FLE`                 | 3    | **single** precision less than/less than or equal               |
+    | `MIR_DLT`, `MIR_DLE`                 | 3    | **double** precision less than/less than or equal               |
+    | `MIR_LDLT`, `MIR_LDLE`               | 3    | **long double** less than/less than or equal                    |
+    | `MIR_FGT`, `MIR_FGE`                 | 3    | **single** precision greater than/greater than or equal         |
+    | `MIR_DGT`, `MIR_DGE`                 | 3    | **double** precision greater than/greater than or equal         |
+    | `MIR_LDGT`, `MIR_LDGE`               | 3    | **long double** greater than/greater than or equal              |
 
 ### MIR branch insns
   * The first operand of the insn should be label
 
     | Insn Code               | Nops |   Description                                                 |
     |-------------------------|-----:|---------------------------------------------------------------|
-    | `MIR_JMP`               | 1    | unconditional jump to the label                                 |
+    | `MIR_JMP`               | 1    | unconditional jump to the label                               |
     | `MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**  |
     | `MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**  |
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
