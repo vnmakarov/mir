@@ -45,7 +45,6 @@
      * `MIR_T_LD` - long double values.  It is machine-dependent and can be IEEE double, x86 80-bit FP,
        or IEEE quad precision FP values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
-     * `MIR_T_V` representing any value absence (void type)
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
      and `v`
@@ -98,7 +97,7 @@
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (MIR_context_t ctx, const
     char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
     or function `MIR_item_t MIR_new_func_arr (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, MIR_var_t *arg_vars)`
-    * Argument variables can be any type (except `MIR_T_V`)
+    * Argument variables can be any type
       * This type only denotes how the argument value is passed
       * Any integer type argument variable has actually type `MIR_T_I64`
   * MIR functions with variable number of arguments are created through API functions
