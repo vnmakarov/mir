@@ -798,23 +798,21 @@ static void output_out_edges (MIR_context_t ctx, bb_t bb) {
   fprintf (debug_file, "\n");
 }
 
-static void output_live_element (size_t nel, void *data) {
-  MIR_context_t ctx = data;
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  fprintf (debug_file, "%3lu", (unsigned long) nel);
-  if (var_is_reg_p (nel))
-    fprintf (debug_file, "(%s:%s)",
-             MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func)),
-             MIR_reg_name (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func));
-}
-
 static void output_bitmap (MIR_context_t ctx, const char *head, bitmap_t bm) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t nel;
+  bitmap_iterator_t bi;
 
   if (bm == NULL || bitmap_empty_p (bm)) return;
   fprintf (debug_file, "%s", head);
-  bitmap_for_each (bm, output_live_element, ctx);
+  FOREACH_BITMAP_BIT (bi, bm, nel) {
+    fprintf (debug_file, "%3lu", (unsigned long) nel);
+    if (var_is_reg_p (nel))
+      fprintf (debug_file, "(%s:%s)",
+               MIR_type_str (ctx,
+                             MIR_reg_type (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func)),
+               MIR_reg_name (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func));
+  }
   fprintf (debug_file, "\n");
 }
 
@@ -1342,8 +1340,7 @@ static void create_exprs (MIR_context_t ctx) {
     }
 }
 
-static void make_obsolete_var_exprs (size_t nel, void *data) {
-  MIR_context_t ctx = data;
+static void make_obsolete_var_exprs (MIR_context_t ctx, size_t nel) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t var = nel;
   bitmap_t b;
@@ -1357,8 +1354,9 @@ static void make_obsolete_var_exprs (size_t nel, void *data) {
 
 static void create_av_bitmaps (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  size_t exprs_num = VARR_LENGTH (expr_t, exprs);
+  size_t nel, exprs_num = VARR_LENGTH (expr_t, exprs);
   bitmap_t all_expr_bitmap = temp_bitmap2;
+  bitmap_iterator_t bi;
 
   bitmap_clear (all_expr_bitmap);
   bitmap_set_bit_range_p (all_expr_bitmap, 0, exprs_num);
@@ -1397,9 +1395,9 @@ static void create_av_bitmaps (MIR_context_t ctx) {
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
-        make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
+        make_obsolete_var_exprs (ctx, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
-        make_obsolete_var_exprs (early_clobbered_hard_reg2, ctx);
+        make_obsolete_var_exprs (ctx, early_clobbered_hard_reg2);
       nops = MIR_insn_nops (ctx, insn);
       for (i = 0; i < nops; i++) {
         MIR_insn_op_mode (ctx, insn, i, &out_p);
@@ -1409,15 +1407,16 @@ static void create_av_bitmaps (MIR_context_t ctx) {
           bitmap_and_compl (bb->av_gen, bb->av_gen, memory_exprs);
           bitmap_ior (bb->av_kill, bb->av_kill, memory_exprs);
         } else if (op.mode == MIR_OP_REG || op.mode == MIR_OP_HARD_REG) {
-          make_obsolete_var_exprs (op.mode == MIR_OP_HARD_REG ? op.u.hard_reg
-                                                              : reg2var (gen_ctx, op.u.reg),
-                                   ctx);
+          make_obsolete_var_exprs (ctx, op.mode == MIR_OP_HARD_REG ? op.u.hard_reg
+                                                                   : reg2var (gen_ctx, op.u.reg));
         }
       }
       if (MIR_call_code_p (insn->code)) {
         gen_assert (bb_insn->call_hard_reg_args != NULL);
-        bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs, ctx);
-        bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs, ctx);
+        FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+          make_obsolete_var_exprs (ctx, nel);
+        }
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) { make_obsolete_var_exprs (ctx, nel); }
         bitmap_and_compl (bb->av_gen, bb->av_gen, memory_exprs);
         bitmap_ior (bb->av_kill, bb->av_kill, memory_exprs);
       }
@@ -1429,6 +1428,8 @@ static void cse_modify (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   bb_insn_t bb_insn, new_bb_insn, next_bb_insn;
   bitmap_t av = temp_bitmap;
+  size_t nel;
+  bitmap_iterator_t bi;
 
   curr_bb_av_gen = temp_bitmap;
   curr_bb_av_kill = NULL;
@@ -1499,9 +1500,9 @@ static void cse_modify (MIR_context_t ctx) {
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
-        make_obsolete_var_exprs (early_clobbered_hard_reg1, ctx);
+        make_obsolete_var_exprs (ctx, early_clobbered_hard_reg1);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
-        make_obsolete_var_exprs (early_clobbered_hard_reg2, ctx);
+        make_obsolete_var_exprs (ctx, early_clobbered_hard_reg2);
       nops = MIR_insn_nops (ctx, insn);
       for (i = 0; i < nops; i++) {
         op = insn->ops[i];
@@ -1510,15 +1511,16 @@ static void cse_modify (MIR_context_t ctx) {
         if (op.mode == MIR_OP_MEM || op.mode == MIR_OP_HARD_REG_MEM) {
           bitmap_and_compl (av, av, memory_exprs);
         } else if (op.mode == MIR_OP_REG || op.mode == MIR_OP_HARD_REG) {
-          make_obsolete_var_exprs (op.mode == MIR_OP_HARD_REG ? op.u.hard_reg
-                                                              : reg2var (gen_ctx, op.u.reg),
-                                   ctx);
+          make_obsolete_var_exprs (ctx, op.mode == MIR_OP_HARD_REG ? op.u.hard_reg
+                                                                   : reg2var (gen_ctx, op.u.reg));
         }
       }
       if (MIR_call_code_p (insn->code)) {
         gen_assert (bb_insn->call_hard_reg_args != NULL);
-        bitmap_for_each (bb_insn->call_hard_reg_args, make_obsolete_var_exprs, ctx);
-        bitmap_for_each (call_used_hard_regs, make_obsolete_var_exprs, ctx);
+        FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+          make_obsolete_var_exprs (ctx, nel);
+        }
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) { make_obsolete_var_exprs (ctx, nel); }
         bitmap_and_compl (av, av, memory_exprs);
       }
     }
@@ -1661,7 +1663,6 @@ struct ccp_ctx {
   int curr_producer_age, curr_op_age;
   var_producer_t *producers;
   VARR (var_producer_t) * producer_varr;
-  bb_t ccp_end_bb;
   bitmap_t bb_visited;
   VARR (bb_t) * ccp_bbs;
   VARR (var_occ_t) * ccp_var_occs;
@@ -1676,7 +1677,6 @@ struct ccp_ctx {
 #define curr_op_age gen_ctx->ccp_ctx->curr_op_age
 #define producers gen_ctx->ccp_ctx->producers
 #define producer_varr gen_ctx->ccp_ctx->producer_varr
-#define ccp_end_bb gen_ctx->ccp_ctx->ccp_end_bb
 #define bb_visited gen_ctx->ccp_ctx->bb_visited
 #define ccp_bbs gen_ctx->ccp_ctx->ccp_bbs
 #define ccp_var_occs gen_ctx->ccp_ctx->ccp_var_occs
@@ -1794,17 +1794,6 @@ static void process_op_use (MIR_context_t ctx, MIR_op_t *op, bb_insn_t bb_insn) 
   }
 }
 
-static void process_bb_end (size_t el, void *data) {
-  MIR_context_t ctx = data;
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  MIR_reg_t var = el;
-  var_occ_t use = get_bb_var_occ (ctx, var, OCC_BB_END, ccp_end_bb);
-  var_occ_t def = get_var_def (ctx, var, ccp_end_bb);
-
-  use->def = def;
-  DLIST_APPEND (var_occ_t, def->uses, use);
-}
-
 /* Build a web of def-use with auxiliary usages and definitions at BB
    borders to emulate SSA on which the sparse conditional propagation
    is usually done.  We could do non-sparse CCP w/o building the web
@@ -1813,12 +1802,13 @@ static void build_var_occ_web (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_op_t *op;
   MIR_insn_t insn;
-  size_t i, nops;
+  size_t i, nops, nel;
   int out_p;
   MIR_reg_t dst_var;
   var_occ_t var_occ;
   var_producer_t var_producer;
   bb_start_occ_list_t list;
+  bitmap_iterator_t bi;
 
   DLIST_INIT (var_occ_t, list);
   while (VARR_LENGTH (bb_start_occ_list_t, bb_start_occ_list_varr) < curr_bb_index)
@@ -1853,8 +1843,14 @@ static void build_var_occ_web (MIR_context_t ctx) {
         }
       }
     }
-    ccp_end_bb = bb;
-    bitmap_for_each (bb->live_out, process_bb_end, ctx);
+    FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+      MIR_reg_t var = nel;
+      var_occ_t use = get_bb_var_occ (ctx, var, OCC_BB_END, bb);
+      var_occ_t def = get_var_def (ctx, var, bb);
+
+      use->def = def;
+      DLIST_APPEND (var_occ_t, def->uses, use);
+    }
   }
 }
 
@@ -3115,31 +3111,6 @@ static int make_reg_live (MIR_context_t ctx, MIR_reg_t reg, int hard_reg_p, int 
   return make_var_live (ctx, hard_reg_p ? reg : reg2var (gen_ctx, reg), point);
 }
 
-static void make_live (size_t nb, void *data) {
-  MIR_context_t ctx = data;
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  make_var_live ((MIR_context_t) data, nb, curr_point);
-}
-static void make_dead (size_t nb, void *data) {
-  MIR_context_t ctx = data;
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  make_var_dead ((MIR_context_t) data, nb, curr_point);
-}
-
-static void make_live_through_call (size_t nb, void *data) {
-  reg_info_t *bri;
-  MIR_reg_t breg;
-  MIR_context_t ctx = data;
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  if (!var_is_reg_p (nb)) return;
-  breg = reg2breg (gen_ctx, var2reg (gen_ctx, nb));
-  bri = &VARR_ADDR (reg_info_t, curr_cfg->breg_info)[breg];
-  bri->calls_num++;
-}
-
 #if !MIR_NO_GEN_DEBUG
 static void print_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -3166,9 +3137,10 @@ static void build_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   MIR_reg_t nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  size_t i, nops;
+  size_t i, nops, nel;
   int incr_p, out_p;
   MIR_op_t op;
+  bitmap_iterator_t bi;
 
   curr_point = 0;
   nvars = get_nvars (ctx);
@@ -3180,7 +3152,9 @@ static void build_live_ranges (MIR_context_t ctx) {
       fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point);
 #endif
     bitmap_clear (live_vars);
-    if (bb->live_out != NULL) bitmap_for_each (bb->live_out, make_live, ctx);
+    if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+        make_var_live (ctx, nel, curr_point);
+      }
     for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
@@ -3201,9 +3175,19 @@ static void build_live_ranges (MIR_context_t ctx) {
           incr_p |= make_reg_dead (ctx, op.u.hard_reg, TRUE, curr_point);
       }
       if (MIR_call_code_p (insn->code)) {
-        bitmap_for_each (call_used_hard_regs, make_dead, ctx);
-        bitmap_for_each (bb_insn->call_hard_reg_args, make_live, ctx);
-        bitmap_for_each (live_vars, make_live_through_call, ctx);
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) { make_var_dead (ctx, nel, curr_point); }
+        FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+          make_var_live (ctx, nel, curr_point);
+        }
+        FOREACH_BITMAP_BIT (bi, live_vars, nel) {
+          reg_info_t *bri;
+          MIR_reg_t breg;
+
+          if (!var_is_reg_p (nel)) continue;
+          breg = reg2breg (gen_ctx, var2reg (gen_ctx, nel));
+          bri = &VARR_ADDR (reg_info_t, curr_cfg->breg_info)[breg];
+          bri->calls_num++;
+        }
       }
       if (incr_p) curr_point++;
       incr_p = FALSE;
@@ -3244,7 +3228,7 @@ static void build_live_ranges (MIR_context_t ctx) {
       if (incr_p) curr_point++;
     }
     gen_assert (bitmap_equal_p (live_vars, bb->live_in));
-    bitmap_for_each (live_vars, make_dead, ctx);
+    FOREACH_BITMAP_BIT (bi, live_vars, nel) { make_var_dead (ctx, nel, curr_point); }
     if (!bitmap_empty_p (bb->live_in)) curr_point++;
   }
 #if !MIR_NO_GEN_DEBUG
