@@ -761,6 +761,10 @@ static MIR_reg_t var2reg (struct gen_ctx *gen_ctx, MIR_reg_t var) {
   gen_assert (var > MAX_HARD_REG);
   return breg2reg (gen_ctx, var - MAX_HARD_REG - 1);
 }
+static MIR_reg_t var2breg (struct gen_ctx *gen_ctx, MIR_reg_t var) {
+  gen_assert (var > MAX_HARD_REG);
+  return var - MAX_HARD_REG - 1;
+}
 
 static MIR_reg_t get_nregs (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
