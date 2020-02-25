@@ -2920,12 +2920,12 @@ static int bb_loop_level (bb_t bb) {
 static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
-  size_t nops, i, niter, bb_freq, mvs_num = 0;
-  MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  MIR_op_t op;
-  int out_p;
+  size_t i, niter, passed_mem_num, bb_freq, mvs_num = 0;
+  MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  int out_p, mem_p;
   mv_t mv;
   reg_info_t *breg_infos;
+  insn_var_iterator_t insn_var_iter;
 
   gen_assert (bb->live_in != NULL && bb->live_out != NULL && bb->live_gen != NULL
               && bb->live_kill != NULL);
@@ -2940,54 +2940,20 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
-    nops = MIR_insn_nops (ctx, insn);
     if (MIR_call_code_p (insn->code)) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
       bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
     }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        switch (op.mode) {
-        case MIR_OP_REG:
-          if (!out_p && niter != 0)
-            bitmap_set_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.reg));
-          else if (niter == 0) {
-            bitmap_clear_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.reg));
-            bitmap_set_bit_p (bb->live_kill, reg2var (gen_ctx, op.u.reg));
-          }
-          breg_infos[reg2breg (gen_ctx, op.u.reg)].freq += bb_freq;
-          break;
-        case MIR_OP_HARD_REG:
-          if (!out_p && niter != 0)
-            bitmap_set_bit_p (bb->live_gen, op.u.hard_reg);
-          else if (niter == 0) {
-            bitmap_clear_bit_p (bb->live_gen, op.u.hard_reg);
-            bitmap_set_bit_p (bb->live_kill, op.u.hard_reg);
-          }
-          break;
-        case MIR_OP_MEM:
-          if (niter == 0) break;
-          if (op.u.mem.base != 0) {
-            bitmap_set_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.mem.base));
-            breg_infos[reg2breg (gen_ctx, op.u.mem.base)].freq += bb_freq;
-          }
-          if (op.u.mem.index != 0) {
-            bitmap_set_bit_p (bb->live_gen, reg2var (gen_ctx, op.u.mem.index));
-            breg_infos[reg2breg (gen_ctx, op.u.mem.index)].freq += bb_freq;
-          }
-          break;
-        case MIR_OP_HARD_REG_MEM:
-          if (niter == 0) break;
-          if (op.u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (bb->live_gen, op.u.hard_reg_mem.base);
-          if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (bb->live_gen, op.u.hard_reg_mem.index);
-          break;
-        default: /* do nothing */ break;
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p && niter != 0)
+          bitmap_set_bit_p (bb->live_gen, var);
+        else if (niter == 0) {
+          bitmap_clear_bit_p (bb->live_gen, var);
+          bitmap_set_bit_p (bb->live_kill, var);
         }
+        if (var_is_reg_p (var)) breg_infos[var2breg (gen_ctx, var)].freq += bb_freq;
       }
     }
     target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
@@ -3058,11 +3024,12 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
-  size_t nops, i;
-  MIR_reg_t var, var2, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  size_t passed_mem_num;
+  MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
-  int out_p, live_start1_p, live_start2_p;
+  int out_p, mem_p;
   bitmap_t live;
+  insn_var_iterator_t insn_var_iter;
 
   live = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
@@ -3071,42 +3038,13 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
       prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
       clear_bb_insn_dead_vars (bb_insn);
       insn = bb_insn->insn;
-      nops = MIR_insn_nops (ctx, insn);
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        if (!out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG)) continue;
-        var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (gen_ctx, op.u.reg);
-        bitmap_clear_bit_p (live, var);
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (out_p) bitmap_clear_bit_p (live, var);
       }
       if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        live_start1_p = live_start2_p = FALSE;
-        switch (op.mode) {
-        case MIR_OP_REG:
-          if (!out_p) live_start1_p = bitmap_set_bit_p (live, var = reg2var (gen_ctx, op.u.reg));
-          break;
-        case MIR_OP_HARD_REG:
-          if (!out_p) live_start1_p = bitmap_set_bit_p (live, var = op.u.hard_reg);
-          break;
-        case MIR_OP_MEM:
-          if (op.u.mem.base != 0)
-            live_start1_p = bitmap_set_bit_p (live, var = reg2var (gen_ctx, op.u.mem.base));
-          if (op.u.mem.index != 0)
-            live_start2_p = bitmap_set_bit_p (live, var2 = reg2var (gen_ctx, op.u.mem.index));
-          break;
-        case MIR_OP_HARD_REG_MEM:
-          if (op.u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            live_start1_p = bitmap_set_bit_p (live, var = op.u.hard_reg_mem.base);
-          if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            live_start2_p = bitmap_set_bit_p (live, var2 = op.u.hard_reg_mem.index);
-          break;
-        default: break;
-        }
-        if (live_start1_p) add_bb_insn_dead_var (ctx, bb_insn, var);
-        if (live_start2_p) add_bb_insn_dead_var (ctx, bb_insn, var2);
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (out_p) continue;
+        if (bitmap_set_bit_p (live, var)) add_bb_insn_dead_var (ctx, bb_insn, var);
       }
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
@@ -3184,18 +3122,6 @@ static int make_var_live (MIR_context_t ctx, MIR_reg_t var, int point) {
   return TRUE;
 }
 
-static int make_reg_dead (MIR_context_t ctx, MIR_reg_t reg, int hard_reg_p, int point) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  return make_var_dead (ctx, hard_reg_p ? reg : reg2var (gen_ctx, reg), point);
-}
-
-static int make_reg_live (MIR_context_t ctx, MIR_reg_t reg, int hard_reg_p, int point) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-
-  return make_var_live (ctx, hard_reg_p ? reg : reg2var (gen_ctx, reg), point);
-}
-
 #if !MIR_NO_GEN_DEBUG
 static void print_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -3221,11 +3147,11 @@ static void print_live_ranges (MIR_context_t ctx) {
 static void build_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
-  MIR_reg_t nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  size_t i, nops, nel;
-  int incr_p, out_p;
-  MIR_op_t op;
+  MIR_reg_t var, nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  size_t i, nel, passed_mem_num;
+  int incr_p, out_p, mem_p;
   bitmap_iterator_t bi;
+  insn_var_iterator_t insn_var_iter;
 
   curr_point = 0;
   nvars = get_nvars (ctx);
@@ -3249,15 +3175,9 @@ static void build_live_ranges (MIR_context_t ctx) {
         print_bb_insn (ctx, bb_insn, TRUE);
       }
 #endif
-      nops = MIR_insn_nops (ctx, insn);
       incr_p = FALSE;
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        if (op.mode == MIR_OP_REG && out_p)
-          incr_p |= make_reg_dead (ctx, op.u.reg, FALSE, curr_point);
-        else if (op.mode == MIR_OP_HARD_REG && out_p)
-          incr_p |= make_reg_dead (ctx, op.u.hard_reg, TRUE, curr_point);
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (out_p) incr_p |= make_var_dead (ctx, var, curr_point);
       }
       if (MIR_call_code_p (insn->code)) {
         FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) { make_var_dead (ctx, nel, curr_point); }
@@ -3276,39 +3196,18 @@ static void build_live_ranges (MIR_context_t ctx) {
       }
       if (incr_p) curr_point++;
       incr_p = FALSE;
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        switch (op.mode) {
-        case MIR_OP_REG:
-          MIR_insn_op_mode (ctx, insn, i, &out_p);
-          if (!out_p) incr_p |= make_reg_live (ctx, op.u.reg, FALSE, curr_point);
-          break;
-        case MIR_OP_HARD_REG:
-          MIR_insn_op_mode (ctx, insn, i, &out_p);
-          if (!out_p) incr_p |= make_reg_live (ctx, op.u.hard_reg, TRUE, curr_point);
-          break;
-        case MIR_OP_MEM:
-          if (op.u.mem.base != 0) incr_p |= make_reg_live (ctx, op.u.mem.base, FALSE, curr_point);
-          if (op.u.mem.index != 0) incr_p |= make_reg_live (ctx, op.u.mem.index, FALSE, curr_point);
-          break;
-        case MIR_OP_HARD_REG_MEM:
-          if (op.u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            incr_p |= make_reg_live (ctx, op.u.hard_reg_mem.base, TRUE, curr_point);
-          if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            incr_p |= make_reg_live (ctx, op.u.hard_reg_mem.index, TRUE, curr_point);
-          break;
-        default: /* do nothing */ break;
-        }
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) incr_p |= make_var_live (ctx, var, curr_point);
       }
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
-        incr_p |= make_reg_live (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
-        incr_p |= make_reg_dead (ctx, early_clobbered_hard_reg1, TRUE, curr_point);
+        incr_p |= make_var_live (ctx, early_clobbered_hard_reg1, curr_point);
+        incr_p |= make_var_dead (ctx, early_clobbered_hard_reg1, curr_point);
       }
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
-        incr_p |= make_reg_live (ctx, early_clobbered_hard_reg2, TRUE, curr_point);
-        incr_p |= make_reg_dead (ctx, early_clobbered_hard_reg2, TRUE, curr_point);
+        incr_p |= make_var_live (ctx, early_clobbered_hard_reg2, curr_point);
+        incr_p |= make_var_dead (ctx, early_clobbered_hard_reg2, curr_point);
       }
       if (incr_p) curr_point++;
     }
@@ -4412,11 +4311,11 @@ static void dead_code_elimination (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
-  size_t nops, i;
+  size_t passed_mem_num;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  MIR_op_t op;
-  int out_p, reg_def_p, dead_p;
+  int out_p, reg_def_p, dead_p, mem_p;
   bitmap_t live;
+  insn_var_iterator_t insn_var_iter;
 
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Dead code elimination:\n");
@@ -4427,15 +4326,11 @@ static void dead_code_elimination (MIR_context_t ctx) {
     for (bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = prev_bb_insn) {
       prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
-      nops = MIR_insn_nops (ctx, insn);
       reg_def_p = FALSE;
       dead_p = TRUE;
-      for (i = 0; i < nops; i++) { /* process output reg: */
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        if (!out_p || (op.mode != MIR_OP_REG && op.mode != MIR_OP_HARD_REG)) continue;
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) continue;
         reg_def_p = TRUE;
-        var = op.mode == MIR_OP_HARD_REG ? op.u.hard_reg : reg2var (gen_ctx, op.u.reg);
         if (bitmap_clear_bit_p (live, var)) dead_p = FALSE;
       }
       if (!reg_def_p) dead_p = FALSE;
@@ -4455,28 +4350,8 @@ static void dead_code_elimination (MIR_context_t ctx) {
         continue;
       }
       if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        MIR_insn_op_mode (ctx, insn, i, &out_p);
-        switch (op.mode) {
-        case MIR_OP_REG:
-          if (!out_p) bitmap_set_bit_p (live, reg2var (gen_ctx, op.u.reg));
-          break;
-        case MIR_OP_HARD_REG:
-          if (!out_p) bitmap_set_bit_p (live, op.u.hard_reg);
-          break;
-        case MIR_OP_MEM:
-          if (op.u.mem.base != 0) bitmap_set_bit_p (live, reg2var (gen_ctx, op.u.mem.base));
-          if (op.u.mem.index != 0) bitmap_set_bit_p (live, reg2var (gen_ctx, op.u.mem.index));
-          break;
-        case MIR_OP_HARD_REG_MEM:
-          if (op.u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (live, op.u.hard_reg_mem.base);
-          if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (live, op.u.hard_reg_mem.index);
-          break;
-        default: break;
-        }
+      FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) bitmap_set_bit_p (live, var);
       }
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
