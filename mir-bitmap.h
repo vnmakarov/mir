@@ -334,16 +334,4 @@ static inline int bitmap_iterator_next (bitmap_iterator_t *iter, size_t *nbit) {
 #define FOREACH_BITMAP_BIT(iter, bitmap, nbit) \
   for (bitmap_iterator_init (&iter, bitmap); bitmap_iterator_next (&iter, &nbit);)
 
-static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t, void *), void *data) {
-  size_t i, nb, len = VARR_LENGTH (bitmap_el_t, bm);
-  bitmap_el_t el, *addr = VARR_ADDR (bitmap_el_t, bm);
-
-  for (i = 0; i < len; i++) {
-    if ((el = addr[i]) != 0) {
-      for (nb = 0; el != 0; el >>= 1, nb++)
-        if (el & 1) func (i * BITMAP_WORD_BITS + nb, data);
-    }
-  }
-}
-
 #endif /* #ifndef MIR_BITMAP_H */
