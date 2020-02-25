@@ -871,7 +871,11 @@ static void print_loop_subtree (MIR_context_t ctx, loop_node_t root, int level) 
     fprintf (debug_file, "BB%-3lu\n", (unsigned long) root->bb->index);
     return;
   }
-  fprintf (debug_file, "Loop%-3lu\n", (unsigned long) root->index);
+  fprintf (debug_file, "Loop%3lu", (unsigned long) root->index);
+  if (curr_cfg->root_loop_node == root)
+    fprintf (debug_file, ":\n");
+  else
+    fprintf (debug_file, " (entry - bb%lu):\n", (unsigned long) root->entry->bb->index);
   for (loop_node_t node = DLIST_HEAD (loop_node_t, root->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
     print_loop_subtree (ctx, node, level + 1);
@@ -880,7 +884,7 @@ static void print_loop_subtree (MIR_context_t ctx, loop_node_t root, int level) 
 static void print_loop_tree (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-  fprintf (debug_file, "Loop Tree:\n");
+  fprintf (debug_file, "Loop Tree\n");
   print_loop_subtree (ctx, curr_cfg->root_loop_node, 0);
 }
 
