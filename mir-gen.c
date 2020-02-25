@@ -262,8 +262,8 @@ struct bb_insn {
 DEF_DLIST (bb_insn_t, bb_insn_link);
 
 struct bb {
-  size_t index, pre, rpost;
-  unsigned int flag : 1; /* used for CPP */
+  size_t index, pre, rpost, bfs; /* preorder, reverse post order, breadth first order */
+  unsigned int flag : 1;         /* used for CPP */
   DLIST_LINK (bb_t) bb_link;
   DLIST (in_edge_t) in_edges;
   /* The out edges order: optional fall through bb, optional label bb,
@@ -537,7 +537,7 @@ static size_t get_label_disp (MIR_insn_t insn) {
 static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
   bb_t bb = gen_malloc (ctx, sizeof (struct bb));
 
-  bb->pre = bb->rpost = 0;
+  bb->pre = bb->rpost = bb->bfs = 0;
   bb->flag = FALSE;
   DLIST_INIT (bb_insn_t, bb->bb_insns);
   DLIST_INIT (in_edge_t, bb->in_edges);
