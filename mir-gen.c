@@ -620,6 +620,18 @@ static loop_node_t top_loop_node (bb_t bb) {
     if (loop_node->parent == NULL) return loop_node;
 }
 
+static int in_loop_p (loop_node_t node, loop_node_t loop) {
+  for (loop_node_t curr_node = node; curr_node != NULL; curr_node = curr_node->parent)
+    if (curr_node == loop) return TRUE;
+  return FALSE;
+}
+
+static int bb_loop_exit_p (MIR_context_t ctx, bb_t bb, loop_node_t loop) {
+  for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_PREV (out_edge_t, e))
+    if (!in_loop_p (e->dst->loop_node, loop)) return TRUE;
+  return FALSE;
+}
+
 static loop_node_t create_loop_node (MIR_context_t ctx, bb_t bb) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   loop_node_t loop_node = gen_malloc (ctx, sizeof (struct loop_node));
