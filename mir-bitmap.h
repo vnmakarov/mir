@@ -11,6 +11,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <limits.h>
 #include "mir-varr.h"
 
 #define FALSE 0
@@ -304,6 +305,34 @@ static inline bitmap_el_t bitmap_el_ior_and_compl (bitmap_el_t el1, bitmap_el_t 
 static inline int bitmap_ior_and_compl (bitmap_t dst, bitmap_t src1, bitmap_t src2, bitmap_t src3) {
   return bitmap_op3 (dst, src1, src2, src3, bitmap_el_ior_and_compl);
 }
+
+typedef struct {
+  bitmap_t bitmap;
+  size_t nbit;
+} bitmap_iterator_t;
+
+static inline void bitmap_iterator_init (bitmap_iterator_t *iter, bitmap_t bitmap) {
+  iter->bitmap = bitmap;
+  iter->nbit = 0;
+}
+
+static inline int bitmap_iterator_next (bitmap_iterator_t *iter, size_t *nbit) {
+  const size_t el_bits_num = sizeof (bitmap_el_t) * CHAR_BIT;
+  size_t curr_nel = iter->nbit / el_bits_num, len = VARR_LENGTH (bitmap_el_t, iter->bitmap);
+  bitmap_el_t el, *addr = VARR_ADDR (bitmap_el_t, iter->bitmap);
+
+  for (; curr_nel < len; curr_nel++, iter->nbit = curr_nel * el_bits_num)
+    if ((el = addr[curr_nel]) != 0)
+      for (el >>= iter->nbit % el_bits_num; el != 0; el >>= 1, iter->nbit++)
+        if (el & 1) {
+          *nbit = iter->nbit++;
+          return TRUE;
+        }
+  return FALSE;
+}
+
+#define FOREACH_BITMAP_BIT(iter, bitmap, nbit) \
+  for (bitmap_iterator_init (&iter, bitmap); bitmap_iterator_next (&iter, &nbit);)
 
 static inline void bitmap_for_each (bitmap_t bm, void (*func) (size_t, void *), void *data) {
   size_t i, nb, len = VARR_LENGTH (bitmap_el_t, bm);
