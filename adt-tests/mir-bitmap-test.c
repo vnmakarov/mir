@@ -100,6 +100,18 @@ int main (void) {
   status &= bitmap_clear_bit_range_p (b1, 30, 362);
   status &= bitmap_empty_p (b1);
 
+  status &= bitmap_set_bit_range_p (b1, 30, 362);
+
+  bitmap_iterator_t iter;
+  size_t nb = 0, n = 0, nmax = 0, nmin = 10000;
+  FOREACH_BITMAP_BIT (iter, b1, nb) {
+    n++;
+    if (nmax < nb) nmax = nb;
+    if (nmin > nb) nmin = nb;
+  }
+  status &= n == 362;
+  status &= nmin == 30 && nmax == 391;
+
   fprintf (stderr, status ? "BITMAP OK\n" : "BITMAP FAILURE!\n");
   bitmap_destroy (b1);
   bitmap_destroy (b2);
