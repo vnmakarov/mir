@@ -790,6 +790,70 @@ static int imm_move_p (MIR_insn_t insn) {
               || insn->ops[1].mode == MIR_OP_LDOUBLE || insn->ops[1].mode == MIR_OP_REF));
 }
 
+typedef struct {
+  MIR_insn_t insn;
+  size_t nops, op_num, op_part_num, passed_mem_num;
+} insn_var_iterator_t;
+
+static inline void insn_var_iterator_init (MIR_context_t ctx, insn_var_iterator_t *iter,
+                                           MIR_insn_t insn) {
+  iter->insn = insn;
+  iter->nops = MIR_insn_nops (ctx, insn);
+  iter->op_num = 0;
+  iter->op_part_num = 0;
+  iter->passed_mem_num = 0;
+}
+
+static inline int insn_var_iterator_next (MIR_context_t ctx, insn_var_iterator_t *iter,
+                                          MIR_reg_t *var, int *out_p, int *mem_p,
+                                          size_t *passed_mem_num) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_op_t op;
+
+  while (iter->op_num < iter->nops) {
+    MIR_insn_op_mode (ctx, iter->insn, iter->op_num, out_p);
+    op = iter->insn->ops[iter->op_num];
+    *mem_p = FALSE;
+    while (iter->op_part_num < 2) {
+      if (op.mode == MIR_OP_MEM || op.mode == MIR_OP_HARD_REG_MEM) {
+        *mem_p = TRUE;
+        *passed_mem_num = ++iter->passed_mem_num;
+        *out_p = FALSE;
+        if (op.mode == MIR_OP_MEM) {
+          *var = iter->op_part_num == 0 ? op.u.mem.base : op.u.mem.index;
+          if (*var == 0) {
+            iter->op_part_num++;
+            continue;
+          }
+          *var = reg2var (gen_ctx, *var);
+        } else {
+          *var = iter->op_part_num == 0 ? op.u.hard_reg_mem.base : op.u.hard_reg_mem.index;
+          if (*var == MIR_NON_HARD_REG) {
+            iter->op_part_num++;
+            continue;
+          }
+        }
+      } else if (iter->op_part_num > 0) {
+        break;
+      } else if (op.mode == MIR_OP_REG) {
+        *var = reg2var (gen_ctx, op.u.reg);
+      } else if (op.mode == MIR_OP_HARD_REG) {
+        *var = op.u.hard_reg;
+      } else
+        break;
+      iter->op_part_num++;
+      return TRUE;
+    }
+    iter->op_num++;
+    iter->op_part_num = 0;
+  }
+  return FALSE;
+}
+
+#define FOR_EACH_INSN_VAR(ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) \
+  for (insn_var_iterator_init (ctx, &iterator, insn);                             \
+       insn_var_iterator_next (ctx, &iterator, &var, &out_p, &mem_p, &passed_mem_num);)
+
 #if !MIR_NO_GEN_DEBUG
 static void output_in_edges (MIR_context_t ctx, bb_t bb) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
