@@ -25,7 +25,8 @@
 
    Simplify: Lowering MIR (in mir.c).
    Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
-   Common Sub-Expression Elimination: Reusing calculated values
+   Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
+                                      we need the right value numbering after simplification)
    Dead code elimination: Removing insns with unused outputs.
    Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
@@ -280,8 +281,8 @@ DEF_DLIST_LINK (loop_node_t);
 DEF_DLIST_TYPE (loop_node_t);
 
 struct loop_node {
-  size_t index;
-  bb_t bb; /* NULL for internal tree node  */
+  size_t index; /* if BB != NULL, it is index of BB */
+  bb_t bb;      /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
   DLIST (loop_node_t) children;
