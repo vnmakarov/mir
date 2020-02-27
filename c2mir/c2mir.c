@@ -6300,9 +6300,13 @@ static void adjust_param_type (c2m_ctx_t c2m_ctx, struct type **type_ptr) {
 
   if (type->mode == TM_ARR) {  // ??? static, old type qual
     arr_type = type->u.arr_type;
-    type->mode = TM_PTR;
-    type->u.ptr_type = arr_type->el_type;
-    type->type_qual = arr_type->ind_type_qual;
+    par_type = create_type (c2m_ctx, NULL);
+    par_type->mode = TM_PTR;
+    par_type->pos_node = type->pos_node;
+    par_type->u.ptr_type = arr_type->el_type;
+    par_type->type_qual = arr_type->ind_type_qual;
+    par_type->arr_type = type;
+    *type_ptr = type = par_type;
     make_type_complete (c2m_ctx, type);
   } else if (type->mode == TM_FUNC) {
     par_type = create_type (c2m_ctx, NULL);
