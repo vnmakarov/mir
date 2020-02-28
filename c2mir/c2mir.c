@@ -343,18 +343,18 @@ static int char_is_signed_p (void) { return MIR_CHAR_MAX == MIR_SCHAR_MAX; }
 
 enum str_flag { FLAG_EXT = 1, FLAG_C89, FLAG_EXT89 };
 
-static int str_eq (str_t str1, str_t str2) {
+static int str_eq (str_t str1, str_t str2, void *arg) {
   return str1.len == str2.len && memcmp (str1.s, str2.s, str1.len) == 0;
 }
-static htab_hash_t str_hash (str_t str) { return mir_hash (str.s, str.len, 0x42); }
-static int str_key_eq (str_t str1, str_t str2) { return str1.key == str2.key; }
-static htab_hash_t str_key_hash (str_t str) { return mir_hash64 (str.key, 0x24); }
+static htab_hash_t str_hash (str_t str, void *arg) { return mir_hash (str.s, str.len, 0x42); }
+static int str_key_eq (str_t str1, str_t str2, void *arg) { return str1.key == str2.key; }
+static htab_hash_t str_key_hash (str_t str, void *arg) { return mir_hash64 (str.key, 0x24); }
 
 static str_t uniq_cstr (c2m_ctx_t c2m_ctx, const char *str);
 
 static void str_init (c2m_ctx_t c2m_ctx) {
-  HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq);
-  HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq);
+  HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq, NULL);
+  HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq, NULL);
   empty_str = uniq_cstr (c2m_ctx, "");
 }
 
@@ -1811,11 +1811,11 @@ static void add_to_temp_string (c2m_ctx_t c2m_ctx, const char *str) {
   VARR_PUSH (char, temp_string, '\0');
 }
 
-static int macro_eq (macro_t macro1, macro_t macro2) {
+static int macro_eq (macro_t macro1, macro_t macro2, void *arg) {
   return macro1->id->repr == macro2->id->repr;
 }
 
-static htab_hash_t macro_hash (macro_t macro) {
+static htab_hash_t macro_hash (macro_t macro, void *arg) {
   return mir_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
 }
 
@@ -1830,7 +1830,7 @@ static void init_macros (c2m_ctx_t c2m_ctx) {
   VARR (token_t) * params;
 
   VARR_CREATE (macro_t, macros, 2048);
-  HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq);
+  HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq, NULL);
   /* Standard macros : */
   new_std_macro (c2m_ctx, "__DATE__");
   new_std_macro (c2m_ctx, "__TIME__");
@@ -3536,17 +3536,19 @@ typedef struct {
 DEF_HTAB (tpname_t);
 static HTAB (tpname_t) * tpname_tab;
 
-static int tpname_eq (tpname_t tpname1, tpname_t tpname2) {
+static int tpname_eq (tpname_t tpname1, tpname_t tpname2, void *arg) {
   return tpname1.id->u.s.s == tpname2.id->u.s.s && tpname1.scope == tpname2.scope;
 }
 
-static htab_hash_t tpname_hash (tpname_t tpname) {
+static htab_hash_t tpname_hash (tpname_t tpname, void *arg) {
   return (mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) tpname.id->u.s.s),
                    (uint64_t) tpname.scope)));
 }
 
-static void tpname_init (void) { HTAB_CREATE (tpname_t, tpname_tab, 1000, tpname_hash, tpname_eq); }
+static void tpname_init (void) {
+  HTAB_CREATE (tpname_t, tpname_tab, 1000, tpname_hash, tpname_eq, NULL);
+}
 
 static int tpname_find (node_t id, node_t scope, tpname_t *res) {
   int found_p;
@@ -5020,21 +5022,22 @@ struct check_ctx {
 
 static int supported_alignment_p (mir_llong align) { return TRUE; }  // ???
 
-static int symbol_eq (symbol_t s1, symbol_t s2) {
+static int symbol_eq (symbol_t s1, symbol_t s2, void *arg) {
   return s1.mode == s2.mode && s1.id->u.s.s == s2.id->u.s.s && s1.scope == s2.scope;
 }
 
-static htab_hash_t symbol_hash (symbol_t s) {
+static htab_hash_t symbol_hash (symbol_t s, void *arg) {
   return (mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) s.mode),
                                   (uint64_t) s.id->u.s.s),
                    (uint64_t) s.scope)));
 }
 
-static void symbol_clear (symbol_t sym) { VARR_DESTROY (node_t, sym.defs); }
+static void symbol_clear (symbol_t sym, void *arg) { VARR_DESTROY (node_t, sym.defs); }
 
 static void symbol_init (c2m_ctx_t c2m_ctx) {
-  HTAB_CREATE_WITH_FREE_FUNC (symbol_t, symbol_tab, 5000, symbol_hash, symbol_eq, symbol_clear);
+  HTAB_CREATE_WITH_FREE_FUNC (symbol_t, symbol_tab, 5000, symbol_hash, symbol_eq, symbol_clear,
+                              NULL);
 }
 
 static int symbol_find (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, node_t scope,
@@ -7488,7 +7491,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
   return e;
 }
 
-static unsigned case_hash (case_t el) {
+static unsigned case_hash (case_t el, void *arg) {
   node_t case_expr = NL_HEAD (el->case_node->ops);
   struct expr *expr;
 
@@ -7500,7 +7503,7 @@ static unsigned case_hash (case_t el) {
   return mir_hash (&expr->u.u_val, sizeof (expr->u.u_val), 0x42);
 }
 
-static int case_eq (case_t el1, case_t el2) {
+static int case_eq (case_t el1, case_t el2, void *arg) {
   node_t case_expr1 = NL_HEAD (el1->case_node->ops);
   node_t case_expr2 = NL_HEAD (el2->case_node->ops);
   struct expr *expr1, *expr2;
@@ -9052,7 +9055,7 @@ static void context_init (MIR_context_t ctx) {
   symbol_init (c2m_ctx);
   in_params_p = FALSE;
   curr_unnamed_anon_struct_union_member = NULL;
-  HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq);
+  HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq, NULL);
   VARR_CREATE (decl_t, func_decls_for_allocation, 1024);
 }
 
@@ -9164,14 +9167,18 @@ static op_t new_op (decl_t decl, MIR_op_t mir_op) {
   return res;
 }
 
-static htab_hash_t reg_var_hash (reg_var_t r) { return mir_hash (r.name, strlen (r.name), 0x42); }
-static int reg_var_eq (reg_var_t r1, reg_var_t r2) { return strcmp (r1.name, r2.name) == 0; }
+static htab_hash_t reg_var_hash (reg_var_t r, void *arg) {
+  return mir_hash (r.name, strlen (r.name), 0x42);
+}
+static int reg_var_eq (reg_var_t r1, reg_var_t r2, void *arg) {
+  return strcmp (r1.name, r2.name) == 0;
+}
 
 static void init_reg_vars (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
   reg_free_mark = 0;
-  HTAB_CREATE (reg_var_t, reg_var_tab, 128, reg_var_hash, reg_var_eq);
+  HTAB_CREATE (reg_var_t, reg_var_tab, 128, reg_var_hash, reg_var_eq, NULL);
 }
 
 static void finish_curr_func_reg_vars (MIR_context_t ctx) {
@@ -11609,7 +11616,7 @@ finish:
 DEF_HTAB (MIR_item_t);
 static HTAB (MIR_item_t) * proto_tab;
 
-static htab_hash_t proto_hash (MIR_item_t pi) {
+static htab_hash_t proto_hash (MIR_item_t pi, void *arg) {
   MIR_proto_t p = pi->u.proto;
   MIR_var_t *args = VARR_ADDR (MIR_var_t, p->args);
   uint64_t h = mir_hash_init (42);
@@ -11624,7 +11631,7 @@ static htab_hash_t proto_hash (MIR_item_t pi) {
   return mir_hash_finish (h);
 }
 
-static int proto_eq (MIR_item_t pi1, MIR_item_t pi2) {
+static int proto_eq (MIR_item_t pi1, MIR_item_t pi2, void *arg) {
   MIR_proto_t p1 = pi1->u.proto, p2 = pi2->u.proto;
 
   if (p1->nres != p2->nres || p1->vararg_p != p2->vararg_p
@@ -11669,7 +11676,7 @@ static void gen_mir_protos (MIR_context_t ctx) {
   MIR_type_t ret_type;
 
   curr_mir_proto_num = 0;
-  HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq);
+  HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq, NULL);
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
     assert (call->code == N_CALL);

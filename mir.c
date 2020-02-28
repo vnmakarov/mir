@@ -353,8 +353,10 @@ struct string_ctx {
 #define strings ctx->string_ctx->strings
 #define string_tab ctx->string_ctx->string_tab
 
-static htab_hash_t str_hash (string_t str) { return mir_hash (str.str.s, str.str.len, 0); }
-static int str_eq (string_t str1, string_t str2) {
+static htab_hash_t str_hash (string_t str, void *arg) {
+  return mir_hash (str.str.s, str.str.len, 0);
+}
+static int str_eq (string_t str1, string_t str2, void *arg) {
   return str1.str.len == str2.str.len && memcmp (str1.str.s, str2.str.s, str1.str.len) == 0;
 }
 
@@ -363,7 +365,7 @@ static void string_init (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) {
 
   VARR_CREATE (string_t, *strs, 0);
   VARR_PUSH (string_t, *strs, string); /* don't use 0th string */
-  HTAB_CREATE (string_t, *str_tab, 1000, str_hash, str_eq);
+  HTAB_CREATE (string_t, *str_tab, 1000, str_hash, str_eq, NULL);
 }
 
 static int string_find (VARR (string_t) * *strs, HTAB (string_t) * *str_tab, MIR_str_t str,
@@ -428,7 +430,7 @@ struct reg_ctx {
 #define namenum2rdn_tab ctx->reg_ctx->namenum2rdn_tab
 #define reg2rdn_tab ctx->reg_ctx->reg2rdn_tab
 
-static int namenum2rdn_eq (size_ctx_t sc1, size_ctx_t sc2) {
+static int namenum2rdn_eq (size_ctx_t sc1, size_ctx_t sc2, void *arg) {
   MIR_context_t ctx = sc1.ctx;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
@@ -437,7 +439,7 @@ static int namenum2rdn_eq (size_ctx_t sc1, size_ctx_t sc2) {
           && addr[sc1.rdn].func == addr[sc2.rdn].func);
 }
 
-static htab_hash_t namenum2rdn_hash (size_ctx_t sc) {
+static htab_hash_t namenum2rdn_hash (size_ctx_t sc, void *arg) {
   MIR_context_t ctx = sc.ctx;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
@@ -446,7 +448,7 @@ static htab_hash_t namenum2rdn_hash (size_ctx_t sc) {
                    (uint64_t) addr[sc.rdn].name_num));
 }
 
-static int reg2rdn_eq (size_ctx_t sc1, size_ctx_t sc2) {
+static int reg2rdn_eq (size_ctx_t sc1, size_ctx_t sc2, void *arg) {
   MIR_context_t ctx = sc1.ctx;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
@@ -454,7 +456,7 @@ static int reg2rdn_eq (size_ctx_t sc1, size_ctx_t sc2) {
   return addr[sc1.rdn].reg == addr[sc2.rdn].reg && addr[sc1.rdn].func == addr[sc2.rdn].func;
 }
 
-static htab_hash_t reg2rdn_hash (size_ctx_t sc) {
+static htab_hash_t reg2rdn_hash (size_ctx_t sc, void *arg) {
   MIR_context_t ctx = sc.ctx;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
@@ -470,8 +472,8 @@ static void reg_init (MIR_context_t ctx) {
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (reg_desc_t, reg_descs, 300);
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
-  HTAB_CREATE (size_ctx_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq);
-  HTAB_CREATE (size_ctx_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq);
+  HTAB_CREATE (size_ctx_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, NULL);
+  HTAB_CREATE (size_ctx_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, NULL);
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
@@ -552,12 +554,12 @@ MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }
 
 void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) { error_func = func; }
 
-static htab_hash_t item_hash (MIR_item_t it) {
+static htab_hash_t item_hash (MIR_item_t it, void *arg) {
   return mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_init (28), (uint64_t) MIR_item_name (NULL, it)),
                    (uint64_t) it->module));
 }
-static int item_eq (MIR_item_t it1, MIR_item_t it2) {
+static int item_eq (MIR_item_t it1, MIR_item_t it2, void *arg) {
   return it1->module == it2->module && MIR_item_name (NULL, it1) == MIR_item_name (NULL, it2);
 }
 
@@ -626,7 +628,7 @@ MIR_context_t MIR_init (void) {
 #endif
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
   init_module (ctx, &environment_module, ".environment");
-  HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq);
+  HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq, NULL);
   code_init (ctx);
   interp_init (ctx);
   inlined_calls = inline_insns_before = inline_insns_after = 0;
@@ -2409,7 +2411,7 @@ struct simplify_ctx {
 
 #define val_tab ctx->simplify_ctx->val_tab
 
-static htab_hash_t val_hash (val_t v) {
+static htab_hash_t val_hash (val_t v, void *arg) {
   htab_hash_t h;
 
   h = mir_hash_step (mir_hash_init (0), (uint64_t) v.code);
@@ -2419,7 +2421,7 @@ static htab_hash_t val_hash (val_t v) {
   return mir_hash_finish (h);
 }
 
-static int val_eq (val_t v1, val_t v2) {
+static int val_eq (val_t v1, val_t v2, void *arg) {
   assert (v1.ctx == v2.ctx);
   if (v1.code != v2.code || v1.type != v2.type || !MIR_op_eq_p (v1.ctx, v1.op1, v2.op1))
     return FALSE;
@@ -2429,7 +2431,7 @@ static int val_eq (val_t v1, val_t v2) {
 static void vn_init (MIR_context_t ctx) {
   if ((ctx->simplify_ctx = malloc (sizeof (struct simplify_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
-  HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq);
+  HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, NULL);
 }
 
 static void vn_finish (MIR_context_t ctx) {
@@ -4558,10 +4560,10 @@ typedef struct insn_name {
   MIR_insn_code_t code;
 } insn_name_t;
 
-static int insn_name_eq (insn_name_t in1, insn_name_t in2) {
+static int insn_name_eq (insn_name_t in1, insn_name_t in2, void *arg) {
   return strcmp (in1.name, in2.name) == 0;
 }
-static htab_hash_t insn_name_hash (insn_name_t in) {
+static htab_hash_t insn_name_hash (insn_name_t in, void *arg) {
   return mir_hash (in.name, strlen (in.name), 0);
 }
 
@@ -4858,8 +4860,12 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
   }
 }
 
-static int label_eq (label_desc_t l1, label_desc_t l2) { return strcmp (l1.name, l2.name) == 0; }
-static htab_hash_t label_hash (label_desc_t l) { return mir_hash (l.name, strlen (l.name), 0); }
+static int label_eq (label_desc_t l1, label_desc_t l2, void *arg) {
+  return strcmp (l1.name, l2.name) == 0;
+}
+static htab_hash_t label_hash (label_desc_t l, void *arg) {
+  return mir_hash (l.name, strlen (l.name), 0);
+}
 
 static MIR_label_t create_label_desc (MIR_context_t ctx, const char *name) {
   MIR_label_t label;
@@ -5364,8 +5370,8 @@ static void scan_init (MIR_context_t ctx) {
   if ((ctx->scan_ctx = malloc (sizeof (struct scan_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (label_name_t, label_names, 0);
-  HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq);
-  HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq);
+  HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq, NULL);
+  HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
   for (i = 0; i < MIR_INSN_BOUND; i++) {
     in.code = i;
     in.name = MIR_insn_name (ctx, i);

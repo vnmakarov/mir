@@ -1336,20 +1336,20 @@ static inline func_desc_t get_func_desc (MIR_item_t func_item) {
   return func_item->data;
 }
 
-static htab_hash_t ff_interface_hash (ff_interface_t i) {
+static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg) {
   return mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0), i->nres), i->nargs),
                    mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres,
                              mir_hash (i->arg_types, sizeof (MIR_type_t) * i->nargs, 42))));
 }
 
-static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2) {
+static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg) {
   return (i1->nres == i2->nres && i1->nargs == i2->nargs
           && memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) == 0
           && memcmp (i1->arg_types, i2->arg_types, sizeof (MIR_type_t) * i1->nargs) == 0);
 }
 
-static void ff_interface_clear (ff_interface_t ffi) { free (ffi); }
+static void ff_interface_clear (ff_interface_t ffi, void *arg) { free (ffi); }
 
 static void *get_ff_interface (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
                                MIR_type_t *arg_types) {
@@ -1482,7 +1482,7 @@ static void interp_init (MIR_context_t ctx) {
   call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
   call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
   HTAB_CREATE_WITH_FREE_FUNC (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash,
-                              ff_interface_eq, ff_interface_clear);
+                              ff_interface_eq, ff_interface_clear, NULL);
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
@@ -1507,7 +1507,7 @@ static void interp_finish (MIR_context_t ctx) {
 #if VA_LIST_IS_ARRAY_P
 typedef va_list va_t;
 #else
-typedef va_list *va_t;
+    typedef va_list *va_t;
 #endif
 
 static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results,
@@ -1529,7 +1529,7 @@ static void interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t 
 #if VA_LIST_IS_ARRAY_P
     va_end (va);
 #else
-    va_end (*va);
+        va_end (*va);
 #endif
 }
 
@@ -1545,7 +1545,7 @@ void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, si
 #if VA_LIST_IS_ARRAY_P
   interp_arr_varg (ctx, func_item, results, nargs, arg_vals, argp);
 #else
-  interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &argp);
+      interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &argp);
 #endif
 }
 
@@ -1561,7 +1561,7 @@ void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *re
 #if VA_LIST_IS_ARRAY_P
   bp[0].a = va;
 #else
-  bp[0].a = &va;
+      bp[0].a = &va;
 #endif
   bp++;
   if (func_desc->nregs < nargs + 1) nargs = func_desc->nregs - 1;
@@ -1617,7 +1617,7 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
 #if VA_LIST_IS_ARRAY_P
   interp_arr_varg (ctx, func_item, results, nargs, arg_vals, va);
 #else
-  interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &va);
+      interp_arr_varg (ctx, func_item, results, nargs, arg_vals, (va_t) &va);
 #endif
 }
 

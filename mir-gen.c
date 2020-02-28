@@ -1266,7 +1266,7 @@ static int op_eq (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
   return MIR_op_eq_p (ctx, op1, op2);
 }
 
-static int expr_eq (expr_t e1, expr_t e2) {
+static int expr_eq (expr_t e1, expr_t e2, void *arg) {
   size_t i, nops;
   int out_p;
 
@@ -1285,7 +1285,7 @@ static htab_hash_t add_op_hash (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
   return MIR_op_hash_step (ctx, h, op);
 }
 
-static htab_hash_t expr_hash (expr_t e) {
+static htab_hash_t expr_hash (expr_t e, void *arg) {
   size_t i, nops;
   int out_p;
   htab_hash_t h = mir_hash_init (0x42);
@@ -1667,7 +1667,7 @@ static void init_cse (MIR_context_t ctx) {
   VARR_CREATE (expr_t, exprs, 512);
   VARR_CREATE (bitmap_t, var2dep_expr, 512);
   memory_exprs = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq);
+  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq, NULL);
 }
 
 static void finish_cse (MIR_context_t ctx) {
@@ -1767,7 +1767,7 @@ struct ccp_ctx {
 #define ccp_var_occs gen_ctx->ccp_ctx->ccp_var_occs
 #define ccp_insns gen_ctx->ccp_ctx->ccp_insns
 
-static htab_hash_t var_occ_hash (var_occ_t vo) {
+static htab_hash_t var_occ_hash (var_occ_t vo, void *arg) {
   gen_assert (vo->place.type != OCC_INSN);
   return mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x54), (uint64_t) vo->var),
@@ -1775,7 +1775,7 @@ static htab_hash_t var_occ_hash (var_occ_t vo) {
                    (uint64_t) vo->place.u.bb));
 }
 
-static int var_occ_eq (var_occ_t vo1, var_occ_t vo2) {
+static int var_occ_eq (var_occ_t vo1, var_occ_t vo2, void *arg) {
   return (vo1->var == vo2->var && vo1->place.type == vo2->place.type
           && vo1->place.u.bb == vo2->place.u.bb);
 }
@@ -1958,7 +1958,7 @@ static void init_var_occs (MIR_context_t ctx) {
   VARR_CREATE (var_occ_t, var_occs, 1024);
   curr_producer_age = curr_op_age = 0;
   VARR_CREATE (var_producer_t, producer_varr, 256);
-  HTAB_CREATE (var_occ_t, var_occ_tab, 1024, var_occ_hash, var_occ_eq);
+  HTAB_CREATE (var_occ_t, var_occ_tab, 1024, var_occ_hash, var_occ_eq, NULL);
 }
 
 static void finish_var_occs (MIR_context_t ctx) {
