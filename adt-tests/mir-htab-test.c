@@ -1,16 +1,29 @@
 #include "mir-htab.h"
 
+static int status = 1;
+
+#define ARG ((void *) 1)
+
 DEF_HTAB (int);
-static unsigned hash (int el) { return el; }
-static int eq (int el1, int el2) { return el1 == el2; }
+static unsigned hash (int el, void *arg) {
+  status &= arg == ARG;
+  return el;
+}
+static int eq (int el1, int el2, void *arg) {
+  status &= arg == ARG;
+  return el1 == el2;
+}
 static int sum;
-static void f (int i) { sum += i; }
+static void f (int i, void *arg) {
+  status &= arg == ARG;
+  sum += i;
+}
 
 int main (void) {
-  int i, collisions, iter, tab_el, status = 1;
+  int i, collisions, iter, tab_el;
   HTAB (int) * htab;
 
-  HTAB_CREATE_WITH_FREE_FUNC (int, htab, 4, hash, eq, f);
+  HTAB_CREATE_WITH_FREE_FUNC (int, htab, 4, hash, eq, f, ARG);
   status &= HTAB_ELS_NUM (int, htab) == 0;
   for (iter = 0; iter < 10; iter++) {
     for (i = 0; i < 100; i++) {
