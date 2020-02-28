@@ -415,7 +415,6 @@ DEF_VARR (reg_desc_t);
 
 typedef struct size_ctx {
   size_t rdn;
-  MIR_context_t ctx;
 } size_ctx_t;
 
 DEF_HTAB (size_ctx_t);
@@ -431,16 +430,15 @@ struct reg_ctx {
 #define reg2rdn_tab ctx->reg_ctx->reg2rdn_tab
 
 static int namenum2rdn_eq (size_ctx_t sc1, size_ctx_t sc2, void *arg) {
-  MIR_context_t ctx = sc1.ctx;
+  MIR_context_t ctx = arg;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
-  mir_assert (ctx == sc2.ctx);
   return (addr[sc1.rdn].name_num == addr[sc2.rdn].name_num
           && addr[sc1.rdn].func == addr[sc2.rdn].func);
 }
 
 static htab_hash_t namenum2rdn_hash (size_ctx_t sc, void *arg) {
-  MIR_context_t ctx = sc.ctx;
+  MIR_context_t ctx = arg;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
   return mir_hash_finish (
@@ -449,15 +447,14 @@ static htab_hash_t namenum2rdn_hash (size_ctx_t sc, void *arg) {
 }
 
 static int reg2rdn_eq (size_ctx_t sc1, size_ctx_t sc2, void *arg) {
-  MIR_context_t ctx = sc1.ctx;
+  MIR_context_t ctx = arg;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
-  mir_assert (ctx == sc2.ctx);
   return addr[sc1.rdn].reg == addr[sc2.rdn].reg && addr[sc1.rdn].func == addr[sc2.rdn].func;
 }
 
 static htab_hash_t reg2rdn_hash (size_ctx_t sc, void *arg) {
-  MIR_context_t ctx = sc.ctx;
+  MIR_context_t ctx = arg;
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
 
   return mir_hash_finish (
@@ -472,8 +469,8 @@ static void reg_init (MIR_context_t ctx) {
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (reg_desc_t, reg_descs, 300);
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
-  HTAB_CREATE (size_ctx_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, NULL);
-  HTAB_CREATE (size_ctx_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, NULL);
+  HTAB_CREATE (size_ctx_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, ctx);
+  HTAB_CREATE (size_ctx_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, ctx);
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
@@ -489,7 +486,6 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   rd.type = type;
   rd.reg = reg; /* 0 is reserved */
   sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  sc.ctx = ctx;
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (HTAB_DO (size_ctx_t, namenum2rdn_tab, sc, HTAB_FIND, tab_sc)) {
     VARR_POP (reg_desc_t, reg_descs);
@@ -1250,7 +1246,6 @@ static reg_desc_t *find_rd_by_name_num (MIR_context_t ctx, size_t name_num, MIR_
   rd.type = MIR_T_I64;
   rd.reg = 0; /* to eliminate warnings */
   temp_sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  temp_sc.ctx = ctx;
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (!HTAB_DO (size_ctx_t, namenum2rdn_tab, temp_sc, HTAB_FIND, sc)) {
     VARR_POP (reg_desc_t, reg_descs);
@@ -1269,7 +1264,6 @@ static reg_desc_t *find_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t 
   rd.name_num = 0;
   rd.type = MIR_T_I64; /* to eliminate warnings */
   temp_sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  temp_sc.ctx = ctx;
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   if (!HTAB_DO (size_ctx_t, reg2rdn_tab, temp_sc, HTAB_FIND, sc)) {
     VARR_POP (reg_desc_t, reg_descs);
@@ -2400,7 +2394,6 @@ typedef struct {
   MIR_type_t type;
   MIR_op_t op1, op2;
   MIR_reg_t reg;
-  MIR_context_t ctx;
 } val_t;
 
 DEF_HTAB (val_t);
@@ -2412,26 +2405,27 @@ struct simplify_ctx {
 #define val_tab ctx->simplify_ctx->val_tab
 
 static htab_hash_t val_hash (val_t v, void *arg) {
+  MIR_context_t ctx = arg;
   htab_hash_t h;
 
   h = mir_hash_step (mir_hash_init (0), (uint64_t) v.code);
   h = mir_hash_step (h, (uint64_t) v.type);
-  h = MIR_op_hash_step (v.ctx, h, v.op1);
-  if (v.code != MIR_INSN_BOUND) h = MIR_op_hash_step (v.ctx, h, v.op2);
+  h = MIR_op_hash_step (ctx, h, v.op1);
+  if (v.code != MIR_INSN_BOUND) h = MIR_op_hash_step (ctx, h, v.op2);
   return mir_hash_finish (h);
 }
 
 static int val_eq (val_t v1, val_t v2, void *arg) {
-  assert (v1.ctx == v2.ctx);
-  if (v1.code != v2.code || v1.type != v2.type || !MIR_op_eq_p (v1.ctx, v1.op1, v2.op1))
-    return FALSE;
-  return v1.code == MIR_INSN_BOUND || MIR_op_eq_p (v1.ctx, v1.op2, v2.op2);
+  MIR_context_t ctx = arg;
+
+  if (v1.code != v2.code || v1.type != v2.type || !MIR_op_eq_p (ctx, v1.op1, v2.op1)) return FALSE;
+  return v1.code == MIR_INSN_BOUND || MIR_op_eq_p (ctx, v1.op2, v2.op2);
 }
 
 static void vn_init (MIR_context_t ctx) {
   if ((ctx->simplify_ctx = malloc (sizeof (struct simplify_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
-  HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, NULL);
+  HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, ctx);
 }
 
 static void vn_finish (MIR_context_t ctx) {
@@ -2450,7 +2444,6 @@ static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type
   val.code = code;
   val.op1 = op1;
   val.op2 = op2;
-  val.ctx = ctx;
   if (HTAB_DO (val_t, val_tab, val, HTAB_FIND, tab_val)) return tab_val.reg;
   val.reg = _MIR_new_temp_reg (ctx, type, func);
   HTAB_DO (val_t, val_tab, val, HTAB_INSERT, tab_val);
@@ -4905,7 +4898,6 @@ static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
   rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
   rd.func = func;
   sc.rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  sc.ctx = ctx;
   VARR_PUSH (reg_desc_t, reg_descs, rd);
   res = HTAB_DO (size_ctx_t, namenum2rdn_tab, sc, HTAB_FIND, tab_sc);
   VARR_POP (reg_desc_t, reg_descs);
