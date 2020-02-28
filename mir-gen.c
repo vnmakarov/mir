@@ -1236,9 +1236,8 @@ static void finish_data_flow (MIR_context_t ctx) {
 #define av_gen gen
 
 typedef struct expr {
-  MIR_insn_t insn;  /* operation and input operands are the expr keys */
-  unsigned int num; /* the expression number (0, 1 ...) */
-  MIR_context_t ctx;
+  MIR_insn_t insn;    /* operation and input operands are the expr keys */
+  unsigned int num;   /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* ??? */
 } * expr_t;
 
@@ -1267,16 +1266,16 @@ static int op_eq (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
 }
 
 static int expr_eq (expr_t e1, expr_t e2, void *arg) {
+  MIR_context_t ctx = arg;
   size_t i, nops;
   int out_p;
 
-  assert (e1->ctx == e2->ctx);
   if (e1->insn->code != e2->insn->code) return FALSE;
-  nops = MIR_insn_nops (e1->ctx, e1->insn);
+  nops = MIR_insn_nops (ctx, e1->insn);
   for (i = 0; i < nops; i++) {
-    MIR_insn_op_mode (e1->ctx, e1->insn, i, &out_p);
+    MIR_insn_op_mode (ctx, e1->insn, i, &out_p);
     if (out_p) continue;
-    if (!op_eq (e1->ctx, e1->insn->ops[i], e2->insn->ops[i])) return FALSE;
+    if (!op_eq (ctx, e1->insn->ops[i], e2->insn->ops[i])) return FALSE;
   }
   return TRUE;
 }
@@ -1286,16 +1285,17 @@ static htab_hash_t add_op_hash (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
 }
 
 static htab_hash_t expr_hash (expr_t e, void *arg) {
+  MIR_context_t ctx = arg;
   size_t i, nops;
   int out_p;
   htab_hash_t h = mir_hash_init (0x42);
 
   h = mir_hash_step (h, (uint64_t) e->insn->code);
-  nops = MIR_insn_nops (e->ctx, e->insn);
+  nops = MIR_insn_nops (ctx, e->insn);
   for (i = 0; i < nops; i++) {
-    MIR_insn_op_mode (e->ctx, e->insn, i, &out_p);
+    MIR_insn_op_mode (ctx, e->insn, i, &out_p);
     if (out_p) continue;
-    h = add_op_hash (e->ctx, h, e->insn->ops[i]);
+    h = add_op_hash (ctx, h, e->insn->ops[i]);
   }
   return mir_hash_finish (h);
 }
@@ -1305,7 +1305,6 @@ static int find_expr (MIR_context_t ctx, MIR_insn_t insn, expr_t *e) {
   struct expr es;
 
   es.insn = insn;
-  es.ctx = ctx;
   return HTAB_DO (expr_t, expr_tab, &es, HTAB_FIND, *e);
 }
 
@@ -1365,7 +1364,6 @@ static expr_t add_expr (MIR_context_t ctx, MIR_insn_t insn) {
   gen_assert (!MIR_call_code_p (insn->code) && insn->code != MIR_RET);
   e->insn = insn;
   e->num = VARR_LENGTH (expr_t, exprs);
-  e->ctx = ctx;
   mode = MIR_insn_op_mode (ctx, insn, 0, &out_p);
   e->temp_reg
     = gen_new_temp_reg (ctx,
@@ -1667,7 +1665,7 @@ static void init_cse (MIR_context_t ctx) {
   VARR_CREATE (expr_t, exprs, 512);
   VARR_CREATE (bitmap_t, var2dep_expr, 512);
   memory_exprs = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq, NULL);
+  HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq, ctx);
 }
 
 static void finish_cse (MIR_context_t ctx) {
