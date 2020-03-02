@@ -4605,7 +4605,13 @@ struct scan_ctx {
 
 static void MIR_NO_RETURN MIR_UNUSED process_error (MIR_context_t ctx,
                                                     enum MIR_error_type error_type,
-                                                    const char *message) {
+                                                    const char *format, ...) {
+#define MAX_MESSAGE_LEN 300
+  char message[MAX_MESSAGE_LEN];
+  va_list va;
+
+  va_start (va, format);
+  vsnprintf (message, MAX_MESSAGE_LEN, format, va);
   (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
   longjmp (error_jmp_buf, TRUE);
 }
@@ -4700,8 +4706,11 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
   mir_assert (c == '\"');
   VARR_TRUNC (char, temp_string, 0);
   for (;;) {
-    if ((c = get_char (ctx)) == EOF || c == '\n')
-      process_error (ctx, MIR_syntax_error, "unfinished string");
+    if ((c = get_char (ctx)) == EOF || c == '\n') {
+      VARR_PUSH (char, temp_string, '\0');
+      process_error (ctx, MIR_syntax_error, "unfinished string \"%s",
+                     VARR_ADDR (char, temp_string));
+    }
     if (c == '"') break;
     if (c == '\\') {
       if ((c = get_char (ctx)) == 'n')
@@ -4742,7 +4751,11 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
         ch_code = 0;
         for (int i = 2; i > 0; i--) {
           c = get_char (ctx);
-          if (!isxdigit (c)) process_error (ctx, MIR_syntax_error, "wrong hexadecimal escape");
+          if (!isxdigit (c)) {
+            VARR_PUSH (char, temp_string, '\0');
+            process_error (ctx, MIR_syntax_error, "wrong hexadecimal escape in %s",
+                           VARR_ADDR (char, temp_string));
+          }
           c = '0' <= c && c <= '9' ? c - '0' : 'a' <= c && c <= 'f' ? c - 'a' + 10 : c - 'A' + 10;
           ch_code = (ch_code << 4) | c;
         }
@@ -4816,7 +4829,8 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
 
         if (ch == '+' || ch == '-') {
           next_ch = get_char (ctx);
-          if (!isdigit (next_ch)) process_error (ctx, MIR_syntax_error, "no number after a sign");
+          if (!isdigit (next_ch))
+            process_error (ctx, MIR_syntax_error, "no number after a sign %c", ch);
           unget_char (ctx, next_ch);
         }
         scan_number (ctx, ch, get_char, unget_char, &base, &float_p, &double_p, &ldouble_p);
@@ -4841,7 +4855,8 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
           ;
         return;
       } else {
-        process_error (ctx, MIR_syntax_error, "wrong char");
+        VARR_PUSH (char, temp_string, '\0');
+        process_error (ctx, MIR_syntax_error, "wrong char after %s", VARR_ADDR (char, temp_string));
       }
     }
   }
@@ -5039,7 +5054,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
     } else {
       in.name = name;
       if (!HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
-        process_error (ctx, MIR_syntax_error, "Unknown insn");
+        process_error (ctx, MIR_syntax_error, "Unknown insn %s", name);
       insn_code = el.code;
       for (n = 0; n < VARR_LENGTH (label_name_t, label_names); n++) {
         label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n));
@@ -5085,17 +5100,17 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           } else if ((item = find_item (ctx, name, module)) != NULL) {
             op = MIR_new_ref_op (ctx, item);
           } else {
-            process_error (ctx, MIR_syntax_error, "undeclared name");
+            process_error (ctx, MIR_syntax_error, "undeclared name %s", name);
           }
           break;
         }
         /* Memory, type only, arg, or var */
         type = MIR_str2type (ctx, name);
         if (type == MIR_T_BOUND)
-          process_error (ctx, MIR_syntax_error, "Unknown type");
+          process_error (ctx, MIR_syntax_error, "Unknown type %s", name);
         else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D
                  && type != MIR_T_LD)
-          process_error (ctx, MIR_syntax_error, "wrong type for local var");
+          process_error (ctx, MIR_syntax_error, "wrong type %s for local var", name);
         op = MIR_new_mem_op (ctx, type, 0, 0, 0, 1);
         if (proto_p || func_p || local_p) {
           if (t.code == TC_COL) {
