@@ -48,6 +48,8 @@
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
      and `v`
+   * Function `int MIR_int_type_p (MIR_type_t t)` returns TRUE if given type is an integer one (it includes pointer type too)
+   * Function `int MIR_fp_type_p (MIR_type_t t)` returns TRUE if given type is a floating point type
    
 ## MIR module
   * Module is a high level entity of MIR program
