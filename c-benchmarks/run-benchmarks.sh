@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run run-benchmarks.sh
+# Run run-benchmarks.sh [start_test_num]
 #
 
 temp=c-benchmarks/__temp.out
@@ -87,12 +87,20 @@ runbench () {
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first" 1
 }
 
+start_bench_num=$1
+if test x$start_bench_num = x; then
+  start_bench_num=0
+fi
+bench_num=0
 for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat  # ackermann fib random 
 do
-    b=c-benchmarks/$bench
-    if test -f $b.arg; then arg=`cat $b.arg`; else arg=; fi
-    echo "+++++ $bench $arg +++++"
-    runbench $b $arg
+    if test $bench_num -ge $start_bench_num; then
+	b=c-benchmarks/$bench
+	if test -f $b.arg; then arg=`cat $b.arg`; else arg=; fi
+	echo "+++++ $bench_num:$bench $arg +++++"
+	runbench $b $arg
+    fi
+    bench_num=`expr $bench_num + 1`
 done
 
 s="C2M Average:"
