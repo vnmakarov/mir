@@ -557,13 +557,18 @@ static void add_bb (MIR_context_t ctx, bb_t bb) {
   bb->index = curr_bb_index++;
 }
 
-static edge_t create_edge (MIR_context_t ctx, bb_t src, bb_t dst) {
+static edge_t create_edge (MIR_context_t ctx, bb_t src, bb_t dst, int append_p) {
   edge_t e = gen_malloc (ctx, sizeof (struct edge));
 
   e->src = src;
   e->dst = dst;
-  DLIST_APPEND (in_edge_t, dst->in_edges, e);
-  DLIST_APPEND (out_edge_t, src->out_edges, e);
+  if (append_p) {
+    DLIST_APPEND (in_edge_t, dst->in_edges, e);
+    DLIST_APPEND (out_edge_t, src->out_edges, e);
+  } else {
+    DLIST_PREPEND (in_edge_t, dst->in_edges, e);
+    DLIST_PREPEND (out_edge_t, src->out_edges, e);
+  }
   e->back_edge_p = e->skipped_p = FALSE;
   return e;
 }
@@ -1021,7 +1026,7 @@ static void build_func_cfg (MIR_context_t ctx) {
       prev_bb = bb;
       bb = create_bb (ctx, NULL);
       add_bb (ctx, bb);
-      create_edge (ctx, prev_bb, bb);
+      create_edge (ctx, prev_bb, bb, TRUE);
     }
   }
   for (; insn != NULL; insn = next_insn) {
@@ -1038,7 +1043,7 @@ static void build_func_cfg (MIR_context_t ctx) {
         bb = create_bb (ctx, next_insn);
       add_bb (ctx, bb);
       if (insn->code != MIR_JMP && insn->code != MIR_RET && insn->code != MIR_SWITCH)
-        create_edge (ctx, prev_bb, bb);
+        create_edge (ctx, prev_bb, bb, TRUE);
     }
     for (i = 0; i < nops; i++)
       if ((op = &insn->ops[i])->mode == MIR_OP_LABEL) {
@@ -1047,7 +1052,7 @@ static void build_func_cfg (MIR_context_t ctx) {
           label_bb_insn = op->u.label->data;
         }
         bb_insn = insn->data;
-        create_edge (ctx, bb_insn->bb, label_bb_insn->bb);
+        create_edge (ctx, bb_insn->bb, label_bb_insn->bb, TRUE);
       } else if (op->mode == MIR_OP_REG) {
         update_min_max_reg (ctx, op->u.reg);
       } else if (op->mode == MIR_OP_MEM) {
@@ -1058,9 +1063,9 @@ static void build_func_cfg (MIR_context_t ctx) {
   /* Add additional edges with entry and exit */
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb != entry_bb && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL)
-      create_edge (ctx, entry_bb, bb);
+      create_edge (ctx, entry_bb, bb, TRUE);
     if (bb != exit_bb && DLIST_HEAD (out_edge_t, bb->out_edges) == NULL)
-      create_edge (ctx, bb, exit_bb);
+      create_edge (ctx, bb, exit_bb, TRUE);
   }
   enumerate_bbs (ctx);
   VARR_CREATE (reg_info_t, curr_cfg->breg_info, 128);
