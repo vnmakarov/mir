@@ -913,7 +913,7 @@ static void output_out_edges (MIR_context_t ctx, bb_t bb) {
   fprintf (debug_file, "\n");
 }
 
-static void output_bitmap (MIR_context_t ctx, const char *head, bitmap_t bm) {
+static void output_bitmap (MIR_context_t ctx, const char *head, bitmap_t bm, int var_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   size_t nel;
   bitmap_iterator_t bi;
@@ -921,8 +921,8 @@ static void output_bitmap (MIR_context_t ctx, const char *head, bitmap_t bm) {
   if (bm == NULL || bitmap_empty_p (bm)) return;
   fprintf (debug_file, "%s", head);
   FOREACH_BITMAP_BIT (bi, bm, nel) {
-    fprintf (debug_file, "%3lu", (unsigned long) nel);
-    if (var_is_reg_p (nel))
+    fprintf (debug_file, " %3lu", (unsigned long) nel);
+    if (var_p && var_is_reg_p (nel))
       fprintf (debug_file, "(%s:%s)",
                MIR_type_str (ctx,
                              MIR_reg_type (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func)),
@@ -1673,10 +1673,10 @@ static void print_exprs (MIR_context_t ctx) {
 }
 
 static void output_bb_cse_info (MIR_context_t ctx, bb_t bb) {
-  output_bitmap (ctx, "  av_in:", bb->av_in);
-  output_bitmap (ctx, "  av_out:", bb->av_out);
-  output_bitmap (ctx, "  av_gen:", bb->av_gen);
-  output_bitmap (ctx, "  av_kill:", bb->av_kill);
+  output_bitmap (ctx, "  av_in:", bb->av_in, TRUE);
+  output_bitmap (ctx, "  av_out:", bb->av_out, TRUE);
+  output_bitmap (ctx, "  av_gen:", bb->av_gen, TRUE);
+  output_bitmap (ctx, "  av_kill:", bb->av_kill, TRUE);
 }
 #endif
 
@@ -3297,10 +3297,10 @@ static void destroy_func_live_ranges (MIR_context_t ctx) {
 
 #if !MIR_NO_GEN_DEBUG
 static void output_bb_live_info (MIR_context_t ctx, bb_t bb) {
-  output_bitmap (ctx, "  live_in:", bb->live_in);
-  output_bitmap (ctx, "  live_out:", bb->live_out);
-  output_bitmap (ctx, "  live_gen:", bb->live_gen);
-  output_bitmap (ctx, "  live_kill:", bb->live_kill);
+  output_bitmap (ctx, "  live_in:", bb->live_in, TRUE);
+  output_bitmap (ctx, "  live_out:", bb->live_out, TRUE);
+  output_bitmap (ctx, "  live_gen:", bb->live_gen, TRUE);
+  output_bitmap (ctx, "  live_kill:", bb->live_kill, TRUE);
 }
 #endif
 
