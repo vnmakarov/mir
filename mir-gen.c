@@ -1170,7 +1170,8 @@ struct data_flow_ctx {
 #define bb_to_consider gen_ctx->data_flow_ctx->bb_to_consider
 
 static void solve_dataflow (MIR_context_t ctx, int forward_p, void (*con_func_0) (bb_t),
-                            int (*con_func_n) (MIR_context_t, bb_t), int (*trans_func) (bb_t)) {
+                            int (*con_func_n) (MIR_context_t, bb_t),
+                            int (*trans_func) (MIR_context_t, bb_t)) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   size_t i, iter;
   bb_t bb, *addr;
@@ -1202,7 +1203,7 @@ static void solve_dataflow (MIR_context_t ctx, int forward_p, void (*con_func_0)
         else
           changed_p |= con_func_n (ctx, bb);
       }
-      if (changed_p && trans_func (bb)) {
+      if (changed_p && trans_func (ctx, bb)) {
         if (forward_p) {
           for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
                e = DLIST_NEXT (out_edge_t, e))
@@ -1410,7 +1411,7 @@ static int cse_con_func_n (MIR_context_t ctx, bb_t bb) {
   return !bitmap_equal_p (bb->av_in, prev_av_in);
 }
 
-static int cse_trans_func (bb_t bb) {
+static int cse_trans_func (MIR_context_t ctx, bb_t bb) {
   return bitmap_ior_and_compl (bb->av_out, bb->av_gen, bb->av_in, bb->av_kill);
 }
 
@@ -2915,7 +2916,7 @@ static int live_con_func_n (MIR_context_t ctx, bb_t bb) {
   return change_p;
 }
 
-static int live_trans_func (bb_t bb) {
+static int live_trans_func (MIR_context_t ctx, bb_t bb) {
   return bitmap_ior_and_compl (bb->live_in, bb->live_gen, bb->live_out, bb->live_kill);
 }
 
