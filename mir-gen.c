@@ -24,7 +24,7 @@
 
 
    Simplify: Lowering MIR (in mir.c).
-   Build CGF: Builing Control Flow Graph (basic blocks and CFG edges).
+   Build CGF: Building Control Flow Graph (basic blocks and CFG edges).
    Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
                                       we need the right value numbering after simplification)
    Dead code elimination: Removing insns with unused outputs.
@@ -539,6 +539,7 @@ static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
 
   bb->pre = bb->rpost = bb->bfs = 0;
   bb->flag = FALSE;
+  bb->loop_node = NULL;
   DLIST_INIT (bb_insn_t, bb->bb_insns);
   DLIST_INIT (in_edge_t, bb->in_edges);
   DLIST_INIT (out_edge_t, bb->out_edges);
@@ -729,11 +730,14 @@ static void destroy_loop_tree (MIR_context_t ctx, loop_node_t root) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   loop_node_t node, next;
 
-  if (root->bb == NULL)
+  if (root->bb != NULL) {
+    root->bb->loop_node = NULL;
+  } else {
     for (node = DLIST_HEAD (loop_node_t, root->children); node != NULL; node = next) {
       next = DLIST_NEXT (loop_node_t, node);
       destroy_loop_tree (ctx, node);
     }
+  }
   free (root);
 }
 
