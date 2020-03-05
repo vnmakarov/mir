@@ -108,6 +108,7 @@ struct data_flow_ctx;
 struct cse_ctx;
 struct rdef_ctx;
 struct rename_ctx;
+struct licm_ctx;
 struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
@@ -129,12 +130,14 @@ struct gen_ctx {
   struct data_flow_ctx *data_flow_ctx;
   struct cse_ctx *cse_ctx;
   struct rename_ctx *rename_ctx;
+  struct licm_ctx *licm_ctx;
   struct rdef_ctx *rdef_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
+  int max_int_hard_regs, max_fp_hard_regs;
 };
 
 static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct gen_ctx **) ctx; }
@@ -152,6 +155,8 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define loop_nodes gen_ctx->loop_nodes
 #define queue_nodes gen_ctx->queue_nodes
 #define loop_entries gen_ctx->loop_entries
+#define max_int_hard_regs gen_ctx->max_int_hard_regs
+#define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 
 #ifdef __x86_64__
 #include "mir-gen-x86_64.c"
@@ -255,8 +260,8 @@ DEF_DLIST (dead_var_t, dead_var_link);
 
 struct bb_insn {
   MIR_insn_t insn;
-  unsigned char flag; /* used for CCP */
-  size_t index;
+  unsigned char flag, flag2; /* used for CCP and LICM */
+  size_t index;              /* used for LICM */
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
   DLIST (dead_var_t) dead_vars;
@@ -277,6 +282,7 @@ struct bb {
   DLIST (bb_insn_t) bb_insns;
   size_t freq;
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
+  bitmap_t dom_in, dom_out;    /* additional var bitmaps LICM */
   loop_node_t loop_node;
   int max_int_pressure, max_fp_pressure;
 };
@@ -291,6 +297,8 @@ struct loop_node {
   bb_t bb;      /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
+  bb_t preheader;      /* used in LICM */
+  unsigned int call_p; /* used in LICM: call is present in the loop */
   DLIST (loop_node_t) children;
   DLIST_LINK (loop_node_t) children_link;
   int max_int_pressure, max_fp_pressure;
@@ -554,6 +562,8 @@ static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
   bb->out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->gen = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->kill = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  bb->dom_in = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  bb->dom_out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->max_int_pressure = bb->max_fp_pressure = 0;
   if (insn != NULL) add_new_bb_insn (ctx, insn, bb);
   return bb;
@@ -605,6 +615,8 @@ static void delete_bb (MIR_context_t ctx, bb_t bb) {
   bitmap_destroy (bb->out);
   bitmap_destroy (bb->gen);
   bitmap_destroy (bb->kill);
+  bitmap_destroy (bb->dom_in);
+  bitmap_destroy (bb->dom_out);
   free (bb);
 }
 
@@ -655,6 +667,7 @@ static loop_node_t create_loop_node (MIR_context_t ctx, bb_t bb) {
   if (bb != NULL) bb->loop_node = loop_node;
   loop_node->parent = NULL;
   loop_node->entry = NULL;
+  loop_node->preheader = NULL;
   loop_node->max_int_pressure = loop_node->max_fp_pressure = 0;
   DLIST_INIT (loop_node_t, loop_node->children);
   return loop_node;
@@ -2163,6 +2176,478 @@ static void finish_rename (MIR_context_t ctx) {
   VARR_DESTROY (char, reg_name);
   free (gen_ctx->rename_ctx);
   gen_ctx->rename_ctx = NULL;
+}
+
+#undef rdef_in
+#undef rdef_out
+#undef rdef_kill
+#undef rdef_gen
+
+/* New Page */
+
+/* Loop Invariant Code Motion.  Reaching defs should be present for it. */
+
+#define rdef_in in
+#define rdef_out out
+#define rdef_kill kill
+#define rdef_gen gen
+
+struct licm_ctx {
+  VARR (bb_t) * licm_temp_bbs, *loop_bbs, *curr_exit_loop_bbs;
+  VARR (bb_insn_t) * loop_stores, *invariant_bb_insns;
+  bitmap_t loop_defs_bitmap;
+};
+
+#define licm_temp_bbs gen_ctx->licm_ctx->licm_temp_bbs
+#define loop_bbs gen_ctx->licm_ctx->loop_bbs
+#define loop_stores gen_ctx->licm_ctx->loop_stores
+#define curr_exit_loop_bbs gen_ctx->licm_ctx->curr_exit_loop_bbs
+#define invariant_bb_insns gen_ctx->licm_ctx->invariant_bb_insns
+#define loop_defs_bitmap gen_ctx->licm_ctx->loop_defs_bitmap
+
+static edge_t find_loop_entry_edge (MIR_context_t ctx, bb_t loop_entry) {
+  edge_t e, entry_e = NULL;
+  bb_insn_t head, tail;
+
+  for (e = DLIST_HEAD (in_edge_t, loop_entry->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
+    if (e->back_edge_p) continue;
+    if (entry_e != NULL) return NULL;
+    entry_e = e;
+  }
+  gen_assert (entry_e != NULL);
+  tail = DLIST_TAIL (bb_insn_t, entry_e->src->bb_insns);
+  head = DLIST_HEAD (bb_insn_t, entry_e->dst->bb_insns);
+  if (tail != NULL && head != NULL && DLIST_NEXT (MIR_insn_t, tail->insn) != head->insn)
+    return NULL; /* not fall through */
+  return entry_e;
+}
+
+static void create_preheader_from_edge (MIR_context_t ctx, edge_t e, loop_node_t loop) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_t new_bb = create_bb (ctx, NULL);
+  loop_node_t bb_loop_node = create_loop_node (ctx, new_bb), parent = loop->parent;
+
+  add_bb (ctx, new_bb);
+  DLIST_REMOVE (bb_t, curr_cfg->bbs, new_bb);
+  DLIST_INSERT_BEFORE (bb_t, curr_cfg->bbs, e->dst, new_bb); /* insert before loop entry */
+  create_edge (ctx, e->src, new_bb, FALSE); /* fall through should be the 1st edge */
+  create_edge (ctx, new_bb, e->dst, FALSE);
+  delete_edge (e);
+  gen_assert (parent != NULL);
+  DLIST_APPEND (loop_node_t, parent->children, bb_loop_node);
+  bb_loop_node->parent = parent;
+  loop->preheader = new_bb;
+}
+
+static void licm_add_loop_preheaders (MIR_context_t ctx, loop_node_t loop) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_insn_t bb_insn;
+  edge_t e;
+
+  for (loop_node_t node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) /* process sub-loops */
+      licm_add_loop_preheaders (ctx, node);
+  if (loop == curr_cfg->root_loop_node) return;
+  loop->preheader = NULL;
+  if ((e = find_loop_entry_edge (ctx, loop->entry->bb)) == NULL) return;
+  if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
+      || !MIR_branch_code_p (bb_insn->insn->code))
+    loop->preheader = e->src; /* The preheader already exists */
+  else
+    create_preheader_from_edge (ctx, e, loop);
+}
+
+static void dom_con_func_0 (bb_t bb) { bitmap_clear (bb->dom_in); }
+
+static int dom_con_func_n (MIR_context_t ctx, bb_t bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  edge_t e, head;
+  bitmap_t prev_dom_in = temp_bitmap;
+
+  bitmap_copy (prev_dom_in, bb->dom_in);
+  head = DLIST_HEAD (in_edge_t, bb->in_edges);
+  bitmap_copy (bb->dom_in, head->src->dom_out);
+  for (e = DLIST_NEXT (in_edge_t, head); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+    bitmap_and (bb->dom_in, bb->dom_in, e->src->dom_out); /* dom_in &= dom_out */
+  return !bitmap_equal_p (bb->dom_in, prev_dom_in);
+}
+
+static int dom_trans_func (MIR_context_t ctx, bb_t bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  bitmap_clear (temp_bitmap);
+  bitmap_set_bit_p (temp_bitmap, bb->index);
+  return bitmap_ior (bb->dom_out, bb->dom_in, temp_bitmap);
+}
+
+static void calculate_dominators (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_t entry_bb = DLIST_HEAD (bb_t, curr_cfg->bbs);
+
+  bitmap_clear (entry_bb->dom_out);
+  for (bb_t bb = DLIST_NEXT (bb_t, entry_bb); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    bitmap_set_bit_range_p (bb->dom_out, 0, curr_bb_index);
+  solve_dataflow (ctx, TRUE, dom_con_func_0, dom_con_func_n, dom_trans_func);
+}
+
+static int invariant_reaching_definitions_p (MIR_context_t ctx, loop_node_t loop, MIR_reg_t var,
+                                             bitmap_t var_rdefs) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t nbit;
+  bb_insn_t bb_insn;
+  bitmap_iterator_t iter;
+
+  FOREACH_BITMAP_BIT (iter, var_rdefs, nbit) {
+    bb_insn = VARR_GET (bb_insn_t, def_bb_insns, nbit);
+    if (bb_insn == NULL) continue; /* a special def insn */
+    if (in_loop_p (bb_insn->bb->loop_node, loop) && !bb_insn->flag) return FALSE;
+  }
+  return TRUE;
+}
+
+static int dominate_curr_loop_exits_p (MIR_context_t ctx, bb_t bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  for (size_t i = 0; i < VARR_LENGTH (bb_t, curr_exit_loop_bbs); i++)
+    if (!bitmap_bit_p (VARR_GET (bb_t, curr_exit_loop_bbs, i)->dom_out, bb->index)) return FALSE;
+  return TRUE;
+}
+
+static int dominate_uses_p (MIR_context_t ctx, bb_insn_t def_bb_insn, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bitmap_iterator_t iter;
+  bb_insn_t use_bb_insn;
+  bb_t use_bb, def_bb = def_bb_insn->bb;
+  bitmap_t var_defs_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
+  size_t nbit;
+
+  bitmap_and (temp_bitmap, get_var_uses_or_defs (ctx, var, TRUE), loop_defs_bitmap);
+  FOREACH_BITMAP_BIT (iter, temp_bitmap, nbit) {
+    use_bb_insn = VARR_GET (bb_insn_t, def_bb_insns, nbit);
+    use_bb = use_bb_insn->bb;
+    if (use_bb == def_bb) {
+      if (use_bb_insn->index <= def_bb_insn->index) return FALSE;
+      continue; /* def before use in the same BB */
+    }
+    bitmap_and (temp_bitmap2, use_bb->rdef_in, var_defs_bitmap);
+    if (!bitmap_clear_bit_p (temp_bitmap2, def_bb_insn->index) /* does not reach use_bb */
+        || !bitmap_empty_p (temp_bitmap2))                     /* another def reaches use_bb */
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static int another_def_reaching_def_p (MIR_context_t ctx, bb_insn_t def_bb_insn, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t ignore_var;
+  bitmap_iterator_t bi;
+  bb_insn_t another_def_bb_insn;
+  bb_t another_def_bb, def_bb = def_bb_insn->bb;
+  int out_p, mem_p;
+  size_t nbit, passed_mem_num, n_out;
+  insn_var_iterator_t iter;
+
+  bitmap_and (temp_bitmap, get_var_uses_or_defs (ctx, var, FALSE), loop_defs_bitmap);
+  bitmap_and (temp_bitmap2, def_bb->rdef_in, temp_bitmap);
+  n_out = 0;
+  FOREACH_INSN_VAR (ctx, iter, def_bb_insn->insn, ignore_var, out_p, mem_p, passed_mem_num) {
+    if (!out_p) continue;
+    bitmap_clear_bit_p (temp_bitmap2, def_bb_insn->index + n_out++); /* exclude insn defs itself */
+  }
+  if (!bitmap_empty_p (temp_bitmap2)) return TRUE; /* another def reaches def bb */
+  FOREACH_BITMAP_BIT (bi, temp_bitmap, nbit) {     /* check defs in the same BB: */
+    if ((another_def_bb_insn = VARR_GET (bb_insn_t, def_bb_insns, nbit)) == def_bb_insn) continue;
+    another_def_bb = another_def_bb_insn->bb;
+    if (another_def_bb == def_bb && another_def_bb_insn->index < def_bb_insn->index) return TRUE;
+  }
+  return FALSE;
+}
+
+static int loop_invariant_insn_p (MIR_context_t ctx, loop_node_t loop, bb_insn_t bb_insn,
+                                  size_t stores_start) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_insn_t insn = bb_insn->insn;
+  bb_t bb = bb_insn->bb;
+  size_t i, passed_mem_num;
+  int out_p, mem_p;
+  MIR_reg_t var;
+  bitmap_t var_rdef_bitmap = temp_bitmap;
+  insn_var_iterator_t iter;
+
+  if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+      || insn->code == MIR_LABEL || MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA
+      || insn->code == MIR_BSTART || insn->code == MIR_BEND || insn->code == MIR_VA_START
+      || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END)
+    return FALSE;
+  if (!dominate_curr_loop_exits_p (ctx, bb)) return FALSE; /* can not safely move */
+  FOREACH_INSN_VAR (ctx, iter, insn, var, out_p, mem_p, passed_mem_num) {
+    /* no stores in the loop ??? aliasing should be used here */
+    if (passed_mem_num != 0
+        && (loop->call_p || stores_start != VARR_LENGTH (bb_insn_t, loop_stores)))
+      return FALSE;
+    if (!out_p) {
+      /* in var: check reaching defs of var is outside the loop or loop invariant */
+      bitmap_and (var_rdef_bitmap, curr_rdef_bitmap, get_var_uses_or_defs (ctx, var, FALSE));
+      if (!invariant_reaching_definitions_p (ctx, loop, var, var_rdef_bitmap)) return FALSE;
+    } else { /* out var: check all uses in the loop are dominated by the def (bb_insn) */
+      if (!dominate_uses_p (ctx, bb_insn, var)) return FALSE;
+      if (another_def_reaching_def_p (ctx, bb_insn, var)) return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+static int collect_loop_bb_invariants (MIR_context_t ctx, loop_node_t loop, bb_t bb,
+                                       size_t stores_start) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bitmap_t def_bitmap;
+  MIR_reg_t var;
+  int out_p, mem_p, change_p = FALSE;
+  size_t passed_mem_num, n_out;
+  insn_var_iterator_t iter;
+
+  bitmap_copy (curr_rdef_bitmap, bb->rdef_in);
+  for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+       bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+    if (!bb_insn->flag && loop_invariant_insn_p (ctx, loop, bb_insn, stores_start)) {
+      bb_insn->flag = TRUE;
+      VARR_PUSH (bb_insn_t, invariant_bb_insns, bb_insn);
+      change_p = TRUE;
+    }
+    /* Update curr_rdef_bitmap: */
+    n_out = 0;
+    FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      if (!out_p) continue;
+      def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
+      gen_assert (def_bitmap != NULL);
+      bitmap_and_compl (curr_rdef_bitmap, curr_rdef_bitmap, def_bitmap);
+      bitmap_set_bit_p (curr_rdef_bitmap, bb_insn->index + n_out++);
+    }
+  }
+  return change_p;
+}
+
+static int compare_bb_bfs (const void *p1, const void *p2) {
+  const bb_t *bb1 = (const bb_t *) p1, *bb2 = (const bb_t *) p2;
+
+  return (*bb1)->bfs < (*bb2)->bfs ? -1 : (*bb1)->bfs > (*bb2)->bfs ? 1 : 0;
+}
+
+static int int_var_type_p (MIR_context_t ctx, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  if (!var_is_reg_p (var)) return target_hard_reg_type_ok_p (var, MIR_T_I32);
+  return MIR_int_type_p (MIR_reg_type (ctx, var2reg (gen_ctx, var), curr_func_item->u.func));
+}
+
+static void find_profitable_loop_invariants (MIR_context_t ctx, loop_node_t loop) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_insn_t bb_insn;
+  MIR_insn_t insn;
+  MIR_op_mode_t mode;
+  MIR_reg_t var;
+  int out_p, mem_p, move_p, dep_p, int_p;
+  int int_pressure, fp_pressure;
+  size_t passed_mem_num;
+  insn_var_iterator_t iterator;
+  bitmap_t live = temp_bitmap;
+
+  bitmap_clear (live);
+  for (size_t i = VARR_LENGTH (bb_insn_t, invariant_bb_insns); i != 0;) {
+    i--;
+    bb_insn = VARR_GET (bb_insn_t, invariant_bb_insns, i);
+    gen_assert (bb_insn->flag);
+    insn = bb_insn->insn;
+    move_p = !(insn->code == MIR_MOV
+               && ((mode = insn->ops[1].mode) == MIR_OP_INT || mode == MIR_OP_UINT
+                   || mode == MIR_OP_REG || mode == MIR_OP_HARD_REG)); /* ??? */
+    dep_p = FALSE;
+    int_pressure = loop->max_int_pressure;
+    fp_pressure = loop->max_fp_pressure;
+    bb_insn->flag2 = TRUE; /* cheap or pressure */
+    FOREACH_INSN_VAR (ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) {
+      if (!out_p) continue;
+      if (bitmap_bit_p (live, var)) {
+        move_p = dep_p = TRUE;
+        break;
+      }
+      /* inaccurate reg pressure evaluation: */
+      if ((int_p = int_var_type_p (ctx, var))) {
+        if (++int_pressure >= max_int_hard_regs) bb_insn->flag2 = move_p = FALSE;
+      } else {
+        if (++fp_pressure >= max_fp_hard_regs) bb_insn->flag2 = move_p = FALSE;
+      }
+      int_p ? int_pressure++ : fp_pressure++;
+    }
+    if (move_p || dep_p) { /* update live: ignore killed vars here */
+      bb_insn->flag = FALSE;
+      FOREACH_INSN_VAR (ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) bitmap_set_bit_p (live, var);
+      }
+    }
+  }
+}
+
+static void licm_move_insn (MIR_context_t ctx, bb_insn_t bb_insn, bb_t to, bb_insn_t before) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_t bb = bb_insn->bb;
+  MIR_insn_t insn = bb_insn->insn;
+
+  gen_assert (before != NULL);
+  DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
+  DLIST_APPEND (bb_insn_t, to->bb_insns, bb_insn);
+  bb_insn->bb = to;
+  DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, insn);
+  MIR_insert_insn_before (ctx, curr_func_item, before->insn, insn);
+}
+
+static void move_loop_invariants (MIR_context_t ctx, loop_node_t loop) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_t entry_bb = loop->entry->bb;
+
+  find_profitable_loop_invariants (ctx, loop);
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, "Loop%3lu (pressure: int=%d, fp=%d) -- invariant insns:\n",
+             (unsigned long) loop->index, loop->max_int_pressure, loop->max_fp_pressure);
+#endif
+  for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, invariant_bb_insns); i++) {
+    bb_insn_t bb_insn = VARR_GET (bb_insn_t, invariant_bb_insns, i);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "  %15s %-5lu",
+               !bb_insn->flag ? "move" : bb_insn->flag2 ? "keep cheap" : "keep pressure",
+               (unsigned long) bb_insn->index);
+      print_bb_insn (ctx, bb_insn, TRUE);
+    }
+#endif
+    if (!bb_insn->flag) {
+      gen_assert (entry_bb != NULL);
+      licm_move_insn (ctx, bb_insn, loop->preheader, DLIST_HEAD (bb_insn_t, entry_bb->bb_insns));
+    }
+  }
+}
+
+static int store_p (MIR_insn_t insn) {
+  MIR_insn_code_t code = insn->code;
+
+  if (code != MIR_MOV && code != MIR_DMOV && code != MIR_FMOV && code != MIR_LDMOV) return FALSE;
+  return insn->ops[0].mode == MIR_OP_MEM || insn->ops[0].mode == MIR_OP_HARD_REG_MEM;
+}
+
+static void loop_licm (MIR_context_t ctx, loop_node_t loop) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t var;
+  size_t i, n_out, passed_mem_num;
+  int out_p, mem_p, change_p;
+  bb_t bb;
+  insn_var_iterator_t iter;
+  size_t loop_bbs_start = VARR_LENGTH (bb_t, loop_bbs);
+  size_t stores_start = VARR_LENGTH (bb_insn_t, loop_stores);
+
+  for (loop_node_t node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) { /* process sub-loops first */
+      loop_licm (ctx, node);
+    } else {
+      VARR_PUSH (bb_t, loop_bbs, node->bb); /* collect loop bbs */
+    }
+  if (loop == curr_cfg->root_loop_node || loop->preheader == NULL) return;
+  VARR_TRUNC (bb_t, curr_exit_loop_bbs, 0);
+  bitmap_clear (loop_defs_bitmap);
+  loop->call_p = TRUE;
+  for (i = loop_bbs_start; i < VARR_LENGTH (bb_t, loop_bbs); i++) {
+    bb = VARR_GET (bb_t, loop_bbs, i);
+    if (bb_loop_exit_p (ctx, bb, loop)) VARR_PUSH (bb_t, curr_exit_loop_bbs, bb);
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      if (store_p (bb_insn->insn)) VARR_PUSH (bb_insn_t, loop_stores, bb_insn);
+      if (MIR_call_code_p (bb_insn->insn->code)) loop->call_p = TRUE;
+      bb_insn->flag = FALSE; /* clear invariant flag */
+      n_out = 0;
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+        if (out_p) bitmap_set_bit_p (loop_defs_bitmap, bb_insn->index + n_out++);
+      }
+    }
+  }
+  qsort (VARR_ADDR (bb_t, loop_bbs) + loop_bbs_start, VARR_LENGTH (bb_t, loop_bbs) - loop_bbs_start,
+         sizeof (bb_t), compare_bb_bfs);
+  VARR_TRUNC (bb_insn_t, invariant_bb_insns, 0);
+  do {
+    change_p = FALSE;
+    for (i = loop_bbs_start; i < VARR_LENGTH (bb_t, loop_bbs); i++) {
+      bb = VARR_GET (bb_t, loop_bbs, i);
+      if (collect_loop_bb_invariants (ctx, loop, bb, stores_start)) change_p = TRUE;
+    }
+  } while (change_p);
+  move_loop_invariants (ctx, loop);
+}
+
+static void BFS (MIR_context_t ctx) { /* breadth-first search */
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bb_t bb, dst;
+  edge_t e;
+  size_t bfs = 0;
+
+  VARR_TRUNC (bb_t, licm_temp_bbs, 0);
+  VARR_PUSH (bb_t, licm_temp_bbs, DLIST_HEAD (bb_t, curr_cfg->bbs)); /* entry */
+  while (VARR_LENGTH (bb_t, licm_temp_bbs) != 0) {
+    bb = VARR_POP (bb_t, licm_temp_bbs);
+    bb->bfs = bfs++;
+    for (e = DLIST_TAIL (out_edge_t, bb->out_edges); e != NULL; e = DLIST_PREV (out_edge_t, e))
+      if ((dst = e->dst)->bfs == 0) VARR_PUSH (bb_t, licm_temp_bbs, dst);
+    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
+      if ((dst = e->dst)->bfs == 0) dst->bfs = bfs++;
+  }
+}
+
+static int licm (MIR_context_t ctx) { /* loop invariant code motion */
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL) print_loop_tree (ctx, FALSE);
+#endif
+  BFS (ctx);
+  calculate_dominators (ctx);
+  VARR_TRUNC (bb_t, licm_temp_bbs, 0);
+  VARR_TRUNC (bb_t, loop_bbs, 0);
+  VARR_TRUNC (bb_insn_t, loop_stores, 0);
+  loop_licm (ctx, curr_cfg->root_loop_node);
+  return TRUE;
+}
+
+#if !MIR_NO_GEN_DEBUG
+static void output_bb_licm_info (MIR_context_t ctx, bb_t bb) {
+  output_bitmap (ctx, "  dom_in:", bb->dom_in, FALSE);
+  output_bitmap (ctx, "  dom_out:", bb->dom_out, FALSE);
+  output_bb_rdef_info (ctx, bb);
+}
+#endif
+
+static void init_licm (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  gen_ctx->licm_ctx = gen_malloc (ctx, sizeof (struct licm_ctx));
+  VARR_CREATE (bb_t, licm_temp_bbs, 0);
+  VARR_CREATE (bb_t, loop_bbs, 0);
+  VARR_CREATE (bb_insn_t, loop_stores, 0);
+  VARR_CREATE (bb_t, curr_exit_loop_bbs, 0);
+  VARR_CREATE (bb_insn_t, invariant_bb_insns, 0);
+  loop_defs_bitmap = bitmap_create ();
+}
+
+static void finish_licm (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  VARR_DESTROY (bb_t, licm_temp_bbs);
+  VARR_DESTROY (bb_t, loop_bbs);
+  VARR_DESTROY (bb_insn_t, loop_stores);
+  VARR_DESTROY (bb_t, curr_exit_loop_bbs);
+  VARR_DESTROY (bb_insn_t, invariant_bb_insns);
+  bitmap_destroy (loop_defs_bitmap);
+  free (gen_ctx->licm_ctx);
+  gen_ctx->licm_ctx = NULL;
 }
 
 #undef rdef_in
@@ -3780,7 +4265,6 @@ static void finish_live_ranges (MIR_context_t ctx) {
 /* Register allocation */
 
 DEF_VARR (MIR_reg_t);
-DEF_VARR (size_t);
 
 typedef struct breg_info {
   MIR_reg_t breg;
@@ -5027,6 +5511,26 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   rdef_clear (ctx);
   calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
 #endif                                       /* #ifndef NO_CSE */
+#ifndef NO_LICM
+  if (build_loop_tree (ctx)) {
+    licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
+    calculate_reaching_defs (ctx);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++LICM:\n");
+#endif
+    licm (ctx);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
+      print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
+    }
+#endif
+    rdef_clear (ctx);
+    calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
+  }
+  destroy_loop_tree (ctx, curr_cfg->root_loop_node);
+  curr_cfg->root_loop_node = NULL;
+#endif /* #ifndef NO_LICM */
 #ifndef NO_CCP
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
@@ -5155,6 +5659,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->cse_ctx = NULL;
   gen_ctx->rdef_ctx = NULL;
   gen_ctx->rename_ctx = NULL;
+  gen_ctx->licm_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
@@ -5168,6 +5673,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_cse (ctx);
   init_rdef (ctx);
   init_rename (ctx);
+  init_licm (ctx);
   init_ccp (ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -5175,11 +5681,15 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_live_ranges (ctx);
   init_ra (ctx);
   init_selection (ctx);
-  call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
-  for (i = 0; i <= MAX_HARD_REG; i++)
-    if (target_call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
-  insn_to_consider = bitmap_create2 (1024);
   target_init (ctx);
+  call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+  max_int_hard_regs = max_fp_hard_regs = 0;
+  for (i = 0; i <= MAX_HARD_REG; i++) {
+    if (target_fixed_hard_reg_p (i)) continue;
+    if (target_call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
+    target_hard_reg_type_ok_p (i, MIR_T_I32) ? max_int_hard_regs++ : max_fp_hard_regs++;
+  }
+  insn_to_consider = bitmap_create2 (1024);
 }
 
 void MIR_gen_finish (MIR_context_t ctx) {
@@ -5190,6 +5700,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_cse (ctx);
   finish_rdef (ctx);
   finish_rename (ctx);
+  finish_licm (ctx);
   finish_ccp (ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
