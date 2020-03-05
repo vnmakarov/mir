@@ -42,8 +42,7 @@ const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = V17_HARD_REG;
 
 static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
-  return (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? hard_reg >= V0_HARD_REG
-                                                                 : hard_reg < V0_HARD_REG);
+  return MIR_fp_type_p (type) ? hard_reg >= V0_HARD_REG : hard_reg < V0_HARD_REG;
 }
 
 static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
@@ -522,7 +521,7 @@ static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t ty
   /* slot is 0, 1, ... */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   size_t offset = curr_func_item->u.func->vararg_p || stack_arg_func_p ? 32 : 16;
-  
+
   return ((MIR_disp_t) slot * 8 + offset);
 }
 
