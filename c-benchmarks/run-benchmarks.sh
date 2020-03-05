@@ -76,14 +76,14 @@ runbench () {
   if test -f $bench.expect; then expect_out=$bench.expect; else expect_out=; fi
   first=first
   if type gcc >/dev/null 2>&1; then
-      run "gcc -O2" "gcc -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
+      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
   if type clang >/dev/null 2>&1; then
       run "clang -O2" "clang -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
-#  run "gcc -O0" "gcc -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+#  run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first" 1
 }
 
