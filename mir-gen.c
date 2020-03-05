@@ -3897,6 +3897,7 @@ static int64_t power2 (int64_t p) {
 static int64_t int_log2 (int64_t i) {
   int64_t n;
 
+  if (i == 0) return -1;
   for (n = 0; (i & 1) == 0; n++, i >>= 1)
     ;
   return i == 1 ? n : -1;
