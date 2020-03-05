@@ -651,7 +651,7 @@ static loop_node_t create_loop_node (MIR_context_t ctx, bb_t bb) {
   return loop_node;
 }
 
-static void process_loop (MIR_context_t ctx, bb_t entry_bb) {
+static int process_loop (MIR_context_t ctx, bb_t entry_bb) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   edge_t e;
   loop_node_t loop_node, new_loop_node, queue_node;
@@ -671,7 +671,7 @@ static void process_loop (MIR_context_t ctx, bb_t entry_bb) {
     queue_node = VARR_POP (loop_node_t, queue_nodes);
     if ((queue_bb = queue_node->bb) == NULL) queue_bb = queue_node->entry->bb; /* subloop */
     /* entry block is achieved which means multiple entry loop -- just ignore */
-    if (queue_bb == DLIST_HEAD (bb_t, curr_cfg->bbs)) return;
+    if (queue_bb == DLIST_HEAD (bb_t, curr_cfg->bbs)) return FALSE;
     for (e = DLIST_HEAD (in_edge_t, queue_bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
       if (e->src != entry_bb) {
         loop_node = top_loop_node (e->src);
@@ -689,6 +689,7 @@ static void process_loop (MIR_context_t ctx, bb_t entry_bb) {
     DLIST_APPEND (loop_node_t, new_loop_node->children, loop_node);
     loop_node->parent = new_loop_node;
   }
+  return TRUE;
 }
 
 static int compare_bb_loop_nodes (const void *p1, const void *p2) {
@@ -697,10 +698,11 @@ static int compare_bb_loop_nodes (const void *p1, const void *p2) {
   return bb1->rpost > bb2->rpost ? -1 : bb1->rpost < bb2->rpost ? 1 : 0;
 }
 
-static void build_loop_tree (MIR_context_t ctx) {
+static int build_loop_tree (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   loop_node_t loop_node;
   edge_t e;
+  int loops_p = FALSE;
 
   curr_loop_node_index = 0;
   enumerate_bbs (ctx);
@@ -717,13 +719,14 @@ static void build_loop_tree (MIR_context_t ctx) {
   qsort (VARR_ADDR (loop_node_t, loop_entries), VARR_LENGTH (loop_node_t, loop_entries),
          sizeof (loop_node_t), compare_bb_loop_nodes);
   for (size_t i = 0; i < VARR_LENGTH (loop_node_t, loop_entries); i++)
-    process_loop (ctx, VARR_GET (loop_node_t, loop_entries, i)->bb);
+    if (process_loop (ctx, VARR_GET (loop_node_t, loop_entries, i)->bb)) loops_p = TRUE;
   curr_cfg->root_loop_node = create_loop_node (ctx, NULL);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     if ((loop_node = top_loop_node (bb)) != curr_cfg->root_loop_node) {
       DLIST_APPEND (loop_node_t, curr_cfg->root_loop_node->children, loop_node);
       loop_node->parent = curr_cfg->root_loop_node;
     }
+  return loops_p;
 }
 
 static void destroy_loop_tree (MIR_context_t ctx, loop_node_t root) {
