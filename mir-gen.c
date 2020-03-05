@@ -107,6 +107,7 @@ struct target_ctx;
 struct data_flow_ctx;
 struct cse_ctx;
 struct rdef_ctx;
+struct rename_ctx;
 struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
@@ -127,6 +128,7 @@ struct gen_ctx {
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct cse_ctx *cse_ctx;
+  struct rename_ctx *rename_ctx;
   struct rdef_ctx *rdef_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
@@ -1906,6 +1908,261 @@ static void finish_rdef (MIR_context_t ctx) {
   bitmap_destroy (curr_rdef_bitmap);
   free (gen_ctx->rdef_ctx);
   gen_ctx->rdef_ctx = NULL;
+}
+
+#undef rdef_in
+#undef rdef_out
+#undef rdef_kill
+#undef rdef_gen
+
+/* New Page */
+
+/* Register (variable) renaming.  Reaching definitions info should exist. */
+
+#define rdef_in in
+#define rdef_out out
+#define rdef_kill kill
+#define rdef_gen gen
+
+struct web_node {
+  MIR_reg_t var;      /* web_node_tab key */
+  int def_p;          /* web_node_tab key: TRUE for definition, FALSE otherwise */
+  bb_insn_t bb_insn;  /* web_node_tab key: NULL for an artificial definition */
+  size_t n_out;       /* web_node_tab key: output number of insn, 0 for input */
+  size_t first, next; /* first, next node index in the web: 0 is NULL */
+};
+
+typedef struct web_node web_node_t;
+
+DEF_VARR (web_node_t);
+DEF_HTAB (size_t);
+DEF_VARR (size_t);
+DEF_VARR (char);
+
+struct rename_ctx {
+  VARR (web_node_t) * web_nodes;
+  HTAB (size_t) * web_node_htab;
+  VARR (size_t) * curr_var_indexes;
+  VARR (char) * reg_name;
+};
+
+#define web_nodes gen_ctx->rename_ctx->web_nodes
+#define web_node_htab gen_ctx->rename_ctx->web_node_htab
+#define curr_var_indexes gen_ctx->rename_ctx->curr_var_indexes
+#define reg_name gen_ctx->rename_ctx->reg_name
+
+static int web_node_eq (size_t wn_ind1, size_t wn_ind2, void *arg) {
+  MIR_context_t ctx = arg;
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  web_node_t *addr = VARR_ADDR (web_node_t, web_nodes), *n1 = &addr[wn_ind1], *n2 = &addr[wn_ind2];
+
+  return (n1->bb_insn == n2->bb_insn && n1->n_out == n2->n_out && n1->var == n2->var
+          && n1->def_p == n2->def_p);
+  return 0;
+}
+
+static htab_hash_t web_node_hash (size_t wn_ind, void *arg) {
+  MIR_context_t ctx = arg;
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  web_node_t *addr = VARR_ADDR (web_node_t, web_nodes);
+  htab_hash_t h = mir_hash_init (0x24);
+
+  if (addr[wn_ind].bb_insn != NULL) h = mir_hash_step (h, (uint64_t) addr[wn_ind].bb_insn);
+  h = mir_hash_step (h, (uint64_t) addr[wn_ind].n_out);
+  h = mir_hash_step (h, (uint64_t) addr[wn_ind].var);
+  h = mir_hash_step (h, (uint64_t) addr[wn_ind].def_p);
+  return mir_hash_finish (h);
+  return 0;
+}
+
+static size_t get_web_node_ind (MIR_context_t ctx, MIR_reg_t var, int def_p, bb_insn_t bb_insn,
+                                size_t n_out) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t tab_el, ind = VARR_LENGTH (web_node_t, web_nodes);
+  web_node_t wn = (struct web_node){var, def_p, bb_insn, n_out, ind, 0};
+
+  VARR_PUSH (web_node_t, web_nodes, wn);
+  if (!HTAB_DO (size_t, web_node_htab, ind, HTAB_INSERT, tab_el)) {
+    gen_assert (ind == tab_el);
+    return ind;
+  }
+  VARR_POP (web_node_t, web_nodes);
+  return tab_el;
+}
+
+static void link_web_nodes (MIR_context_t ctx, size_t ind1, size_t ind2) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  web_node_t *addr = VARR_ADDR (web_node_t, web_nodes);
+  size_t curr, last, first1 = addr[ind1].first, first2 = addr[ind2].first;
+
+  if (first1 == first2) return; /* already linked */
+  for (curr = ind1; curr != 0; curr = addr[curr].next) last = curr;
+  for (curr = first2; curr != 0; curr = addr[curr].next) addr[curr].first = first1;
+  addr[last].next = first2;
+}
+
+static void build_webs (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t var;
+  bb_insn_t bb_insn, def_bb_insn;
+  int out_p, mem_p;
+  size_t nbit, passed_mem_num, web_node_ind, web_node_ind2, n_out;
+  web_node_t wn;
+  bitmap_t def_bitmap = temp_bitmap, var_rdef_bitmap = temp_bitmap2;
+  bitmap_iterator_t bi;
+  insn_var_iterator_t iter;
+
+  HTAB_CLEAR (size_t, web_node_htab);
+  VARR_TRUNC (web_node_t, web_nodes, 0);
+  VARR_PUSH (web_node_t, web_nodes, wn); /* to avoid nodes with 0-th index */
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    bitmap_copy (curr_rdef_bitmap, bb->rdef_in);
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+        if (!var_is_reg_p (var) || out_p) continue; /* ignore hard regs here */
+        bitmap_and (var_rdef_bitmap, curr_rdef_bitmap, get_var_uses_or_defs (ctx, var, FALSE));
+        web_node_ind = get_web_node_ind (ctx, var, FALSE, bb_insn, 0);
+        if (bitmap_empty_p (var_rdef_bitmap)) {
+          web_node_ind2 = get_web_node_ind (ctx, var, TRUE, NULL, 0); /* an artificial def */
+          link_web_nodes (ctx, web_node_ind, web_node_ind2);
+        } else {
+          FOREACH_BITMAP_BIT (bi, var_rdef_bitmap, nbit) {
+            def_bb_insn = VARR_GET (bb_insn_t, def_bb_insns, nbit);
+            gen_assert (def_bb_insn == NULL || nbit >= def_bb_insn->index);
+            web_node_ind2 = get_web_node_ind (ctx, var, TRUE, def_bb_insn,
+                                              def_bb_insn == NULL ? 0 : nbit - def_bb_insn->index);
+            link_web_nodes (ctx, web_node_ind, web_node_ind2);
+          }
+        }
+      }
+      /* Update curr_rdef_bitmap: */
+      n_out = 0;
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) continue;
+        def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
+        gen_assert (def_bitmap != NULL);
+        bitmap_and_compl (curr_rdef_bitmap, curr_rdef_bitmap, def_bitmap);
+        bitmap_set_bit_p (curr_rdef_bitmap, bb_insn->index + n_out++);
+      }
+    }
+  }
+}
+
+static MIR_reg_t get_new_reg (MIR_context_t ctx, MIR_reg_t reg, size_t index) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_type_t type = MIR_reg_type (ctx, reg, func);
+  const char *name = MIR_reg_name (ctx, reg, func);
+  char ind_str[20];
+  MIR_reg_t new_reg;
+
+  VARR_TRUNC (char, reg_name, 0);
+  VARR_PUSH_ARR (char, reg_name, name, strlen (name));
+  VARR_PUSH (char, reg_name, '@');
+  sprintf (ind_str, "%d", index); /* ??? should be enough to unique */
+  VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
+  new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
+  update_min_max_reg (ctx, new_reg);
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, " Renaming %s to %s in", name, VARR_ADDR (char, reg_name));
+#endif
+  return new_reg;
+}
+
+static void reg_rename (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_insn_t insn;
+  MIR_reg_t var, reg, new_reg;
+  MIR_op_t op, *ops;
+  bb_insn_t bb_insn;
+  size_t i, j, nops, index, curr;
+  int def_p, out_p, change_p;
+  web_node_t *addr;
+
+  build_webs (ctx);
+  VARR_TRUNC (size_t, curr_var_indexes, 0);
+  addr = VARR_ADDR (web_node_t, web_nodes);
+  for (i = 1; i < VARR_LENGTH (web_node_t, web_nodes); i++) {
+    if (addr[i].first != i) continue;
+    var = addr[i].var;
+    reg = var2reg (gen_ctx, var);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "web reg=%d(%s):", reg, MIR_reg_name (ctx, reg, func));
+      for (curr = i; curr != 0; curr = addr[curr].next)
+        if (addr[curr].bb_insn == NULL)
+          fprintf (debug_file, " art_def(%s)", addr[curr].def_p ? "def" : "use");
+        else
+          fprintf (debug_file, " %d(%s)", addr[curr].bb_insn->index + addr[curr].n_out,
+                   addr[curr].def_p ? "def" : "use");
+      fprintf (debug_file, "\n");
+    }
+#endif
+    while (VARR_LENGTH (size_t, curr_var_indexes) <= var) VARR_PUSH (size_t, curr_var_indexes, 0);
+    index = VARR_GET (size_t, curr_var_indexes, var);
+    VARR_SET (size_t, curr_var_indexes, var, index + 1);
+    if (index == 0) continue; /* use the old names */
+    new_reg = get_new_reg (ctx, reg, index);
+    for (curr = i; curr != 0; curr = addr[curr].next) {
+      bb_insn = addr[curr].bb_insn;
+      if (bb_insn == NULL) continue; /* an artificial def */
+      insn = bb_insn->insn;
+      def_p = addr[curr].def_p;
+      nops = MIR_insn_nops (ctx, insn);
+      ops = insn->ops;
+      for (j = 0; j < nops; j++) {
+        MIR_insn_op_mode (ctx, insn, j, &out_p);
+        op = ops[j];
+        if (op.mode == MIR_OP_MEM) out_p = FALSE;
+        if ((def_p && !out_p) || (!def_p && out_p)) continue;
+        change_p = FALSE;
+        if (op.mode == MIR_OP_REG && op.u.reg == reg) {
+          ops[j].u.reg = new_reg;
+          change_p = TRUE;
+        } else if (op.mode == MIR_OP_MEM) {
+          if (op.u.mem.base == reg) {
+            ops[j].u.mem.base = new_reg;
+            change_p = TRUE;
+          }
+          if (op.u.mem.index == reg) {
+            ops[j].u.mem.index = new_reg;
+            change_p = TRUE;
+          }
+        }
+#if !MIR_NO_GEN_DEBUG
+        if (change_p && debug_file != NULL)
+          fprintf (debug_file, " %d(%s)", bb_insn->index + addr[curr].n_out, def_p ? "def" : "use");
+#endif
+      }
+    }
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) fprintf (debug_file, "\n");
+#endif
+  }
+}
+
+static void init_rename (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  gen_ctx->rename_ctx = gen_malloc (ctx, sizeof (struct rename_ctx));
+  VARR_CREATE (web_node_t, web_nodes, 4096);
+  HTAB_CREATE (size_t, web_node_htab, 4096, web_node_hash, web_node_eq, ctx);
+  VARR_CREATE (size_t, curr_var_indexes, 4096);
+  VARR_CREATE (char, reg_name, 20);
+}
+
+static void finish_rename (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  VARR_DESTROY (web_node_t, web_nodes);
+  HTAB_DESTROY (size_t, web_node_htab);
+  VARR_DESTROY (size_t, curr_var_indexes);
+  VARR_DESTROY (char, reg_name);
+  free (gen_ctx->rename_ctx);
+  gen_ctx->rename_ctx = NULL;
 }
 
 #undef rdef_in
@@ -4755,6 +5012,21 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif
 #endif /* #ifndef NO_CSE */
+#ifndef NO_RENAME
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Rename:\n");
+#endif
+  calculate_reaching_defs (ctx);
+  reg_rename (ctx);
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL) {
+    fprintf (debug_file, "+++++++++++++MIR after rename:\n");
+    print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
+  }
+#endif
+  rdef_clear (ctx);
+  calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
+#endif                                       /* #ifndef NO_CSE */
 #ifndef NO_CCP
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
@@ -4882,6 +5154,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->data_flow_ctx = NULL;
   gen_ctx->cse_ctx = NULL;
   gen_ctx->rdef_ctx = NULL;
+  gen_ctx->rename_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
@@ -4894,6 +5167,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_data_flow (ctx);
   init_cse (ctx);
   init_rdef (ctx);
+  init_rename (ctx);
   init_ccp (ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -4915,6 +5189,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_data_flow (ctx);
   finish_cse (ctx);
   finish_rdef (ctx);
+  finish_rename (ctx);
   finish_ccp (ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
