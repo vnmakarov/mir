@@ -143,6 +143,12 @@ typedef enum {
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
+static inline int MIR_int_type_p (MIR_type_t t) {
+  return (MIR_T_I8 <= t && t <= MIR_T_U64) || t == MIR_T_P;
+}
+
+static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
+
 #if UINTPTR_MAX == 0xffffffff
 #define MIR_PTR32 1
 #define MIR_PTR64 0
