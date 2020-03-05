@@ -106,6 +106,7 @@ typedef struct func_cfg *func_cfg_t;
 struct target_ctx;
 struct data_flow_ctx;
 struct cse_ctx;
+struct rdef_ctx;
 struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
@@ -126,6 +127,7 @@ struct gen_ctx {
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct cse_ctx *cse_ctx;
+  struct rdef_ctx *rdef_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
@@ -251,7 +253,8 @@ DEF_DLIST (dead_var_t, dead_var_link);
 
 struct bb_insn {
   MIR_insn_t insn;
-  unsigned int flag; /* used for CPP */
+  unsigned char flag; /* used for CCP */
+  size_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
   DLIST (dead_var_t) dead_vars;
@@ -263,7 +266,7 @@ DEF_DLIST (bb_insn_t, bb_insn_link);
 
 struct bb {
   size_t index, pre, rpost, bfs; /* preorder, reverse post order, breadth first order */
-  unsigned int flag : 1;         /* used for CPP */
+  unsigned int flag;             /* used for CCP */
   DLIST_LINK (bb_t) bb_link;
   DLIST (in_edge_t) in_edges;
   /* The out edges order: optional fall through bb, optional label bb,
@@ -1721,6 +1724,185 @@ static void finish_cse (MIR_context_t ctx) {
 
 /* New Page */
 
+/* Reaching definitions. */
+
+#define rdef_in in
+#define rdef_out out
+#define rdef_kill kill
+#define rdef_gen gen
+
+DEF_VARR (bb_insn_t);
+
+struct rdef_ctx {
+  VARR (bb_insn_t) * def_bb_insns;
+  VARR (bitmap_t) * var_uses, *var_defs;
+  bitmap_t artificial_def_bitmap, curr_rdef_bitmap;
+};
+
+#define def_bb_insns gen_ctx->rdef_ctx->def_bb_insns
+#define var_uses gen_ctx->rdef_ctx->var_uses
+#define var_defs gen_ctx->rdef_ctx->var_defs
+#define artificial_def_bitmap gen_ctx->rdef_ctx->artificial_def_bitmap
+#define curr_rdef_bitmap gen_ctx->rdef_ctx->curr_rdef_bitmap
+
+static void rdef_con_func_0 (bb_t bb) { bitmap_clear (bb->rdef_in); }
+
+static int rdef_con_func_n (MIR_context_t ctx, bb_t bb) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  int first_bb_p = bb == DLIST_EL (bb_t, curr_cfg->bbs, 2);
+  edge_t e, head;
+  bitmap_t prev_rdef_in = temp_bitmap;
+
+  if (first_bb_p) bitmap_ior (bb->rdef_in, bb->rdef_in, artificial_def_bitmap);
+  bitmap_copy (prev_rdef_in, bb->rdef_in);
+  head = DLIST_HEAD (in_edge_t, bb->in_edges);
+  bitmap_copy (bb->rdef_in, head->src->rdef_out);
+  for (e = DLIST_NEXT (in_edge_t, head); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+    bitmap_ior (bb->rdef_in, bb->rdef_in, e->src->rdef_out); /* rdef_in |= rdef_out */
+  if (first_bb_p) bitmap_ior (bb->rdef_in, bb->rdef_in, artificial_def_bitmap);
+  return !bitmap_equal_p (bb->rdef_in, prev_rdef_in);
+}
+
+static int rdef_trans_func (MIR_context_t ctx, bb_t bb) {
+  return bitmap_ior_and_compl (bb->rdef_out, bb->rdef_gen, bb->rdef_in, bb->rdef_kill);
+}
+
+static bitmap_t get_var_uses_or_defs (MIR_context_t ctx, MIR_reg_t var, int uses_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bitmap_t bm;
+  VARR (bitmap_t) *bitmap_varr = uses_p ? var_uses : var_defs;
+
+  while (VARR_LENGTH (bitmap_t, bitmap_varr) <= var) VARR_PUSH (bitmap_t, bitmap_varr, NULL);
+  if ((bm = VARR_GET (bitmap_t, bitmap_varr, var)) != NULL) return bm;
+  bm = bitmap_create2 (2 * curr_cfg->max_reg);
+  VARR_SET (bitmap_t, bitmap_varr, var, bm);
+  return bm;
+}
+
+static void calculate_reaching_defs (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_func_t func = curr_func_item->u.func;
+  bb_t entry_bb = DLIST_HEAD (bb_t, curr_cfg->bbs);
+  int out_p, mem_p;
+  size_t i, passed_mem_num, n_out, def;
+  MIR_reg_t var;
+  const char *var_name;
+  bitmap_t def_bitmap;
+  insn_var_iterator_t iter;
+
+  VARR_TRUNC (bb_insn_t, def_bb_insns, 0);
+  for (bb_t bb = entry_bb; bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    /* Set up: var -> def insn indexes; bb_insn -> insn index; var = use insn indexes */
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      n_out = 0;
+      bb_insn->index = VARR_LENGTH (bb_insn_t, def_bb_insns);
+      VARR_PUSH (bb_insn_t, def_bb_insns, bb_insn);
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) {
+          bitmap_set_bit_p (get_var_uses_or_defs (ctx, var, TRUE), bb_insn->index);
+        } else {
+          if (n_out != 0) VARR_PUSH (bb_insn_t, def_bb_insns, bb_insn);
+          bitmap_set_bit_p (get_var_uses_or_defs (ctx, var, FALSE), bb_insn->index + n_out++);
+        }
+      }
+    }
+  }
+  /* Add special defs for each fucn arg */
+  bitmap_clear (artificial_def_bitmap);
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL && func->nargs > 0)
+    fprintf (debug_file, " Adding special defs name(reg,def):");
+#endif
+  for (i = 0; i < func->nargs; i++) {
+    var_name = VARR_GET (MIR_var_t, func->vars, i).name;
+    var = reg2var (gen_ctx, MIR_reg (ctx, var_name, func));
+    gen_assert (var_is_reg_p (var));
+    def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
+    def = VARR_LENGTH (bb_insn_t, def_bb_insns);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL)
+      fprintf (debug_file, " %s(%lu,%lu)", var_name, (unsigned long) var2reg (gen_ctx, var),
+               (unsigned long) def);
+#endif
+    VARR_PUSH (bb_insn_t, def_bb_insns, NULL);
+    bitmap_set_bit_p (def_bitmap, def);
+    bitmap_set_bit_p (artificial_def_bitmap, def);
+  }
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL && i > 0) fprintf (debug_file, "\n");
+#endif
+  for (bb_t bb = entry_bb; bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    /* Set up rdef gen/kill; initialize rdef in/out */
+    bitmap_clear (bb->rdef_in);
+    bitmap_clear (bb->rdef_out);
+    bitmap_clear (bb->rdef_gen);
+    bitmap_clear (bb->rdef_kill);
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      n_out = 0;
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+        if (!out_p) continue;
+        def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
+        gen_assert (def_bitmap != NULL);
+        bitmap_ior (bb->rdef_kill, bb->rdef_kill, def_bitmap);
+        bitmap_and_compl (bb->rdef_gen, bb->rdef_gen, def_bitmap);
+        bitmap_set_bit_p (bb->rdef_gen, bb_insn->index + n_out++);
+      }
+    }
+  }
+  solve_dataflow (ctx, TRUE, rdef_con_func_0, rdef_con_func_n, rdef_trans_func);
+}
+
+#if !MIR_NO_GEN_DEBUG
+static void output_bb_rdef_info (MIR_context_t ctx, bb_t bb) {
+  output_bitmap (ctx, "  rdef_in:", bb->rdef_in, FALSE);
+  output_bitmap (ctx, "  rdef_out:", bb->rdef_out, FALSE);
+  output_bitmap (ctx, "  rdef_gen:", bb->rdef_gen, FALSE);
+  output_bitmap (ctx, "  rdef_kill:", bb->rdef_kill, FALSE);
+}
+#endif
+
+static void rdef_clear (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  bitmap_t bm;
+
+  while (VARR_LENGTH (bitmap_t, var_uses) != 0)
+    if ((bm = VARR_POP (bitmap_t, var_uses)) != NULL) bitmap_destroy (bm);
+  while (VARR_LENGTH (bitmap_t, var_defs) != 0)
+    if ((bm = VARR_POP (bitmap_t, var_defs)) != NULL) bitmap_destroy (bm);
+}
+
+static void init_rdef (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  gen_ctx->rdef_ctx = gen_malloc (ctx, sizeof (struct rdef_ctx));
+  VARR_CREATE (bb_insn_t, def_bb_insns, 0);
+  VARR_CREATE (bitmap_t, var_uses, 0);
+  VARR_CREATE (bitmap_t, var_defs, 0);
+  artificial_def_bitmap = bitmap_create ();
+  curr_rdef_bitmap = bitmap_create ();
+}
+
+static void finish_rdef (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  VARR_DESTROY (bb_insn_t, def_bb_insns);
+  VARR_DESTROY (bitmap_t, var_uses);
+  VARR_DESTROY (bitmap_t, var_defs);
+  bitmap_destroy (artificial_def_bitmap);
+  bitmap_destroy (curr_rdef_bitmap);
+  free (gen_ctx->rdef_ctx);
+  gen_ctx->rdef_ctx = NULL;
+}
+
+#undef rdef_in
+#undef rdef_out
+#undef rdef_kill
+#undef rdef_gen
+
+/* New Page */
+
 /* Sparse Conditional Constant Propagation.  Live info should exist.  */
 
 #define live_in in
@@ -1770,8 +1952,6 @@ typedef struct {
 } var_producer_t;
 
 DEF_VARR (var_producer_t);
-
-DEF_VARR (bb_insn_t);
 
 struct ccp_ctx {
   VARR (bb_start_occ_list_t) * bb_start_occ_list_varr;
@@ -4686,6 +4866,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
   gen_ctx->cse_ctx = NULL;
+  gen_ctx->rdef_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
@@ -4697,6 +4878,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_dead_vars ();
   init_data_flow (ctx);
   init_cse (ctx);
+  init_rdef (ctx);
   init_ccp (ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -4717,6 +4899,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
 
   finish_data_flow (ctx);
   finish_cse (ctx);
+  finish_rdef (ctx);
   finish_ccp (ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
