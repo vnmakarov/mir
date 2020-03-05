@@ -2073,7 +2073,7 @@ static MIR_reg_t get_new_reg (MIR_context_t ctx, MIR_reg_t reg, size_t index) {
   VARR_TRUNC (char, reg_name, 0);
   VARR_PUSH_ARR (char, reg_name, name, strlen (name));
   VARR_PUSH (char, reg_name, '@');
-  sprintf (ind_str, "%d", index); /* ??? should be enough to unique */
+  sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
   update_min_max_reg (ctx, new_reg);
@@ -2109,7 +2109,8 @@ static void reg_rename (MIR_context_t ctx) {
         if (addr[curr].bb_insn == NULL)
           fprintf (debug_file, " art_def(%s)", addr[curr].def_p ? "def" : "use");
         else
-          fprintf (debug_file, " %d(%s)", addr[curr].bb_insn->index + addr[curr].n_out,
+          fprintf (debug_file, " %lu(%s)",
+                   (long unsigned) addr[curr].bb_insn->index + addr[curr].n_out,
                    addr[curr].def_p ? "def" : "use");
       fprintf (debug_file, "\n");
     }
