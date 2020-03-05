@@ -273,6 +273,7 @@ struct bb {
   size_t freq;
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
   loop_node_t loop_node;
+  int max_int_pressure, max_fp_pressure;
 };
 
 DEF_DLIST (bb_t, bb_link);
@@ -287,6 +288,7 @@ struct loop_node {
   loop_node_t parent;
   DLIST (loop_node_t) children;
   DLIST_LINK (loop_node_t) children_link;
+  int max_int_pressure, max_fp_pressure;
 };
 
 DEF_DLIST_CODE (loop_node_t, children_link);
@@ -547,6 +549,7 @@ static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
   bb->out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->gen = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->kill = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  bb->max_int_pressure = bb->max_fp_pressure = 0;
   if (insn != NULL) add_new_bb_insn (ctx, insn, bb);
   return bb;
 }
@@ -647,6 +650,7 @@ static loop_node_t create_loop_node (MIR_context_t ctx, bb_t bb) {
   if (bb != NULL) bb->loop_node = loop_node;
   loop_node->parent = NULL;
   loop_node->entry = NULL;
+  loop_node->max_int_pressure = loop_node->max_fp_pressure = 0;
   DLIST_INIT (loop_node_t, loop_node->children);
   return loop_node;
 }
@@ -692,6 +696,22 @@ static int process_loop (MIR_context_t ctx, bb_t entry_bb) {
   return TRUE;
 }
 
+static void setup_loop_pressure (MIR_context_t ctx, loop_node_t loop_node) {
+  for (loop_node_t curr = DLIST_HEAD (loop_node_t, loop_node->children); curr != NULL;
+       curr = DLIST_NEXT (loop_node_t, curr)) {
+    if (curr->bb == NULL) {
+      setup_loop_pressure (ctx, curr);
+    } else {
+      curr->max_int_pressure = curr->bb->max_int_pressure;
+      curr->max_fp_pressure = curr->bb->max_fp_pressure;
+    }
+    if (loop_node->max_int_pressure < curr->max_int_pressure)
+      loop_node->max_int_pressure = curr->max_int_pressure;
+    if (loop_node->max_fp_pressure < curr->max_fp_pressure)
+      loop_node->max_fp_pressure = curr->max_fp_pressure;
+  }
+}
+
 static int compare_bb_loop_nodes (const void *p1, const void *p2) {
   bb_t bb1 = (*(const loop_node_t *) p1)->bb, bb2 = (*(const loop_node_t *) p2)->bb;
 
@@ -726,6 +746,7 @@ static int build_loop_tree (MIR_context_t ctx) {
       DLIST_APPEND (loop_node_t, curr_cfg->root_loop_node->children, loop_node);
       loop_node->parent = curr_cfg->root_loop_node;
     }
+  setup_loop_pressure (ctx, curr_cfg->root_loop_node);
   return loops_p;
 }
 
@@ -2929,12 +2950,21 @@ static int bb_loop_level (bb_t bb) {
   return level;
 }
 
+static void increase_pressure (int int_p, bb_t bb, int *int_pressure, int *fp_pressure) {
+  if (int_p) {
+    if (bb->max_int_pressure < ++(*int_pressure)) bb->max_int_pressure = *int_pressure;
+  } else {
+    if (bb->max_fp_pressure < ++(*fp_pressure)) bb->max_fp_pressure = *fp_pressure;
+  }
+}
+
 static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_t insn;
   size_t i, niter, passed_mem_num, bb_freq, mvs_num = 0;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int out_p, mem_p;
+  int out_p, mem_p, int_p;
+  int bb_int_pressure, max_bb_int_pressure, bb_fp_pressure, max_bb_fp_pressure;
   mv_t mv;
   reg_info_t *breg_infos;
   insn_var_iterator_t insn_var_iter;
@@ -2949,6 +2979,7 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   bb_freq = 1;
   if (moves_p)
     for (int i = bb_loop_level (bb); i > 0; i--) bb_freq *= 5;
+  bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
   for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
@@ -2959,10 +2990,12 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
       FOR_EACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
-        if (!out_p && niter != 0)
-          bitmap_set_bit_p (bb->live_gen, var);
-        else if (niter == 0) {
-          bitmap_clear_bit_p (bb->live_gen, var);
+        if (!out_p && niter != 0) {
+          if (bitmap_set_bit_p (bb->live_gen, var))
+            increase_pressure (int_var_type_p (ctx, var), bb, &bb_int_pressure, &bb_fp_pressure);
+        } else if (niter == 0) {
+          if (bitmap_clear_bit_p (bb->live_gen, var))
+            (int_var_type_p (ctx, var) ? bb_int_pressure-- : bb_fp_pressure--);
           bitmap_set_bit_p (bb->live_kill, var);
         }
         if (var_is_reg_p (var)) breg_infos[var2breg (gen_ctx, var)].freq += bb_freq;
@@ -2971,12 +3004,18 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
     target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                           &early_clobbered_hard_reg2);
     if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
+      int_p = int_var_type_p (ctx, early_clobbered_hard_reg1);
+      increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg1);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg1);
+      (int_p ? bb_int_pressure-- : bb_fp_pressure--);
     }
     if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
+      int_p = int_var_type_p (ctx, early_clobbered_hard_reg2);
+      increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg2);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg2);
+      (int_p ? bb_int_pressure-- : bb_fp_pressure--);
     }
     if (MIR_call_code_p (insn->code))
       bitmap_ior (bb->live_gen, bb->live_gen, bb_insn->call_hard_reg_args);
@@ -3027,9 +3066,24 @@ static void initiate_live_info (MIR_context_t ctx, int moves_p) {
   if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
 }
 
+static void update_bb_pressure (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t nel;
+  bitmap_iterator_t bi;
+
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    int int_pressure = bb->max_int_pressure, fp_pressure = bb->max_fp_pressure;
+
+    FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+      increase_pressure (int_var_type_p (ctx, (MIR_reg_t) nel), bb, &int_pressure, &fp_pressure);
+    }
+  }
+}
+
 static void calculate_func_cfg_live_info (MIR_context_t ctx, int moves_p) {
   initiate_live_info (ctx, moves_p);
   solve_dataflow (ctx, FALSE, live_con_func_0, live_con_func_n, live_trans_func);
+  update_bb_pressure (ctx);
 }
 
 static void add_bb_insn_dead_vars (MIR_context_t ctx) {
