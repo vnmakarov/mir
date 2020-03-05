@@ -956,13 +956,20 @@ static void print_bb_insn (MIR_context_t ctx, bb_insn_t bb_insn, int with_notes_
   fprintf (debug_file, "\n");
 }
 
-static void print_CFG (MIR_context_t ctx, int bb_p, int insns_p,
+static void print_CFG (MIR_context_t ctx, int bb_p, int pressure_p, int insns_p, int insn_index_p,
                        void (*bb_info_print_func) (MIR_context_t, bb_t)) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb_p) {
-      fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
+      fprintf (debug_file, "BB %3lu", (unsigned long) bb->index);
+      if (pressure_p)
+        fprintf (debug_file, " (pressure: int=%d, fp=%d)", bb->max_int_pressure,
+                 bb->max_fp_pressure);
+      if (bb->loop_node == NULL)
+        fprintf (debug_file, "\n");
+      else
+        fprintf (debug_file, " (loop%3lu):\n", (unsigned long) bb->loop_node->parent->index);
       output_in_edges (ctx, bb);
       output_out_edges (ctx, bb);
       if (bb_info_print_func != NULL) {
@@ -972,37 +979,42 @@ static void print_CFG (MIR_context_t ctx, int bb_p, int insns_p,
     }
     if (insns_p) {
       for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-           bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+           bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+        if (insn_index_p) fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
         print_bb_insn (ctx, bb_insn, TRUE);
+      }
       fprintf (debug_file, "\n");
     }
   }
 }
 
-static void print_loop_subtree (MIR_context_t ctx, loop_node_t root, int level) {
+static void print_loop_subtree (MIR_context_t ctx, loop_node_t root, int level, int bb_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
+  if (root->bb != NULL && !bb_p) return;
   for (int i = 0; i < 2 * level + 2; i++) fprintf (debug_file, " ");
   if (root->bb != NULL) {
     gen_assert (DLIST_HEAD (loop_node_t, root->children) == NULL);
-    fprintf (debug_file, "BB%-3lu\n", (unsigned long) root->bb->index);
+    fprintf (debug_file, "BB%-3lu (pressure: int=%d, fp=%d)\n", (unsigned long) root->bb->index,
+             root->max_int_pressure, root->max_fp_pressure);
     return;
   }
-  fprintf (debug_file, "Loop%3lu", (unsigned long) root->index);
+  fprintf (debug_file, "Loop%3lu (pressure: int=%d, fp=%d)", (unsigned long) root->index,
+           root->max_int_pressure, root->max_fp_pressure);
   if (curr_cfg->root_loop_node == root)
     fprintf (debug_file, ":\n");
   else
     fprintf (debug_file, " (entry - bb%lu):\n", (unsigned long) root->entry->bb->index);
   for (loop_node_t node = DLIST_HEAD (loop_node_t, root->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
-    print_loop_subtree (ctx, node, level + 1);
+    print_loop_subtree (ctx, node, level + 1, bb_p);
 }
 
-static void print_loop_tree (MIR_context_t ctx) {
+static void print_loop_tree (MIR_context_t ctx, int bb_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   fprintf (debug_file, "Loop Tree\n");
-  print_loop_subtree (ctx, curr_cfg->root_loop_node, 0);
+  print_loop_subtree (ctx, curr_cfg->root_loop_node, 0, bb_p);
 }
 
 #endif
@@ -4716,7 +4728,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
-    print_CFG (ctx, TRUE, TRUE, NULL);
+    print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
 #ifndef NO_CSE
@@ -4728,7 +4740,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   if (debug_file != NULL) {
     print_exprs (ctx);
     fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
-    print_CFG (ctx, TRUE, TRUE, output_bb_cse_info);
+    print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
   }
 #endif
   cse_clear (ctx);
@@ -4739,23 +4751,26 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
-    print_CFG (ctx, TRUE, TRUE, output_bb_live_info);
+    print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
   }
 #endif
-#endif
+#endif /* #ifndef NO_CSE */
 #ifndef NO_CCP
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
+#endif
   if (ccp (ctx)) {
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
       fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
-      print_CFG (ctx, TRUE, TRUE, NULL);
+      print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
     }
 #endif
     dead_code_elimination (ctx);
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
-      print_CFG (ctx, TRUE, TRUE, output_bb_live_info);
+      print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
     }
 #endif
   }
@@ -4767,7 +4782,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
-    print_CFG (ctx, FALSE, TRUE, NULL);
+    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
   build_loop_tree (ctx);
@@ -4776,8 +4791,8 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   if (debug_file != NULL) {
     add_bb_insn_dead_vars (ctx);
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
-    print_loop_tree (ctx);
-    print_CFG (ctx, TRUE, FALSE, output_bb_live_info);
+    print_loop_tree (ctx, TRUE);
+    print_CFG (ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
   }
 #endif
   build_live_ranges (ctx);
@@ -4786,7 +4801,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
-    print_CFG (ctx, FALSE, TRUE, NULL);
+    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
   calculate_func_cfg_live_info (ctx, FALSE);
@@ -4794,7 +4809,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR before combine:\n");
-    print_CFG (ctx, FALSE, TRUE, NULL);
+    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
 #ifndef NO_COMBINE
@@ -4802,14 +4817,14 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after combine:\n");
-    print_CFG (ctx, FALSE, TRUE, NULL);
+    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
   dead_code_elimination (ctx);
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
-    print_CFG (ctx, TRUE, TRUE, output_bb_live_info);
+    print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
   }
 #endif
 #endif /* #ifndef NO_COMBINE */
@@ -4817,7 +4832,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
-    print_CFG (ctx, FALSE, TRUE, NULL);
+    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
   code = target_translate (ctx, &code_len);
