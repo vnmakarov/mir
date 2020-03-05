@@ -826,6 +826,7 @@ static inline int insn_var_iterator_next (MIR_context_t ctx, insn_var_iterator_t
     MIR_insn_op_mode (ctx, iter->insn, iter->op_num, out_p);
     op = iter->insn->ops[iter->op_num];
     *mem_p = FALSE;
+    *passed_mem_num = iter->passed_mem_num;
     while (iter->op_part_num < 2) {
       if (op.mode == MIR_OP_MEM || op.mode == MIR_OP_HARD_REG_MEM) {
         *mem_p = TRUE;
