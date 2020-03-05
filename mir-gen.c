@@ -2148,7 +2148,8 @@ static void reg_rename (MIR_context_t ctx) {
         }
 #if !MIR_NO_GEN_DEBUG
         if (change_p && debug_file != NULL)
-          fprintf (debug_file, " %d(%s)", bb_insn->index + addr[curr].n_out, def_p ? "def" : "use");
+          fprintf (debug_file, " %lu(%s)", (unsigned long) bb_insn->index + addr[curr].n_out,
+                   def_p ? "def" : "use");
 #endif
       }
     }
