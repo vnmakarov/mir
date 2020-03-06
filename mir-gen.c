@@ -9,18 +9,23 @@
             ----------------      -----------     |    Elimination   |	  | Elimination |
                                                    ------------------	   -------------
                                                                                   |
-                                                                                  v
-    -------------      ------------      ---------      -----------     ----------------------
-   | Build Live  |<---| Build Live |<---| Finding |<---| Machinize |<--|  Sparse Conditional  |
-   |   Ranges    |    |    Info    |    |  Loops  |     -----------    | Constant Propagation |
-    -------------      ------------      ---------                      ----------------------
-         |
-         v
-    ---------     ---------     ---------     -------------      ---------------
-   |  Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |--->|   Generate    |---> Machine
-    ---------     ---------     ---------    | Elimination |    | machine insns |      Insns
-                                              -------------      ---------------
-
+                                                                                  V
+       ----------------     ------------     ---------     -----------     ------------
+      | Loop Invariant |   |  Reaching  |   | Finding |   | Variable  |   |  Reaching  |
+      | Code Motion    |<--| Definitons |<--|  Loops  |<--| Renaming  |<--| Definitons |
+       ----------------    |  Analysis  |    ---------     -----------    |  Analysis  |
+              |             ------------                                   ------------
+              V
+    ----------------------     -----------     ---------     ------------     -------------
+   |  Sparse Conditional  |-->| Machinize |-->| Finding |-->| Build Live |-->| Build Live  |
+   | Constant Propagation |    -----------    |  Loops  |   |    Info    |   |   Ranges    |
+    ----------------------                     ---------     ------------     -------------
+                                                                                    |
+                                                                                    V
+               ---------------     -------------     ---------     ---------     ---------
+   Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |<--|  Assign |
+    Insns     | machine insns |   | Elimination |    ---------     ---------     ---------
+               ---------------     ------------
 
 
    Simplify: Lowering MIR (in mir.c).
@@ -28,6 +33,13 @@
    Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
                                       we need the right value numbering after simplification)
    Dead code elimination: Removing insns with unused outputs.
+   Reaching definition Analysis: Analysis required for subsequent variable renaming
+   Variable renaming: Rename disjoint live ranges of variables which is beneficial for
+                      register allocation and loop invariant code motion.
+   Finding Loops: Building loop tree which is used in subsequent loop invariant code motion.
+   Reaching definition Analysis: Analysis required for subsequent loop invariant code motion
+   Loop Invariant Code Motion (LICM): Register pressure sensitive moves loop invariant insns out
+                                      of the loop.
    Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.
