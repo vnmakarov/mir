@@ -105,7 +105,7 @@ l2m-test2: l2m
 	@echo +++++ Interpreter +++++++ && ./l2m -i sieve.bc
 	@echo +++++ Generator +++++++ && ./l2m -g sieve.bc
 	
-bench: interp-bench gen-bench io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
+bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
 	@echo ==============================Bench is done
 
 mir-test:
@@ -206,6 +206,13 @@ gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 
 gen-bench:
 	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
 	$(CC) $(CFLAGS) -D$(TARGET) -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+
+gen-bench2: c2m
+	echo +++++ Compiling and generating all code for c2m: +++++
+	@for i in 0 1 2 3;do \
+	   echo === Optimization level $$i:;\
+           echo 'int main () {return 0;}'|/usr/bin/time ./c2m -O$$i -Dx86_64 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -el -i;\
+	done
 
 gen-speed:
 	if type valgrind  > /dev/null 2>&1; then \
