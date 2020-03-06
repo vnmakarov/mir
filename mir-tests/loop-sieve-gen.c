@@ -33,7 +33,6 @@ int main (void) {
     start_heap = sbrk (0);
     start_time = real_usec_time ();
     ctx = MIR_init ();
-    start_time = real_usec_time ();
     fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
     funcs = malloc (sizeof (MIR_item_t) * N);
     for (int i = 0; i < N; i++) {
