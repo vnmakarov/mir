@@ -69,7 +69,7 @@
   * Option `-pedantic` is used for stricter diagnostic about C
     standard conformance.  It might be useful as C2MIR implements some GCC extensions of C
   * Option `-O<n>` is used to set up MIR-generator optimization level.  The optimization levels are described
-    in documentation fo MIR generator API function `MIR_gen_set_optimize_level`
+    in documentation for MIR generator API function `MIR_gen_set_optimize_level`
   * Option `-dg` is used for debuging MIR-generator.  It results in dumping debug information
     about MIR-generator work to `stderr`
   * Besides C files, MIR textual files with suffix `.mir` and MIR
