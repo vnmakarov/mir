@@ -578,8 +578,8 @@ ex100:    func v
     * `0` means only register allocator and machine code generator work
     * `1` means additional code selection task.  On this level MIR generator creates more compact and faster
       code than on zero level with practically on the same speed
-    * `2` means additionally common sub-expression elimination and sparse conditional constant propagation.  This is
-      valuable level if you generate bad input MIR code with a lot redundancy and constants.  The generation speed
-      on level `1` is about 50% faster than on level `2`
+    * `2` means additionally common sub-expression elimination and sparse conditional constant propagation.
+       This is a default level.  This level is valuable if you generate bad input MIR code with a lot redundancy
+       and constants.  The generation speed on level `1` is about 50% faster than on level `2`
     * `3` means additionally register renaming and loop invariant code motion.  The generation speed
       on level `2` is about 50% faster than on level `3`
