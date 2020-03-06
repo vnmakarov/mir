@@ -215,11 +215,14 @@ ex100:    func v, 0
   * Only the **most valuable** optimization usage:
     * **function inlining**
     * **global common sub-expression elimination**
+    * **variable renaming**
+    * **register pressure sensitive loop invariant code motion**
     * **sparse conditional constant propagation**
     * **dead code elimination**
     * **code selection**
     * fast **register allocator** with implicit coalescing hard registers and stack slots
       for copy elimination
+  * Different optimization levels to tune compilation speed vs generated code performance
   * **No SSA** (single static assignment form) for:
     * Faster optimizations for short optimizations pipeline and small functions (a target usage scenario) 
       * Currently SSA could be used only for two optimizations (CCP
@@ -232,13 +235,20 @@ ex100:    func v, 0
       frontier calculation, a good out of SSA code)
   * Simplicity of optimizations implementation over extreme generated code performance
 
-  * More detail **JIT compiler pipeline**:
+  * More details about **full JIT compiler pipeline**:
 ![MIR generator](mir-gen.svg)
   * **Simplify**: lowering MIR
   * **Inline**: inlining MIR calls
   * **Build CFG**: building Control Flow Graph (basic blocks and CFG edges)
   * **Global Common Sub-Expression Elimination**: reusing calculated values
   * **Dead Code Elimination**: removing insns with unused outputs
+  * **Reaching Definition Analysis** required for subsequent variable renaming
+  * **Variable renaming** renaming disjoint live ranges of variables which is beneficial for
+    register allocation and loop invariant code motion
+  * **Find Loops** finding natural loops for subsequent loop invariant code motion
+  * **Reaching Definition Analysis** required for subsequent loop invariant code motion
+  * **Loop Invariant Code Motion (LICM)** doing register pressure sensitive move of loop invariant
+    insns out of the loop
   * **Sparse Conditional Constant Propagation**: constant propagation
     and removing death paths of CFG
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
@@ -288,23 +298,26 @@ ex100:    func v, 0
 
     |                |     MIR-gen      |     MIR-interp  |     gcc -O2      |     gcc -O0     |
     |----------------|------------------|-----------------|------------------|-----------------|
-    | compilation [1]| **1.0** (75us)   | 0.16 (12us)     | **178** (13.35ms)|  171 (12.8ms)   |
-    | execution [2]  | **1.0** (3.1s)   | 5.9 (18.3s)     | **0.94** (2.9s)  |  2.05 (6.34s)   |
-    | code size [3]  | **1.0** (175KB)  | 0.65 (114KB)    | **144** (25.2MB) |  144 (25.2MB)   |
-    | startup [4]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [5]        | **1.0** (15.0K)  | 0.53 (8K)       | **99** (1480K)   |  99  (1480K)    |
+    | compilation [1]| **1.0** (69us)   | 0.17 (12us)     | **193** (13.35ms)|  186 (12.8ms)   |
+    | compilation [2]| **1.0** (116us)  | 0.10 (12us)     | **115** (13.35ms)|  110 (12.8ms)   |
+    | execution [3]  | **1.0** (3.05s)  | 6.0 (18.3s)     | **0.95** (2.9s)  |  2.08 (6.34s)   |
+    | code size [4]  | **1.0** (325KB)  | 0.51 (165KB)    | **76** (25.2MB)  |  76 (25.2MB)   |
+    | startup [5]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
+    | LOC [6]        | **1.0** (15.8K)  | 0.59 (9.4K)     | **94** (1480K)   |  94  (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and with
-   using memory file system for GCC) 100 times
+   using memory file system for GCC) 100 times.  The used optimization level is 1
 
-   [2] is based on the best wall time of 10 runs
+   [2] is analogous to [1] but with MIR-optimization level 2
 
-   [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
+   [3] is based on the best wall time of 10 runs with used MIR-generator optimization level 1
 
-   [4] is based on wall time of generation of object code for empty C file or generation of empty
+   [4] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
+
+   [5] is based on wall time of generation of object code for empty C file or generation of empty
    MIR module through API
 
-   [5] is based only on files required for x86-64 C compiler and files for minimal program to create
+   [6] is based only on files required for x86-64 C compiler and files for minimal program to create
    and run MIR code
 
 ## MIR project competitors
@@ -323,8 +336,7 @@ ex100:    func v, 0
   * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md)
     is a part of runtime for .NET Core:
     * RyuJIT is even bigger: 360K SLOC
-    * RyuJIT optimizations is basically MIR-generator optimizations plus loop invariant motion
-      minus SCCP
+    * RyuJIT optimizations is basically MIR-generator optimizations minus SCCP
     * RyuJIT uses SSA
   * Other candidates:
     * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-,
