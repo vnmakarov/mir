@@ -152,6 +152,8 @@ static void close_cmdline_libs (void) {
     if ((handler = VARR_GET (lib_t, cmdline_libs, i).handler) != NULL) dlclose (handler);
 }
 
+static int optimize_level;
+
 static void init_options (int argc, char *argv[]) {
   int incl_p, ldir_p = FALSE; /* to remove an uninitialized warning */
 
@@ -163,6 +165,7 @@ static void init_options (int argc, char *argv[]) {
   VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (macro_command_t, macro_commands, 0);
+  optimize_level = -1;
   for (int i = 1; i < argc; i++) {
     if (strcmp (argv[i], "-d") == 0) {
       options.verbose_p = options.debug_p = TRUE;
@@ -182,6 +185,8 @@ static void init_options (int argc, char *argv[]) {
       options.no_prepro_p = TRUE;
     } else if (strcmp (argv[i], "-pedantic") == 0) {
       options.pedantic_p = TRUE;
+    } else if (strncmp (argv[i], "-O", 2) == 0) {
+      optimize_level = argv[i][2] != '\0' ? atoi (&argv[i][2]) : 2;
     } else if (strcmp (argv[i], "-o") == 0) {
       if (i + 1 >= argc)
         fprintf (stderr, "-o without argument\n");
@@ -483,6 +488,7 @@ int main (int argc, char *argv[], char *env[]) {
         }
       } else {
         MIR_gen_init (ctx);
+        if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, (unsigned) optimize_level);
         if (gen_debug_p) MIR_gen_set_debug_file (ctx, stderr);
         MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
                   import_resolver);
