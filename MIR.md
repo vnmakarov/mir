@@ -575,7 +575,7 @@ ex100:    func v
     for MIR developers
   * API function `void MIR_gen_set_optimize_level (MIR_context_t ctx, unsigned int level)` sets up optimization
     level for MIR generator:
-    * `0` means only register allocator and machine code generator works
+    * `0` means only register allocator and machine code generator work
     * `1` means additional code selection task.  On this level MIR generator creates more compact and faster
       code than on zero level with practically on the same speed
     * `2` means additionally common sub-expression elimination and sparse conditional constant propagation.  This is
