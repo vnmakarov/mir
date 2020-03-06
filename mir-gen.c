@@ -130,6 +130,7 @@ typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
 struct gen_ctx {
+  unsigned int optimize_level; /* 0:only RA; 1:+combiner; 2: +CSE/CCP (default); >=3: everything  */
   MIR_item_t curr_func_item;
 #if !MIR_NO_GEN_DEBUG
   FILE *debug_file;
@@ -154,6 +155,7 @@ struct gen_ctx {
 
 static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct gen_ctx **) ctx; }
 
+#define optimize_level gen_ctx->optimize_level
 #define curr_func_item gen_ctx->curr_func_item
 #define debug_file gen_ctx->debug_file
 #define insn_to_consider gen_ctx->insn_to_consider
@@ -5487,82 +5489,92 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   }
 #endif
 #ifndef NO_CSE
+  if (optimize_level >= 2) {
 #if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CSE:\n");
+    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CSE:\n");
 #endif
-  cse (ctx);
+    cse (ctx);
 #if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    print_exprs (ctx);
-    fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
-    print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
+    if (debug_file != NULL) {
+      print_exprs (ctx);
+      fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
+      print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
+    }
+#endif
+    cse_clear (ctx);
   }
-#endif
-  cse_clear (ctx);
 #endif /* #ifndef NO_CSE */
   calculate_func_cfg_live_info (ctx, FALSE);
 #ifndef NO_CSE
-  dead_code_elimination (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
-    print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-  }
-#endif
-#endif /* #ifndef NO_CSE */
-#ifndef NO_RENAME
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Rename:\n");
-#endif
-  calculate_reaching_defs (ctx);
-  reg_rename (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after rename:\n");
-    print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
-  }
-#endif
-  rdef_clear (ctx);
-  calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
-#endif                                       /* #ifndef NO_CSE */
-#ifndef NO_LICM
-  if (build_loop_tree (ctx)) {
-    licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
-    calculate_reaching_defs (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++LICM:\n");
-#endif
-    licm (ctx);
+  if (optimize_level >= 2) {
+    dead_code_elimination (ctx);
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
-      fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
-      print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
+      print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+    }
+#endif
+  }
+#endif /* #ifndef NO_CSE */
+#ifndef NO_RENAME
+  if (optimize_level >= 3) {
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Rename:\n");
+#endif
+    calculate_reaching_defs (ctx);
+    reg_rename (ctx);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after rename:\n");
+      print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
     }
 #endif
     rdef_clear (ctx);
     calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
   }
-  destroy_loop_tree (ctx, curr_cfg->root_loop_node);
-  curr_cfg->root_loop_node = NULL;
+#endif /* #ifndef NO_RENAME */
+#ifndef NO_LICM
+  if (optimize_level >= 3) {
+    if (build_loop_tree (ctx)) {
+      licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
+      calculate_reaching_defs (ctx);
+#if !MIR_NO_GEN_DEBUG
+      if (debug_file != NULL) fprintf (debug_file, "+++++++++++++LICM:\n");
+#endif
+      licm (ctx);
+#if !MIR_NO_GEN_DEBUG
+      if (debug_file != NULL) {
+        fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
+        print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
+      }
+#endif
+      rdef_clear (ctx);
+      calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
+    }
+    destroy_loop_tree (ctx, curr_cfg->root_loop_node);
+    curr_cfg->root_loop_node = NULL;
+  }
 #endif /* #ifndef NO_LICM */
 #ifndef NO_CCP
+  if (optimize_level >= 2) {
 #if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
+    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
 #endif
-  if (ccp (ctx)) {
+    if (ccp (ctx)) {
 #if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
-      fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
-      print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
+      if (debug_file != NULL) {
+        fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
+        print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
+      }
+#endif
+      dead_code_elimination (ctx);
+#if !MIR_NO_GEN_DEBUG
+      if (debug_file != NULL) {
+        fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
+        print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+      }
+#endif
     }
-#endif
-    dead_code_elimination (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
-      print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-    }
-#endif
   }
 #endif /* #ifndef NO_CCP */
   ccp_clear (ctx);
@@ -5596,27 +5608,29 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
   calculate_func_cfg_live_info (ctx, FALSE);
   add_bb_insn_dead_vars (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR before combine:\n");
-    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  }
-#endif
 #ifndef NO_COMBINE
-  combine (ctx); /* After combine the BB live info is still valid */
+  if (optimize_level >= 1) {
 #if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after combine:\n");
-    print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  }
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR before combine:\n");
+      print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    }
 #endif
-  dead_code_elimination (ctx);
+    combine (ctx); /* After combine the BB live info is still valid */
 #if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
-    fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
-    print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-  }
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after combine:\n");
+      print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    }
 #endif
+    dead_code_elimination (ctx);
+#if !MIR_NO_GEN_DEBUG
+    if (debug_file != NULL) {
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
+      print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+    }
+#endif
+  }
 #endif /* #ifndef NO_COMBINE */
   target_make_prolog_epilog (ctx, func_assigned_hard_regs, func_stack_slots_num);
 #if !MIR_NO_GEN_DEBUG
@@ -5663,11 +5677,18 @@ void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f) {
 #endif
 }
 
+void MIR_gen_set_optimize_level (MIR_context_t ctx, unsigned int level) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  optimize_level = level;
+}
+
 void MIR_gen_init (MIR_context_t ctx) {
   struct gen_ctx **gen_ctx_ptr = gen_ctx_loc (ctx), *gen_ctx;
   MIR_reg_t i;
 
   *gen_ctx_ptr = gen_ctx = gen_malloc (ctx, sizeof (struct gen_ctx));
+  optimize_level = 2;
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
   gen_ctx->cse_ctx = NULL;
