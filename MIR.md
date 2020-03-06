@@ -570,3 +570,16 @@ ex100:    func v
   * API function `void *MIR_gen (MIR_context ctx, MIR_item_t func_item)` generates machine code of given MIR function
     and returns an address to call it.  You can call the code as usual C function by using this address
     as the called function address
+  * API function `void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f)` sets up MIR generator debug file to `f`.
+    If it is not NULL a lot of debugging and optimization information will be output to the file.  It is useful mostly
+    for MIR developers
+  * API function `void MIR_gen_set_optimize_level (MIR_context_t ctx, unsigned int level)` sets up optimization
+    level for MIR generator:
+    * `0` means only register allocator and machine code generator works
+    * `1` means additional code selection task.  On this level MIR generator creates more compact and faster
+      code than on zero level with practically on the same speed
+    * `2` means additionally common sub-expression elimination and sparse conditional constant propagation.  This is
+      valuable level if you generate bad input MIR code with a lot redundancy and constants.  The generation speed
+      on level `1` is about 50% faster than on level `2`
+    * `3` means additionally register renaming and loop invariant code motion.  The generation speed
+      on level `2` is about 50% faster than on level `3`
