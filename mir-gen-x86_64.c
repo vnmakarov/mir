@@ -134,6 +134,9 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *
     default: arg_reg = MIR_NON_HARD_REG; break;
     }
     (*fp_arg_num)++;
+#ifdef _WIN64
+    (*int_arg_num)++; /* arg slot used by fp, skip int register */
+#endif
     *mov_code = arg_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
   } else {
     switch (*int_arg_num
@@ -154,6 +157,9 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *
     case 5: arg_reg = R9_HARD_REG; break;
     default: arg_reg = MIR_NON_HARD_REG; break;
     }
+#ifdef _WIN64
+    (*fp_arg_num)++; /* arg slot used by int, skip fp register */
+#endif
     (*int_arg_num)++;
     *mov_code = MIR_MOV;
   }
