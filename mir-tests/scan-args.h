@@ -21,6 +21,7 @@ f:     func i64, i8:i1, i16:i2, i32:i3, i64:i4, f:f1, d:d1, u32:i5, u8:i6, u16:i
        call p_prf, prf, f2\n\
        call p_prf, prf, f3\n\
        call p_prf, prf, f4\n\
+       call p_prf, prf, f5\n\
        call p_prf, prf, f6\n\
        call p_prf, prf, f7\n\
        call p_prf, prf, f8\n\
