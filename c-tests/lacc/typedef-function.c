@@ -11,13 +11,9 @@ int foo(foo_fn fn) {
 typedef int bar_fn(int);
 
 int bar(bar_fn fn) {
-	return fn('a');
+	return !!fn('a');
 }
 
 int main(void) {
-#ifdef __APPLE__
   return !(foo(atoi) + bar(isalnum) == 11);
-#else
-  return !(foo(atoi) + bar(isalnum) == 18);
-#endif
 }
