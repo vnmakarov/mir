@@ -124,7 +124,7 @@ files.  The easiest way to do this is to copy existing target
 dependent directory (e.g. aarch64) in directory `mirc/include` and
 modify files in the new directory.  Again in most cases of 64-bit
 target, you don't need to change anything probably except macros
-related long double and `va_list` definitions.
+related long double, char signedness, wchar, and `va_list` definitions.
 
 To run C tests for C2MIR with MIR intepreter you can use `make
 c2mir-interp-test`.
