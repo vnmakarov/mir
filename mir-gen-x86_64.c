@@ -246,12 +246,14 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_after (ctx, prev_call_insn, ext_insn);
     }
   }
+#ifndef _WIN64
   if (proto->vararg_p) {
     setup_call_hard_reg_args (call_insn, AX_HARD_REG);
     new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, AX_HARD_REG),
                              MIR_new_int_op (ctx, xmm_args));
     gen_add_insn_before (ctx, call_insn, new_insn);
   }
+#endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
     ret_reg_op = call_insn->ops[i + 2];
