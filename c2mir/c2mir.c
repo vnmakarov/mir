@@ -29,6 +29,8 @@
 #include "x86_64/cx86_64.h"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64.h"
+#elif defined(__PPC64__)
+#include "ppc64/cppc64.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -313,6 +315,8 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
 #include "x86_64/cx86_64-code.c"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64-code.c"
+#elif defined(__PPC64__)
+#include "ppc64/cppc64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
