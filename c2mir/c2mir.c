@@ -9621,16 +9621,22 @@ static op_t mem_to_address (MIR_context_t ctx, op_t mem) {
 static op_t force_val (MIR_context_t ctx, op_t op, int arr_p) {
   op_t temp_op;
   int sh;
+  c2m_ctx_t c2m_ctx;
 
   if (arr_p && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
     return mem_to_address (ctx, op);
   }
   if (op.decl == NULL || op.decl->bit_offset < 0) return op;
+  c2m_ctx = *c2m_ctx_loc (ctx);
   assert (op.mir_op.mode == MIR_OP_MEM);
   temp_op = get_new_temp (ctx, MIR_T_I64);
   emit2 (ctx, MIR_MOV, temp_op.mir_op, op.mir_op);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   sh = 64 - op.decl->bit_offset - op.decl->width;
+#else
+  sh = op.decl->bit_offset + (64 - type_size (c2m_ctx, op.decl->decl_spec.type) * MIR_CHAR_BIT);
+#endif
   if (sh != 0) emit3 (ctx, MIR_LSH, temp_op.mir_op, temp_op.mir_op, MIR_new_int_op (ctx, sh));
   emit3 (ctx,
          signed_integer_type_p (op.decl->decl_spec.type)
@@ -10266,10 +10272,16 @@ static void emit_scalar_assign (MIR_context_t ctx, op_t var, op_t *val, MIR_type
     int width = var.decl->width;
     uint64_t mask, mask2;
     op_t temp_op1, temp_op2, temp_op3, temp_op4;
+    c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+    size_t size = type_size (c2m_ctx, var.decl->decl_spec.type) * MIR_CHAR_BIT;
 
     assert (var.mir_op.mode == MIR_OP_MEM);
     mask = 0xffffffffffffffff >> (64 - width);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     mask2 = ~(mask << var.decl->bit_offset);
+#else
+    mask2 = ~(mask << (size - var.decl->bit_offset - width));
+#endif
     temp_op1 = get_new_temp (ctx, MIR_T_I64);
     temp_op2 = get_new_temp (ctx, MIR_T_I64);
     temp_op3 = get_new_temp (ctx, MIR_T_I64);
@@ -10287,12 +10299,21 @@ static void emit_scalar_assign (MIR_context_t ctx, op_t var, op_t *val, MIR_type
     }
     emit3 (ctx, MIR_AND, temp_op3.mir_op, temp_op1.mir_op, MIR_new_uint_op (ctx, mask));
     temp_op4 = get_new_temp (ctx, MIR_T_I64);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     if (var.decl->bit_offset == 0) {
       temp_op4 = temp_op3;
     } else {
       emit3 (ctx, MIR_LSH, temp_op4.mir_op, temp_op3.mir_op,
              MIR_new_int_op (ctx, var.decl->bit_offset));
     }
+#else
+    if (size - var.decl->bit_offset - width == 0) {
+      temp_op4 = temp_op3;
+    } else {
+      emit3 (ctx, MIR_LSH, temp_op4.mir_op, temp_op3.mir_op,
+             MIR_new_int_op (ctx, size - var.decl->bit_offset - width));
+    }
+#endif
     if (!ignore_others_p) {
       emit3 (ctx, MIR_OR, temp_op4.mir_op, temp_op4.mir_op, temp_op2.mir_op);
     }
@@ -10300,19 +10321,29 @@ static void emit_scalar_assign (MIR_context_t ctx, op_t var, op_t *val, MIR_type
   }
 }
 
-static void add_bit_field (uint64_t *u, uint64_t v, decl_t member_decl) {
+static void add_bit_field (MIR_context_t ctx, uint64_t *u, uint64_t v, decl_t member_decl) {
   uint64_t mask, mask2;
   int bit_offset = member_decl->bit_offset, width = member_decl->width;
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  size_t size = type_size (c2m_ctx, member_decl->decl_spec.type) * MIR_CHAR_BIT;
 
   mask = 0xffffffffffffffff >> (64 - width);
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   mask2 = ~(mask << bit_offset);
+#else
+  mask2 = ~(mask << (size - bit_offset - width));
+#endif
   *u &= mask2;
-  v &= mask;
   if (signed_integer_type_p (member_decl->decl_spec.type)) {
     v <<= (64 - width);
     v = (int64_t) v >> (64 - width);
   }
+  v &= mask;
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   v <<= bit_offset;
+#else
+  v <<= size - bit_offset - width;
+#endif
   *u |= v;
 }
 
@@ -10432,14 +10463,14 @@ static void gen_initializer (MIR_context_t ctx, size_t init_start, op_t var,
           uint64_t u = 0;
 
           assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
-          add_bit_field (&u, val.mir_op.u.u, init_el.member_decl);
+          add_bit_field (ctx, &u, val.mir_op.u.u, init_el.member_decl);
           for (; i + 1 < VARR_LENGTH (init_el_t, init_els); i++, init_el = next_init_el) {
             next_init_el = VARR_GET (init_el_t, init_els, i + 1);
             if (next_init_el.offset != init_el.offset) break;
             if (next_init_el.member_decl->bit_offset == init_el.member_decl->bit_offset) continue;
             val = gen (ctx, next_init_el.init, NULL, NULL, TRUE, NULL);
             assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
-            add_bit_field (&u, val.mir_op.u.u, next_init_el.member_decl);
+            add_bit_field (ctx, &u, val.mir_op.u.u, next_init_el.member_decl);
           }
           val.mir_op.u.u = u;
         }
