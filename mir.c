@@ -5394,10 +5394,10 @@ static void scan_finish (MIR_context_t ctx) {
 
 #if defined(__x86_64__)
 #include "mir-x86_64.c"
-#elif defined(__PPC64__)
-#include "mir-ppc64.c"
 #elif defined(__aarch64__)
 #include "mir-aarch64.c"
+#elif defined(__PPC64__)
+#include "mir-ppc64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
