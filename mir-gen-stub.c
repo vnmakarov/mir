@@ -28,7 +28,7 @@ enum {
 };
 
 static const MIR_reg_t MAX_HARD_REG = F7_HARD_REG;           /* max value for the previous regs */
-static const MIR_reg_t HARD_REG_FRAME_POINTER = R6_HARD_REG; /* stack frame pointer according ABI */
+static const MIR_reg_t FP_HARD_REG = R6_HARD_REG; /* stack frame pointer according ABI */
 static const MIR_reg_t SP_HARD_REG = R7_HARD_REG;            /* stack pointer according ABI */
 
 const MIR_reg_t TEMP_INT_HARD_REG1 = R2_HARD_REG, TEMP_INT_HARD_REG2 = R3_HARD_REG;
@@ -49,7 +49,7 @@ static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type
 
 static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
-  return (hard_reg == HARD_REG_FRAME_POINTER || hard_reg == SP_HARD_REG
+  return (hard_reg == FP_HARD_REG || hard_reg == SP_HARD_REG
           || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
           || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
           || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
