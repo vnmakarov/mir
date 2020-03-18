@@ -1610,7 +1610,11 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
         float f;
       } u;
       u.d = va_arg (va, double);
-      arg_vals[i].f = u.f;
+#if defined(__PPC64__)
+      arg_vals[i].f = u.d;
+#else
+          arg_vals[i].f = u.f;
+#endif
       break;
     }
     case MIR_T_D: arg_vals[i].d = va_arg (va, double); break;
