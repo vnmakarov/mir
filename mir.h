@@ -589,7 +589,7 @@ extern void *_MIR_get_bstart_builtin (MIR_context_t ctx);
 extern void *_MIR_get_bend_builtin (MIR_context_t ctx);
 
 extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                               MIR_type_t *arg_types);
+                               MIR_type_t *arg_types, int vararg_p);
 extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);

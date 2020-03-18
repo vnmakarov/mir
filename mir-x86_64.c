@@ -172,7 +172,7 @@ static void gen_st80 (MIR_context_t ctx, uint32_t src_offset) {
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
    pop rbx; ret. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        MIR_type_t *arg_types) {
+                        MIR_type_t *arg_types, int vararg_p) {
   static const uint8_t prolog[] = {
     0x53,                         /* pushq %rbx */
     0x48, 0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
