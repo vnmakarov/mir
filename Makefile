@@ -43,6 +43,9 @@ ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
   ifeq ($(shell $(CC) -fno-tree-sra 2>&1 | grep -c 'fno-tree-sra'), 0)
      CC += -fno-tree-sra
   endif
+  ifeq ($(shell $(CC) -fno-ipa-cp-clone 2>&1 | grep -c 'fno-ipa-cp-clone'), 0)
+     CC += -fno-ipa-cp-clone 
+  endif
 endif
 
 CFLAGS=-O3 -g -DNDEBUG
