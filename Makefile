@@ -25,6 +25,10 @@ else
 	else
             ifeq ($(UNAME_M),aarch64)
     	       TARGET := aarch64
+            else
+               ifeq ($(UNAME_M),ppc64)
+    	          TARGET := ppc64
+	       endif
 	    endif
 	endif
     endif
