@@ -20,10 +20,15 @@ static char ppc64_mirc[]
     "#define __SIZEOF_SHORT__ 2\n"
     "#define __SIZEOF_SIZE_T__ 8\n"
     "\n"
-    "#define _BIG_ENDIAN 1\n" // ??? Implement LE too
     "#define __ORDER_LITTLE_ENDIAN__ 1234\n"
     "#define __ORDER_BIG_ENDIAN__ 4321\n"
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    "#define _BIG_ENDIAN 1\n"
     "#define __BYTE_ORDER__ __ORDER_BIG_ENDIAN__\n"
+#else
+    "#define _LITTLE_ENDIAN 1\n"
+    "#define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__\n"
+#endif
     "\n"
     "/* Some GCC predefined macros: */\n"
     "#define __SIZE_TYPE__ unsigned long\n"
