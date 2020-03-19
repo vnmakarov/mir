@@ -28,6 +28,10 @@ else
             else
                ifeq ($(UNAME_M),ppc64)
     	          TARGET := ppc64
+	       else
+	          ifeq ($(UNAME_M),ppc64le)
+    	             TARGET := ppc64
+                  endif
 	       endif
 	    endif
 	endif
