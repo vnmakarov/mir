@@ -192,7 +192,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
 #ifdef _WIN64
-  if (nargs > 4) mem_size = 32; /* spill space for register args */
+  if (nargs > 4 || proto->vararg_p) mem_size = 32; /* spill space for register args */
 #endif
   if (call_insn->ops[1].mode != MIR_OP_REG && call_insn->ops[1].mode != MIR_OP_HARD_REG) {
     temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, func));
@@ -246,12 +246,14 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_after (ctx, prev_call_insn, ext_insn);
     }
   }
+#ifndef _WIN64
   if (proto->vararg_p) {
     setup_call_hard_reg_args (call_insn, AX_HARD_REG);
     new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, AX_HARD_REG),
                              MIR_new_int_op (ctx, xmm_args));
     gen_add_insn_before (ctx, call_insn, new_insn);
   }
+#endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
     ret_reg_op = call_insn->ops[i + 2];
