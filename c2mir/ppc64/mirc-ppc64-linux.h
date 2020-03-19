@@ -7,6 +7,13 @@ static char ppc64_mirc[]
     "#define _ARCH_PPC64 1\n"
     "#define _LP64 1\n"
     "#define __LP64__ 1\n"
+    "#define __powerpc64__ 1\n"
+    "#define __powerpc__ 1\n"
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    "#define _CALL_ELF 1\n"
+#else
+    "#define _CALL_ELF 2\n"
+#endif
     "\n"
     "#define __LONG_DOUBLE_128__ 1\n" // ???
     "#define __SIZEOF_DOUBLE__ 8\n"
