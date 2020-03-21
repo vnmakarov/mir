@@ -110,6 +110,44 @@ static MIR_insn_code_t get_ext_code (MIR_type_t type) {
   }
 }
 
+static MIR_reg_t get_fp_arg_reg (size_t fp_arg_num) {
+  switch (fp_arg_num) {
+  case 0:
+  case 1:
+  case 2:
+  case 3:
+#ifndef _WIN64
+  case 4:
+  case 5:
+  case 6:
+  case 7:
+#endif
+    return XMM0_HARD_REG + fp_arg_num;
+  default: return MIR_NON_HARD_REG;
+  }
+}
+
+static MIR_reg_t get_int_arg_reg (size_t int_arg_num) {
+  switch (int_arg_num
+#ifdef _WIN64
+          + 2
+#endif
+  ) {
+  case 0: return DI_HARD_REG;
+  case 1: return SI_HARD_REG;
+#ifdef _WIN64
+  case 2: return CX_HARD_REG;
+  case 3: return DX_HARD_REG;
+#else
+  case 2: return DX_HARD_REG;
+  case 3: return CX_HARD_REG;
+#endif
+  case 4: return R8_HARD_REG;
+  case 5: return R9_HARD_REG;
+  default: return MIR_NON_HARD_REG;
+  }
+}
+
 static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *fp_arg_num,
                               MIR_insn_code_t *mov_code) {
   MIR_reg_t arg_reg;
@@ -118,45 +156,14 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *
     arg_reg = MIR_NON_HARD_REG;
     *mov_code = MIR_LDMOV;
   } else if (arg_type == MIR_T_F || arg_type == MIR_T_D) {
-    switch (*fp_arg_num) {
-    case 0:
-    case 1:
-    case 2:
-    case 3:
-#ifndef _WIN64
-    case 4:
-    case 5:
-    case 6:
-    case 7:
-#endif
-      arg_reg = XMM0_HARD_REG + *fp_arg_num;
-      break;
-    default: arg_reg = MIR_NON_HARD_REG; break;
-    }
+    arg_reg = get_fp_arg_reg(*fp_arg_num);
     (*fp_arg_num)++;
 #ifdef _WIN64
     (*int_arg_num)++; /* arg slot used by fp, skip int register */
 #endif
     *mov_code = arg_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
   } else {
-    switch (*int_arg_num
-#ifdef _WIN64
-            + 2
-#endif
-    ) {
-    case 0: arg_reg = DI_HARD_REG; break;
-    case 1: arg_reg = SI_HARD_REG; break;
-#ifdef _WIN64
-    case 2: arg_reg = CX_HARD_REG; break;
-    case 3: arg_reg = DX_HARD_REG; break;
-#else
-    case 2: arg_reg = DX_HARD_REG; break;
-    case 3: arg_reg = CX_HARD_REG; break;
-#endif
-    case 4: arg_reg = R8_HARD_REG; break;
-    case 5: arg_reg = R9_HARD_REG; break;
-    default: arg_reg = MIR_NON_HARD_REG; break;
-    }
+    arg_reg = get_int_arg_reg(*int_arg_num);
 #ifdef _WIN64
     (*fp_arg_num)++; /* arg slot used by int, skip fp register */
 #endif
@@ -229,6 +236,21 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       new_insn = MIR_new_insn (ctx, new_insn_code, arg_reg_op, arg_op);
       gen_add_insn_before (ctx, call_insn, new_insn);
       call_insn->ops[i] = arg_reg_op;
+#ifdef _WIN64
+      /* copy fp reg varargs into corresponding int regs */
+      if (proto->vararg_p && type == MIR_T_D) {
+        gen_assert (int_arg_num > 0 && int_arg_num <= 4);
+        arg_reg = get_int_arg_reg (int_arg_num - 1);
+        setup_call_hard_reg_args (call_insn, arg_reg);
+        /* mir does not support moving fp to int regs directly, spill and load them instead */
+        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, 8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+        new_insn = MIR_new_insn (ctx, MIR_DMOV, mem_op, arg_op);
+        gen_add_insn_before (ctx, call_insn, new_insn);
+        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+        new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, arg_reg), mem_op);
+        gen_add_insn_before (ctx, call_insn, new_insn);
+      }
+#endif
     } else { /* put arguments on the stack */
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
       new_insn_code
