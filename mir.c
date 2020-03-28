@@ -947,6 +947,13 @@ MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len) {
   return item;
 }
 
+static MIR_type_t canon_type (MIR_type_t type) {
+#if __SIZEOF_LONG_DOUBLE__ == 8
+  if (type == MIR_T_LD) type = MIR_T_D;
+#endif
+  return type;
+}
+
 size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type) {
   switch (type) {
   case MIR_T_I8: return sizeof (int8_t);
@@ -986,7 +993,7 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
     free (item);
     item = tab_item;
   }
-  data->el_type = el_type;
+  data->el_type = canon_type (el_type);
   data->nel = nel;
   memcpy (data->u.els, els, el_len * nel);
   return item;
@@ -1148,7 +1155,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   func->nres = nres;
   func->res_types = (MIR_type_t *) ((char *) func + sizeof (struct MIR_func));
-  memcpy (func->res_types, res_types, nres * sizeof (MIR_type_t));
+  for (size_t i = 0; i < nres; i++) func->res_types[i] = canon_type (res_types[i]);
   tab_item = add_item (ctx, func_item);
   mir_assert (tab_item == func_item);
   DLIST_INIT (MIR_insn_t, func->insns);
@@ -1161,7 +1168,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->n_inlines = 0;
   func->machine_code = func->call_addr = NULL;
   for (size_t i = 0; i < nargs; i++) {
-    MIR_type_t type = vars[i].type;
+    MIR_type_t type = canon_type (vars[i].type);
 
     VARR_PUSH (MIR_var_t, func->vars, vars[i]);
     create_func_reg (ctx, func, vars[i].name, i + 1,
@@ -1694,6 +1701,35 @@ static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t c
   if (nops == 0) nops = 1;
   insn = malloc (sizeof (struct MIR_insn) + sizeof (MIR_op_t) * (nops - 1));
   if (insn == NULL) (*error_func) (MIR_alloc_error, "Not enough memory for insn creation");
+#if __SIZEOF_LONG_DOUBLE__ == 8
+  switch (code) {
+  case MIR_LDMOV: code = MIR_DMOV; break;
+  case MIR_I2LD: code = MIR_I2D; break;
+  case MIR_UI2LD: code = MIR_UI2D; break;
+  case MIR_LD2I: code = MIR_D2I; break;
+  case MIR_F2LD: code = MIR_F2D; break;
+  case MIR_D2LD: code = MIR_DMOV; break;
+  case MIR_LD2F: code = MIR_D2F; break;
+  case MIR_LD2D: code = MIR_DMOV; break;
+  case MIR_LDNEG: code = MIR_DNEG; break;
+  case MIR_LDADD: code = MIR_DADD; break;
+  case MIR_LDSUB: code = MIR_DSUB; break;
+  case MIR_LDMUL: code = MIR_DMUL; break;
+  case MIR_LDDIV: code = MIR_DDIV; break;
+  case MIR_LDEQ: code = MIR_DEQ; break;
+  case MIR_LDNE: code = MIR_DNE; break;
+  case MIR_LDLT: code = MIR_DLT; break;
+  case MIR_LDLE: code = MIR_DLE; break;
+  case MIR_LDGT: code = MIR_DGT; break;
+  case MIR_LDGE: code = MIR_DGE; break;
+  case MIR_LDBEQ: code = MIR_DBEQ; break;
+  case MIR_LDBNE: code = MIR_DBNE; break;
+  case MIR_LDBLT: code = MIR_DBLT; break;
+  case MIR_LDBLE: code = MIR_DBLE; break;
+  case MIR_LDBGT: code = MIR_DBGT; break;
+  case MIR_LDBGE: code = MIR_DBGE; break;
+  }
+#endif
   insn->code = code;
   insn->data = NULL;
   return insn;
@@ -1901,6 +1937,9 @@ MIR_op_t MIR_new_double_op (MIR_context_t ctx, double d) {
 MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double ld) {
   MIR_op_t op;
 
+#if __SIZEOF_LONG_DOUBLE__ == 8
+  return MIR_new_double_op (ctx, ld);
+#endif
   mir_assert (sizeof (long double) == 16); /* machine-defined 80- or 128-bit FP  */
   init_op (&op, MIR_OP_LDOUBLE);
   op.u.ld = ld;
@@ -1928,7 +1967,7 @@ MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MI
   MIR_op_t op;
 
   init_op (&op, MIR_OP_MEM);
-  op.u.mem.type = type;
+  op.u.mem.type = canon_type (type);
   op.u.mem.disp = disp;
   op.u.mem.base = base;
   op.u.mem.index = index;
@@ -4689,8 +4728,10 @@ static void scan_number (MIR_context_t ctx, int ch, int get_char (MIR_context_t)
       *double_p = FALSE;
       ch = get_char (ctx);
     } else if (ch == 'l' || ch == 'L') {
+#if __SIZEOF_LONG_DOUBLE__ != 8
       *ldouble_p = TRUE;
       *double_p = FALSE;
+#endif
       ch = get_char (ctx);
     }
   } else if (*base == 8 && dec_p)
@@ -5165,13 +5206,13 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         op.mode = MIR_OP_FLOAT;
         op.u.f = t.u.f;
         break;
+      case TC_LDOUBLE: op.mode = MIR_OP_LDOUBLE; op.u.ld = t.u.ld;
+#if __SIZEOF_LONG_DOUBLE__ != 8
+        break;
+#endif
       case TC_DOUBLE:
         op.mode = MIR_OP_DOUBLE;
         op.u.d = t.u.d;
-        break;
-      case TC_LDOUBLE:
-        op.mode = MIR_OP_LDOUBLE;
-        op.u.ld = t.u.ld;
         break;
       case TC_STR:
         op.mode = MIR_OP_STR;
