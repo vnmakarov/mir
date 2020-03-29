@@ -43,7 +43,7 @@
          their value
      * `MIR_T_F` and `MIR_T_D` -- IEEE single and double precision floating point values
      * `MIR_T_LD` - long double values.  It is machine-dependent and can be IEEE double, x86 80-bit FP,
-       or IEEE quad precision FP values
+       or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
@@ -78,6 +78,7 @@
         only one result, have no arguments, not use any call or any instruction with memory
       * The expression function is called during linking and its result is used to initialize the data
     * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
+  * Long double data item is changed to double one, if long double coincides with double for given target or ABI
   * Names of MIR functions, imports, and prototypes should be unique in a module
   * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
     and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
@@ -139,7 +140,9 @@
       `MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v)` and `MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v)`
       * In MIR text they are represented the same way as C integer numbers (e.g. octal, decimal, hexadecimal ones)
     * **Float, double or long double value operands** created through API functions `MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v)`,
-      `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`, and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`
+      `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`,
+      and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`.
+      Long double operand is changed to double one when long double coincides with double for given target or ABI
       * In MIR text they are represented the same way as C floating point numbers
     * **String operands** created through API functions `MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str)`
       * In MIR text they are represented by `typedef struct MIR_str {size_t len; const char *s;} MIR_str_t`
@@ -184,6 +187,7 @@
     * You can not use `MIR_new_insn` for the creation of call and ret insns as these insns have a variable number of operands.
       To create such insns you should use `MIR_new_insn_arr` or special functions
       `MIR_insn_t MIR_new_call_insn (MIR_context_t ctx, size_t nops, ...)` and `MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...)`
+    * Long double insns are changed by double ones if long double coincides with double for given target or ABI
   * You can get insn name and number of insn operands through API functions
     `const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code)` and `size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn)`
   * You can add a created insn at the beginning or end of function insn list through API functions
