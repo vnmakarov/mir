@@ -43,7 +43,8 @@
          their value
      * `MIR_T_F` and `MIR_T_D` -- IEEE single and double precision floating point values
      * `MIR_T_LD` - long double values.  It is machine-dependent and can be IEEE double, x86 80-bit FP,
-       or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead
+       or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead.
+       So please don't expect machine-independence of MIR code working with long double values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
