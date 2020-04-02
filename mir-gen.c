@@ -5260,6 +5260,7 @@ static void combine (MIR_context_t ctx) {
             }
           }
           if (change_p) block_change_p = TRUE;
+          if (code == MIR_BSTART || code == MIR_BEND) last_mem_ref_insn_num = curr_insn_num;
         }
 
         for (iter = 0; iter < 2; iter++) { /* update hreg ref info: */
