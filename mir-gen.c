@@ -4479,10 +4479,10 @@ static void assign (MIR_context_t ctx) {
       for (k = 0; k < slots_num; k++) bitmap_set_bit_p (func_assigned_hard_regs, best_loc + k);
     } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
       for (k = 0; k < slots_num; k++) {
-	if (k == 0) best_loc = VARR_LENGTH (size_t, loc_profits);
+        if (k == 0) best_loc = VARR_LENGTH (size_t, loc_profits);
         VARR_PUSH (size_t, loc_profits, 0);
         VARR_PUSH (size_t, loc_profit_ages, 0);
-	if (k == 0 && (best_loc - MAX_HARD_REG - 1) % slots_num != 0) k--; /* align */
+        if (k == 0 && (best_loc - MAX_HARD_REG - 1) % slots_num != 0) k--; /* align */
       }
       func_stack_slots_num = VARR_LENGTH (size_t, loc_profits) - MAX_HARD_REG - 1;
     }
