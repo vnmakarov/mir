@@ -156,14 +156,14 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *
     arg_reg = MIR_NON_HARD_REG;
     *mov_code = MIR_LDMOV;
   } else if (arg_type == MIR_T_F || arg_type == MIR_T_D) {
-    arg_reg = get_fp_arg_reg(*fp_arg_num);
+    arg_reg = get_fp_arg_reg (*fp_arg_num);
     (*fp_arg_num)++;
 #ifdef _WIN64
     (*int_arg_num)++; /* arg slot used by fp, skip int register */
 #endif
     *mov_code = arg_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
   } else {
-    arg_reg = get_int_arg_reg(*int_arg_num);
+    arg_reg = get_int_arg_reg (*int_arg_num);
 #ifdef _WIN64
     (*fp_arg_num)++; /* arg slot used by int, skip fp register */
 #endif
@@ -683,7 +683,8 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   func = curr_func_item->u.func;
   for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) saved_hard_regs_num++;
-  if (leaf_p && !alloca_p && saved_hard_regs_num == 0 && !func->vararg_p && stack_slots_num == 0)
+  if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_num == 0 && !func->vararg_p
+      && stack_slots_num == 0)
     return;
   sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
   sp_reg_op.u.hard_reg = SP_HARD_REG;
