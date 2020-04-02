@@ -4455,6 +4455,7 @@ static void assign (MIR_context_t ctx) {
     for (loc = 0; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
       if (loc <= MAX_HARD_REG && !target_hard_reg_type_ok_p (loc, type)) continue;
       slots_num = target_locs_num (loc, type);
+      if (loc + slots_num - 1 > func_stack_slots_num + MAX_HARD_REG) break;
       for (k = 0; k < slots_num; k++)
         if ((loc + k <= MAX_HARD_REG
              && (target_fixed_hard_reg_p (loc + k)
@@ -4462,7 +4463,7 @@ static void assign (MIR_context_t ctx) {
             || bitmap_bit_p (conflict_locs, loc + k))
           break;
       if (k < slots_num) continue;
-      if (loc > MAX_HARD_REG && loc % slots_num != 0)
+      if (loc > MAX_HARD_REG && (loc - MAX_HARD_REG - 1) % slots_num != 0)
         continue; /* we align stack slots according to the type size */
       profit = (VARR_GET (size_t, loc_profit_ages, loc) != curr_age
                   ? 0
@@ -4478,12 +4479,12 @@ static void assign (MIR_context_t ctx) {
       for (k = 0; k < slots_num; k++) bitmap_set_bit_p (func_assigned_hard_regs, best_loc + k);
     } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
       for (k = 0; k < slots_num; k++) {
-        best_loc = VARR_LENGTH (size_t, loc_profits);
+	if (k == 0) best_loc = VARR_LENGTH (size_t, loc_profits);
         VARR_PUSH (size_t, loc_profits, 0);
         VARR_PUSH (size_t, loc_profit_ages, 0);
+	if (k == 0 && (best_loc - MAX_HARD_REG - 1) % slots_num != 0) k--; /* align */
       }
-      func_stack_slots_num = best_loc - MAX_HARD_REG;
-      best_loc -= slots_num - 1;
+      func_stack_slots_num = VARR_LENGTH (size_t, loc_profits) - MAX_HARD_REG - 1;
     }
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
