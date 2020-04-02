@@ -38,8 +38,7 @@ static lib_t std_libs[] = {{"/lib/libc.so.6", NULL},
                            {"/lib/aarch64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
-                           {"/lib64/libm.so.6", NULL}};
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64"};
 #else
 #error cannot recognize 32- or 64-bit target
@@ -246,9 +245,12 @@ static void init_options (int argc, char *argv[]) {
     } else if (*argv[i] != '-') {
       VARR_PUSH (char_ptr_t, source_file_names, argv[i]);
     } else if (strcmp (argv[i], "-h") == 0) {
-      fprintf (stderr, "Usage: %s options (-i | -s \"program\" | source files); where options are:\n", argv[0]);
+      fprintf (stderr,
+               "Usage: %s options (-i | -s \"program\" | source files); where options are:\n",
+               argv[0]);
       fprintf (stderr, "\n");
-      fprintf (stderr, "  -v, -d, -dg -- output work, general debug, or MIR-generator debug info\n");
+      fprintf (stderr,
+               "  -v, -d, -dg -- output work, general debug, or MIR-generator debug info\n");
       fprintf (stderr, "  -E -- output C preprocessed code into stdout\n");
       fprintf (stderr, "  -Dname[=value], -Uname -- predefine or unpredefine macros\n");
       fprintf (stderr, "  -Idir, -Ldir -- add directories to search include headers or lbraries\n");
@@ -258,7 +260,9 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -S, -c -- generate corresponding textual or binary MIR files\n");
       fprintf (stderr, "  -o file -- put output code into given file\n");
       fprintf (stderr, "  -On -- use given optimization level in MIR-generator\n");
-      fprintf (stderr, "  (-ei | -eg | -el) options -- execute code in the interpreter or (lazily) generated code with given options\n");
+      fprintf (stderr,
+               "  (-ei | -eg | -el) options -- execute code in the interpreter or (lazily) "
+               "generated code with given options\n");
       exit (0);
     } else {
       fprintf (stderr, "unknown command line option %s (use -h for usage) -- goodbye\n", argv[i]);
