@@ -2,6 +2,7 @@
 # Run run-benchmarks.sh [start_test_num]
 #
 
+tempc=c-benchmarks/__temp.c
 temp=c-benchmarks/__temp.out
 temp2=c-benchmarks/__temp2.out
 temp3=c-benchmarks/__temp3.out
@@ -75,11 +76,15 @@ runbench () {
   inputf=
   if test -f $bench.expect; then expect_out=$bench.expect; else expect_out=; fi
   first=first
-  if type gcc >/dev/null 2>&1; then
+  cat >$tempc <<EOF
+  #include <stdio.h>
+  int main (void) {printf ("hi\n"); return 0;}
+EOF
+  if gcc $tempc >/dev/null 2>&1; then
       run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
-  if type clang >/dev/null 2>&1; then
+  if clang $tempc >/dev/null 2>&1; then
       run "clang -O2" "clang -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
@@ -113,4 +118,4 @@ $NECHO $s
 skip ${#s} 53
 awk 'BEGIN {f = 1.0} {f = f * $1} END {printf "%0.2fx\n", f ^  (1.0/NR);}' < $temp3
 
-rm -f $temp $temp2 $temp3 $errf
+rm -f $tempc $temp $temp2 $temp3 $errf
