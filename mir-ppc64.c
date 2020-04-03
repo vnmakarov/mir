@@ -246,7 +246,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       if (vararg_p) {
         if (n_gpregs >= 8) {
           ppc64_gen_st (ctx, 1 + n_fpregs, 1, disp, MIR_T_D);
-        } else { /* load gp reg to */
+        } else { /* load into gp reg too */
           ppc64_gen_st (ctx, 1 + n_fpregs, 1, -8, MIR_T_D);
           ppc64_gen_ld (ctx, 3 + n_gpregs, 1, -8, MIR_T_I64);
         }
@@ -269,8 +269,6 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
           ppc64_gen_st (ctx, 0, 1, disp + 8, MIR_T_D);
         }
       }
-    } else if (n_gpregs < 8) {
-      ppc64_gen_ld (ctx, n_gpregs + 3, res_reg, param_offset, MIR_T_I64);
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
       ppc64_gen_ld (ctx, 0, res_reg, param_offset, type);
       ppc64_gen_st (ctx, 0, 1, disp, MIR_T_D);
@@ -278,6 +276,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         ppc64_gen_ld (ctx, 0, res_reg, param_offset + 8, type);
         ppc64_gen_st (ctx, 0, 1, disp + 8, MIR_T_D);
       }
+    } else if (n_gpregs < 8) {
+      ppc64_gen_ld (ctx, n_gpregs + 3, res_reg, param_offset, MIR_T_I64);
     } else {
       ppc64_gen_ld (ctx, 0, res_reg, param_offset, MIR_T_I64);
       ppc64_gen_st (ctx, 0, 1, disp, MIR_T_I64);
