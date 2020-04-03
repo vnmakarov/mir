@@ -453,7 +453,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   for (unsigned reg = 3; reg <= 10; reg++) /* std rn,dispn(r1) : */
     ppc64_gen_st (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
   for (unsigned reg = 1; reg <= 13; reg++) /* stfd fn,dispn(r1) : */
-    ppc64_gen_ld (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 1 + 8) * 8 + 64, MIR_T_D);
+    ppc64_gen_st (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 1 + 8) * 8 + 64, MIR_T_D);
   ppc64_gen_address (ctx, 3, ctx);
   ppc64_gen_address (ctx, 4, called_func);
   ppc64_gen_address (ctx, 12, hook_address);
