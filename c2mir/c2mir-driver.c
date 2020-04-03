@@ -32,14 +32,17 @@ static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
                            {"/lib/x86_64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #elif (__aarch64__)
-static lib_t std_libs[] = {{"/lib/libc.so.6", NULL},
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
                            {"/lib/aarch64-linux-gnu/libc.so.6", NULL},
-                           {"/lib/libm.so.6", NULL},
+                           {"/lib64/libm.so.6", NULL},
                            {"/lib/aarch64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}};
-static const char *std_lib_dirs[] = {"/lib64"};
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+                           {"/lib/ppc64-linux-gnu/libc.so.6", NULL},
+                           {"/lib64/libm.so.6", NULL},
+                           {"/lib/ppc64-linux-gnu/libm.so.6", NULL}};
+static const char *std_lib_dirs[] = {"/lib64", "/lib/ppc64-linux-gnu"};
 #else
 #error cannot recognize 32- or 64-bit target
 #endif
