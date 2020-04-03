@@ -236,6 +236,9 @@ readme-example-test:
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
+	-find /usr -name bits/libc-header-start.h
+	-find /usr -name sys/cdefs.h
+	-fgrep bits/libc-header-start.h /usr/include/stdlib.h
 	$(CC) -g -D$(TARGET) -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl && ./a.out -v sieve.c -ei
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test2 c2mir-bootstrap-test c2mir-bootstrap-test2
