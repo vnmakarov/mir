@@ -440,15 +440,16 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     0xf8010010, /* std  r0,16(r1) */
   };
   static uint32_t epilogue[] = {
-    0x38210118, /* addi r1,r1,280 */
     0xe8010010, /* ld   r0,16(r1) */
     0x7c0803a6, /* mtlr r0 */
   };
+  int frame_size = PPC64_STACK_HEADER_SIZE + 8 * 8 + 13 * 8 + 8 * 8;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (ctx, prologue, sizeof (prologue));
   /* stdu r1,n(r1): header + 8(gp args) + 13(fp args) + 8(param area): */
-  ppc64_gen_stdu (ctx, -(PPC64_STACK_HEADER_SIZE + 8 * 8 + 13 * 8 + 8 * 8));
+  if (frame_size % 16 != 0) frame_size += 8;
+  ppc64_gen_stdu (ctx, -frame_size);
   for (unsigned reg = 3; reg <= 10; reg++) /* std rn,dispn(r1) : */
     ppc64_gen_st (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
   for (unsigned reg = 1; reg <= 13; reg++) /* stfd fn,dispn(r1) : */
@@ -462,6 +463,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     ppc64_gen_ld (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
   for (unsigned reg = 1; reg <= 13; reg++) /* lfd fn,dispn(r1) : */
     ppc64_gen_ld (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 1 + 8) * 8 + 64, MIR_T_D);
+  ppc64_gen_addi (ctx, 1, 1, frame_size);
   push_insns (ctx, epilogue, sizeof (epilogue));
   ppc64_gen_jump (ctx, 11, FALSE);
 }
