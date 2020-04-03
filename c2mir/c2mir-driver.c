@@ -39,10 +39,25 @@ static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
 static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
 static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
-                           {"/lib/ppc64-linux-gnu/libc.so.6", NULL},
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+                           {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
+#else
+                           {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
+#endif
                            {"/lib64/libm.so.6", NULL},
-                           {"/lib/ppc64-linux-gnu/libm.so.6", NULL}};
-static const char *std_lib_dirs[] = {"/lib64", "/lib/ppc64-linux-gnu"};
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+                           {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
+#else
+                           {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
+#endif
+};
+static const char *std_lib_dirs[] = {"/lib64",
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+				     "/lib/powerpc64le-linux-gnu",
+#else
+				     "/lib/powerpc64-linux-gnu",
+#endif
+};
 #else
 #error cannot recognize 32- or 64-bit target
 #endif
