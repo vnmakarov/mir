@@ -8,6 +8,7 @@ os:
 dist: bionic
 arch:
  - amd64
+ - arm64
 git:
   quiet: true
 branches:
