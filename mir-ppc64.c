@@ -160,8 +160,8 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   ppc64_redirect_func_desc (ctx, thunk, to);
 #else
   static const uint32_t global_entry_end[] = {
-    0xa603897d, /* mtctr r12 */
-    0x2004804e, /* bctr */
+    0x7d8903a6, /* mtctr r12 */
+    0x4e800420, /* bctr */
   };
   VARR_TRUNC (uint8_t, machine_insns, 0);
   ppc64_gen_address (ctx, 12, to);
