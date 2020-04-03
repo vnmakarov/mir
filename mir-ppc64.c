@@ -228,7 +228,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   for (uint32_t i = 0; i < nargs; i++) param_size += arg_types[i] == MIR_T_LD ? 16 : 8;
   if (param_size < 64) param_size = 64;
   frame_size = PPC64_STACK_HEADER_SIZE + param_size + 8;         /* +local var to save res_reg */
-  if (frame_size % 8 != 0) frame_size += 8; /* align */
+  if (frame_size % 16 != 0) frame_size += 8; /* align */
   ppc64_gen_st (ctx, 2, 1, PPC64_TOC_OFFSET, MIR_T_I64);
   push_insns (ctx, start_pattern, sizeof (start_pattern));
   ppc64_gen_stdu (ctx, -frame_size);
