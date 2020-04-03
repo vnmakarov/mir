@@ -148,6 +148,7 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
 #else
   const uint32_t nop_insn = 24 << (32 - 6); /* ori 0,0,0 */
   const int max_thunk_len = (7 * 8);
+  VARR_TRUNC (uint8_t, machine_insns, 0);
   for (int i = 0; i < max_thunk_len; i++) push_insn (ctx, nop_insn);
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
                             VARR_LENGTH (uint8_t, machine_insns));
@@ -162,6 +163,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
     0xa603897d, /* mtctr r12 */
     0x2004804e, /* bctr */
   };
+  VARR_TRUNC (uint8_t, machine_insns, 0);
   ppc64_gen_address (ctx, 12, to);
   push_insns (ctx, global_entry_end, sizeof (global_entry_end));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, machine_insns),
