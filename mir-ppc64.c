@@ -353,7 +353,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     }
   }
   frame_size += local_var_size;
-  if (frame_size % 8 != 0) frame_size += 8; /* align */
+  if (frame_size % 16 != 0) frame_size += 8; /* align */
   push_insns (ctx, start_pattern, sizeof (start_pattern));
   ppc64_gen_stdu (ctx, -frame_size);
   ppc64_gen_st (ctx, res_reg, 1, PPC64_STACK_HEADER_SIZE + 64, MIR_T_I64); /* save res_reg */
