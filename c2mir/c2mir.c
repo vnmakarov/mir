@@ -12179,6 +12179,12 @@ static void init_include_dirs (MIR_context_t ctx) {
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/x86_64-linux-gnu");
 #elif defined(__linux__) && defined(__aarch64__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/aarch64-linux-gnu");
+#elif defined(__linux__) && defined(__PPC64__)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/powerpc64le-linux-gnu");
+#else
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/powerpc64-linux-gnu");
+#endif
 #endif
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
