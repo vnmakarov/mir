@@ -6,10 +6,9 @@
 #ifndef _STDINT_H
 #define _STDINT_H 1
 
-#ifdef __CHAR_UNSIGNED__
+#ifndef __int8_t_defined
+#define __int8_t_defined
 typedef signed char int8_t;
-#else
-typedef char int8_t;
 #endif
 typedef short int int16_t;
 typedef int int32_t;
