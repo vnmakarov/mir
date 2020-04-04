@@ -3283,6 +3283,14 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   return VARR_ADDR (code_holder_t, code_holders) + len - 1;
 }
 
+#ifndef __MIRC__
+void _MIR_flush_code_cache (void *start, void *bound) {
+#ifdef __GNUC__
+  __clear_cache (start, bound);
+#endif
+}
+#endif
+
 static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_t *code,
                           size_t code_len) {
   uint8_t *mem = ch_ptr->free;
@@ -3292,6 +3300,7 @@ static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_
   mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE | PROT_EXEC);
   memcpy (mem, code, code_len);
   mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_READ | PROT_EXEC);
+  _MIR_flush_code_cache (mem, ch_ptr->free);
   return mem;
 }
 
@@ -3325,6 +3334,7 @@ void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code, si
   mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
   memcpy (addr, code, code_len);
   mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  _MIR_flush_code_cache (addr, addr + code_len);
 }
 
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
@@ -3339,6 +3349,7 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
   mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
   for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
   mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
 }
 
 void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
@@ -3363,6 +3374,7 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
     memcpy (base + offset, &value, sizeof (void *));
   }
   mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
   va_end (args);
 }
 

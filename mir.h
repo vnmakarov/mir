@@ -564,6 +564,7 @@ extern MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, co
 extern MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char *name,
                                      void *addr);
 
+extern void _MIR_flush_code_cache (void *start, void *bound);
 extern uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len);
 extern uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size);
 extern uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t *code,
