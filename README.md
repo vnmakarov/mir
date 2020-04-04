@@ -2,7 +2,7 @@
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abuild"><img alt="GitHub MIR build status" src="https://github.com/vnmakarov/mir/workflows/build/badge.svg"></a>
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Atest"><img alt="GitHub MIR test status" src="https://github.com/vnmakarov/mir/workflows/test/badge.svg"></a>
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abenchmark"><img alt="GitHub MIR benchmark status" src="https://github.com/vnmakarov/mir/workflows/benchmark/badge.svg"></a>
-<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=Travis%20tests"></a>
+<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=Travis%20tests(x86_64,%20arm64,%20ppc64le)"></a>
 </p>
 
 # MIR Project
