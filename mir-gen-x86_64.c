@@ -77,7 +77,11 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
 
  */
 
+#ifndef _WIN64
 static const int reg_save_area_size = 176;
+#else
+static const int reg_save_area_size = 0;
+#endif
 
 static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
                                                 MIR_reg_t slot) {
@@ -456,15 +460,18 @@ static void target_machinize (MIR_context_t ctx) {
   MIR_type_t type, mem_type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn;
-  MIR_reg_t ret_reg, arg_reg;
+  MIR_reg_t ret_reg, arg_reg, vap_reg;
   MIR_op_t ret_reg_op, arg_reg_op, mem_op;
-  size_t i, int_arg_num, fp_arg_num, mem_size;
+  size_t i, int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
   stack_arg_func_p = FALSE;
   start_sp_from_bp_offset = 8;
-  for (i = int_arg_num = fp_arg_num = mem_size = 0; i < func->nargs; i++) {
+#ifdef _WIN64
+  if (func->nargs > 4) mem_size = 32; /* spill space for register args */
+#endif
+  for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem ... */
     type = VARR_GET (MIR_var_t, func->vars, i).type;
@@ -516,6 +523,7 @@ static void target_machinize (MIR_context_t ctx) {
       gen_add_insn_before (ctx, insn, new_insn);
       gen_delete_insn (ctx, insn);
     } else if (code == MIR_VA_START) {
+#ifndef _WIN64
       MIR_op_t treg_op
         = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func));
       MIR_op_t va_op = insn->ops[0];
@@ -549,10 +557,30 @@ static void target_machinize (MIR_context_t ctx) {
                                MIR_new_int_op (ctx, -reg_save_area_size));
       gen_add_insn_before (ctx, insn, new_insn);
       gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
+#else
+      stack_arg_func_p = TRUE;
+      /* spill reg args */
+      mem_size = 8 /*ret*/ + start_sp_from_bp_offset;
+      for (int i = 0; i < 4; i++) {
+        arg_reg = get_int_arg_reg (i);
+        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, mem_size, FP_HARD_REG, MIR_NON_HARD_REG, 1);
+        new_insn = MIR_new_insn (ctx, MIR_MOV, mem_op, _MIR_new_hard_reg_op (ctx, arg_reg));
+        gen_add_insn_before (ctx, insn, new_insn);
+        mem_size += 8;
+      }
+      /* set va pointer */
+      mem_size = 8 /*ret*/ + start_sp_from_bp_offset + func->nargs * 8;
+      vap_reg = gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func);
+      new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, vap_reg),
+                               _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
+                               MIR_new_int_op (ctx, mem_size));
+      gen_add_insn_before (ctx, insn, new_insn);
+#endif
       gen_delete_insn (ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (ctx, insn);
     } else if (code == MIR_VA_ARG) { /* do nothing */
+#ifndef _WIN64
       /* Use a builtin func call:
          mov func_reg, func ref; mov flag_reg, <0|1>; call proto, func_reg, res_reg, va_reg,
          flag_reg */
@@ -578,6 +606,17 @@ static void target_machinize (MIR_context_t ctx) {
       ops[4] = flag_reg_op;
       new_insn = MIR_new_insn_arr (ctx, MIR_CALL, 5, ops);
       gen_add_insn_before (ctx, insn, new_insn);
+#else
+      MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], mem_op = insn->ops[2];
+      assert (res_reg_op.mode == MIR_OP_REG && va_reg_op.mode == MIR_OP_REG
+              && mem_op.mode == MIR_OP_MEM);
+      /* return and increment va pointer */
+      arg_reg_op = MIR_new_reg_op (ctx, vap_reg);
+      new_insn = MIR_new_insn (ctx, MIR_MOV, res_reg_op, arg_reg_op);
+      gen_add_insn_before (ctx, insn, new_insn);
+      new_insn = MIR_new_insn (ctx, MIR_ADD, arg_reg_op, arg_reg_op, MIR_new_int_op (ctx, 8));
+      gen_add_insn_before (ctx, insn, new_insn);
+#endif
       gen_delete_insn (ctx, insn);
     } else if (MIR_call_code_p (code)) {
       machinize_call (ctx, insn);
@@ -703,6 +742,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
     service_area_size = 8;
   } else {
     service_area_size = reg_save_area_size + 8;
+#ifndef _WIN64
     start = -(int64_t) service_area_size;
     isave (ctx, anchor, start, DI_HARD_REG);
     isave (ctx, anchor, start + 8, SI_HARD_REG);
@@ -718,6 +758,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
     dsave (ctx, anchor, start + 128, XMM5_HARD_REG);
     dsave (ctx, anchor, start + 144, XMM6_HARD_REG);
     dsave (ctx, anchor, start + 160, XMM7_HARD_REG);
+#endif
   }
   stack_slots_size = stack_slots_num * 8;
   /* stack slots, and saved regs as multiple of 16 bytes: */
