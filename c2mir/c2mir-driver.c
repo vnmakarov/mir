@@ -515,6 +515,7 @@ int main (int argc, char *argv[], char *env[]) {
     } else {
       open_std_libs ();
       MIR_load_external (ctx, "abort", fancy_abort);
+      MIR_load_external (ctx, "_MIR_flush_code_cache", _MIR_flush_code_cache);
       if (interp_exec_p) {
         MIR_link (ctx, MIR_set_interp_interface, import_resolver);
         start_time = real_usec_time ();
