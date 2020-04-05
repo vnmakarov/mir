@@ -1,9 +1,3 @@
-/* ???Preventing allocation of R0 as base reg and removing cases of mem
-   with r0 as base.
-   ??? more mov immediate patterns ((li|lis);shl 32;addis;addi or lis,addi;shl 32|16):
-   z1,z2,z3 or z0;z2;z3 or z2;z3 or z0;z1  ...
-   ???Should be r2 fixed, clobbered by CALL */
-
 /* This file is a part of MIR project.
    Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
@@ -944,7 +938,6 @@ static const struct pattern patterns[] = {
   {MIR_MOV, "r ms0", "o34 rt0 m; o31 O954 rs0 ra0"},     /* lbz rt,disp-mem; extsb rt,rt */
   {MIR_MOV, "r Ms0", "o31 O87 rt0 M; o31 O954 rs0 ra0"}, /* lbzx rt,index-mem; extsb rt,rt */
 
-  // ??? more constant
   {MIR_MOV, "r i", "o14 rt0 ha0 i"},                   /* li rt,i == addi rt,0,i */
   {MIR_MOV, "r I", "o15 rt0 ha0 I"},                   /* lis rt,i == addis rt,0,i */
   {MIR_MOV, "r zs", "o15 rt0 ha0 z2; o24 rt0 ra0 z3"}, /* lis rt,z2; ori rt,rt,z3 */
@@ -1322,7 +1315,7 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
     *hr1 = F0_HARD_REG;
   } else if (code == MIR_LDMOV) { /* if mem base reg is R0 */
     *hr1 = R10_HARD_REG;
-  } else if (code == MIR_CALL || code == MIR_INLINE) { // ????
+  } else if (code == MIR_CALL || code == MIR_INLINE) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     *hr1 = R12_HARD_REG;
 #else
@@ -1965,7 +1958,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
 	if ((n = dec_value (ch2)) >= 0) {
           gen_assert (lab_off < 0 && (n & 0x3) == 0);
           lab_off = n;
-        } else {  // ???
+        } else {
           --p;
 	  gen_assert (insn->code != MIR_CALL);
           op = insn->ops[0];
@@ -1989,7 +1982,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         } else if ((n = dec_value (ch2)) >= 0) {
           gen_assert (lb < 0);
           lb = n;
-        } else {  // ???
+        } else {
           --p;
           op = insn->ops[insn->code != MIR_CALL ? 0 : 1];
           gen_assert (op.mode == MIR_OP_LABEL);
@@ -2010,7 +2003,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
       case 'T':
         gen_assert (!switch_table_addr_p && switch_table_addr_insn_start < 0);
         switch_table_addr_p = TRUE;
-        break;  // ???
+        break;
       default: gen_assert (FALSE);
       }
     }
