@@ -822,9 +822,11 @@ struct pattern {
      I - 16 bit signed immediate shift left by 16
      u - 16 bit unsigned immediate
      U - 16 bit unsigned immediate shift left by 16
+     x - 64 bit unsigned immediate whose hight 32-bit part is described by pattern 0*1*
      z - 32-bit unsigned immediate
-     zs - 32-bit unsigned immediate with zero 15-th bit
+     zs - 32-bit unsigned immediate with zero 0-th bit
      Z - any integer immediate
+     Zs - 48-bit unsigned immediate with zero 0-th bit
      Sh - 6-bit unsigned shift
      sh - 5-bit unsigned shift
      ia - roundup (i, 16) as 16 bit signed integer
@@ -873,8 +875,8 @@ struct pattern {
      I - 16 bit signed immediate shift left by 16 - field [16..31]
      u - 16 bit unsigned immediate - field [16..31]
      U - 16 bit unsigned immediate shift left by 16 - field [16..31]
-     z[0-1] - n-th 16 bytes of low 32-bit part
-     Z[0-3] - n-th 16 bytes
+     z[0-3] - n-th 16 bytes of 64-bit immediate
+     x - mb for x immediate
      sh<number> - field [16..20]
      Sh<number> - field [16..20,30]
      Mb<number> - field [21..26], and zero bits [27..28]
@@ -945,12 +947,16 @@ static const struct pattern patterns[] = {
   // ??? more constant
   {MIR_MOV, "r i", "o14 rt0 ha0 i"},                   /* li rt,i == addi rt,0,i */
   {MIR_MOV, "r I", "o15 rt0 ha0 I"},                   /* lis rt,i == addis rt,0,i */
-  {MIR_MOV, "r zs", "o15 rt0 ha0 z0; o24 rt0 ra0 z1"}, /* lis rt,z0; ori rt,rt,z1 */
-  /* xor rt,rt,rt; oris rt,rt,z0; ori rt,rt,z1: */
-  {MIR_MOV, "r z", "o31 O316 rs0 ra0 rb0; o25 ra0 rs0 z0; o24 ra0 rs0 z1"},
-  /* lis rt,r0,Z0; ori rt,rt,Z1; rldicr rt,rt,32,31; oris rt,rt,Z2; ori rt,rt,Z3: */
+  {MIR_MOV, "r zs", "o15 rt0 ha0 z2; o24 rt0 ra0 z3"}, /* lis rt,z2; ori rt,rt,z3 */
+  /* lis rt,rt,z2; ori rt,rt,z3; clrdi rt,rt,X */
+  {MIR_MOV, "r x", "o15 rt0 ha0 z2; o24 ra0 rs0 z3; o30 ra0 rs0 Sh0 x"},
+  /* xor rt,rt,rt; oris rt,rt,z2; ori rt,rt,z3: */
+  {MIR_MOV, "r z", "o31 O316 rs0 ra0 rb0; o25 ra0 rs0 z2; o24 ra0 rs0 z3"},
+  /* li rt,r0,z1; rldicr rt,rt,32,31; oris rt,rt,z2; ori rt,rt,z3 */
+  {MIR_MOV, "r Zs", "o14 rt0 ha0 z1; o30 rt0 ra0 Sh32 Me31; o25 ra0 rs0 z2; o24 ra0 rs0 z3"},
+  /* lis rt,r0,z0; ori rt,rt,z1; rldicr rt,rt,32,31; oris rt,rt,z2; ori rt,rt,z3: */
   {MIR_MOV, "r Z",
-   "o15 rt0 ha0 Z0; o24 ra0 rs0 Z1; o30 rt0 ra0 Sh32 Me31; o25 ra0 rs0 Z2; o24 ra0 rs0 Z3"},
+   "o15 rt0 ha0 z0; o24 ra0 rs0 z1; o30 rt0 ra0 Sh32 Me31; o25 ra0 rs0 z2; o24 ra0 rs0 z3"},
 
   {MIR_FMOV, "r r", "o63 O72 rt0 rb1"}, /*  fmr rt,rb */
   {MIR_FMOV, "r mf", "o48 rt0 m"},      /* lfs rt, disp-mem */
@@ -1368,9 +1374,17 @@ static int uint16_p (uint64_t u) { return !(u >> 16); }
 static int int16_shifted_p (int64_t i) { return (i & 0xffff) == 0 && int16_p (i >> 16); }
 static int uint16_shifted_p (uint64_t u) { return (u & 0xffff) == 0 && uint16_p (u >> 16); }
 static int uint31_p (uint64_t u) { return !(u >> 31); }
+static int uint47_p (uint64_t u) { return !(u >> 47); }
 static int uint32_p (uint64_t u) { return !(u >> 32); }
 static int uint6_p (uint64_t u) { return !(u >> 6); }
 static int uint5_p (uint64_t u) { return !(u >> 5); }
+static int negative32_p (uint64_t u, uint64_t *n) {
+  if (((u >> 31) & 1) == 0) return FALSE;
+  /* high 32-bit part pattern: 0*1*, n contains number of ones. */
+  for (u >>= 32, *n = 0; u & 1; u >>= 1, (*n)++)
+    ;
+  return u == 0;
+}
 
 static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
 			    MIR_insn_t insn, int use_short_label_p) {
@@ -1521,19 +1535,33 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
       if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || !uint16_shifted_p (op.u.u))
         return FALSE;
       break;
+    case 'x':
     case 'z':
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
-      ch = *++p;
-      if (ch == 's') {
-        if (!uint31_p (op.u.u)) return FALSE;
+    case 'Z': {
+      uint64_t v, n;
+
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
+      if (op.mode != MIR_OP_REF) {
+	v = op.u.u;
+      } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
+		 && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
+	v = (uint64_t) op.u.ref->u.data->u.els;
       } else {
-        p--;
-        if (!uint32_p (op.u.u)) return FALSE;
+	v = (uint64_t) op.u.ref->addr;
+      }
+      if (start_ch == 'x') {
+	if (!negative32_p (v, &n)) return FALSE;
+      } else {
+	ch = *++p;
+	if (ch == 's') {
+	  if (start_ch == 'z' ? !uint31_p (v) : !uint47_p (op.u.u)) return FALSE;
+	} else {
+	  p--;
+	  if (start_ch == 'z' && !uint32_p (v)) return FALSE;
+	}
       }
       break;
-    case 'Z':
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
-      break;
+    }
     case 's':
     case 'S':
       ch = *++p;
@@ -1879,22 +1907,13 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (imm < 0);
         imm = (start_ch == 'i' || start_ch == 'u' ? op.u.u : op.u.u >> 16) & 0xffff;
         break;
-      case 'z':
-        n = dec_value (*++p);
-        gen_assert (n >= 0 && n <= 1);
-        op = insn->ops[nops - 1];
-        gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
-        gen_assert (imm < 0);
-        imm = (op.u.u >> (1 - n) * 16) & 0xffff;
-        break;
-      case 'Z': {
-	uint64_t v;
+      case 'x':
+      case 'z': {
+	int ok_p;
+	uint64_t v, n;
 
-        n = dec_value (*++p);
-        gen_assert (n >= 0 && n <= 3);
         op = insn->ops[nops - 1];
         gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_REF);
-        gen_assert (imm < 0);
 	if (op.mode != MIR_OP_REF) {
 	  v = op.u.u;
 	} else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
@@ -1903,7 +1922,17 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         } else {
           v = (uint64_t) op.u.ref->addr;
         }
-	imm = (v >> (3 - n) * 16) & 0xffff;
+	if (start_ch == 'x') {
+	  ok_p = negative32_p (v, &n);
+	  n = 32 - n;
+	  gen_assert (Mb < 0 && ok_p);
+	  Mb = ((n & 0x1f) << 1) | (n >> 5) & 1;
+	} else {
+	  gen_assert (imm < 0);
+	  n = dec_value (*++p);
+	  gen_assert (n >= 0 && n <= 3);
+	  imm = (v >> (3 - n) * 16) & 0xffff;
+	}
         break;
       }
       case 'b':
