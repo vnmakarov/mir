@@ -72,6 +72,9 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
    |---------------|
    | slots for     |  dynamically allocated/deallocated by caller
    |  passing args |
+   |---------------|
+   |  spill space  |  WIN64 only, 32 bytes spill space for register args
+   |---------------|
 
    size of slots and saved regs is multiple of 16 bytes
 
@@ -79,8 +82,10 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
 
 #ifndef _WIN64
 static const int reg_save_area_size = 176;
+static const int spill_space_size = 0;
 #else
 static const int reg_save_area_size = 0;
+static const int spill_space_size = 32;
 #endif
 
 static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t type,
@@ -182,7 +187,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0, xmm_args = 0;
+  size_t int_arg_num = 0, fp_arg_num = 0, xmm_args = 0, mem_size = spill_space_size;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -202,9 +207,6 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
     nargs = VARR_LENGTH (MIR_var_t, proto->args);
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
-#ifdef _WIN64
-  if (nargs > 4 || proto->vararg_p) mem_size = 32; /* spill space for register args */
-#endif
   if (call_insn->ops[1].mode != MIR_OP_REG && call_insn->ops[1].mode != MIR_OP_HARD_REG) {
     temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, func));
     new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op, call_insn->ops[1]);
@@ -462,15 +464,12 @@ static void target_machinize (MIR_context_t ctx) {
   MIR_insn_t insn, next_insn, new_insn;
   MIR_reg_t ret_reg, arg_reg, vap_reg;
   MIR_op_t ret_reg_op, arg_reg_op, mem_op;
-  size_t i, int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
+  size_t i, int_arg_num = 0, fp_arg_num = 0, mem_size = spill_space_size;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
   stack_arg_func_p = FALSE;
   start_sp_from_bp_offset = 8;
-#ifdef _WIN64
-  if (func->nargs > 4) mem_size = 32; /* spill space for register args */
-#endif
   for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem ... */
