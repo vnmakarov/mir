@@ -85,7 +85,7 @@ EOF
       first=
   fi
   if clang $tempc >/dev/null 2>&1; then
-      run "clang -O2" "clang -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
+      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
 #  run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
