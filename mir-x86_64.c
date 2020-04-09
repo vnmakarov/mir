@@ -13,13 +13,20 @@ void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
 }
 void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   static const uint8_t bend_code[] = {
+#ifndef _WIN64
     0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
     0x48, 0x89, 0xfc,       /* rsp = rdi */
     0xff, 0xe0,             /* jmp *rax */
+#else
+    0x48, 0x8b, 0x04, 0x24, /* rax = (rsp) */
+    0x48, 0x89, 0xcc,       /* rsp = rcx */
+    0xff, 0xe0,             /* jmp *rax */
+#endif
   };
   return _MIR_publish_code (ctx, bend_code, sizeof (bend_code));
 }
 
+#ifndef _WIN64
 struct x86_64_va_list {
   uint32_t gp_offset, fp_offset;
   uint64_t *overflow_arg_area, *reg_save_area;
@@ -51,6 +58,26 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
   *va = *(struct x86_64_va_list *) vap;
 }
+#else
+struct x86_64_va_list {
+  uint64_t *arg_area;
+};
+
+void *va_arg_builtin (void *p, uint64_t t) {
+  struct x86_64_va_list *va = p;
+  void *a = va->arg_area;
+  va->arg_area++;
+  return a;
+}
+
+void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+  struct x86_64_va_list **va = p;
+  va_list *vap = a;
+
+  assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
+  *va = (struct x86_64_va_list *) vap;
+}
+#endif
 
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
 
@@ -70,6 +97,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
 }
 
 static const uint8_t save_pat[] = {
+#ifndef _WIN64
   0x48, 0x81, 0xec, 0x80, 0,    0,    0, /*sub    $0x80,%rsp		   */
   0xf3, 0x0f, 0x7f, 0x04, 0x24,          /*movdqu %xmm0,(%rsp)		   */
   0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,    /*movdqu %xmm1,0x10(%rsp)	   */
@@ -85,9 +113,16 @@ static const uint8_t save_pat[] = {
   0x52,                                  /*push   %rdx			   */
   0x56,                                  /*push   %rsi			   */
   0x57,                                  /*push   %rdi			   */
+#else
+  0x48, 0x89, 0x4c, 0x24, 0x08,          /*mov  %rcx,0x08(%rsp) */
+  0x48, 0x89, 0x54, 0x24, 0x10,          /*mov  %rdx,0x10(%rsp) */
+  0x4c, 0x89, 0x44, 0x24, 0x18,          /*mov  %r8, 0x18(%rsp) */
+  0x4c, 0x89, 0x4c, 0x24, 0x20,          /*mov  %r9, 0x20(%rsp) */
+#endif
 };
 
 static const uint8_t restore_pat[] = {
+#ifndef _WIN64
   0x5f,                                  /*pop    %rdi			   */
   0x5e,                                  /*pop    %rsi			   */
   0x5a,                                  /*pop    %rdx			   */
@@ -103,6 +138,16 @@ static const uint8_t restore_pat[] = {
   0xf3, 0x0f, 0x6f, 0x74, 0x24, 0x60,    /*movdqu 0x60(%rsp),%xmm6	   */
   0xf3, 0x0f, 0x6f, 0x7c, 0x24, 0x70,    /*movdqu 0x70(%rsp),%xmm7	   */
   0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x80,%rsp		   */
+#else
+  0x48, 0x8b, 0x4c, 0x24, 0x08,          /*mov  0x08(%rsp),%rcx */
+  0x48, 0x8b, 0x54, 0x24, 0x10,          /*mov  0x10(%rsp),%rdx */
+  0x4c, 0x8b, 0x44, 0x24, 0x18,          /*mov  0x18(%rsp),%r8  */
+  0x4c, 0x8b, 0x4c, 0x24, 0x20,          /*mov  0x20(%rsp),%r9  */
+  0xf3, 0x0f, 0x7e, 0x44, 0x24, 0x08,    /*movq 0x08(%rsp),%xmm0*/
+  0xf3, 0x0f, 0x7e, 0x4c, 0x24, 0x10,    /*movq 0x10(%rsp),%xmm1*/
+  0xf3, 0x0f, 0x7e, 0x54, 0x24, 0x18,    /*movq 0x18(%rsp),%xmm2*/
+  0xf3, 0x0f, 0x7e, 0x5c, 0x24, 0x20,    /*movq 0x20(%rsp),%xmm3*/
+#endif
 };
 
 static uint8_t *push_insns (MIR_context_t ctx, const uint8_t *pat, size_t pat_len) {
@@ -174,13 +219,22 @@ static void gen_st80 (MIR_context_t ctx, uint32_t src_offset) {
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
                         MIR_type_t *arg_types, int vararg_p) {
   static const uint8_t prolog[] = {
+#ifndef _WIN64
     0x53,                         /* pushq %rbx */
     0x48, 0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
     0x49, 0x89, 0xfb,             /* mov $rdi, $r11 -- fun addr */
     0x48, 0x89, 0xf3,             /* mov $rsi, $rbx -- result/arg addresses */
+#else
+    0x53,                         /* pushq %rbx */
+    0x48, 0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
+    0x49, 0x89, 0xcb,             /* mov $rcx, $r11 -- fun addr */
+    0x48, 0x89, 0xd3,             /* mov $rdx, $rbx -- result/arg addresses */
+#endif
   };
   static const uint8_t call_end[] = {
+#ifndef _WIN64
     0x48, 0xc7, 0xc0, 0x08, 0, 0, 0, /* mov $8, rax -- to save xmm varargs */
+#endif
     0x41, 0xff, 0xd3,                /* callq  *%r11	   */
     0x48, 0x81, 0xc4, 0,    0, 0, 0, /* addq <sp_offset>, %rsp */
   };
@@ -188,24 +242,38 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x5b, /* pop %rbx */
     0xc3, /* ret */
   };
+#ifndef _WIN64
   static const uint8_t iregs[] = {7, 6, 2, 1, 8, 9}; /* rdi, rsi, rdx, rcx, r8, r9 */
-  uint32_t n_iregs = 0, n_xregs = 0, n_fregs, sp_offset = 0;
+  static const uint32_t max_iregs = 6, max_xregs = 8;
+  uint32_t sp_offset = 0;
+#else
+  static const uint8_t iregs[] = {1, 2, 8, 9}; /* rcx, rdx, r8, r9 */
+  static const uint32_t max_iregs = 4, max_xregs = 4;
+  uint32_t sp_offset = 32;
+#endif
+  uint32_t n_iregs = 0, n_xregs = 0, n_fregs;
   uint8_t *addr;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (ctx, prolog, sizeof (prolog));
   for (size_t i = 0; i < nargs; i++) {
     if ((MIR_T_I8 <= arg_types[i] && arg_types[i] <= MIR_T_U64) || arg_types[i] == MIR_T_P) {
-      if (n_iregs < 6) {
+      if (n_iregs < max_iregs) {
         gen_mov (ctx, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+#ifdef _WIN64
+        n_xregs++;
+#endif
       } else {
         gen_ldst (ctx, sp_offset, (i + nres) * sizeof (long double), TRUE);
         sp_offset += 8;
       }
     } else if (arg_types[i] == MIR_T_F || arg_types[i] == MIR_T_D) {
-      if (n_xregs < 8) {
+      if (n_xregs < max_xregs) {
         gen_movxmm (ctx, (i + nres) * sizeof (long double), n_xregs++, arg_types[i] == MIR_T_F,
                     TRUE);
+#ifdef _WIN64
+        gen_mov (ctx, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+#endif
       } else {
         gen_ldst (ctx, sp_offset, (i + nres) * sizeof (long double), arg_types[i] == MIR_T_D);
         sp_offset += 8;
@@ -221,7 +289,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   addr = VARR_ADDR (uint8_t, machine_insns);
   memcpy (addr + 4, &sp_offset, sizeof (uint32_t));
   addr = push_insns (ctx, call_end, sizeof (call_end));
-  memcpy (addr + 13, &sp_offset, sizeof (uint32_t));
+  memcpy (addr + sizeof (call_end) - 4, &sp_offset, sizeof (uint32_t));
+#ifdef _WIN64
+  if (nres > 1)
+    (*error_func) (MIR_call_op_error, "Windows x86-64 doesn't support multiple return values");
+#endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < nres; i++) {
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
@@ -245,6 +317,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
   static const uint8_t push_rbx[] = {0x53, /*push   %rbx  */};
   static const uint8_t prepare_pat[] = {
+#ifndef _WIN64
     /*  0: */ 0x48, 0x83, 0xec, 0x20,                      /* sub    32,%rsp	     */
     /*  4: */ 0x48, 0x89, 0xe2,                            /* mov    %rsp,%rdx	     */
     /*  7: */ 0xc7, 0x02, 0,    0,    0,    0,             /* movl   0,(%rdx)	     */
@@ -261,10 +334,33 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     /* 4a: */ 0x48, 0xb8, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <handler>,%rax  */
     /* 54: */ 0xff, 0xd0,                                  /* callq  *%rax           */
   };
+  static const uint32_t nres_offset = 0x2c;
+  static const uint32_t ctx_offset = 0x38;
+  static const uint32_t func_offset = 0x42;
+  static const uint32_t hndl_offset = 0x4c;
+  static const uint32_t prep_stack_size = 208;
+#else
+    /*  0: */ 0x4c, 0x8d, 0x44, 0x24, 0x08,                /* lea    8(%rsp),%r8     */
+    /*  5: */ 0x53,                                        /* push   %rbx            */
+    /*  6: */ 0x48, 0x81, 0xec, 0,    0,    0, 0,          /* sub    <n>,%rsp        */
+    /*  d: */ 0x48, 0x89, 0xe3,                            /* mov    %rsp,%rbx       */
+    /* 10: */ 0x49, 0x89, 0xe1,                            /* mov    %rsp,%r9        */
+    /* 13: */ 0x48, 0x83, 0xec, 0x20,                      /* sub    32,%rsp         */
+    /* 17: */ 0x48, 0xb9, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <ctx>,%rcx      */
+    /* 21: */ 0x48, 0xba, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <func_item>,%rdx*/
+    /* 2b: */ 0x48, 0xb8, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <handler>,%rax  */
+    /* 35: */ 0xff, 0xd0,                                  /* callq  *%rax           */
+  };
+  static const uint32_t nres_offset = 0x09;
+  static const uint32_t ctx_offset = 0x19;
+  static const uint32_t func_offset = 0x23;
+  static const uint32_t hndl_offset = 0x2d;
+  static const uint32_t prep_stack_size = 32;
+#endif
   static const uint8_t shim_end[] = {
-    /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, /*add    208+n,%rsp*/
-    /* 7: */ 0x5b,                         /*pop          %rbx*/
-    /* 8: */ 0xc3,                         /*retq             */
+    /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, /*add    prep_stack_size+n,%rsp*/
+    /* 7: */ 0x5b,                         /*pop                      %rbx*/
+    /* 8: */ 0xc3,                         /*retq                         */
   };
   static const uint8_t ld_pat[] = {0x48, 0x8b, 0x83, 0, 0, 0, 0}; /* mov <offset>(%rbx), %reg */
   static const uint8_t movss_pat[]
@@ -279,15 +375,21 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t *results = func_item->u.func->res_types;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
+#ifndef _WIN64
   push_insns (ctx, push_rbx, sizeof (push_rbx));
+#endif
   push_insns (ctx, save_pat, sizeof (save_pat));
   addr = push_insns (ctx, prepare_pat, sizeof (prepare_pat));
   imm = nres * 16;
-  memcpy (addr + 0x2c, &imm, sizeof (uint32_t));
-  memcpy (addr + 0x38, &ctx, sizeof (void *));
-  memcpy (addr + 0x42, &func_item, sizeof (void *));
-  memcpy (addr + 0x4c, &handler, sizeof (void *));
+  memcpy (addr + nres_offset, &imm, sizeof (uint32_t));
+  memcpy (addr + ctx_offset, &ctx, sizeof (void *));
+  memcpy (addr + func_offset, &func_item, sizeof (void *));
+  memcpy (addr + hndl_offset, &handler, sizeof (void *));
   /* move results: */
+#ifdef _WIN64
+  if (nres > 1)
+    (*error_func) (MIR_call_op_error, "Windows x86-64 doesn't support multiple return values");
+#endif
   n_iregs = n_xregs = n_fregs = offset = 0;
   for (uint32_t i = 0; i < nres; i++) {
     if (results[i] == MIR_T_F && n_xregs < 2) {
@@ -316,7 +418,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     offset += 16;
   }
   addr = push_insns (ctx, shim_end, sizeof (shim_end));
-  imm = 208 + nres * 16;
+  imm = prep_stack_size + nres * 16;
   memcpy (addr + 3, &imm, sizeof (uint32_t));
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
                             VARR_LENGTH (uint8_t, machine_insns));
@@ -327,20 +429,36 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   static const uint8_t push_rax[] = {0x50, /*push   %rax */};
   static const uint8_t wrap_end[] = {
+#ifndef _WIN64
     0x58,             /*pop   %rax */
+#endif
     0x41, 0xff, 0xe2, /*jmpq   *%r10			   */
   };
   static const uint8_t call_pat[] = {
+#ifndef _WIN64
     0x48, 0xbe, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs called_func,%rsi  	   */
     0x48, 0xbf, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs ctx,%rdi  	   */
     0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs <hook_address>,%r10  	   */
     0x41, 0xff, 0xd2,                      /*callq  *%r10			   */
     0x49, 0x89, 0xc2,                      /*mov    %rax,%r10		   */
+#else
+    0x48, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs called_func,%rdx   */
+    0x48, 0xb9, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs ctx,%rcx           */
+    0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs <hook_address>,%r10*/
+    0x50,                                  /*push   %rax               */
+    0x48, 0x83, 0xec, 0x20,                /*sub    32,%rsp            */
+    0x41, 0xff, 0xd2,                      /*callq  *%r10              */
+    0x49, 0x89, 0xc2,                      /*mov    %rax,%r10          */
+    0x48, 0x83, 0xc4, 0x20,                /*add    32,%rsp            */
+    0x58,                                  /*pop    %rax               */
+#endif
   };
   uint8_t *addr;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
+#ifndef _WIN64
   push_insns (ctx, push_rax, sizeof (push_rax));
+#endif
   push_insns (ctx, save_pat, sizeof (save_pat));
   addr = push_insns (ctx, call_pat, sizeof (call_pat));
   memcpy (addr + 2, &called_func, sizeof (void *));
