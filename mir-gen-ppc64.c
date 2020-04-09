@@ -53,13 +53,14 @@ static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type
 
 static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
-  return (hard_reg == FP_HARD_REG || hard_reg == SP_HARD_REG || hard_reg == LR_HARD_REG
-	   /* don't bother to allocate R0 as it has special meaning for base reg and of addi: */
-	  || hard_reg == R0_HARD_REG || hard_reg == R2_HARD_REG || hard_reg == R13_HARD_REG
-	  || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
-	  || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
-	  || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
-	  || hard_reg == TEMP_LDOUBLE_HARD_REG1 || hard_reg == TEMP_LDOUBLE_HARD_REG2);
+  return (hard_reg == FP_HARD_REG || hard_reg == SP_HARD_REG
+          || hard_reg == LR_HARD_REG
+          /* don't bother to allocate R0 as it has special meaning for base reg and of addi: */
+          || hard_reg == R0_HARD_REG || hard_reg == R2_HARD_REG || hard_reg == R13_HARD_REG
+          || hard_reg == TEMP_INT_HARD_REG1 || hard_reg == TEMP_INT_HARD_REG2
+          || hard_reg == TEMP_FLOAT_HARD_REG1 || hard_reg == TEMP_FLOAT_HARD_REG2
+          || hard_reg == TEMP_DOUBLE_HARD_REG1 || hard_reg == TEMP_DOUBLE_HARD_REG2
+          || hard_reg == TEMP_LDOUBLE_HARD_REG1 || hard_reg == TEMP_LDOUBLE_HARD_REG2);
 }
 
 static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
@@ -75,7 +76,7 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
         |   Floating point register save area             optional        optional
         |   General register save area                    optional        optional
         |   VRSAVE save word (32-bits)                      0              NA
-        |   Alignment padding (4 or 12 bytes)                            
+        |   Alignment padding (4 or 12 bytes)
         |   Vector register save area (quadword aligned)    we don't have it
         |   Local variable space                          optional        optional
         |   Parameter save area  (for callees)            (SP + 48)       (SP + 32) optional
@@ -216,33 +217,35 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64; // ???
+    mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;  // ???
     if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fregs < 13) {
       /* put arguments to argument hard regs */
       if (ext_insn != NULL) gen_add_insn_before (ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + n_fregs);
-      gen_mov (ctx, call_insn, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV, // ???
-	       arg_reg_op, arg_op);
+      gen_mov (ctx, call_insn,
+               type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,  // ???
+               arg_reg_op, arg_op);
       call_insn->ops[i] = arg_reg_op;
-      if (vararg_p) { // ??? dead insns
+      if (vararg_p) {                                           // ??? dead insns
         if (n_iregs >= 8 || type == MIR_T_LD && n_iregs == 7) { /* store in memory too */
-	  mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size + PPC64_STACK_HEADER_SIZE,
-					     SP_HARD_REG, MIR_NON_HARD_REG, 1);
-	  gen_assert (n_fregs < 12);
-	  gen_mov (ctx, call_insn, type == MIR_T_LD ? MIR_LDMOV : MIR_DMOV, mem_op, arg_reg_op);
+          mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size + PPC64_STACK_HEADER_SIZE,
+                                             SP_HARD_REG, MIR_NON_HARD_REG, 1);
+          gen_assert (n_fregs < 12);
+          gen_mov (ctx, call_insn, type == MIR_T_LD ? MIR_LDMOV : MIR_DMOV, mem_op, arg_reg_op);
         }
-	if (n_iregs < 8) { /* load into gp reg too */
-	  mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -16, SP_HARD_REG, MIR_NON_HARD_REG, 1);
-	  gen_mov (ctx, call_insn, type == MIR_T_LD ? MIR_LDMOV : MIR_DMOV, mem_op, arg_reg_op);
-	  mem_type = mem_type == MIR_T_F ? MIR_T_I32 : MIR_T_I64; // ???
-	  mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -16, SP_HARD_REG, MIR_NON_HARD_REG, 1);
-	  arg_reg_op = _MIR_new_hard_reg_op (ctx, R3_HARD_REG + n_iregs);
-	  gen_mov (ctx, call_insn, MIR_MOV, arg_reg_op, mem_op);
-	  call_insn->ops[i] = arg_reg_op; /* keep it alive */
-	  if (type == MIR_T_LD && n_iregs + 1 < 8) {
-	    mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
-	    gen_mov (ctx, call_insn, MIR_MOV, _MIR_new_hard_reg_op (ctx, R3_HARD_REG + n_iregs + 1), mem_op);
-	  }
+        if (n_iregs < 8) { /* load into gp reg too */
+          mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -16, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+          gen_mov (ctx, call_insn, type == MIR_T_LD ? MIR_LDMOV : MIR_DMOV, mem_op, arg_reg_op);
+          mem_type = mem_type == MIR_T_F ? MIR_T_I32 : MIR_T_I64;  // ???
+          mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -16, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+          arg_reg_op = _MIR_new_hard_reg_op (ctx, R3_HARD_REG + n_iregs);
+          gen_mov (ctx, call_insn, MIR_MOV, arg_reg_op, mem_op);
+          call_insn->ops[i] = arg_reg_op; /* keep it alive */
+          if (type == MIR_T_LD && n_iregs + 1 < 8) {
+            mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, -8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
+            gen_mov (ctx, call_insn, MIR_MOV, _MIR_new_hard_reg_op (ctx, R3_HARD_REG + n_iregs + 1),
+                     mem_op);
+          }
         }
       }
       n_fregs += type == MIR_T_LD ? 2 : 1;
@@ -255,9 +258,9 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_before (ctx, call_insn, ext_insn);
       new_insn_code
         = (type == MIR_T_F ? MIR_FMOV
-	   : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size + PPC64_STACK_HEADER_SIZE,
-					 SP_HARD_REG, MIR_NON_HARD_REG, 1);
+                                         SP_HARD_REG, MIR_NON_HARD_REG, 1);
       gen_mov (ctx, call_insn, new_insn_code, mem_op, arg_op);
       call_insn->ops[i] = mem_op;
     }
@@ -269,14 +272,14 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
 #else
   if (mem_size < 64) mem_size = 64; /* minimal param save area  */
 #endif
-  if (param_save_area_size < mem_size)
-    param_save_area_size = mem_size;
+  if (param_save_area_size < mem_size) param_save_area_size = mem_size;
   n_iregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
     ret_reg_op = call_insn->ops[i + 2];
     gen_assert (ret_reg_op.mode == MIR_OP_REG || ret_reg_op.mode == MIR_OP_HARD_REG);
     type = proto->res_types[i];
-    if (((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) || (type == MIR_T_LD && n_fregs < 3)) {
+    if (((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4)
+        || (type == MIR_T_LD && n_fregs < 3)) {
       new_insn_code = type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
       ret_reg = F1_HARD_REG + n_fregs++;
     } else if (n_iregs < 8) {
@@ -284,10 +287,9 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       ret_reg = R3_HARD_REG + n_iregs++;
     } else {
       (*MIR_get_error_func (ctx)) (MIR_ret_error,
-				   "ppc64 can not handle this combination of return values");
+                                   "ppc64 can not handle this combination of return values");
     }
-    new_insn = MIR_new_insn (ctx, new_insn_code, ret_reg_op,
-			     _MIR_new_hard_reg_op (ctx, ret_reg));
+    new_insn = MIR_new_insn (ctx, new_insn_code, ret_reg_op, _MIR_new_hard_reg_op (ctx, ret_reg));
     MIR_insert_insn_after (ctx, curr_func_item, call_insn, new_insn);
     call_insn->ops[i + 2] = new_insn->ops[1];
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) {
@@ -503,7 +505,7 @@ static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t ty
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  
+
   return ((MIR_disp_t) slot * 8 + PPC64_STACK_HEADER_SIZE + param_save_area_size);
 }
 
@@ -514,7 +516,7 @@ static void set_prev_sp_op (MIR_context_t ctx, MIR_insn_t anchor, MIR_op_t *prev
     stack_arg_func_p = TRUE;
     *prev_sp_op = _MIR_new_hard_reg_op (ctx, R11_HARD_REG);
     gen_mov (ctx, anchor, MIR_MOV, *prev_sp_op,
-	     _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
+             _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1));
   }
 }
 
@@ -542,27 +544,29 @@ static void target_machinize (MIR_context_t ctx) {
     arg_var_op = MIR_new_reg_op (ctx, i + 1);
     if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && fp_arg_num < 13) {
       if (type == MIR_T_LD && fp_arg_num == 12) { /* dmov f14,disp(r1) -> lfd f14,disp(r1): */
-	set_prev_sp_op (ctx, anchor, &prev_sp_op); 
-	arg_reg_op = _MIR_new_hard_reg_op (ctx, F14_HARD_REG);
-	gen_mov (ctx, anchor, MIR_DMOV, arg_reg_op,
-		 _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, disp + 8, R11_HARD_REG, MIR_NON_HARD_REG, 1));
+        set_prev_sp_op (ctx, anchor, &prev_sp_op);
+        arg_reg_op = _MIR_new_hard_reg_op (ctx, F14_HARD_REG);
+        gen_mov (ctx, anchor, MIR_DMOV, arg_reg_op,
+                 _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, disp + 8, R11_HARD_REG, MIR_NON_HARD_REG,
+                                           1));
       }
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + fp_arg_num);
       gen_mov (ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
-	       arg_var_op, arg_reg_op); /* (f|d|ld|)mov arg, arg_hard_reg */
+               arg_var_op, arg_reg_op); /* (f|d|ld|)mov arg, arg_hard_reg */
       fp_arg_num += type == MIR_T_LD ? 2 : 1;
-    } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) { /* (f|d|ld|)mov arg, arg_memory */
+    } else if (type == MIR_T_F || type == MIR_T_D
+               || type == MIR_T_LD) { /* (f|d|ld|)mov arg, arg_memory */
       set_prev_sp_op (ctx, anchor, &prev_sp_op);
       gen_mov (ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
-	       arg_var_op,
-	       _MIR_new_hard_reg_mem_op (ctx, type, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
+               arg_var_op,
+               _MIR_new_hard_reg_mem_op (ctx, type, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
     } else if (int_arg_num < 8) { /* mov arg, arg_hard_reg */
       arg_reg_op = _MIR_new_hard_reg_op (ctx, R3_HARD_REG + int_arg_num);
       gen_mov (ctx, anchor, MIR_MOV, arg_var_op, arg_reg_op);
     } else { /* mov arg, arg_memory */
       set_prev_sp_op (ctx, anchor, &prev_sp_op);
       gen_mov (ctx, anchor, MIR_MOV, arg_var_op,
-	       _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
+               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
     }
     disp += type == MIR_T_LD ? 16 : 8;
     int_arg_num += type == MIR_T_LD ? 2 : 1;
@@ -646,7 +650,8 @@ static void target_machinize (MIR_context_t ctx) {
       va_reg = va_op.u.reg;
       /* Insns can be non-simplified as soon as they match a machine insn.  */
       /* treg = mem64[r1]; treg = treg + var_args_start; mem64[va_reg] = treg */
-      gen_mov (ctx, insn, MIR_MOV, treg_op, _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R1_HARD_REG, MIR_NON_HARD_REG, 1));
+      gen_mov (ctx, insn, MIR_MOV, treg_op,
+               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R1_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_mov (ctx, insn, MIR_MOV, treg_op2, MIR_new_int_op (ctx, var_args_start));
       /* don't use immediate in ADD as treg_op can become r0: */
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, treg_op, treg_op2);
@@ -672,7 +677,7 @@ static void target_machinize (MIR_context_t ctx) {
         assert (insn->ops[i].mode == MIR_OP_REG);
         res_type = func->res_types[i];
         if (((res_type == MIR_T_F || res_type == MIR_T_D) && n_fregs < 4)
-	    || (res_type == MIR_T_LD && n_fregs < 3)) {
+            || (res_type == MIR_T_LD && n_fregs < 3)) {
           new_insn_code
             = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
           ret_reg = F1_HARD_REG + n_fregs++;
@@ -716,8 +721,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   func = curr_func_item->u.func;
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   if (func->vararg_p) {
-    for (i = 0; i < 8; i++)
-      isave (ctx, anchor, PPC64_STACK_HEADER_SIZE + i * 8, i + R3_HARD_REG);
+    for (i = 0; i < 8; i++) isave (ctx, anchor, PPC64_STACK_HEADER_SIZE + i * 8, i + R3_HARD_REG);
   }
   for (i = saved_iregs_num = saved_fregs_num = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
@@ -741,26 +745,27 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   if (frame_size % 16 != 0) frame_size = (frame_size + 15) / 16 * 16;
   gen_mov (ctx, anchor, MIR_MOV, r0_reg_op, lr_reg_op); /* r0 = lr */
   gen_mov (ctx, anchor, MIR_MOV,
-	   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16,
-				     R1_HARD_REG, MIR_NON_HARD_REG, 1), r0_reg_op); /* mem[r1] = r0 */
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_HARD_REG, 1),
+           r0_reg_op); /* mem[r1] = r0 */
   gen_mov (ctx, anchor, MIR_MOV, r0_reg_op, sp_reg_op);
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -frame_size));
   gen_add_insn_before (ctx, anchor, new_insn); /* r1 -= frame_size */
   gen_mov (ctx, anchor, MIR_MOV,
-	   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R1_HARD_REG, MIR_NON_HARD_REG, 1),
-	   r0_reg_op); /* mem[r1] = r0 */
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R1_HARD_REG, MIR_NON_HARD_REG, 1),
+           r0_reg_op); /* mem[r1] = r0 */
   gen_mov (ctx, anchor, MIR_MOV,
-	   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, PPC64_TOC_OFFSET, R1_HARD_REG, MIR_NON_HARD_REG, 1),
-	   _MIR_new_hard_reg_op (ctx, R2_HARD_REG)); /* mem[r1+toc_off] = r2 */
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, PPC64_TOC_OFFSET, R1_HARD_REG,
+                                     MIR_NON_HARD_REG, 1),
+           _MIR_new_hard_reg_op (ctx, R2_HARD_REG)); /* mem[r1+toc_off] = r2 */
   for (n = i = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
       if (i < F0_HARD_REG)
-	isave (ctx, anchor, start_save_regs_offset + (n++) * 8, i);
+        isave (ctx, anchor, start_save_regs_offset + (n++) * 8, i);
       else
-	fsave (ctx, anchor, start_save_regs_offset + (n++) * 8, i);
+        fsave (ctx, anchor, start_save_regs_offset + (n++) * 8, i);
     }
   isave (ctx, anchor, start_save_regs_offset + n * 8, R31_HARD_REG); /* save R31 */
-  gen_mov (ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op); /* r31 = r1 */
+  gen_mov (ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op);              /* r31 = r1 */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
   assert (anchor->code == MIR_RET);
@@ -770,22 +775,23 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
       if (i < F0_HARD_REG) {
         gen_mov (ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                  _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, start_save_regs_offset + (n++) * 8,
-					   FP_HARD_REG, MIR_NON_HARD_REG, 1));
+                                           FP_HARD_REG, MIR_NON_HARD_REG, 1));
       } else {
         gen_mov (ctx, anchor, MIR_DMOV, _MIR_new_hard_reg_op (ctx, i),
                  _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, start_save_regs_offset + (n++) * 8,
-					   FP_HARD_REG, MIR_NON_HARD_REG, 1));
+                                           FP_HARD_REG, MIR_NON_HARD_REG, 1));
       }
     }
   /* Restore sp, fp, lr */
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, frame_size));
   gen_add_insn_before (ctx, anchor, new_insn); /* sp = fp + frame_size */
   gen_mov (ctx, anchor, MIR_MOV, fp_reg_op,
-	   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, start_save_regs_offset + n * 8,
-				     FP_HARD_REG, MIR_NON_HARD_REG, 1)); /* restore fp */
-  gen_mov (ctx, anchor, MIR_MOV, r0_reg_op, 
-           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_HARD_REG, 1)); /* r0 = 16(sp) */
-  gen_mov (ctx, anchor, MIR_MOV, lr_reg_op, r0_reg_op);  /* lr = r0 */
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, start_save_regs_offset + n * 8, FP_HARD_REG,
+                                     MIR_NON_HARD_REG, 1)); /* restore fp */
+  gen_mov (ctx, anchor, MIR_MOV, r0_reg_op,
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_HARD_REG,
+                                     1));               /* r0 = 16(sp) */
+  gen_mov (ctx, anchor, MIR_MOV, lr_reg_op, r0_reg_op); /* lr = r0 */
 }
 
 struct pattern {
@@ -896,7 +902,7 @@ struct pattern {
      BO<number> - field [6..10] for bcond
      BI<number> - field [11..15] for bcond
      LK<number> - field [31..31]
-     
+
      at - address disp PPC64_TOC_OFFSET
      T - switch table displacement
   */
@@ -905,8 +911,8 @@ struct pattern {
 
 static const struct pattern patterns[] = {
   {MIR_MOV, "r r", "o31 O444 ra0 rs1 rb1"}, /* or ra,rs,rs */
-  {MIR_MOV, "r h64", "o31 O339 rt0 sr8"}, /* mflr rt */
-  {MIR_MOV, "h64 r", "o31 O467 rs1 sr8"}, /* mtlr rs */
+  {MIR_MOV, "r h64", "o31 O339 rt0 sr8"},   /* mflr rt */
+  {MIR_MOV, "h64 r", "o31 O467 rs1 sr8"},   /* mtlr rs */
 
   // ??? loads/stores with update
   {MIR_MOV, "r Mds", "o58 rt0 Mds"},   /* ld rt,ds-mem */
@@ -964,10 +970,14 @@ static const struct pattern patterns[] = {
   {MIR_DMOV, "Md r", "o31 O727 rt1 M"}, /* stfdx rt, index-mem */
 
   {MIR_LDMOV, "r r", "o63 O72 rt0 rb1;o63 O72 nt0 nb1"}, /* fmr rt,rb; fmr rt+1,rb+1 */
-  {MIR_LDMOV, "r mld", "o50 rt0 m; o50 nt0 mn"},      /* lfd rt,disp-mem; lfd rt+1,disp+8-mem */
-  {MIR_LDMOV, "mld r", "o54 rt1 m; o54 nt1 mn"},      /* stfd rt,disp-mem; stfdx rt+1,disp+8-mem */
-  {MIR_LDMOV, "r mld0", "o31 O444 ha10 hs0 hb0; o50 rt0 ha10; o50 nt0 ha10 i8"}, /* mr r10,r0; lfd rt,(r10); lfd rt+1,8(r10) */
-  {MIR_LDMOV, "mld0 r", "o31 O444 ha10 hs0 hb0; o54 rt1 ha10; o54 nt1 ha10 i8"}, /* mr r10,r0; stfd rt,(r10); stfdx rt+1,8(r10) */
+  {MIR_LDMOV, "r mld", "o50 rt0 m; o50 nt0 mn"},         /* lfd rt,disp-mem; lfd rt+1,disp+8-mem */
+  {MIR_LDMOV, "mld r", "o54 rt1 m; o54 nt1 mn"}, /* stfd rt,disp-mem; stfdx rt+1,disp+8-mem */
+  {MIR_LDMOV, "r mld0",
+   "o31 O444 ha10 hs0 hb0; o50 rt0 ha10; o50 nt0 ha10 i8"}, /* mr r10,r0; lfd rt,(r10); lfd
+                                                               rt+1,8(r10) */
+  {MIR_LDMOV, "mld0 r",
+   "o31 O444 ha10 hs0 hb0; o54 rt1 ha10; o54 nt1 ha10 i8"}, /* mr r10,r0; stfd rt,(r10); stfdx
+                                                               rt+1,8(r10) */
 
   {MIR_EXT8, "r r", "o31 O954 ra0 rs1"},  /* extsb ra,rs */
   {MIR_EXT16, "r r", "o31 O922 ra0 rs1"}, /* extsh ra,rs */
@@ -1148,58 +1158,63 @@ static const struct pattern patterns[] = {
 
 #define BRC(o, i) "o16 BO" #o " BI" #i " l"
 #define BRCL(o, i) "o16 BO" #o " BI" #i " l8; o18 L"
-#define BRLOG(CODE, CMP, BI, COND, NEG_COND)				\
-  {CODE, "l r", CMP (i0) "; " BRC (COND, BI)}, /* cmp 7,ra1,0;bcond 7,l; */ \
-  {CODE, "L r", CMP (i0) "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,0;bneg_cond 7,o8;b L;l8:*/
+#define BRLOG(CODE, CMP, BI, COND, NEG_COND)                                       \
+  {CODE, "l r", CMP (i0) "; " BRC (COND, BI)},        /* cmp 7,ra1,0;bcond 7,l; */ \
+    {CODE, "L r", CMP (i0) "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,0;bneg_cond 7,o8;b L;l8:*/
 
   BRLOG (MIR_BT, CMPDI, 30, 4, 12) BRLOG (MIR_BTS, CMPWI, 30, 4, 12)
-  BRLOG (MIR_BF, CMPDI, 30, 12, 4) BRLOG (MIR_BFS, CMPWI, 30, 12, 4)
+    BRLOG (MIR_BF, CMPDI, 30, 12, 4) BRLOG (MIR_BFS, CMPWI, 30, 12, 4)
 
-#define BRCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)			\
-  {CODE, "l r r", CMP "; " BRC (COND, BI)}, /* cmp 7,ra1,rb2;bcond 7,l; */ \
-  {CODE, "l r i", CMPI "; " BRC (COND, BI)},/* cmpi 7,ra1,i;bcond 7,l;:*/ \
-  {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
-  {CODE, "L r i", CMPI "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,i;bneg_cond 7,o8;b L;l8:*/
+#define BRCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                            \
+  {CODE, "l r r", CMP "; " BRC (COND, BI)},         /* cmp 7,ra1,rb2;bcond 7,l; */            \
+    {CODE, "l r i", CMPI "; " BRC (COND, BI)},      /* cmpi 7,ra1,i;bcond 7,l;:*/             \
+    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},  /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
+    {CODE, "L r i", CMPI "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,i;bneg_cond 7,o8;b L;l8:*/
 
-#define BRFCMP(CODE, BI, COND, NEG_COND)					\
-  {CODE, "l r r", FCMPU "; " BRC (COND, BI)}, /* cmp 7,ra1,rb2;bcond 7,l; */ \
-  {CODE, "L r r", FCMPU "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/
+#define BRFCMP(CODE, BI, COND, NEG_COND)                                            \
+  {CODE, "l r r", FCMPU "; " BRC (COND, BI)},        /* cmp 7,ra1,rb2;bcond 7,l; */ \
+    {CODE, "L r r", FCMPU "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/
 
   // all ld insn are changed to builtins and bt/bts
   BRCMP (MIR_BEQ, CMPD, CMPDI (i), 30, 12, 4) BRCMP (MIR_BEQS, CMPW, CMPWI (i), 30, 12, 4)
-  BRFCMP (MIR_FBEQ, 30, 12, 4) BRFCMP (MIR_DBEQ, 30, 12, 4)
+    BRFCMP (MIR_FBEQ, 30, 12, 4) BRFCMP (MIR_DBEQ, 30, 12, 4)
 
-  BRCMP (MIR_BNE, CMPD, CMPDI (i), 30, 4, 12) BRCMP (MIR_BNES, CMPW, CMPWI (i), 30, 4, 12)
-  BRFCMP (MIR_FBNE, 30, 4, 12) BRFCMP (MIR_DBNE, 30, 4, 12)
+      BRCMP (MIR_BNE, CMPD, CMPDI (i), 30, 4, 12) BRCMP (MIR_BNES, CMPW, CMPWI (i), 30, 4, 12)
+        BRFCMP (MIR_FBNE, 30, 4, 12) BRFCMP (MIR_DBNE, 30, 4, 12)
 
-#define BRUCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)			\
-  {CODE, "l r r", CMP "; " BRC (COND, BI)}, /* cmp 7,ra1,rb2;bcond 7,l; */ \
-  {CODE, "l r u", CMPI "; " BRC (COND, BI)},/* cmpi 7,ra1,u;bcond 7,l;:*/ \
-  {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
-  {CODE, "L r u", CMPI "; " BRCL (NEG_COND, BI)},/* cmp 7,ra1,u;bneg_cond 7,o8;b L;l8:*/
+#define BRUCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                           \
+  {CODE, "l r r", CMP "; " BRC (COND, BI)},         /* cmp 7,ra1,rb2;bcond 7,l; */            \
+    {CODE, "l r u", CMPI "; " BRC (COND, BI)},      /* cmpi 7,ra1,u;bcond 7,l;:*/             \
+    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},  /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
+    {CODE, "L r u", CMPI "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,u;bneg_cond 7,o8;b L;l8:*/
 
-  BRCMP (MIR_BLT, CMPD, CMPDI (i), 28, 12, 4) BRCMP (MIR_BLTS, CMPW, CMPWI (i), 28, 12, 4)
-  BRFCMP (MIR_FBLT, 28, 12, 4) BRFCMP (MIR_DBLT, 28, 12, 4)
-  BRUCMP (MIR_UBLT, CMPLD, CMPLDI, 28, 12, 4) BRUCMP (MIR_UBLTS, CMPLW, CMPLWI, 28, 12, 4)
+          BRCMP (MIR_BLT, CMPD, CMPDI (i), 28, 12, 4) BRCMP (MIR_BLTS, CMPW, CMPWI (i), 28, 12, 4)
+            BRFCMP (MIR_FBLT, 28, 12, 4) BRFCMP (MIR_DBLT, 28, 12, 4)
+              BRUCMP (MIR_UBLT, CMPLD, CMPLDI, 28, 12, 4) BRUCMP (MIR_UBLTS, CMPLW, CMPLWI, 28, 12,
+                                                                  4)
 
-  BRCMP (MIR_BGE, CMPD, CMPDI (i), 28, 4, 12) BRCMP (MIR_BGES, CMPW, CMPWI (i), 28, 4, 12)
-  BRFCMP (MIR_FBGE, 28, 4, 12) BRFCMP (MIR_DBGE, 28, 4, 12)
-  BRUCMP (MIR_UBGE, CMPLD, CMPLDI, 28, 4, 12) BRUCMP (MIR_UBGES, CMPLW, CMPLWI, 28, 4, 12)
+                BRCMP (MIR_BGE, CMPD, CMPDI (i), 28, 4, 12)
+                  BRCMP (MIR_BGES, CMPW, CMPWI (i), 28, 4, 12) BRFCMP (MIR_FBGE, 28, 4, 12)
+                    BRFCMP (MIR_DBGE, 28, 4, 12) BRUCMP (MIR_UBGE, CMPLD, CMPLDI, 28, 4, 12)
+                      BRUCMP (MIR_UBGES, CMPLW, CMPLWI, 28, 4, 12)
 
-  BRCMP (MIR_BGT, CMPD, CMPDI (i), 29, 12, 4) BRCMP (MIR_BGTS, CMPW, CMPWI (i), 29, 12, 4)
-  BRFCMP (MIR_FBGT, 29, 12, 4) BRFCMP (MIR_DBGT, 29, 12, 4)
-  BRUCMP (MIR_UBGT, CMPLD, CMPLDI, 29, 12, 4) BRUCMP (MIR_UBGTS, CMPLW, CMPLWI, 29, 12, 4)
+                        BRCMP (MIR_BGT, CMPD, CMPDI (i), 29, 12, 4)
+                          BRCMP (MIR_BGTS, CMPW, CMPWI (i), 29, 12, 4) BRFCMP (MIR_FBGT, 29, 12, 4)
+                            BRFCMP (MIR_DBGT, 29, 12, 4) BRUCMP (MIR_UBGT, CMPLD, CMPLDI, 29, 12, 4)
+                              BRUCMP (MIR_UBGTS, CMPLW, CMPLWI, 29, 12, 4)
 
-  BRCMP (MIR_BLE, CMPD, CMPDI (i), 29, 4, 12) BRCMP (MIR_BLES, CMPW, CMPWI (i), 29, 4, 12)
-  BRFCMP (MIR_FBLE, 29, 4, 12) BRFCMP (MIR_DBLE, 29, 4, 12)
-  BRUCMP (MIR_UBLE, CMPLD, CMPLDI, 29, 4, 12) BRUCMP (MIR_UBLES, CMPLW, CMPLWI, 29, 4, 12)
+                                BRCMP (MIR_BLE, CMPD, CMPDI (i), 29, 4, 12)
+                                  BRCMP (MIR_BLES, CMPW, CMPWI (i), 29, 4, 12)
+                                    BRFCMP (MIR_FBLE, 29, 4, 12) BRFCMP (MIR_DBLE, 29, 4, 12)
+                                      BRUCMP (MIR_UBLE, CMPLD, CMPLDI, 29, 4, 12)
+                                        BRUCMP (MIR_UBLES, CMPLW, CMPLWI, 29, 4, 12)
 
 #define NEG "o31 O104 rt0 ra1"
 #define FNEG "o63 O40 rt0 rb1"
-  {MIR_NEG, "r r", NEG},   /* neg Rt,Ra */
-  {MIR_NEGS, "r r", NEG},  /* neg Rt,Ra */
-  {MIR_FNEG, "r r", FNEG}, /* fneg rt,rb */
-  {MIR_DNEG, "r r", FNEG}, /* fneg rt,rb */
+                                          {MIR_NEG, "r r", NEG}, /* neg Rt,Ra */
+  {MIR_NEGS, "r r", NEG},                                        /* neg Rt,Ra */
+  {MIR_FNEG, "r r", FNEG},                                       /* fneg rt,rb */
+  {MIR_DNEG, "r r", FNEG},                                       /* fneg rt,rb */
 // ldneg is a builtin
 
 #define SHR(s) "o31 O" #s " ra0 rs1 rb2"
@@ -1255,18 +1270,23 @@ static const struct pattern patterns[] = {
   {MIR_F2I, "r r", "o63 O815 ht32 rb1; o54 hs32 mt; o58 rt0 mt"},
   /* fctidz f0,rb; stfd f0,-16(r1);ld rt,-16(r1): */
   {MIR_D2I, "r r", "o63 O815 ht32 rb1; o54 hs32 mt; o58 rt0 mt"},
-  {MIR_F2D, "r r", "o63 O72 rt0 rb1"},  /* fmr rt,rb */
+  {MIR_F2D, "r r", "o63 O72 rt0 rb1"}, /* fmr rt,rb */
   {MIR_D2F, "r r", "o63 O12 rt0 rb1"}, /* frsp rt,rb */
-  // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
+// i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  {MIR_CALL, "X h12 $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"},   /* mtctr r12; bcctrl */
-  {MIR_CALL, "X r $", "o31 O444 ha12 rs1 rb1; o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"},   /* mr r12,r; mtctr r; bcctrl */
+  {MIR_CALL, "X h12 $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mtctr r12; bcctrl */
+  {MIR_CALL, "X r $",
+   "o31 O444 ha12 rs1 rb1; o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mr r12,r; mtctr r; bcctrl
+                                                                       */
 #else
   /* mr r2,r0; ld r0,0(r2); ld r2,8(r2); mtctr r0; bcctrl */
-  {MIR_CALL, "X h0 $", "o31 O444 ha2 hs0 hb0; o58 ht0 ha2; o58 ht2 ha2 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; o31 O444 ha0 hs0 hb0"},
+  {MIR_CALL, "X h0 $",
+   "o31 O444 ha2 hs0 hb0; o58 ht0 ha2; o58 ht2 ha2 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; "
+   "o31 O444 ha0 hs0 hb0"},
   /* ld r0,0(r); ld r2,8(r); mtctr r0; bcctrl */
-  {MIR_CALL, "X r $", "o58 ht0 ra1; o58 ht2 ra1 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; o31 O444 ha0 hs0 hb0"},
+  {MIR_CALL, "X r $",
+   "o58 ht0 ra1; o58 ht2 ra1 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; o31 O444 ha0 hs0 hb0"},
 #endif
 
   {MIR_RET, "$", "o19 O16 BO20 BI0"}, /* bclr */
@@ -1274,13 +1294,15 @@ static const struct pattern patterns[] = {
 #if 0
   /* ld r10,16(r1); subf r1,rt,r1; ldx r0,(r1,rt); std r10,16(r1); std r0,0(r1);
      std r2,PPC64_TOC_OFFSET(r1); add rt,r1,PPC64_STACK_HEADER_SIZE+PARAM_AREA_SIZE: */
-#define ALLOCA_END "o58 ht10 ha1 i16; o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
-                   "o62 hs10 ha1 i16; o62 hs0 ha1;o62 hs2 ha1 at; o14 rt0 ha1 ih"
+#define ALLOCA_END                                               \
+  "o58 ht10 ha1 i16; o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
+  "o62 hs10 ha1 i16; o62 hs0 ha1;o62 hs2 ha1 at; o14 rt0 ha1 ih"
 #else
-  /* subf r1,rt,r1; ldx r0,(r1,rt); std r0,0(r1);
-     add rt,r1,PPC64_STACK_HEADER_SIZE+PARAM_AREA_SIZE: */
-#define ALLOCA_END "o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
-                   "o62 hs0 ha1; o14 rt0 ha1 ih"
+/* subf r1,rt,r1; ldx r0,(r1,rt); std r0,0(r1);
+   add rt,r1,PPC64_STACK_HEADER_SIZE+PARAM_AREA_SIZE: */
+#define ALLOCA_END                             \
+  "o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
+  "o62 hs0 ha1; o14 rt0 ha1 ih"
 #endif
   /* addi rt,ra,15;rldicr rt,rt,0,59; ... : */
   {MIR_ALLOCA, "r r", "o14 rt0 ra1 i15; o30 ra0 rs0 Sh0 Me59; " ALLOCA_END},
@@ -1311,7 +1333,8 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
   *hr1 = *hr2 = MIR_NON_HARD_REG;
   if (code == MIR_MOD || code == MIR_MODS || code == MIR_UMOD || code == MIR_UMODS) {
     *hr1 = R10_HARD_REG;
-  } else if (code == MIR_I2F || code == MIR_I2D || code == MIR_UI2F || code == MIR_UI2D || code == MIR_F2I || code == MIR_D2I) {
+  } else if (code == MIR_I2F || code == MIR_I2D || code == MIR_UI2F || code == MIR_UI2D
+             || code == MIR_F2I || code == MIR_D2I) {
     *hr1 = F0_HARD_REG;
   } else if (code == MIR_LDMOV) { /* if mem base reg is R0 */
     *hr1 = R10_HARD_REG;
@@ -1379,8 +1402,8 @@ static int negative32_p (uint64_t u, uint64_t *n) {
   return u == 0;
 }
 
-static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
-			    MIR_insn_t insn, int use_short_label_p) {
+static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_insn_t insn,
+                            int use_short_label_p) {
   int nop, n;
   size_t nops = MIR_insn_nops (ctx, insn);
   const char *p;
@@ -1401,7 +1424,9 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
       if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == LR_HARD_REG) return FALSE;
       break;
     case 'R':
-      if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == R0_HARD_REG || op.u.hard_reg == LR_HARD_REG) return FALSE;
+      if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == R0_HARD_REG
+          || op.u.hard_reg == LR_HARD_REG)
+        return FALSE;
       break;
     case 'h':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
@@ -1419,7 +1444,8 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
     case 'm':
     case 'M': {
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
-      int ds_p = FALSE, l_p = FALSE, br0_p = FALSE, u_p = TRUE, s_p = TRUE, index_p = start_ch == 'M';
+      int ds_p = FALSE, l_p = FALSE, br0_p = FALSE, u_p = TRUE, s_p = TRUE,
+          index_p = start_ch == 'M';
 
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
       ch = *++p;
@@ -1448,13 +1474,13 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
         break;
       case 'l':
         ch = *++p;
-        gen_assert (ch == 'd' && ch != 'M');
+        gen_assert (ch == 'd' && start_ch != 'M');
         ch = *++p;
         if (ch != '0')
-	  p--;
-	else
-	  br0_p = TRUE;
-	l_p = TRUE;
+          p--;
+        else
+          br0_p = TRUE;
+        l_p = TRUE;
         type = MIR_T_LD;
         type2 = MIR_T_BOUND;
         break;
@@ -1492,11 +1518,11 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
       if (ds_p
           && (op.u.hard_reg_mem.index != MIR_NON_HARD_REG || op.u.hard_reg_mem.base == R0_HARD_REG
               || op.u.hard_reg_mem.disp % 4 != 0 || !int16_p (op.u.hard_reg_mem.disp)))
-	  return FALSE;
+        return FALSE;
       if (!ds_p && start_ch == 'm'
           && (op.u.hard_reg_mem.index != MIR_NON_HARD_REG
-	      || (!br0_p && op.u.hard_reg_mem.base == R0_HARD_REG)
-	      || (br0_p && op.u.hard_reg_mem.base != R0_HARD_REG)
+              || (!br0_p && op.u.hard_reg_mem.base == R0_HARD_REG)
+              || (br0_p && op.u.hard_reg_mem.base != R0_HARD_REG)
               || !int16_p (op.u.hard_reg_mem.disp) || l_p && !int16_p (op.u.hard_reg_mem.disp + 8)))
         return FALSE;
       if (!ds_p && start_ch == 'M'
@@ -1511,10 +1537,10 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
       ch = *++p;
       if (ch == 'a') {
-	if (!int16_p ((op.u.i + 15) / 16 * 16)) return FALSE;
+        if (!int16_p ((op.u.i + 15) / 16 * 16)) return FALSE;
       } else {
         p--;
-	if (!int16_p (op.u.i)) return FALSE;
+        if (!int16_p (op.u.i)) return FALSE;
       }
       break;
     case 'u':
@@ -1535,23 +1561,23 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
 
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
       if (op.mode != MIR_OP_REF) {
-	v = op.u.u;
+        v = op.u.u;
       } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
-		 && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
-	v = (uint64_t) op.u.ref->u.data->u.els;
+                 && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
+        v = (uint64_t) op.u.ref->u.data->u.els;
       } else {
-	v = (uint64_t) op.u.ref->addr;
+        v = (uint64_t) op.u.ref->addr;
       }
       if (start_ch == 'x') {
-	if (!negative32_p (v, &n)) return FALSE;
+        if (!negative32_p (v, &n)) return FALSE;
       } else {
-	ch = *++p;
-	if (ch == 's') {
-	  if (start_ch == 'z' ? !uint31_p (v) : !uint47_p (op.u.u)) return FALSE;
-	} else {
-	  p--;
-	  if (start_ch == 'z' && !uint32_p (v)) return FALSE;
-	}
+        ch = *++p;
+        if (ch == 's') {
+          if (start_ch == 'z' ? !uint31_p (v) : !uint47_p (op.u.u)) return FALSE;
+        } else {
+          p--;
+          if (start_ch == 'z' && !uint32_p (v)) return FALSE;
+        }
       }
       break;
     }
@@ -1577,7 +1603,7 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat,
 }
 
 static const char *find_insn_pattern_replacement (MIR_context_t ctx, MIR_insn_t insn,
-						  int use_short_label_p) {
+                                                  int use_short_label_p) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   int i;
   const struct pattern *pat;
@@ -1649,8 +1675,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
     MIR_op_t op;
     char ch, ch2, start_ch;
     uint32_t binsn = 0;
-    int opcode = -1, opcode2 = -1, opcode3 = -1, opcode4 = -1, rt = -1, rs = -1, ra = -1, rb = -1, rc = -1, spreg = -1, sh = -1, Sh = -1;
-    int disp = -1, disp4 = -1, mb = -1, me = -1, Mb = -1, Me = -1, bf = -1, BO = -1, BI = -1, imm = -1, LK = -1;
+    int opcode = -1, opcode2 = -1, opcode3 = -1, opcode4 = -1, rt = -1, rs = -1, ra = -1, rb = -1,
+        rc = -1, spreg = -1, sh = -1, Sh = -1;
+    int disp = -1, disp4 = -1, mb = -1, me = -1, Mb = -1, Me = -1, bf = -1, BO = -1, BI = -1,
+        imm = -1, LK = -1;
     int d = -1, lab_off = -1, lb = -1, label_ref_num = -1, n;
     uint32_t binsn_mask = 0;
     int switch_table_addr_p = FALSE;
@@ -1698,7 +1726,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
           gen_assert (op.mode == MIR_OP_HARD_REG);
           reg = op.u.hard_reg + (start_ch == 'n' ? 1 : 0);
         }
-	if (reg > R31_HARD_REG) reg -= F0_HARD_REG;
+        if (reg > R31_HARD_REG) reg -= F0_HARD_REG;
         gen_assert (reg <= 31);
         if (ch2 == 't') {
           gen_assert (rt < 0);
@@ -1747,13 +1775,13 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         if (dec_value (ch2) >= 0) {
           Sh = read_dec (&p);
         } else if (ch2 == 'r') {
-	  op = insn->ops[2];
+          op = insn->ops[2];
           gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           Sh = 64 - op.u.u;
         } else {
           --p;
-	  op = insn->ops[2];
-	  gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
+          op = insn->ops[2];
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           Sh = op.u.u;
         }
         break;
@@ -1773,10 +1801,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
           gen_assert (dec_value (ch2) >= 0 && Mb < 0 && Me < 0);
           if (b_p) {
             Mb = read_dec (&p);
-	    Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
+            Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
           } else {
             Me = read_dec (&p);
-	    Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
+            Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
           }
         } else {
           op = insn->ops[0].mode == MIR_OP_HARD_REG_MEM ? insn->ops[0] : insn->ops[1];
@@ -1787,7 +1815,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
             ra = op.u.hard_reg_mem.base;
             if (ra == MIR_NON_HARD_REG) ra = R0_HARD_REG;
             disp4 = op.u.hard_reg_mem.disp & 0xffff;
-	    gen_assert ((disp4 & 0x3) == 0);
+            gen_assert ((disp4 & 0x3) == 0);
           } else {
             --p;
             gen_assert (ra < 0 && rb < 0);
@@ -1835,10 +1863,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
               gen_assert (Mb < 0 && Me < 0);
               if (b_p) {
                 Mb = op.u.i;
-		Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
+                Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
               } else {
                 Me = 63 - op.u.i;
-		Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
+                Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
               }
             } else if (b_p) {
               gen_assert (mb < 0);
@@ -1857,8 +1885,8 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
             ra = op.u.hard_reg_mem.base;
             if (ra == MIR_NON_HARD_REG) ra = R0_HARD_REG;
             disp4 = op.u.hard_reg_mem.disp & 0xffff;
-	    gen_assert ((disp4 & 0x3) == 0);
-	  } else {
+            gen_assert ((disp4 & 0x3) == 0);
+          } else {
             if (ch2 != 'n') --p;
             gen_assert (ra < 0 && disp < 0);
             ra = op.u.hard_reg_mem.base;
@@ -1869,29 +1897,29 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         break;
       }
       case 'd':
-	ch2 = *++p;
-	gen_assert (d < 0 && dec_value (ch2) >= 0);
+        ch2 = *++p;
+        gen_assert (d < 0 && dec_value (ch2) >= 0);
         d = read_dec (&p);
-	break;
+        break;
       case 'i':
-	ch2 = *++p;
-	if (ch2 == 'a') {
-	  op = insn->ops[nops - 1];
-	  gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
-	  gen_assert (imm < 0);
-	  imm = (op.u.i + 15) / 16 * 16;
-	  break;
-	} else if (ch2 == 'h') {
-	  gen_assert (imm < 0);
-	  imm = PPC64_STACK_HEADER_SIZE + param_save_area_size;
-	  break;
-	} else if (dec_value (ch2) >= 0) {
-	  gen_assert (imm < 0);
-	  imm = read_dec (&p);
-	  break;
-	}
-	p--;
-	/* fall through: */
+        ch2 = *++p;
+        if (ch2 == 'a') {
+          op = insn->ops[nops - 1];
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
+          gen_assert (imm < 0);
+          imm = (op.u.i + 15) / 16 * 16;
+          break;
+        } else if (ch2 == 'h') {
+          gen_assert (imm < 0);
+          imm = PPC64_STACK_HEADER_SIZE + param_save_area_size;
+          break;
+        } else if (dec_value (ch2) >= 0) {
+          gen_assert (imm < 0);
+          imm = read_dec (&p);
+          break;
+        }
+        p--;
+        /* fall through: */
       case 'u':
       case 'I':
       case 'U':
@@ -1902,30 +1930,30 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         break;
       case 'x':
       case 'z': {
-	int ok_p;
-	uint64_t v, n;
+        int ok_p;
+        uint64_t v, n;
 
         op = insn->ops[nops - 1];
         gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_REF);
-	if (op.mode != MIR_OP_REF) {
-	  v = op.u.u;
-	} else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
+        if (op.mode != MIR_OP_REF) {
+          v = op.u.u;
+        } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
                    && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
           v = (uint64_t) op.u.ref->u.data->u.els;
         } else {
           v = (uint64_t) op.u.ref->addr;
         }
-	if (start_ch == 'x') {
-	  ok_p = negative32_p (v, &n);
-	  n = 32 - n;
-	  gen_assert (Mb < 0 && ok_p);
-	  Mb = ((n & 0x1f) << 1) | (n >> 5) & 1;
-	} else {
-	  gen_assert (imm < 0);
-	  n = dec_value (*++p);
-	  gen_assert (n >= 0 && n <= 3);
-	  imm = (v >> (3 - n) * 16) & 0xffff;
-	}
+        if (start_ch == 'x') {
+          ok_p = negative32_p (v, &n);
+          n = 32 - n;
+          gen_assert (Mb < 0 && ok_p);
+          Mb = ((n & 0x1f) << 1) | (n >> 5) & 1;
+        } else {
+          gen_assert (imm < 0);
+          n = dec_value (*++p);
+          gen_assert (n >= 0 && n <= 3);
+          imm = (v >> (3 - n) * 16) & 0xffff;
+        }
         break;
       }
       case 'b':
@@ -1933,9 +1961,9 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (ch2 == 'f');
         ch2 = *++p;
         gen_assert (dec_value (ch2) >= 0);
-	gen_assert (bf < 0);
-	bf = read_dec (&p);
-	break;
+        gen_assert (bf < 0);
+        bf = read_dec (&p);
+        break;
       case 'B': {
         int o_p;
 
@@ -1955,16 +1983,16 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
       }
       case 'l': {
         ch2 = *++p;
-	if ((n = dec_value (ch2)) >= 0) {
+        if ((n = dec_value (ch2)) >= 0) {
           gen_assert (lab_off < 0 && (n & 0x3) == 0);
           lab_off = n;
         } else {
           --p;
-	  gen_assert (insn->code != MIR_CALL);
+          gen_assert (insn->code != MIR_CALL);
           op = insn->ops[0];
           gen_assert (op.mode == MIR_OP_LABEL);
           lr.abs_addr_p = FALSE;
-	  lr.short_addr_p = TRUE;
+          lr.short_addr_p = TRUE;
           lr.label_val_disp = 0;
           lr.label = op.u.label;
           label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
@@ -1975,8 +2003,8 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
       case 'L': {
         ch2 = *++p;
         if (ch2 == 'K') {
-	  ch2 = *++p;
-	  gen_assert (LK < 0 && dec_value (ch2) >= 0);
+          ch2 = *++p;
+          gen_assert (LK < 0 && dec_value (ch2) >= 0);
           LK = read_dec (&p);
           gen_assert (LK <= 1);
         } else if ((n = dec_value (ch2)) >= 0) {
@@ -1995,10 +2023,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         break;
       }
       case 'a':
-	gen_assert (imm < 0);
-	ch2 = *++p;
-	gen_assert (ch2 == 't' || ch2 == 'a');
-	imm = ch2 == 't' ? PPC64_TOC_OFFSET : 15 + PPC64_STACK_HEADER_SIZE + param_save_area_size;
+        gen_assert (imm < 0);
+        ch2 = *++p;
+        gen_assert (ch2 == 't' || ch2 == 'a');
+        imm = ch2 == 't' ? PPC64_TOC_OFFSET : 15 + PPC64_STACK_HEADER_SIZE + param_save_area_size;
         break;
       case 'T':
         gen_assert (!switch_table_addr_p && switch_table_addr_insn_start < 0);
@@ -2187,82 +2215,83 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
     VARR_TRUNC (uint64_t, abs_address_locs, 0);
     short_label_disp_fail_p = FALSE;
     for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-	 insn = DLIST_NEXT (MIR_insn_t, insn)) {
+         insn = DLIST_NEXT (MIR_insn_t, insn)) {
       MIR_insn_code_t code = insn->code;
-      
-      if ((code == MIR_RSH || code == MIR_LSH || code == MIR_URSH
-	   || code == MIR_RSHS || code == MIR_LSHS || code == MIR_URSHS)
-	  && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_UINT)) {
-	if (insn->ops[2].u.i == 0) {
-	  gen_mov (ctx, insn, MIR_MOV, insn->ops[0], insn->ops[1]);
-	  old_insn = insn;
-	  insn = DLIST_NEXT (MIR_insn_t, insn);
-	  gen_delete_insn (ctx, old_insn);
-	} else {
-	  if (insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i < 0) {
-	    switch (code) {
-	    case MIR_RSH: insn->code = MIR_LSH; break;
-	    case MIR_URSH: insn->code = MIR_LSH; break;
-	    case MIR_LSH: insn->code = MIR_RSH; break;
-	    case MIR_RSHS: insn->code = MIR_LSHS; break;
-	    case MIR_URSHS: insn->code = MIR_LSHS; break;
-	    case MIR_LSHS: insn->code = MIR_RSHS; break;
-	    }
-	    insn->ops[2].u.i = -insn->ops[2].u.i;
-	  }
-	  if (code == MIR_RSH || code == MIR_LSH || code == MIR_URSH) {
-	    if (insn->ops[2].u.i > 64) insn->ops[2].u.i = 64;
-	  } else if (insn->ops[2].u.i > 32) {
-	    insn->ops[2].u.i = 32;
-	  }
-	}
+
+      if ((code == MIR_RSH || code == MIR_LSH || code == MIR_URSH || code == MIR_RSHS
+           || code == MIR_LSHS || code == MIR_URSHS)
+          && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_UINT)) {
+        if (insn->ops[2].u.i == 0) {
+          gen_mov (ctx, insn, MIR_MOV, insn->ops[0], insn->ops[1]);
+          old_insn = insn;
+          insn = DLIST_NEXT (MIR_insn_t, insn);
+          gen_delete_insn (ctx, old_insn);
+        } else {
+          if (insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i < 0) {
+            switch (code) {
+            case MIR_RSH: insn->code = MIR_LSH; break;
+            case MIR_URSH: insn->code = MIR_LSH; break;
+            case MIR_LSH: insn->code = MIR_RSH; break;
+            case MIR_RSHS: insn->code = MIR_LSHS; break;
+            case MIR_URSHS: insn->code = MIR_LSHS; break;
+            case MIR_LSHS: insn->code = MIR_RSHS; break;
+            }
+            insn->ops[2].u.i = -insn->ops[2].u.i;
+          }
+          if (code == MIR_RSH || code == MIR_LSH || code == MIR_URSH) {
+            if (insn->ops[2].u.i > 64) insn->ops[2].u.i = 64;
+          } else if (insn->ops[2].u.i > 32) {
+            insn->ops[2].u.i = 32;
+          }
+        }
       }
       if (insn->code == MIR_LABEL) {
-	set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
+        set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
       } else {
-	int use_short_label_p = TRUE;
+        int use_short_label_p = TRUE;
 
-	if (n_iter > 0 && MIR_branch_code_p (code)) {
-	  MIR_label_t label = insn->ops[0].u.label;
-	  int64_t offset = (int64_t) get_label_disp (label) - (int64_t) VARR_LENGTH (uint8_t, result_code);
+        if (n_iter > 0 && MIR_branch_code_p (code)) {
+          MIR_label_t label = insn->ops[0].u.label;
+          int64_t offset
+            = (int64_t) get_label_disp (label) - (int64_t) VARR_LENGTH (uint8_t, result_code);
 
-	  use_short_label_p = ((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) == 0;
-	}
-	replacement = find_insn_pattern_replacement (ctx, insn, use_short_label_p);
-	if (replacement == NULL) {
-	  fprintf (stderr, "fatal failure in matching insn:");
-	  MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
-	  exit (1);
-	} else {
-	  gen_assert (replacement != NULL);
-	  out_insn (ctx, insn, replacement);
-	}
+          use_short_label_p = ((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) == 0;
+        }
+        replacement = find_insn_pattern_replacement (ctx, insn, use_short_label_p);
+        if (replacement == NULL) {
+          fprintf (stderr, "fatal failure in matching insn:");
+          MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
+          exit (1);
+        } else {
+          gen_assert (replacement != NULL);
+          out_insn (ctx, insn, replacement);
+        }
       }
     }
     /* Setting up labels */
     for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
       label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
-      
-      if (lr.abs_addr_p) {
-	set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-		   (int64_t) get_label_disp (lr.label));
-	VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
-      } else if (lr.short_addr_p) { /* 14-bit relative addressing */
-	int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
 
-	gen_assert ((offset & 0x3) == 0);
-	if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) != 0) {
-	  short_label_disp_fail_p = TRUE;
-	} else {
-	  *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
-	    |= ((offset / 4) & 0x3fff) << 2;
-	}
+      if (lr.abs_addr_p) {
+        set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+                   (int64_t) get_label_disp (lr.label));
+        VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
+      } else if (lr.short_addr_p) { /* 14-bit relative addressing */
+        int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
+
+        gen_assert ((offset & 0x3) == 0);
+        if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) != 0) {
+          short_label_disp_fail_p = TRUE;
+        } else {
+          *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
+            |= ((offset / 4) & 0x3fff) << 2;
+        }
       } else { /* 24-bit relative address */
-	int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
-	gen_assert ((offset & 0x3) == 0
-		    && ((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0);
-	*(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
-	  |= ((offset / 4) & 0xffffff) << 2;
+        int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
+        gen_assert ((offset & 0x3) == 0
+                    && ((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0);
+        *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
+          |= ((offset / 4) & 0xffffff) << 2;
       }
     }
     n_iter++;
