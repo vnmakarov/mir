@@ -281,6 +281,10 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                              MIR_new_int_op (ctx, xmm_args));
     gen_add_insn_before (ctx, call_insn, new_insn);
   }
+#else
+  if (proto->nres > 1)
+    (*MIR_get_error_func (ctx)) (MIR_ret_error,
+                                 "Windows x86-64 doesn't support multiple return values");
 #endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
@@ -629,6 +633,11 @@ static void target_machinize (MIR_context_t ctx) {
          and added extension in return (if any).  */
       uint32_t n_iregs = 0, n_xregs = 0, n_fregs = 0;
 
+#ifdef _WIN64
+      if (curr_func_item->u.func->nres > 1)
+        (*MIR_get_error_func (ctx)) (MIR_ret_error,
+                                     "Windows x86-64 doesn't support multiple return values");
+#endif
       assert (curr_func_item->u.func->nres == MIR_insn_nops (ctx, insn));
       for (size_t i = 0; i < curr_func_item->u.func->nres; i++) {
         assert (insn->ops[i].mode == MIR_OP_REG);
