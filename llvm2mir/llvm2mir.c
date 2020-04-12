@@ -65,15 +65,15 @@ static VARR (bb_gen_info_t) * bb_gen_infos;
 DEF_HTAB (bb_gen_info_t);
 static HTAB (bb_gen_info_t) * bb_gen_info_tab;
 
-static int bb_gen_info_eq (bb_gen_info_t bb_gen_info1, bb_gen_info_t bb_gen_info2) {
+static int bb_gen_info_eq (bb_gen_info_t bb_gen_info1, bb_gen_info_t bb_gen_info2, void *arg) {
   return bb_gen_info1->bb == bb_gen_info2->bb;
 }
-static htab_hash_t bb_gen_info_hash (bb_gen_info_t bb_gen_info) {
+static htab_hash_t bb_gen_info_hash (bb_gen_info_t bb_gen_info, void *arg) {
   return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uint64_t) bb_gen_info->bb));
 }
 
 static void init_bb_gen_info (void) {
-  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, 64, bb_gen_info_hash, bb_gen_info_eq);
+  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, 64, bb_gen_info_hash, bb_gen_info_eq, NULL);
   VARR_CREATE (bb_gen_info_t, bb_gen_infos, 0);
 }
 
@@ -186,8 +186,8 @@ typedef struct item item_t;
 DEF_HTAB (item_t);
 static HTAB (item_t) * item_tab;
 
-static int item_eq (item_t item1, item_t item2) { return strcmp (item1.name, item2.name) == 0; }
-static htab_hash_t item_hash (item_t item) { return mir_hash (item.name, strlen (item.name), 424); }
+static int item_eq (item_t item1, item_t item2, void *arg) { return strcmp (item1.name, item2.name) == 0; }
+static htab_hash_t item_hash (item_t item, void *arg) { return mir_hash (item.name, strlen (item.name), 424); }
 
 static MIR_item_t find_item (MIR_name_t name) {
   struct item temp_item;
@@ -215,10 +215,10 @@ typedef struct expr_res expr_res_t;
 DEF_HTAB (expr_res_t);
 static HTAB (expr_res_t) * expr_res_tab;
 
-static int expr_res_eq (expr_res_t expr_res1, expr_res_t expr_res2) {
+static int expr_res_eq (expr_res_t expr_res1, expr_res_t expr_res2, void *arg) {
   return expr_res1.expr == expr_res2.expr;
 }
-static htab_hash_t expr_res_hash (expr_res_t expr_res) {
+static htab_hash_t expr_res_hash (expr_res_t expr_res, void *arg) {
   return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uint64_t) expr_res.expr));
 }
 
@@ -1394,8 +1394,8 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
   context = c;
   TD = LLVMGetModuleDataLayout (module);
   init_bb_gen_info ();
-  HTAB_CREATE (expr_res_t, expr_res_tab, 512, expr_res_hash, expr_res_eq);
-  HTAB_CREATE (item_t, item_tab, 64, item_hash, item_eq);
+  HTAB_CREATE (expr_res_t, expr_res_tab, 512, expr_res_hash, expr_res_eq, NULL);
+  HTAB_CREATE (item_t, item_tab, 64, item_hash, item_eq, NULL);
   id = LLVMGetModuleIdentifier (module, &len);
   curr_mir_module = MIR_new_module (context, id);
   ptr_size = LLVMPointerSize (TD);
