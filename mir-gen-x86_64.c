@@ -682,7 +682,7 @@ static void target_machinize (MIR_context_t ctx) {
                || code == MIR_LE || code == MIR_ULE || code == MIR_GT || code == MIR_UGT
                || code == MIR_GE || code == MIR_UGE || code == MIR_EQS || code == MIR_NES
                || code == MIR_LTS || code == MIR_ULTS || code == MIR_LES || code == MIR_ULES
-               || code == MIR_GTS || code == MIR_UGT || code == MIR_GES || code == MIR_UGES
+               || code == MIR_GTS || code == MIR_UGTS || code == MIR_GES || code == MIR_UGES
                || code == MIR_FEQ || code == MIR_FNE || code == MIR_FLT || code == MIR_FLE
                || code == MIR_FGT || code == MIR_FGE || code == MIR_DEQ || code == MIR_DNE
                || code == MIR_DLT || code == MIR_DLE || code == MIR_DGT || code == MIR_DGE) {
