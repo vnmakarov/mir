@@ -281,6 +281,10 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
                              MIR_new_int_op (ctx, xmm_args));
     gen_add_insn_before (ctx, call_insn, new_insn);
   }
+#else
+  if (proto->nres > 1)
+    (*MIR_get_error_func (ctx)) (MIR_ret_error,
+                                 "Windows x86-64 doesn't support multiple return values");
 #endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
@@ -462,7 +466,7 @@ static void target_machinize (MIR_context_t ctx) {
   MIR_type_t type, mem_type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn;
-  MIR_reg_t ret_reg, arg_reg, vap_reg;
+  MIR_reg_t ret_reg, arg_reg;
   MIR_op_t ret_reg_op, arg_reg_op, mem_op;
   size_t i, int_arg_num = 0, fp_arg_num = 0, mem_size = spill_space_size;
 
@@ -522,11 +526,11 @@ static void target_machinize (MIR_context_t ctx) {
       gen_add_insn_before (ctx, insn, new_insn);
       gen_delete_insn (ctx, insn);
     } else if (code == MIR_VA_START) {
-#ifndef _WIN64
       MIR_op_t treg_op
         = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func));
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
+#ifndef _WIN64
       int gp_offset = 0, fp_offset = 48;
       MIR_var_t var;
 
@@ -567,13 +571,13 @@ static void target_machinize (MIR_context_t ctx) {
         gen_add_insn_before (ctx, insn, new_insn);
         mem_size += 8;
       }
-      /* set va pointer */
+      /* init va_list */
       mem_size = 8 /*ret*/ + start_sp_from_bp_offset + func->nargs * 8;
-      vap_reg = gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func);
-      new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, vap_reg),
-                               _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
+      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, mem_size));
       gen_add_insn_before (ctx, insn, new_insn);
+      va_reg = va_op.mode == MIR_OP_REG ? va_op.u.reg : va_op.u.hard_reg;
+      gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg, 0, 1), treg_op);
 #endif
       gen_delete_insn (ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
@@ -606,15 +610,17 @@ static void target_machinize (MIR_context_t ctx) {
       new_insn = MIR_new_insn_arr (ctx, MIR_CALL, 5, ops);
       gen_add_insn_before (ctx, insn, new_insn);
 #else
-      MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], mem_op = insn->ops[2];
+      MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], mem_op = insn->ops[2], treg_op;
       assert (res_reg_op.mode == MIR_OP_REG && va_reg_op.mode == MIR_OP_REG
               && mem_op.mode == MIR_OP_MEM);
-      /* return and increment va pointer */
-      arg_reg_op = MIR_new_reg_op (ctx, vap_reg);
-      new_insn = MIR_new_insn (ctx, MIR_MOV, res_reg_op, arg_reg_op);
+      /* load and increment va pointer */
+      treg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func));
+      gen_mov (ctx, insn, MIR_MOV, treg_op, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1));
+      new_insn = MIR_new_insn (ctx, MIR_MOV, res_reg_op, treg_op);
       gen_add_insn_before (ctx, insn, new_insn);
-      new_insn = MIR_new_insn (ctx, MIR_ADD, arg_reg_op, arg_reg_op, MIR_new_int_op (ctx, 8));
+      new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, treg_op, MIR_new_int_op (ctx, 8));
       gen_add_insn_before (ctx, insn, new_insn);
+      gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1), treg_op);
 #endif
       gen_delete_insn (ctx, insn);
     } else if (MIR_call_code_p (code)) {
@@ -627,6 +633,11 @@ static void target_machinize (MIR_context_t ctx) {
          and added extension in return (if any).  */
       uint32_t n_iregs = 0, n_xregs = 0, n_fregs = 0;
 
+#ifdef _WIN64
+      if (curr_func_item->u.func->nres > 1)
+        (*MIR_get_error_func (ctx)) (MIR_ret_error,
+                                     "Windows x86-64 doesn't support multiple return values");
+#endif
       assert (curr_func_item->u.func->nres == MIR_insn_nops (ctx, insn));
       for (size_t i = 0; i < curr_func_item->u.func->nres; i++) {
         assert (insn->ops[i].mode == MIR_OP_REG);

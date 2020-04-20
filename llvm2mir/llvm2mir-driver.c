@@ -98,7 +98,7 @@ int main (int argc, char *argv[], char *env[]) {
   uint64_t (*fun_addr) (int, char *argv[], char *env[]);
   MIR_context_t context;
 
-  if (2 <= argc && argc <= 4) {
+  if (!(2 <= argc && argc <= 4)) {
     fprintf (stderr, "%s: [-dg] [-i|-g] <input bitcode file>\n", argv[0]);
     exit (1);
   }
