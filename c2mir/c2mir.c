@@ -31,6 +31,8 @@
 #include "aarch64/caarch64.h"
 #elif defined(__PPC64__)
 #include "ppc64/cppc64.h"
+#elif defined(__s390x__)
+#include "s390x/cs390x.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -317,6 +319,8 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
 #include "aarch64/caarch64-code.c"
 #elif defined(__PPC64__)
 #include "ppc64/cppc64-code.c"
+#elif defined(__s390x__)
+#include "s390x/cs390x-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -12185,6 +12189,8 @@ static void init_include_dirs (MIR_context_t ctx) {
 #else
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/powerpc64-linux-gnu");
 #endif
+#elif defined(__linux__) && defined(__s390x__)
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/s390x-linux-gnu");
 #endif
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
