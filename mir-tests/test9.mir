@@ -6,7 +6,7 @@ printf_p:	proto  p:fmt, ...
 		import printf, exit
 fun:		func i64:double_p, ...
 		local i64:va, i64:a
-		alloca va, 24 # .va_list_size ???
+		alloca va, 32 # .va_list_size ???
 		va_start va
 		bt double, double_p
 		va_arg a, va, i64:0 # memory at address 0
