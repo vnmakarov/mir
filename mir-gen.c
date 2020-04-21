@@ -4620,6 +4620,13 @@ static void rewrite (MIR_context_t ctx) {
           in_op = *op;
 #endif
         switch (op->mode) {
+        case MIR_OP_HARD_REG: bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg); break;
+        case MIR_OP_HARD_REG_MEM:
+          if (op->u.hard_reg_mem.base != MIR_NON_HARD_REG)
+            bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.base);
+          if (op->u.hard_reg_mem.index != MIR_NON_HARD_REG)
+            bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.index);
+          break;
         case MIR_OP_REG:
           hard_reg
             = change_reg (ctx, &mem_op, op->u.reg, data_mode, out_p || first_in_p, bb_insn, out_p);
