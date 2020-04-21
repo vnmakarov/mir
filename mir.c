@@ -5451,6 +5451,8 @@ static void scan_finish (MIR_context_t ctx) {
 #include "mir-aarch64.c"
 #elif defined(__PPC64__)
 #include "mir-ppc64.c"
+#elif defined(__s390x__)
+#include "mir-s390x.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
