@@ -124,7 +124,7 @@ tracing by adding `-DMIR_INTERP_TRACE` for compilation `mir.c` file.
 
 C programs compiled by C2MIR compiler need some compiler specific
 files.  The easiest way to do this is to copy existing target
-dependent directory (e.g. aarch64) in directory `mirc/include` and
+dependent directory (e.g. aarch64) in directory `include/mirc` and
 modify files in the new directory.  Again in most cases of 64-bit
 target, you don't need to change anything probably except macros
 related long double, char signedness, wchar, and `va_list` definitions.
