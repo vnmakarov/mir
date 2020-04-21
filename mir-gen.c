@@ -172,12 +172,14 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define max_int_hard_regs gen_ctx->max_int_hard_regs
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 
-#ifdef __x86_64__
+#if defined(__x86_64__)
 #include "mir-gen-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-gen-aarch64.c"
 #elif defined(__PPC64__)
 #include "mir-gen-ppc64.c"
+#elif defined(__s390x__)
+#include "mir-gen-stub.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
