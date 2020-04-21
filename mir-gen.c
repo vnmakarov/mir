@@ -4304,7 +4304,7 @@ struct ra_ctx {
   size_t curr_age;
   /* Slots num for variables.  Some variable can take several slots. */
   size_t func_stack_slots_num;
-  bitmap_t func_assigned_hard_regs;
+  bitmap_t func_used_hard_regs;
 };
 
 #define breg_renumber gen_ctx->ra_ctx->breg_renumber
@@ -4316,7 +4316,7 @@ struct ra_ctx {
 #define loc_profit_ages gen_ctx->ra_ctx->loc_profit_ages
 #define curr_age gen_ctx->ra_ctx->curr_age
 #define func_stack_slots_num gen_ctx->ra_ctx->func_stack_slots_num
-#define func_assigned_hard_regs gen_ctx->ra_ctx->func_assigned_hard_regs
+#define func_used_hard_regs gen_ctx->ra_ctx->func_used_hard_regs
 
 static void process_move_to_form_thread (MIR_context_t ctx, mv_t mv) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -4387,9 +4387,19 @@ static void setup_loc_profits (MIR_context_t ctx, MIR_reg_t breg) {
     setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1], mv->freq);
 }
 
+static void setup_used_hard_regs (MIR_context_t ctx, MIR_type_t type, MIR_reg_t hard_reg) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t curr_hard_reg;
+  int i, slots_num = target_locs_num (hard_reg, type);
+
+  for (i = 0; i < slots_num; i++)
+    if ((curr_hard_reg = target_nth_loc (hard_reg, type, i)) <= MAX_HARD_REG)
+      bitmap_set_bit_p (func_used_hard_regs, curr_hard_reg);
+}
+
 static void assign (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  MIR_reg_t loc, best_loc, i, reg, breg, var, nregs = get_nregs (ctx);
+  MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (ctx);
   MIR_type_t type;
   int slots_num;
   int j, k;
@@ -4439,7 +4449,7 @@ static void assign (MIR_context_t ctx) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (point_used_locs_addr[j], i);
   }
-  bitmap_clear (func_assigned_hard_regs);
+  bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
     breg = VARR_GET (breg_info_t, sorted_bregs, i).breg;
     if (VARR_GET (MIR_reg_t, breg_renumber, breg) != MIR_NON_HARD_REG) continue;
@@ -4457,13 +4467,16 @@ static void assign (MIR_context_t ctx) {
     for (loc = 0; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
       if (loc <= MAX_HARD_REG && !target_hard_reg_type_ok_p (loc, type)) continue;
       slots_num = target_locs_num (loc, type);
-      if (loc + slots_num - 1 > func_stack_slots_num + MAX_HARD_REG) break;
-      for (k = 0; k < slots_num; k++)
-        if ((loc + k <= MAX_HARD_REG
-             && (target_fixed_hard_reg_p (loc + k)
-                 || (target_call_used_hard_reg_p (loc + k) && curr_breg_infos[breg].calls_num > 0)))
-            || bitmap_bit_p (conflict_locs, loc + k))
+      if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
+      for (k = 0; k < slots_num; k++) {
+        curr_loc = target_nth_loc (loc, type, k);
+        if ((curr_loc <= MAX_HARD_REG
+             && (target_fixed_hard_reg_p (curr_loc)
+                 || (target_call_used_hard_reg_p (curr_loc)
+                     && curr_breg_infos[breg].calls_num > 0)))
+            || bitmap_bit_p (conflict_locs, curr_loc))
           break;
+      }
       if (k < slots_num) continue;
       if (loc > MAX_HARD_REG && (loc - MAX_HARD_REG - 1) % slots_num != 0)
         continue; /* we align stack slots according to the type size */
@@ -4478,7 +4491,7 @@ static void assign (MIR_context_t ctx) {
     }
     slots_num = target_locs_num (best_loc, type);
     if (best_loc <= MAX_HARD_REG) {
-      for (k = 0; k < slots_num; k++) bitmap_set_bit_p (func_assigned_hard_regs, best_loc + k);
+      setup_used_hard_regs (ctx, type, best_loc);
     } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
       for (k = 0; k < slots_num; k++) {
         if (k == 0) best_loc = VARR_LENGTH (size_t, loc_profits);
@@ -4501,9 +4514,11 @@ static void assign (MIR_context_t ctx) {
     }
 #endif
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
+    slots_num = target_locs_num (best_loc, type);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
-        for (k = 0; k < slots_num; k++) bitmap_set_bit_p (point_used_locs_addr[j], best_loc + k);
+        for (k = 0; k < slots_num; k++)
+          bitmap_set_bit_p (point_used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
   for (i = 0; i <= curr_point; i++) bitmap_destroy (VARR_POP (bitmap_t, point_used_locs));
 #if !MIR_NO_GEN_DEBUG
@@ -4553,6 +4568,7 @@ static MIR_reg_t change_reg (MIR_context_t ctx, MIR_op_t *mem_op, MIR_reg_t reg,
     code = MIR_LDMOV;
     hard_reg = first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
   }
+  setup_used_hard_regs (ctx, type, hard_reg);
   offset = target_get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
   *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
   if (hard_reg == MIR_NON_HARD_REG) return hard_reg;
@@ -4675,7 +4691,7 @@ static void init_ra (MIR_context_t ctx) {
   VARR_CREATE (size_t, loc_profits, 0);
   VARR_CREATE (size_t, loc_profit_ages, 0);
   conflict_locs = bitmap_create2 (3 * MAX_HARD_REG / 2);
-  func_assigned_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+  func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
 }
 
 static void finish_ra (MIR_context_t ctx) {
@@ -4687,7 +4703,7 @@ static void finish_ra (MIR_context_t ctx) {
   VARR_DESTROY (size_t, loc_profits);
   VARR_DESTROY (size_t, loc_profit_ages);
   bitmap_destroy (conflict_locs);
-  bitmap_destroy (func_assigned_hard_regs);
+  bitmap_destroy (func_used_hard_regs);
   free (gen_ctx->ra_ctx);
   gen_ctx->ra_ctx = NULL;
 }
@@ -5638,7 +5654,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif
   }
 #endif /* #ifndef NO_COMBINE */
-  target_make_prolog_epilog (ctx, func_assigned_hard_regs, func_stack_slots_num);
+  target_make_prolog_epilog (ctx, func_used_hard_regs, func_stack_slots_num);
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
