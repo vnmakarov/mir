@@ -119,6 +119,9 @@ mostly copies of already existing ones.
     file `c2mir.c` and add target standard include and library
     directories in files `c2mir.c` and `c2mir-driver.c`
 
+For debuging MIR interpreter, you can switch on MIR insn excution
+tracing by adding `-DMIR_INTERP_TRACE` for compilation `mir.c` file.
+
 C programs compiled by C2MIR compiler need some compiler specific
 files.  The easiest way to do this is to copy existing target
 dependent directory (e.g. aarch64) in directory `mirc/include` and
