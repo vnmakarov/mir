@@ -11440,6 +11440,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
              signed_p ? MIR_new_int_op (ctx, e->u.i_val) : MIR_new_uint_op (ctx, e->u.u_val));
       emit3 (ctx, short_p ? MIR_UBGTS : MIR_UBGT, MIR_new_label_op (ctx, label), index.mir_op,
              MIR_new_uint_op (ctx, range));
+      if (short_p) emit2 (ctx, MIR_UEXT32, index.mir_op, index.mir_op);
       VARR_TRUNC (case_t, switch_cases, 0);
       for (c = DLIST_HEAD (case_t, switch_attr->case_labels);
            c != NULL && c->case_node->code != N_DEFAULT; c = DLIST_NEXT (case_t, c))
