@@ -10241,7 +10241,8 @@ static void gen_memcpy (MIR_context_t ctx, MIR_disp_t disp, MIR_reg_t base, op_t
   MIR_op_t treg_op, args[6];
   MIR_module_t module;
 
-  if (val.mir_op.u.mem.index == 0 && val.mir_op.u.mem.disp == disp && val.mir_op.u.mem.base == base)
+  if (val.mir_op.mode == MIR_OP_MEM && val.mir_op.u.mem.index == 0 && val.mir_op.u.mem.disp == disp
+      && val.mir_op.u.mem.base == base)
     return;
   if (memcpy_item == NULL) {
     ret_type = get_int_mir_type (sizeof (mir_size_t));
