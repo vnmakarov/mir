@@ -179,7 +179,7 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #elif defined(__PPC64__)
 #include "mir-gen-ppc64.c"
 #elif defined(__s390x__)
-#include "mir-gen-stub.c"
+#include "mir-gen-s390x.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
