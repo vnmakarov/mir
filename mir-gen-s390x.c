@@ -2,6 +2,8 @@
    Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+// ??? More patterns (ult, ugt, ule, uge w/o branches).
+
 static void fancy_abort (int code) {
   if (!code) abort ();
 }
@@ -1206,48 +1208,6 @@ static const struct pattern patterns[] = {
     CMP (MIR_GT, MIR_GTS, MIR_UGT, MIR_UGTS, MIR_FGT, MIR_DGT, 2)
       CMP (MIR_LE, MIR_LES, MIR_ULE, MIR_ULES, MIR_FLE, MIR_DLE, 12)
         CMP (MIR_GE, MIR_GES, MIR_UGE, MIR_UGES, MIR_FGE, MIR_DGE, 10)
-
-#if 0
-
-#define UCMPEND "; a7:9 r0 i0; b988 r0 R0" /* lghi r0,0; alcgr r0,r0 */
-
-  /* (clgr r2,r1 | clg r2, m | clgf r2, m); lghi r0,0; alcgr r0,r0: */
-  {MIR_ULT, "r r r", "b921 r1 R2" CMPEND (4)}, /* clgr r1,r2;lghi r0,1;jm L;lghi r0,0 */
-  {MIR_ULT, "r r M3", "e3:21 r1 m" CMPEND (4)}, /* clg r1,m;lghi r0,1;jm L;lghi r0,0 */
-  {MIR_ULT, "r r Mu2", "e3:31 r1 m" CMPEND (4)}, /* clgf r1,m;lghi r0,1;jm L;lghi r0,0 */
-  /* (clr r2,r1 | cl r2, m | cly r2, m); lghi r0,0; alcgr r0,r0: */
-  {MIR_ULTS, "r r r", "15* r1 R2" CMPEND (4)},/* clr r1,r2;lghi r0,1;jm L;lghi r0,0 */
-  {MIR_ULTS, "r r m2", "55 r1 m" CMPEND (4)},/* cl r1,m;lghi r0,1;jm L;lghi r0,0 */
-  {MIR_ULTS, "r r M2", "e3:55 r1 m" CMPEND (4)},/* cly r1,m;lghi r0,1;jm L;lghi r0,0 */
-
-  /* (clgr r1,r2 | clg r1, m | clgf r1, m); lghi r0,0; alcgr r0,r0: */
-  {MIR_UGT, "r r r", "b921 r1 R2" UCMPEND},
-  {MIR_UGT, "r r M3", "e3:21 r1 m" UCMPEND},
-  {MIR_UGT, "r r Mu2", "e3:31 r1 m" UCMPEND},
-  /* (clr r1,r2 | cl r1, m | cly r1, m); lghi r0,0; alcgr r0,r0: */
-  {MIR_UGTS, "r r r", "b921 r1 R2" UCMPEND},
-  {MIR_UGTS, "r r m2", "e55 r1 m" UCMPEND},
-  {MIR_UGTS, "r r M2", "e3:55 r1 m" UCMPEND},
-
-  /* lgr h0, r2; slgr h0, r1; lghi r0,0; alcgr r0,r0 */
-  {MIR_ULE, "r r r", "b904 h0 R2; b90B h0 R1" UCMPEND},
-  /* (lgr h0, r2 | lg h0 m | lgf h0 m); slgr h0, r1; lghi r0,0; alcgr r0,r0 */
-  {MIR_ULE, "r M3 r", "b904 h0 R2; b90B h0 R2" UCMPEND},
-  {MIR_ULE, "r Mu2 r", "b904 h0 R2; b90B h0 R2" UCMPEND},
-  /* (lr h0, r2 | l h0 m | ly h0 m"); slr h0, r1; lghi r0,0; alcgr r0,r0 */
-  {MIR_ULES, "r r r", "18* h0 R2; 1f* h0 R1" UCMPEND},
-  {MIR_ULES, "r r m2", "58 h0 m; 1f* h0 R1" UCMPEND},
-  {MIR_ULES, "r r M2", "e3:58 h0 m; 1f* h0 R1" UCMPEND},
-
-  /* (lgr h0, r1 | lg h0 m | lgf h0 m); slgr h0, r2; lghi r0,0; alcgr r0,r0 */
-  {MIR_UGE, "r r r", "b904 h0 R1; b90B h0 R2" UCMPEND},
-  {MIR_UGE, "r r M3", "e3:04 h0 m; b90B h0 R1" UCMPEND},
-  {MIR_UGE, "r r Mu2", "e3:14 h0 m; b90B h0 R1" UCMPEND},
-  /* (lr h0, r1 | l h0 m | ly h0 m); slr h0, r2; lghi r0,0; alcgr r0,r0 */
-  {MIR_UGES, "r r r", "18* h0 R1; 1f* h0 R2" UCMPEND},
-  {MIR_UGES, "r r m2", "58 h0 m; 1f* h0 R1" UCMPEND},
-  {MIR_UGES, "r r M2", "e3:58 h0 m;  1f* h0 R1" UCMPEND},
-#endif
 
 #define SBRCL(mask) "c0:4* ma" #mask " L"
 #define BRCL(mask) "; " SBRCL (mask)
