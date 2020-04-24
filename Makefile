@@ -299,7 +299,9 @@ sloc:
 	@echo -n 'MIR Generator: ' && wc -l mir-gen.[ch] | awk '{last=$$1} END {print last}'
 	@echo -n 'x86-64 machine dependent code: ' && wc -l mir-x86_64.c mir-gen-x86_64.c | awk '{last=$$1} END {print last}'
 	@echo -n 'aarch64 machine dependent code: ' && wc -l mir-aarch64.c mir-gen-aarch64.c | awk '{last=$$1} END {print last}'
-	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c mir-dlist.h mir-hash.h mir-htab.h mir-varr.h mir-reduce.h mir-bitmap.h mir-mp.h mir.[ch] mir-interp.c mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c mir-aarch64.c mir-gen-aarch64.c | awk '{last=$$1} END {print last}'
+	@echo -n 'ppc64 machine dependent code: ' && wc -l mir-ppc64.c mir-gen-ppc64.c | awk '{last=$$1} END {print last}'
+	@echo -n 's390x machine dependent code: ' && wc -l mir-s390x.c mir-gen-s390x.c | awk '{last=$$1} END {print last}'
+	@echo -n 'Overall: ' && wc -l c2mir/c2mir.c mir-dlist.h mir-hash.h mir-htab.h mir-varr.h mir-reduce.h mir-bitmap.h mir-mp.h mir.[ch] mir-interp.c mir-gen.[ch] mir-x86_64.c mir-gen-x86_64.c mir-aarch64.c mir-gen-aarch64.c mir-ppc64.c mir-gen-ppc64.c mir-s390x.c mir-gen-s390x.c | awk '{last=$$1} END {print last}'
 
 gcc-test:
 	$(SHELL) c-tests/runtests.sh c-tests/use-gcc
