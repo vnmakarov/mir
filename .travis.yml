@@ -10,6 +10,7 @@ arch:
  - amd64
  - ppc64le
  - arm64
+ - s390x
 git:
   quiet: true
 branches:
