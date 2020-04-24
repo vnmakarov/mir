@@ -24,7 +24,7 @@ endif
 CFLAGS=-O3 -g -DNDEBUG
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h \
-             mir-gen-x86_64.c mir-gen-aarch64.c mir-gen-ppc64.c
+             mir-gen-x86_64.c mir-gen-aarch64.c mir-gen-ppc64.c mir-gen-s390x.c
 OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
 Q=@
 
