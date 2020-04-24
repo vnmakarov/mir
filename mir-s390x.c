@@ -383,7 +383,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   s390x_gen_mov (ctx, 1, 2);
   s390x_gen_addi (ctx, 15, 15, frame_size);
   for (unsigned reg = 0; reg <= 6; reg += 2) /* ldy fn,disp(r15) : */
-    s390x_gen_st (ctx, reg, 15, reg * 4 + 128, MIR_T_D);
+    s390x_gen_ld (ctx, reg, 15, reg * 4 + 128, MIR_T_D);
   s390x_gen_ldstm (ctx, 2, 6, 15, 16, TRUE);  /* lmg 2,6,16(r15) : */
   s390x_gen_ld (ctx, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (ctx, 1, FALSE);
