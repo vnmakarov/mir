@@ -2,7 +2,7 @@
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abuild"><img alt="GitHub MIR build status" src="https://github.com/vnmakarov/mir/workflows/build/badge.svg"></a>
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Atest"><img alt="GitHub MIR test status" src="https://github.com/vnmakarov/mir/workflows/test/badge.svg"></a>
 <a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abenchmark"><img alt="GitHub MIR benchmark status" src="https://github.com/vnmakarov/mir/workflows/benchmark/badge.svg"></a>
-<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=Travis%20tests(x86_64,%20arm64,%20ppc64le)"></a>
+<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=Travis%20tests(x86_64,%20arm64,%20ppc64le,%20s390x)"></a>
 </p>
 
 # MIR Project
@@ -15,7 +15,8 @@
    * **This code is in initial stages of development.  It is present
      only for familiarization with the project.  There is absolutely
      no warranty that MIR will not be changed in the future and the
-     code will work for any tests except ones given here and on platforms other than x86_64/aarch64 Linux/OSX**
+     code will work for any tests except ones given here and on platforms
+     other than x86_64 Linux/OSX and aarch64/ppc64be/ppc64le/s390x Linux**
   
 ## MIR
   * MIR is strongly typed
@@ -198,7 +199,7 @@ ex100:    func v, 0
     * big runtime and possibly MIR extensions will be required
   * Porting GCC to MIR is possible too.  An experienced GCC developer can implement this
     for 6 to 12 months
-  * On my estimation porting MIR JIT compiler to aarch64, ppc64, and mips will take
+  * On my estimation porting MIR JIT compiler to mips64 or sparc64 will take
     1-2 months of work for each target
   * Performance minded porting MIR JIT compiler to 32-bit targets will need an implementation of
     additional small analysis pass to get info what 64-bit variables are used only
@@ -277,14 +278,16 @@ ex100:    func v, 0
    by hashtables
  * File `mir-interp.c` contains code for interpretation of MIR code.  It is included in `mir.c`
    and never compiled separately
- * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, and `mir-gen-aarch64.c` contain code for MIR JIT compiler
-   * Files `mir-gen-x86_64.c` and `mir-gen-aarch64.c` is machine dependent code of JIT compiler
+ * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`,
+   and `mir-gen-s390x.c` contain code for MIR JIT compiler
+   * Files `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`,
+   and `mir-gen-s390x.c` is machine dependent code of JIT compiler
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
-   C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64` contain correspondingly
-   x86_64 and aarch64 machine-dependent code for C to MIR compiler
+   C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64` and `c2mir/s390x`
+   contain correspondingly x86_64, aarch64, ppc64, and s390x machine-dependent code for C to MIR compiler
    
 ## Playing with current MIR project code
   * MIR project is far away from any serious usage
@@ -347,5 +350,5 @@ ex100:    func v, 0
       Mozilla Public License
 
 ## Porting MIR
-  * Currently MIR works on x86_64 and aarch64 Linux and x86_64 MacOS
+  * Currently MIR works on x86_64, aarch64, ppc64be, ppc64le, s390x Linux and x86_64 MacOS
   * [HOW-TO-PORT-MIR.md](https://github.com/vnmakarov/mir/blob/master/HOW-TO-PORT-MIR.md) outlines process of porting MIR
