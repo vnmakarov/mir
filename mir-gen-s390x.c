@@ -857,7 +857,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   gen_mov (ctx, anchor, MIR_MOV, r11_reg_op, r15_reg_op); /* r11 = r15 */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  gen_assert (anchor->code == MIR_RET);
+  gen_assert (anchor->code == MIR_RET || anchor->code == MIR_JMP);
   /* Restoring fp hard registers: */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
