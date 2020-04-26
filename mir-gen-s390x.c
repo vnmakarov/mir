@@ -2,7 +2,7 @@
    Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-// ??? More patterns (ult, ugt, ule, uge w/o branches).
+// ??? More patterns (ult, ugt, ule, uge w/o branches, multi-insn combining).
 
 static void fancy_abort (int code) {
   if (!code) abort ();
