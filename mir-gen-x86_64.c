@@ -55,7 +55,13 @@ static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
 
 static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
+#ifndef _WIN64
   return !(hard_reg == BX_HARD_REG || (hard_reg >= R12_HARD_REG && hard_reg <= R15_HARD_REG));
+#else
+  return !(hard_reg == BX_HARD_REG || hard_reg == SI_HARD_REG || hard_reg == DI_HARD_REG
+           || (hard_reg >= R12_HARD_REG && hard_reg <= R15_HARD_REG)
+           || (hard_reg >= XMM6_HARD_REG && hard_reg <= XMM15_HARD_REG));
+#endif
 }
 
 /* Stack layout (sp refers to the last reserved stack slot address)
