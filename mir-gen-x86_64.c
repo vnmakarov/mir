@@ -26,8 +26,13 @@ static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) {
 
 /* Hard regs not used in machinized code, preferably call used ones. */
 const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
+#ifndef _WIN64
 const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM8_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM9_HARD_REG;
 const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM9_HARD_REG;
+#else
+const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM4_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM5_HARD_REG;
+const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM4_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM5_HARD_REG;
+#endif
 const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_HARD_REG;
 const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = MIR_NON_HARD_REG;
 
