@@ -4232,7 +4232,7 @@ static void build_live_ranges (MIR_context_t ctx) {
       if (incr_p) curr_point++;
     }
     gen_assert (bitmap_equal_p (live_vars, bb->live_in));
-    FOREACH_BITMAP_BIT (bi, live_vars, nel) { make_var_dead (ctx, nel, curr_point); }
+    FOREACH_BITMAP_BIT (bi, bb->live_in, nel) { make_var_dead (ctx, nel, curr_point); }
     if (!bitmap_empty_p (bb->live_in)) curr_point++;
   }
 #if !MIR_NO_GEN_DEBUG
