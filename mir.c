@@ -415,15 +415,22 @@ DEF_VARR (reg_desc_t);
 
 DEF_HTAB (size_t);
 
+struct reg_type_cache {
+  MIR_func_t func;
+  VARR (MIR_type_t) * types;
+};
+
 struct reg_ctx {
   VARR (reg_desc_t) * reg_descs;
   HTAB (size_t) * namenum2rdn_tab;
   HTAB (size_t) * reg2rdn_tab;
+  struct reg_type_cache reg_type_cache;
 };
 
 #define reg_descs ctx->reg_ctx->reg_descs
 #define namenum2rdn_tab ctx->reg_ctx->namenum2rdn_tab
 #define reg2rdn_tab ctx->reg_ctx->reg2rdn_tab
+#define reg_type_cache ctx->reg_ctx->reg_type_cache
 
 static int namenum2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
   MIR_context_t ctx = arg;
@@ -465,6 +472,8 @@ static void reg_init (MIR_context_t ctx) {
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, ctx);
   HTAB_CREATE (size_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, ctx);
+  reg_type_cache.func = NULL;
+  VARR_CREATE (MIR_type_t, reg_type_cache.types, 1000);
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
@@ -496,6 +505,7 @@ static void reg_finish (MIR_context_t ctx) {
   VARR_DESTROY (reg_desc_t, reg_descs);
   HTAB_DESTROY (size_t, namenum2rdn_tab);
   HTAB_DESTROY (size_t, reg2rdn_tab);
+  VARR_DESTROY (MIR_type_t, reg_type_cache.types);
   free (ctx->reg_ctx);
   ctx->reg_ctx = NULL;
 }
@@ -1870,7 +1880,20 @@ MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
 }
 
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  return get_func_rd_by_reg (ctx, reg, func)->type;
+  MIR_type_t type;
+
+  if (reg_type_cache.func != func) {
+    reg_type_cache.func = func;
+    VARR_TRUNC (MIR_type_t, reg_type_cache.types, 0);
+  }
+  if (VARR_LENGTH (MIR_type_t, reg_type_cache.types) > reg
+      && (type = VARR_GET (MIR_type_t, reg_type_cache.types, reg)) != MIR_T_UNDEF)
+    return type;
+  type = get_func_rd_by_reg (ctx, reg, func)->type;
+  while (VARR_LENGTH (MIR_type_t, reg_type_cache.types) <= reg)
+    VARR_PUSH (MIR_type_t, reg_type_cache.types, MIR_T_UNDEF);
+  VARR_SET (MIR_type_t, reg_type_cache.types, reg, type);
+  return type;
 }
 
 const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
