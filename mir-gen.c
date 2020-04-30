@@ -4089,13 +4089,18 @@ DEF_VARR (live_range_t);
 
 struct lr_ctx {
   int curr_point;
-  bitmap_t live_vars;
+  bitmap_t live_vars, born_vars, dead_vars, born_or_dead_vars;
   VARR (live_range_t) * var_live_ranges;
+  VARR (int) * point_map;
 };
 
 #define curr_point gen_ctx->lr_ctx->curr_point
 #define live_vars gen_ctx->lr_ctx->live_vars
+#define born_vars gen_ctx->lr_ctx->born_vars
+#define dead_vars gen_ctx->lr_ctx->dead_vars
+#define born_or_dead_vars gen_ctx->lr_ctx->born_or_dead_vars
 #define var_live_ranges gen_ctx->lr_ctx->var_live_ranges
+#define point_map gen_ctx->lr_ctx->point_map
 
 static live_range_t create_live_range (MIR_context_t ctx, int start, int finish,
                                        live_range_t next) {
@@ -4145,12 +4150,11 @@ static int make_var_live (MIR_context_t ctx, MIR_reg_t var, int point) {
 #if !MIR_NO_GEN_DEBUG
 static void print_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  size_t i;
   live_range_t lr;
 
   fprintf (debug_file, "+++++++++++++Live ranges:\n");
   gen_assert (get_nvars (ctx) == VARR_LENGTH (live_range_t, var_live_ranges));
-  for (i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
+  for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     if ((lr = VARR_GET (live_range_t, var_live_ranges, i)) == NULL) continue;
     fprintf (debug_file, "%lu", i);
     if (var_is_reg_p (i))
@@ -4163,6 +4167,72 @@ static void print_live_ranges (MIR_context_t ctx) {
   }
 }
 #endif
+
+static void shrink_live_ranges (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t p;
+  long int n;
+  live_range_t lr, prev_lr, next_lr;
+  int born_p, dead_p, prev_born_p, prev_dead_p;
+  bitmap_iterator_t bi;
+
+  bitmap_clear (born_vars);
+  bitmap_clear (dead_vars);
+  for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
+    for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next) {
+      gen_assert (lr->start <= lr->finish);
+      bitmap_set_bit_p (born_vars, lr->start);
+      bitmap_set_bit_p (dead_vars, lr->finish);
+    }
+  }
+
+  VARR_TRUNC (int, point_map, 0);
+  for (size_t i = 0; i <= curr_point; i++) VARR_PUSH (int, point_map, 0);
+  bitmap_ior (born_or_dead_vars, born_vars, dead_vars);
+  n = -1;
+  prev_born_p = prev_dead_p = FALSE;
+  FOREACH_BITMAP_BIT (bi, born_or_dead_vars, p) {
+    born_p = bitmap_bit_p (born_vars, p);
+    dead_p = bitmap_bit_p (dead_vars, p);
+    if ((prev_born_p && !prev_dead_p && born_p && !dead_p)
+        || (prev_dead_p && !prev_born_p && dead_p && !born_p))
+      VARR_SET (int, point_map, p, n);
+    else
+      VARR_SET (int, point_map, p, ++n);
+    prev_born_p = born_p;
+    prev_dead_p = dead_p;
+  }
+
+  n++;
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL)
+    fprintf (debug_file, "Compressing live ranges: from %d to %d - %d%%\n", curr_point, n,
+             100 * n / curr_point);
+#endif
+  curr_point = n;
+
+  for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
+    for (lr = VARR_GET (live_range_t, var_live_ranges, i), prev_lr = NULL; lr != NULL;
+         lr = next_lr) {
+      next_lr = lr->next;
+      lr->start = VARR_GET (int, point_map, lr->start);
+      lr->finish = VARR_GET (int, point_map, lr->finish);
+      if (prev_lr == NULL || prev_lr->start > lr->finish + 1) {
+        prev_lr = lr;
+        continue;
+      }
+      prev_lr->start = lr->start;
+      prev_lr->next = next_lr;
+      free (lr);
+    }
+  }
+#if !MIR_NO_GEN_DEBUG
+  if (debug_file != NULL) {
+    fprintf (debug_file, "Ranges after the compression:\n");
+    print_live_ranges (ctx);
+  }
+#endif
+}
 
 static void build_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -4238,6 +4308,7 @@ static void build_live_ranges (MIR_context_t ctx) {
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) print_live_ranges (ctx);
 #endif
+  shrink_live_ranges (ctx);
 }
 
 static void destroy_func_live_ranges (MIR_context_t ctx) {
@@ -4263,14 +4334,22 @@ static void init_live_ranges (MIR_context_t ctx) {
 
   gen_ctx->lr_ctx = gen_malloc (ctx, sizeof (struct lr_ctx));
   VARR_CREATE (live_range_t, var_live_ranges, 0);
+  VARR_CREATE (int, point_map, 1024);
   live_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  born_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  born_or_dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
 }
 
 static void finish_live_ranges (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   VARR_DESTROY (live_range_t, var_live_ranges);
+  VARR_DESTROY (int, point_map);
   bitmap_destroy (live_vars);
+  bitmap_destroy (born_vars);
+  bitmap_destroy (dead_vars);
+  bitmap_destroy (born_or_dead_vars);
   free (gen_ctx->lr_ctx);
   gen_ctx->lr_ctx = NULL;
 }
