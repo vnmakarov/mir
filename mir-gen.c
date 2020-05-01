@@ -99,6 +99,7 @@ static void *gen_malloc (MIR_context_t ctx, size_t size) {
   return res;
 }
 
+/* Functions used by target dependent code: */
 static MIR_reg_t gen_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func);
 static void set_label_disp (MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (MIR_insn_t insn);
