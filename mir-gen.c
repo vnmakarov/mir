@@ -875,12 +875,13 @@ static inline void insn_var_iterator_init (MIR_context_t ctx, insn_var_iterator_
 }
 
 static inline int insn_var_iterator_next (MIR_context_t ctx, insn_var_iterator_t *iter,
-                                          MIR_reg_t *var, int *out_p, int *mem_p,
+                                          MIR_reg_t *var, int *op_num, int *out_p, int *mem_p,
                                           size_t *passed_mem_num) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_op_t op;
 
   while (iter->op_num < iter->nops) {
+    *op_num = iter->op_num;
     MIR_insn_op_mode (ctx, iter->insn, iter->op_num, out_p);
     op = iter->insn->ops[iter->op_num];
     *mem_p = FALSE;
@@ -921,9 +922,9 @@ static inline int insn_var_iterator_next (MIR_context_t ctx, insn_var_iterator_t
   return FALSE;
 }
 
-#define FOREACH_INSN_VAR(ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) \
-  for (insn_var_iterator_init (ctx, &iterator, insn);                            \
-       insn_var_iterator_next (ctx, &iterator, &var, &out_p, &mem_p, &passed_mem_num);)
+#define FOREACH_INSN_VAR(ctx, iterator, insn, var, op_num, out_p, mem_p, passed_mem_num) \
+  for (insn_var_iterator_init (ctx, &iterator, insn);                                    \
+       insn_var_iterator_next (ctx, &iterator, &var, &op_num, &out_p, &mem_p, &passed_mem_num);)
 
 #if !MIR_NO_GEN_DEBUG
 static void output_in_edges (MIR_context_t ctx, bb_t bb) {
@@ -1829,7 +1830,7 @@ static void calculate_reaching_defs (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func = curr_func_item->u.func;
   bb_t entry_bb = DLIST_HEAD (bb_t, curr_cfg->bbs);
-  int out_p, mem_p;
+  int op_num, out_p, mem_p;
   size_t i, passed_mem_num, n_out, def;
   MIR_reg_t var;
   const char *var_name;
@@ -1844,7 +1845,7 @@ static void calculate_reaching_defs (MIR_context_t ctx) {
       n_out = 0;
       bb_insn->index = VARR_LENGTH (bb_insn_t, def_bb_insns);
       VARR_PUSH (bb_insn_t, def_bb_insns, bb_insn);
-      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) {
           bitmap_set_bit_p (get_var_uses_or_defs (ctx, var, TRUE), bb_insn->index);
         } else {
@@ -1887,7 +1888,7 @@ static void calculate_reaching_defs (MIR_context_t ctx) {
     for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       n_out = 0;
-      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) continue;
         def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
         gen_assert (def_bitmap != NULL);
@@ -2037,7 +2038,7 @@ static void build_webs (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t var;
   bb_insn_t bb_insn, def_bb_insn;
-  int out_p, mem_p;
+  int op_num, out_p, mem_p;
   size_t nbit, passed_mem_num, web_node_ind, web_node_ind2, n_out;
   web_node_t wn;
   bitmap_t def_bitmap = temp_bitmap, var_rdef_bitmap = temp_bitmap2;
@@ -2051,7 +2052,7 @@ static void build_webs (MIR_context_t ctx) {
     bitmap_copy (curr_rdef_bitmap, bb->rdef_in);
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!var_is_reg_p (var) || out_p) continue; /* ignore hard regs here */
         bitmap_and (var_rdef_bitmap, curr_rdef_bitmap, get_var_uses_or_defs (ctx, var, FALSE));
         web_node_ind = get_web_node_ind (ctx, var, FALSE, bb_insn, 0);
@@ -2070,7 +2071,7 @@ static void build_webs (MIR_context_t ctx) {
       }
       /* Update curr_rdef_bitmap: */
       n_out = 0;
-      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) continue;
         def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
         gen_assert (def_bitmap != NULL);
@@ -2365,14 +2366,15 @@ static int another_def_reaching_def_p (MIR_context_t ctx, bb_insn_t def_bb_insn,
   bitmap_iterator_t bi;
   bb_insn_t another_def_bb_insn;
   bb_t another_def_bb, def_bb = def_bb_insn->bb;
-  int out_p, mem_p;
+  int op_num, out_p, mem_p;
   size_t nbit, passed_mem_num, n_out;
   insn_var_iterator_t iter;
 
   bitmap_and (temp_bitmap, get_var_uses_or_defs (ctx, var, FALSE), loop_defs_bitmap);
   bitmap_and (temp_bitmap2, def_bb->rdef_in, temp_bitmap);
   n_out = 0;
-  FOREACH_INSN_VAR (ctx, iter, def_bb_insn->insn, ignore_var, out_p, mem_p, passed_mem_num) {
+  FOREACH_INSN_VAR (ctx, iter, def_bb_insn->insn, ignore_var, op_num, out_p, mem_p,
+                    passed_mem_num) {
     if (!out_p) continue;
     bitmap_clear_bit_p (temp_bitmap2, def_bb_insn->index + n_out++); /* exclude insn defs itself */
   }
@@ -2391,7 +2393,7 @@ static int loop_invariant_insn_p (MIR_context_t ctx, loop_node_t loop, bb_insn_t
   MIR_insn_t insn = bb_insn->insn;
   bb_t bb = bb_insn->bb;
   size_t i, passed_mem_num;
-  int out_p, mem_p;
+  int op_num, out_p, mem_p;
   MIR_reg_t var;
   bitmap_t var_rdef_bitmap = temp_bitmap;
   insn_var_iterator_t iter;
@@ -2402,7 +2404,7 @@ static int loop_invariant_insn_p (MIR_context_t ctx, loop_node_t loop, bb_insn_t
       || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END)
     return FALSE;
   if (!dominate_curr_loop_exits_p (ctx, bb)) return FALSE; /* can not safely move */
-  FOREACH_INSN_VAR (ctx, iter, insn, var, out_p, mem_p, passed_mem_num) {
+  FOREACH_INSN_VAR (ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
     /* no stores in the loop ??? aliasing should be used here */
     if (passed_mem_num != 0
         && (loop->call_p || stores_start != VARR_LENGTH (bb_insn_t, loop_stores)))
@@ -2424,7 +2426,7 @@ static int collect_loop_bb_invariants (MIR_context_t ctx, loop_node_t loop, bb_t
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   bitmap_t def_bitmap;
   MIR_reg_t var;
-  int out_p, mem_p, change_p = FALSE;
+  int op_num, out_p, mem_p, change_p = FALSE;
   size_t passed_mem_num, n_out;
   insn_var_iterator_t iter;
 
@@ -2438,7 +2440,7 @@ static int collect_loop_bb_invariants (MIR_context_t ctx, loop_node_t loop, bb_t
     }
     /* Update curr_rdef_bitmap: */
     n_out = 0;
-    FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+    FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
       if (!out_p) continue;
       def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
       gen_assert (def_bitmap != NULL);
@@ -2468,7 +2470,7 @@ static void find_profitable_loop_invariants (MIR_context_t ctx, loop_node_t loop
   MIR_insn_t insn;
   MIR_op_mode_t mode;
   MIR_reg_t var;
-  int out_p, mem_p, move_p, dep_p, int_p;
+  int op_num, out_p, mem_p, move_p, dep_p, int_p;
   int int_pressure, fp_pressure;
   size_t passed_mem_num;
   insn_var_iterator_t iterator;
@@ -2487,7 +2489,7 @@ static void find_profitable_loop_invariants (MIR_context_t ctx, loop_node_t loop
     int_pressure = loop->max_int_pressure;
     fp_pressure = loop->max_fp_pressure;
     bb_insn->flag2 = TRUE; /* cheap or pressure */
-    FOREACH_INSN_VAR (ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) {
+    FOREACH_INSN_VAR (ctx, iterator, insn, var, op_num, out_p, mem_p, passed_mem_num) {
       if (!out_p) continue;
       if (bitmap_bit_p (live, var)) {
         move_p = dep_p = TRUE;
@@ -2503,7 +2505,7 @@ static void find_profitable_loop_invariants (MIR_context_t ctx, loop_node_t loop
     }
     if (move_p || dep_p) { /* update live: ignore killed vars here */
       bb_insn->flag = FALSE;
-      FOREACH_INSN_VAR (ctx, iterator, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iterator, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
     }
@@ -2561,7 +2563,7 @@ static void loop_licm (MIR_context_t ctx, loop_node_t loop) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t var;
   size_t i, n_out, passed_mem_num;
-  int out_p, mem_p, change_p;
+  int op_num, out_p, mem_p, change_p;
   bb_t bb;
   insn_var_iterator_t iter;
   size_t loop_bbs_start = VARR_LENGTH (bb_t, loop_bbs);
@@ -2587,7 +2589,7 @@ static void loop_licm (MIR_context_t ctx, loop_node_t loop) {
       if (MIR_call_code_p (bb_insn->insn->code)) loop->call_p = TRUE;
       bb_insn->flag = FALSE; /* clear invariant flag */
       n_out = 0;
-      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_set_bit_p (loop_defs_bitmap, bb_insn->index + n_out++);
       }
     }
@@ -3918,7 +3920,7 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
   MIR_insn_t insn;
   size_t i, niter, passed_mem_num, bb_freq, mvs_num = 0;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int out_p, mem_p, int_p;
+  int op_num, out_p, mem_p, int_p;
   int bb_int_pressure, max_bb_int_pressure, bb_fp_pressure, max_bb_fp_pressure;
   mv_t mv;
   reg_info_t *breg_infos;
@@ -3944,7 +3946,7 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
     }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p && niter != 0) {
           if (bitmap_set_bit_p (bb->live_gen, var))
             increase_pressure (int_var_type_p (ctx, var), bb, &bb_int_pressure, &bb_fp_pressure);
@@ -4048,7 +4050,7 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
   size_t passed_mem_num;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   MIR_op_t op;
-  int out_p, mem_p;
+  int op_num, out_p, mem_p;
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
 
@@ -4059,11 +4061,11 @@ static void add_bb_insn_dead_vars (MIR_context_t ctx) {
       prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
       clear_bb_insn_dead_vars (bb_insn);
       insn = bb_insn->insn;
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_clear_bit_p (live, var);
       }
       if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) continue;
         if (bitmap_set_bit_p (live, var)) add_bb_insn_dead_var (ctx, bb_insn, var);
       }
@@ -4240,7 +4242,7 @@ static void build_live_ranges (MIR_context_t ctx) {
   MIR_insn_t insn;
   MIR_reg_t var, nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   size_t i, nel, passed_mem_num;
-  int incr_p, out_p, mem_p;
+  int op_num, incr_p, out_p, mem_p;
   bitmap_iterator_t bi;
   insn_var_iterator_t insn_var_iter;
 
@@ -4267,7 +4269,7 @@ static void build_live_ranges (MIR_context_t ctx) {
       }
 #endif
       incr_p = FALSE;
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) incr_p |= make_var_dead (ctx, var, curr_point);
       }
       if (MIR_call_code_p (insn->code)) {
@@ -4287,7 +4289,7 @@ static void build_live_ranges (MIR_context_t ctx) {
       }
       if (incr_p) curr_point++;
       incr_p = FALSE;
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) incr_p |= make_var_live (ctx, var, curr_point);
       }
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
@@ -5438,7 +5440,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
   bb_insn_t bb_insn, prev_bb_insn;
   size_t passed_mem_num;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int out_p, reg_def_p, dead_p, mem_p;
+  int op_num, out_p, reg_def_p, dead_p, mem_p;
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
 
@@ -5453,7 +5455,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
       insn = bb_insn->insn;
       reg_def_p = FALSE;
       dead_p = TRUE;
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) continue;
         reg_def_p = TRUE;
         if (bitmap_clear_bit_p (live, var)) dead_p = FALSE;
@@ -5475,7 +5477,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
         continue;
       }
       if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
-      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, out_p, mem_p, passed_mem_num) {
+      FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
