@@ -19,6 +19,11 @@ static void f (int i, void *arg) {
   sum += i;
 }
 
+static void add (int i, void *arg) {
+  int *sum = arg;
+  (*sum) += i;
+}
+
 int main (void) {
   int i, collisions, iter, tab_el;
   HTAB (int) * htab;
@@ -31,6 +36,9 @@ int main (void) {
       status &= tab_el == i;
       status &= HTAB_ELS_NUM (int, htab) == i + 1;
     }
+    sum = 0;
+    HTAB_FOREACH_ELEM (int, htab, add, &sum);
+    status &= sum == 4950;
     sum = 0;
     HTAB_CLEAR (int, htab);
     status &= sum == 4950;
