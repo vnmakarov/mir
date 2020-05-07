@@ -4424,13 +4424,13 @@ static void process_move_to_form_thread (MIR_context_t ctx, mv_t mv) {
 }
 
 static int breg_info_compare_func (const void *a1, const void *a2) {
-  breg_info_t breg_info1 = *(const breg_info_t *) a1, breg_info2 = *(const breg_info_t *) a2;
-  MIR_reg_t breg1 = breg_info1.breg, breg2 = breg_info2.breg;
-  reg_info_t *breg_infos = breg_info1.breg_infos;
+  const breg_info_t *breg_info1 = (const breg_info_t *) a1, *breg_info2 = (const breg_info_t *) a2;
+  MIR_reg_t breg1 = breg_info1->breg, breg2 = breg_info2->breg;
+  reg_info_t *breg_infos = breg_info1->breg_infos;
   MIR_reg_t t1 = breg_infos[breg1].thread_first, t2 = breg_infos[breg2].thread_first;
   long diff;
 
-  gen_assert (breg_infos == breg_info2.breg_infos);
+  gen_assert (breg_infos == breg_info2->breg_infos);
   if ((diff = breg_infos[t2].thread_freq - breg_infos[t1].thread_freq) != 0) return diff;
   if (t1 < t2) return -1;
   if (t2 < t1) return 1;
