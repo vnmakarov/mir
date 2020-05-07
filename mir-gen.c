@@ -5738,10 +5738,10 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   }
 #endif
-  calculate_func_cfg_live_info (ctx, FALSE);
-  add_bb_insn_dead_vars (ctx);
 #ifndef NO_COMBINE
   if (optimize_level >= 1) {
+    calculate_func_cfg_live_info (ctx, FALSE);
+    add_bb_insn_dead_vars (ctx);
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
       fprintf (debug_file, "+++++++++++++MIR before combine:\n");
