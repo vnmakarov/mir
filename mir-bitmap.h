@@ -189,15 +189,13 @@ static inline int bitmap_empty_p (const_bitmap_t bm) {
   return TRUE;
 }
 
+static inline bitmap_el_t bitmap_el_max2 (bitmap_el_t el1, bitmap_el_t el2) {
+  return el1 < el2 ? el2 : el1;
+}
+
 static inline bitmap_el_t bitmap_el_max3 (bitmap_el_t el1, bitmap_el_t el2, bitmap_el_t el3) {
   if (el1 <= el2) return el2 < el3 ? el3 : el2;
   return el1 < el3 ? el3 : el1;
-}
-
-static inline bitmap_el_t bitmap_el_max4 (bitmap_el_t el1, bitmap_el_t el2, bitmap_el_t el3,
-                                          bitmap_el_t el4) {
-  if (el1 <= el2) return bitmap_el_max3 (el2, el3, el4);
-  return bitmap_el_max3 (el1, el3, el4);
 }
 
 /* Return the number of bits set in BM.  */
@@ -223,7 +221,7 @@ static inline int bitmap_op2 (bitmap_t dst, const_bitmap_t src1, const_bitmap_t 
 
   src1_len = VARR_LENGTH (bitmap_el_t, src1);
   src2_len = VARR_LENGTH (bitmap_el_t, src2);
-  len = bitmap_el_max3 (VARR_LENGTH (bitmap_el_t, dst), src1_len, src2_len);
+  len = bitmap_el_max2 (src1_len, src2_len);
   bitmap_expand (dst, len * BITMAP_WORD_BITS);
   dst_addr = VARR_ADDR (bitmap_el_t, dst);
   src1_addr = VARR_ADDR (bitmap_el_t, src1);
@@ -269,7 +267,7 @@ static inline int bitmap_op3 (bitmap_t dst, const_bitmap_t src1, const_bitmap_t 
   src1_len = VARR_LENGTH (bitmap_el_t, src1);
   src2_len = VARR_LENGTH (bitmap_el_t, src2);
   src3_len = VARR_LENGTH (bitmap_el_t, src3);
-  len = bitmap_el_max4 (VARR_LENGTH (bitmap_el_t, dst), src1_len, src2_len, src3_len);
+  len = bitmap_el_max3 (src1_len, src2_len, src3_len);
   bitmap_expand (dst, len * BITMAP_WORD_BITS);
   dst_addr = VARR_ADDR (bitmap_el_t, dst);
   src1_addr = VARR_ADDR (bitmap_el_t, src1);
