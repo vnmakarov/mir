@@ -4518,8 +4518,9 @@ static void assign (MIR_context_t ctx) {
     VARR_PUSH (size_t, loc_profits, 0);
     VARR_PUSH (size_t, loc_profit_ages, 0);
   }
-  VARR_TRUNC (bitmap_t, point_used_locs, 0);
-  for (i = 0; i <= curr_point; i++) {
+  for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, point_used_locs); n++)
+    bitmap_clear (VARR_GET (bitmap_t, point_used_locs, n));
+  while (VARR_LENGTH (bitmap_t, point_used_locs) <= curr_point) {
     bm = bitmap_create2 (MAX_HARD_REG + 1);
     VARR_PUSH (bitmap_t, point_used_locs, bm);
   }
@@ -4602,7 +4603,6 @@ static void assign (MIR_context_t ctx) {
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (point_used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
-  for (i = 0; i <= curr_point; i++) bitmap_destroy (VARR_POP (bitmap_t, point_used_locs));
 #if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "+++++++++++++Disposition after assignment:");
@@ -4788,6 +4788,8 @@ static void finish_ra (MIR_context_t ctx) {
 
   VARR_DESTROY (MIR_reg_t, breg_renumber);
   VARR_DESTROY (breg_info_t, sorted_bregs);
+  while (VARR_LENGTH (bitmap_t, point_used_locs) != 0)
+    bitmap_destroy (VARR_POP (bitmap_t, point_used_locs));
   VARR_DESTROY (bitmap_t, point_used_locs);
   VARR_DESTROY (size_t, loc_profits);
   VARR_DESTROY (size_t, loc_profit_ages);
