@@ -5636,7 +5636,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     cse_clear (ctx);
   }
 #endif /* #ifndef NO_CSE */
-  calculate_func_cfg_live_info (ctx, FALSE);
+  if (optimize_level >= 2) calculate_func_cfg_live_info (ctx, FALSE);
 #ifndef NO_CSE
   if (optimize_level >= 2) {
     dead_code_elimination (ctx);
