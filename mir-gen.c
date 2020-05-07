@@ -4547,22 +4547,19 @@ static void assign (MIR_context_t ctx) {
     best_loc = MIR_NON_HARD_REG;
     best_profit = 0;
     type = MIR_reg_type (ctx, reg, curr_func_item->u.func);
-    for (loc = 0; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
-      if (loc <= MAX_HARD_REG && !target_hard_reg_type_ok_p (loc, type)) continue;
-      slots_num = target_locs_num (loc, type);
-      if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
-      for (k = 0; k < slots_num; k++) {
-        curr_loc = target_nth_loc (loc, type, k);
-        if ((curr_loc <= MAX_HARD_REG
-             && (target_fixed_hard_reg_p (curr_loc)
-                 || (target_call_used_hard_reg_p (curr_loc)
-                     && curr_breg_infos[breg].calls_num > 0)))
-            || bitmap_bit_p (conflict_locs, curr_loc))
-          break;
+    if (curr_breg_infos[breg].calls_num > 0)
+      bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs);
+    for (loc = 0; loc <= MAX_HARD_REG; loc++) {
+      if (bitmap_bit_p (conflict_locs, loc)) continue;
+      if (!target_hard_reg_type_ok_p (loc, type) || target_fixed_hard_reg_p (loc)) continue;
+      if ((slots_num = target_locs_num (loc, type)) > 1) {
+        if (target_nth_loc (loc, type, slots_num - 1) > MAX_HARD_REG) break;
+        for (k = slots_num - 1; k > 0; k--) {
+          curr_loc = target_nth_loc (loc, type, k);
+          if (target_fixed_hard_reg_p (curr_loc) || bitmap_bit_p (conflict_locs, curr_loc)) break;
+        }
+        if (k > 0) continue;
       }
-      if (k < slots_num) continue;
-      if (loc > MAX_HARD_REG && (loc - MAX_HARD_REG - 1) % slots_num != 0)
-        continue; /* we align stack slots according to the type size */
       profit = (VARR_GET (size_t, loc_profit_ages, loc) != curr_age
                   ? 0
                   : VARR_GET (size_t, loc_profits, loc));
@@ -4570,19 +4567,41 @@ static void assign (MIR_context_t ctx) {
         best_loc = loc;
         best_profit = profit;
       }
-      if (best_loc != MIR_NON_HARD_REG && loc == MAX_HARD_REG) break;
     }
-    slots_num = target_locs_num (best_loc, type);
-    if (best_loc <= MAX_HARD_REG) {
+    if (best_loc != MIR_NON_HARD_REG) {
       setup_used_hard_regs (ctx, type, best_loc);
-    } else if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
-      for (k = 0; k < slots_num; k++) {
-        if (k == 0) best_loc = VARR_LENGTH (size_t, loc_profits);
-        VARR_PUSH (size_t, loc_profits, 0);
-        VARR_PUSH (size_t, loc_profit_ages, 0);
-        if (k == 0 && (best_loc - MAX_HARD_REG - 1) % slots_num != 0) k--; /* align */
+    } else {
+      for (loc = MAX_HARD_REG + 1; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
+        slots_num = target_locs_num (loc, type);
+        if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
+        for (k = 0; k < slots_num; k++) {
+          curr_loc = target_nth_loc (loc, type, k);
+          if (bitmap_bit_p (conflict_locs, curr_loc)) break;
+        }
+        if (k < slots_num) continue;
+        if ((loc - MAX_HARD_REG - 1) % slots_num != 0)
+          continue; /* we align stack slots according to the type size */
+        profit = (VARR_GET (size_t, loc_profit_ages, loc) != curr_age
+                    ? 0
+                    : VARR_GET (size_t, loc_profits, loc));
+        if (best_loc == MIR_NON_HARD_REG || best_profit < profit) {
+          best_loc = loc;
+          best_profit = profit;
+        }
       }
-      func_stack_slots_num = VARR_LENGTH (size_t, loc_profits) - MAX_HARD_REG - 1;
+      if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
+        slots_num = 1;
+        for (k = 0; k < slots_num; k++) {
+          if (k == 0) {
+            best_loc = VARR_LENGTH (size_t, loc_profits);
+            slots_num = target_locs_num (best_loc, type);
+          }
+          VARR_PUSH (size_t, loc_profits, 0);
+          VARR_PUSH (size_t, loc_profit_ages, 0);
+          if (k == 0 && (best_loc - MAX_HARD_REG - 1) % slots_num != 0) k--; /* align */
+        }
+        func_stack_slots_num = VARR_LENGTH (size_t, loc_profits) - MAX_HARD_REG - 1;
+      }
     }
 #if !MIR_NO_GEN_DEBUG
     if (debug_file != NULL) {
