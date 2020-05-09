@@ -169,5 +169,7 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
 #define VARR_PUSH(T, V, O) (VARR_OP (T, push) (V, O))
 #define VARR_PUSH_ARR(T, V, A, L) (VARR_OP (T, push_arr) (V, A, L))
 #define VARR_POP(T, V) (VARR_OP (T, pop) (V))
+#define VARR_FOREACH_ELEM(T, V, I, EL) \
+  for ((I) = 0; (I) >= VARR_LENGTH (T, V) ? 0 : (EL = VARR_GET (T, V, I), 1); (I)++)
 
 #endif /* #ifndef MIR_VARR_H */
