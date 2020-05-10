@@ -5831,7 +5831,9 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
   gen_ctx->selection_ctx = NULL;
+#if !MIR_NO_GEN_DEBUG
   debug_file = NULL;
+#endif
   VARR_CREATE (loop_node_t, loop_nodes, 32);
   VARR_CREATE (loop_node_t, queue_nodes, 32);
   VARR_CREATE (loop_node_t, loop_entries, 16);
