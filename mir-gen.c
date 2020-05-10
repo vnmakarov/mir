@@ -114,6 +114,15 @@ static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
 #define MIR_GEN_CALL_TRACE 0
 #endif
 
+#if MIR_NO_GEN_DEBUG
+#define DEBUG(code)
+#else
+#define DEBUG(code)               \
+  {                               \
+    if (debug_file != NULL) code; \
+  }
+#endif
+
 typedef struct func_cfg *func_cfg_t;
 
 struct target_ctx;
@@ -1643,25 +1652,21 @@ static void cse_modify (MIR_context_t ctx) {
           MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
           DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, bb_insn, new_bb_insn);
           next_bb_insn = DLIST_NEXT (bb_insn_t, new_bb_insn);
-#if !MIR_NO_GEN_DEBUG
-          if (debug_file != NULL) {
+          DEBUG ({
             fprintf (debug_file, "  adding insn ");
             MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, FALSE);
             fprintf (debug_file, "  after def insn ");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-          }
-#endif
+          });
         } else {
           new_insn = MIR_new_insn (ctx, move_code, insn->ops[0], op);
           gen_add_insn_after (ctx, insn, new_insn);
-#if !MIR_NO_GEN_DEBUG
-          if (debug_file != NULL) {
+          DEBUG ({
             fprintf (debug_file, "  adding insn ");
             MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, FALSE);
             fprintf (debug_file, "  after use insn ");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-          }
-#endif
+          });
           insn = new_insn;
         }
       }
@@ -1857,28 +1862,24 @@ static void calculate_reaching_defs (MIR_context_t ctx) {
   }
   /* Add special defs for each fucn arg */
   bitmap_clear (artificial_def_bitmap);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL && func->nargs > 0)
-    fprintf (debug_file, " Adding special defs name(reg,def):");
-#endif
+  DEBUG ({ fprintf (debug_file, " Adding special defs name(reg,def):"); });
   for (i = 0; i < func->nargs; i++) {
     var_name = VARR_GET (MIR_var_t, func->vars, i).name;
     var = reg2var (gen_ctx, MIR_reg (ctx, var_name, func));
     gen_assert (var_is_reg_p (var));
     def_bitmap = get_var_uses_or_defs (ctx, var, FALSE);
     def = VARR_LENGTH (bb_insn_t, def_bb_insns);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL)
+    DEBUG ({
       fprintf (debug_file, " %s(%lu,%lu)", var_name, (unsigned long) var2reg (gen_ctx, var),
                (unsigned long) def);
-#endif
+    });
     VARR_PUSH (bb_insn_t, def_bb_insns, NULL);
     bitmap_set_bit_p (def_bitmap, def);
     bitmap_set_bit_p (artificial_def_bitmap, def);
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL && i > 0) fprintf (debug_file, "\n");
-#endif
+  DEBUG ({
+    if (i > 0) fprintf (debug_file, "\n");
+  });
   for (bb_t bb = entry_bb; bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     /* Set up rdef gen/kill; initialize rdef in/out */
     bitmap_clear (bb->rdef_in);
@@ -2097,10 +2098,7 @@ static MIR_reg_t get_new_reg (MIR_context_t ctx, MIR_reg_t reg, size_t index) {
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
   update_min_max_reg (ctx, new_reg);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
-    fprintf (debug_file, " Renaming %s to %s in", name, VARR_ADDR (char, reg_name));
-#endif
+  DEBUG ({ fprintf (debug_file, " Renaming %s to %s in", name, VARR_ADDR (char, reg_name)); });
   return new_reg;
 }
 
@@ -2122,8 +2120,7 @@ static void reg_rename (MIR_context_t ctx) {
     if (addr[i].first != i) continue;
     var = addr[i].var;
     reg = var2reg (gen_ctx, var);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "web reg=%d(%s):", reg, MIR_reg_name (ctx, reg, func));
       for (curr = i; curr != 0; curr = addr[curr].next)
         if (addr[curr].bb_insn == NULL)
@@ -2133,8 +2130,7 @@ static void reg_rename (MIR_context_t ctx) {
                    (long unsigned) addr[curr].bb_insn->index + addr[curr].n_out,
                    addr[curr].def_p ? "def" : "use");
       fprintf (debug_file, "\n");
-    }
-#endif
+    });
     while (VARR_LENGTH (size_t, curr_var_indexes) <= var) VARR_PUSH (size_t, curr_var_indexes, 0);
     index = VARR_GET (size_t, curr_var_indexes, var);
     VARR_SET (size_t, curr_var_indexes, var, index + 1);
@@ -2166,16 +2162,14 @@ static void reg_rename (MIR_context_t ctx) {
             change_p = TRUE;
           }
         }
-#if !MIR_NO_GEN_DEBUG
-        if (change_p && debug_file != NULL)
-          fprintf (debug_file, " %lu(%s)", (unsigned long) bb_insn->index + addr[curr].n_out,
-                   def_p ? "def" : "use");
-#endif
+        DEBUG ({
+          if (change_p)
+            fprintf (debug_file, " %lu(%s)", (unsigned long) bb_insn->index + addr[curr].n_out,
+                     def_p ? "def" : "use");
+        });
       }
     }
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, "\n");
-#endif
+    DEBUG ({ fprintf (debug_file, "\n"); });
   }
 }
 
@@ -2530,21 +2524,18 @@ static void move_loop_invariants (MIR_context_t ctx, loop_node_t loop) {
   bb_t entry_bb = loop->entry->bb;
 
   find_profitable_loop_invariants (ctx, loop);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file, "Loop%3lu (pressure: int=%d, fp=%d) -- invariant insns:\n",
              (unsigned long) loop->index, loop->max_int_pressure, loop->max_fp_pressure);
-#endif
+  });
   for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, invariant_bb_insns); i++) {
     bb_insn_t bb_insn = VARR_GET (bb_insn_t, invariant_bb_insns, i);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "  %15s %-5lu",
                !bb_insn->flag ? "move" : bb_insn->flag2 ? "keep cheap" : "keep pressure",
                (unsigned long) bb_insn->index);
       print_bb_insn (ctx, bb_insn, TRUE);
-    }
-#endif
+    });
     if (!bb_insn->flag) {
       gen_assert (entry_bb != NULL);
       licm_move_insn (ctx, bb_insn, loop->preheader, DLIST_HEAD (bb_insn_t, entry_bb->bb_insns));
@@ -2628,9 +2619,7 @@ static void BFS (MIR_context_t ctx) { /* breadth-first search */
 static int licm (MIR_context_t ctx) { /* loop invariant code motion */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) print_loop_tree (ctx, FALSE);
-#endif
+  DEBUG ({ print_loop_tree (ctx, FALSE); });
   BFS (ctx);
   calculate_dominators (ctx);
   VARR_TRUNC (bb_t, licm_temp_bbs, 0);
@@ -3424,12 +3413,10 @@ static void ccp_push_used_insns (MIR_context_t ctx, var_occ_t def) {
 
       if (bb_insn->flag) continue; /* already in ccp_insns */
       VARR_PUSH (bb_insn_t, ccp_insns, bb_insn);
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "           pushing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
         MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
-      }
-#endif
+      });
       bb_insn->flag = TRUE;
     } else {
       struct var_occ vos;
@@ -3444,15 +3431,14 @@ static void ccp_push_used_insns (MIR_context_t ctx, var_occ_t def) {
         vos.place.u.bb = e->dst;
         if (!HTAB_DO (var_occ_t, var_occ_tab, &vos, HTAB_FIND, tab_var_occ) || tab_var_occ->flag)
           continue; /* var_occ at the start of BB in subsequent BB is already in ccp_var_occs */
-#if !MIR_NO_GEN_DEBUG
-        if (debug_file != NULL)
+        DEBUG ({
           fprintf (debug_file, "           pushing var%lu(%s) at start of bb%lu\n",
                    (long unsigned) vos.var,
                    var_is_reg_p (vos.var)
                      ? MIR_reg_name (ctx, var2reg (gen_ctx, vos.var), curr_func_item->u.func)
                      : "",
                    (unsigned long) e->dst->index);
-#endif
+        });
         VARR_PUSH (var_occ_t, ccp_var_occs, tab_var_occ);
         tab_var_occ->flag = TRUE;
       }
@@ -3466,8 +3452,7 @@ static void ccp_process_bb_start_var_occ (MIR_context_t ctx, var_occ_t var_occ, 
   var_occ_t tab_var_occ, def;
   int change_p;
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file,
              "       %sprocessing var%lu(%s) at start of bb%lu:", from_bb_process_p ? "  " : "",
              (long unsigned) var_occ->var,
@@ -3475,17 +3460,13 @@ static void ccp_process_bb_start_var_occ (MIR_context_t ctx, var_occ_t var_occ, 
                ? MIR_reg_name (ctx, var2reg (gen_ctx, var_occ->var), curr_func_item->u.func)
                : "",
              (unsigned long) var_occ->place.u.bb->index);
-#endif
+  });
   gen_assert (var_occ->place.type == OCC_BB_START && bb == var_occ->place.u.bb);
   if (var_occ->val_kind == CCP_VARYING) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, " already varying\n");
-#endif
+    DEBUG ({ fprintf (debug_file, " already varying\n"); });
     return;
   } else if (bb->index == 0) { /* Non-parameter at entry BB (it means using undefined value) */
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, " making varying\n");
-#endif
+    DEBUG ({ fprintf (debug_file, " making varying\n"); });
     var_occ->val_kind = CCP_VARYING;
   }
   change_p = FALSE;
@@ -3519,8 +3500,7 @@ static void ccp_process_bb_start_var_occ (MIR_context_t ctx, var_occ_t var_occ, 
       }
     }
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     if (var_occ->val_kind != CCP_CONST) {
       fprintf (debug_file, "         %s%s\n", change_p ? "changed to " : "",
                var_occ->val_kind == CCP_UNKNOWN ? "unknown" : "varying");
@@ -3529,8 +3509,7 @@ static void ccp_process_bb_start_var_occ (MIR_context_t ctx, var_occ_t var_occ, 
       print_const (debug_file, var_occ->val);
       fprintf (debug_file, "\n");
     }
-  }
-#endif
+  });
   if (change_p) ccp_push_used_insns (ctx, var_occ);
 }
 
@@ -3538,11 +3517,10 @@ static void ccp_process_active_edge (MIR_context_t ctx, edge_t e) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   if (e->skipped_p && !e->dst->flag) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL)
+    DEBUG ({
       fprintf (debug_file, "         Make edge bb%lu->bb%lu active\n",
                (unsigned long) e->src->index, (unsigned long) e->dst->index);
-#endif
+    });
     e->dst->flag = TRUE; /* just activated edge whose dest is not in ccp_bbs */
     VARR_PUSH (bb_t, ccp_bbs, e->dst);
   }
@@ -3556,8 +3534,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
   var_occ_t var_occ;
 
   if (!ccp_insn_update (ctx, insn, NULL)) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       if (MIR_call_code_p (insn->code)) {
         fprintf (debug_file, " -- keep all results varying");
       } else if (get_ccp_res_op (ctx, insn, 0, &op) && var_insn_op_p (insn, 0)) {
@@ -3573,8 +3550,7 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
         }
       }
       fprintf (debug_file, "\n");
-    }
-#endif
+    });
   } else {
     def_p = FALSE;
     var_occ = NULL; /* to remove an initilized warning */
@@ -3584,20 +3560,20 @@ static void ccp_make_insn_update (MIR_context_t ctx, MIR_insn_t insn) {
         var_occ = op.data;
         ccp_push_used_insns (ctx, var_occ);
       }
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL && def_p) {
-      if (MIR_call_code_p (insn->code)) {
-        fprintf (debug_file, " -- make all results varying");
-      } else if (var_occ->val_kind == CCP_VARYING) {
-        fprintf (debug_file, " -- make the result varying\n");
-      } else {
-        gen_assert (var_occ->val_kind == CCP_CONST);
-        fprintf (debug_file, " -- make the result a constant ");
-        print_const (debug_file, var_occ->val);
-        fprintf (debug_file, "\n");
+    DEBUG ({
+      if (def_p) {
+        if (MIR_call_code_p (insn->code)) {
+          fprintf (debug_file, " -- make all results varying");
+        } else if (var_occ->val_kind == CCP_VARYING) {
+          fprintf (debug_file, " -- make the result varying\n");
+        } else {
+          gen_assert (var_occ->val_kind == CCP_CONST);
+          fprintf (debug_file, " -- make the result a constant ");
+          print_const (debug_file, var_occ->val);
+          fprintf (debug_file, "\n");
+        }
       }
-    }
-#endif
+    });
   }
 }
 
@@ -3609,19 +3585,15 @@ static void ccp_process_insn (MIR_context_t ctx, bb_insn_t bb_insn) {
   bb_t bb = bb_insn->bb;
   MIR_insn_t insn = bb_insn->insn;
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "       processing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
     MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-  }
-#endif
+  });
   if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH) {
     ccp_make_insn_update (ctx, insn);
     return;
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "\n");
-#endif
+  DEBUG ({ fprintf (debug_file, "\n"); });
   if ((ccp_res = ccp_branch_update (insn, &res)) == CCP_CONST) {
     /* Remember about an edge to exit bb.  First edge is always for
        fall through and the 2nd edge is for jump bb. */
@@ -3639,22 +3611,17 @@ static void ccp_process_bb (MIR_context_t ctx, bb_t bb) {
   bb_insn_t bb_insn;
   edge_t e;
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
-    fprintf (debug_file, "       processing bb%lu\n", (unsigned long) bb->index);
-#endif
+  DEBUG ({ fprintf (debug_file, "       processing bb%lu\n", (unsigned long) bb->index); });
   for (var_occ_t var_occ = DLIST_HEAD (var_occ_t, bb_start_occ_lists[bb->index]); var_occ != NULL;
        var_occ = DLIST_NEXT (var_occ_t, var_occ))
     ccp_process_bb_start_var_occ (ctx, var_occ, bb, TRUE);
   if (!bitmap_set_bit_p (bb_visited, bb->index)) return;
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
        bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "         processing insn: ");
       MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-    }
-#endif
+    });
     ccp_make_insn_update (ctx, bb_insn->insn);
   }
   if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL
@@ -3710,11 +3677,10 @@ static int ccp_modify (MIR_context_t ctx) {
     next_bb = DLIST_NEXT (bb_t, bb);
     if (!bb->flag) {
       change_p = TRUE;
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL)
+      DEBUG ({
         fprintf (debug_file, "  deleting unreachable bb%lu and its edges\n",
                  (unsigned long) bb->index);
-#endif
+      });
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
            bb_insn = next_bb_insn) {
         next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
@@ -3733,12 +3699,10 @@ static int ccp_modify (MIR_context_t ctx) {
                   && bb_insn->insn->ops[1].mode != MIR_OP_UINT))) {
         gen_assert (!MIR_call_code_p (bb_insn->insn->code));
         change_p = TRUE;
-#if !MIR_NO_GEN_DEBUG
-        if (debug_file != NULL) {
+        DEBUG ({
           fprintf (debug_file, "  changing insn ");
           MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-        }
-#endif
+        });
         op = val.uns_p ? MIR_new_uint_op (ctx, val.u.u) : MIR_new_int_op (ctx, val.u.i);
 #ifndef NDEBUG
         {
@@ -3753,12 +3717,10 @@ static int ccp_modify (MIR_context_t ctx) {
         MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
         insn->data = bb_insn;
         bb_insn->insn = insn;
-#if !MIR_NO_GEN_DEBUG
-        if (debug_file != NULL) {
+        DEBUG ({
           fprintf (debug_file, "    on insn ");
           MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        }
-#endif
+        });
       }
       // nulify/free op.data ???
     }
@@ -3767,13 +3729,11 @@ static int ccp_modify (MIR_context_t ctx) {
     first_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
     if (first_insn->code == MIR_LABEL && (prev_insn = DLIST_PREV (MIR_insn_t, first_insn)) != NULL
         && prev_insn->code == MIR_JMP && prev_insn->ops[0].u.label == first_insn) {
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "  removing useless jump insn ");
         MIR_output_insn (ctx, debug_file, prev_insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
-      }
-#endif
+      });
       gen_delete_insn (ctx, prev_insn);
     }
     if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH
@@ -3781,26 +3741,22 @@ static int ccp_modify (MIR_context_t ctx) {
       continue;
     change_p = TRUE;
     if (!res) {
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "  removing branch insn ");
         MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
-      }
-#endif
+      });
       gen_delete_insn (ctx, insn);
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
     } else {
       insn = MIR_new_insn (ctx, MIR_JMP, bb_insn->insn->ops[0]); /* label is always 0-th op */
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "  changing branch insn ");
         MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
         fprintf (debug_file, " onto jump insn ");
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
-      }
-#endif
+      });
       MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
       MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
       insn->data = bb_insn;
@@ -3814,9 +3770,7 @@ static int ccp_modify (MIR_context_t ctx) {
 static int ccp (MIR_context_t ctx) { /* conditional constant propagation */
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "  CCP analysis:\n");
-#endif
+  DEBUG ({ fprintf (debug_file, "  CCP analysis:\n"); });
   build_var_occ_web (ctx);
   bb_visited = temp_bitmap;
   initiate_ccp_info (ctx);
@@ -3843,9 +3797,7 @@ static int ccp (MIR_context_t ctx) { /* conditional constant propagation */
       ccp_process_insn (ctx, bb_insn);
     }
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "  CCP modification:\n");
-#endif
+  DEBUG ({ fprintf (debug_file, "  CCP modification:\n"); });
   return ccp_modify (ctx);
 }
 
@@ -3985,12 +3937,10 @@ static size_t initiate_bb_live_info (MIR_context_t ctx, bb_t bb, int moves_p) {
       if (insn->ops[1].mode == MIR_OP_REG)
         DLIST_APPEND (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
       mvs_num++;
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "  move with freq %10lu:", (unsigned long) mv->freq);
         MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
-      }
-#endif
+      });
     }
   }
   return mvs_num;
@@ -4207,11 +4157,10 @@ static void shrink_live_ranges (MIR_context_t ctx) {
   }
 
   n++;
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file, "Compressing live ranges: from %d to %d - %d%%\n", curr_point, n,
              100 * n / curr_point);
-#endif
+  });
   curr_point = n;
 
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
@@ -4229,12 +4178,10 @@ static void shrink_live_ranges (MIR_context_t ctx) {
       free (lr);
     }
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "Ranges after the compression:\n");
     print_live_ranges (ctx);
-  }
-#endif
+  });
 }
 
 static void build_live_ranges (MIR_context_t ctx) {
@@ -4251,10 +4198,8 @@ static void build_live_ranges (MIR_context_t ctx) {
   gen_assert (VARR_LENGTH (live_range_t, var_live_ranges) == 0);
   for (i = 0; i < nvars; i++) VARR_PUSH (live_range_t, var_live_ranges, NULL);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL)
-      fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point);
-#endif
+    DEBUG (
+      { fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point); });
     bitmap_clear (live_vars);
     if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
         make_var_live (ctx, nel, curr_point);
@@ -4262,12 +4207,10 @@ static void build_live_ranges (MIR_context_t ctx) {
     for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "  p%-5d", curr_point);
         print_bb_insn (ctx, bb_insn, TRUE);
-      }
-#endif
+      });
       incr_p = FALSE;
       FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) incr_p |= make_var_dead (ctx, var, curr_point);
@@ -4308,9 +4251,7 @@ static void build_live_ranges (MIR_context_t ctx) {
     FOREACH_BITMAP_BIT (bi, bb->live_in, nel) { make_var_dead (ctx, nel, curr_point); }
     if (!bitmap_empty_p (bb->live_in)) curr_point++;
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) print_live_ranges (ctx);
-#endif
+  DEBUG ({ print_live_ranges (ctx); });
   shrink_live_ranges (ctx);
 }
 
@@ -4603,18 +4544,17 @@ static void assign (MIR_context_t ctx) {
         func_stack_slots_num = VARR_LENGTH (size_t, loc_profits) - MAX_HARD_REG - 1;
       }
     }
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       MIR_reg_t thread_breg = curr_breg_infos[breg].thread_first;
 
       fprintf (debug_file,
-               " Assigning to %s:var=%3u, breg=%3u (freq %-3ld), thread breg=%3u (freq %-3ld) -- "
+               " Assigning to %s:var=%3u, breg=%3u (freq %-3ld), thread breg=%3u (freq %-3ld) "
+               "-- "
                "%lu\n",
                MIR_reg_name (ctx, reg, curr_func_item->u.func), reg2var (gen_ctx, reg), breg,
                curr_breg_infos[breg].freq, thread_breg, curr_breg_infos[thread_breg].thread_freq,
                (unsigned long) best_loc);
-    }
-#endif
+    });
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
@@ -4622,8 +4562,7 @@ static void assign (MIR_context_t ctx) {
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (point_used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "+++++++++++++Disposition after assignment:");
     for (i = 0; i < nregs; i++) {
       if (i % 8 == 0) fprintf (debug_file, "\n");
@@ -4632,8 +4571,7 @@ static void assign (MIR_context_t ctx) {
                VARR_GET (MIR_reg_t, breg_renumber, i));
     }
     fprintf (debug_file, "\n");
-  }
-#endif
+  });
 }
 
 static MIR_reg_t change_reg (MIR_context_t ctx, MIR_op_t *mem_op, MIR_reg_t reg,
@@ -4714,12 +4652,12 @@ static void rewrite (MIR_context_t ctx) {
       for (i = 0; i < nops; i++) {
         op = &insn->ops[i];
         data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
-#if !MIR_NO_GEN_DEBUG
-        if (out_p)
-          out_op = *op; /* we don't care about multiple call outputs here */
-        else
-          in_op = *op;
-#endif
+        DEBUG ({
+          if (out_p)
+            out_op = *op; /* we don't care about multiple call outputs here */
+          else
+            in_op = *op;
+        });
         switch (op->mode) {
         case MIR_OP_HARD_REG: bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg); break;
         case MIR_OP_HARD_REG_MEM:
@@ -4761,32 +4699,30 @@ static void rewrite (MIR_context_t ctx) {
           || insn->code == MIR_LDMOV) {
         movs_num++;
         if (MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
-#if !MIR_NO_GEN_DEBUG
-          if (debug_file != NULL) {
+          DEBUG ({
             fprintf (debug_file, "Deleting noop move ");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
             fprintf (debug_file, " which was ");
             insn->ops[0] = out_op;
             insn->ops[1] = in_op;
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-          }
-#endif
+          });
           deleted_movs_num++;
           gen_delete_insn (ctx, insn);
         }
       }
     }
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file,
-             "Deleting moves: %lu deleted noop moves out of %lu non-conflicting moves (%.1f%%), "
+             "Deleting moves: %lu deleted noop moves out of %lu non-conflicting moves "
+             "(%.1f%%), "
              "out of %lu all moves (%.1f), out of %lu all insns (%.1f)\n",
              (unsigned long) deleted_movs_num, (unsigned long) curr_cfg->non_conflicting_moves,
              deleted_movs_num * 100.0 / curr_cfg->non_conflicting_moves, (unsigned long) movs_num,
              deleted_movs_num * 100.0 / movs_num, (unsigned long) insns_num,
              deleted_movs_num * 100.0 / insns_num);
-#endif
+  });
 }
 
 static void init_ra (MIR_context_t ctx) {
@@ -5017,13 +4953,11 @@ static void combine_delete_insn (MIR_context_t ctx, MIR_insn_t def_insn, bb_insn
   gen_assert (def_insn->ops[0].mode == MIR_OP_HARD_REG);
   hr = def_insn->ops[0].u.hard_reg;
   if (hreg_ref_ages_addr[hr] != curr_bb_hreg_ref_age || hreg_refs_addr[hr].del_p) return;
-#if !MIR_NO_GEN_DEBUG
-  // deleted_insns_num++;
-  if (debug_file != NULL) {
+  DEBUG ({
+    // deleted_insns_num++;
     fprintf (debug_file, "      deleting now dead insn ");
     print_bb_insn (ctx, def_insn->data, TRUE);
-  }
-#endif
+  });
   remove_bb_insn_dead_var (bb_insn, hr);
   move_bb_insn_dead_vars (bb_insn, def_insn->data);
   /* We should delete the def insn here because of possible
@@ -5210,12 +5144,10 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       if (success_p) {
         gen_assert (def_insn != NULL);
         combine_delete_insn (ctx, def_insn, bb_insn);
-#if !MIR_NO_GEN_DEBUG
-        if (debug_file != NULL) {
+        DEBUG ({
           fprintf (debug_file, "      changing to ");
           print_bb_insn (ctx, bb_insn, TRUE);
-        }
-#endif
+        });
       }
     }
   }
@@ -5294,12 +5226,10 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) 
     MIR_remove_insn (ctx, curr_func_item, insn);
     new_insn->data = bb_insn;
     bb_insn->insn = new_insn;
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "      changing to ");
       print_bb_insn (ctx, bb_insn, TRUE);
-    }
-#endif
+    });
     combine_delete_insn (ctx, def_insn, bb_insn);
     return new_insn;
   }
@@ -5335,9 +5265,7 @@ static void combine (MIR_context_t ctx) {
   hreg_ref_ages_addr = VARR_ADDR (size_t, hreg_ref_ages);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     do {
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) fprintf (debug_file, "Processing bb%lu\n", (unsigned long) bb->index);
-#endif
+      DEBUG ({ fprintf (debug_file, "Processing bb%lu\n", (unsigned long) bb->index); });
       block_change_p = FALSE;
       curr_bb_hreg_ref_age++;
       last_mem_ref_insn_num = 0; /* means undef */
@@ -5345,13 +5273,11 @@ static void combine (MIR_context_t ctx) {
            bb_insn = DLIST_NEXT (bb_insn_t, bb_insn), curr_insn_num++) {
         insn = bb_insn->insn;
         nops = MIR_insn_nops (ctx, insn);
-#if !MIR_NO_GEN_DEBUG
-        if (insn->code != MIR_LABEL) insns_num++;
-        if (debug_file != NULL) {
+        DEBUG ({
+          if (insn->code != MIR_LABEL) insns_num++;
           fprintf (debug_file, "  Processing ");
           print_bb_insn (ctx, bb_insn, TRUE);
-        }
-#endif
+        });
         target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                               &early_clobbered_hard_reg2);
         if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
@@ -5411,11 +5337,10 @@ static void combine (MIR_context_t ctx) {
       }
     } while (block_change_p);
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", deleted_insns_num, insns_num,
              100.0 * deleted_insns_num / insns_num);
-#endif
+  });
 }
 
 static void init_selection (MIR_context_t ctx) {
@@ -5465,9 +5390,7 @@ static void dead_code_elimination (MIR_context_t ctx) {
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
 
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Dead code elimination:\n");
-#endif
+  DEBUG ({ fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
   live = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bitmap_copy (live, bb->live_out);
@@ -5488,12 +5411,10 @@ static void dead_code_elimination (MIR_context_t ctx) {
           && !(insn->ops[0].mode == MIR_OP_HARD_REG
                && (insn->ops[0].u.hard_reg == FP_HARD_REG
                    || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
-#if !MIR_NO_GEN_DEBUG
-        if (debug_file != NULL) {
+        DEBUG ({
           fprintf (debug_file, "  Removing dead insn");
           MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        }
-#endif
+        });
         gen_delete_insn (ctx, insn);
         continue;
       }
@@ -5596,43 +5517,34 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item->u.func->machine_code != NULL) {
     gen_assert (func_item->u.func->call_addr != NULL);
     _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL)
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++The code for %s has been already generated\n",
                MIR_item_name (ctx, func_item));
-#endif
+    });
     return func_item->addr;
   }
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     start_time = real_usec_time ();
     fprintf (debug_file, "+++++++++++++MIR before generator:\n");
     MIR_output_item (ctx, debug_file, func_item);
-  }
-#endif
+  });
   curr_func_item = func_item;
   _MIR_duplicate_func_insns (ctx, func_item);
   curr_cfg = func_item->data = gen_malloc (ctx, sizeof (struct func_cfg));
   build_func_cfg (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
     print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
-  }
-#endif
+  });
 #ifndef NO_CSE
   if (optimize_level >= 2) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CSE:\n");
-#endif
+    DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
     cse (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       print_exprs (ctx);
       fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
       print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
-    }
-#endif
+    });
     cse_clear (ctx);
   }
 #endif /* #ifndef NO_CSE */
@@ -5640,27 +5552,21 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #ifndef NO_CSE
   if (optimize_level >= 2) {
     dead_code_elimination (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
       print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-    }
-#endif
+    });
   }
 #endif /* #ifndef NO_CSE */
 #ifndef NO_RENAME
   if (optimize_level >= 3) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++Rename:\n");
-#endif
+    DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
     calculate_reaching_defs (ctx);
     reg_rename (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after rename:\n");
       print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
-    }
-#endif
+    });
     rdef_clear (ctx);
     calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
   }
@@ -5670,16 +5576,12 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     if (build_loop_tree (ctx)) {
       licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
       calculate_reaching_defs (ctx);
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) fprintf (debug_file, "+++++++++++++LICM:\n");
-#endif
+      DEBUG ({ fprintf (debug_file, "+++++++++++++LICM:\n"); });
       licm (ctx);
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
         print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
-      }
-#endif
+      });
       rdef_clear (ctx);
       calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
     }
@@ -5689,23 +5591,17 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif /* #ifndef NO_LICM */
 #ifndef NO_CCP
   if (optimize_level >= 2) {
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) fprintf (debug_file, "+++++++++++++CCP:\n");
-#endif
+    DEBUG ({ fprintf (debug_file, "+++++++++++++CCP:\n"); });
     if (ccp (ctx)) {
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
         print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
-      }
-#endif
+      });
       dead_code_elimination (ctx);
-#if !MIR_NO_GEN_DEBUG
-      if (debug_file != NULL) {
+      DEBUG ({
         fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
         print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-      }
-#endif
+      });
     }
   }
 #endif /* #ifndef NO_CCP */
@@ -5713,64 +5609,50 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   make_io_dup_op_insns (ctx);
   target_machinize (ctx);
   add_new_bb_insns (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  }
-#endif
+  });
   build_loop_tree (ctx);
   calculate_func_cfg_live_info (ctx, TRUE);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     add_bb_insn_dead_vars (ctx);
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
     print_loop_tree (ctx, TRUE);
     print_CFG (ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
-  }
-#endif
+  });
   build_live_ranges (ctx);
   assign (ctx);
   rewrite (ctx); /* After rewrite the BB live info is still valid */
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  }
-#endif
+  });
 #ifndef NO_COMBINE
   if (optimize_level >= 1) {
     calculate_func_cfg_live_info (ctx, FALSE);
     add_bb_insn_dead_vars (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR before combine:\n");
       print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-    }
-#endif
+    });
     combine (ctx); /* After combine the BB live info is still valid */
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after combine:\n");
       print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-    }
-#endif
+    });
     dead_code_elimination (ctx);
-#if !MIR_NO_GEN_DEBUG
-    if (debug_file != NULL) {
+    DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
       print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-    }
-#endif
+    });
   }
 #endif /* #ifndef NO_COMBINE */
   target_make_prolog_epilog (ctx, func_used_hard_regs, func_stack_slots_num);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  }
-#endif
+  });
   code = target_translate (ctx, &code_len);
   func_item->u.func->machine_code = func_item->u.func->call_addr
     = _MIR_publish_code (ctx, code, code_len);
@@ -5778,21 +5660,18 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #if MIR_GEN_CALL_TRACE
   func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL) {
+  DEBUG ({
     print_code (ctx, func_item->u.func->machine_code, code_len, func_item->u.func->machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
-  }
-#endif
+  });
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
   destroy_func_live_ranges (ctx);
   destroy_loop_tree (ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (ctx);
-#if !MIR_NO_GEN_DEBUG
-  if (debug_file != NULL)
+  DEBUG ({
     fprintf (debug_file, "Generation of code for %s -- time %.0f usec\n",
              MIR_item_name (ctx, func_item), real_usec_time () - start_time);
-#endif
+  });
   _MIR_restore_func_insns (ctx, func_item);
   return func_item->addr;
 }
