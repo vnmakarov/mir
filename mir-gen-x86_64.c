@@ -579,7 +579,8 @@ static void target_machinize (MIR_context_t ctx) {
       mem_size = 8 /*ret*/ + start_sp_from_bp_offset;
       for (int i = 0; i < 4; i++) {
         arg_reg = get_int_arg_reg (i);
-        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, mem_size, FP_HARD_REG, MIR_NON_HARD_REG, 1);
+        mem_op
+          = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, mem_size, FP_HARD_REG, MIR_NON_HARD_REG, 1);
         new_insn = MIR_new_insn (ctx, MIR_MOV, mem_op, _MIR_new_hard_reg_op (ctx, arg_reg));
         gen_add_insn_before (ctx, insn, new_insn);
         mem_size += 8;
@@ -628,12 +629,14 @@ static void target_machinize (MIR_context_t ctx) {
               && mem_op.mode == MIR_OP_MEM);
       /* load and increment va pointer */
       treg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func));
-      gen_mov (ctx, insn, MIR_MOV, treg_op, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1));
+      gen_mov (ctx, insn, MIR_MOV, treg_op,
+               MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1));
       new_insn = MIR_new_insn (ctx, MIR_MOV, res_reg_op, treg_op);
       gen_add_insn_before (ctx, insn, new_insn);
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, treg_op, MIR_new_int_op (ctx, 8));
       gen_add_insn_before (ctx, insn, new_insn);
-      gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1), treg_op);
+      gen_mov (ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg_op.u.reg, 0, 1),
+               treg_op);
 #endif
       gen_delete_insn (ctx, insn);
     } else if (MIR_call_code_p (code)) {
