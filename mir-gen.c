@@ -145,7 +145,7 @@ struct gen_ctx {
 #if !MIR_NO_GEN_DEBUG
   FILE *debug_file;
 #endif
-  bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, all_vars;
+  bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
   bitmap_t call_used_hard_regs;
   func_cfg_t curr_cfg;
   size_t curr_bb_index, curr_loop_node_index;
@@ -171,7 +171,6 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define insn_to_consider gen_ctx->insn_to_consider
 #define temp_bitmap gen_ctx->temp_bitmap
 #define temp_bitmap2 gen_ctx->temp_bitmap2
-#define all_vars gen_ctx->all_vars
 #define call_used_hard_regs gen_ctx->call_used_hard_regs
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
@@ -5725,7 +5724,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_ccp (ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  all_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   init_live_ranges (ctx);
   init_ra (ctx);
   init_selection (ctx);
@@ -5752,7 +5750,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_ccp (ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
-  bitmap_destroy (all_vars);
   finish_live_ranges (ctx);
   finish_ra (ctx);
   finish_selection (ctx);
