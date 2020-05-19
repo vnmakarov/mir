@@ -552,7 +552,8 @@ static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
     gen_assert (insn_for_bb == NULL || !MIR_branch_code_p (insn_for_bb->code));
   }
   MIR_insert_insn_before (ctx, curr_func_item, before, insn);
-  create_new_bb_insns (ctx, DLIST_PREV (MIR_insn_t, insn), before, insn_for_bb);
+  if (curr_cfg != NULL)
+    create_new_bb_insns (ctx, DLIST_PREV (MIR_insn_t, insn), before, insn_for_bb);
 }
 
 static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t insn) {
@@ -561,7 +562,7 @@ static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t 
   gen_assert (insn->code != MIR_LABEL);
   gen_assert (!MIR_branch_code_p (after->code));
   MIR_insert_insn_after (ctx, curr_func_item, after, insn);
-  create_new_bb_insns (ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
+  if (curr_cfg != NULL) create_new_bb_insns (ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
 }
 
 static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
