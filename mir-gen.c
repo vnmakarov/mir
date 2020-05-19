@@ -161,6 +161,8 @@ struct gen_ctx {
   struct selection_ctx *selection_ctx;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
   int max_int_hard_regs, max_fp_hard_regs;
+  /* Slots num for variables.  Some variable can take several slots and can be aligned. */
+  size_t func_stack_slots_num;
 };
 
 static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct gen_ctx **) ctx; }
@@ -180,6 +182,7 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define loop_entries gen_ctx->loop_entries
 #define max_int_hard_regs gen_ctx->max_int_hard_regs
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
+#define func_stack_slots_num gen_ctx->func_stack_slots_num
 
 #if defined(__x86_64__)
 #include "mir-gen-x86_64.c"
@@ -4324,8 +4327,6 @@ struct ra_ctx {
   VARR (size_t) * loc_profits;
   VARR (size_t) * loc_profit_ages;
   size_t curr_age;
-  /* Slots num for variables.  Some variable can take several slots. */
-  size_t func_stack_slots_num;
   bitmap_t func_used_hard_regs;
 };
 
@@ -4337,7 +4338,6 @@ struct ra_ctx {
 #define loc_profits gen_ctx->ra_ctx->loc_profits
 #define loc_profit_ages gen_ctx->ra_ctx->loc_profit_ages
 #define curr_age gen_ctx->ra_ctx->curr_age
-#define func_stack_slots_num gen_ctx->ra_ctx->func_stack_slots_num
 #define func_used_hard_regs gen_ctx->ra_ctx->func_used_hard_regs
 
 static void process_move_to_form_thread (MIR_context_t ctx, mv_t mv) {
