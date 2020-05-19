@@ -1171,6 +1171,13 @@ static void destroy_func_cfg (MIR_context_t ctx) {
   bb_t bb, next_bb;
   mv_t mv, next_mv;
 
+  if (curr_cfg == NULL) {
+    for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+         insn = DLIST_NEXT (MIR_insn_t, insn))
+      if (MIR_call_code_p (insn->code) && insn->data != NULL)
+        bitmap_destroy ((bitmap_t) insn->data);
+    return;
+  }
   gen_assert (curr_func_item->item_type == MIR_func_item && curr_func_item->data != NULL);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
