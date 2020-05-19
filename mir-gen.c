@@ -5699,8 +5699,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   destroy_loop_tree (ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (ctx);
   DEBUG ({
-    fprintf (debug_file, "Generation of code for %s -- time %.0f usec\n",
-             MIR_item_name (ctx, func_item), real_usec_time () - start_time);
+    fprintf (debug_file, "Generation of code for %s: %lu MIR insns -- time %.0f usec\n",
+             MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
+             real_usec_time () - start_time);
   });
   _MIR_restore_func_insns (ctx, func_item);
   return func_item->addr;
