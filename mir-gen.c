@@ -538,7 +538,7 @@ static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
 static void gen_delete_insn (MIR_context_t ctx, MIR_insn_t insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-  delete_bb_insn (insn->data);
+  if (curr_cfg != NULL) delete_bb_insn (insn->data);
   MIR_remove_insn (ctx, curr_func_item, insn);
 }
 
