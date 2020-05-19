@@ -824,9 +824,10 @@ static void update_min_max_reg (MIR_context_t ctx, MIR_reg_t reg) {
 }
 
 static MIR_reg_t gen_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t reg = _MIR_new_temp_reg (ctx, type, func);
 
-  update_min_max_reg (ctx, reg);
+  if (curr_cfg != NULL) update_min_max_reg (ctx, reg);
   return reg;
 }
 
