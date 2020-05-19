@@ -2097,7 +2097,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
       }
     }
     if (insn->code == MIR_LABEL) {
-      set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
+      set_label_disp (ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else {
       replacement = find_insn_pattern_replacement (ctx, insn);
       if (replacement == NULL) {
@@ -2116,10 +2116,10 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
 
     if (lr.abs_addr_p) {
       set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                 (int64_t) get_label_disp (lr.label));
+                 (int64_t) get_label_disp (ctx, lr.label));
       VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
     } else { /* 32-bit relative address */
-      int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
+      int64_t offset = (int64_t) get_label_disp (ctx, lr.label) - (int64_t) lr.label_val_disp;
       gen_assert (offset % 2 == 0);
       offset /= 2;
       gen_assert (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fffffff) == 0);

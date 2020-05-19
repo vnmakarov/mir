@@ -101,8 +101,8 @@ static void *gen_malloc (MIR_context_t ctx, size_t size) {
 
 /* Functions used by target dependent code: */
 static MIR_reg_t gen_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func);
-static void set_label_disp (MIR_insn_t insn, size_t disp);
-static size_t get_label_disp (MIR_insn_t insn);
+static void set_label_disp (MIR_context_t ctx, MIR_insn_t insn, size_t disp);
+static size_t get_label_disp (MIR_context_t ctx, MIR_insn_t insn);
 static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t after,
                                  MIR_insn_t insn_for_bb);
 static void gen_delete_insn (MIR_context_t ctx, MIR_insn_t insn);
@@ -572,13 +572,20 @@ static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) 
   bitmap_set_bit_p (bb_insn->call_hard_reg_args, hard_reg);
 }
 
-static void set_label_disp (MIR_insn_t insn, size_t disp) {
+static void set_label_disp (MIR_context_t ctx, MIR_insn_t insn, size_t disp) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
   gen_assert (insn->code == MIR_LABEL);
-  ((bb_insn_t) insn->data)->label_disp = disp;
+  if (curr_cfg == NULL)
+    insn->data = (void *) disp;
+  else
+    ((bb_insn_t) insn->data)->label_disp = disp;
 }
-static size_t get_label_disp (MIR_insn_t insn) {
+static size_t get_label_disp (MIR_context_t ctx, MIR_insn_t insn) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
   gen_assert (insn->code == MIR_LABEL);
-  return ((bb_insn_t) insn->data)->label_disp;
+  return curr_cfg == NULL ? (size_t) insn->data : ((bb_insn_t) insn->data)->label_disp;
 }
 
 static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {

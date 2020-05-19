@@ -1927,7 +1927,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
-      set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
+      set_label_disp (ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else {
       replacement = find_insn_pattern_replacement (ctx, insn);
       if (replacement == NULL) {
@@ -1946,10 +1946,10 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
 
     if (!lr.abs_addr_p) {
       set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                 (int64_t) get_label_disp (lr.label) - (int64_t) lr.next_insn_disp, 4);
+                 (int64_t) get_label_disp (ctx, lr.label) - (int64_t) lr.next_insn_disp, 4);
     } else {
       set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                 (int64_t) get_label_disp (lr.label), 8);
+                 (int64_t) get_label_disp (ctx, lr.label), 8);
       VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
     }
   }

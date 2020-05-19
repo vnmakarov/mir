@@ -2248,14 +2248,14 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
         }
       }
       if (insn->code == MIR_LABEL) {
-        set_label_disp (insn, VARR_LENGTH (uint8_t, result_code));
+        set_label_disp (ctx, insn, VARR_LENGTH (uint8_t, result_code));
       } else {
         int use_short_label_p = TRUE;
 
         if (n_iter > 0 && MIR_branch_code_p (code)) {
           MIR_label_t label = insn->ops[0].u.label;
           int64_t offset
-            = (int64_t) get_label_disp (label) - (int64_t) VARR_LENGTH (uint8_t, result_code);
+            = (int64_t) get_label_disp (ctx, label) - (int64_t) VARR_LENGTH (uint8_t, result_code);
 
           use_short_label_p = ((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) == 0;
         }
@@ -2276,10 +2276,10 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
 
       if (lr.abs_addr_p) {
         set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                   (int64_t) get_label_disp (lr.label));
+                   (int64_t) get_label_disp (ctx, lr.label));
         VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
       } else if (lr.short_addr_p) { /* 14-bit relative addressing */
-        int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
+        int64_t offset = (int64_t) get_label_disp (ctx, lr.label) - (int64_t) lr.label_val_disp;
 
         gen_assert ((offset & 0x3) == 0);
         if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) != 0) {
@@ -2289,7 +2289,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
             |= ((offset / 4) & 0x3fff) << 2;
         }
       } else { /* 24-bit relative address */
-        int64_t offset = (int64_t) get_label_disp (lr.label) - (int64_t) lr.label_val_disp;
+        int64_t offset = (int64_t) get_label_disp (ctx, lr.label) - (int64_t) lr.label_val_disp;
         gen_assert ((offset & 0x3) == 0
                     && ((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0);
         *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
