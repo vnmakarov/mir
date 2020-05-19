@@ -509,6 +509,7 @@ static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
   bb_insn_t bb_insn, new_bb_insn;
   bb_t bb;
 
+  if (curr_cfg == NULL) return;
   if (insn_for_bb == NULL)                  /* It should be in the 1st block */
     bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); /* Skip entry and exit blocks */
   else
