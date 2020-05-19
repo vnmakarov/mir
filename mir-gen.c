@@ -108,7 +108,7 @@ static void create_new_bb_insns (MIR_context_t ctx, MIR_insn_t before, MIR_insn_
 static void gen_delete_insn (MIR_context_t ctx, MIR_insn_t insn);
 static void gen_add_insn_before (MIR_context_t ctx, MIR_insn_t before, MIR_insn_t insn);
 static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t insn);
-static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg);
+static void setup_call_hard_reg_args (MIR_context_t ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
 #ifndef MIR_GEN_CALL_TRACE
 #define MIR_GEN_CALL_TRACE 0
@@ -565,11 +565,16 @@ static void gen_add_insn_after (MIR_context_t ctx, MIR_insn_t after, MIR_insn_t 
   if (curr_cfg != NULL) create_new_bb_insns (ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
 }
 
-static void setup_call_hard_reg_args (MIR_insn_t call_insn, MIR_reg_t hard_reg) {
-  bb_insn_t bb_insn = call_insn->data;
+static void setup_call_hard_reg_args (MIR_context_t ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   gen_assert (MIR_call_code_p (call_insn->code) && hard_reg <= MAX_HARD_REG);
-  bitmap_set_bit_p (bb_insn->call_hard_reg_args, hard_reg);
+  if (curr_cfg != NULL) {
+    bitmap_set_bit_p (((bb_insn_t) call_insn->data)->call_hard_reg_args, hard_reg);
+    return;
+  }
+  if (call_insn->data == NULL) call_insn->data = (void *) bitmap_create2 (MAX_HARD_REG + 1);
+  bitmap_set_bit_p ((bitmap_t) call_insn->data, hard_reg);
 }
 
 static void set_label_disp (MIR_context_t ctx, MIR_insn_t insn, size_t disp) {

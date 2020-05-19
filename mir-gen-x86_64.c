@@ -260,7 +260,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
       if (proto->vararg_p && type == MIR_T_D) {
         gen_assert (int_arg_num > 0 && int_arg_num <= 4);
         arg_reg = get_int_arg_reg (int_arg_num - 1);
-        setup_call_hard_reg_args (call_insn, arg_reg);
+        setup_call_hard_reg_args (ctx, call_insn, arg_reg);
         /* mir does not support moving fp to int regs directly, spill and load them instead */
         mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, 8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
         new_insn = MIR_new_insn (ctx, MIR_DMOV, mem_op, arg_op);
@@ -289,7 +289,7 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   }
 #ifndef _WIN64
   if (proto->vararg_p) {
-    setup_call_hard_reg_args (call_insn, AX_HARD_REG);
+    setup_call_hard_reg_args (ctx, call_insn, AX_HARD_REG);
     new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, AX_HARD_REG),
                              MIR_new_int_op (ctx, xmm_args));
     gen_add_insn_before (ctx, call_insn, new_insn);
