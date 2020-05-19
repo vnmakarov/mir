@@ -5638,7 +5638,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   ccp_clear (ctx);
   make_io_dup_op_insns (ctx);
   target_machinize (ctx);
-  add_new_bb_insns (ctx);
+  if (curr_cfg != NULL) add_new_bb_insns (ctx);
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
