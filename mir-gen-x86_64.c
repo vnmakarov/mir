@@ -764,12 +764,16 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   /* Use add for matching LEA: */
   new_insn = MIR_new_insn (ctx, MIR_ADD, fp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -8));
   gen_add_insn_before (ctx, anchor, new_insn); /* bp = sp - 8 */
-  if (!func->vararg_p) {
-    service_area_size = 8;
-  } else {
-    service_area_size = reg_save_area_size + 8;
+  service_area_size = func->vararg_p ? reg_save_area_size + 8 : 8;
+  stack_slots_size = stack_slots_num * 8;
+  /* stack slots, and saved regs as multiple of 16 bytes: */
+  block_size = (stack_slots_size + 8 * saved_hard_regs_num + 15) / 16 * 16;
+  new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op,
+                           MIR_new_int_op (ctx, block_size + service_area_size));
+  gen_add_insn_before (ctx, anchor, new_insn); /* sp -= block size + service_area_size */
+  if (func->vararg_p) {
 #ifndef _WIN64
-    start = -(int64_t) service_area_size;
+    start = block_size;
     isave (ctx, anchor, start, DI_HARD_REG);
     isave (ctx, anchor, start + 8, SI_HARD_REG);
     isave (ctx, anchor, start + 16, DX_HARD_REG);
@@ -786,12 +790,6 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
     dsave (ctx, anchor, start + 160, XMM7_HARD_REG);
 #endif
   }
-  stack_slots_size = stack_slots_num * 8;
-  /* stack slots, and saved regs as multiple of 16 bytes: */
-  block_size = (stack_slots_size + 8 * saved_hard_regs_num + 15) / 16 * 16;
-  new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op,
-                           MIR_new_int_op (ctx, block_size + service_area_size));
-  gen_add_insn_before (ctx, anchor, new_insn); /* sp -= block size + service_area_size */
   bp_saved_reg_offset = block_size + (func->vararg_p ? reg_save_area_size : 0);
   /* Saving callee saved hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
