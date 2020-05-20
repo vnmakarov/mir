@@ -4935,35 +4935,36 @@ static int obsolete_op_p (MIR_context_t ctx, MIR_op_t op, size_t def_insn_num) {
   return last_mem_ref_insn_num > def_insn_num;
 }
 
-static int safe_hreg_substitution_p (MIR_context_t ctx, MIR_reg_t hr, MIR_insn_t insn) {
+static int safe_hreg_substitution_p (MIR_context_t ctx, MIR_reg_t hr, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
   return (hr != MIR_NON_HARD_REG
           && hreg_ref_ages_addr[hr] == curr_bb_hreg_ref_age
           /* It is not safe to substitute if there is another use after def insn before
              the current insn as we delete def insn after the substitution. */
-          && hreg_refs_addr[hr].def_p && find_bb_insn_dead_var (insn->data, hr) != NULL);
+          && hreg_refs_addr[hr].def_p && find_bb_insn_dead_var (bb_insn, hr) != NULL);
 }
 
-static void combine_process_hard_reg (MIR_context_t ctx, MIR_reg_t hr, MIR_insn_t insn) {
+static void combine_process_hard_reg (MIR_context_t ctx, MIR_reg_t hr, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
-  if (!safe_hreg_substitution_p (ctx, hr, insn) || !bitmap_set_bit_p (hard_regs_bitmap, hr)) return;
+  if (!safe_hreg_substitution_p (ctx, hr, bb_insn) || !bitmap_set_bit_p (hard_regs_bitmap, hr))
+    return;
   VARR_PUSH (MIR_reg_t, insn_hard_regs, hr);
 }
 
-static void combine_process_op (MIR_context_t ctx, const MIR_op_t *op_ref, MIR_insn_t insn) {
+static void combine_process_op (MIR_context_t ctx, const MIR_op_t *op_ref, bb_insn_t bb_insn) {
   if (op_ref->mode == MIR_OP_HARD_REG) {
-    combine_process_hard_reg (ctx, op_ref->u.hard_reg, insn);
+    combine_process_hard_reg (ctx, op_ref->u.hard_reg, bb_insn);
   } else if (op_ref->mode == MIR_OP_HARD_REG_MEM) {
     if (op_ref->u.hard_reg_mem.base != MIR_NON_HARD_REG)
-      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.base, insn);
+      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.base, bb_insn);
     if (op_ref->u.hard_reg_mem.index != MIR_NON_HARD_REG)
-      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.index, insn);
+      combine_process_hard_reg (ctx, op_ref->u.hard_reg_mem.index, bb_insn);
   }
 }
 
-static void combine_delete_insn (MIR_context_t ctx, MIR_insn_t def_insn, MIR_insn_t insn) {
+static void combine_delete_insn (MIR_context_t ctx, MIR_insn_t def_insn, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_reg_t hr;
 
@@ -4975,12 +4976,8 @@ static void combine_delete_insn (MIR_context_t ctx, MIR_insn_t def_insn, MIR_ins
     fprintf (debug_file, "      deleting now dead insn ");
     print_bb_insn (ctx, def_insn->data, TRUE);
   });
-  if (curr_cfg != NULL) {
-    bb_insn_t bb_insn = insn->data;
-
-    remove_bb_insn_dead_var (bb_insn, hr);
-    move_bb_insn_dead_vars (bb_insn, def_insn->data);
-  }
+  remove_bb_insn_dead_var (bb_insn, hr);
+  move_bb_insn_dead_vars (bb_insn, def_insn->data);
   /* We should delete the def insn here because of possible
      substitution of the def insn 'r0 = ... r0 ...'.  We still
      need valid entry for def here to find obsolete definiton,
@@ -5006,10 +5003,10 @@ static int64_t int_log2 (int64_t i) {
   return i == 1 ? n : -1;
 }
 
-static int combine_substitute (MIR_context_t ctx, MIR_insn_t insn) {
+static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_insn_code_t code, new_code;
-  MIR_insn_t def_insn, new_insn;
+  MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
   size_t i, nops = insn->nops;
   int out_p, insn_change_p, insn_hr_change_p, op_change_p, mem_reg_change_p, success_p;
   MIR_op_t *op_ref, *src_op_ref, *src_op2_ref;
@@ -5024,7 +5021,7 @@ static int combine_substitute (MIR_context_t ctx, MIR_insn_t insn) {
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
     if (out_p && insn->ops[i].mode != MIR_OP_HARD_REG_MEM) continue;
-    combine_process_op (ctx, &insn->ops[i], insn);
+    combine_process_op (ctx, &insn->ops[i], bb_insn);
   }
   insn_change_p = FALSE;
   while (VARR_LENGTH (MIR_reg_t, insn_hard_regs) != 0) {
@@ -5164,9 +5161,8 @@ static int combine_substitute (MIR_context_t ctx, MIR_insn_t insn) {
       }
       if (success_p) {
         gen_assert (def_insn != NULL);
-        combine_delete_insn (ctx, def_insn, insn);
+        combine_delete_insn (ctx, def_insn, bb_insn);
         DEBUG ({
-          bb_insn_t bb_insn = insn->data;
           fprintf (debug_file, "      changing to ");
           print_bb_insn (ctx, bb_insn, TRUE);
         });
@@ -5222,15 +5218,15 @@ static MIR_insn_code_t get_combined_br_code (int true_p, MIR_insn_code_t cmp_cod
   }
 }
 
-static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, MIR_insn_t insn) {
+static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, bb_insn_t bb_insn) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  MIR_insn_t def_insn, new_insn;
+  MIR_insn_t def_insn, new_insn, insn = bb_insn->insn;
   MIR_insn_code_t code = insn->code;
   MIR_op_t op;
 
   if (code != MIR_BT && code != MIR_BF && code != MIR_BTS && code != MIR_BFS) return NULL;
   op = insn->ops[1];
-  if (op.mode != MIR_OP_HARD_REG || !safe_hreg_substitution_p (ctx, op.u.hard_reg, insn))
+  if (op.mode != MIR_OP_HARD_REG || !safe_hreg_substitution_p (ctx, op.u.hard_reg, bb_insn))
     return NULL;
   def_insn = hreg_refs_addr[op.u.hard_reg].insn;
   if ((code = get_combined_br_code (code == MIR_BT || code == MIR_BTS, def_insn->code))
@@ -5245,19 +5241,14 @@ static MIR_insn_t combine_branch_and_cmp (MIR_context_t ctx, MIR_insn_t insn) {
     MIR_remove_insn (ctx, curr_func_item, new_insn);
     return NULL;
   } else {
-    bb_insn_t bb_insn;
-
-    if (curr_cfg != NULL) bb_insn = insn->data;
     MIR_remove_insn (ctx, curr_func_item, insn);
-    if (curr_cfg != NULL) {
-      new_insn->data = bb_insn;
-      bb_insn->insn = new_insn;
-    }
+    new_insn->data = bb_insn;
+    bb_insn->insn = new_insn;
     DEBUG ({
       fprintf (debug_file, "      changing to ");
       print_bb_insn (ctx, bb_insn, TRUE);
     });
-    combine_delete_insn (ctx, def_insn, insn);
+    combine_delete_insn (ctx, def_insn, bb_insn);
     return new_insn;
   }
 }
@@ -5320,18 +5311,18 @@ static void combine (MIR_context_t ctx) {
             }
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
-        } else if ((new_insn = combine_branch_and_cmp (ctx, insn)) != NULL) {
+        } else if ((new_insn = combine_branch_and_cmp (ctx, bb_insn)) != NULL) {
           insn = new_insn;
           nops = MIR_insn_nops (ctx, insn);
           block_change_p = TRUE;
         } else {
-          change_p = combine_substitute (ctx, bb_insn->insn);
+          change_p = combine_substitute (ctx, bb_insn);
           if (!change_p && (new_code = commutative_insn_code (insn->code)) != MIR_INSN_BOUND) {
             insn->code = new_code;
             temp_op = insn->ops[1];
             insn->ops[1] = insn->ops[2];
             insn->ops[2] = temp_op;
-            if (combine_substitute (ctx, bb_insn->insn))
+            if (combine_substitute (ctx, bb_insn))
               change_p = TRUE;
             else {
               insn->code = code;
