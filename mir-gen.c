@@ -594,6 +594,16 @@ static size_t get_label_disp (MIR_context_t ctx, MIR_insn_t insn) {
   return curr_cfg == NULL ? (size_t) insn->data : ((bb_insn_t) insn->data)->label_disp;
 }
 
+static void setup_used_hard_regs (MIR_context_t ctx, MIR_type_t type, MIR_reg_t hard_reg) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t curr_hard_reg;
+  int i, slots_num = target_locs_num (hard_reg, type);
+
+  for (i = 0; i < slots_num; i++)
+    if ((curr_hard_reg = target_nth_loc (hard_reg, type, i)) <= MAX_HARD_REG)
+      bitmap_set_bit_p (func_used_hard_regs, curr_hard_reg);
+}
+
 static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
   bb_t bb = gen_malloc (ctx, sizeof (struct bb));
 
@@ -4428,16 +4438,6 @@ static void setup_loc_profits (MIR_context_t ctx, MIR_reg_t breg) {
     setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1], mv->freq);
   for (mv = DLIST_HEAD (src_mv_t, info->src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
     setup_loc_profit_from_op (ctx, mv->bb_insn->insn->ops[1], mv->freq);
-}
-
-static void setup_used_hard_regs (MIR_context_t ctx, MIR_type_t type, MIR_reg_t hard_reg) {
-  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
-  MIR_reg_t curr_hard_reg;
-  int i, slots_num = target_locs_num (hard_reg, type);
-
-  for (i = 0; i < slots_num; i++)
-    if ((curr_hard_reg = target_nth_loc (hard_reg, type, i)) <= MAX_HARD_REG)
-      bitmap_set_bit_p (func_used_hard_regs, curr_hard_reg);
 }
 
 static void assign (MIR_context_t ctx) {
