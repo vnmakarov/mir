@@ -230,8 +230,8 @@ c2mir-bootstrap-test: c2m
 
 c2mir-bootstrap-test2: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O3 '... '
-	$(Q) ./c2m -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -el -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -el -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
