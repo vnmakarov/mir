@@ -146,7 +146,7 @@ struct gen_ctx {
   FILE *debug_file;
 #endif
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
-  bitmap_t call_used_hard_regs;
+  bitmap_t call_used_hard_regs, func_used_hard_regs;
   func_cfg_t curr_cfg;
   size_t curr_bb_index, curr_loop_node_index;
   struct target_ctx *target_ctx;
@@ -174,6 +174,7 @@ static inline struct gen_ctx **gen_ctx_loc (MIR_context_t ctx) { return (struct 
 #define temp_bitmap gen_ctx->temp_bitmap
 #define temp_bitmap2 gen_ctx->temp_bitmap2
 #define call_used_hard_regs gen_ctx->call_used_hard_regs
+#define func_used_hard_regs gen_ctx->func_used_hard_regs
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
 #define curr_loop_node_index gen_ctx->curr_loop_node_index
@@ -4349,7 +4350,6 @@ struct ra_ctx {
   VARR (size_t) * loc_profits;
   VARR (size_t) * loc_profit_ages;
   size_t curr_age;
-  bitmap_t func_used_hard_regs;
 };
 
 #define breg_renumber gen_ctx->ra_ctx->breg_renumber
@@ -4360,7 +4360,6 @@ struct ra_ctx {
 #define loc_profits gen_ctx->ra_ctx->loc_profits
 #define loc_profit_ages gen_ctx->ra_ctx->loc_profit_ages
 #define curr_age gen_ctx->ra_ctx->curr_age
-#define func_used_hard_regs gen_ctx->ra_ctx->func_used_hard_regs
 
 static void process_move_to_form_thread (MIR_context_t ctx, mv_t mv) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
@@ -4756,7 +4755,6 @@ static void init_ra (MIR_context_t ctx) {
   VARR_CREATE (size_t, loc_profits, 0);
   VARR_CREATE (size_t, loc_profit_ages, 0);
   conflict_locs = bitmap_create2 (3 * MAX_HARD_REG / 2);
-  func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
 }
 
 static void finish_ra (MIR_context_t ctx) {
@@ -4770,7 +4768,6 @@ static void finish_ra (MIR_context_t ctx) {
   VARR_DESTROY (size_t, loc_profits);
   VARR_DESTROY (size_t, loc_profit_ages);
   bitmap_destroy (conflict_locs);
-  bitmap_destroy (func_used_hard_regs);
   free (gen_ctx->ra_ctx);
   gen_ctx->ra_ctx = NULL;
 }
@@ -5768,6 +5765,7 @@ void MIR_gen_init (MIR_context_t ctx) {
     target_hard_reg_type_ok_p (i, MIR_T_I32) ? max_int_hard_regs++ : max_fp_hard_regs++;
   }
   insn_to_consider = bitmap_create2 (1024);
+  func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
 }
 
 void MIR_gen_finish (MIR_context_t ctx) {
@@ -5787,6 +5785,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_selection (ctx);
   bitmap_destroy (call_used_hard_regs);
   bitmap_destroy (insn_to_consider);
+  bitmap_destroy (func_used_hard_regs);
   target_finish (ctx);
   finish_dead_vars ();
   free (gen_ctx->data_flow_ctx);
