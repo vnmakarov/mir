@@ -1016,8 +1016,7 @@ static const struct pattern patterns[] = {
   {MIR_UEXT16, "r r", "53003c00:fffffc00 rd0 rn1"}, /* uxth wd, wn */
   {MIR_UEXT32, "r r", "2a0003e0:7fe0ffe0 rd0 rm1"}, /* mov wd, wm */
 
-  // ??? add extended reg insns:
-  {MIR_ADD, "r r r", "8b000000:ff200000 rd0 rn1 rm2"},  /* add Rd,Rn,Rm*/
+  {MIR_ADD, "r r r", "8b206000:ffe0fc00 rd0 rn1 rm2"},  /* extended add Rd,Rn,Rm*/
   {MIR_ADD, "r r I", "91000000:ff000000 rd0 rn1 I"},    /* add Rd,Rn,I,shift */
   {MIR_ADDS, "r r r", "0b000000:ff200000 rd0 rn1 rm2"}, /* add Wd,Wn,Wm*/
   {MIR_ADDS, "r r I", "11000000:ff000000 rd0 rn1 I"},   /* add Wd,Wn,I,shift */
@@ -1025,7 +1024,7 @@ static const struct pattern patterns[] = {
   {MIR_DADD, "r r r", "1e602800:ffe0fc00 vd0 vn1 vm2"}, /* fadd Dd,Dn,Dm*/
   // ldadd is implemented through builtin
 
-  {MIR_SUB, "r r r", "cb000000:ff200000 rd0 rn1 rm2"},  /* sub Rd,Rn,Rm*/
+  {MIR_SUB, "r r r", "cb206000:ffe0fc00 rd0 rn1 rm2"},  /* extended sub Rd,Rn,Rm*/
   {MIR_SUB, "r r I", "d1000000:ff000000 rd0 rn1 I"},    /* sub Rd,Rn,I,shift */
   {MIR_SUBS, "r r r", "4b000000:ff200000 rd0 rn1 rm2"}, /* sub Wd,Wn,Wm*/
   {MIR_SUBS, "r r I", "51000000:ff000000 rd0 rn1 I"},   /* sub Wd,Wn,I,shift */
