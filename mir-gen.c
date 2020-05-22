@@ -4210,7 +4210,7 @@ static void shrink_live_ranges (MIR_context_t ctx) {
 
   n++;
   DEBUG ({
-    fprintf (debug_file, "Compressing live ranges: from %d to %d - %d%%\n", curr_point, n,
+    fprintf (debug_file, "Compressing live ranges: from %d to %ld - %ld%%\n", curr_point, n,
              100 * n / curr_point);
   });
   curr_point = n;
@@ -5052,8 +5052,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       op_change_p = FALSE;
       MIR_insn_op_mode (ctx, insn, i, &out_p);
       if (!out_p && op_ref->mode == MIR_OP_HARD_REG && op_ref->u.hard_reg == hr) {
-        if (!move_code_p (def_insn->code))
-          break;
+        if (!move_code_p (def_insn->code)) break;
         /* It is not safe to substitute if there is another use after def insn before
            the current as we delete def insn after substitution. */
         insn->ops[i] = def_insn->ops[1];
