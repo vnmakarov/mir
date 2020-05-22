@@ -702,15 +702,15 @@ static void target_machinize (MIR_context_t ctx) {
   }
 }
 
-static void isave (MIR_context_t ctx, MIR_insn_t anchor, int disp, MIR_reg_t hard_reg) {
+static void isave (MIR_context_t ctx, MIR_insn_t anchor, int disp, MIR_reg_t base, MIR_reg_t hard_reg) {
   gen_mov (ctx, anchor, MIR_MOV,
-           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, base, MIR_NON_HARD_REG, 1),
            _MIR_new_hard_reg_op (ctx, hard_reg));
 }
 
-static void fsave (MIR_context_t ctx, MIR_insn_t anchor, int disp, MIR_reg_t hard_reg) {
+static void fsave (MIR_context_t ctx, MIR_insn_t anchor, int disp, MIR_reg_t base,  MIR_reg_t hard_reg) {
   gen_mov (ctx, anchor, MIR_LDMOV,
-           _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, disp, SP_HARD_REG, MIR_NON_HARD_REG, 1),
+           _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, disp, base, MIR_NON_HARD_REG, 1),
            _MIR_new_hard_reg_op (ctx, hard_reg));
 }
 
@@ -782,23 +782,31 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
            _MIR_new_hard_reg_op (ctx, FP_HARD_REG));    /* mem[sp] = fp */
   gen_mov (ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op); /* fp = sp */
   if (func->vararg_p) {
+    MIR_reg_t base = SP_HARD_REG;
+    
     start = (int64_t) frame_size - reg_save_area_size;
-    fsave (ctx, anchor, start, V0_HARD_REG);
-    fsave (ctx, anchor, start + 16, V1_HARD_REG);
-    fsave (ctx, anchor, start + 32, V2_HARD_REG);
-    fsave (ctx, anchor, start + 48, V3_HARD_REG);
-    fsave (ctx, anchor, start + 64, V4_HARD_REG);
-    fsave (ctx, anchor, start + 80, V5_HARD_REG);
-    fsave (ctx, anchor, start + 96, V6_HARD_REG);
-    fsave (ctx, anchor, start + 112, V7_HARD_REG);
-    isave (ctx, anchor, start + 128, R0_HARD_REG);
-    isave (ctx, anchor, start + 136, R1_HARD_REG);
-    isave (ctx, anchor, start + 144, R2_HARD_REG);
-    isave (ctx, anchor, start + 152, R3_HARD_REG);
-    isave (ctx, anchor, start + 160, R4_HARD_REG);
-    isave (ctx, anchor, start + 168, R5_HARD_REG);
-    isave (ctx, anchor, start + 176, R6_HARD_REG);
-    isave (ctx, anchor, start + 184, R7_HARD_REG);
+    if ((start + 184) >= (1 << 12)) {
+      new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, start));
+      gen_add_insn_before (ctx, anchor, new_insn); /* t = frame_size - reg_save_area_size */
+      start = 0;
+      base = R9_HARD_REG;
+    }
+    fsave (ctx, anchor, start, base, V0_HARD_REG);
+    fsave (ctx, anchor, start + 16, base, V1_HARD_REG);
+    fsave (ctx, anchor, start + 32, base, V2_HARD_REG);
+    fsave (ctx, anchor, start + 48, base, V3_HARD_REG);
+    fsave (ctx, anchor, start + 64, base, V4_HARD_REG);
+    fsave (ctx, anchor, start + 80, base, V5_HARD_REG);
+    fsave (ctx, anchor, start + 96, base, V6_HARD_REG);
+    fsave (ctx, anchor, start + 112, base, V7_HARD_REG);
+    isave (ctx, anchor, start + 128, base, R0_HARD_REG);
+    isave (ctx, anchor, start + 136, base, R1_HARD_REG);
+    isave (ctx, anchor, start + 144, base, R2_HARD_REG);
+    isave (ctx, anchor, start + 152, base, R3_HARD_REG);
+    isave (ctx, anchor, start + 160, base, R4_HARD_REG);
+    isave (ctx, anchor, start + 168, base, R5_HARD_REG);
+    isave (ctx, anchor, start + 176, base, R6_HARD_REG);
+    isave (ctx, anchor, start + 184, base, R7_HARD_REG);
   }
   /* Saving callee saved hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
