@@ -135,6 +135,7 @@ struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
 struct selection_ctx;
+struct fg_ctx;
 
 typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
@@ -159,6 +160,7 @@ struct gen_ctx {
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
+  struct fg_ctx *fg_ctx;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
   int max_int_hard_regs, max_fp_hard_regs;
   /* Slots num for variables.  Some variable can take several slots and can be aligned. */
@@ -5465,6 +5467,738 @@ static void dead_code_elimination (MIR_context_t ctx) {
 
 #undef live_out
 
+/* New Page */
+
+/* Fast generator: */
+
+struct var_info {
+  char global_p, mem_val_p;
+  MIR_type_t type;
+  MIR_reg_t hreg, mem_loc; /* mem_loc is defined for global even if !mem_val_p */
+  uint32_t bb_num, freq;
+};
+typedef struct var_info var_info_t;
+DEF_VARR (var_info_t);
+
+struct insn_var {
+  MIR_reg_t var, hreg; /* var and its current hreg (can be optional depending on collecting arg)  */
+  MIR_type_t type;
+  size_t op_num;
+};
+typedef struct insn_var insn_var_t;
+DEF_VARR (insn_var_t);
+
+struct var_gen_ctx {
+  MIR_reg_t var;
+  struct gen_ctx *gen_ctx;
+};
+typedef struct var_gen_ctx var_gen_ctx_t;
+DEF_VARR (var_gen_ctx_t);
+
+struct fg_ctx {
+  VARR (var_info_t) * var_infos;
+  var_info_t *curr_var_infos;
+  bitmap_t killed_globals, bb_occured_globals, live_locals, borned, busy_locs, blocked_hard_regs;
+  VARR (MIR_reg_t) * loc_vars; /* loc to var currently occupying it (or MIR_NON_HARD_REG) */
+  VARR (insn_var_t) * input_hard_regs, *output_hard_regs, *input_vars, *output_vars;
+  VARR (var_gen_ctx_t) * sorted_vars;
+  size_t start_local_mem_slot;
+};
+
+#define var_infos gen_ctx->fg_ctx->var_infos
+#define curr_var_infos gen_ctx->fg_ctx->curr_var_infos
+#define killed_globals gen_ctx->fg_ctx->killed_globals
+#define bb_occured_globals gen_ctx->fg_ctx->bb_occured_globals
+#define live_locals gen_ctx->fg_ctx->live_locals
+#define borned gen_ctx->fg_ctx->borned
+#define busy_locs gen_ctx->fg_ctx->busy_locs
+#define blocked_hard_regs gen_ctx->fg_ctx->blocked_hard_regs
+#define loc_vars gen_ctx->fg_ctx->loc_vars
+#define input_hard_regs gen_ctx->fg_ctx->input_hard_regs
+#define output_hard_regs gen_ctx->fg_ctx->output_hard_regs
+#define input_vars gen_ctx->fg_ctx->input_vars
+#define output_vars gen_ctx->fg_ctx->output_vars
+#define sorted_vars gen_ctx->fg_ctx->sorted_vars
+#define start_local_mem_slot gen_ctx->fg_ctx->start_local_mem_slot
+
+static MIR_reg_t get_loc_var (MIR_context_t ctx, MIR_reg_t loc) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  return (VARR_LENGTH (MIR_reg_t, loc_vars) <= loc ? MIR_NON_HARD_REG
+                                                   : VARR_GET (MIR_reg_t, loc_vars, loc));
+}
+
+static void set_loc_var (MIR_context_t ctx, MIR_reg_t loc, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  while (VARR_LENGTH (MIR_reg_t, loc_vars) <= loc)
+    VARR_PUSH (MIR_reg_t, loc_vars, MIR_NON_HARD_REG);
+  VARR_SET (MIR_reg_t, loc_vars, loc, var);
+}
+
+static void collect_insn_vars (MIR_context_t ctx, MIR_insn_t insn, int hreg_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t passed_mem_num;
+  int op_num, out_p, dummy_out_p, mem_p;
+  MIR_reg_t var;
+  MIR_op_mode_t mode;
+  insn_var_t insn_var;
+  insn_var_iterator_t insn_var_iter;
+
+  VARR_TRUNC (insn_var_t, input_hard_regs, 0);
+  VARR_TRUNC (insn_var_t, output_hard_regs, 0);
+  VARR_TRUNC (insn_var_t, input_vars, 0);
+  VARR_TRUNC (insn_var_t, output_vars, 0);
+  FOREACH_INSN_VAR (ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    insn_var.var = var;
+    insn_var.op_num = op_num;
+    insn_var.hreg = MIR_NON_HARD_REG;
+    if (var_is_reg_p (var)) {
+      if (hreg_p) insn_var.hreg = curr_var_infos[var].hreg;
+      insn_var.type = MIR_reg_type (ctx, var2reg (gen_ctx, var), curr_func_item->u.func);
+      VARR_PUSH (insn_var_t, out_p ? output_vars : input_vars, insn_var);
+    } else {
+      if (hreg_p) insn_var.hreg = insn_var.var;
+      if (mem_p) {
+        insn_var.type = MIR_T_I64;
+      } else {
+        mode = MIR_insn_op_mode (ctx, insn, op_num, &dummy_out_p);
+        insn_var.type
+          = (mode == MIR_OP_FLOAT
+               ? MIR_T_F
+               : mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
+        if (!target_hard_reg_type_ok_p (insn_var.var, insn_var.type)) {
+          /* the type can be wrong, e.g. if we pass some values by address  */
+          insn_var.type = insn_var.type == MIR_T_I64 ? MIR_T_D : MIR_T_I64;
+        }
+      }
+      VARR_PUSH (insn_var_t, out_p ? output_hard_regs : input_hard_regs, insn_var);
+    }
+  }
+}
+
+static void collect_var_info (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_insn_code_t code;
+  MIR_insn_t insn, prev_insn;
+  size_t ind;
+  uint32_t bb_num = 1;
+  insn_var_t insn_var;
+  var_info_t var_info, init_var_info;
+
+  init_var_info.global_p = FALSE;
+  init_var_info.mem_val_p = FALSE;
+  init_var_info.hreg = MIR_NON_HARD_REG;
+  init_var_info.mem_loc = MIR_NON_HARD_REG;
+  init_var_info.bb_num = 0;
+  init_var_info.freq = 0;
+  for (insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = prev_insn) {
+    prev_insn = DLIST_PREV (MIR_insn_t, insn);
+    code = insn->code;
+    if (code == MIR_LABEL) continue;
+    collect_insn_vars (ctx, insn, FALSE);
+    for (int i = 0; i < 2; i++) {
+      VARR_FOREACH_ELEM (insn_var_t, i == 0 ? input_vars : output_vars, ind, insn_var) {
+        while (insn_var.var >= VARR_LENGTH (var_info_t, var_infos))
+          VARR_PUSH (var_info_t, var_infos, init_var_info);
+        var_info = VARR_GET (var_info_t, var_infos, insn_var.var);
+        if (var_info.bb_num != 0 && var_info.bb_num != bb_num) var_info.global_p = TRUE;
+        var_info.bb_num = bb_num;
+        var_info.type = insn_var.type;
+        var_info.freq++;
+        VARR_SET (var_info_t, var_infos, insn_var.var, var_info);
+      }
+    }
+    if (prev_insn == NULL || prev_insn->code == MIR_LABEL || MIR_branch_code_p (prev_insn->code)) {
+      /* we reached BB start: */
+      bb_num++;
+    }
+  }
+  DEBUG ({
+    fprintf (debug_file, "Vars:\n");
+    for (MIR_reg_t var = 0; var < VARR_LENGTH (var_info_t, var_infos); var++) {
+      var_info = VARR_GET (var_info_t, var_infos, var);
+      if (var_info.freq == 0) continue;
+      MIR_reg_t reg = var_is_reg_p (var) ? var2reg (gen_ctx, var) : var;
+      fprintf (debug_file, " %s%s:reg=%u,var=%u\n", var_info.global_p ? "global " : "",
+               var_is_reg_p (var) ? MIR_reg_name (ctx, reg, curr_func_item->u.func) : "", reg, var,
+               var_info.freq);
+    }
+  });
+}
+
+static void set_locs_in_bitmap (bitmap_t bm, MIR_reg_t loc, MIR_type_t type) {
+  for (int i = target_locs_num (loc, type) - 1; i >= 0; i--)
+    bitmap_set_bit_p (bm, target_nth_loc (loc, type, i));
+}
+
+static int locs_in_bitmap_p (bitmap_t bm, MIR_reg_t loc, MIR_type_t type) {
+  for (int i = target_locs_num (loc, type) - 1; i >= 0; i--)
+    if (bitmap_bit_p (bm, target_nth_loc (loc, type, i))) return TRUE;
+  return FALSE;
+}
+
+static int mark_var_live (MIR_context_t ctx, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  return (VARR_GET (var_info_t, var_infos, var).global_p ? bitmap_clear_bit_p (killed_globals, var)
+                                                         : bitmap_set_bit_p (live_locals, var));
+}
+static int mark_var_death (MIR_context_t ctx, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  return (VARR_GET (var_info_t, var_infos, var).global_p ? bitmap_set_bit_p (killed_globals, var)
+                                                         : bitmap_clear_bit_p (live_locals, var));
+}
+
+static int live_var_p (MIR_context_t ctx, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  return (curr_var_infos[var].global_p ? !bitmap_bit_p (killed_globals, var)
+                                       : bitmap_bit_p (live_locals, var));
+}
+
+static void reserve_locs (MIR_context_t ctx, MIR_reg_t loc, MIR_type_t type, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  if (type == MIR_T_UNDEF) { /* just one hard reg */
+    bitmap_set_bit_p (busy_locs, loc);
+    if (var != MIR_NON_HARD_REG) set_loc_var (ctx, loc, var);
+  } else {
+    for (int i = target_locs_num (loc, type) - 1; i >= 0; i--) {
+      MIR_reg_t curr_loc = target_nth_loc (loc, type, i);
+      gen_assert ((var != MIR_NON_HARD_REG && curr_var_infos[var].global_p) || var <= MAX_HARD_REG
+                  || !bitmap_bit_p (busy_locs, curr_loc));
+      bitmap_set_bit_p (busy_locs, curr_loc);
+      if (var != MIR_NON_HARD_REG) set_loc_var (ctx, curr_loc, var);
+    }
+  }
+  if (var != MIR_NON_HARD_REG) {
+    if (loc <= MAX_HARD_REG) {
+      curr_var_infos[var].hreg = loc;
+    } else {
+      curr_var_infos[var].mem_loc = loc;
+      curr_var_infos[var].mem_val_p = TRUE;
+    }
+  }
+}
+
+static void free_locs (MIR_context_t ctx, MIR_reg_t loc, MIR_type_t type, MIR_reg_t var) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  gen_assert (type != MIR_T_UNDEF);
+  /* explicit hard reg usage should have the following pattern in BB: (def hr; ...; (use hr)*)* */
+  for (int i = target_locs_num (loc, type) - 1; i >= 0; i--) {
+    MIR_reg_t curr_loc = target_nth_loc (loc, type, i);
+    gen_assert (var <= MAX_HARD_REG || bitmap_bit_p (busy_locs, curr_loc));
+    if (var == MIR_NON_HARD_REG || curr_loc <= MAX_HARD_REG || !curr_var_infos[var].global_p)
+      bitmap_clear_bit_p (busy_locs, curr_loc); /* don't free memory of global vars */
+    if (var != MIR_NON_HARD_REG) set_loc_var (ctx, curr_loc, MIR_NON_HARD_REG);
+  }
+  if (var != MIR_NON_HARD_REG) {
+    if (loc <= MAX_HARD_REG) {
+      curr_var_infos[var].hreg = MIR_NON_HARD_REG;
+    } else {
+      curr_var_infos[var].mem_val_p = FALSE;
+      if (!curr_var_infos[var].global_p) curr_var_infos[var].mem_loc = MIR_NON_HARD_REG;
+    }
+  }
+}
+
+static MIR_reg_t slot2loc (MIR_reg_t slot) { return slot + MAX_HARD_REG + 1; }
+
+static MIR_reg_t assign_new_mem_loc (MIR_context_t ctx, MIR_reg_t var, MIR_type_t type) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t loc;
+
+  while (func_stack_slots_num % target_locs_num (slot2loc (func_stack_slots_num), type) != 0)
+    func_stack_slots_num++;
+  /* allocate memory */
+  curr_var_infos[var].mem_loc = loc = slot2loc (func_stack_slots_num);
+  func_stack_slots_num += target_locs_num (loc, type);
+  return loc;
+}
+
+static MIR_reg_t get_mem_loc (MIR_context_t ctx, MIR_reg_t var, MIR_type_t type, int set_busy_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t loc;
+  int slots_num;
+
+  if ((loc = curr_var_infos[var].mem_loc) != MIR_NON_HARD_REG) return loc;
+  for (MIR_reg_t slot = start_local_mem_slot;; slot++) {
+    loc = slot2loc (slot);
+    slots_num = target_locs_num (loc, type);
+    if (target_nth_loc (loc, type, slots_num - 1) >= slot2loc (func_stack_slots_num)) break;
+    if (slot % slots_num == 0 && !locs_in_bitmap_p (busy_locs, loc, type)) {
+      if (set_busy_p) set_locs_in_bitmap (busy_locs, loc, type);
+      curr_var_infos[var].mem_loc = loc;
+      return loc;
+    }
+  }
+  loc = assign_new_mem_loc (ctx, var, type);
+  if (set_busy_p) set_locs_in_bitmap (busy_locs, loc, type);
+  return loc;
+}
+
+static void free_all_var_locs (MIR_context_t ctx, MIR_reg_t var, MIR_type_t type) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  if (curr_var_infos[var].hreg != MIR_NON_HARD_REG)
+    free_locs (ctx, curr_var_infos[var].hreg, type, var);
+  if (curr_var_infos[var].mem_val_p) free_locs (ctx, curr_var_infos[var].mem_loc, type, var);
+}
+
+static MIR_op_t get_loc_op (MIR_context_t ctx, MIR_reg_t loc, MIR_type_t type) {
+  if (loc <= MAX_HARD_REG) return _MIR_new_hard_reg_op (ctx, loc);
+  MIR_disp_t offset = target_get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
+  return _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
+}
+
+static MIR_insn_code_t get_move_code (MIR_type_t type) {
+  return (type == MIR_T_F ? MIR_FMOV
+                          : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+}
+
+static MIR_insn_t gen_move (MIR_context_t ctx, MIR_type_t type, MIR_reg_t to_loc,
+                            MIR_reg_t from_loc) {
+  gen_assert (to_loc <= MAX_HARD_REG || from_loc <= MAX_HARD_REG);
+  return MIR_new_insn (ctx, get_move_code (type), get_loc_op (ctx, to_loc, type),
+                       get_loc_op (ctx, from_loc, type));
+}
+
+static void add_insn (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t anchor, int before_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  (before_p ? gen_add_insn_before : gen_add_insn_after) (ctx, anchor, insn);
+  DEBUG ({
+    fprintf (debug_file, "    adding insn ");
+    MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+    fprintf (debug_file, "  %s insn ", before_p ? "before" : "after");
+    MIR_output_insn (ctx, debug_file, anchor, curr_func_item->u.func, TRUE);
+  });
+}
+
+static void add_move (MIR_context_t ctx, MIR_type_t type, MIR_reg_t to_loc, MIR_reg_t from_loc,
+                      MIR_insn_t anchor, int before_p) {
+  add_insn (ctx, gen_move (ctx, type, to_loc, from_loc), anchor, before_p);
+}
+
+static void add_inputs_to_blocked_hard_regs (MIR_context_t ctx, MIR_reg_t var, MIR_type_t type,
+                                             MIR_insn_t insn) {
+  /* Add input hard regs, early clobbers, hard regs of lived input vars: */
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t ind;
+  MIR_reg_t hreg, hard_reg1, hard_reg2;
+  insn_var_t insn_var;
+
+  VARR_FOREACH_ELEM (insn_var_t, input_hard_regs, ind, insn_var) {
+    set_locs_in_bitmap (blocked_hard_regs, insn_var.var, insn_var.type);
+  }
+  VARR_FOREACH_ELEM (insn_var_t, input_vars, ind, insn_var) {
+    if (insn_var.var == var) continue;
+    if ((hreg = insn_var.hreg) != MIR_NON_HARD_REG) bitmap_set_bit_p (blocked_hard_regs, hreg);
+  }
+  target_get_early_clobbered_hard_regs (insn, &hard_reg1, &hard_reg2);
+  if (hard_reg1 != MIR_NON_HARD_REG) bitmap_set_bit_p (blocked_hard_regs, hard_reg1);
+  if (hard_reg2 != MIR_NON_HARD_REG) bitmap_set_bit_p (blocked_hard_regs, hard_reg2);
+  if (MIR_call_code_p (insn->code) && insn->data != NULL) {
+    bitmap_ior (blocked_hard_regs, blocked_hard_regs, (bitmap_t) insn->data);
+  }
+}
+
+static void spill_vars (MIR_context_t ctx, MIR_reg_t hreg, MIR_reg_t for_var, MIR_type_t for_type,
+                        MIR_insn_t insn) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t spill_var, curr_hreg, spill_hreg;
+  int i, slots_num;
+
+  gen_assert (hreg != MIR_NON_HARD_REG && hreg <= MAX_HARD_REG);
+  slots_num = for_type == MIR_T_UNDEF ? 1 : target_locs_num (hreg, for_type);
+  for (i = 0; i < slots_num; i++)
+    if ((curr_hreg = target_nth_loc (hreg, for_type, i)) <= MAX_HARD_REG
+        && (spill_var = get_loc_var (ctx, curr_hreg)) != MIR_NON_HARD_REG && for_var != spill_var) {
+      gen_assert (var_is_reg_p (spill_var));
+      DEBUG ({
+        fprintf (debug_file, "    Spilling %s:reg=%u,var=%u for var %u\n",
+                 MIR_reg_name (ctx, var2reg (gen_ctx, spill_var), curr_func_item->u.func),
+                 var2reg (gen_ctx, spill_var), spill_var, for_var);
+      });
+      spill_hreg = curr_var_infos[spill_var].hreg;
+      free_locs (ctx, spill_hreg, curr_var_infos[spill_var].type, spill_var);
+      if (!curr_var_infos[spill_var].mem_val_p) {
+        reserve_locs (ctx, get_mem_loc (ctx, spill_var, curr_var_infos[spill_var].type, FALSE),
+                      curr_var_infos[spill_var].type, spill_var);
+        /* add best_reg = mem after insn: */
+        add_move (ctx, curr_var_infos[spill_var].type, spill_hreg,
+                  curr_var_infos[spill_var].mem_loc, insn, FALSE);
+      }
+    }
+}
+
+static MIR_reg_t assign_to_loc (MIR_context_t ctx, insn_var_t *insn_var_ref, int live_before_p,
+                                int live_after_p, MIR_insn_t insn, int out_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t hreg, curr_hreg, best_hreg, spill_var, var = insn_var_ref->var;
+  MIR_type_t type = insn_var_ref->type;
+  int i, cost, best_cost = 0;
+  size_t ind;
+  insn_var_t insn_var;
+
+  bitmap_clear (blocked_hard_regs);
+  if (live_before_p) add_inputs_to_blocked_hard_regs (ctx, var, type, insn);
+  if (live_after_p) { /* add output hard regs and hard regs of live output vars: */
+    VARR_FOREACH_ELEM (insn_var_t, output_hard_regs, ind, insn_var) {
+      set_locs_in_bitmap (blocked_hard_regs, insn_var.var, insn_var.type);
+    }
+    VARR_FOREACH_ELEM (insn_var_t, output_vars, ind, insn_var) {
+      if (insn_var.var == var) continue;
+      if (insn_var.hreg != MIR_NON_HARD_REG) bitmap_set_bit_p (blocked_hard_regs, insn_var.hreg);
+    }
+  }
+  if (live_before_p && live_after_p && MIR_call_code_p (insn->code)) {
+    bitmap_ior (blocked_hard_regs, blocked_hard_regs, call_used_hard_regs);
+  }
+  hreg = out_p ? insn_var_ref->hreg : curr_var_infos[var].hreg;
+  if (hreg != MIR_NON_HARD_REG && !locs_in_bitmap_p (blocked_hard_regs, hreg, type)) {
+    if (!curr_var_infos[var].mem_val_p && curr_var_infos[var].global_p && out_p
+        && bitmap_set_bit_p (bb_occured_globals, var)) {
+      /* add move mem,best_hreg after insn: */
+      add_move (ctx, type, get_mem_loc (ctx, var, type, TRUE), hreg, insn, FALSE);
+    }
+    return hreg;
+  }
+  /* for spilling only transparent vars: */
+  if (live_after_p && !live_before_p) add_inputs_to_blocked_hard_regs (ctx, var, type, insn);
+  best_hreg = MIR_NON_HARD_REG;
+  for (hreg = 0; hreg <= MAX_HARD_REG; hreg++) {
+    if (!target_hard_reg_type_ok_p (hreg, type) || target_fixed_hard_reg_p (hreg)
+        || locs_in_bitmap_p (blocked_hard_regs, hreg, type))
+      continue;
+    for (cost = 0, i = target_locs_num (hreg, type) - 1; i >= 0; i--)
+      if ((curr_hreg = target_nth_loc (hreg, type, i)) <= MAX_HARD_REG
+          && (spill_var = get_loc_var (ctx, curr_hreg)) != MIR_NON_HARD_REG) {
+        if (!var_is_reg_p (spill_var)) break;
+        cost += curr_var_infos[spill_var].global_p ? 2 : 1;
+      }
+    if (i < 0 && (best_hreg == MIR_NON_HARD_REG || cost < best_cost)) {
+      best_hreg = hreg;
+      if ((best_cost = cost) == 0) break;
+    }
+  }
+  if (best_hreg == MIR_NON_HARD_REG) { /* this reg type has never regs */
+    gen_assert (insn_var_ref->hreg == MIR_NON_HARD_REG);
+    if (!curr_var_infos[var].mem_val_p)
+      reserve_locs (ctx, get_mem_loc (ctx, var, type, FALSE), type, var);
+    return curr_var_infos[var].mem_loc;
+  }
+  spill_vars (ctx, best_hreg, var, type, insn);
+  DEBUG ({
+    gen_assert (var_is_reg_p (var));
+    fprintf (debug_file, "    Assigning %u to %s:reg=%u,var=%u\n", best_hreg,
+             MIR_reg_name (ctx, var2reg (gen_ctx, var), curr_func_item->u.func),
+             var2reg (gen_ctx, var), var);
+  });
+  /* move to best_reg */
+  hreg = out_p ? insn_var_ref->hreg : curr_var_infos[var].hreg;
+  if (hreg != MIR_NON_HARD_REG) { /* add move hr,best_hr after insn */
+    add_move (ctx, type, hreg, best_hreg, insn, FALSE);
+  } else {
+    if (!curr_var_infos[var].mem_val_p && curr_var_infos[var].global_p && out_p
+        && bitmap_set_bit_p (bb_occured_globals, var))
+      reserve_locs (ctx, get_mem_loc (ctx, var, type, FALSE), type, var);
+    if (curr_var_infos[var].mem_val_p) {
+      add_move (ctx, type, curr_var_infos[var].mem_loc, best_hreg, insn, !out_p);
+      free_locs (ctx, curr_var_infos[var].mem_loc, type, var); /* invalidate mem */
+    }
+  }
+  if (out_p || hreg != MIR_NON_HARD_REG) { /* to invalidate memory and old hreg */
+    free_all_var_locs (ctx, var, type);
+  }
+  reserve_locs (ctx, best_hreg, type, var);
+  insn_var_ref->hreg = best_hreg;
+  return best_hreg;
+}
+
+#if !MIR_NO_GEN_DEBUG
+static void print_var_loc (MIR_context_t ctx, MIR_reg_t var, MIR_reg_t loc, int ln_p) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_reg_t reg = var_is_reg_p (var) ? var2reg (gen_ctx, var) : var;
+
+  fprintf (debug_file, " %u", loc);
+  if (var != MIR_NON_HARD_REG)
+    fprintf (debug_file, "%s(%s%s:reg=%u,var=%u)",
+             (loc <= MAX_HARD_REG || curr_var_infos[var].mem_val_p ? "" : " obsolete"),
+             curr_var_infos[var].global_p ? "global " : "",
+             var_is_reg_p (var) ? MIR_reg_name (ctx, reg, curr_func_item->u.func) : "", reg, var);
+  if (ln_p) fprintf (debug_file, "\n");
+}
+
+static void print_busy_locs (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  size_t nel;
+  bitmap_iterator_t bi;
+
+  FOREACH_BITMAP_BIT (bi, busy_locs, nel) {
+    print_var_loc (ctx, get_loc_var (ctx, nel), nel, FALSE);
+  }
+  fprintf (debug_file, "\n");
+}
+#endif
+
+static int global_var_compare (const void *el1, const void *el2) {
+  var_gen_ctx_t vg1 = *(var_gen_ctx_t *) el1, vg2 = *(var_gen_ctx_t *) el2;
+  struct gen_ctx *gen_ctx = vg1.gen_ctx;
+
+  return (long) curr_var_infos[vg2.var].freq - (long) curr_var_infos[vg1.var].freq;
+}
+
+static void fast_gen (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_type_t type;
+  MIR_insn_code_t code;
+  MIR_insn_t insn, prev_insn, new_insn;
+  MIR_reg_t var, hreg, hard_reg1, hard_reg2;
+  size_t ind, ind2, nel;
+  insn_var_t insn_var, insn_var2;
+  int unused_p, live_p, born_p, move_p;
+  bitmap_iterator_t bi;
+  var_gen_ctx_t var_gen_ctx;
+
+  DEBUG ({ fprintf (debug_file, "+++++++++++++Fast Generator:\n"); });
+  VARR_TRUNC (var_info_t, var_infos, 0);
+  collect_var_info (ctx);
+  curr_var_infos = VARR_ADDR (var_info_t, var_infos);
+  /* Allocate mem for globals: */
+  func_stack_slots_num = 0;
+  VARR_TRUNC (var_gen_ctx_t, sorted_vars, 0);
+  var_gen_ctx.gen_ctx = gen_ctx;
+  for (var = MAX_HARD_REG + 1; var < VARR_LENGTH (var_info_t, var_infos); var++)
+    if (curr_var_infos[var].global_p && curr_var_infos[var].freq != 0) {
+      var_gen_ctx.var = var;
+      VARR_PUSH (var_gen_ctx_t, sorted_vars, var_gen_ctx);
+    }
+  qsort (VARR_ADDR (var_gen_ctx_t, sorted_vars), VARR_LENGTH (var_gen_ctx_t, sorted_vars),
+         sizeof (var_gen_ctx_t), global_var_compare);
+  for (size_t i = 0; i < VARR_LENGTH (var_gen_ctx_t, sorted_vars); i++) {
+    var = VARR_GET (var_gen_ctx_t, sorted_vars, i).var;
+    assign_new_mem_loc (ctx, var, curr_var_infos[var].type);
+  }
+  start_local_mem_slot = func_stack_slots_num;
+  VARR_TRUNC (MIR_reg_t, loc_vars, 0);
+  bitmap_clear (busy_locs);
+  bitmap_clear (live_locals);
+  bitmap_clear (killed_globals);
+  bitmap_clear (bb_occured_globals);
+  bitmap_clear (func_used_hard_regs);
+  for (insn = DLIST_TAIL (MIR_insn_t, func->insns); insn != NULL; insn = prev_insn) {
+    prev_insn = DLIST_PREV (MIR_insn_t, insn);
+    if ((code = insn->code) == MIR_LABEL) continue;
+    DEBUG ({
+      fprintf (debug_file, "curr insn ");
+      MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+    });
+    collect_insn_vars (ctx, insn, TRUE);
+    curr_var_infos = VARR_ADDR (var_info_t, var_infos);
+    unused_p = FALSE;
+    move_p = move_code_p (code);
+    VARR_FOREACH_ELEM (insn_var_t, output_vars, ind, insn_var) { /* kill */
+      live_p = FALSE;
+      VARR_FOREACH_ELEM (insn_var_t, input_vars, ind2, insn_var2) {
+        if ((live_p = insn_var2.var == insn_var.var)) break;
+      }
+      gen_assert (!live_p || !MIR_call_code_p (code)); /* no io regs in calls: */
+      if (live_p) {
+        hreg
+          = assign_to_loc (ctx, &VARR_ADDR (insn_var_t, output_vars)[ind], TRUE, TRUE, insn, TRUE);
+        VARR_FOREACH_ELEM (insn_var_t, input_vars, ind2, insn_var2) {
+          if (insn_var2.var == insn_var.var && hreg <= MAX_HARD_REG)
+            VARR_ADDR (insn_var_t, input_vars)[ind2].hreg = hreg;
+        }
+      } else {
+        unused_p = !mark_var_death (ctx, insn_var.var);
+        hreg = assign_to_loc (ctx, &VARR_ADDR (insn_var_t, output_vars)[ind], FALSE, TRUE, insn,
+                              !unused_p);
+        free_all_var_locs (ctx, insn_var.var, insn_var.type);
+      }
+      gen_assert (insn->ops[insn_var.op_num].mode == MIR_OP_REG);
+      insn->ops[insn_var.op_num] = get_loc_op (ctx, hreg, insn_var.type);
+      if (hreg <= MAX_HARD_REG) setup_used_hard_regs (ctx, insn_var.type, hreg);
+    }
+    VARR_FOREACH_ELEM (insn_var_t, output_hard_regs, ind, insn_var) {
+      setup_used_hard_regs (ctx, insn_var.type, insn_var.var);
+      if (!target_fixed_hard_reg_p (insn_var.var)) {
+        spill_vars (ctx, insn_var.var, insn_var.var, insn_var.type, insn);
+        free_locs (ctx, insn_var.var, insn_var.type, insn_var.var);
+      }
+    }
+    if (unused_p && !MIR_call_code_p (code) && code != MIR_RET && code != MIR_ALLOCA
+        && code != MIR_BSTART && code != MIR_BEND && code != MIR_VA_START && code != MIR_VA_ARG
+        && code != MIR_VA_END
+        && !(
+          insn->ops[0].mode == MIR_OP_HARD_REG
+          && (insn->ops[0].u.hard_reg == FP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
+      gen_assert (VARR_LENGTH (insn_var_t, output_vars) == 1);
+      DEBUG ({
+        fprintf (debug_file, "  removing unused insn ");
+        MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+        fprintf (debug_file, "Busy locs after insn:\n");
+        print_busy_locs (ctx);
+      });
+      gen_delete_insn (ctx, insn);
+      goto check_bb_end;
+    }
+    target_get_early_clobbered_hard_regs (insn, &hard_reg1, &hard_reg2);
+    if (hard_reg1 != MIR_NON_HARD_REG && !target_fixed_hard_reg_p (hard_reg1))
+      spill_vars (ctx, hard_reg1, hard_reg1, MIR_T_UNDEF, insn);
+    if (hard_reg2 != MIR_NON_HARD_REG && !target_fixed_hard_reg_p (hard_reg2))
+      spill_vars (ctx, hard_reg2, hard_reg2, MIR_T_UNDEF, insn);
+    if (MIR_call_code_p (code)) {
+      FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) {
+        if (!target_fixed_hard_reg_p (nel)) {
+          spill_vars (ctx, nel, nel, MIR_T_UNDEF, insn);
+        }
+      }
+      if (insn->data != NULL) {
+        FOREACH_BITMAP_BIT (bi, (bitmap_t) insn->data, nel) {
+          if (!target_fixed_hard_reg_p (nel)) {
+            spill_vars (ctx, nel, nel, MIR_T_UNDEF, insn);
+            reserve_locs (ctx, nel, MIR_T_UNDEF, nel);
+          }
+        }
+      }
+    }
+    VARR_FOREACH_ELEM (insn_var_t, input_hard_regs, ind, insn_var) {
+      setup_used_hard_regs (ctx, insn_var.type, insn_var.var);
+      if (!target_fixed_hard_reg_p (insn_var.var)) {
+        spill_vars (ctx, insn_var.var, insn_var.var, insn_var.type, insn);
+        reserve_locs (ctx, insn_var.var, insn_var.type, insn_var.var);
+      }
+    }
+    bitmap_clear (borned);
+    VARR_FOREACH_ELEM (insn_var_t, input_vars, ind, insn_var) { /* make the var live */
+      born_p = mark_var_live (ctx, insn_var.var);
+      if (born_p) bitmap_set_bit_p (borned, insn_var.var);
+      hreg = assign_to_loc (ctx, &VARR_ADDR (insn_var_t, input_vars)[ind], TRUE,
+                            !bitmap_bit_p (borned, insn_var.var), insn, FALSE);
+      if (insn->ops[insn_var.op_num].mode == MIR_OP_REG) {
+        insn->ops[insn_var.op_num] = get_loc_op (ctx, hreg, insn_var.type);
+      } else {
+        MIR_op_t op = insn->ops[insn_var.op_num];
+
+        gen_assert (op.mode == MIR_OP_MEM && op.u.mem.index == 0
+                    && op.u.mem.base == var2reg (gen_ctx, insn_var.var));
+        insn->ops[insn_var.op_num]
+          = _MIR_new_hard_reg_mem_op (ctx, op.u.mem.type, op.u.mem.disp, hreg, MIR_NON_HARD_REG, 1);
+      }
+      if (hreg <= MAX_HARD_REG) setup_used_hard_regs (ctx, insn_var.type, hreg);
+    }
+    DEBUG ({
+      fprintf (debug_file, "  final insn ");
+      MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+      fprintf (debug_file, "Busy locs after insn:\n");
+      print_busy_locs (ctx);
+    });
+    if (move_p && insn->ops[0].mode == MIR_OP_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
+        && insn->ops[0].u.hard_reg == insn->ops[1].u.hard_reg) {
+      DEBUG ({
+        fprintf (debug_file, "  removing redundant move ");
+        MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+      });
+      gen_delete_insn (ctx, insn);
+    } else if (move_p && insn->ops[0].mode == MIR_OP_HARD_REG_MEM
+               && insn->ops[1].mode == MIR_OP_HARD_REG_MEM) {
+      type = insn->ops[0].u.hard_reg_mem.type;
+      if ((hreg = get_temp_hard_reg (type, TRUE)) != MIR_NON_HARD_REG) {
+        DEBUG ({
+          fprintf (debug_file, "    breaking insn ");
+          MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+        });
+        new_insn = MIR_new_insn (ctx, get_move_code (type), _MIR_new_hard_reg_op (ctx, hreg),
+                                 insn->ops[1]);
+        gen_add_insn_before (ctx, insn, new_insn);
+        insn->ops[1] = _MIR_new_hard_reg_op (ctx, hreg);
+        DEBUG ({
+          fprintf (debug_file, " onto ");
+          MIR_output_insn (ctx, debug_file, new_insn, func, FALSE);
+          fprintf (debug_file, ";");
+          MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+        });
+      }
+    }
+  check_bb_end:
+    if (prev_insn != NULL
+        && (prev_insn->code == MIR_LABEL || MIR_branch_code_p (prev_insn->code))) {  // ??? EBB
+      DEBUG ({
+        fprintf (debug_file, "Busy locs at BB start:\n");
+        print_busy_locs (ctx);
+      });
+      /* we reached EBB start: */
+      for (MIR_reg_t hreg = 0; hreg <= MAX_HARD_REG; hreg++)
+        if ((var = get_loc_var (ctx, hreg)) != MIR_NON_HARD_REG) { /* globals: hreg -> memory */
+          if (curr_var_infos[var].global_p && !curr_var_infos[var].mem_val_p) {
+            add_move (ctx, curr_var_infos[var].type, curr_var_infos[var].hreg,
+                      get_mem_loc (ctx, var, curr_var_infos[var].type, TRUE),
+                      DLIST_NEXT (MIR_insn_t, prev_insn), TRUE);
+            DEBUG ({
+              fprintf (debug_file, "    adding var location:");
+              print_var_loc (ctx, var, curr_var_infos[var].mem_loc, TRUE);
+            });
+          }
+          free_all_var_locs (ctx, var, curr_var_infos[var].type);
+        }
+      FOREACH_BITMAP_BIT (bi, live_locals, nel) { /* should be non-empty for wrong MIR-code */
+        free_all_var_locs (ctx, (MIR_reg_t) nel, curr_var_infos[nel].type);
+      }
+      bitmap_clear (live_locals);
+      bitmap_clear (killed_globals);
+      bitmap_clear (bb_occured_globals);
+    }
+  }
+}
+
+static void init_fast_gen (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  gen_ctx->fg_ctx = gen_malloc (ctx, sizeof (struct fg_ctx));
+  VARR_CREATE (var_info_t, var_infos, 256);
+  VARR_CREATE (MIR_reg_t, loc_vars, 256);
+  VARR_CREATE (insn_var_t, input_hard_regs, 0);
+  VARR_CREATE (insn_var_t, output_hard_regs, 0);
+  VARR_CREATE (insn_var_t, input_vars, 0);
+  VARR_CREATE (insn_var_t, output_vars, 0);
+  VARR_CREATE (var_gen_ctx_t, sorted_vars, 256);
+  killed_globals = bitmap_create ();
+  bb_occured_globals = bitmap_create ();
+  live_locals = bitmap_create ();
+  borned = bitmap_create ();
+  busy_locs = bitmap_create ();
+  blocked_hard_regs = bitmap_create ();
+}
+
+static void finish_fast_gen (MIR_context_t ctx) {
+  struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
+
+  VARR_DESTROY (var_info_t, var_infos);
+  VARR_DESTROY (MIR_reg_t, loc_vars);
+  VARR_DESTROY (insn_var_t, input_hard_regs);
+  VARR_DESTROY (insn_var_t, output_hard_regs);
+  VARR_DESTROY (insn_var_t, input_vars);
+  VARR_DESTROY (insn_var_t, output_vars);
+  VARR_DESTROY (var_gen_ctx_t, sorted_vars);
+  bitmap_destroy (killed_globals);
+  bitmap_destroy (bb_occured_globals);
+  bitmap_destroy (live_locals);
+  bitmap_destroy (borned);
+  bitmap_destroy (busy_locs);
+  bitmap_destroy (blocked_hard_regs);
+  free (gen_ctx->fg_ctx);
+  gen_ctx->fg_ctx = NULL;
+}
+
+/* New Page */
+
 #if !MIR_NO_GEN_DEBUG
 
 #include <sys/types.h>
@@ -5559,100 +6293,107 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   });
   curr_func_item = func_item;
   _MIR_duplicate_func_insns (ctx, func_item);
-  curr_cfg = func_item->data = gen_malloc (ctx, sizeof (struct func_cfg));
-  build_func_cfg (ctx);
-  DEBUG ({
-    fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
-    print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
-  });
-#ifndef NO_CSE
-  if (optimize_level >= 2) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
-    cse (ctx);
+  curr_cfg = NULL;
+  if (optimize_level != 0) {
+    curr_cfg = func_item->data = gen_malloc (ctx, sizeof (struct func_cfg));
+    build_func_cfg (ctx);
     DEBUG ({
-      print_exprs (ctx);
-      fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
-      print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
+      fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
+      print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
     });
-    cse_clear (ctx);
-  }
+#ifndef NO_CSE
+    if (optimize_level >= 2) {
+      DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
+      cse (ctx);
+      DEBUG ({
+        print_exprs (ctx);
+        fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
+        print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, output_bb_cse_info);
+      });
+      cse_clear (ctx);
+    }
 #endif /* #ifndef NO_CSE */
-  if (optimize_level >= 2) calculate_func_cfg_live_info (ctx, FALSE);
+    if (optimize_level >= 2) calculate_func_cfg_live_info (ctx, FALSE);
 #ifndef NO_CSE
-  if (optimize_level >= 2) {
-    dead_code_elimination (ctx);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
-      print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-    });
-  }
+    if (optimize_level >= 2) {
+      dead_code_elimination (ctx);
+      DEBUG ({
+        fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
+        print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+      });
+    }
 #endif /* #ifndef NO_CSE */
 #ifndef NO_RENAME
-  if (optimize_level >= 3) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
-    calculate_reaching_defs (ctx);
-    reg_rename (ctx);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after rename:\n");
-      print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
-    });
-    rdef_clear (ctx);
-    calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
-  }
-#endif /* #ifndef NO_RENAME */
-#ifndef NO_LICM
-  if (optimize_level >= 3) {
-    if (build_loop_tree (ctx)) {
-      licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
+    if (optimize_level >= 3) {
+      DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
       calculate_reaching_defs (ctx);
-      DEBUG ({ fprintf (debug_file, "+++++++++++++LICM:\n"); });
-      licm (ctx);
+      reg_rename (ctx);
       DEBUG ({
-        fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
-        print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
+        fprintf (debug_file, "+++++++++++++MIR after rename:\n");
+        print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_rdef_info);
       });
       rdef_clear (ctx);
       calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
     }
-    destroy_loop_tree (ctx, curr_cfg->root_loop_node);
-    curr_cfg->root_loop_node = NULL;
-  }
+#endif /* #ifndef NO_RENAME */
+#ifndef NO_LICM
+    if (optimize_level >= 3) {
+      if (build_loop_tree (ctx)) {
+        licm_add_loop_preheaders (ctx, curr_cfg->root_loop_node);
+        calculate_reaching_defs (ctx);
+        DEBUG ({ fprintf (debug_file, "+++++++++++++LICM:\n"); });
+        licm (ctx);
+        DEBUG ({
+          fprintf (debug_file, "+++++++++++++MIR after LICM:\n");
+          print_CFG (ctx, TRUE, FALSE, TRUE, TRUE, output_bb_licm_info);
+        });
+        rdef_clear (ctx);
+        calculate_func_cfg_live_info (ctx, FALSE); /* restore live info */
+      }
+      destroy_loop_tree (ctx, curr_cfg->root_loop_node);
+      curr_cfg->root_loop_node = NULL;
+    }
 #endif /* #ifndef NO_LICM */
 #ifndef NO_CCP
-  if (optimize_level >= 2) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++CCP:\n"); });
-    if (ccp (ctx)) {
-      DEBUG ({
-        fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
-        print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
-      });
-      dead_code_elimination (ctx);
-      DEBUG ({
-        fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
-        print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-      });
+    if (optimize_level >= 2) {
+      DEBUG ({ fprintf (debug_file, "+++++++++++++CCP:\n"); });
+      if (ccp (ctx)) {
+        DEBUG ({
+          fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
+          print_CFG (ctx, TRUE, FALSE, TRUE, FALSE, NULL);
+        });
+        dead_code_elimination (ctx);
+        DEBUG ({
+          fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
+          print_CFG (ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+        });
+      }
     }
-  }
 #endif /* #ifndef NO_CCP */
-  ccp_clear (ctx);
+    ccp_clear (ctx);
+  }
   make_io_dup_op_insns (ctx);
   target_machinize (ctx);
-  if (curr_cfg != NULL) add_new_bb_insns (ctx);
+  if (optimize_level != 0) add_new_bb_insns (ctx);
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
-  build_loop_tree (ctx);
-  calculate_func_cfg_live_info (ctx, TRUE);
-  DEBUG ({
-    add_bb_insn_dead_vars (ctx);
-    fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
-    print_loop_tree (ctx, TRUE);
-    print_CFG (ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
-  });
-  build_live_ranges (ctx);
-  assign (ctx);
-  rewrite (ctx); /* After rewrite the BB live info is still valid */
+  if (optimize_level == 0) {
+    fast_gen (ctx);
+  } else {
+    build_loop_tree (ctx);
+    calculate_func_cfg_live_info (ctx, TRUE);
+    DEBUG ({
+      add_bb_insn_dead_vars (ctx);
+      fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
+      print_loop_tree (ctx, TRUE);
+      print_CFG (ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
+    });
+    build_live_ranges (ctx);
+    assign (ctx);
+    rewrite (ctx); /* After rewrite the BB live info is still valid */
+  }
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
     print_CFG (ctx, FALSE, FALSE, TRUE, FALSE, NULL);
@@ -5694,9 +6435,11 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   });
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
-  destroy_func_live_ranges (ctx);
-  destroy_loop_tree (ctx, curr_cfg->root_loop_node);
-  destroy_func_cfg (ctx);
+  if (optimize_level != 0) {
+    destroy_func_live_ranges (ctx);
+    destroy_loop_tree (ctx, curr_cfg->root_loop_node);
+    destroy_func_cfg (ctx);
+  }
   DEBUG ({
     fprintf (debug_file, "Generation of code for %s: %lu MIR insns -- time %.0f usec\n",
              MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
@@ -5758,6 +6501,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_live_ranges (ctx);
   init_ra (ctx);
   init_selection (ctx);
+  init_fast_gen (ctx);
   target_init (ctx);
   call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
   max_int_hard_regs = max_fp_hard_regs = 0;
@@ -5785,6 +6529,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_live_ranges (ctx);
   finish_ra (ctx);
   finish_selection (ctx);
+  finish_fast_gen (ctx);
   bitmap_destroy (call_used_hard_regs);
   bitmap_destroy (insn_to_consider);
   bitmap_destroy (func_used_hard_regs);
