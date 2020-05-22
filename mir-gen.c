@@ -888,16 +888,18 @@ static MIR_reg_t get_nregs (MIR_context_t ctx) {
 
 static MIR_reg_t get_nvars (MIR_context_t ctx) { return get_nregs (ctx) + MAX_HARD_REG + 1; }
 
+static int move_code_p (MIR_insn_code_t code) {
+  return code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV || code == MIR_LDMOV;
+}
+
 static int move_p (MIR_insn_t insn) {
-  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
-           || insn->code == MIR_LDMOV)
+  return (move_code_p (insn->code)
           && (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
           && (insn->ops[1].mode == MIR_OP_REG || insn->ops[1].mode == MIR_OP_HARD_REG));
 }
 
 static int imm_move_p (MIR_insn_t insn) {
-  return ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
-           || insn->code == MIR_LDMOV)
+  return (move_code_p (insn->code)
           && (insn->ops[0].mode == MIR_OP_REG || insn->ops[0].mode == MIR_OP_HARD_REG)
           && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
               || insn->ops[1].mode == MIR_OP_FLOAT || insn->ops[1].mode == MIR_OP_DOUBLE
@@ -2588,7 +2590,7 @@ static void move_loop_invariants (MIR_context_t ctx, loop_node_t loop) {
 static int store_p (MIR_insn_t insn) {
   MIR_insn_code_t code = insn->code;
 
-  if (code != MIR_MOV && code != MIR_DMOV && code != MIR_FMOV && code != MIR_LDMOV) return FALSE;
+  if (!move_code_p (code)) return FALSE;
   return insn->ops[0].mode == MIR_OP_MEM || insn->ops[0].mode == MIR_OP_HARD_REG_MEM;
 }
 
@@ -4719,8 +4721,7 @@ static void rewrite (MIR_context_t ctx) {
         }
       }
       insns_num++;
-      if (insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
-          || insn->code == MIR_LDMOV) {
+      if (move_code_p (insn->code)) {
         movs_num++;
         if (MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
           DEBUG ({
@@ -5043,8 +5044,7 @@ static int combine_substitute (MIR_context_t ctx, bb_insn_t bb_insn) {
       op_change_p = FALSE;
       MIR_insn_op_mode (ctx, insn, i, &out_p);
       if (!out_p && op_ref->mode == MIR_OP_HARD_REG && op_ref->u.hard_reg == hr) {
-        if (def_insn->code != MIR_MOV && def_insn->code != MIR_FMOV && def_insn->code != MIR_DMOV
-            && def_insn->code != MIR_LDMOV)
+        if (!move_code_p (def_insn->code))
           break;
         /* It is not safe to substitute if there is another use after def insn before
            the current as we delete def insn after substitution. */
