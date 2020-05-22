@@ -719,7 +719,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
-  MIR_op_t sp_reg_op, fp_reg_op, treg_op;
+  MIR_op_t sp_reg_op, fp_reg_op, treg_op, treg_op2;
   int64_t start;
   int save_prev_stack_p;
   size_t i, offset, frame_size, frame_size_after_saved_regs, saved_iregs_num, saved_fregs_num;
@@ -755,14 +755,21 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   frame_size += stack_slots_num * 8;
   if (frame_size % 16 != 0) frame_size = (frame_size + 15) / 16 * 16;
   save_prev_stack_p = func->vararg_p || stack_arg_func_p;
+  treg_op = _MIR_new_hard_reg_op (ctx, R9_HARD_REG);
   if (save_prev_stack_p) { /* prev stack pointer */
-    treg_op = _MIR_new_hard_reg_op (ctx, R9_HARD_REG);
     gen_mov (ctx, anchor, MIR_MOV, treg_op, sp_reg_op);
     frame_size += 16;
   }
   frame_size += 16; /* lr/fp */
-  new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
-  gen_add_insn_before (ctx, anchor, new_insn); /* sp = sp - frame_size */
+  if (frame_size < (1 << 12)) {
+    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
+  } else {
+    treg_op2 = _MIR_new_hard_reg_op (ctx, R10_HARD_REG);
+    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, frame_size));
+    gen_add_insn_before (ctx, anchor, new_insn); /* t = frame_size */
+    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, treg_op2);
+  }
+  gen_add_insn_before (ctx, anchor, new_insn); /* sp = sp - (frame_size|t) */
   if (save_prev_stack_p)
     gen_mov (ctx, anchor, MIR_MOV,
              _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, SP_HARD_REG, MIR_NON_HARD_REG, 1),
@@ -834,8 +841,14 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   /* Restore lr, sp, fp */
   gen_mov (ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, LINK_HARD_REG),
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_HARD_REG, 1));
-  new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, frame_size));
-  gen_add_insn_before (ctx, anchor, new_insn); /* sp = fp + frame_size */
+  if (frame_size < (1 << 12)) {
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, frame_size));
+  } else  {
+    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, frame_size));
+    gen_add_insn_before (ctx, anchor, new_insn); /* t = frame_size */
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, treg_op);
+  }
+  gen_add_insn_before (ctx, anchor, new_insn); /* sp = fp + (frame_size|t) */
   gen_mov (ctx, anchor, MIR_MOV, fp_reg_op,
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, FP_HARD_REG, MIR_NON_HARD_REG, 1));
 }
