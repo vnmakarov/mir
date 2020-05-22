@@ -604,6 +604,13 @@ static void setup_used_hard_regs (MIR_context_t ctx, MIR_type_t type, MIR_reg_t 
       bitmap_set_bit_p (func_used_hard_regs, curr_hard_reg);
 }
 
+static MIR_reg_t get_temp_hard_reg (MIR_type_t type, int first_p) {
+  if (type == MIR_T_F) return first_p ? TEMP_FLOAT_HARD_REG1 : TEMP_FLOAT_HARD_REG2;
+  if (type == MIR_T_D) return first_p ? TEMP_DOUBLE_HARD_REG1 : TEMP_DOUBLE_HARD_REG2;
+  if (type == MIR_T_LD) return first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
+  return first_p ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
+}
+
 static bb_t create_bb (MIR_context_t ctx, MIR_insn_t insn) {
   bb_t bb = gen_malloc (ctx, sizeof (struct bb));
 
@@ -4613,20 +4620,17 @@ static MIR_reg_t change_reg (MIR_context_t ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   if (data_mode == MIR_OP_INT) {
     type = MIR_T_I64;
     code = MIR_MOV;
-    hard_reg = first_p ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
   } else if (data_mode == MIR_OP_FLOAT) {
     type = MIR_T_F;
     code = MIR_FMOV;
-    hard_reg = first_p ? TEMP_FLOAT_HARD_REG1 : TEMP_FLOAT_HARD_REG2;
   } else if (data_mode == MIR_OP_DOUBLE) {
     type = MIR_T_D;
     code = MIR_DMOV;
-    hard_reg = first_p ? TEMP_DOUBLE_HARD_REG1 : TEMP_DOUBLE_HARD_REG2;
   } else {
     type = MIR_T_LD;
     code = MIR_LDMOV;
-    hard_reg = first_p ? TEMP_LDOUBLE_HARD_REG1 : TEMP_LDOUBLE_HARD_REG2;
   }
+  hard_reg = get_temp_hard_reg (type, first_p);
   setup_used_hard_regs (ctx, type, hard_reg);
   offset = target_get_stack_slot_offset (ctx, type, loc - MAX_HARD_REG - 1);
   *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
