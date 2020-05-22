@@ -862,10 +862,10 @@ static MIR_reg_t gen_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_
 }
 
 static MIR_reg_t reg2breg (struct gen_ctx *gen_ctx, MIR_reg_t reg) {
-  return reg - curr_cfg->min_reg;
+  return reg - (curr_cfg == NULL ? 0 : curr_cfg->min_reg);
 }
 static MIR_reg_t breg2reg (struct gen_ctx *gen_ctx, MIR_reg_t breg) {
-  return breg + curr_cfg->min_reg;
+  return breg + (curr_cfg == NULL ? 0 : curr_cfg->min_reg);
 }
 static MIR_reg_t reg2var (struct gen_ctx *gen_ctx, MIR_reg_t reg) {
   return reg2breg (gen_ctx, reg) + MAX_HARD_REG + 1;
