@@ -1041,6 +1041,14 @@ static void print_CFG (MIR_context_t ctx, int bb_p, int pressure_p, int insns_p,
                        void (*bb_info_print_func) (MIR_context_t, bb_t)) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
 
+  if (curr_cfg == NULL) {
+    if (insns_p) {
+      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+           insn = DLIST_NEXT (MIR_insn_t, insn))
+        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+    }
+    return;
+  }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb_p) {
       fprintf (debug_file, "BB %3lu", (unsigned long) bb->index);
