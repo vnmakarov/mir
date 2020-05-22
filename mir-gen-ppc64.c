@@ -46,8 +46,6 @@ const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = F12_HARD_REG;
 
 static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
-  /* For LD we need x87 stack regs and it is too complicated so no
-     hard register allocation for LD: */
   if (type == MIR_T_LD) return FALSE;
   return MIR_fp_type_p (type) ? F0_HARD_REG <= hard_reg && hard_reg <= F31_HARD_REG
                               : hard_reg < F0_HARD_REG;
