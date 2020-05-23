@@ -259,7 +259,8 @@ ex100:    func v, 0
   * **Assign**: priority-based assigning hard regs and stack slots to registers
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
   * **Combine** (code selection): merging data-depended insns into one
-  * **Dead Code Elimination**: removing insns with unused outputs. 
+  * **Dead Code Elimination**: removing insns with unused outputs
+  * **Fast Generator**: 4-5 times faster generation of code whose performance is on par with `-O0` of GCC/Clang
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
   
 ## C to MIR translation
