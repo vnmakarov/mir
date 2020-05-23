@@ -19,39 +19,50 @@
     ----------------------     -----------     ---------     ------------     -------------
    |  Sparse Conditional  |-->| Machinize |-->| Finding |-->| Build Live |-->| Build Live  |
    | Constant Propagation |    -----------    |  Loops  |   |    Info    |   |   Ranges    |
-    ----------------------                     ---------     ------------     -------------
-                                                                                    |
-                                                                                    V
-               ---------------     -------------     ---------     ---------     ---------
-   Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |<--|  Assign |
-    Insns     | machine insns |   | Elimination |    ---------     ---------     ---------
-               ---------------     ------------
+    ----------------------          |          ---------     ------------     -------------
+                                    V                                               |
+                               -----------                                          V
+                              |    Fast   |                                      ---------
+                              | Generator |                                     | Assign  |
+                               -----------                                       ---------
+                                    |                                               |
+                                    V                                               V
+                             ---------------     -------------     ---------     ---------
+                 Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |
+                  Insns     | machine insns |   | Elimination |    ---------     ---------
+                             ---------------     ------------
 
 
-   Simplify: Lowering MIR (in mir.c).
-   Build CGF: Building Control Flow Graph (basic blocks and CFG edges).
+   Simplify: Lowering MIR (in mir.c).  Always.
+   Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
    Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
-                                      we need the right value numbering after simplification)
-   Dead code elimination: Removing insns with unused outputs.
-   Reaching definition Analysis: Analysis required for subsequent variable renaming
+                                      we need the right value numbering after simplification).
+                                      Only for -O2 and above.
+   Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
+   Reaching definition Analysis: Analysis required for subsequent variable renaming.  Only for -O3.
    Variable renaming: Rename disjoint live ranges of variables which is beneficial for
-                      register allocation and loop invariant code motion.
+                      register allocation and loop invariant code motion.  Only for -O3.
    Finding Loops: Building loop tree which is used in subsequent loop invariant code motion.
-   Reaching definition Analysis: Analysis required for subsequent loop invariant code motion
+                  Only for -O3.
+   Reaching definition Analysis: Analysis required for subsequent loop invariant code motion.
+                                 Only for -O3.
    Loop Invariant Code Motion (LICM): Register pressure sensitive moves loop invariant insns out
-                                      of the loop.
-   Sparse Conditional Constant Propagation: constant propagation and removing death paths of CFG
+                                      of the loop.  Only for -O3.
+   Sparse Conditional Constant Propagation: Constant propagation and removing death paths of CFG.
+                                            Only for -O2 and above.
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
-              transforming MIR for calls ABI, 2-op insns, etc.
+              transforming MIR for calls ABI, 2-op insns, etc.  Always.
    Finding Loops: Building loop tree which is used in subsequent register allocation.
-   Building Live Info: Calculating live in and live out for the basic blocks.
-   Build Live Ranges: Calculating program point ranges for registers.
-   Assign: Priority-based assigning hard regs and stack slots to registers.
-   Rewrite: Transform MIR according to the assign using reserved hard regs.
-   Combine (code selection): Merging data-depended insns into one.
-   Dead code elimination: Removing insns with unused outputs.
+                  Only for -O1 and above.
+   Building Live Info: Calculating live in and live out for the basic blocks.  Only for -O1 and
+   above. Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and
+   above. Assign: Priority-based assigning hard regs and stack slots to registers.  Only for -O1 and
+   above. Rewrite: Transform MIR according to the assign using reserved hard regs.  Only for -O1 and
+   above. Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
+   Dead code elimination: Removing insns with unused outputs.  Only for -O1 and above.
+   Fast Generator:   Only for -O0.
    Generate machine insns: Machine-dependent code (e.g. in
-                           mir-gen-x86_64.c) creating machine insns.
+                           mir-gen-x86_64.c) creating machine insns. Always.
 
    Terminology:
    reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP_MEM)
