@@ -60,7 +60,8 @@
    above. Rewrite: Transform MIR according to the assign using reserved hard regs.  Only for -O1 and
    above. Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O1 and above.
-   Fast Generator:   Only for -O0.
+   Fast Generator: Code generation about 4-5 times faster than one with -O1.  The generated code
+                   performance is approximately on par with -O0 GCC/Clang.  Only for -O0.
    Generate machine insns: Machine-dependent code (e.g. in
                            mir-gen-x86_64.c) creating machine insns. Always.
 
