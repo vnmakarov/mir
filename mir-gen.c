@@ -5510,7 +5510,7 @@ DEF_VARR (var_gen_ctx_t);
 struct fg_ctx {
   VARR (var_info_t) * var_infos;
   var_info_t *curr_var_infos;
-  bitmap_t killed_globals, bb_occured_globals, live_locals, borned, busy_locs, blocked_hard_regs;
+  bitmap_t killed_globals, bb_occured_globals, live_locals, busy_locs, blocked_hard_regs;
   VARR (MIR_reg_t) * loc_vars; /* loc to var currently occupying it (or MIR_NON_HARD_REG) */
   VARR (insn_var_t) * input_hard_regs, *output_hard_regs, *input_vars, *output_vars;
   VARR (var_gen_ctx_t) * sorted_vars;
@@ -5522,7 +5522,6 @@ struct fg_ctx {
 #define killed_globals gen_ctx->fg_ctx->killed_globals
 #define bb_occured_globals gen_ctx->fg_ctx->bb_occured_globals
 #define live_locals gen_ctx->fg_ctx->live_locals
-#define borned gen_ctx->fg_ctx->borned
 #define busy_locs gen_ctx->fg_ctx->busy_locs
 #define blocked_hard_regs gen_ctx->fg_ctx->blocked_hard_regs
 #define loc_vars gen_ctx->fg_ctx->loc_vars
@@ -5975,6 +5974,7 @@ static void fast_gen (MIR_context_t ctx) {
   size_t ind, ind2, nel;
   insn_var_t insn_var, insn_var2;
   int unused_p, live_p, born_p, move_p;
+  bitmap_t borned = temp_bitmap;
   bitmap_iterator_t bi;
   var_gen_ctx_t var_gen_ctx;
 
@@ -6184,7 +6184,6 @@ static void init_fast_gen (MIR_context_t ctx) {
   killed_globals = bitmap_create ();
   bb_occured_globals = bitmap_create ();
   live_locals = bitmap_create ();
-  borned = bitmap_create ();
   busy_locs = bitmap_create ();
   blocked_hard_regs = bitmap_create ();
 }
@@ -6202,7 +6201,6 @@ static void finish_fast_gen (MIR_context_t ctx) {
   bitmap_destroy (killed_globals);
   bitmap_destroy (bb_occured_globals);
   bitmap_destroy (live_locals);
-  bitmap_destroy (borned);
   bitmap_destroy (busy_locs);
   bitmap_destroy (blocked_hard_regs);
   free (gen_ctx->fg_ctx);
