@@ -153,7 +153,7 @@ typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
 struct gen_ctx {
-  unsigned int optimize_level; /* 0:only RA; 1:+combiner; 2: +CSE/CCP (default); >=3: everything  */
+  unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
   MIR_item_t curr_func_item;
 #if !MIR_NO_GEN_DEBUG
   FILE *debug_file;
