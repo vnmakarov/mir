@@ -3248,8 +3248,49 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
 
 /* New Page */
 
+#ifndef _WIN32
 #include <sys/mman.h>
 #include <unistd.h>
+
+#define PROT_WRITE_EXEC (PROT_WRITE | PROT_EXEC)
+#define PROT_READ_EXEC (PROT_READ | PROT_EXEC)
+#define mem_protect mprotect
+#define mem_unmap munmap
+
+static void *mem_map (size_t len) {
+  return mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+}
+
+static size_t mem_page_size () {
+  return sysconf (_SC_PAGE_SIZE);
+}
+#else
+#include <memoryapi.h>
+#include <sysinfoapi.h>
+
+#define PROT_WRITE_EXEC PAGE_EXECUTE_READWRITE
+#define PROT_READ_EXEC PAGE_EXECUTE_READ
+#define MAP_FAILED NULL
+
+static int mem_protect (void *addr, size_t len, int prot) {
+  DWORD old_prot = 0;
+  return VirtualProtect (addr, len, prot, &old_prot) ? 0 : -1;
+}
+
+static int mem_unmap (void *addr, size_t len) {
+  return VirtualFree (addr, len, MEM_RELEASE) ? 0 : -1;
+}
+
+static void *mem_map (size_t len) {
+  return VirtualAlloc (NULL, len, MEM_COMMIT, PAGE_EXECUTE);
+}
+
+static size_t mem_page_size () {
+  SYSTEM_INFO sysInfo;
+  GetSystemInfo (&sysInfo);
+  return sysInfo.dwPageSize;
+}
+#endif
 
 struct code_holder {
   uint8_t *start, *free, *bound;
@@ -3282,7 +3323,7 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   }
   npages = (size + page_size) / page_size;
   len = page_size * npages;
-  mem = (uint8_t *) mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  mem = (uint8_t *) mem_map (len);
   if (mem == MAP_FAILED) return NULL;
   ch.start = mem;
   ch.free = mem;
@@ -3306,9 +3347,9 @@ static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_
 
   ch_ptr->free += code_len;
   mir_assert (ch_ptr->free <= ch_ptr->bound);
-  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE | PROT_EXEC);
+  mem_protect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE_EXEC);
   memcpy (mem, code, code_len);
-  mprotect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_READ | PROT_EXEC);
+  mem_protect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_READ_EXEC);
   _MIR_flush_code_cache (mem, ch_ptr->free);
   return mem;
 }
@@ -3340,9 +3381,9 @@ void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code, si
 
   start = (size_t) addr / page_size * page_size;
   len = (size_t) addr + code_len - start;
-  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   memcpy (addr, code, code_len);
-  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (addr, addr + code_len);
 }
 
@@ -3355,9 +3396,9 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
     if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
-  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
-  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
 }
 
@@ -3375,14 +3416,14 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
   va_end (args);
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
-  mprotect ((uint8_t *) start, len, PROT_WRITE | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   va_start (args, nloc);
   for (size_t i = 0; i < nloc; i++) {
     offset = va_arg (args, size_t);
     value = va_arg (args, void *);
     memcpy (base + offset, &value, sizeof (void *));
   }
-  mprotect ((uint8_t *) start, len, PROT_READ | PROT_EXEC);
+  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
   va_end (args);
 }
@@ -3390,7 +3431,7 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
 static void code_init (MIR_context_t ctx) {
   if ((ctx->machine_code_ctx = malloc (sizeof (struct machine_code_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
-  page_size = sysconf (_SC_PAGE_SIZE);
+  page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
   VARR_CREATE (uint8_t, machine_insns, 1024);
 }
@@ -3398,7 +3439,7 @@ static void code_init (MIR_context_t ctx) {
 static void code_finish (MIR_context_t ctx) {
   while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
     code_holder_t ch = VARR_POP (code_holder_t, code_holders);
-    munmap (ch.start, ch.bound - ch.start);
+    mem_unmap (ch.start, ch.bound - ch.start);
   }
   VARR_DESTROY (code_holder_t, code_holders);
   VARR_DESTROY (uint8_t, machine_insns);
