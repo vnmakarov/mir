@@ -1,10 +1,10 @@
 #include "../mir-gen.h"
+#include "../real-time.h"
 #if defined(TEST_GEN_LOOP)
 #include "api-loop.h"
 #else
 #include "scan-sieve.h"
 #endif
-#include "real-time.h"
 
 #include <inttypes.h>
 #include <unistd.h>

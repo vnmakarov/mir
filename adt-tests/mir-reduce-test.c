@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "mir-reduce.h"
 #include "mir-varr.h"
+#include "real-time.h"
 
 DEF_VARR (uint8_t);
 static VARR (uint8_t) * orig, *buf1, *buf2;
@@ -38,15 +39,6 @@ static size_t writer2 (const void *start, size_t len, void *aux_data) {
   output_length2 += len;
   for (size_t i = 0; i < len; i++) VARR_PUSH (uint8_t, buf2, ((uint8_t *) start)[i]);
   return len;
-}
-
-#include <sys/time.h>
-
-static double real_usec_time (void) {
-  struct timeval tv;
-
-  gettimeofday (&tv, NULL);
-  return tv.tv_usec + tv.tv_sec * 1000000.0;
 }
 
 int main (void) {

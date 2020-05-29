@@ -2,13 +2,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <dlfcn.h>
-#include <sys/time.h>
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/stat.h>
 #endif
 
 #include "c2mir.h"
 #include "mir-gen.h"
+#include "real-time.h"
 
 struct lib {
   char *name;
@@ -82,13 +82,6 @@ static lib_t std_libs[] = {{"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib"
 static const char *std_lib_dirs[] = {"/usr/lib"};
 static const char *lib_suffix = ".dylib";
 #endif
-
-static double real_usec_time (void) {
-  struct timeval tv;
-
-  gettimeofday (&tv, NULL);
-  return tv.tv_usec + tv.tv_sec * 1000000.0;
-}
 
 static struct c2mir_options options;
 static int gen_debug_p;
