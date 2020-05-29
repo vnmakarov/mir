@@ -68,14 +68,7 @@ static void *import_resolver (const char *name) {
 #endif
 
 #if MIR_BIN_DEBUG
-#include <sys/time.h>
-
-static double real_usec_time (void) {
-  struct timeval tv;
-
-  gettimeofday (&tv, NULL);
-  return tv.tv_usec + tv.tv_sec * 1000000.0;
-}
+#include "real-time.h"
 #endif
 
 #ifndef MIR_USE_INTERP

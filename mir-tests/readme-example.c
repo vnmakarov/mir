@@ -1,5 +1,6 @@
 #include "../mir.h"
 #include "../mir-gen.h"
+#include "../real-time.h"
 
 static void create_program (MIR_context_t ctx) {
   const char *str
@@ -47,7 +48,6 @@ ex100:    func\n\
   MIR_scan_string (ctx, str);
 }
 
-#include "real-time.h"
 #include <inttypes.h>
 #include <unistd.h>
 
