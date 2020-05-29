@@ -22,13 +22,6 @@ struct simplify_ctx;
 struct machine_code_ctx;
 struct interp_ctx;
 
-typedef struct insn_name {
-  const char *name;
-  MIR_insn_code_t code;
-} insn_name_t;
-
-DEF_HTAB (insn_name_t);
-
 struct MIR_context {
   struct gen_ctx *gen_ctx;     /* should be the 1st member */
   struct c2mir_ctx *c2mir_ctx; /* should be the 2nd member */
@@ -44,7 +37,6 @@ struct MIR_context {
   HTAB (MIR_item_t) * module_item_tab;
   /* Module to keep items potentially used by all modules:  */
   struct MIR_module environment_module;
-  HTAB (insn_name_t) * insn_name_tab; /* insn name->code: setup once, never changed. */
   VARR (MIR_reg_t) * inline_reg_map;
   MIR_module_t curr_module;
   MIR_func_t curr_func;
@@ -71,7 +63,6 @@ struct MIR_context {
 #define temp_buff ctx->temp_buff
 #define module_item_tab ctx->module_item_tab
 #define environment_module ctx->environment_module
-#define insn_name_tab ctx->insn_name_tab
 #define inline_reg_map ctx->inline_reg_map
 #define curr_module ctx->curr_module
 #define curr_func ctx->curr_func
@@ -576,13 +567,6 @@ static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
 static void code_init (MIR_context_t ctx);
 static void code_finish (MIR_context_t ctx);
 
-static int insn_name_eq (insn_name_t in1, insn_name_t in2, void *arg) {
-  return strcmp (in1.name, in2.name) == 0;
-}
-static htab_hash_t insn_name_hash (insn_name_t in, void *arg) {
-  return mir_hash (in.name, strlen (in.name), 0);
-}
-
 MIR_context_t MIR_init (void) {
   MIR_context_t ctx;
 
@@ -618,14 +602,6 @@ MIR_context_t MIR_init (void) {
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
   init_module (ctx, &environment_module, ".environment");
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq, NULL);
-  HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
-  for (size_t i = 0; i < MIR_INSN_BOUND; i++) {
-    insn_name_t in, el;
-
-    in.code = i;
-    in.name = MIR_insn_name (ctx, i);
-    HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_INSERT, el);
-  }
   code_init (ctx);
   interp_init (ctx);
   inlined_calls = inline_insns_before = inline_insns_after = 0;
@@ -713,7 +689,6 @@ static void remove_all_modules (MIR_context_t ctx) {
 void MIR_finish (MIR_context_t ctx) {
   interp_finish (ctx);
   remove_all_modules (ctx);
-  HTAB_DESTROY (insn_name_t, insn_name_tab);
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
   VARR_DESTROY (uint8_t, temp_data);
@@ -4696,6 +4671,18 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 #include <errno.h>
 #include <setjmp.h>
 
+typedef struct insn_name {
+  const char *name;
+  MIR_insn_code_t code;
+} insn_name_t;
+
+static int insn_name_eq (insn_name_t in1, insn_name_t in2, void *arg) {
+  return strcmp (in1.name, in2.name) == 0;
+}
+static htab_hash_t insn_name_hash (insn_name_t in, void *arg) {
+  return mir_hash (in.name, strlen (in.name), 0);
+}
+
 #define TC_EL(t) TC_##t
 #define REP_SEP ,
 enum token_code {
@@ -4716,6 +4703,7 @@ typedef struct token {
   } u;
 } token_t;
 
+DEF_HTAB (insn_name_t);
 typedef const char *label_name_t;
 DEF_VARR (label_name_t);
 
@@ -4730,6 +4718,7 @@ struct scan_ctx {
   MIR_context_t ctx;
   jmp_buf error_jmp_buf;
   size_t curr_lno;
+  HTAB (insn_name_t) * insn_name_tab;
   const char *input_string;
   size_t input_string_char_num;
   VARR (label_name_t) * label_names;
@@ -4739,6 +4728,7 @@ typedef struct scan_ctx *scan_ctx_t;
 
 #define error_jmp_buf scan_ctx->error_jmp_buf
 #define curr_lno scan_ctx->curr_lno
+#define insn_name_tab scan_ctx->insn_name_tab
 #define input_string scan_ctx->input_string
 #define input_string_char_num scan_ctx->input_string_char_num
 #define label_names scan_ctx->label_names
@@ -5085,18 +5075,27 @@ static MIR_type_t str2type (const char *type_name) {
 
 static scan_ctx_t scan_init (MIR_context_t ctx) {
   scan_ctx_t scan_ctx;
+  insn_name_t in, el;
+  size_t i;
 
   if ((scan_ctx = malloc (sizeof (struct scan_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   scan_ctx->ctx = ctx;
   VARR_CREATE (label_name_t, label_names, 0);
   HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq, NULL);
+  HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
+  for (i = 0; i < MIR_INSN_BOUND; i++) {
+    in.code = i;
+    in.name = MIR_insn_name (ctx, i);
+    HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_INSERT, el);
+  }
   return scan_ctx;
 }
 
 static void scan_finish (scan_ctx_t scan_ctx) {
   VARR_DESTROY (label_name_t, label_names);
   HTAB_DESTROY (label_desc_t, label_desc_tab);
+  HTAB_DESTROY (insn_name_t, insn_name_tab);
   free (scan_ctx);
 }
 
