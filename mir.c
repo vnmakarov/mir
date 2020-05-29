@@ -516,23 +516,18 @@ static void push_data (MIR_context_t ctx, uint8_t *els, size_t size) {
 
 const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
   mir_assert (item != NULL);
-  return (item->item_type == MIR_func_item
-            ? item->u.func->name
-            : item->item_type == MIR_proto_item
-                ? item->u.proto->name
-                : item->item_type == MIR_import_item
-                    ? item->u.import_id
-                    : item->item_type == MIR_export_item
-                        ? item->u.export_id
-                        : item->item_type == MIR_forward_item
-                            ? item->u.forward_id
-                            : item->item_type == MIR_bss_item
-                                ? item->u.bss->name
-                                : item->item_type == MIR_data_item
-                                    ? item->u.data->name
-                                    : item->item_type == MIR_ref_data_item
-                                        ? item->u.ref_data->name
-                                        : item->u.expr_data->name);
+  switch (item->item_type) {
+  case MIR_func_item: return item->u.func->name;
+  case MIR_proto_item: return item->u.proto->name;
+  case MIR_import_item: return item->u.import_id;
+  case MIR_export_item: return item->u.export_id;
+  case MIR_forward_item: return item->u.forward_id;
+  case MIR_bss_item: return item->u.bss->name;
+  case MIR_data_item: return item->u.data->name;
+  case MIR_ref_data_item: return item->u.ref_data->name;
+  case MIR_expr_data_item: return item->u.expr_data->name;
+  default: mir_assert (FALSE);
+  }
 }
 
 #if !MIR_NO_SCAN
