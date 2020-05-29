@@ -6260,14 +6260,7 @@ static void print_code (MIR_context_t ctx, uint8_t *code, size_t code_len, void 
 #endif
 
 #if !MIR_NO_GEN_DEBUG
-#include <sys/time.h>
-
-static double real_usec_time (void) {
-  struct timeval tv;
-
-  gettimeofday (&tv, NULL);
-  return tv.tv_usec + tv.tv_sec * 1000000.0;
-}
+#include "real-time.h"
 #endif
 
 #if MIR_GEN_CALL_TRACE

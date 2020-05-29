@@ -12308,17 +12308,7 @@ static void compile_finish (MIR_context_t ctx) {
   if (init_object_path != NULL) VARR_DESTROY (init_object_t, init_object_path);
 }
 
-#include <sys/time.h>
-#if defined(__unix__) || defined(__APPLE__)
-#include <sys/stat.h>
-#endif
-
-static double real_usec_time (void) {
-  struct timeval tv;
-
-  gettimeofday (&tv, NULL);
-  return tv.tv_usec + tv.tv_sec * 1000000.0;
-}
+#include "real-time.h"
 
 static const char *get_module_name (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
