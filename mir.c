@@ -4659,22 +4659,6 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 
 #endif /* if !MIR_NO_IO */
 
-MIR_type_t MIR_str2type (MIR_context_t ctx, const char *type_name) {
-  if (strcmp (type_name, "i64") == 0) return MIR_T_I64;
-  if (strcmp (type_name, "u64") == 0) return MIR_T_U64;
-  if (strcmp (type_name, "f") == 0) return MIR_T_F;
-  if (strcmp (type_name, "d") == 0) return MIR_T_D;
-  if (strcmp (type_name, "ld") == 0) return MIR_T_LD;
-  if (strcmp (type_name, "p") == 0) return MIR_T_P;
-  if (strcmp (type_name, "i32") == 0) return MIR_T_I32;
-  if (strcmp (type_name, "u32") == 0) return MIR_T_U32;
-  if (strcmp (type_name, "i16") == 0) return MIR_T_I16;
-  if (strcmp (type_name, "u16") == 0) return MIR_T_U16;
-  if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
-  if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
-  return MIR_T_BOUND;
-}
-
 /* New Page */
 
 /* Reading MIR text file */
@@ -5073,6 +5057,22 @@ static void read_func_proto (scan_ctx_t scan_ctx, size_t nops, MIR_op_t *ops) {
   }
 }
 
+static MIR_type_t str2type (const char *type_name) {
+  if (strcmp (type_name, "i64") == 0) return MIR_T_I64;
+  if (strcmp (type_name, "u64") == 0) return MIR_T_U64;
+  if (strcmp (type_name, "f") == 0) return MIR_T_F;
+  if (strcmp (type_name, "d") == 0) return MIR_T_D;
+  if (strcmp (type_name, "ld") == 0) return MIR_T_LD;
+  if (strcmp (type_name, "p") == 0) return MIR_T_P;
+  if (strcmp (type_name, "i32") == 0) return MIR_T_I32;
+  if (strcmp (type_name, "u32") == 0) return MIR_T_U32;
+  if (strcmp (type_name, "i16") == 0) return MIR_T_I16;
+  if (strcmp (type_name, "u16") == 0) return MIR_T_U16;
+  if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
+  if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
+  return MIR_T_BOUND;
+}
+
 static scan_ctx_t scan_init (MIR_context_t ctx) {
   scan_ctx_t scan_ctx;
   insn_name_t in, el;
@@ -5213,7 +5213,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (func == NULL) scan_err (scan_ctx, MIR_syntax_error, "local outside func");
       if (VARR_LENGTH (label_name_t, label_names) != 0)
         scan_err (scan_ctx, MIR_syntax_error, "local should have no labels");
-    } else if ((data_type = MIR_str2type (ctx, name)) != MIR_T_BOUND) {
+    } else if ((data_type = str2type (name)) != MIR_T_BOUND) {
       if (VARR_LENGTH (label_name_t, label_names) > 1)
         scan_err (scan_ctx, MIR_syntax_error, "at most one label should be used for data");
     } else {
@@ -5270,7 +5270,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           break;
         }
         /* Memory, type only, arg, or var */
-        type = MIR_str2type (ctx, name);
+        type = str2type (name);
         if (type == MIR_T_BOUND)
           scan_err (scan_ctx, MIR_syntax_error, "Unknown type %s", name);
         else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D
