@@ -5156,7 +5156,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (func == NULL) process_error (ctx, MIR_syntax_error, "local outside func");
       if (VARR_LENGTH (label_name_t, label_names) != 0)
         process_error (ctx, MIR_syntax_error, "local should have no labels");
-    } else if ((data_type = str2type (ctx, name)) != MIR_T_BOUND) {
+    } else if ((data_type = str2type (name)) != MIR_T_BOUND) {
       if (VARR_LENGTH (label_name_t, label_names) > 1)
         process_error (ctx, MIR_syntax_error, "at most one label should be used for data");
     } else {
