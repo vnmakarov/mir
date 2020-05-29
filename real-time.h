@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com> and logzero <core13@gmx.net>
+*/
+
 #ifndef _WIN32
 #include <sys/time.h>
 
@@ -22,7 +26,7 @@ static double real_sec_time (void) {
   LARGE_INTEGER freq, count;
 
   if (QueryPerformanceFrequency (&freq) && QueryPerformanceCounter (&count))
-    return (double)count.QuadPart / (double)freq.QuadPart;
+    return (double) count.QuadPart / (double) freq.QuadPart;
   return 0.0;
 }
 
@@ -30,7 +34,7 @@ static double real_usec_time (void) {
   LARGE_INTEGER freq, count;
 
   if (QueryPerformanceFrequency (&freq) && QueryPerformanceCounter (&count))
-    return (double)count.QuadPart / ((double)freq.QuadPart * 1.0E-6);
+    return (double) count.QuadPart / ((double) freq.QuadPart * 1.0E-6);
   return 0.0;
 }
 #endif
