@@ -186,11 +186,9 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
-  MIR_reg_t arg_reg;
   MIR_op_t arg_op, temp_op, arg_reg_op, ret_op, mem_op, ret_val_op, call_res_op;
   MIR_insn_code_t new_insn_code, ext_code;
-  MIR_insn_t new_insn, prev_insn, next_insn, ext_insn;
-  MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
+  MIR_insn_t new_insn, ext_insn;
 
   if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
@@ -563,13 +561,13 @@ static void set_prev_sp_reg (MIR_context_t ctx, MIR_insn_t anchor, int *prev_sp_
 static void target_machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
-  MIR_type_t type, mem_type, res_type;
+  MIR_type_t type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn, anchor;
-  MIR_reg_t ret_reg, arg_reg, ld_addr_reg, prev_sp_reg;
-  MIR_op_t ret_reg_op, arg_reg_op, mem_op, temp_op, arg_var_op;
+  MIR_reg_t ret_reg, ld_addr_reg, prev_sp_reg;
+  MIR_op_t ret_reg_op, arg_reg_op, temp_op, arg_var_op;
   int prev_sp_set_p = FALSE;
-  size_t i, int_arg_num = 0, fp_arg_num = 0, disp, var_args_start;
+  size_t i, int_arg_num = 0, fp_arg_num = 0, disp;
 
   gen_assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
@@ -753,7 +751,7 @@ static void target_machinize (MIR_context_t ctx) {
       switch_p = TRUE;
     } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn and added extension insns.  */
-      uint32_t n_gpregs = 0, n_fregs = 0, n_addr_res = 0, ld_addr_n = 0;
+      uint32_t n_gpregs = 0, n_fregs = 0, ld_addr_n = 0;
 
       gen_assert (func->nres == MIR_insn_nops (ctx, insn));
       for (size_t i = 0; i < func->nres; i++) {
@@ -803,7 +801,7 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
-  MIR_op_t r15_reg_op, r14_reg_op, r11_reg_op, treg_op, r0_reg_op, lr_reg_op;
+  MIR_op_t r15_reg_op, r14_reg_op, r11_reg_op, r0_reg_op;
   int saved_regs_p = FALSE;
   int64_t start_saved_fregs_offset;
   size_t i, n, frame_size, saved_fregs_num;
@@ -1674,6 +1672,7 @@ static uint64_t get_imm (MIR_context_t ctx, MIR_insn_t insn) {
       && (ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT || ops[2].mode == MIR_OP_REF))
     return get_op_imm (ctx, ops[2]);
   gen_assert (FALSE);
+  return 0;
 }
 
 static uint64_t place_field (uint64_t v, int start_bit, int len) {
@@ -1710,7 +1709,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
     int opcode1 = -1, opcode2 = -1, opcode11 = -1, opcode12 = -1, mask = -1, MASK = -1;
     int r1 = -1, r2 = -1, R1 = -1, R2 = -1, rs = -1, rx = -1;
     int imm = -1, IMM = -1, d = -1, dh = -1, label_off = -1, const_ref_num = -1, label_ref_num = -1;
-    int n, len, v, reg;
+    int n, len = 0, v, reg;
     int switch_table_addr_p = FALSE;
 
     for (p = insn_str; (ch = *p) != '\0' && ch != ';'; p++) {
@@ -2086,6 +2085,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
           case MIR_RSHS: insn->code = MIR_LSHS; break;
           case MIR_URSHS: insn->code = MIR_LSHS; break;
           case MIR_LSHS: insn->code = MIR_RSHS; break;
+          default: gen_assert (FALSE); break;
           }
           insn->ops[2].u.i = -insn->ops[2].u.i;
         }
