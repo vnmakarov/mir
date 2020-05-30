@@ -175,11 +175,10 @@ static void machinize_call (MIR_context_t ctx, MIR_insn_t call_insn) {
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
-  MIR_reg_t arg_reg, ret_reg;
+  MIR_reg_t ret_reg;
   MIR_op_t arg_op, temp_op, arg_reg_op, ret_reg_op, mem_op;
   MIR_insn_code_t new_insn_code, ext_code;
-  MIR_insn_t new_insn, prev_insn, next_insn, ext_insn;
-  MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
+  MIR_insn_t new_insn, ext_insn;
 
   if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
@@ -523,11 +522,11 @@ static void set_prev_sp_op (MIR_context_t ctx, MIR_insn_t anchor, MIR_op_t *prev
 static void target_machinize (MIR_context_t ctx) {
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
-  MIR_type_t type, mem_type, res_type;
+  MIR_type_t type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn, anchor;
-  MIR_reg_t ret_reg, arg_reg;
-  MIR_op_t ret_reg_op, arg_reg_op, mem_op, prev_sp_op, temp_op, arg_var_op;
+  MIR_reg_t ret_reg;
+  MIR_op_t ret_reg_op, arg_reg_op, prev_sp_op, temp_op, arg_var_op;
   size_t i, int_arg_num, fp_arg_num, disp, var_args_start;
 
   assert (curr_func_item->item_type == MIR_func_item);
@@ -713,9 +712,9 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   struct gen_ctx *gen_ctx = *gen_ctx_loc (ctx);
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
-  MIR_op_t sp_reg_op, fp_reg_op, treg_op, r0_reg_op, lr_reg_op;
+  MIR_op_t sp_reg_op, fp_reg_op, r0_reg_op, lr_reg_op;
   int64_t start_save_regs_offset;
-  size_t i, n, offset, frame_size, frame_size_after_saved_regs, saved_iregs_num, saved_fregs_num;
+  size_t i, n, frame_size, saved_iregs_num, saved_fregs_num;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
@@ -1408,8 +1407,7 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
   size_t nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
-  MIR_op_mode_t mode;
-  MIR_op_t op, original;
+  MIR_op_t op;
   MIR_reg_t hr;
 
   for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
@@ -1444,8 +1442,7 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
     case 'm':
     case 'M': {
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
-      int ds_p = FALSE, l_p = FALSE, br0_p = FALSE, u_p = TRUE, s_p = TRUE,
-          index_p = start_ch == 'M';
+      int ds_p = FALSE, l_p = FALSE, br0_p = FALSE, u_p = TRUE, s_p = TRUE;
 
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
       ch = *++p;
@@ -1465,7 +1462,6 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
 #else
           if (start_ch == 'M') type3 = MIR_T_P;
 #endif
-          index_p = FALSE;
         } else {
           p--;
           type = MIR_T_D;
@@ -1523,7 +1519,8 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
           && (op.u.hard_reg_mem.index != MIR_NON_HARD_REG
               || (!br0_p && op.u.hard_reg_mem.base == R0_HARD_REG)
               || (br0_p && op.u.hard_reg_mem.base != R0_HARD_REG)
-              || !int16_p (op.u.hard_reg_mem.disp) || l_p && !int16_p (op.u.hard_reg_mem.disp + 8)))
+              || !int16_p (op.u.hard_reg_mem.disp)
+              || (l_p && !int16_p (op.u.hard_reg_mem.disp + 8))))
         return FALSE;
       if (!ds_p && start_ch == 'M'
           && (op.u.hard_reg_mem.disp != 0
@@ -1801,10 +1798,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
           gen_assert (dec_value (ch2) >= 0 && Mb < 0 && Me < 0);
           if (b_p) {
             Mb = read_dec (&p);
-            Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
+            Mb = ((Mb & 0x1f) << 1) | ((Mb >> 5) & 1);
           } else {
             Me = read_dec (&p);
-            Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
+            Me = ((Me & 0x1f) << 1) | ((Me >> 5) & 1);
           }
         } else {
           op = insn->ops[0].mode == MIR_OP_HARD_REG_MEM ? insn->ops[0] : insn->ops[1];
@@ -1863,10 +1860,10 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
               gen_assert (Mb < 0 && Me < 0);
               if (b_p) {
                 Mb = op.u.i;
-                Mb = ((Mb & 0x1f) << 1) | (Mb >> 5) & 1;
+                Mb = ((Mb & 0x1f) << 1) | ((Mb >> 5) & 1);
               } else {
                 Me = 63 - op.u.i;
-                Me = ((Me & 0x1f) << 1) | (Me >> 5) & 1;
+                Me = ((Me & 0x1f) << 1) | ((Me >> 5) & 1);
               }
             } else if (b_p) {
               gen_assert (mb < 0);
@@ -1947,7 +1944,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
           ok_p = negative32_p (v, &n);
           n = 32 - n;
           gen_assert (Mb < 0 && ok_p);
-          Mb = ((n & 0x1f) << 1) | (n >> 5) & 1;
+          Mb = ((n & 0x1f) << 1) | ((n >> 5) & 1);
         } else {
           gen_assert (imm < 0);
           n = dec_value (*++p);
@@ -2235,6 +2232,7 @@ static uint8_t *target_translate (MIR_context_t ctx, size_t *len) {
             case MIR_RSHS: insn->code = MIR_LSHS; break;
             case MIR_URSHS: insn->code = MIR_LSHS; break;
             case MIR_LSHS: insn->code = MIR_RSHS; break;
+            default: gen_assert (FALSE); break;
             }
             insn->ops[2].u.i = -insn->ops[2].u.i;
           }
