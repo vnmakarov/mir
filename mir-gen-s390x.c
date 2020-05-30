@@ -1824,7 +1824,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
             u = get_imm (ctx, insn);
             d = u & 0xfff;
             dh = ((int64_t) u >> 12) & 0xff;
-            if (dh == 0) dh < 0;
+            if (dh == 0) dh = -1;
           }
         } else {
           if (ch2 != 'n') p--;
@@ -1894,7 +1894,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         d = u & 0xfff;
         dh = ((int64_t) u >> 12) & 0xff;
         gen_assert (ch2 == 'D' || dh == 0);
-        if (dh == 0) dh < 0;
+        if (dh == 0) dh = -1;
         break;
       case 'l':
         label_off = read_dec (&p);
