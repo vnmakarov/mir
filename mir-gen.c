@@ -153,6 +153,7 @@ typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
 struct gen_ctx {
+  MIR_context_t ctx;
   unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
   MIR_item_t curr_func_item;
 #if !MIR_NO_GEN_DEBUG
@@ -6475,6 +6476,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   MIR_reg_t i;
 
   *gen_ctx_ptr = gen_ctx = gen_malloc (ctx, sizeof (struct gen_ctx));
+  gen_ctx->ctx = ctx;
   optimize_level = 2;
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
