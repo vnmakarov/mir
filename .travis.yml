@@ -11,6 +11,9 @@ arch:
  - ppc64le
  - arm64
  - s390x
+jobs:
+  allow_failures:
+    - arch: s390x
 git:
   quiet: true
 branches:
