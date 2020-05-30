@@ -641,7 +641,6 @@ static void target_machinize (MIR_context_t ctx) {
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
       int gp_offset, fp_offset;
-      MIR_var_t var;
 
       assert (func->vararg_p && va_op.mode == MIR_OP_REG);
       gp_offset = (int_arg_num >= 8 ? 0 : 8 * int_arg_num - 64);
@@ -1549,8 +1548,7 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
   size_t nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
-  MIR_op_mode_t mode;
-  MIR_op_t op, original;
+  MIR_op_t op;
   MIR_reg_t hr;
 
   for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
@@ -1660,7 +1658,7 @@ static int pattern_match_p (MIR_context_t ctx, const struct pattern *pat, MIR_in
         if (op.u.d != 0.0) return FALSE;
       } else {
         if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
-        gen_assert ('0' <= ch && ch <= '2' || start_ch == 'Z' && ch == '3');
+        gen_assert (('0' <= ch && ch <= '2') || (start_ch == 'Z' && ch == '3'));
         n = ch - '0';
         if (op.mode != MIR_OP_REF) {
           v = op.u.u;
@@ -1870,7 +1868,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         scale = op.u.hard_reg_mem.scale;
         break;
       case 'M': {
-        int scale;
+        int scale = 1;
 
         op = insn->ops[0].mode == MIR_OP_HARD_REG_MEM ? insn->ops[0] : insn->ops[1];
         switch (op.u.hard_reg_mem.type) {
@@ -1900,7 +1898,7 @@ static void out_insn (MIR_context_t ctx, MIR_insn_t insn, const char *replacemen
         break;
       }
       case 'S': { /* S, SL, Sl */
-        int flag, r, s;
+        int flag;
 
         op = insn->ops[2];
         gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
