@@ -4693,6 +4693,7 @@ DEF_HTAB (label_desc_t);
 
 struct scan_ctx {
   jmp_buf error_jmp_buf;
+  VARR (char) * error_msg_buf;
   size_t curr_lno;
   HTAB (insn_name_t) * insn_name_tab;
   const char *input_string;
@@ -4702,6 +4703,7 @@ struct scan_ctx {
 };
 
 #define error_jmp_buf ctx->scan_ctx->error_jmp_buf
+#define error_msg_buf ctx->scan_ctx->error_msg_buf
 #define curr_lno ctx->scan_ctx->curr_lno
 #define insn_name_tab ctx->scan_ctx->insn_name_tab
 #define input_string ctx->scan_ctx->input_string
@@ -4709,16 +4711,19 @@ struct scan_ctx {
 #define label_names ctx->scan_ctx->label_names
 #define label_desc_tab ctx->scan_ctx->label_desc_tab
 
-static void MIR_NO_RETURN MIR_UNUSED process_error (MIR_context_t ctx,
-                                                    enum MIR_error_type error_type,
-                                                    const char *format, ...) {
-#define MAX_MESSAGE_LEN 300
-  char message[MAX_MESSAGE_LEN];
+static void scan_error (MIR_context_t ctx, const char *format, ...) {
+  char message[150];
+  size_t len;
   va_list va;
 
   va_start (va, format);
-  vsnprintf (message, MAX_MESSAGE_LEN, format, va);
-  (*error_func) (error_type, "ln %lu: %s", (unsigned long) curr_lno, message);
+  if (VARR_LENGTH (char, error_msg_buf) != 0) VARR_POP (char, error_msg_buf); /* remove last '\0' */
+  sprintf (message, "ln %lu: ", (unsigned long) curr_lno);
+  VARR_PUSH_ARR (char, error_msg_buf, message, strlen (message));
+  len = vsnprintf (message, sizeof (message), format, va);
+  VARR_PUSH_ARR (char, error_msg_buf, message, len);
+  VARR_PUSH_ARR (char, error_msg_buf, "\n", 2); /* add '\n' and '\0' */
+  va_end (va);
   longjmp (error_jmp_buf, TRUE);
 }
 
@@ -4816,8 +4821,7 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
   for (;;) {
     if ((c = get_char (ctx)) == EOF || c == '\n') {
       VARR_PUSH (char, temp_string, '\0');
-      process_error (ctx, MIR_syntax_error, "unfinished string \"%s",
-                     VARR_ADDR (char, temp_string));
+      scan_error (ctx, "unfinished string \"%s", VARR_ADDR (char, temp_string));
     }
     if (c == '"') break;
     if (c == '\\') {
@@ -4861,8 +4865,7 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
           c = get_char (ctx);
           if (!isxdigit (c)) {
             VARR_PUSH (char, temp_string, '\0');
-            process_error (ctx, MIR_syntax_error, "wrong hexadecimal escape in %s",
-                           VARR_ADDR (char, temp_string));
+            scan_error (ctx, "wrong hexadecimal escape in %s", VARR_ADDR (char, temp_string));
           }
           c = '0' <= c && c <= '9' ? c - '0' : 'a' <= c && c <= 'f' ? c - 'a' + 10 : c - 'A' + 10;
           ch_code = (ch_code << 4) | c;
@@ -4937,8 +4940,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
 
         if (ch == '+' || ch == '-') {
           next_ch = get_char (ctx);
-          if (!isdigit (next_ch))
-            process_error (ctx, MIR_syntax_error, "no number after a sign %c", ch);
+          if (!isdigit (next_ch)) scan_error (ctx, "no number after a sign %c", ch);
           unget_char (ctx, next_ch);
         }
         scan_number (ctx, ch, get_char, unget_char, &base, &float_p, &double_p, &ldouble_p);
@@ -4964,7 +4966,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
         return;
       } else {
         VARR_PUSH (char, temp_string, '\0');
-        process_error (ctx, MIR_syntax_error, "wrong char after %s", VARR_ADDR (char, temp_string));
+        scan_error (ctx, "wrong char after %s", VARR_ADDR (char, temp_string));
       }
     }
   }
@@ -5018,12 +5020,10 @@ static void read_func_proto (MIR_context_t ctx, size_t nops, MIR_op_t *ops) {
   }
   VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (; i < nops; i++) {
-    if (ops[i].mode != MIR_OP_MEM)
-      process_error (ctx, MIR_syntax_error, "wrong prototype/func arg");
+    if (ops[i].mode != MIR_OP_MEM) scan_error (ctx, "wrong prototype/func arg");
     var.type = ops[i].u.mem.type;
     var.name = (const char *) ops[i].u.mem.disp;
-    if (var.name == NULL)
-      process_error (ctx, MIR_syntax_error, "all func/prototype args should have type:name form");
+    if (var.name == NULL) scan_error (ctx, "all func/prototype args should have type:name form");
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
 }
@@ -5076,6 +5076,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   int bss_p, ref_p, expr_p, string_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
+  VARR_TRUNC (char, error_msg_buf, 0);
   curr_lno = 1;
   input_string = str;
   input_string_char_num = 0;
@@ -5091,8 +5092,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
     while (t.code == TC_NL) scan_token (ctx, &t, get_string_char, unget_string_char);
     if (t.code == TC_EOFILE) break;
     for (;;) { /* label_names */
-      if (t.code != TC_NAME)
-        process_error (ctx, MIR_syntax_error, "insn should start with label or insn name");
+      if (t.code != TC_NAME) scan_error (ctx, "insn should start with label or insn name");
       name = t.u.name;
       scan_token (ctx, &t, get_string_char, unget_string_char);
       if (t.code != TC_COL) break;
@@ -5106,63 +5106,63 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
     if (strcmp (name, "module") == 0) {
       module_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
-        process_error (ctx, MIR_syntax_error, "only one label should be used for module");
+        scan_error (ctx, "only one label should be used for module");
     } else if (strcmp (name, "endmodule") == 0) {
       end_module_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "endmodule should have no labels");
+        scan_error (ctx, "endmodule should have no labels");
     } else if (strcmp (name, "proto") == 0) {
       proto_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
-        process_error (ctx, MIR_syntax_error, "only one label should be used for proto");
+        scan_error (ctx, "only one label should be used for proto");
     } else if (strcmp (name, "func") == 0) {
       func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 1)
-        process_error (ctx, MIR_syntax_error, "only one label should be used for func");
+        scan_error (ctx, "only one label should be used for func");
     } else if (strcmp (name, "endfunc") == 0) {
       end_func_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "endfunc should have no labels");
+        scan_error (ctx, "endfunc should have no labels");
     } else if (strcmp (name, "export") == 0) {
       export_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "export should have no labels");
+        scan_error (ctx, "export should have no labels");
     } else if (strcmp (name, "import") == 0) {
       import_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "import should have no labels");
+        scan_error (ctx, "import should have no labels");
     } else if (strcmp (name, "forward") == 0) {
       forward_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "forward should have no labels");
+        scan_error (ctx, "forward should have no labels");
     } else if (strcmp (name, "bss") == 0) {
       bss_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for bss");
+        scan_error (ctx, "at most one label should be used for bss");
     } else if (strcmp (name, "ref") == 0) {
       ref_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for ref");
+        scan_error (ctx, "at most one label should be used for ref");
     } else if (strcmp (name, "expr") == 0) {
       expr_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for expr");
+        scan_error (ctx, "at most one label should be used for expr");
     } else if (strcmp (name, "string") == 0) {
       string_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for string");
+        scan_error (ctx, "at most one label should be used for string");
     } else if (strcmp (name, "local") == 0) {
       local_p = TRUE;
-      if (func == NULL) process_error (ctx, MIR_syntax_error, "local outside func");
+      if (func == NULL) scan_error (ctx, "local outside func");
       if (VARR_LENGTH (label_name_t, label_names) != 0)
-        process_error (ctx, MIR_syntax_error, "local should have no labels");
+        scan_error (ctx, "local should have no labels");
     } else if ((data_type = str2type (name)) != MIR_T_BOUND) {
       if (VARR_LENGTH (label_name_t, label_names) > 1)
-        process_error (ctx, MIR_syntax_error, "at most one label should be used for data");
+        scan_error (ctx, "at most one label should be used for data");
     } else {
       in.name = name;
       if (!HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
-        process_error (ctx, MIR_syntax_error, "Unknown insn %s", name);
+        scan_error (ctx, "Unknown insn %s", name);
       insn_code = el.code;
       for (n = 0; n < VARR_LENGTH (label_name_t, label_names); n++) {
         label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n));
@@ -5208,23 +5208,22 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           } else if ((item = find_item (ctx, name, module)) != NULL) {
             op = MIR_new_ref_op (ctx, item);
           } else {
-            process_error (ctx, MIR_syntax_error, "undeclared name %s", name);
+            scan_error (ctx, "undeclared name %s", name);
           }
           break;
         }
         /* Memory, type only, arg, or var */
         type = str2type (name);
         if (type == MIR_T_BOUND)
-          process_error (ctx, MIR_syntax_error, "Unknown type %s", name);
+          scan_error (ctx, "Unknown type %s", name);
         else if (local_p && type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D
                  && type != MIR_T_LD)
-          process_error (ctx, MIR_syntax_error, "wrong type %s for local var", name);
+          scan_error (ctx, "wrong type %s for local var", name);
         op = MIR_new_mem_op (ctx, type, 0, 0, 0, 1);
         if (proto_p || func_p || local_p) {
           if (t.code == TC_COL) {
             scan_token (ctx, &t, get_string_char, unget_string_char);
-            if (t.code != TC_NAME)
-              process_error (ctx, MIR_syntax_error, func_p ? "wrong arg" : "wrong local var");
+            if (t.code != TC_NAME) scan_error (ctx, func_p ? "wrong arg" : "wrong local var");
             op.u.mem.disp = (MIR_disp_t) t.u.name;
             scan_token (ctx, &t, get_string_char, unget_string_char);
           }
@@ -5248,20 +5247,20 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             }
             if (t.code == TC_COMMA) {
               scan_token (ctx, &t, get_string_char, unget_string_char);
-              if (t.code != TC_NAME) process_error (ctx, MIR_syntax_error, "wrong index");
+              if (t.code != TC_NAME) scan_error (ctx, "wrong index");
               op.u.mem.index = MIR_reg (ctx, t.u.name, func->u.func);
               scan_token (ctx, &t, get_string_char, unget_string_char);
               if (t.code == TC_COMMA) {
                 scan_token (ctx, &t, get_string_char, unget_string_char);
-                if (t.code != TC_INT) process_error (ctx, MIR_syntax_error, "wrong scale");
+                if (t.code != TC_INT) scan_error (ctx, "wrong scale");
                 op.u.mem.scale = t.u.i;
                 scan_token (ctx, &t, get_string_char, unget_string_char);
               }
             }
-            if (t.code != TC_RIGHT_PAR) process_error (ctx, MIR_syntax_error, "wrong memory op");
+            if (t.code != TC_RIGHT_PAR) scan_error (ctx, "wrong memory op");
             scan_token (ctx, &t, get_string_char, unget_string_char);
           } else if (!disp_p)
-            process_error (ctx, MIR_syntax_error, "wrong memory");
+            scan_error (ctx, "wrong memory");
         }
         break;
       }
@@ -5294,61 +5293,59 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       scan_token (ctx, &t, get_string_char, unget_string_char);
     }
     if (t.code != TC_NL && t.code != TC_EOFILE && t.code != TC_SEMICOL)
-      process_error (ctx, MIR_syntax_error, "wrong insn end");
+      scan_error (ctx, "wrong insn end");
     if (module_p) {
-      if (module != NULL) process_error (ctx, MIR_syntax_error, "nested module");
+      if (module != NULL) scan_error (ctx, "nested module");
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
-        process_error (ctx, MIR_syntax_error, "module should have no params");
+        scan_error (ctx, "module should have no params");
       module = MIR_new_module (ctx, VARR_GET (label_name_t, label_names, 0));
     } else if (end_module_p) {
-      if (module == NULL) process_error (ctx, MIR_syntax_error, "standalone endmodule");
+      if (module == NULL) scan_error (ctx, "standalone endmodule");
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
-        process_error (ctx, MIR_syntax_error, "endmodule should have no params");
+        scan_error (ctx, "endmodule should have no params");
       MIR_finish_module (ctx);
       module = NULL;
     } else if (bss_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
-        process_error (ctx, MIR_syntax_error, "bss should have one operand");
+        scan_error (ctx, "bss should have one operand");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
       if (op_addr[0].mode != MIR_OP_INT || op_addr[0].u.i < 0)
-        process_error (ctx, MIR_syntax_error, "wrong bss operand type or value");
+        scan_error (ctx, "wrong bss operand type or value");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_bss (ctx, name, op_addr[0].u.i);
     } else if (ref_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 2)
-        process_error (ctx, MIR_syntax_error, "ref should have two operands");
+        scan_error (ctx, "ref should have two operands");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      if (op_addr[0].mode != MIR_OP_REF) process_error (ctx, MIR_syntax_error, "wrong ref operand");
-      if (op_addr[1].mode != MIR_OP_INT)
-        process_error (ctx, MIR_syntax_error, "wrong ref disp operand");
+      if (op_addr[0].mode != MIR_OP_REF) scan_error (ctx, "wrong ref operand");
+      if (op_addr[1].mode != MIR_OP_INT) scan_error (ctx, "wrong ref disp operand");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_ref_data (ctx, name, op_addr[0].u.ref, op_addr[1].u.i);
     } else if (expr_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
-        process_error (ctx, MIR_syntax_error, "expr should have one operand");
+        scan_error (ctx, "expr should have one operand");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
       if (op_addr[0].mode != MIR_OP_REF || op_addr[0].u.ref->item_type != MIR_func_item)
-        process_error (ctx, MIR_syntax_error, "wrong expr operand");
+        scan_error (ctx, "wrong expr operand");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_expr_data (ctx, name, op_addr[0].u.ref);
     } else if (string_p) {
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
-        process_error (ctx, MIR_syntax_error, "string should have one operand");
+        scan_error (ctx, "string should have one operand");
       op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      if (op_addr[0].mode != MIR_OP_STR)
-        process_error (ctx, MIR_syntax_error, "wrong string data operand type");
+      if (op_addr[0].mode != MIR_OP_STR) scan_error (ctx, "wrong string data operand type");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_string_data (ctx, name, op_addr[0].u.str);
     } else if (proto_p) {
-      if (module == NULL) process_error (ctx, MIR_syntax_error, "prototype outside module");
+      if (module == NULL) scan_error (ctx, "prototype outside module");
       read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
                        VARR_ADDR (MIR_op_t, temp_insn_ops));
       if (dots_p)
@@ -5362,8 +5359,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                            VARR_LENGTH (MIR_type_t, temp_types), VARR_ADDR (MIR_type_t, temp_types),
                            VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
     } else if (func_p) {
-      if (module == NULL) process_error (ctx, MIR_syntax_error, "func outside module");
-      if (func != NULL) process_error (ctx, MIR_syntax_error, "nested func");
+      if (module == NULL) scan_error (ctx, "func outside module");
+      if (func != NULL) scan_error (ctx, "nested func");
       read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
                        VARR_ADDR (MIR_op_t, temp_insn_ops));
       if (dots_p)
@@ -5380,9 +5377,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                               VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
       HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
-      if (func == NULL) process_error (ctx, MIR_syntax_error, "standalone endfunc");
+      if (func == NULL) scan_error (ctx, "standalone endfunc");
       if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
-        process_error (ctx, MIR_syntax_error, "endfunc should have no params");
+        scan_error (ctx, "endfunc should have no params");
       func = NULL;
       MIR_finish_func (ctx);
     } else if (export_p || import_p || forward_p) { /* we already created items, now do nothing: */
@@ -5392,7 +5389,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
       for (i = 0; i < n; i++) {
         if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
-          process_error (ctx, MIR_syntax_error, "wrong local var");
+          scan_error (ctx, "wrong local var");
         MIR_new_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
                           (const char *) op_addr[i].u.mem.disp);
       }
@@ -5413,7 +5410,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       VARR_TRUNC (uint8_t, temp_data, 0);
       for (i = 0; i < n; i++) {
         if (op_addr[i].mode != type2mode (data_type))
-          process_error (ctx, MIR_syntax_error, "data operand is not of data type");
+          scan_error (ctx, "data operand is not of data type");
         switch (data_type) {
         case MIR_T_I8:
           v.i8 = op_addr[i].u.i;
@@ -5453,7 +5450,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           push_data (ctx, (uint8_t *) &op_addr[i].u.ld, sizeof (long double));
           break;
           /* ptr ??? */
-        default: process_error (ctx, MIR_syntax_error, "wrong data clause");
+        default: scan_error (ctx, "wrong data clause");
         }
       }
       name
@@ -5468,8 +5465,10 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (func != NULL) MIR_append_insn (ctx, func, insn);
     }
   }
-  if (func != NULL) process_error (ctx, MIR_syntax_error, "absent endfunc");
-  if (module != NULL) process_error (ctx, MIR_syntax_error, "absent endmodule");
+  if (func != NULL) scan_error (ctx, "absent endfunc");
+  if (module != NULL) scan_error (ctx, "absent endmodule");
+  if (VARR_LENGTH (char, error_msg_buf) != 0)
+    (*error_func) (MIR_syntax_error, VARR_ADDR (char, error_msg_buf));
 }
 
 static void scan_init (MIR_context_t ctx) {
@@ -5478,6 +5477,7 @@ static void scan_init (MIR_context_t ctx) {
 
   if ((ctx->scan_ctx = malloc (sizeof (struct scan_ctx))) == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
+  VARR_CREATE (char, error_msg_buf, 0);
   VARR_CREATE (label_name_t, label_names, 0);
   HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq, NULL);
   HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
@@ -5489,6 +5489,7 @@ static void scan_init (MIR_context_t ctx) {
 }
 
 static void scan_finish (MIR_context_t ctx) {
+  VARR_DESTROY (char, error_msg_buf);
   VARR_DESTROY (label_name_t, label_names);
   HTAB_DESTROY (label_desc_t, label_desc_tab);
   HTAB_DESTROY (insn_name_t, insn_name_tab);
