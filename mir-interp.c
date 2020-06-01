@@ -1635,5 +1635,5 @@ static void redirect_interface_to_interp (MIR_context_t ctx, MIR_item_t func_ite
 }
 
 void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {
-  redirect_interface_to_interp (ctx, func_item);
+  if (func_item != NULL) redirect_interface_to_interp (ctx, func_item);
 }
