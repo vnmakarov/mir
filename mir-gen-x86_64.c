@@ -794,9 +794,18 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   /* Saving callee saved hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      MIR_insn_code_t code = MIR_MOV;
+      MIR_type_t type = MIR_T_I64;
+#ifdef _WIN64
+      if (i > R15_HARD_REG) {
+        code = MIR_DMOV;
+        type = MIR_T_D;
+      }
+#else
       assert (i <= R15_HARD_REG); /* xmm regs are always callee-clobbered */
-      new_insn = MIR_new_insn (ctx, MIR_MOV,
-                               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
+#endif
+      new_insn = MIR_new_insn (ctx, code,
+                               _MIR_new_hard_reg_mem_op (ctx, type,
                                                          (int64_t) (n++ * 8) - bp_saved_reg_offset,
                                                          FP_HARD_REG, MIR_NON_HARD_REG, 1),
                                _MIR_new_hard_reg_op (ctx, i));
@@ -807,8 +816,16 @@ static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_reg
   /* Restoring hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
-                               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
+      MIR_insn_code_t code = MIR_MOV;
+      MIR_type_t type = MIR_T_I64;
+#ifdef _WIN64
+      if (i > R15_HARD_REG) {
+        code = MIR_DMOV;
+        type = MIR_T_D;
+      }
+#endif
+      new_insn = MIR_new_insn (ctx, code, _MIR_new_hard_reg_op (ctx, i),
+                               _MIR_new_hard_reg_mem_op (ctx, type,
                                                          (int64_t) (n++ * 8) - bp_saved_reg_offset,
                                                          FP_HARD_REG, MIR_NON_HARD_REG, 1));
       gen_add_insn_before (ctx, anchor, new_insn); /* hard reg = disp(sp) */
