@@ -1620,7 +1620,7 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
               _MIR_type_size (ctx, expr_item->u.func->res_types[0]));
     }
   }
-  if (set_interface != NULL)
+  if (set_interface != NULL) {
     while (VARR_LENGTH (MIR_module_t, modules_to_link) != 0) {
       m = VARR_POP (MIR_module_t, modules_to_link);
       for (item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
@@ -1630,6 +1630,8 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
           set_interface (ctx, item);
         }
     }
+    set_interface (ctx, NULL); /* finish interface setting */
+  }
 }
 
 static const char *insn_name (MIR_insn_code_t code) {
