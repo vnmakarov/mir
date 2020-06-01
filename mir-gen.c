@@ -103,6 +103,10 @@ static void varr_error (const char *message) { util_error (NULL, message); }
 #include "mir-hash.h"
 #include "mir-gen.h"
 
+#ifndef MIR_NO_PARALLEL_GEN
+#include <pthread.h>
+#endif
+
 /* Functions used by target dependent code: */
 static void *gen_malloc (gen_ctx_t gen_ctx, size_t size);
 static MIR_reg_t gen_new_temp_reg (gen_ctx_t gen_ctx, MIR_type_t type, MIR_func_t func);
@@ -145,7 +149,14 @@ struct fg_ctx;
 typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
+struct all_gen_ctx;
+
 struct gen_ctx {
+  struct all_gen_ctx *all_gen_ctx;
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_t gen_thread;
+  int busy_p;
+#endif
   MIR_context_t ctx;
   unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
   MIR_item_t curr_func_item;
@@ -173,8 +184,6 @@ struct gen_ctx {
   size_t func_stack_slots_num;
 };
 
-static inline gen_ctx_t *gen_ctx_loc (MIR_context_t ctx) { return (gen_ctx_t *) ctx; }
-
 #define optimize_level gen_ctx->optimize_level
 #define curr_func_item gen_ctx->curr_func_item
 #define debug_file gen_ctx->debug_file
@@ -192,6 +201,31 @@ static inline gen_ctx_t *gen_ctx_loc (MIR_context_t ctx) { return (gen_ctx_t *) 
 #define max_int_hard_regs gen_ctx->max_int_hard_regs
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 #define func_stack_slots_num gen_ctx->func_stack_slots_num
+
+DEF_VARR (MIR_item_t);
+struct all_gen_ctx {
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_t queue_mutex;
+  pthread_cond_t generate_signal, done_signal;
+  size_t funcs_start;
+  VARR (MIR_item_t) * funcs_to_generate;
+#endif
+  MIR_context_t ctx;
+  size_t gens_num; /* size of the following array: */
+  struct gen_ctx gen_ctx[1];
+};
+
+#ifndef MIR_NO_PARALLEL_GEN
+#define queue_mutex all_gen_ctx->queue_mutex
+#define generate_signal all_gen_ctx->generate_signal
+#define done_signal all_gen_ctx->done_signal
+#define funcs_start all_gen_ctx->funcs_start
+#define funcs_to_generate all_gen_ctx->funcs_to_generate
+#endif
+
+static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
+  return (struct all_gen_ctx **) ctx;
+}
 
 #if defined(__x86_64__)
 #include "mir-gen-x86_64.c"
@@ -6107,14 +6141,20 @@ static void *print_and_execute_wrapper (gen_ctx_t gen_ctx, MIR_item_t called_fun
 }
 #endif
 
-void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
-  gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
+void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  gen_ctx_t gen_ctx;
   uint8_t *code;
   size_t code_len;
 #if !MIR_NO_GEN_DEBUG
   double start_time = 0.0;
 #endif
 
+#ifndef MIR_NO_PARALLEL_GEN
+  gen_num = 0;
+#endif
+  gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
+  gen_ctx = &all_gen_ctx->gen_ctx[gen_num];
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
   if (func_item->u.func->machine_code != NULL) {
     gen_assert (func_item->u.func->call_addr != NULL);
@@ -6289,105 +6329,244 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
   return func_item->addr;
 }
 
-void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f) {
+void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f) {
 #if !MIR_NO_GEN_DEBUG
-  gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  gen_ctx_t gen_ctx;
 
-  if (gen_ctx == NULL) {
+  if (all_gen_ctx == NULL) {
     fprintf (stderr, "Calling MIR_gen_set_debug_file before MIR_gen_init -- good bye\n");
     exit (1);
   }
+#ifndef MIR_NO_PARALLEL_GEN
+  gen_num = 0;
+#endif
+  gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
+  gen_ctx = &all_gen_ctx->gen_ctx[gen_num];
   debug_file = f;
 #endif
 }
 
-void MIR_gen_set_optimize_level (MIR_context_t ctx, unsigned int level) {
-  gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
+void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int level) {
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  gen_ctx_t gen_ctx;
 
+#ifndef MIR_NO_PARALLEL_GEN
+  gen_num = 0;
+#endif
+  gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
+  gen_ctx = &all_gen_ctx->gen_ctx[gen_num];
   optimize_level = level;
 }
 
-void MIR_gen_init (MIR_context_t ctx) {
-  gen_ctx_t *gen_ctx_ptr = gen_ctx_loc (ctx), gen_ctx;
-  MIR_reg_t i;
+#ifndef MIR_NO_PARALLEL_GEN
+struct thread_arg {
+  int num;
+  struct all_gen_ctx *all_gen_ctx;
+};
 
-  *gen_ctx_ptr = gen_ctx = gen_malloc (NULL, sizeof (struct gen_ctx));
-  gen_ctx->ctx = ctx;
-  optimize_level = 2;
-  gen_ctx->target_ctx = NULL;
-  gen_ctx->data_flow_ctx = NULL;
-  gen_ctx->cse_ctx = NULL;
-  gen_ctx->rdef_ctx = NULL;
-  gen_ctx->rename_ctx = NULL;
-  gen_ctx->licm_ctx = NULL;
-  gen_ctx->ccp_ctx = NULL;
-  gen_ctx->lr_ctx = NULL;
-  gen_ctx->ra_ctx = NULL;
-  gen_ctx->selection_ctx = NULL;
-#if !MIR_NO_GEN_DEBUG
-  debug_file = NULL;
-#endif
-  VARR_CREATE (loop_node_t, loop_nodes, 32);
-  VARR_CREATE (loop_node_t, queue_nodes, 32);
-  VARR_CREATE (loop_node_t, loop_entries, 16);
-  init_dead_vars ();
-  init_data_flow (gen_ctx);
-  init_cse (gen_ctx);
-  init_rdef (gen_ctx);
-  init_rename (gen_ctx);
-  init_licm (gen_ctx);
-  init_ccp (gen_ctx);
-  temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  init_live_ranges (gen_ctx);
-  init_ra (gen_ctx);
-  init_selection (gen_ctx);
-  init_fast_gen (gen_ctx);
-  target_init (gen_ctx);
-  call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
-  max_int_hard_regs = max_fp_hard_regs = 0;
-  for (i = 0; i <= MAX_HARD_REG; i++) {
-    if (target_fixed_hard_reg_p (i)) continue;
-    if (target_call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
-    target_hard_reg_type_ok_p (i, MIR_T_I32) ? max_int_hard_regs++ : max_fp_hard_regs++;
+static void *gen (void *arg) {
+  MIR_item_t func_item;
+  struct thread_arg *ta = arg;
+  struct all_gen_ctx *all_gen_ctx = ta->all_gen_ctx;
+
+  for (;;) {
+    pthread_mutex_lock (&queue_mutex);
+    while (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start)
+      pthread_cond_wait (&generate_signal, &queue_mutex);
+    if ((func_item = VARR_GET (MIR_item_t, funcs_to_generate, funcs_start)) == NULL) {
+      pthread_mutex_unlock (&queue_mutex);
+      break;
+    }
+    funcs_start++;
+    if (funcs_start > 64 && VARR_LENGTH (MIR_item_t, funcs_to_generate) < 2 * funcs_start) {
+      memmove (VARR_ADDR (MIR_item_t, funcs_to_generate), /* compact */
+               VARR_ADDR (MIR_item_t, funcs_to_generate) + funcs_start,
+               (VARR_LENGTH (MIR_item_t, funcs_to_generate) - funcs_start) * sizeof (MIR_item_t));
+      funcs_start = 0;
+    }
+    all_gen_ctx->gen_ctx[ta->num].busy_p = TRUE;
+    pthread_mutex_unlock (&queue_mutex);
+    MIR_gen (all_gen_ctx->ctx, ta->num, func_item);
+    pthread_mutex_lock (&queue_mutex);
+    all_gen_ctx->gen_ctx[ta->num].busy_p = FALSE;
+    pthread_cond_signal (&done_signal);
+    pthread_mutex_unlock (&queue_mutex);
   }
-  insn_to_consider = bitmap_create2 (1024);
-  func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+  return NULL;
+}
+
+static void inform_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
+  pthread_mutex_lock (&queue_mutex);
+  funcs_start = 0;
+  VARR_TRUNC (MIR_item_t, funcs_to_generate, 0);
+  VARR_PUSH (MIR_item_t, funcs_to_generate, NULL); /* flag to finish threads */
+  pthread_cond_broadcast (&generate_signal);
+  pthread_mutex_unlock (&queue_mutex);
+}
+#endif
+
+void MIR_gen_init (MIR_context_t ctx, int gens_num) {
+  struct all_gen_ctx **all_gen_ctx_ptr = all_gen_ctx_loc (ctx), *all_gen_ctx;
+  gen_ctx_t gen_ctx;
+  MIR_reg_t reg;
+
+#ifndef MIR_NO_PARALLEL_GEN
+  gens_num = 1;
+#else
+  if (gens_num < 1) gens_num = 1;
+#endif
+  *all_gen_ctx_ptr = all_gen_ctx
+    = gen_malloc (NULL, sizeof (struct all_gen_ctx) + sizeof (struct gen_ctx) * (gens_num - 1));
+  all_gen_ctx->ctx = ctx;
+  all_gen_ctx->gens_num = gens_num;
+#ifndef MIR_NO_PARALLEL_GEN
+  funcs_start = 0;
+  VARR_CREATE (MIR_item_t, funcs_to_generate, 0);
+  if (pthread_mutex_init (&queue_mutex, NULL) != 0) {
+    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread lock");
+  } else if (pthread_cond_init (&generate_signal, NULL) != 0) {
+    pthread_mutex_destroy (&queue_mutex);
+    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
+  } else if (pthread_cond_init (&done_signal, NULL) != 0) {
+    pthread_cond_destroy (&generate_signal);
+    pthread_mutex_destroy (&queue_mutex);
+    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
+  } else {
+    for (int i = 0; i < gens_num; i++) {
+      struct thread_arg t = {i, all_gen_ctx};
+
+      all_gen_ctx->gen_ctx[i].busy_p = FALSE;
+      if (pthread_create (&all_gen_ctx->gen_ctx[i].gen_thread, NULL, gen, &t) != 0) {
+        inform_threads_to_finish (all_gen_ctx);
+        for (int j = 0; j < i; j++) pthread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
+        pthread_cond_destroy (&done_signal);
+        pthread_cond_destroy (&generate_signal);
+        pthread_mutex_destroy (&queue_mutex);
+        (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread");
+      }
+    }
+  }
+#endif
+  for (int i = 0; i < gens_num; i++) {
+    gen_ctx = &all_gen_ctx->gen_ctx[i];
+    gen_ctx->all_gen_ctx = all_gen_ctx;
+    gen_ctx->ctx = ctx;
+    optimize_level = 2;
+    gen_ctx->target_ctx = NULL;
+    gen_ctx->data_flow_ctx = NULL;
+    gen_ctx->cse_ctx = NULL;
+    gen_ctx->rdef_ctx = NULL;
+    gen_ctx->rename_ctx = NULL;
+    gen_ctx->licm_ctx = NULL;
+    gen_ctx->ccp_ctx = NULL;
+    gen_ctx->lr_ctx = NULL;
+    gen_ctx->ra_ctx = NULL;
+    gen_ctx->selection_ctx = NULL;
+#if !MIR_NO_GEN_DEBUG
+    debug_file = NULL;
+#endif
+    VARR_CREATE (loop_node_t, loop_nodes, 32);
+    VARR_CREATE (loop_node_t, queue_nodes, 32);
+    VARR_CREATE (loop_node_t, loop_entries, 16);
+    init_dead_vars ();
+    init_data_flow (gen_ctx);
+    init_cse (gen_ctx);
+    init_rdef (gen_ctx);
+    init_rename (gen_ctx);
+    init_licm (gen_ctx);
+    init_ccp (gen_ctx);
+    temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+    temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+    init_live_ranges (gen_ctx);
+    init_ra (gen_ctx);
+    init_selection (gen_ctx);
+    init_fast_gen (gen_ctx);
+    target_init (gen_ctx);
+    call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+    max_int_hard_regs = max_fp_hard_regs = 0;
+    for (reg = 0; reg <= MAX_HARD_REG; reg++) {
+      if (target_fixed_hard_reg_p (reg)) continue;
+      if (target_call_used_hard_reg_p (reg)) bitmap_set_bit_p (call_used_hard_regs, reg);
+      target_hard_reg_type_ok_p (reg, MIR_T_I32) ? max_int_hard_regs++ : max_fp_hard_regs++;
+    }
+    insn_to_consider = bitmap_create2 (1024);
+    func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+  }
 }
 
 void MIR_gen_finish (MIR_context_t ctx) {
-  gen_ctx_t *gen_ctx_ptr = gen_ctx_loc (ctx);
-  gen_ctx_t gen_ctx = *gen_ctx_ptr;
+  struct all_gen_ctx **all_gen_ctx_ptr = all_gen_ctx_loc (ctx), *all_gen_ctx = *all_gen_ctx_ptr;
+  gen_ctx_t gen_ctx;
 
-  finish_data_flow (gen_ctx);
-  finish_cse (gen_ctx);
-  finish_rdef (gen_ctx);
-  finish_rename (gen_ctx);
-  finish_licm (gen_ctx);
-  finish_ccp (gen_ctx);
-  bitmap_destroy (temp_bitmap);
-  bitmap_destroy (temp_bitmap2);
-  finish_live_ranges (gen_ctx);
-  finish_ra (gen_ctx);
-  finish_selection (gen_ctx);
-  finish_fast_gen (gen_ctx);
-  bitmap_destroy (call_used_hard_regs);
-  bitmap_destroy (insn_to_consider);
-  bitmap_destroy (func_used_hard_regs);
-  target_finish (gen_ctx);
-  finish_dead_vars ();
-  free (gen_ctx->data_flow_ctx);
-  VARR_DESTROY (loop_node_t, loop_nodes);
-  VARR_DESTROY (loop_node_t, queue_nodes);
-  VARR_DESTROY (loop_node_t, loop_entries);
-  free (gen_ctx);
-  *gen_ctx_ptr = NULL;
+#ifndef MIR_NO_PARALLEL_GEN
+  inform_threads_to_finish (all_gen_ctx);
+  for (int i = 0; i < all_gen_ctx->gens_num; i++)
+    pthread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
+  if (pthread_mutex_destroy (&queue_mutex) != 0 || pthread_cond_destroy (&generate_signal) != 0
+      || pthread_cond_destroy (&done_signal) != 0) {  // ???
+    (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
+                                              "can not destroy generator mutex  or signals");
+  }
+#endif
+  for (int i = 0; i < all_gen_ctx->gens_num; i++) {
+    gen_ctx = &all_gen_ctx->gen_ctx[i];
+    finish_data_flow (gen_ctx);
+    finish_cse (gen_ctx);
+    finish_rdef (gen_ctx);
+    finish_rename (gen_ctx);
+    finish_licm (gen_ctx);
+    finish_ccp (gen_ctx);
+    bitmap_destroy (temp_bitmap);
+    bitmap_destroy (temp_bitmap2);
+    finish_live_ranges (gen_ctx);
+    finish_ra (gen_ctx);
+    finish_selection (gen_ctx);
+    finish_fast_gen (gen_ctx);
+    bitmap_destroy (call_used_hard_regs);
+    bitmap_destroy (insn_to_consider);
+    bitmap_destroy (func_used_hard_regs);
+    target_finish (gen_ctx);
+    finish_dead_vars ();
+    free (gen_ctx->data_flow_ctx);
+    VARR_DESTROY (loop_node_t, loop_nodes);
+    VARR_DESTROY (loop_node_t, queue_nodes);
+    VARR_DESTROY (loop_node_t, loop_entries);
+  }
+  free (all_gen_ctx);
+  *all_gen_ctx_ptr = NULL;
 }
 
-void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) { MIR_gen (ctx, func_item); }
+void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+
+#ifdef MIR_NO_PARALLEL_GEN
+  if (func_item == NULL) return; /* finish setting interfaces */
+  MIR_gen (ctx, func_item);
+#else
+  if (func_item == NULL) {
+    size_t i;
+
+    pthread_mutex_lock (&queue_mutex);
+    for (;;) {
+      for (i = 0; i < all_gen_ctx->gens_num; i++)
+        if (all_gen_ctx->gen_ctx[i].busy_p) break;
+      if (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
+        break; /* nothing to generate and nothing is being generated */
+      pthread_cond_wait (&done_signal, &queue_mutex);
+    }
+    pthread_mutex_unlock (&queue_mutex);
+  } else {
+    pthread_mutex_lock (&queue_mutex);
+    VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
+    pthread_cond_broadcast (&generate_signal);
+    pthread_mutex_lock (&queue_mutex);
+  }
+#endif
+}
 
 static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
-  MIR_gen (ctx, func_item);
+  MIR_gen (ctx, 0, func_item);
   return func_item->u.func->machine_code;
 }
 
