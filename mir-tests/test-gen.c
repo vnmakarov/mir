@@ -23,12 +23,12 @@ int main (int argc, char *argv[]) {
   func = DLIST_TAIL (MIR_item_t, m->items);
   MIR_load_module (ctx, m);
   MIR_link (ctx, NULL, NULL);
-  MIR_gen_init (ctx);
+  MIR_gen_init (ctx, 1);
 #if TEST_GEN_DEBUG
   fprintf (stderr, "\n==============================%s============================\n", argv[1]);
-  MIR_gen_set_debug_file (ctx, stderr);
+  MIR_gen_set_debug_file (ctx, 0, stderr);
 #endif
-  MIR_gen (ctx, func);
+  MIR_gen (ctx, 0, func);
   MIR_gen_finish (ctx);
   MIR_finish (ctx);
   free (str);

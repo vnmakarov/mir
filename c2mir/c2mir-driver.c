@@ -38,24 +38,26 @@ static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
                            {"/lib/aarch64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+static lib_t std_libs[] = {
+  {"/lib64/libc.so.6", NULL},
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-                           {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
 #else
-                           {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
+  {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
 #endif
-                           {"/lib64/libm.so.6", NULL},
+  {"/lib64/libm.so.6", NULL},
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-                           {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
 #else
-                           {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
 #endif
 };
-static const char *std_lib_dirs[] = {"/lib64",
+static const char *std_lib_dirs[] = {
+  "/lib64",
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-				     "/lib/powerpc64le-linux-gnu",
+  "/lib/powerpc64le-linux-gnu",
 #else
-				     "/lib/powerpc64-linux-gnu",
+  "/lib/powerpc64-linux-gnu",
 #endif
 };
 #elif (__s390x__)
@@ -528,12 +530,12 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "exit code: %lu\n", (long unsigned) ret_code);
         }
       } else {
-        MIR_gen_init (ctx);
-        if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, (unsigned) optimize_level);
-        if (gen_debug_p) MIR_gen_set_debug_file (ctx, stderr);
+        MIR_gen_init (ctx, 1);
+        if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, 0, (unsigned) optimize_level);
+        if (gen_debug_p) MIR_gen_set_debug_file (ctx, 0, stderr);
         MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
                   import_resolver);
-        fun_addr = MIR_gen (ctx, main_func);
+        fun_addr = MIR_gen (ctx, 0, main_func);
         start_time = real_usec_time ();
         ret_code
           = fun_addr (VARR_LENGTH (char_ptr_t, exec_argv), VARR_ADDR (char_ptr_t, exec_argv), env);

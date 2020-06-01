@@ -50,14 +50,14 @@ int main (void) {
     }
     fprintf (stderr, "MIR %d funcs creation end -- %.0f usec\n", N, real_usec_time () - start_time);
     for (int i = 0; i < N; i++) MIR_load_module (ctx, funcs[i]->module);
-    MIR_gen_init (ctx);
+    MIR_gen_init (ctx, 1);
     fprintf (stderr, "MIR_init_gen end -- %.0f usec\n", real_usec_time () - start_time);
-    MIR_gen_set_optimize_level (ctx, level);
+    MIR_gen_set_optimize_level (ctx, 0, level);
 #if TEST_GEN_DEBUG
-    MIR_gen_set_debug_file (ctx, stderr);
+    MIR_gen_set_debug_file (ctx, 0, stderr);
 #endif
     MIR_link (ctx, MIR_set_gen_interface, NULL);
-    for (int i = 0; i < N; i++) fun = MIR_gen (ctx, funcs[i]);
+    for (int i = 0; i < N; i++) fun = MIR_gen (ctx, 0, funcs[i]);
     fprintf (stderr, "MIR_gen end (%d funcs) -- %.0f usec\n", N, real_usec_time () - start_time);
 #if defined(TEST_GENERATION_ONLY)
     return 0;

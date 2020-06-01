@@ -6542,7 +6542,7 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 
 #ifdef MIR_NO_PARALLEL_GEN
   if (func_item == NULL) return; /* finish setting interfaces */
-  MIR_gen (ctx, func_item);
+  MIR_gen (ctx, 0, func_item);
 #else
   if (func_item == NULL) {
     size_t i;
