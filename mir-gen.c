@@ -6396,7 +6396,7 @@ static void *gen (void *arg) {
   return NULL;
 }
 
-static void inform_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
+static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
   pthread_mutex_lock (&queue_mutex);
   funcs_start = 0;
   VARR_TRUNC (MIR_item_t, funcs_to_generate, 0);
@@ -6438,7 +6438,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
 
       all_gen_ctx->gen_ctx[i].busy_p = FALSE;
       if (pthread_create (&all_gen_ctx->gen_ctx[i].gen_thread, NULL, gen, &t) != 0) {
-        inform_threads_to_finish (all_gen_ctx);
+        signal_threads_to_finish (all_gen_ctx);
         for (int j = 0; j < i; j++) pthread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
         pthread_cond_destroy (&done_signal);
         pthread_cond_destroy (&generate_signal);
@@ -6500,7 +6500,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   gen_ctx_t gen_ctx;
 
 #ifndef MIR_NO_PARALLEL_GEN
-  inform_threads_to_finish (all_gen_ctx);
+  signal_threads_to_finish (all_gen_ctx);
   for (int i = 0; i < all_gen_ctx->gens_num; i++)
     pthread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
   if (pthread_mutex_destroy (&queue_mutex) != 0 || pthread_cond_destroy (&generate_signal) != 0
