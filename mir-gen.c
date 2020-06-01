@@ -6392,8 +6392,10 @@ static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
-  void *addr = _MIR_get_wrapper (ctx, func_item, gen_and_redirect);
+  void *addr;
 
+  if (func_item == NULL) return;
+  addr = _MIR_get_wrapper (ctx, func_item, gen_and_redirect);
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 
