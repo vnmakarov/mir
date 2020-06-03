@@ -6372,9 +6372,10 @@ static void *gen (void *arg) {
     }
     funcs_start++;
     if (funcs_start > 64 && VARR_LENGTH (MIR_item_t, funcs_to_generate) < 2 * funcs_start) {
+      len = VARR_LENGTH (MIR_item_t, funcs_to_generate) - funcs_start;
       memmove (VARR_ADDR (MIR_item_t, funcs_to_generate), /* compact */
-               VARR_ADDR (MIR_item_t, funcs_to_generate) + funcs_start,
-               (VARR_LENGTH (MIR_item_t, funcs_to_generate) - funcs_start) * sizeof (MIR_item_t));
+               VARR_ADDR (MIR_item_t, funcs_to_generate) + funcs_start, len * sizeof (MIR_item_t));
+      VARR_TRUNC (MIR_item_t, funcs_to_generate, len);
       funcs_start = 0;
     }
     gen_ctx->busy_p = TRUE;
