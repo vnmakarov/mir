@@ -31,8 +31,11 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_NO_SCAN 0
 #endif
 
-//#define MIR_NO_PARALLEL_GEN 1
-#ifndef MIR_NO_PARALLEL_GEN
+#ifndef MIR_PARALLEL_GEN
+#define MIR_PARALLEL_GEN 0
+#endif
+
+#if MIR_PARALLEL_GEN
 #include <pthread.h>
 #endif
 

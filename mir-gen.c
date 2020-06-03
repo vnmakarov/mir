@@ -149,7 +149,7 @@ struct all_gen_ctx;
 
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   pthread_t gen_thread;
   int gen_num, busy_p;
 #endif
@@ -200,7 +200,7 @@ struct gen_ctx {
 
 DEF_VARR (MIR_item_t);
 struct all_gen_ctx {
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   pthread_mutex_t queue_mutex;
   pthread_cond_t generate_signal, done_signal;
   size_t funcs_start;
@@ -211,7 +211,7 @@ struct all_gen_ctx {
   struct gen_ctx gen_ctx[1];
 };
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
 #define queue_mutex all_gen_ctx->queue_mutex
 #define generate_signal all_gen_ctx->generate_signal
 #define done_signal all_gen_ctx->done_signal
@@ -6146,7 +6146,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   double start_time = 0.0;
 #endif
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6334,7 +6334,7 @@ void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f) {
     fprintf (stderr, "Calling MIR_gen_set_debug_file before MIR_gen_init -- good bye\n");
     exit (1);
   }
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6347,7 +6347,7 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6355,7 +6355,7 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   optimize_level = level;
 }
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
 static void *gen (void *arg) {
   MIR_item_t func_item;
   gen_ctx_t gen_ctx = arg;
@@ -6406,7 +6406,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
   gen_ctx_t gen_ctx;
   MIR_reg_t reg;
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   gens_num = 1;
 #else
   if (gens_num < 1) gens_num = 1;
@@ -6415,7 +6415,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     = gen_malloc (NULL, sizeof (struct all_gen_ctx) + sizeof (struct gen_ctx) * (gens_num - 1));
   all_gen_ctx->ctx = ctx;
   all_gen_ctx->gens_num = gens_num;
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   funcs_start = 0;
   VARR_CREATE (MIR_item_t, funcs_to_generate, 0);
   if (pthread_mutex_init (&queue_mutex, NULL) != 0) {
@@ -6494,7 +6494,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   struct all_gen_ctx **all_gen_ctx_ptr = all_gen_ctx_loc (ctx), *all_gen_ctx = *all_gen_ctx_ptr;
   gen_ctx_t gen_ctx;
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   signal_threads_to_finish (all_gen_ctx);
   for (int i = 0; i < all_gen_ctx->gens_num; i++)
     pthread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
