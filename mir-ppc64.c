@@ -310,7 +310,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       n_fpregs++;
       if (type == MIR_T_LD) {
         if (n_fpregs >= 4)
-          (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
+          MIR_get_error_func (ctx) (MIR_ret_error,
+                                    "ppc64 can not handle this combination of return values");
         ppc64_gen_st (code, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }
@@ -318,7 +319,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       ppc64_gen_st (code, n_gpregs + 3, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
-      (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "ppc64 can not handle this combination of return values");
     }
     disp += 16;
   }
@@ -428,7 +430,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       n_fpregs++;
       if (type == MIR_T_LD) {
         if (n_fpregs >= 4)
-          (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
+          MIR_get_error_func (ctx) (MIR_ret_error,
+                                    "ppc64 can not handle this combination of return values");
         ppc64_gen_ld (code, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }
@@ -436,7 +439,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       ppc64_gen_ld (code, n_gpregs + 3, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
-      (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "ppc64 can not handle this combination of return values");
     }
     disp += 16;
   }

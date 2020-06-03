@@ -301,7 +301,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       s390x_gen_st (code, n_gpregs + 2, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
-      (*error_func) (MIR_ret_error, "s390x can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "s390x can not handle this combination of return values");
     }
     disp += 16;
   }
@@ -373,7 +374,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       }
       n_gpregs++;
     } else {
-      (*error_func) (MIR_ret_error, "s390x can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "s390x can not handle this combination of return values");
     }
     disp += 16;
   }

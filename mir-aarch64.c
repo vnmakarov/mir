@@ -241,7 +241,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       }
       push_insns (code, &pat, sizeof (pat));
     } else {
-      (*error_func) (MIR_call_op_error, "wrong type of arg value");
+      MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
     }
   }
   sp_offset = (sp_offset + 15) / 16 * 16;
@@ -263,7 +263,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       pat |= offset_imm | n_vregs++ | (19 << 5);
       push_insns (code, &pat, sizeof (pat));
     } else {
-      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "x86-64 can not handle this combination of return values");
     }
   }
   push_insns (code, epilog, sizeof (epilog));
@@ -331,7 +332,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       pat = ld_pat | n_xregs;
       n_xregs++;
     } else {
-      (*error_func) (MIR_ret_error, "aarch64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "aarch64 can not handle this combination of return values");
     }
     offset_imm = offset >> (results[i] == MIR_T_F ? 2 : results[i] == MIR_T_LD ? 4 : 3);
     mir_assert (offset_imm < (1 << 12));

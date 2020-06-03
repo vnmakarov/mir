@@ -286,7 +286,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       gen_ldst80 (code, sp_offset, (i + nres) * sizeof (long double));
       sp_offset += 16;
     } else {
-      (*error_func) (MIR_call_op_error, "wrong type of arg value");
+      MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
     }
   }
   sp_offset = (sp_offset + 15) / 16 * 16;
@@ -296,7 +296,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   memcpy (addr + sizeof (call_end) - 4, &sp_offset, sizeof (uint32_t));
 #ifdef _WIN64
   if (nres > 1)
-    (*error_func) (MIR_call_op_error, "Windows x86-64 doesn't support multiple return values");
+    MIR_get_error_func (ctx) (MIR_call_op_error,
+                              "Windows x86-64 doesn't support multiple return values");
 #endif
   n_iregs = n_xregs = n_fregs = 0;
   for (size_t i = 0; i < nres; i++) {
@@ -308,7 +309,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     } else if (res_types[i] == MIR_T_LD && n_fregs < 2) {
       gen_st80 (code, i * sizeof (long double));
     } else {
-      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "x86-64 can not handle this combination of return values");
     }
   }
   push_insns (code, epilog, sizeof (epilog));
@@ -395,7 +397,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   /* move results: */
 #ifdef _WIN64
   if (nres > 1)
-    (*error_func) (MIR_call_op_error, "Windows x86-64 doesn't support multiple return values");
+    MIR_get_error_func (ctx) (MIR_call_op_error,
+                              "Windows x86-64 doesn't support multiple return values");
 #endif
   n_iregs = n_xregs = n_fregs = offset = 0;
   for (uint32_t i = 0; i < nres; i++) {
@@ -420,7 +423,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       memcpy (addr + 3, &offset, sizeof (uint32_t));
       n_iregs++;
     } else {
-      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
+      MIR_get_error_func (ctx) (MIR_ret_error,
+                                "x86-64 can not handle this combination of return values");
     }
     offset += 16;
   }
