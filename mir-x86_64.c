@@ -255,45 +255,44 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #endif
   uint32_t n_iregs = 0, n_xregs = 0, n_fregs;
   uint8_t *addr;
-  VARR (uint8_t) * machine_insns;
+  VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, machine_insns, 128);
-  push_insns (machine_insns, prolog, sizeof (prolog));
+  VARR_CREATE (uint8_t, code, 128);
+  push_insns (code, prolog, sizeof (prolog));
   for (size_t i = 0; i < nargs; i++) {
     if ((MIR_T_I8 <= arg_types[i] && arg_types[i] <= MIR_T_U64) || arg_types[i] == MIR_T_P) {
       if (n_iregs < max_iregs) {
-        gen_mov (machine_insns, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+        gen_mov (code, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
 #ifdef _WIN64
         n_xregs++;
 #endif
       } else {
-        gen_ldst (machine_insns, sp_offset, (i + nres) * sizeof (long double), TRUE);
+        gen_ldst (code, sp_offset, (i + nres) * sizeof (long double), TRUE);
         sp_offset += 8;
       }
     } else if (arg_types[i] == MIR_T_F || arg_types[i] == MIR_T_D) {
       if (n_xregs < max_xregs) {
-        gen_movxmm (machine_insns, (i + nres) * sizeof (long double), n_xregs++,
-                    arg_types[i] == MIR_T_F, TRUE);
+        gen_movxmm (code, (i + nres) * sizeof (long double), n_xregs++, arg_types[i] == MIR_T_F,
+                    TRUE);
 #ifdef _WIN64
-        gen_mov (machine_insns, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+        gen_mov (code, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
 #endif
       } else {
-        gen_ldst (machine_insns, sp_offset, (i + nres) * sizeof (long double),
-                  arg_types[i] == MIR_T_D);
+        gen_ldst (code, sp_offset, (i + nres) * sizeof (long double), arg_types[i] == MIR_T_D);
         sp_offset += 8;
       }
     } else if (arg_types[i] == MIR_T_LD) {
-      gen_ldst80 (machine_insns, sp_offset, (i + nres) * sizeof (long double));
+      gen_ldst80 (code, sp_offset, (i + nres) * sizeof (long double));
       sp_offset += 16;
     } else {
       (*error_func) (MIR_call_op_error, "wrong type of arg value");
     }
   }
   sp_offset = (sp_offset + 15) / 16 * 16;
-  addr = VARR_ADDR (uint8_t, machine_insns);
+  addr = VARR_ADDR (uint8_t, code);
   memcpy (addr + 4, &sp_offset, sizeof (uint32_t));
-  addr = push_insns (machine_insns, call_end, sizeof (call_end));
+  addr = push_insns (code, call_end, sizeof (call_end));
   memcpy (addr + sizeof (call_end) - 4, &sp_offset, sizeof (uint32_t));
 #ifdef _WIN64
   if (nres > 1)
@@ -303,21 +302,18 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   for (size_t i = 0; i < nres; i++) {
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
         && n_iregs < 2) {
-      gen_mov (machine_insns, i * sizeof (long double), n_iregs++ == 0 ? 0 : 2,
-               FALSE); /* rax or rdx */
+      gen_mov (code, i * sizeof (long double), n_iregs++ == 0 ? 0 : 2, FALSE); /* rax or rdx */
     } else if ((res_types[i] == MIR_T_F || res_types[i] == MIR_T_D) && n_xregs < 2) {
-      gen_movxmm (machine_insns, i * sizeof (long double), n_xregs++, res_types[i] == MIR_T_F,
-                  FALSE);
+      gen_movxmm (code, i * sizeof (long double), n_xregs++, res_types[i] == MIR_T_F, FALSE);
     } else if (res_types[i] == MIR_T_LD && n_fregs < 2) {
-      gen_st80 (machine_insns, i * sizeof (long double));
+      gen_st80 (code, i * sizeof (long double));
     } else {
       (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
     }
   }
-  push_insns (machine_insns, epilog, sizeof (epilog));
-  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                           VARR_LENGTH (uint8_t, machine_insns));
-  VARR_DESTROY (uint8_t, machine_insns);
+  push_insns (code, epilog, sizeof (epilog));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  VARR_DESTROY (uint8_t, code);
   return res;
 }
 
@@ -382,15 +378,15 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   uint32_t imm, n_iregs, n_xregs, n_fregs, offset;
   uint32_t nres = func_item->u.func->nres;
   MIR_type_t *results = func_item->u.func->res_types;
-  VARR (uint8_t) * machine_insns;
+  VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, machine_insns, 128);
+  VARR_CREATE (uint8_t, code, 128);
 #ifndef _WIN64
-  push_insns (machine_insns, push_rbx, sizeof (push_rbx));
+  push_insns (code, push_rbx, sizeof (push_rbx));
 #endif
-  push_insns (machine_insns, save_pat, sizeof (save_pat));
-  addr = push_insns (machine_insns, prepare_pat, sizeof (prepare_pat));
+  push_insns (code, save_pat, sizeof (save_pat));
+  addr = push_insns (code, prepare_pat, sizeof (prepare_pat));
   imm = nres * 16;
   memcpy (addr + nres_offset, &imm, sizeof (uint32_t));
   memcpy (addr + ctx_offset, &ctx, sizeof (void *));
@@ -404,22 +400,22 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   n_iregs = n_xregs = n_fregs = offset = 0;
   for (uint32_t i = 0; i < nres; i++) {
     if (results[i] == MIR_T_F && n_xregs < 2) {
-      addr = push_insns (machine_insns, movss_pat, sizeof (movss_pat));
+      addr = push_insns (code, movss_pat, sizeof (movss_pat));
       addr[3] |= n_xregs << 3;
       memcpy (addr + 4, &offset, sizeof (uint32_t));
       n_xregs++;
     } else if (results[i] == MIR_T_D && n_xregs < 2) {
-      addr = push_insns (machine_insns, movsd_pat, sizeof (movsd_pat));
+      addr = push_insns (code, movsd_pat, sizeof (movsd_pat));
       addr[3] |= n_xregs << 3;
       memcpy (addr + 4, &offset, sizeof (uint32_t));
       n_xregs++;
     } else if (results[i] == MIR_T_LD && n_fregs < 2) {
-      addr = push_insns (machine_insns, fldt_pat, sizeof (fldt_pat));
+      addr = push_insns (code, fldt_pat, sizeof (fldt_pat));
       memcpy (addr + 2, &offset, sizeof (uint32_t));
-      if (n_fregs == 1) push_insns (machine_insns, fxch_pat, sizeof (fxch_pat));
+      if (n_fregs == 1) push_insns (code, fxch_pat, sizeof (fxch_pat));
       n_fregs++;
     } else if (n_iregs < 2) {
-      addr = push_insns (machine_insns, ld_pat, sizeof (ld_pat));
+      addr = push_insns (code, ld_pat, sizeof (ld_pat));
       addr[2] |= n_iregs << 4;
       memcpy (addr + 3, &offset, sizeof (uint32_t));
       n_iregs++;
@@ -428,12 +424,11 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     }
     offset += 16;
   }
-  addr = push_insns (machine_insns, shim_end, sizeof (shim_end));
+  addr = push_insns (code, shim_end, sizeof (shim_end));
   imm = prep_stack_size + nres * 16;
   memcpy (addr + 3, &imm, sizeof (uint32_t));
-  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                           VARR_LENGTH (uint8_t, machine_insns));
-  VARR_DESTROY (uint8_t, machine_insns);
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  VARR_DESTROY (uint8_t, code);
   return res;
 }
 
@@ -467,22 +462,21 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
 #endif
   };
   uint8_t *addr;
-  VARR (uint8_t) * machine_insns;
+  VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, machine_insns, 128);
+  VARR_CREATE (uint8_t, code, 128);
 #ifndef _WIN64
-  push_insns (machine_insns, push_rax, sizeof (push_rax));
+  push_insns (code, push_rax, sizeof (push_rax));
 #endif
-  push_insns (machine_insns, save_pat, sizeof (save_pat));
-  addr = push_insns (machine_insns, call_pat, sizeof (call_pat));
+  push_insns (code, save_pat, sizeof (save_pat));
+  addr = push_insns (code, call_pat, sizeof (call_pat));
   memcpy (addr + 2, &called_func, sizeof (void *));
   memcpy (addr + 12, &ctx, sizeof (void *));
   memcpy (addr + 22, &hook_address, sizeof (void *));
-  push_insns (machine_insns, restore_pat, sizeof (restore_pat));
-  push_insns (machine_insns, wrap_end, sizeof (wrap_end));
-  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                           VARR_LENGTH (uint8_t, machine_insns));
-  VARR_DESTROY (uint8_t, machine_insns);
+  push_insns (code, restore_pat, sizeof (restore_pat));
+  push_insns (code, wrap_end, sizeof (wrap_end));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  VARR_DESTROY (uint8_t, code);
   return res;
 }
