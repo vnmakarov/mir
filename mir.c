@@ -3365,11 +3365,20 @@ static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_
   return mem;
 }
 
-uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len) {
+uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code,
+                            size_t code_len) { /* thread safe */
   code_holder_t *ch_ptr;
+  uint8_t *res = NULL;
 
-  if ((ch_ptr = get_last_code_holder (ctx, code_len)) == NULL) return NULL;
-  return add_code (ctx, ch_ptr, code, code_len);
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_lock (&code_mutex);
+#endif
+  if ((ch_ptr = get_last_code_holder (ctx, code_len)) != NULL)
+    res = add_code (ctx, ch_ptr, code, code_len);
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_unlock (&code_mutex);
+#endif
+  return res;
 }
 
 uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size) {
@@ -3381,25 +3390,33 @@ uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size) {
 uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t *code,
                                     size_t code_len) {
   code_holder_t *ch_ptr = get_last_code_holder (ctx, 0);
+  uint8_t *res = NULL;
 
-  if (ch_ptr == NULL || ch_ptr->free != addr || ch_ptr->free + code_len >= ch_ptr->bound)
-    return NULL;
-  return add_code (ctx, ch_ptr, code, code_len);
+  if (ch_ptr != NULL && ch_ptr->free == addr && ch_ptr->free + code_len < ch_ptr->bound)
+    res = add_code (ctx, ch_ptr, code, code_len);
+  return res;
 }
 
-void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code, size_t code_len) {
+void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
+                       size_t code_len) { /* thread safe */
   size_t len, start;
 
   start = (size_t) addr / page_size * page_size;
   len = (size_t) addr + code_len - start;
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_lock (&code_mutex);
+#endif
   mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   memcpy (addr, code, code_len);
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (addr, addr + code_len);
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_unlock (&code_mutex);
+#endif
 }
 
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
-                           const MIR_code_reloc_t *relocs) {
+                           const MIR_code_reloc_t *relocs) { /* thread safe */
   size_t i, len, start, max_offset = 0;
 
   mir_assert (relocs != NULL);
@@ -3407,13 +3424,19 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
     if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_lock (&code_mutex);
+#endif
   mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_unlock (&code_mutex);
+#endif
 }
 
-void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
+void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* thread safe */
   size_t start, len, offset, max_offset = 0;
   void *value;
   va_list args;
@@ -3427,8 +3450,11 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
   va_end (args);
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
-  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   va_start (args, nloc);
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_lock (&code_mutex);
+#endif
+  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   for (size_t i = 0; i < nloc; i++) {
     offset = va_arg (args, size_t);
     value = va_arg (args, void *);
@@ -3436,6 +3462,9 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) {
   }
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_init (&code_mutex, NULL);
+#endif
   va_end (args);
 }
 
@@ -3445,9 +3474,15 @@ static void code_init (MIR_context_t ctx) {
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
   VARR_CREATE (uint8_t, machine_insns, 1024);
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_destroy (&code_mutex);
+#endif
 }
 
 static void code_finish (MIR_context_t ctx) {
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_destroy (&code_mutex);
+#endif
   while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
     code_holder_t ch = VARR_POP (code_holder_t, code_holders);
     mem_unmap (ch.start, ch.bound - ch.start);
