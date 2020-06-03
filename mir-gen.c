@@ -151,7 +151,7 @@ struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
 #ifndef MIR_NO_PARALLEL_GEN
   pthread_t gen_thread;
-  int busy_p;
+  int gen_num, busy_p;
 #endif
   MIR_context_t ctx;
   unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
@@ -6356,15 +6356,11 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
 }
 
 #ifndef MIR_NO_PARALLEL_GEN
-struct thread_arg {
-  int num;
-  struct all_gen_ctx *all_gen_ctx;
-};
-
 static void *gen (void *arg) {
   MIR_item_t func_item;
-  struct thread_arg *ta = arg;
-  struct all_gen_ctx *all_gen_ctx = ta->all_gen_ctx;
+  gen_ctx_t gen_ctx = arg;
+  struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
+  size_t len;
 
   for (;;) {
     pthread_mutex_lock (&queue_mutex);
@@ -6381,11 +6377,13 @@ static void *gen (void *arg) {
                (VARR_LENGTH (MIR_item_t, funcs_to_generate) - funcs_start) * sizeof (MIR_item_t));
       funcs_start = 0;
     }
-    all_gen_ctx->gen_ctx[ta->num].busy_p = TRUE;
+    gen_ctx->busy_p = TRUE;
     pthread_mutex_unlock (&queue_mutex);
-    MIR_gen (all_gen_ctx->ctx, ta->num, func_item);
+    fprintf (stderr, ">>>Starting parallel generation of %s\n", func_item->u.func->name);
+    MIR_gen (gen_ctx->ctx, gen_ctx->gen_num, func_item);
+    fprintf (stderr, ">>>Finishing parallel generation of %s\n", func_item->u.func->name);
     pthread_mutex_lock (&queue_mutex);
-    all_gen_ctx->gen_ctx[ta->num].busy_p = FALSE;
+    gen_ctx->busy_p = FALSE;
     pthread_cond_signal (&done_signal);
     pthread_mutex_unlock (&queue_mutex);
   }
@@ -6430,10 +6428,10 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
   } else {
     for (int i = 0; i < gens_num; i++) {
-      struct thread_arg t = {i, all_gen_ctx};
-
-      all_gen_ctx->gen_ctx[i].busy_p = FALSE;
-      if (pthread_create (&all_gen_ctx->gen_ctx[i].gen_thread, NULL, gen, &t) != 0) {
+      gen_ctx = &all_gen_ctx->gen_ctx[i];
+      gen_ctx->busy_p = FALSE;
+      gen_ctx->gen_num = i;
+      if (pthread_create (&gen_ctx->gen_thread, NULL, gen, gen_ctx) != 0) {
         signal_threads_to_finish (all_gen_ctx);
         for (int j = 0; j < i; j++) pthread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
         pthread_cond_destroy (&done_signal);
