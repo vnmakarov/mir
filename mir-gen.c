@@ -103,10 +103,6 @@ static void varr_error (const char *message) { util_error (NULL, message); }
 #include "mir-hash.h"
 #include "mir-gen.h"
 
-#ifndef MIR_NO_PARALLEL_GEN
-#include <pthread.h>
-#endif
-
 /* Functions used by target dependent code: */
 static void *gen_malloc (gen_ctx_t gen_ctx, size_t size);
 static MIR_reg_t gen_new_temp_reg (gen_ctx_t gen_ctx, MIR_type_t type, MIR_func_t func);
