@@ -3308,6 +3308,10 @@ typedef struct code_holder code_holder_t;
 DEF_VARR (code_holder_t);
 
 struct machine_code_ctx {
+#ifndef MIR_NO_PARALLEL_GEN
+  pthread_mutex_t code_mutex;
+#define code_mutex ctx->machine_code_ctx->code_mutex
+#endif
   VARR (code_holder_t) * code_holders;
   size_t page_size;
   VARR (uint8_t) * machine_insns;
