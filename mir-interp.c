@@ -1474,7 +1474,7 @@ static void interp_init (MIR_context_t ctx) {
   struct interp_ctx *interp_ctx;
 
   if ((interp_ctx = ctx->interp_ctx = malloc (sizeof (struct interp_ctx))) == NULL)
-    (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
 #if DIRECT_THREADED_DISPATCH
   eval (ctx, NULL, NULL, NULL);
 #endif
