@@ -19,7 +19,7 @@ static void ppc64_push_func_desc (VARR (uint8_t) * insn_varr);
 void (*ppc64_func_desc) (VARR (uint8_t) * insn_varr) = ppc64_push_func_desc;
 
 static void ppc64_push_func_desc (VARR (uint8_t) * insn_varr) {
-  VARR_TRUNC (uint8_t, insn_varr, 0);
+  VARR_CREATE (uint8_t, insn_varr, 128);
   for (int i = 0; i < PPC64_FUNC_DESC_LEN; i++)
     VARR_PUSH (uint8_t, insn_varr, ((uint8_t *) ppc64_func_desc)[i]);
 }
@@ -37,6 +37,7 @@ static void *ppc64_publish_func_and_redirect (MIR_context_t ctx, VARR (uint8_t) 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
   ppc64_redirect_func_desc (ctx, res, (uint8_t *) res + PPC64_FUNC_DESC_LEN);
 #endif
+  VARR_DESTROY (uint8_t, insn_varr);
   return res;
 }
 
@@ -122,6 +123,8 @@ void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
     0x7c230b78, /* mr 3,1 */
     0x4e800020, /* blr */
   };
+  VARR (uint8_t) * machine_insns;
+
   ppc64_push_func_desc (machine_insns);
   push_insns (machine_insns, bstart_code, sizeof (bstart_code));
   return ppc64_publish_func_and_redirect (ctx, machine_insns);
@@ -132,6 +135,8 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
     0x7c611b78, /* mr      r1,r3 */
     0x4e800020, /* blr */
   };
+  VARR (uint8_t) * machine_insns;
+
   ppc64_push_func_desc (machine_insns);
   ppc64_gen_ld (machine_insns, 0, 1, 0, MIR_T_I64);                /* r0 = 0(r1) */
   ppc64_gen_st (machine_insns, 0, 3, 0, MIR_T_I64);                /* 0(r3) = r0 */
@@ -142,16 +147,22 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
 }
 
 void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descriptor: */
-  ppc64_push_func_desc (machine_insns);
+  VARR (uint8_t) * machine_insns;
+
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  ppc64_push_func_desc (machine_insns);
   return ppc64_publish_func_and_redirect (ctx, machine_insns);
 #else
   const uint32_t nop_insn = 24 << (32 - 6);                                /* ori 0,0,0 */
   const int max_thunk_len = (7 * 8);
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  void *res;
+
+  VARR_CREATE (uint8_t, machine_insns, 128);
   for (int i = 0; i < max_thunk_len; i++) push_insn (machine_insns, nop_insn);
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 #endif
 }
 
@@ -163,11 +174,14 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
     0x7d8903a6, /* mtctr r12 */
     0x4e800420, /* bctr */
   };
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR (uint8_t) * machine_insns;
+
+  VARR_CREATE (uint8_t, machine_insns, 256);
   ppc64_gen_address (machine_insns, 12, to);
   push_insns (machine_insns, global_entry_end, sizeof (global_entry_end));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, machine_insns),
                     VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
 #endif
 }
 
@@ -223,6 +237,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   };
   MIR_type_t type;
   int n_gpregs = 0, n_fpregs = 0, res_reg = 14, frame_size, disp, param_offset, param_size = 0;
+  VARR (uint8_t) * machine_insns;
 
   ppc64_push_func_desc (machine_insns);
   for (uint32_t i = 0; i < nargs; i++) param_size += arg_types[i] == MIR_T_LD ? 16 : 8;
@@ -339,8 +354,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0x7c0803a6, /* mtlr r0 */
     0x4e800020, /* blr */
   };
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 256);
   frame_size = PPC64_STACK_HEADER_SIZE + 64; /* header + 8(param area) */
   local_var_size = nres * 16 + 8;            /* saved r14, results */
   if (vararg_p) {
@@ -430,8 +447,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
                 MIR_T_I64); /* restore res_reg */
   ppc64_gen_addi (machine_insns, 1, 1, frame_size);
   push_insns (machine_insns, finish_pattern, sizeof (finish_pattern));
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 /* Brief: save lr (r1+16); update r1, save all param regs (r1+header+64);
@@ -448,8 +467,10 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     0x7c0803a6, /* mtlr r0 */
   };
   int frame_size = PPC64_STACK_HEADER_SIZE + 8 * 8 + 13 * 8 + 8 * 8;
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 256);
   push_insns (machine_insns, prologue, sizeof (prologue));
   /* stdu r1,n(r1): header + 8(gp args) + 13(fp args) + 8(param area): */
   if (frame_size % 16 != 0) frame_size += 8;
@@ -464,13 +485,15 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   ppc64_gen_jump (machine_insns, 12, TRUE);
   ppc64_gen_mov (machine_insns, 12, 3);
   for (unsigned reg = 3; reg <= 10; reg++) /* ld rn,dispn(r1) : */
-    ppc64_gen_ld (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
+    ppc64_gen_ld (machine_insns, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
   for (unsigned reg = 1; reg <= 13; reg++) /* lfd fn,dispn(r1) : */
-    ppc64_gen_ld (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 1 + 8) * 8 + 64, MIR_T_D);
-  ppc64_gen_addi (ctx, 1, 1, frame_size);
+    ppc64_gen_ld (machine_insns, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 1 + 8) * 8 + 64, MIR_T_D);
+  ppc64_gen_addi (machine_insns, 1, 1, frame_size);
   push_insns (machine_insns, epilogue, sizeof (epilogue));
   push_insn (machine_insns, (31 << 26) | (467 << 1) | (12 << 21) | (9 << 16)); /* mctr 12 */
   push_insn (machine_insns, (19 << 26) | (528 << 1) | (20 << 21));             /* bcctr */
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }

@@ -3314,12 +3314,10 @@ struct machine_code_ctx {
 #endif
   VARR (code_holder_t) * code_holders;
   size_t page_size;
-  VARR (uint8_t) * machine_insns;
 };
 
 #define code_holders ctx->machine_code_ctx->code_holders
 #define page_size ctx->machine_code_ctx->page_size
-#define machine_insns ctx->machine_code_ctx->machine_insns
 
 static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   uint8_t *mem, *free_adddr;
@@ -3473,7 +3471,6 @@ static void code_init (MIR_context_t ctx) {
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
-  VARR_CREATE (uint8_t, machine_insns, 1024);
 #if MIR_PARALLEL_GEN
   pthread_mutex_destroy (&code_mutex);
 #endif
@@ -3488,7 +3485,6 @@ static void code_finish (MIR_context_t ctx) {
     mem_unmap (ch.start, ch.bound - ch.start);
   }
   VARR_DESTROY (code_holder_t, code_holders);
-  VARR_DESTROY (uint8_t, machine_insns);
   free (ctx->machine_code_ctx);
   ctx->machine_code_ctx = NULL;
 }

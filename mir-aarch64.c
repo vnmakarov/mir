@@ -208,8 +208,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, pat, offset_imm, scale, sp = 31;
   uint32_t *addr;
   const uint32_t temp_reg = 8; /* x8 or v9 */
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 128);
   push_insns (machine_insns, prolog, sizeof (prolog));
   mir_assert (sizeof (long double) == 16);
   for (size_t i = 0; i < nargs; i++) { /* args */
@@ -266,8 +268,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     }
   }
   push_insns (machine_insns, epilog, sizeof (epilog));
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
@@ -304,8 +308,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
   uint32_t nres = func_item->u.func->nres;
   MIR_type_t *results = func_item->u.func->res_types;
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 128);
   push_insns (machine_insns, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (machine_insns, save_insns, sizeof (save_insns));
   push_insns (machine_insns, prepare_pat, sizeof (prepare_pat));
@@ -341,8 +347,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns)))[-4]
     |= imm << 5;
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 /* Save regs x0-x7, q0-q7; x9 = call hook_address (ctx, called_func); restore regs; br x9 */
@@ -353,10 +361,12 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   static const uint32_t restore_fplr = 0xa8c17bfd; /* ldp R29, R30, SP, #16 */
   uint8_t *base_addr, *curr_addr, *code = NULL;
   size_t len = sizeof (save_insns) + sizeof (restore_insns); /* initial code length */
+  VARR (uint8_t) * machine_insns;
 
 #ifndef MIR_NO_PARALLEL_GEN
   pthread_mutex_lock (&code_mutex);
 #endif
+  VARR_CREATE (uint8_t, machine_insns, 128);
   for (;;) { /* dealing with moving code to another page */
     curr_addr = base_addr = _MIR_get_new_code_addr (ctx, len);
     if (curr_addr == NULL) break;
@@ -377,6 +387,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     code = _MIR_publish_code_by_addr (ctx, base_addr, VARR_ADDR (uint8_t, machine_insns), len);
     if (code != NULL) break;
   }
+  VARR_DESTROY (uint8_t, machine_insns);
 #ifndef MIR_NO_PARALLEL_GEN
   pthread_mutex_unlock (&code_mutex);
 #endif

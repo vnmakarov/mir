@@ -110,34 +110,51 @@ static void s390x_gen_3addrs (VARR (uint8_t) * insn_varr, unsigned int r1, void 
 }
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR (uint8_t) * machine_insns;
+  void *res;
+
+  VARR_CREATE (uint8_t, machine_insns, 128);
   s390x_gen_mov (machine_insns, 2, 15);      /* lgr r2,15 */
   s390x_gen_jump (machine_insns, 14, FALSE); /* bcr m15,r14 */
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 void *_MIR_get_bend_builtin (MIR_context_t ctx) {
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR (uint8_t) * machine_insns;
+  void *res;
+
+  VARR_CREATE (uint8_t, machine_insns, 128);
   s390x_gen_ld (machine_insns, 0, 15, 0, MIR_T_I64); /* r0 = 0(r15) */
   s390x_gen_st (machine_insns, 0, 2, 0, MIR_T_I64);  /* 0(r2) = r0 */
   s390x_gen_mov (machine_insns, 15, 2);              /* lgr r15,2 */
   s390x_gen_jump (machine_insns, 14, FALSE);         /* bcr m15,r14 */
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 void *_MIR_get_thunk (MIR_context_t ctx) {
   const int max_thunk_len = (4 * 8); /* see _MIR_redirect_thunk */
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR (uint8_t) * machine_insns;
+  void *res;
+
+  VARR_CREATE (uint8_t, machine_insns, 128);
   for (int i = 0; i < max_thunk_len; i++) VARR_PUSH (uint8_t, machine_insns, 0);
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   int64_t offset = (uint8_t *) to - (uint8_t *) thunk;
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR (uint8_t) * machine_insns;
+
+  VARR_CREATE (uint8_t, machine_insns, 128);
   assert (offset % 2 == 0);
   offset /= 2;
   if (-(1l << 31) < offset && offset < (1l << 31)) { /* brcl m15,offset: */
@@ -157,6 +174,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   }
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, machine_insns),
                     VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
 }
 
 struct s390x_va_list {
@@ -216,8 +234,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
                         MIR_type_t *arg_types, int vararg_p) {
   MIR_type_t type;
   int n_gpregs = 0, n_fpregs = 0, res_reg = 7, frame_size, disp, param_offset, param_size = 0;
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 128);
   frame_size = S390X_STACK_HEADER_SIZE;
   if (nres > 0 && res_types[0] == MIR_T_LD) n_gpregs++; /* ld address */
   for (uint32_t i = 0; i < nargs; i++) {                /* calculate param area size: */
@@ -296,8 +316,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   s390x_gen_ldstm (machine_insns, 6, 7, 15, 48, TRUE);  /* lmg 6,7,48(r15) : */
   s390x_gen_ld (machine_insns, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (machine_insns, 14, FALSE);            /* bcr m15,r14 */
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
@@ -310,8 +332,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   uint32_t nres = func->nres, nargs = func->nargs;
   MIR_type_t type, *res_types = func->res_types;
   int disp, frame_size, local_var_size, n_gpregs, n_fpregs, va_list_disp, results_disp;
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 128);
   frame_size = S390X_STACK_HEADER_SIZE;                 /* register save area */
   s390x_gen_st (machine_insns, 14, 15, 112, MIR_T_I64); /* stg 14,112(r15) */
   s390x_gen_ldstm (machine_insns, 2, 6, 15, 16, FALSE); /* stmg 2,6,16(r15) : */
@@ -367,8 +391,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   s390x_gen_ld (machine_insns, 6, 15, 48, MIR_T_I64);   /* lg 6,48(r15) : */
   s390x_gen_ld (machine_insns, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (machine_insns, 14, FALSE);            /* bcr m15,r14 */
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
 
 /* Brief: save r14 (r15+120); save all param regs r2-r6 (r15+16),f0,f2,f4,f6 (r15+128);
@@ -376,8 +402,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
    r2 = call hook_address (ctx, called_func); r1=r2; restore all params regs, r15, r14; bcr r1 */
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   int frame_size = S390X_STACK_HEADER_SIZE;
+  VARR (uint8_t) * machine_insns;
+  void *res;
 
-  VARR_TRUNC (uint8_t, machine_insns, 0);
+  VARR_CREATE (uint8_t, machine_insns, 128);
   s390x_gen_st (machine_insns, 14, 15, 112, MIR_T_I64); /* stg 14,112(r15) */
   s390x_gen_ldstm (machine_insns, 2, 6, 15, 16, FALSE); /* stmg 2,6,16(r15) : */
   for (unsigned reg = 0; reg <= 6; reg += 2)            /* stdy f0,f2,f4,f6,128(r15) : */
@@ -393,6 +421,8 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   s390x_gen_ldstm (machine_insns, 2, 6, 15, 16, TRUE);  /* lmg 2,6,16(r15) : */
   s390x_gen_ld (machine_insns, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (machine_insns, 1, FALSE);
-  return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
-                            VARR_LENGTH (uint8_t, machine_insns));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
+                           VARR_LENGTH (uint8_t, machine_insns));
+  VARR_DESTROY (uint8_t, machine_insns);
+  return res;
 }
