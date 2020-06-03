@@ -43,13 +43,13 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 c2m: mir.o mir-gen.o c2mir/c2mir.h c2mir/mirc.h c2mir/c2mir.c c2mir/c2mir-driver.c
-	$(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o -lm -ldl -o $@
+	$(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o -lm -ldl -lpthread -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
 
 l2m: llvm2mir.o $(MIR_DEPS) llvm2mir/llvm2mir.h llvm2mir/llvm2mir-driver.c mir-gen.c mir-gen.h 
-	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -o l2m
+	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -lpthread -o l2m
 
 m2b: mir.o mir-utils/m2b.c
 	$(CC) -I. $(CFLAGS) -o $@ mir.o mir-utils/m2b.c
@@ -90,103 +90,103 @@ bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench 
 	@echo ==============================Bench is done
 
 mir-test:
-	$(CC) -g mir.c mir-tests/simplify.c && ./a.out
+	$(CC) -g mir.c mir-tests/simplify.c -lpthread && ./a.out
 
 scan-test:
-	$(CC) -g mir.c mir-tests/scan-test.c && ./a.out
+	$(CC) -g mir.c mir-tests/scan-test.c -lpthread && ./a.out
 
 io-test:
-	$(CC) -g mir.c mir-tests/io.c && ./a.out
+	$(CC) -g mir.c mir-tests/io.c -lpthread && ./a.out
 
 io-bench:
 	@echo ========io-bench can take upto 2 min===============
-	$(CC) $(CFLAGS) mir.c mir-tests/io-bench.c && ./a.out
+	$(CC) $(CFLAGS) mir.c mir-tests/io-bench.c -lpthread && ./a.out
 
 interp-test1:
-	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/loop-interp.c && ./a.out
+	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/loop-interp.c -lpthread && ./a.out
 interp-test2:
-	$(CC) -g -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out
+	$(CC) -g -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c -lpthread && ./a.out
 interp-test3:
-	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/sieve-interp.c && ./a.out
+	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/sieve-interp.c -lpthread && ./a.out
 interp-test4:
-	$(CC) -g -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/sieve-interp.c && ./a.out
+	$(CC) -g -DMIR_INTERP_DEBUG=1 -DMIR_C_INTERFACE=1 mir.c mir-tests/sieve-interp.c -lpthread && ./a.out
 interp-test5:
-	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/hi-interp.c && ./a.out
+	$(CC) -g -DMIR_INTERP_DEBUG=1 mir.c mir-tests/hi-interp.c -lpthread && ./a.out
 interp-test6:
-	$(CC) -g mir.c mir-tests/args-interp.c && ./a.out
+	$(CC) -g mir.c mir-tests/args-interp.c -lpthread && ./a.out
 interp-test7:
-	$(CC) -g -DMIR_C_INTERFACE=1 mir.c mir-tests/args-interp.c && ./a.out
+	$(CC) -g -DMIR_C_INTERFACE=1 mir.c mir-tests/args-interp.c -lpthread && ./a.out
 interp-test8:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test8.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test8.mir
 interp-test9:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test9.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test9.mir
 
 interp-test10:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test10.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test10.mir
 
 interp-test11:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test11.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test11.mir
 
 interp-test12:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test12.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test12.mir
 
 interp-test13:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test13.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test13.mir
 
 interp-test14:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -i mir-tests/test14.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -i mir-tests/test14.mir
 
 interp-test: interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7 interp-test8\
              interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
 
 interp-bench:
-	$(CC) $(CFLAGS) mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) mir.c mir-tests/sieve-interp.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) mir.c mir-tests/loop-interp.c -lpthread && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DMIR_C_INTERFACE=1 mir.c mir-tests/loop-interp.c -lpthread && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) mir.c mir-tests/sieve-interp.c -lpthread && ./a.out && size ./a.out
 
 gen-test1:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test1.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test1.mir
 gen-test2:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test2.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test2.mir
 gen-test3:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test3.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test3.mir
 gen-test4:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test4.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test4.mir
 gen-test5:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test5.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test5.mir
 gen-test6:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test6.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test6.mir
 gen-test7:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c && ./a.out mir-tests/test7.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/test-gen.c -lpthread && ./a.out mir-tests/test7.mir
 
 gen-test8:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test8.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -g mir-tests/test8.mir
 
 gen-test9:
-	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test9.mir
+	$(CC) -g -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -g mir-tests/test9.mir
 
 gen-test10:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test10.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -g mir-tests/test10.mir
 
 gen-test11:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 && ./a.out -g mir-tests/test11.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 -lpthread && ./a.out -g mir-tests/test11.mir
 
 gen-test12:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 && ./a.out -g mir-tests/test12.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -DTEST_GEN_DEBUG=1 -lpthread && ./a.out -g mir-tests/test12.mir
 
 gen-test13:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test13.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -g mir-tests/test13.mir
 
 gen-test14:
-	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c && ./a.out -g mir-tests/test14.mir
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -lpthread && ./a.out -g mir-tests/test14.mir
 
 gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14
-	$(CC) -g -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
-	$(CC) -g -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out
+	$(CC) -g -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c -lpthread && ./a.out
+	$(CC) -g -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c -lpthread && ./a.out
 
 gen-bench:
-	$(CC) $(CFLAGS) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
-	$(CC) $(CFLAGS) -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DTEST_GEN_LOOP mir.c mir-gen.c mir-tests/loop-sieve-gen.c -lpthread && ./a.out && size ./a.out
+	$(CC) $(CFLAGS) -DTEST_GEN_SIEVE mir.c mir-gen.c mir-tests/loop-sieve-gen.c -lpthread && ./a.out && size ./a.out
 
 gen-bench2: c2m
 	echo +++++ Compiling and generating all code for c2m: +++++
@@ -201,12 +201,12 @@ gen-speed:
 	fi
 
 readme-example-test:
-	$(CC) -g mir.c mir-gen.c mir-tests/readme-example.c && ./a.out
+	$(CC) -g mir.c mir-gen.c mir-tests/readme-example.c -lpthread && ./a.out
 
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
-	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl && ./a.out -v sieve.c -ei
+	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl -lpthread && ./a.out -v sieve.c -ei
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap-test0 c2mir-bootstrap-test c2mir-bootstrap-test2
 
@@ -259,7 +259,7 @@ c2mir-bootstrap-test4: c2m
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-sieve-bench:
-	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -lm -ldl && ./a.out -v sieve.c -eg && size ./a.out
+	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -lm -ldl -lpthread && ./a.out -v sieve.c -eg && size ./a.out
 
 c2mir-bench: c2m
 	c-benchmarks/run-benchmarks.sh
@@ -274,27 +274,27 @@ c2mir-bin-gen-test: c2m mir.o mir-gen.o b2ctab
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-bin-gen
 
 mir2c-test:
-	$(CC) -g -DTEST_MIR2C -I. mir.c mir2c/mir2c.c && ./a.out
+	$(CC) -g -DTEST_MIR2C -I. mir.c mir2c/mir2c.c -lpthread && ./a.out
 
 mir2c-bench:
-	$(CC) $(CFLAGS) -DTEST_MIR2C -I. mir2c/mir2c.c mir.c && ./a.out -v && size ./a.out
+	$(CC) $(CFLAGS) -DTEST_MIR2C -I. mir2c/mir2c.c mir.c -lpthread && ./a.out -v && size ./a.out
 
 adt-test: varr-test dlist-test bitmap-test htab-test reduce-test
 
 varr-test:
-	$(CC) -g -I. adt-tests/mir-varr-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-varr-test.c -lpthread && ./a.out
 
 dlist-test:
-	$(CC) -g -I. adt-tests/mir-dlist-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-dlist-test.c -lpthread && ./a.out
 
 bitmap-test:
-	$(CC) -g -I. adt-tests/mir-bitmap-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-bitmap-test.c -lpthread && ./a.out
 
 htab-test:
-	$(CC) -g -I. adt-tests/mir-htab-test.c && ./a.out
+	$(CC) -g -I. adt-tests/mir-htab-test.c -lpthread && ./a.out
 
 reduce-test:
-	$(CC) -g -I. -O3 -DNDEBUG adt-tests/mir-reduce-test.c && ./a.out < c2mir/c2mir.c
+	$(CC) -g -I. -O3 -DNDEBUG adt-tests/mir-reduce-test.c -lpthread && ./a.out < c2mir/c2mir.c
 
 clean:
 	rm -f $(OBJS) ./a.out
