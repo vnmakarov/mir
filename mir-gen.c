@@ -6555,7 +6555,7 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
     pthread_mutex_lock (&queue_mutex);
     VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
     pthread_cond_broadcast (&generate_signal);
-    pthread_mutex_lock (&queue_mutex);
+    pthread_mutex_unlock (&queue_mutex);
   }
 #endif
 }
