@@ -37,7 +37,7 @@ endif
 THREAD_LIB=
 ifeq ($(shell sh ./check-threads.sh), ok)
   THREAD_LIB = -lpthread
-  CFLAGS += -DMIR_PARALLEL_GEN
+  CC += -DMIR_PARALLEL_GEN
 endif
 
 all: $(OBJS)
