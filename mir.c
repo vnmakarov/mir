@@ -2210,23 +2210,26 @@ void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
-static void store_labels_for_duplication (MIR_context_t ctx, MIR_insn_t insn, MIR_insn_t new_insn) {
+static void store_labels_for_duplication (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
+                                          VARR (MIR_insn_t) * branch_insns, MIR_insn_t insn,
+                                          MIR_insn_t new_insn) {
   if (MIR_branch_code_p (insn->code) || insn->code == MIR_SWITCH) {
-    VARR_PUSH (MIR_insn_t, temp_insns2, new_insn);
+    VARR_PUSH (MIR_insn_t, branch_insns, new_insn);
   } else if (insn->code == MIR_LABEL) {
     mir_assert (insn->data == NULL);
     insn->data = new_insn;
-    VARR_PUSH (MIR_insn_t, temp_insns, insn);
+    VARR_PUSH (MIR_insn_t, labels, insn);
   }
 }
 
-static void redirect_duplicated_labels (MIR_context_t ctx) {
+static void redirect_duplicated_labels (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
+                                        VARR (MIR_insn_t) * branch_insns) {
   MIR_insn_t insn;
 
-  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) { /* redirect new label operands */
+  while (VARR_LENGTH (MIR_insn_t, branch_insns) != 0) { /* redirect new label operands */
     size_t start_label_nop = 0, bound_label_nop = 1, n;
 
-    insn = VARR_POP (MIR_insn_t, temp_insns2);
+    insn = VARR_POP (MIR_insn_t, branch_insns);
     if (insn->code == MIR_SWITCH) {
       start_label_nop = 1;
       bound_label_nop = start_label_nop + insn->nops - 1;
@@ -2234,8 +2237,8 @@ static void redirect_duplicated_labels (MIR_context_t ctx) {
     for (n = start_label_nop; n < bound_label_nop; n++)
       insn->ops[n].u.label = insn->ops[n].u.label->data;
   }
-  while (VARR_LENGTH (MIR_insn_t, temp_insns) != 0) { /* reset data */
-    insn = VARR_POP (MIR_insn_t, temp_insns);
+  while (VARR_LENGTH (MIR_insn_t, labels) != 0) { /* reset data */
+    insn = VARR_POP (MIR_insn_t, labels);
     insn->data = NULL;
   }
 }
@@ -2243,21 +2246,24 @@ static void redirect_duplicated_labels (MIR_context_t ctx) {
 void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_func_t func;
   MIR_insn_t insn, new_insn;
+  VARR (MIR_insn_t) * labels, *branch_insns;
 
   mir_assert (func_item != NULL && func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   mir_assert (DLIST_HEAD (MIR_insn_t, func->original_insns) == NULL);
   func->original_insns = func->insns;
   DLIST_INIT (MIR_insn_t, func->insns);
-  VARR_TRUNC (MIR_insn_t, temp_insns, 0);
-  VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+  VARR_CREATE (MIR_insn_t, labels, 0);
+  VARR_CREATE (MIR_insn_t, branch_insns, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->original_insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) { /* copy insns and collect label info */
     new_insn = MIR_copy_insn (ctx, insn);
     DLIST_APPEND (MIR_insn_t, func->insns, new_insn);
-    store_labels_for_duplication (ctx, insn, new_insn);
+    store_labels_for_duplication (ctx, labels, branch_insns, insn, new_insn);
   }
-  redirect_duplicated_labels (ctx);
+  redirect_duplicated_labels (ctx, labels, branch_insns);
+  VARR_DESTROY (MIR_insn_t, labels);
+  VARR_DESTROY (MIR_insn_t, branch_insns);
 }
 
 void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
@@ -3217,7 +3223,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         }
       if (new_insn->code != MIR_RET) {
         MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
-        store_labels_for_duplication (ctx, insn, new_insn);
+        store_labels_for_duplication (ctx, temp_insns, temp_insns2, insn, new_insn);
       } else {
         /* should be the last insn after simplification */
         mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && call->ops[0].mode == MIR_OP_REF
@@ -3239,7 +3245,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         free (ret_insn);
       }
     }
-    redirect_duplicated_labels (ctx);
+    redirect_duplicated_labels (ctx, temp_insns, temp_insns2);
     if (alloca_p) {
       temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
       new_insn = MIR_new_insn (ctx, MIR_BSTART, MIR_new_reg_op (ctx, temp_reg));
