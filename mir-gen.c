@@ -6084,7 +6084,7 @@ static void finish_fast_gen (gen_ctx_t gen_ctx) {
 static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void *start_addr) {
   size_t i;
   int ch;
-  char cfname[30];
+  char cfname[50];
   char command[500];
   FILE *f;
 #if !defined(__APPLE__)
@@ -6092,7 +6092,7 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
   FILE *bf;
 #endif
 
-  sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
+  sprintf (cfname, "_mir_%d_%lu.c", gen_ctx->gen_num, (unsigned long) getpid ());
   if ((f = fopen (cfname, "w")) == NULL) return;
 #if defined(__APPLE__)
   fprintf (f, "unsigned char code[] = {");
@@ -6105,7 +6105,7 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
   sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
            cfname, cfname, cfname, cfname, cfname);
 #else
-  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
+  sprintf (bfname, "_mir_%d_%lu.bin", gen_ctx->gen_num, (unsigned long) getpid ());
   if ((bf = fopen (bfname, "w")) == NULL) return;
   fprintf (f, "void code (void) {}\n");
   for (i = 0; i < code_len; i++) fputc (code[i], bf);
