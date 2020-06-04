@@ -3271,6 +3271,9 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   MIR_module_t saved_module = curr_module;
 
   va_start (argp, nargs);
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
   VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (i = 0; i < nargs; i++) {
     arg.type = va_arg (argp, MIR_type_t);
@@ -3290,7 +3293,12 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
           if (VARR_GET (MIR_var_t, temp_vars, i).type
               != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type)
             break;
-        if (i >= nargs) return proto_item;
+        if (i >= nargs) {
+#if MIR_PARALLEL_GEN
+          pthread_mutex_unlock (&ctx_mutex);
+#endif
+          return proto_item;
+        }
       }
     }
     MIR_get_error_func (ctx) (MIR_repeated_decl_error,
@@ -3304,6 +3312,9 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   DLIST_REMOVE (MIR_item_t, curr_module->items, proto_item);
   DLIST_PREPEND (MIR_item_t, curr_module->items, proto_item); /* make it first in the list */
   curr_module = saved_module;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#endif
   return proto_item;
 }
 
@@ -3312,6 +3323,9 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
   MIR_item_t item, ref_item;
   MIR_module_t saved_module = curr_module;
 
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
   name = _MIR_uniq_string (ctx, name);
   if ((ref_item = find_item (ctx, name, &environment_module)) != NULL) {
     if (ref_item->item_type != MIR_import_item || ref_item->addr != addr)
@@ -3343,6 +3357,9 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
     item->ref_def = ref_item;
     curr_module = saved_module;
   }
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#endif
   return item;
 }
 
