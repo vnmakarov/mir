@@ -6146,7 +6146,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   double start_time = 0.0;
 #endif
 
-#if MIR_PARALLEL_GEN
+#if !MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6334,7 +6334,7 @@ void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f) {
     fprintf (stderr, "Calling MIR_gen_set_debug_file before MIR_gen_init -- good bye\n");
     exit (1);
   }
-#if MIR_PARALLEL_GEN
+#if !MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6347,7 +6347,7 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
 
-#if MIR_PARALLEL_GEN
+#if !MIR_PARALLEL_GEN
   gen_num = 0;
 #endif
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
@@ -6406,7 +6406,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
   gen_ctx_t gen_ctx;
   MIR_reg_t reg;
 
-#if MIR_PARALLEL_GEN
+#if !MIR_PARALLEL_GEN
   gens_num = 1;
 #else
   if (gens_num < 1) gens_num = 1;
