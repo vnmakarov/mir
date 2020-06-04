@@ -6360,8 +6360,11 @@ static void *gen (void *arg) {
   MIR_item_t func_item;
   gen_ctx_t gen_ctx = arg;
   struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
-  size_t len;
+  pthread_attr_t attr;
+  size_t len, stack_size;
 
+  pthread_attr_getstacksize (&attr, &stack_size);
+  fprintf (stderr, "%d:stack size=%lu\n", gen_ctx->gen_num, stack_size);
   for (;;) {
     pthread_mutex_lock (&queue_mutex);
     while (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start)
@@ -6380,9 +6383,11 @@ static void *gen (void *arg) {
     }
     gen_ctx->busy_p = TRUE;
     pthread_mutex_unlock (&queue_mutex);
-    fprintf (stderr, ">>>Starting parallel generation of %s\n", func_item->u.func->name);
+    //    fprintf (stderr, ">>>Starting parallel generation of %s in %d\n", func_item->u.func->name,
+    //    gen_ctx->gen_num);
     MIR_gen (gen_ctx->ctx, gen_ctx->gen_num, func_item);
-    fprintf (stderr, ">>>Finishing parallel generation of %s\n", func_item->u.func->name);
+    //    fprintf (stderr, ">>>Finishing parallel generation of %s in %d\n",
+    //    func_item->u.func->name, gen_ctx->gen_num);
     pthread_mutex_lock (&queue_mutex);
     gen_ctx->busy_p = FALSE;
     pthread_cond_signal (&done_signal);
