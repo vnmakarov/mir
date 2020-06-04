@@ -6437,6 +6437,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
       gen_ctx = &all_gen_ctx->gen_ctx[i];
       gen_ctx->busy_p = FALSE;
       gen_ctx->gen_num = i;
+      gen_ctx->all_gen_ctx = all_gen_ctx;
       if (pthread_create (&gen_ctx->gen_thread, NULL, gen, gen_ctx) != 0) {
         signal_threads_to_finish (all_gen_ctx);
         for (int j = 0; j < i; j++) pthread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
@@ -6450,7 +6451,10 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
 #endif
   for (int i = 0; i < gens_num; i++) {
     gen_ctx = &all_gen_ctx->gen_ctx[i];
+#if !MIR_PARALLEL_GEN
     gen_ctx->all_gen_ctx = all_gen_ctx;
+    gen_ctx->gen_num = i;
+#endif
     gen_ctx->ctx = ctx;
     optimize_level = 2;
     gen_ctx->target_ctx = NULL;
