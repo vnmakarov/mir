@@ -1261,15 +1261,23 @@ MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name, size_t nres
 
 MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name) {
   MIR_var_t var;
+  MIR_reg_t res;
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type for register %s: got '%s'", name,
                               type_str (type));
   var.type = type;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
   var.name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   mir_assert (func != NULL);
   VARR_PUSH (MIR_var_t, func->vars, var);
-  return create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
+  res = create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#endif
+  return res;
 }
 
 static reg_desc_t *find_rd_by_name_num (MIR_context_t ctx, size_t name_num, MIR_func_t func) {
