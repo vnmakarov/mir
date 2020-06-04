@@ -1971,7 +1971,15 @@ MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
 }
 
 const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  return VARR_ADDR (string_t, strings)[get_func_rd_by_reg (ctx, reg, func)->name_num].str.s;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
+  const char *res
+    = VARR_ADDR (string_t, strings)[get_func_rd_by_reg (ctx, reg, func)->name_num].str.s;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#endif
+  return res;
 }
 
 /* Functions to create operands.  */
