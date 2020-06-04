@@ -1897,6 +1897,9 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type %s for temporary register",
                               type_str (type));
   mir_assert (func != NULL);
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
   for (;;) {
     func->last_temp_num++;
     if (func->last_temp_num == 0)
@@ -1904,8 +1907,12 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
     sprintf (temp_buff, "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
     string
       = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (temp_buff) + 1, temp_buff});
-    if (find_rd_by_name_num (ctx, string.num, func) == NULL)
+    if (find_rd_by_name_num (ctx, string.num, func) == NULL) {
+#if MIR_PARALLEL_GEN
+      pthread_mutex_unlock (&ctx_mutex);
+#endif
       return MIR_new_func_reg (ctx, func, type, string.str.s);
+    }
   }
 }
 
@@ -1928,7 +1935,14 @@ static reg_desc_t *get_func_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_fun
 }
 
 MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
-  return get_func_rd_by_name (ctx, reg_name, func)->reg;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_lock (&ctx_mutex);
+#endif
+  MIR_reg_t res = get_func_rd_by_name (ctx, reg_name, func)->reg;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#endif
+  return res;
 }
 
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
@@ -1952,6 +1966,7 @@ MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
   while (VARR_LENGTH (MIR_type_t, reg_type_cache.types) <= reg)
     VARR_PUSH (MIR_type_t, reg_type_cache.types, MIR_T_UNDEF);
   VARR_SET (MIR_type_t, reg_type_cache.types, reg, type);
+#endif
   return type;
 }
 
