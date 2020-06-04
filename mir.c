@@ -419,22 +419,28 @@ DEF_VARR (reg_desc_t);
 
 DEF_HTAB (size_t);
 
+#if !MIR_PARALLEL_GEN
 struct reg_type_cache {
   MIR_func_t func;
   VARR (MIR_type_t) * types;
 };
+#endif
 
 struct reg_ctx {
   VARR (reg_desc_t) * reg_descs;
   HTAB (size_t) * namenum2rdn_tab;
   HTAB (size_t) * reg2rdn_tab;
+#if !MIR_PARALLEL_GEN
   struct reg_type_cache reg_type_cache;
+#endif
 };
 
 #define reg_descs ctx->reg_ctx->reg_descs
 #define namenum2rdn_tab ctx->reg_ctx->namenum2rdn_tab
 #define reg2rdn_tab ctx->reg_ctx->reg2rdn_tab
+#if !MIR_PARALLEL_GEN
 #define reg_type_cache ctx->reg_ctx->reg_type_cache
+#endif
 
 static int namenum2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
   MIR_context_t ctx = arg;
@@ -476,8 +482,10 @@ static void reg_init (MIR_context_t ctx) {
   VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, ctx);
   HTAB_CREATE (size_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, ctx);
+#if !MIR_PARALLEL_GEN
   reg_type_cache.func = NULL;
   VARR_CREATE (MIR_type_t, reg_type_cache.types, 1000);
+#endif
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
@@ -509,7 +517,9 @@ static void reg_finish (MIR_context_t ctx) {
   VARR_DESTROY (reg_desc_t, reg_descs);
   HTAB_DESTROY (size_t, namenum2rdn_tab);
   HTAB_DESTROY (size_t, reg2rdn_tab);
+#if !MIR_PARALLEL_GEN
   VARR_DESTROY (MIR_type_t, reg_type_cache.types);
+#endif
   free (ctx->reg_ctx);
   ctx->reg_ctx = NULL;
 }
@@ -1916,6 +1926,7 @@ MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
   MIR_type_t type;
 
+#if !MIR_PARALLEL_GEN
   if (reg_type_cache.func != func) {
     reg_type_cache.func = func;
     VARR_TRUNC (MIR_type_t, reg_type_cache.types, 0);
@@ -1923,7 +1934,13 @@ MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
   if (VARR_LENGTH (MIR_type_t, reg_type_cache.types) > reg
       && (type = VARR_GET (MIR_type_t, reg_type_cache.types, reg)) != MIR_T_UNDEF)
     return type;
+#else
+  pthread_mutex_lock (&ctx_mutex);
+#endif
   type = get_func_rd_by_reg (ctx, reg, func)->type;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_unlock (&ctx_mutex);
+#else
   while (VARR_LENGTH (MIR_type_t, reg_type_cache.types) <= reg)
     VARR_PUSH (MIR_type_t, reg_type_cache.types, MIR_T_UNDEF);
   VARR_SET (MIR_type_t, reg_type_cache.types, reg, type);
