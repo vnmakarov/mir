@@ -1831,14 +1831,11 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
 }
 
 static MIR_insn_t new_insn (MIR_context_t ctx, MIR_insn_code_t code, size_t nops, va_list argp) {
-  VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
-  for (size_t i = 0; i < nops; i++) {
-    MIR_op_t op = va_arg (argp, MIR_op_t);
+  MIR_op_t *insn_ops = alloca (sizeof (MIR_op_t) * nops);
 
-    VARR_PUSH (MIR_op_t, temp_insn_ops, op);
-  }
+  for (size_t i = 0; i < nops; i++) insn_ops[i] = va_arg (argp, MIR_op_t);
   va_end (argp);
-  return MIR_new_insn_arr (ctx, code, nops, VARR_ADDR (MIR_op_t, temp_insn_ops));
+  return MIR_new_insn_arr (ctx, code, nops, insn_ops);
 }
 
 MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...) {
