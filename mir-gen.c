@@ -145,6 +145,15 @@ struct fg_ctx;
 typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
+typedef struct dead_var *dead_var_t;
+DEF_DLIST_LINK (dead_var_t);
+
+struct dead_var {
+  MIR_reg_t var;
+  DLIST_LINK (dead_var_t) dead_var_link;
+};
+DEF_DLIST (dead_var_t, dead_var_link);
+
 struct all_gen_ctx;
 
 struct gen_ctx {
@@ -163,6 +172,7 @@ struct gen_ctx {
   bitmap_t call_used_hard_regs, func_used_hard_regs;
   func_cfg_t curr_cfg;
   size_t curr_bb_index, curr_loop_node_index;
+  DLIST (dead_var_t) free_dead_vars;
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct cse_ctx *cse_ctx;
@@ -191,6 +201,7 @@ struct gen_ctx {
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
 #define curr_loop_node_index gen_ctx->curr_loop_node_index
+#define free_dead_vars gen_ctx->free_dead_vars
 #define loop_nodes gen_ctx->loop_nodes
 #define queue_nodes gen_ctx->queue_nodes
 #define loop_entries gen_ctx->loop_entries
@@ -298,10 +309,6 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
   }
 }
 
-typedef struct dead_var *dead_var_t;
-
-DEF_DLIST_LINK (dead_var_t);
-
 typedef struct bb *bb_t;
 
 DEF_DLIST_LINK (bb_t);
@@ -329,13 +336,6 @@ struct edge {
 
 DEF_DLIST (in_edge_t, in_link);
 DEF_DLIST (out_edge_t, out_link);
-
-struct dead_var {
-  MIR_reg_t var;
-  DLIST_LINK (dead_var_t) dead_var_link;
-};
-
-DEF_DLIST (dead_var_t, dead_var_link);
 
 struct bb_insn {
   MIR_insn_t insn;
@@ -449,11 +449,11 @@ struct func_cfg {
   loop_node_t root_loop_node;
 };
 
-static DLIST (dead_var_t) free_dead_vars;
+static void init_dead_vars (gen_ctx_t gen_ctx) { DLIST_INIT (dead_var_t, free_dead_vars); }
 
-static void init_dead_vars (void) { DLIST_INIT (dead_var_t, free_dead_vars); }
-
-static void free_dead_var (dead_var_t dv) { DLIST_APPEND (dead_var_t, free_dead_vars, dv); }
+static void free_dead_var (gen_ctx_t gen_ctx, dead_var_t dv) {
+  DLIST_APPEND (dead_var_t, free_dead_vars, dv);
+}
 
 static dead_var_t get_dead_var (gen_ctx_t gen_ctx) {
   dead_var_t dv;
@@ -464,7 +464,7 @@ static dead_var_t get_dead_var (gen_ctx_t gen_ctx) {
   return dv;
 }
 
-static void finish_dead_vars (void) {
+static void finish_dead_vars (gen_ctx_t gen_ctx) {
   dead_var_t dv;
 
   while ((dv = DLIST_HEAD (dead_var_t, free_dead_vars)) != NULL) {
@@ -493,16 +493,16 @@ static dead_var_t find_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t var) {
   return NULL;
 }
 
-static void clear_bb_insn_dead_vars (bb_insn_t bb_insn) {
+static void clear_bb_insn_dead_vars (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   dead_var_t dv;
 
   while ((dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars)) != NULL) {
     DLIST_REMOVE (dead_var_t, bb_insn->dead_vars, dv);
-    free_dead_var (dv);
+    free_dead_var (gen_ctx, dv);
   }
 }
 
-static void remove_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t hr) {
+static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t hr) {
   dead_var_t dv, next_dv;
 
   gen_assert (hr <= MAX_HARD_REG);
@@ -510,7 +510,7 @@ static void remove_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t hr) {
     next_dv = DLIST_NEXT (dead_var_t, dv);
     if (dv->var != hr) continue;
     DLIST_REMOVE (dead_var_t, bb_insn->dead_vars, dv);
-    free_dead_var (dv);
+    free_dead_var (gen_ctx, dv);
   }
 }
 
@@ -543,10 +543,10 @@ static bb_insn_t add_new_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   return bb_insn;
 }
 
-static void delete_bb_insn (bb_insn_t bb_insn) {
+static void delete_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   DLIST_REMOVE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn);
   bb_insn->insn->data = NULL;
-  clear_bb_insn_dead_vars (bb_insn);
+  clear_bb_insn_dead_vars (gen_ctx, bb_insn);
   if (bb_insn->call_hard_reg_args != NULL) bitmap_destroy (bb_insn->call_hard_reg_args);
   free (bb_insn);
 }
@@ -584,7 +584,7 @@ static void create_new_bb_insns (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 }
 
 static void gen_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  if (curr_cfg != NULL) delete_bb_insn (insn->data);
+  if (curr_cfg != NULL) delete_bb_insn (gen_ctx, insn->data);
   MIR_remove_insn (gen_ctx->ctx, curr_func_item, insn);
 }
 
@@ -1234,7 +1234,7 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     bb_insn = insn->data;
     gen_assert (bb_insn != NULL);
-    delete_bb_insn (bb_insn);
+    delete_bb_insn (gen_ctx, bb_insn);
   }
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
@@ -3997,7 +3997,7 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
     bitmap_copy (live, bb->live_out);
     for (bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = prev_bb_insn) {
       prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
-      clear_bb_insn_dead_vars (bb_insn);
+      clear_bb_insn_dead_vars (gen_ctx, bb_insn);
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_clear_bit_p (live, var);
@@ -4903,7 +4903,7 @@ static void combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn
     fprintf (debug_file, "      deleting now dead insn ");
     print_bb_insn (gen_ctx, def_insn->data, TRUE);
   });
-  remove_bb_insn_dead_var (bb_insn, hr);
+  remove_bb_insn_dead_var (gen_ctx, bb_insn, hr);
   move_bb_insn_dead_vars (bb_insn, def_insn->data);
   /* We should delete the def insn here because of possible
      substitution of the def insn 'r0 = ... r0 ...'.  We still
@@ -6464,7 +6464,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (loop_node_t, loop_nodes, 32);
     VARR_CREATE (loop_node_t, queue_nodes, 32);
     VARR_CREATE (loop_node_t, loop_entries, 16);
-    init_dead_vars ();
+    init_dead_vars (gen_ctx);
     init_data_flow (gen_ctx);
     init_cse (gen_ctx);
     init_rdef (gen_ctx);
@@ -6522,7 +6522,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     bitmap_destroy (insn_to_consider);
     bitmap_destroy (func_used_hard_regs);
     target_finish (gen_ctx);
-    finish_dead_vars ();
+    finish_dead_vars (gen_ctx);
     free (gen_ctx->data_flow_ctx);
     VARR_DESTROY (loop_node_t, loop_nodes);
     VARR_DESTROY (loop_node_t, queue_nodes);
