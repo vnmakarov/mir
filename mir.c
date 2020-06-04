@@ -27,6 +27,10 @@ struct interp_ctx;
 struct MIR_context {
   struct gen_ctx *gen_ctx;     /* should be the 1st member */
   struct c2mir_ctx *c2mir_ctx; /* should be the 2nd member */
+#if MIR_PARALLEL_GEN
+  pthread_mutex_t ctx_mutex;
+#define ctx_mutex ctx->ctx_mutex
+#endif
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) * temp_insns, *temp_insns2;
   VARR (MIR_op_t) * temp_insn_ops;
@@ -593,6 +597,9 @@ MIR_context_t MIR_init (void) {
   ctx->io_ctx = NULL;
   ctx->scan_ctx = NULL;
   ctx->interp_ctx = NULL;
+#if MIR_PARALLEL_GEN
+  pthread_mutex_init (&ctx_mutex, NULL);
+#endif
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++) mir_assert (c == insn_descs[c].code);
 #endif
@@ -745,6 +752,9 @@ void MIR_finish (MIR_context_t ctx) {
              (double) inline_insns_after / inline_insns_before);
 #endif
   free (ctx->string_ctx);
+#if MIR_PARALLEL_GEN
+  pthread_mutex_destroy (&ctx_mutex);
+#endif
   free (ctx);
   ctx = NULL;
 }
