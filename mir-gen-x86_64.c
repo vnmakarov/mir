@@ -1930,7 +1930,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
     } else {
       replacement = find_insn_pattern_replacement (gen_ctx, insn);
       if (replacement == NULL) {
-        fprintf (stderr, "fatal failure in matching insn:");
+        fprintf (stderr, "%d: fatal failure in matching insn:", gen_ctx->gen_num);
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
         exit (1);
       } else {
