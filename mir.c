@@ -3519,7 +3519,7 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* 
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
 #if MIR_PARALLEL_GEN
-  pthread_mutex_init (&code_mutex, NULL);
+  pthread_mutex_unlock (&code_mutex);
 #endif
   va_end (args);
 }
@@ -3530,7 +3530,7 @@ static void code_init (MIR_context_t ctx) {
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
 #if MIR_PARALLEL_GEN
-  pthread_mutex_destroy (&code_mutex);
+  pthread_mutex_init (&code_mutex, NULL);
 #endif
 }
 
