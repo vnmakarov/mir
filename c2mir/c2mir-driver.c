@@ -532,9 +532,13 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "exit code: %lu\n", (long unsigned) ret_code);
         }
       } else {
-        MIR_gen_init (ctx, 1);
-        if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, 0, (unsigned) optimize_level);
-        if (gen_debug_p) MIR_gen_set_debug_file (ctx, 0, stderr);
+        int n_gen = gen_debug_p ? 1 : 4;
+
+        MIR_gen_init (ctx, n_gen);
+        for (int i = 0; i < n_gen; i++) {
+          if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, i, (unsigned) optimize_level);
+          if (gen_debug_p) MIR_gen_set_debug_file (ctx, i, stderr);
+        }
         MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
                   import_resolver);
         fun_addr = MIR_gen (ctx, 0, main_func);
