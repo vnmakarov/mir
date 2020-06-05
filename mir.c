@@ -3581,6 +3581,8 @@ struct io_ctx {
   int (*io_writer) (MIR_context_t, uint8_t);
   int (*io_reader) (MIR_context_t);
   struct reduce_data *io_reduce_data;
+  VARR (MIR_var_t) * proto_vars;
+  VARR (MIR_type_t) * proto_types;
   VARR (string_t) * output_strings;
   HTAB (string_t) * output_string_tab;
   VARR (MIR_str_t) * bin_strings;
@@ -3594,6 +3596,8 @@ struct io_ctx {
 #define io_writer ctx->io_ctx->io_writer
 #define io_reader ctx->io_ctx->io_reader
 #define io_reduce_data ctx->io_ctx->io_reduce_data
+#define proto_vars ctx->io_ctx->proto_vars
+#define proto_types ctx->io_ctx->proto_types
 #define output_strings ctx->io_ctx->output_strings
 #define output_string_tab ctx->io_ctx->output_string_tab
 #define bin_strings ctx->io_ctx->bin_strings
@@ -4363,14 +4367,14 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
   int vararg_p = read_uint (ctx, "wrong vararg flag") != 0;
   uint64_t i, nres = read_uint (ctx, "wrong func nres");
 
-  VARR_TRUNC (MIR_type_t, temp_types, 0);
+  VARR_TRUNC (MIR_type_t, proto_types, 0);
   for (i = 0; i < nres; i++) {
     tag = read_token (ctx, &attr);
     if (TAG_TI8 > tag || tag > TAG_TBLOCK)
       MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong prototype result type tag %d", tag);
-    VARR_PUSH (MIR_type_t, temp_types, tag_type (tag));
+    VARR_PUSH (MIR_type_t, proto_types, tag_type (tag));
   }
-  VARR_TRUNC (MIR_var_t, temp_vars, 0);
+  VARR_TRUNC (MIR_var_t, proto_vars, 0);
   for (;;) {
     tag = read_token (ctx, &attr);
     if (tag == TAG_EOI) break;
@@ -4378,7 +4382,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
       MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
     var.name = read_name (ctx, module, "wrong arg name");
-    VARR_PUSH (MIR_var_t, temp_vars, var);
+    VARR_PUSH (MIR_var_t, proto_vars, var);
   }
   *nres_ptr = nres;
   return vararg_p;
@@ -4454,12 +4458,13 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
         if (module == NULL)
           MIR_get_error_func (ctx) (MIR_binary_io_error, "prototype %s outside module", name);
         if (func_proto_read (ctx, module, &nres))
-          MIR_new_vararg_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
-                                    VARR_LENGTH (MIR_var_t, temp_vars),
-                                    VARR_ADDR (MIR_var_t, temp_vars));
+          MIR_new_vararg_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, proto_types),
+                                    VARR_LENGTH (MIR_var_t, proto_vars),
+                                    VARR_ADDR (MIR_var_t, proto_vars));
         else
-          MIR_new_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
-                             VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
+          MIR_new_proto_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, proto_types),
+                             VARR_LENGTH (MIR_var_t, proto_vars),
+                             VARR_ADDR (MIR_var_t, proto_vars));
       } else if (strcmp (name, "func") == 0) {
         name = read_name (ctx, module, "wrong func name");
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -4468,13 +4473,13 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
         if (module == NULL)
           MIR_get_error_func (ctx) (MIR_binary_io_error, "func %s outside module", name);
         if (func_proto_read (ctx, module, &nres))
-          func = MIR_new_vararg_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
-                                          VARR_LENGTH (MIR_var_t, temp_vars),
-                                          VARR_ADDR (MIR_var_t, temp_vars));
+          func = MIR_new_vararg_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, proto_types),
+                                          VARR_LENGTH (MIR_var_t, proto_vars),
+                                          VARR_ADDR (MIR_var_t, proto_vars));
         else
-          func = MIR_new_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, temp_types),
-                                   VARR_LENGTH (MIR_var_t, temp_vars),
-                                   VARR_ADDR (MIR_var_t, temp_vars));
+          func = MIR_new_func_arr (ctx, name, nres, VARR_ADDR (MIR_type_t, proto_types),
+                                   VARR_LENGTH (MIR_var_t, proto_vars),
+                                   VARR_ADDR (MIR_var_t, proto_vars));
         VARR_TRUNC (MIR_label_t, func_labels, 0);
       } else if (strcmp (name, "endfunc") == 0) {
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -4704,6 +4709,8 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 static void io_init (MIR_context_t ctx) {
   if ((ctx->io_ctx = malloc (sizeof (struct io_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
+  VARR_CREATE (MIR_var_t, proto_vars, 0);
+  VARR_CREATE (MIR_type_t, proto_types, 0);
   VARR_CREATE (MIR_str_t, bin_strings, 512);
   VARR_CREATE (uint64_t, insn_label_string_nums, 64);
   VARR_CREATE (MIR_label_t, func_labels, 512);
@@ -4713,6 +4720,8 @@ static void io_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_label_t, func_labels);
   VARR_DESTROY (uint64_t, insn_label_string_nums);
   VARR_DESTROY (MIR_str_t, bin_strings);
+  VARR_DESTROY (MIR_var_t, proto_vars);
+  VARR_DESTROY (MIR_type_t, proto_types);
   free (ctx->io_ctx);
   ctx->io_ctx = NULL;
 }
