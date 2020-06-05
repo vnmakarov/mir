@@ -281,6 +281,7 @@ typedef struct MIR_func {
   VARR (MIR_var_t) * vars; /* args and locals but temps */
   void *machine_code;      /* address of generated machine code or NULL */
   void *call_addr;         /* address to call the function, it can be the same as machine_code */
+  void *internal;          /* internal data structure */
 } * MIR_func_t;
 
 typedef struct MIR_proto {
