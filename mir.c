@@ -524,9 +524,11 @@ static void scan_finish (MIR_context_t ctx);
 static void simplify_init (MIR_context_t ctx);
 static void simplify_finish (MIR_context_t ctx);
 
-MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }
+MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }  // ??? atomic
 
-void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) { error_func = func; }
+void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atomic access
+  error_func = func;
+}
 
 static htab_hash_t item_hash (MIR_item_t it, void *arg) {
   return mir_hash_finish (
