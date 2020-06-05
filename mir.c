@@ -32,8 +32,7 @@ struct MIR_context {
 #define ctx_mutex ctx->ctx_mutex
 #endif
   MIR_error_func_t error_func;
-  VARR (MIR_insn_t) * temp_insns, *temp_insns2;
-  VARR (size_t) * insn_nops;
+  VARR (size_t) * insn_nops; /* constant after initialization */
   VARR (char) * temp_string;
   VARR (uint8_t) * temp_data;
   char temp_buff[30];
@@ -57,8 +56,6 @@ struct MIR_context {
 };
 
 #define error_func ctx->error_func
-#define temp_insns ctx->temp_insns
-#define temp_insns2 ctx->temp_insns2
 #define insn_nops ctx->insn_nops
 #define temp_string ctx->temp_string
 #define temp_data ctx->temp_data
@@ -596,8 +593,6 @@ MIR_context_t MIR_init (void) {
   if ((ctx->string_ctx = malloc (sizeof (struct string_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   string_init (&strings, &string_tab);
-  VARR_CREATE (MIR_insn_t, temp_insns, 0);
-  VARR_CREATE (MIR_insn_t, temp_insns2, 0);
   check_and_prepare_insn_descs (ctx);
   DLIST_INIT (MIR_module_t, all_modules);
   vn_init (ctx);
@@ -715,8 +710,6 @@ void MIR_finish (MIR_context_t ctx) {
   string_finish (&strings, &string_tab);
   vn_finish (ctx);
   VARR_DESTROY (size_t, insn_nops);
-  VARR_DESTROY (MIR_insn_t, temp_insns2);
-  VARR_DESTROY (MIR_insn_t, temp_insns);
   code_finish (ctx);
   if (curr_func != NULL)
     MIR_get_error_func (ctx) (MIR_finish_error, "finish when function %s is not finished",
@@ -2458,9 +2451,12 @@ DEF_HTAB (val_t);
 
 struct simplify_ctx {
   HTAB (val_t) * val_tab;
+  VARR (MIR_insn_t) * temp_insns, *temp_insns2;
 };
 
 #define val_tab ctx->simplify_ctx->val_tab
+#define temp_insns ctx->simplify_ctx->temp_insns
+#define temp_insns2 ctx->simplify_ctx->temp_insns2
 
 static htab_hash_t val_hash (val_t v, void *arg) {
   MIR_context_t ctx = arg;
@@ -2484,9 +2480,13 @@ static void vn_init (MIR_context_t ctx) {
   if ((ctx->simplify_ctx = malloc (sizeof (struct simplify_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, ctx);
+  VARR_CREATE (MIR_insn_t, temp_insns, 0);
+  VARR_CREATE (MIR_insn_t, temp_insns2, 0);
 }
 
 static void vn_finish (MIR_context_t ctx) {
+  VARR_DESTROY (MIR_insn_t, temp_insns2);
+  VARR_DESTROY (MIR_insn_t, temp_insns);
   HTAB_DESTROY (val_t, val_tab);
   free (ctx->simplify_ctx);
   ctx->simplify_ctx = NULL;
