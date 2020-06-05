@@ -39,7 +39,6 @@ struct MIR_context {
   HTAB (MIR_item_t) * module_item_tab;
   /* Module to keep items potentially used by all modules:  */
   struct MIR_module environment_module;
-  VARR (MIR_reg_t) * inline_reg_map;
   MIR_module_t curr_module;
   MIR_func_t curr_func;
   int curr_label_num;
@@ -52,7 +51,6 @@ struct MIR_context {
   struct io_ctx *io_ctx;
   struct scan_ctx *scan_ctx;
   struct interp_ctx *interp_ctx;
-  size_t inlined_calls, inline_insns_before, inline_insns_after;
 };
 
 #define error_func ctx->error_func
@@ -62,15 +60,11 @@ struct MIR_context {
 #define temp_buff ctx->temp_buff
 #define module_item_tab ctx->module_item_tab
 #define environment_module ctx->environment_module
-#define inline_reg_map ctx->inline_reg_map
 #define curr_module ctx->curr_module
 #define curr_func ctx->curr_func
 #define curr_label_num ctx->curr_label_num
 #define all_modules ctx->all_modules
 #define modules_to_link ctx->modules_to_link
-#define inlined_calls ctx->inlined_calls
-#define inline_insns_before ctx->inline_insns_before
-#define inline_insns_after ctx->inline_insns_after
 
 static void util_error (MIR_context_t ctx, const char *message);
 #define MIR_VARR_ERROR util_error
@@ -596,7 +590,6 @@ MIR_context_t MIR_init (void) {
   check_and_prepare_insn_descs (ctx);
   DLIST_INIT (MIR_module_t, all_modules);
   simplify_init (ctx);
-  VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
   VARR_CREATE (uint8_t, temp_data, 512);
 #if !MIR_NO_IO
@@ -610,7 +603,6 @@ MIR_context_t MIR_init (void) {
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq, NULL);
   code_init (ctx);
   interp_init (ctx);
-  inlined_calls = inline_insns_before = inline_insns_after = 0;
   return ctx;
 }
 
@@ -706,7 +698,6 @@ void MIR_finish (MIR_context_t ctx) {
 #endif
   VARR_DESTROY (uint8_t, temp_data);
   VARR_DESTROY (char, temp_string);
-  VARR_DESTROY (MIR_reg_t, inline_reg_map);
   string_finish (&strings, &string_tab);
   simplify_finish (ctx);
   VARR_DESTROY (size_t, insn_nops);
@@ -717,12 +708,6 @@ void MIR_finish (MIR_context_t ctx) {
   if (curr_module != NULL)
     MIR_get_error_func (ctx) (MIR_finish_error, "finish when module %s is not finished",
                               curr_module->name);
-#if 0
-  if (inlined_calls != 0)
-    fprintf (stderr, "inlined calls = %lu, insns before = %lu, insns_after = %lu, ratio = %.2f\n",
-             inlined_calls, inline_insns_before, inline_insns_after,
-             (double) inline_insns_after / inline_insns_before);
-#endif
   free (ctx->string_ctx);
 #if MIR_PARALLEL_GEN
   pthread_mutex_destroy (&ctx_mutex);
@@ -2455,11 +2440,17 @@ DEF_HTAB (val_t);
 struct simplify_ctx {
   HTAB (val_t) * val_tab;
   VARR (MIR_insn_t) * temp_insns, *labels; /* temp_insns is for branch or ret insns */
+  VARR (MIR_reg_t) * inline_reg_map;
+  size_t inlined_calls, inline_insns_before, inline_insns_after;
 };
 
 #define val_tab ctx->simplify_ctx->val_tab
 #define temp_insns ctx->simplify_ctx->temp_insns
 #define labels ctx->simplify_ctx->labels
+#define inline_reg_map ctx->simplify_ctx->inline_reg_map
+#define inlined_calls ctx->simplify_ctx->inlined_calls
+#define inline_insns_before ctx->simplify_ctx->inline_insns_before
+#define inline_insns_after ctx->simplify_ctx->inline_insns_after
 
 static htab_hash_t val_hash (val_t v, void *arg) {
   MIR_context_t ctx = arg;
@@ -2485,9 +2476,18 @@ static void simplify_init (MIR_context_t ctx) {
   HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, ctx);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_insn_t, labels, 0);
+  VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
+  inlined_calls = inline_insns_before = inline_insns_after = 0;
 }
 
 static void simplify_finish (MIR_context_t ctx) {
+  VARR_DESTROY (MIR_reg_t, inline_reg_map);
+#if 0
+  if (inlined_calls != 0)
+    fprintf (stderr, "inlined calls = %lu, insns before = %lu, insns_after = %lu, ratio = %.2f\n",
+             inlined_calls, inline_insns_before, inline_insns_after,
+             (double) inline_insns_after / inline_insns_before);
+#endif
   VARR_DESTROY (MIR_insn_t, labels);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   HTAB_DESTROY (val_t, val_tab);
