@@ -158,9 +158,10 @@ struct all_gen_ctx;
 
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
+  int gen_num; /* always 1 for non-parallel generation */
 #if MIR_PARALLEL_GEN
   pthread_t gen_thread;
-  int gen_num, busy_p;
+  int busy_p;
 #endif
   MIR_context_t ctx;
   unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
