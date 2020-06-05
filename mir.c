@@ -3575,6 +3575,7 @@ struct io_ctx {
   struct reduce_data *io_reduce_data;
   VARR (MIR_var_t) * proto_vars;
   VARR (MIR_type_t) * proto_types;
+  VARR (MIR_op_t) * read_insn_ops;
   VARR (string_t) * output_strings;
   HTAB (string_t) * output_string_tab;
   VARR (MIR_str_t) * bin_strings;
@@ -3590,6 +3591,7 @@ struct io_ctx {
 #define io_reduce_data ctx->io_ctx->io_reduce_data
 #define proto_vars ctx->io_ctx->proto_vars
 #define proto_types ctx->io_ctx->proto_types
+#define read_insn_ops ctx->io_ctx->read_insn_ops
 #define output_strings ctx->io_ctx->output_strings
 #define output_string_tab ctx->io_ctx->output_string_tab
 #define bin_strings ctx->io_ctx->bin_strings
@@ -4426,7 +4428,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
       VARR_PUSH (uint64_t, insn_label_string_nums, attr.u);
       tag = read_token (ctx, &attr);
     }
-    VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
+    VARR_TRUNC (MIR_op_t, read_insn_ops, 0);
     if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
       name = to_str (ctx, attr.u).s;
       if (strcmp (name, "module") == 0) {
@@ -4668,12 +4670,12 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
       mir_assert (nop != 0 || MIR_call_code_p (insn_code) || insn_code == MIR_RET
                   || insn_code == MIR_SWITCH);
       for (n = 0; (nop == 0 || n < nop) && read_operand (ctx, &op, func); n++)
-        VARR_PUSH (MIR_op_t, temp_insn_ops, op);
+        VARR_PUSH (MIR_op_t, read_insn_ops, op);
       if (nop != 0 && n < nop)
         MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong number of operands of insn %s",
                                   insn_name (insn_code));
       MIR_append_insn (ctx, func,
-                       MIR_new_insn_arr (ctx, insn_code, n, VARR_ADDR (MIR_op_t, temp_insn_ops)));
+                       MIR_new_insn_arr (ctx, insn_code, n, VARR_ADDR (MIR_op_t, read_insn_ops)));
     } else if (tag == TAG_EOFILE) {
       break;
     } else {
@@ -4703,6 +4705,7 @@ static void io_init (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (MIR_var_t, proto_vars, 0);
   VARR_CREATE (MIR_type_t, proto_types, 0);
+  VARR_CREATE (MIR_op_t, read_insn_ops, 0);
   VARR_CREATE (MIR_str_t, bin_strings, 512);
   VARR_CREATE (uint64_t, insn_label_string_nums, 64);
   VARR_CREATE (MIR_label_t, func_labels, 512);
@@ -4712,6 +4715,7 @@ static void io_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_label_t, func_labels);
   VARR_DESTROY (uint64_t, insn_label_string_nums);
   VARR_DESTROY (MIR_str_t, bin_strings);
+  VARR_DESTROY (MIR_op_t, read_insn_ops);
   VARR_DESTROY (MIR_var_t, proto_vars);
   VARR_DESTROY (MIR_type_t, proto_types);
   free (ctx->io_ctx);
