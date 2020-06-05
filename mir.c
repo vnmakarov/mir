@@ -529,8 +529,8 @@ static void scan_init (MIR_context_t ctx);
 static void scan_finish (MIR_context_t ctx);
 #endif
 
-static void vn_init (MIR_context_t ctx);
-static void vn_finish (MIR_context_t ctx);
+static void simplify_init (MIR_context_t ctx);
+static void simplify_finish (MIR_context_t ctx);
 
 MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }
 
@@ -595,7 +595,7 @@ MIR_context_t MIR_init (void) {
   string_init (&strings, &string_tab);
   check_and_prepare_insn_descs (ctx);
   DLIST_INIT (MIR_module_t, all_modules);
-  vn_init (ctx);
+  simplify_init (ctx);
   VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
   VARR_CREATE (char, temp_string, 64);
   VARR_CREATE (uint8_t, temp_data, 512);
@@ -708,7 +708,7 @@ void MIR_finish (MIR_context_t ctx) {
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (MIR_reg_t, inline_reg_map);
   string_finish (&strings, &string_tab);
-  vn_finish (ctx);
+  simplify_finish (ctx);
   VARR_DESTROY (size_t, insn_nops);
   code_finish (ctx);
   if (curr_func != NULL)
@@ -2476,7 +2476,7 @@ static int val_eq (val_t v1, val_t v2, void *arg) {
   return v1.code == MIR_INSN_BOUND || MIR_op_eq_p (ctx, v1.op2, v2.op2);
 }
 
-static void vn_init (MIR_context_t ctx) {
+static void simplify_init (MIR_context_t ctx) {
   if ((ctx->simplify_ctx = malloc (sizeof (struct simplify_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, ctx);
@@ -2484,7 +2484,7 @@ static void vn_init (MIR_context_t ctx) {
   VARR_CREATE (MIR_insn_t, temp_insns2, 0);
 }
 
-static void vn_finish (MIR_context_t ctx) {
+static void simplify_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_insn_t, temp_insns2);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   HTAB_DESTROY (val_t, val_tab);
