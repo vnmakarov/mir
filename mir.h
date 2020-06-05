@@ -561,7 +561,8 @@ extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
                                 int keep_ref_p, int mem_float_p);
 
-extern const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module);
+extern void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff,
+                                     size_t buff_len);
 
 extern MIR_op_t _MIR_new_hard_reg_op (MIR_context_t ctx, MIR_reg_t hard_reg);
 
