@@ -2454,12 +2454,12 @@ DEF_HTAB (val_t);
 
 struct simplify_ctx {
   HTAB (val_t) * val_tab;
-  VARR (MIR_insn_t) * temp_insns, *temp_insns2;
+  VARR (MIR_insn_t) * temp_insns, *labels;
 };
 
 #define val_tab ctx->simplify_ctx->val_tab
 #define temp_insns ctx->simplify_ctx->temp_insns
-#define temp_insns2 ctx->simplify_ctx->temp_insns2
+#define labels ctx->simplify_ctx->labels
 
 static htab_hash_t val_hash (val_t v, void *arg) {
   MIR_context_t ctx = arg;
@@ -2484,11 +2484,11 @@ static void simplify_init (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   HTAB_CREATE (val_t, val_tab, 512, val_hash, val_eq, ctx);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
-  VARR_CREATE (MIR_insn_t, temp_insns2, 0);
+  VARR_CREATE (MIR_insn_t, labels, 0);
 }
 
 static void simplify_finish (MIR_context_t ctx) {
-  VARR_DESTROY (MIR_insn_t, temp_insns2);
+  VARR_DESTROY (MIR_insn_t, labels);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   HTAB_DESTROY (val_t, val_tab);
   free (ctx->simplify_ctx);
@@ -2793,8 +2793,8 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 static void remove_unused_labels (MIR_context_t ctx, MIR_item_t func_item) {
-  while (VARR_LENGTH (MIR_insn_t, temp_insns2) != 0) {
-    MIR_insn_t label = VARR_POP (MIR_insn_t, temp_insns2);
+  while (VARR_LENGTH (MIR_insn_t, labels) != 0) {
+    MIR_insn_t label = VARR_POP (MIR_insn_t, labels);
     int64_t label_num = label->ops[0].u.i;
 
     if (label_num < VARR_LENGTH (uint8_t, temp_data) && VARR_GET (uint8_t, temp_data, label_num))
@@ -2876,7 +2876,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
     }
   }
   VARR_TRUNC (MIR_insn_t, temp_insns, 0);
-  VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+  VARR_TRUNC (MIR_insn_t, labels, 0);
   VARR_TRUNC (uint8_t, temp_data, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
@@ -2896,7 +2896,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       insn->ops[0] = temp_op;
     }
     if (code == MIR_RET) VARR_PUSH (MIR_insn_t, temp_insns, insn);
-    if (code == MIR_LABEL) VARR_PUSH (MIR_insn_t, temp_insns2, insn);
+    if (code == MIR_LABEL) VARR_PUSH (MIR_insn_t, labels, insn);
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (code == MIR_ALLOCA
         && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT)) {
@@ -3115,7 +3115,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     ret_reg = 0;
     alloca_p = FALSE;
     VARR_TRUNC (MIR_insn_t, temp_insns, 0);
-    VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+    VARR_TRUNC (MIR_insn_t, labels, 0);
     VARR_TRUNC (uint8_t, temp_data, 0);
     for (insn = DLIST_HEAD (MIR_insn_t, called_func->insns); insn != NULL;
          insn = DLIST_NEXT (MIR_insn_t, insn)) {
@@ -3141,7 +3141,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         }
       if (new_insn->code != MIR_RET) {
         MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
-        store_labels_for_duplication (ctx, temp_insns, temp_insns2, insn, new_insn);
+        store_labels_for_duplication (ctx, labels, temp_insns, insn, new_insn);
       } else {
         /* should be the last insn after simplification */
         mir_assert (DLIST_NEXT (MIR_insn_t, insn) == NULL && call->ops[0].mode == MIR_OP_REF
@@ -3163,7 +3163,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         free (ret_insn);
       }
     }
-    redirect_duplicated_labels (ctx, temp_insns, temp_insns2);
+    redirect_duplicated_labels (ctx, labels, temp_insns);
     if (alloca_p) {
       temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
       new_insn = MIR_new_insn (ctx, MIR_BSTART, MIR_new_reg_op (ctx, temp_reg));
