@@ -33,7 +33,6 @@ struct MIR_context {
 #endif
   MIR_error_func_t error_func;
   VARR (MIR_insn_t) * temp_insns, *temp_insns2;
-  VARR (MIR_op_t) * temp_insn_ops;
   VARR (size_t) * insn_nops;
   VARR (char) * temp_string;
   VARR (uint8_t) * temp_data;
@@ -60,7 +59,6 @@ struct MIR_context {
 #define error_func ctx->error_func
 #define temp_insns ctx->temp_insns
 #define temp_insns2 ctx->temp_insns2
-#define temp_insn_ops ctx->temp_insn_ops
 #define insn_nops ctx->insn_nops
 #define temp_string ctx->temp_string
 #define temp_data ctx->temp_data
@@ -600,7 +598,6 @@ MIR_context_t MIR_init (void) {
   string_init (&strings, &string_tab);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_insn_t, temp_insns2, 0);
-  VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
   check_and_prepare_insn_descs (ctx);
   DLIST_INIT (MIR_module_t, all_modules);
   vn_init (ctx);
@@ -718,7 +715,6 @@ void MIR_finish (MIR_context_t ctx) {
   string_finish (&strings, &string_tab);
   vn_finish (ctx);
   VARR_DESTROY (size_t, insn_nops);
-  VARR_DESTROY (MIR_op_t, temp_insn_ops);
   VARR_DESTROY (MIR_insn_t, temp_insns2);
   VARR_DESTROY (MIR_insn_t, temp_insns);
   code_finish (ctx);
@@ -4784,6 +4780,7 @@ struct scan_ctx {
   VARR (char) * error_msg_buf;
   VARR (MIR_var_t) * temp_vars;
   VARR (MIR_type_t) * temp_types;
+  VARR (MIR_op_t) * temp_insn_ops;
   size_t curr_lno;
   HTAB (insn_name_t) * insn_name_tab;
   const char *input_string;
@@ -4796,6 +4793,7 @@ struct scan_ctx {
 #define error_msg_buf ctx->scan_ctx->error_msg_buf
 #define temp_vars ctx->scan_ctx->temp_vars
 #define temp_types ctx->scan_ctx->temp_types
+#define temp_insn_ops ctx->scan_ctx->temp_insn_ops
 #define curr_lno ctx->scan_ctx->curr_lno
 #define insn_name_tab ctx->scan_ctx->insn_name_tab
 #define input_string ctx->scan_ctx->input_string
@@ -5572,6 +5570,7 @@ static void scan_init (MIR_context_t ctx) {
   VARR_CREATE (char, error_msg_buf, 0);
   VARR_CREATE (MIR_var_t, temp_vars, 0);
   VARR_CREATE (MIR_type_t, temp_types, 0);
+  VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
   VARR_CREATE (label_name_t, label_names, 0);
   HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq, NULL);
   HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
@@ -5586,6 +5585,7 @@ static void scan_finish (MIR_context_t ctx) {
   VARR_DESTROY (char, error_msg_buf);
   VARR_DESTROY (MIR_var_t, temp_vars);
   VARR_DESTROY (MIR_type_t, temp_types);
+  VARR_DESTROY (MIR_op_t, temp_insn_ops);
   VARR_DESTROY (label_name_t, label_names);
   HTAB_DESTROY (label_desc_t, label_desc_tab);
   HTAB_DESTROY (insn_name_t, insn_name_tab);
