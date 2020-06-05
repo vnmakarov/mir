@@ -6545,7 +6545,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
 void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
 
-#ifdef MIR_NO_PARALLEL_GEN
+#if !MIR_PARALLEL_GEN
   if (func_item == NULL) return; /* finish setting interfaces */
   MIR_gen (ctx, 0, func_item);
 #else
