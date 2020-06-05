@@ -63,10 +63,10 @@ static const char *std_lib_dirs[] = {
 #endif
 };
 #elif (__s390x__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
-                           {"/lib/s390x-linux-gnu/libc.so.6", NULL},
-                           {"/lib64/libm.so.6", NULL},
-                           {"/lib/s390x-linux-gnu/libm.so.6", NULL}};
+static lib_t std_libs[]
+  = {{"/lib64/libc.so.6", NULL},       {"/lib/s390x-linux-gnu/libc.so.6", NULL},
+     {"/lib64/libm.so.6", NULL},       {"/lib/s390x-linux-gnu/libm.so.6", NULL},
+     {"/lib64/libpthread.so.0", NULL}, {"/lib/s390x-linux-gnu/libpthread.so.0", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/s390x-linux-gnu"};
 #else
 #error cannot recognize 32- or 64-bit target
