@@ -3196,7 +3196,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
                                size_t nres, MIR_type_t *res_types, size_t nargs, ...) {
   size_t i;
   va_list argp;
-  MIR_var_t arg;
+  MIR_var_t *args = alloca (nargs * sizeof (MIR_var_t));
   MIR_item_t proto_item;
   MIR_module_t saved_module = curr_module;
 
@@ -3204,11 +3204,9 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
 #if MIR_PARALLEL_GEN
   pthread_mutex_lock (&ctx_mutex);
 #endif
-  VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (i = 0; i < nargs; i++) {
-    arg.type = va_arg (argp, MIR_type_t);
-    arg.name = va_arg (argp, const char *);
-    VARR_PUSH (MIR_var_t, temp_vars, arg);
+    args[i].type = va_arg (argp, MIR_type_t);
+    args[i].name = va_arg (argp, const char *);
   }
   va_end (argp);
   name = _MIR_uniq_string (ctx, name);
@@ -3220,9 +3218,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
         if (res_types[i] != proto_item->u.proto->res_types[i]) break;
       if (i >= nres) {
         for (i = 0; i < nargs; i++)
-          if (VARR_GET (MIR_var_t, temp_vars, i).type
-              != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type)
-            break;
+          if (args[i].type != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type) break;
         if (i >= nargs) {
 #if MIR_PARALLEL_GEN
           pthread_mutex_unlock (&ctx_mutex);
@@ -3237,8 +3233,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   }
   saved_module = curr_module;
   curr_module = module;
-  proto_item
-    = MIR_new_proto_arr (ctx, name, nres, res_types, nargs, VARR_ADDR (MIR_var_t, temp_vars));
+  proto_item = MIR_new_proto_arr (ctx, name, nres, res_types, nargs, args);
   DLIST_REMOVE (MIR_item_t, curr_module->items, proto_item);
   DLIST_PREPEND (MIR_item_t, curr_module->items, proto_item); /* make it first in the list */
   curr_module = saved_module;
