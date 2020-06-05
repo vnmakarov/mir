@@ -2454,7 +2454,7 @@ DEF_HTAB (val_t);
 
 struct simplify_ctx {
   HTAB (val_t) * val_tab;
-  VARR (MIR_insn_t) * temp_insns, *labels;
+  VARR (MIR_insn_t) * temp_insns, *labels; /* temp_insns is for branch or ret insns */
 };
 
 #define val_tab ctx->simplify_ctx->val_tab
