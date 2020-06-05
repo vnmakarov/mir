@@ -4778,9 +4778,9 @@ DEF_HTAB (label_desc_t);
 struct scan_ctx {
   jmp_buf error_jmp_buf;
   VARR (char) * error_msg_buf;
-  VARR (MIR_var_t) * temp_vars;
-  VARR (MIR_type_t) * temp_types;
-  VARR (MIR_op_t) * temp_insn_ops;
+  VARR (MIR_var_t) * scan_vars;
+  VARR (MIR_type_t) * scan_types;
+  VARR (MIR_op_t) * scan_insn_ops;
   size_t curr_lno;
   HTAB (insn_name_t) * insn_name_tab;
   const char *input_string;
@@ -4791,9 +4791,9 @@ struct scan_ctx {
 
 #define error_jmp_buf ctx->scan_ctx->error_jmp_buf
 #define error_msg_buf ctx->scan_ctx->error_msg_buf
-#define temp_vars ctx->scan_ctx->temp_vars
-#define temp_types ctx->scan_ctx->temp_types
-#define temp_insn_ops ctx->scan_ctx->temp_insn_ops
+#define scan_vars ctx->scan_ctx->scan_vars
+#define scan_types ctx->scan_ctx->scan_types
+#define scan_insn_ops ctx->scan_ctx->scan_insn_ops
 #define curr_lno ctx->scan_ctx->curr_lno
 #define insn_name_tab ctx->scan_ctx->insn_name_tab
 #define input_string ctx->scan_ctx->input_string
@@ -5101,20 +5101,20 @@ static void read_func_proto (MIR_context_t ctx, size_t nops, MIR_op_t *ops) {
   MIR_var_t var;
   size_t i;
 
-  VARR_TRUNC (MIR_type_t, temp_types, 0);
+  VARR_TRUNC (MIR_type_t, scan_types, 0);
   for (i = 0; i < nops; i++) {
     var.name = (const char *) ops[i].u.mem.disp;
     if ((var.name = (const char *) ops[i].u.mem.disp) != NULL) break;
     var.type = ops[i].u.mem.type;
-    VARR_PUSH (MIR_type_t, temp_types, var.type);
+    VARR_PUSH (MIR_type_t, scan_types, var.type);
   }
-  VARR_TRUNC (MIR_var_t, temp_vars, 0);
+  VARR_TRUNC (MIR_var_t, scan_vars, 0);
   for (; i < nops; i++) {
     if (ops[i].mode != MIR_OP_MEM) scan_error (ctx, "wrong prototype/func arg");
     var.type = ops[i].u.mem.type;
     var.name = (const char *) ops[i].u.mem.disp;
     if (var.name == NULL) scan_error (ctx, "all func/prototype args should have type:name form");
-    VARR_PUSH (MIR_var_t, temp_vars, var);
+    VARR_PUSH (MIR_var_t, scan_vars, var);
   }
 }
 
@@ -5259,7 +5259,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         if (func != NULL) MIR_append_insn (ctx, func, label);
       }
     }
-    VARR_TRUNC (MIR_op_t, temp_insn_ops, 0);
+    VARR_TRUNC (MIR_op_t, scan_insn_ops, 0);
     dots_p = FALSE;
     for (;;) { /* ops */
       if (t.code == TC_NL || t.code == TC_SEMICOL) {
@@ -5288,9 +5288,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             push_op_p = FALSE;
           } else if (!module_p && !end_module_p && !proto_p && !func_p && !end_func_p && !local_p
                      && ((MIR_branch_code_p (insn_code)
-                          && VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0)
+                          && VARR_LENGTH (MIR_op_t, scan_insn_ops) == 0)
                          || (insn_code == MIR_SWITCH
-                             && VARR_LENGTH (MIR_op_t, temp_insn_ops) > 0))) {
+                             && VARR_LENGTH (MIR_op_t, scan_insn_ops) > 0))) {
             op = MIR_new_label_op (ctx, create_label_desc (ctx, name));
           } else if (!expr_p && !ref_p && func_reg_p (ctx, func->u.func, name)) {
             op.mode = MIR_OP_REG;
@@ -5377,7 +5377,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       default: break;
       }
       if (dots_p) break;
-      if (push_op_p) VARR_PUSH (MIR_op_t, temp_insn_ops, op);
+      if (push_op_p) VARR_PUSH (MIR_op_t, scan_insn_ops, op);
       if (read_p) scan_token (ctx, &t, get_string_char, unget_string_char);
       if (t.code != TC_COMMA) break;
       scan_token (ctx, &t, get_string_char, unget_string_char);
@@ -5386,19 +5386,19 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       scan_error (ctx, "wrong insn end");
     if (module_p) {
       if (module != NULL) scan_error (ctx, "nested module");
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
         scan_error (ctx, "module should have no params");
       module = MIR_new_module (ctx, VARR_GET (label_name_t, label_names, 0));
     } else if (end_module_p) {
       if (module == NULL) scan_error (ctx, "standalone endmodule");
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
         scan_error (ctx, "endmodule should have no params");
       MIR_finish_module (ctx);
       module = NULL;
     } else if (bss_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 1)
         scan_error (ctx, "bss should have one operand");
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       if (op_addr[0].mode != MIR_OP_INT || op_addr[0].u.i < 0)
         scan_error (ctx, "wrong bss operand type or value");
       name
@@ -5406,9 +5406,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_bss (ctx, name, op_addr[0].u.i);
     } else if (ref_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 2)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 2)
         scan_error (ctx, "ref should have two operands");
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       if (op_addr[0].mode != MIR_OP_REF) scan_error (ctx, "wrong ref operand");
       if (op_addr[1].mode != MIR_OP_INT) scan_error (ctx, "wrong ref disp operand");
       name
@@ -5416,9 +5416,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_ref_data (ctx, name, op_addr[0].u.ref, op_addr[1].u.i);
     } else if (expr_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 1)
         scan_error (ctx, "expr should have one operand");
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       if (op_addr[0].mode != MIR_OP_REF || op_addr[0].u.ref->item_type != MIR_func_item)
         scan_error (ctx, "wrong expr operand");
       name
@@ -5426,9 +5426,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_expr_data (ctx, name, op_addr[0].u.ref);
     } else if (string_p) {
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 1)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 1)
         scan_error (ctx, "string should have one operand");
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       if (op_addr[0].mode != MIR_OP_STR) scan_error (ctx, "wrong string data operand type");
       name
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
@@ -5436,47 +5436,47 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       MIR_new_string_data (ctx, name, op_addr[0].u.str);
     } else if (proto_p) {
       if (module == NULL) scan_error (ctx, "prototype outside module");
-      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
-                       VARR_ADDR (MIR_op_t, temp_insn_ops));
+      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, scan_insn_ops),
+                       VARR_ADDR (MIR_op_t, scan_insn_ops));
       if (dots_p)
         MIR_new_vararg_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                                  VARR_LENGTH (MIR_type_t, temp_types),
-                                  VARR_ADDR (MIR_type_t, temp_types),
-                                  VARR_LENGTH (MIR_var_t, temp_vars),
-                                  VARR_ADDR (MIR_var_t, temp_vars));
+                                  VARR_LENGTH (MIR_type_t, scan_types),
+                                  VARR_ADDR (MIR_type_t, scan_types),
+                                  VARR_LENGTH (MIR_var_t, scan_vars),
+                                  VARR_ADDR (MIR_var_t, scan_vars));
       else
         MIR_new_proto_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                           VARR_LENGTH (MIR_type_t, temp_types), VARR_ADDR (MIR_type_t, temp_types),
-                           VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
+                           VARR_LENGTH (MIR_type_t, scan_types), VARR_ADDR (MIR_type_t, scan_types),
+                           VARR_LENGTH (MIR_var_t, scan_vars), VARR_ADDR (MIR_var_t, scan_vars));
     } else if (func_p) {
       if (module == NULL) scan_error (ctx, "func outside module");
       if (func != NULL) scan_error (ctx, "nested func");
-      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, temp_insn_ops),
-                       VARR_ADDR (MIR_op_t, temp_insn_ops));
+      read_func_proto (ctx, VARR_LENGTH (MIR_op_t, scan_insn_ops),
+                       VARR_ADDR (MIR_op_t, scan_insn_ops));
       if (dots_p)
         func = MIR_new_vararg_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                                        VARR_LENGTH (MIR_type_t, temp_types),
-                                        VARR_ADDR (MIR_type_t, temp_types),
-                                        VARR_LENGTH (MIR_var_t, temp_vars),
-                                        VARR_ADDR (MIR_var_t, temp_vars));
+                                        VARR_LENGTH (MIR_type_t, scan_types),
+                                        VARR_ADDR (MIR_type_t, scan_types),
+                                        VARR_LENGTH (MIR_var_t, scan_vars),
+                                        VARR_ADDR (MIR_var_t, scan_vars));
       else
         func
           = MIR_new_func_arr (ctx, VARR_GET (label_name_t, label_names, 0),
-                              VARR_LENGTH (MIR_type_t, temp_types),
-                              VARR_ADDR (MIR_type_t, temp_types),
-                              VARR_LENGTH (MIR_var_t, temp_vars), VARR_ADDR (MIR_var_t, temp_vars));
+                              VARR_LENGTH (MIR_type_t, scan_types),
+                              VARR_ADDR (MIR_type_t, scan_types),
+                              VARR_LENGTH (MIR_var_t, scan_vars), VARR_ADDR (MIR_var_t, scan_vars));
       HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
       if (func == NULL) scan_error (ctx, "standalone endfunc");
-      if (VARR_LENGTH (MIR_op_t, temp_insn_ops) != 0)
+      if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
         scan_error (ctx, "endfunc should have no params");
       func = NULL;
       MIR_finish_func (ctx);
     } else if (export_p || import_p || forward_p) { /* we already created items, now do nothing: */
-      mir_assert (VARR_LENGTH (MIR_op_t, temp_insn_ops) == 0);
+      mir_assert (VARR_LENGTH (MIR_op_t, scan_insn_ops) == 0);
     } else if (local_p) {
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
-      n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
+      n = VARR_LENGTH (MIR_op_t, scan_insn_ops);
       for (i = 0; i < n; i++) {
         if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
           scan_error (ctx, "wrong local var");
@@ -5495,8 +5495,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         int64_t i64;
       } v;
 
-      n = VARR_LENGTH (MIR_op_t, temp_insn_ops);
-      op_addr = VARR_ADDR (MIR_op_t, temp_insn_ops);
+      n = VARR_LENGTH (MIR_op_t, scan_insn_ops);
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       VARR_TRUNC (uint8_t, temp_data, 0);
       for (i = 0; i < n; i++) {
         if (op_addr[i].mode != type2mode (data_type))
@@ -5550,8 +5550,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                     VARR_LENGTH (uint8_t, temp_data) / _MIR_type_size (ctx, data_type),
                     VARR_ADDR (uint8_t, temp_data));
     } else {
-      insn = MIR_new_insn_arr (ctx, insn_code, VARR_LENGTH (MIR_op_t, temp_insn_ops),
-                               VARR_ADDR (MIR_op_t, temp_insn_ops));
+      insn = MIR_new_insn_arr (ctx, insn_code, VARR_LENGTH (MIR_op_t, scan_insn_ops),
+                               VARR_ADDR (MIR_op_t, scan_insn_ops));
       if (func != NULL) MIR_append_insn (ctx, func, insn);
     }
   }
@@ -5568,9 +5568,9 @@ static void scan_init (MIR_context_t ctx) {
   if ((ctx->scan_ctx = malloc (sizeof (struct scan_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (char, error_msg_buf, 0);
-  VARR_CREATE (MIR_var_t, temp_vars, 0);
-  VARR_CREATE (MIR_type_t, temp_types, 0);
-  VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
+  VARR_CREATE (MIR_var_t, scan_vars, 0);
+  VARR_CREATE (MIR_type_t, scan_types, 0);
+  VARR_CREATE (MIR_op_t, scan_insn_ops, 0);
   VARR_CREATE (label_name_t, label_names, 0);
   HTAB_CREATE (label_desc_t, label_desc_tab, 100, label_hash, label_eq, NULL);
   HTAB_CREATE (insn_name_t, insn_name_tab, MIR_INSN_BOUND, insn_name_hash, insn_name_eq, NULL);
@@ -5583,9 +5583,9 @@ static void scan_init (MIR_context_t ctx) {
 
 static void scan_finish (MIR_context_t ctx) {
   VARR_DESTROY (char, error_msg_buf);
-  VARR_DESTROY (MIR_var_t, temp_vars);
-  VARR_DESTROY (MIR_type_t, temp_types);
-  VARR_DESTROY (MIR_op_t, temp_insn_ops);
+  VARR_DESTROY (MIR_var_t, scan_vars);
+  VARR_DESTROY (MIR_type_t, scan_types);
+  VARR_DESTROY (MIR_op_t, scan_insn_ops);
   VARR_DESTROY (label_name_t, label_names);
   HTAB_DESTROY (label_desc_t, label_desc_tab);
   HTAB_DESTROY (insn_name_t, insn_name_tab);
