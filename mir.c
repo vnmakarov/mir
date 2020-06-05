@@ -2646,12 +2646,10 @@ static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type
   return val.reg;
 }
 
-const char *_MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module) {
+void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff, size_t buff_len) {
   mir_assert (module != NULL);
   module->last_temp_item_num++;
-  snprintf (temp_buff, sizeof (temp_buff), "%s%u", TEMP_ITEM_NAME_PREFIX,
-            (unsigned) module->last_temp_item_num);
-  return temp_buff;
+  snprintf (buff, buff_len, "%s%u", TEMP_ITEM_NAME_PREFIX, (unsigned) module->last_temp_item_num);
 }
 
 void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
@@ -2694,11 +2692,13 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
                    && (op->mode == MIR_OP_FLOAT || op->mode == MIR_OP_DOUBLE
                        || op->mode == MIR_OP_LDOUBLE))) {
       const char *name;
+      char buff[50];
       MIR_item_t item;
       MIR_module_t m = curr_module;
 
       curr_module = func_item->module;
-      name = _MIR_get_temp_item_name (ctx, curr_module);
+      _MIR_get_temp_item_name (ctx, curr_module, buff, sizeof (buff));
+      name = buff;
       if (op->mode == MIR_OP_STR) {
         item = MIR_new_string_data (ctx, name, op->u.str);
         *op = MIR_new_ref_op (ctx, item);

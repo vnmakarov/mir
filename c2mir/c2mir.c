@@ -789,7 +789,7 @@ static void print_pos (FILE *f, pos_t pos, int col_p) {
 }
 
 static const char *get_token_name (c2m_ctx_t c2m_ctx, int token_code) {
-  static char buf[30];
+  static char buff[30];
   const char *s;
 
   switch (token_code) {
@@ -812,10 +812,10 @@ static const char *get_token_name (c2m_ctx_t c2m_ctx, int token_code) {
   default:
     if ((s = str_find_by_key (c2m_ctx, token_code)) != NULL) return s;
     if (isprint (token_code))
-      sprintf (buf, "%c", token_code);
+      sprintf (buff, "%c", token_code);
     else
-      sprintf (buf, "%d", token_code);
-    return buf;
+      sprintf (buff, "%d", token_code);
+    return buff;
   }
 }
 
@@ -10661,6 +10661,7 @@ static void gen_initializer (MIR_context_t ctx, size_t init_start, op_t var,
   MIR_item_t data;
   MIR_module_t module;
   struct expr *e;
+  char buff[50];
 
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
     assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) - init_start == 1);
@@ -10737,8 +10738,8 @@ static void gen_initializer (MIR_context_t ctx, size_t init_start, op_t var,
             data = ((decl_t) def->attr)->item;
           } else {
             module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-            data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module),
-                                        (MIR_str_t){def->u.s.len, def->u.s.s});
+            _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
+            data = MIR_new_string_data (ctx, buff, (MIR_str_t){def->u.s.len, def->u.s.s});
             move_item_to_module_start (module, data);
           }
           data = MIR_new_ref_data (ctx, global_name, data, e->u.i_val);
@@ -10803,7 +10804,8 @@ static void gen_initializer (MIR_context_t ctx, size_t init_start, op_t var,
         }
       } else {
         module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-        data = MIR_new_string_data (ctx, _MIR_get_temp_item_name (ctx, module), val.mir_op.u.str);
+        _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
+        data = MIR_new_string_data (ctx, buff, val.mir_op.u.str);
         move_item_to_module_start (module, data);
         data = MIR_new_ref_data (ctx, global_name, data, 0);
         data_size = _MIR_type_size (ctx, t);
@@ -11348,6 +11350,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   case N_COMPOUND_LITERAL: {
     const char *global_name = NULL;
+    char buff[50];
     node_t type_name = NL_HEAD (r->ops);
     decl_t decl = type_name->attr;
     struct expr *expr = r->attr;
@@ -11356,7 +11359,8 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
 
     if (decl->scope == top_scope) {
       assert (decl->item == NULL);
-      global_name = _MIR_get_temp_item_name (ctx, module);
+      _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
+      global_name = buff;
     }
     init_start = VARR_LENGTH (init_el_t, init_els);
     collect_init_els (c2m_ctx, NULL, &decl->decl_spec.type, NL_EL (r->ops, 1),
@@ -12026,7 +12030,7 @@ static MIR_item_t get_mir_proto (MIR_context_t ctx, int vararg_p, VARR (MIR_type
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   struct MIR_item pi, *el;
   struct MIR_proto p;
-  char buf[30];
+  char buff[30];
 
   pi.u.proto = &p;
   p.vararg_p = vararg_p;
@@ -12034,11 +12038,10 @@ static MIR_item_t get_mir_proto (MIR_context_t ctx, int vararg_p, VARR (MIR_type
   p.res_types = VARR_ADDR (MIR_type_t, proto_info.ret_types);
   p.args = vars;
   if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
-  sprintf (buf, "proto%d", curr_mir_proto_num++);
-  el = (vararg_p ? MIR_new_vararg_proto_arr
-                 : MIR_new_proto_arr) (ctx, buf, p.nres, p.res_types,
-                                       VARR_LENGTH (MIR_var_t, proto_info.arg_vars),
-                                       VARR_ADDR (MIR_var_t, proto_info.arg_vars));
+  sprintf (buff, "proto%d", curr_mir_proto_num++);
+  el = (vararg_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr) (ctx, buff, p.nres, &ret_type,
+                                                                  VARR_LENGTH (MIR_var_t, vars),
+                                                                  VARR_ADDR (MIR_var_t, vars));
   HTAB_DO (MIR_item_t, proto_tab, el, HTAB_INSERT, el);
   return el;
 }
