@@ -2430,6 +2430,9 @@ void MIR_output (MIR_context_t ctx, FILE *f) {
     MIR_output_module (ctx, f, module);
 }
 
+/* New Page */
+/* This page contains code for simplification and inlining */
+
 static MIR_insn_t insert_op_insn (MIR_context_t ctx, int out_p, MIR_item_t func_item,
                                   MIR_insn_t anchor, MIR_insn_t insn) {
   if (!out_p) {
@@ -3172,6 +3175,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   }
 }
 
+/* New Page */
+
 const char *_MIR_uniq_string (MIR_context_t ctx, const char *str) {
   return string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (str) + 1, str}).str.s;
 }
@@ -3277,6 +3282,7 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
 }
 
 /* New Page */
+/* This page is for dealing with generated machine code */
 
 #ifndef _WIN32
 #include <sys/mman.h>
