@@ -1205,17 +1205,14 @@ MIR_item_t MIR_new_vararg_func_arr (MIR_context_t ctx, const char *name, size_t 
 
 static MIR_item_t new_func (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types,
                             size_t nargs, int vararg_p, va_list argp) {
-  MIR_var_t var;
   size_t i;
+  MIR_var_t *vars = alloca (sizeof (MIR_var_t) * nargs);
 
-  VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (i = 0; i < nargs; i++) {
-    var.type = va_arg (argp, MIR_type_t);
-    var.name = va_arg (argp, const char *);
-    VARR_PUSH (MIR_var_t, temp_vars, var);
+    vars[i].type = va_arg (argp, MIR_type_t);
+    vars[i].name = va_arg (argp, const char *);
   }
-  return new_func_arr (ctx, name, nres, res_types, nargs, vararg_p,
-                       VARR_ADDR (MIR_var_t, temp_vars));
+  return new_func_arr (ctx, name, nres, res_types, nargs, vararg_p, vars);
 }
 
 MIR_item_t MIR_new_func (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types,
