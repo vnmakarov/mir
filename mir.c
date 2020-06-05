@@ -409,8 +409,7 @@ static void string_finish (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) 
 /* New Page */
 
 typedef struct reg_desc {
-  size_t name_num; /* 1st key for the namenum2rdn hash tab */
-  MIR_func_t func; /* 2nd key for hash the both tabs */
+  char *name; /* 1st key for the name2rdn hash tab */
   MIR_type_t type;
   MIR_reg_t reg; /* 1st key reg2rdn hash tab */
 } reg_desc_t;
@@ -419,109 +418,92 @@ DEF_VARR (reg_desc_t);
 
 DEF_HTAB (size_t);
 
-#if !MIR_PARALLEL_GEN
-struct reg_type_cache {
-  MIR_func_t func;
-  VARR (MIR_type_t) * types;
-};
-#endif
-
-struct reg_ctx {
+typedef struct func_regs {
   VARR (reg_desc_t) * reg_descs;
-  HTAB (size_t) * namenum2rdn_tab;
+  HTAB (size_t) * name2rdn_tab;
   HTAB (size_t) * reg2rdn_tab;
-#if !MIR_PARALLEL_GEN
-  struct reg_type_cache reg_type_cache;
-#endif
-};
+} * func_regs_t;
 
-#define reg_descs ctx->reg_ctx->reg_descs
-#define namenum2rdn_tab ctx->reg_ctx->namenum2rdn_tab
-#define reg2rdn_tab ctx->reg_ctx->reg2rdn_tab
-#if !MIR_PARALLEL_GEN
-#define reg_type_cache ctx->reg_ctx->reg_type_cache
-#endif
+static int name2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
 
-static int namenum2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
-  MIR_context_t ctx = arg;
-  reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
-
-  return (addr[rdn1].name_num == addr[rdn2].name_num && addr[rdn1].func == addr[rdn2].func);
+  return strcmp (addr[rdn1].name, addr[rdn2].name) == 0;
 }
 
-static htab_hash_t namenum2rdn_hash (size_t rdn, void *arg) {
-  MIR_context_t ctx = arg;
-  reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
+static htab_hash_t name2rdn_hash (size_t rdn, void *arg) {
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
 
-  return mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (0), (uint64_t) addr[rdn].func),
-                   (uint64_t) addr[rdn].name_num));
+  return mir_hash (addr[rdn].name, strlen (addr[rdn].name), 0);
 }
 
 static int reg2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
-  MIR_context_t ctx = arg;
-  reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
 
-  return addr[rdn1].reg == addr[rdn2].reg && addr[rdn1].func == addr[rdn2].func;
+  return addr[rdn1].reg == addr[rdn2].reg;
 }
 
 static htab_hash_t reg2rdn_hash (size_t rdn, void *arg) {
-  MIR_context_t ctx = arg;
-  reg_desc_t *addr = VARR_ADDR (reg_desc_t, reg_descs);
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
 
-  return mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (0), (uint64_t) addr[rdn].func), addr[rdn].reg));
+  return mir_hash_finish (mir_hash_step (mir_hash_init (0), addr[rdn].reg));
 }
 
-static void reg_init (MIR_context_t ctx) {
-  reg_desc_t rd = {0, NULL, MIR_T_I64, 0};
+static void func_regs_init (MIR_context_t ctx, MIR_func_t func) {
+  func_regs_t func_regs;
+  reg_desc_t rd = {NULL, MIR_T_I64, 0};
 
-  if ((ctx->reg_ctx = malloc (sizeof (struct reg_ctx))) == NULL)
-    (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
-  VARR_CREATE (reg_desc_t, reg_descs, 300);
-  VARR_PUSH (reg_desc_t, reg_descs, rd); /* for 0 reg */
-  HTAB_CREATE (size_t, namenum2rdn_tab, 300, namenum2rdn_hash, namenum2rdn_eq, ctx);
-  HTAB_CREATE (size_t, reg2rdn_tab, 300, reg2rdn_hash, reg2rdn_eq, ctx);
-#if !MIR_PARALLEL_GEN
-  reg_type_cache.func = NULL;
-  VARR_CREATE (MIR_type_t, reg_type_cache.types, 1000);
-#endif
+  if ((func_regs = func->internal = malloc (sizeof (struct func_regs))) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for func regs info");
+  VARR_CREATE (reg_desc_t, func_regs->reg_descs, 50);
+  VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd); /* for 0 reg */
+  HTAB_CREATE (size_t, func_regs->name2rdn_tab, 100, name2rdn_hash, name2rdn_eq, func_regs);
+  HTAB_CREATE (size_t, func_regs->reg2rdn_tab, 100, reg2rdn_hash, reg2rdn_eq, func_regs);
 }
 
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
-                                  MIR_reg_t reg, MIR_type_t type, int any_p) {
+                                  MIR_reg_t reg, MIR_type_t type, int any_p, char **name_ptr) {
+  func_regs_t func_regs = func->internal;
   reg_desc_t rd;
   size_t rdn, tab_rdn;
   int htab_res;
 
   if (!any_p && _MIR_reserved_name_p (ctx, name))
     (*error_func) (MIR_reserved_name_error, "redefining a reserved name %s", name);
-  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
-  rd.func = func;
+  rd.name = (char *) name;
   rd.type = type;
   rd.reg = reg; /* 0 is reserved */
-  rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  VARR_PUSH (reg_desc_t, reg_descs, rd);
-  if (HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
-    VARR_POP (reg_desc_t, reg_descs);
+  rdn = VARR_LENGTH (reg_desc_t, func_regs->reg_descs);
+  VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
+  if (HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
+    VARR_POP (reg_desc_t, func_regs->reg_descs);
     (*error_func) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
   }
-  htab_res = HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
+  if ((rd.name = malloc (strlen (name) + 1)) == NULL)
+    (*error_func) (MIR_alloc_error, "Not enough memory for reg names");
+  VARR_ADDR (reg_desc_t, func_regs->reg_descs)[rdn].name = *name_ptr = rd.name;
+  strcpy (*name_ptr, name);
+  htab_res = HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
   mir_assert (!htab_res);
-  htab_res = HTAB_DO (size_t, reg2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
+  htab_res = HTAB_DO (size_t, func_regs->reg2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
   mir_assert (!htab_res);
   return reg;
 }
 
-static void reg_finish (MIR_context_t ctx) {
-  VARR_DESTROY (reg_desc_t, reg_descs);
-  HTAB_DESTROY (size_t, namenum2rdn_tab);
-  HTAB_DESTROY (size_t, reg2rdn_tab);
-#if !MIR_PARALLEL_GEN
-  VARR_DESTROY (MIR_type_t, reg_type_cache.types);
-#endif
-  free (ctx->reg_ctx);
-  ctx->reg_ctx = NULL;
+static void func_regs_finish (MIR_context_t ctx, MIR_func_t func) {
+  func_regs_t func_regs = func->internal;
+  char *name;
+
+  for (size_t i = 0; i < VARR_LENGTH (reg_desc_t, func_regs->reg_descs); i++)
+    if ((name = VARR_GET (reg_desc_t, func_regs->reg_descs, i).name) != NULL) free (name);
+  VARR_DESTROY (reg_desc_t, func_regs->reg_descs);
+  HTAB_DESTROY (size_t, func_regs->name2rdn_tab);
+  HTAB_DESTROY (size_t, func_regs->reg2rdn_tab);
+  free (func->internal);
+  func->internal = NULL;
 }
 
 /* New Page */
@@ -620,7 +602,6 @@ MIR_context_t MIR_init (void) {
   if ((ctx->string_ctx = malloc (sizeof (struct string_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   string_init (&strings, &string_tab);
-  reg_init (ctx);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_insn_t, temp_insns2, 0);
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
@@ -673,6 +654,7 @@ static void remove_item (MIR_context_t ctx, MIR_item_t item) {
     remove_func_insns (ctx, item, &item->u.func->insns);
     remove_func_insns (ctx, item, &item->u.func->original_insns);
     VARR_DESTROY (MIR_var_t, item->u.func->vars);
+    func_regs_finish (ctx, item->u.func);
     free (item->u.func);
     break;
   case MIR_proto_item:
@@ -739,7 +721,6 @@ void MIR_finish (MIR_context_t ctx) {
   VARR_DESTROY (uint8_t, temp_data);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (MIR_reg_t, inline_reg_map);
-  reg_finish (ctx);
   string_finish (&strings, &string_tab);
   vn_finish (ctx);
   VARR_DESTROY (MIR_var_t, temp_vars);
@@ -1201,13 +1182,16 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->expr_p = FALSE;
   func->n_inlines = 0;
   func->machine_code = func->call_addr = NULL;
+  func_regs_init (ctx, func);
   for (size_t i = 0; i < nargs; i++) {
+    char *stored_name;
     MIR_type_t type = canon_type (vars[i].type);
 
-    VARR_PUSH (MIR_var_t, func->vars, vars[i]);
     create_func_reg (ctx, func, vars[i].name, i + 1,
                      type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64,
-                     FALSE);
+                     FALSE, &stored_name);
+    vars[i].name = stored_name;
+    VARR_PUSH (MIR_var_t, func->vars, vars[i]);
   }
   return func_item;
 }
@@ -1262,59 +1246,55 @@ MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name, size_t nres
 MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name) {
   MIR_var_t var;
   MIR_reg_t res;
+  char *stored_name;
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type for register %s: got '%s'", name,
                               type_str (type));
-  var.type = type;
-#if MIR_PARALLEL_GEN
-  pthread_mutex_lock (&ctx_mutex);
-#endif
-  var.name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   mir_assert (func != NULL);
+  res = create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars) + 1, type, FALSE,
+                         &stored_name);
+  var.type = type;
+  var.name = stored_name;
   VARR_PUSH (MIR_var_t, func->vars, var);
-  res = create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars), type, FALSE);
-#if MIR_PARALLEL_GEN
-  pthread_mutex_unlock (&ctx_mutex);
-#endif
   return res;
 }
 
-static reg_desc_t *find_rd_by_name_num (MIR_context_t ctx, size_t name_num, MIR_func_t func) {
+static reg_desc_t *find_rd_by_name (MIR_context_t ctx, const char *name, MIR_func_t func) {
+  func_regs_t func_regs = func->internal;
   size_t rdn, temp_rdn;
   reg_desc_t rd;
 
-  rd.name_num = name_num;
-  rd.func = func; /* keys */
+  rd.name = (char *) name;
   rd.type = MIR_T_I64;
   rd.reg = 0; /* to eliminate warnings */
-  temp_rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  VARR_PUSH (reg_desc_t, reg_descs, rd);
-  if (!HTAB_DO (size_t, namenum2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
-    VARR_POP (reg_desc_t, reg_descs);
+  temp_rdn = VARR_LENGTH (reg_desc_t, func_regs->reg_descs);
+  VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
+  if (!HTAB_DO (size_t, func_regs->name2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
+    VARR_POP (reg_desc_t, func_regs->reg_descs);
     return NULL; /* undeclared */
   }
-  VARR_POP (reg_desc_t, reg_descs);
-  return &VARR_ADDR (reg_desc_t, reg_descs)[rdn];
+  VARR_POP (reg_desc_t, func_regs->reg_descs);
+  return &VARR_ADDR (reg_desc_t, func_regs->reg_descs)[rdn];
 }
 
 static reg_desc_t *find_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
+  func_regs_t func_regs = func->internal;
   size_t rdn, temp_rdn;
   reg_desc_t rd;
 
   rd.reg = reg;
-  rd.func = func; /* keys */
-  rd.name_num = 0;
+  rd.name = NULL;
   rd.type = MIR_T_I64; /* to eliminate warnings */
-  temp_rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  VARR_PUSH (reg_desc_t, reg_descs, rd);
-  if (!HTAB_DO (size_t, reg2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
-    VARR_POP (reg_desc_t, reg_descs);
+  temp_rdn = VARR_LENGTH (reg_desc_t, func_regs->reg_descs);
+  VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
+  if (!HTAB_DO (size_t, func_regs->reg2rdn_tab, temp_rdn, HTAB_FIND, rdn)) {
+    VARR_POP (reg_desc_t, func_regs->reg_descs);
     MIR_get_error_func (ctx) (MIR_undeclared_func_reg_error, "undeclared reg %u of func %s", reg,
                               func->name);
   }
-  VARR_POP (reg_desc_t, reg_descs);
-  return &VARR_ADDR (reg_desc_t, reg_descs)[rdn];
+  VARR_POP (reg_desc_t, func_regs->reg_descs);
+  return &VARR_ADDR (reg_desc_t, func_regs->reg_descs)[rdn];
 }
 
 void MIR_finish_func (MIR_context_t ctx) {
@@ -1888,37 +1868,26 @@ static MIR_insn_t create_label (MIR_context_t ctx, int64_t label_num) {
 MIR_insn_t MIR_new_label (MIR_context_t ctx) { return create_label (ctx, ++curr_label_num); }
 
 MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func) {
-  string_t string;
+  char reg_name[30];
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type %s for temporary register",
                               type_str (type));
   mir_assert (func != NULL);
-#if MIR_PARALLEL_GEN
-  pthread_mutex_lock (&ctx_mutex);
-#endif
   for (;;) {
     func->last_temp_num++;
     if (func->last_temp_num == 0)
       MIR_get_error_func (ctx) (MIR_unique_reg_error, "out of unique regs");
-    sprintf (temp_buff, "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
-    string
-      = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (temp_buff) + 1, temp_buff});
-    if (find_rd_by_name_num (ctx, string.num, func) == NULL) {
-#if MIR_PARALLEL_GEN
-      pthread_mutex_unlock (&ctx_mutex);
-#endif
-      return MIR_new_func_reg (ctx, func, type, string.str.s);
-    }
+    sprintf (reg_name, "%s%d", TEMP_REG_NAME_PREFIX, func->last_temp_num);
+    if (find_rd_by_name (ctx, reg_name, func) == NULL)
+      return MIR_new_func_reg (ctx, func, type, reg_name);
   }
 }
 
 static reg_desc_t *get_func_rd_by_name (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
-  string_t string
-    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (reg_name) + 1, reg_name});
   reg_desc_t *rd;
 
-  rd = find_rd_by_name_num (ctx, string.num, func);
+  rd = find_rd_by_name (ctx, reg_name, func);
   if (rd == NULL)
     MIR_get_error_func (ctx) (MIR_undeclared_func_reg_error, "undeclared func reg %s", reg_name);
   return rd;
@@ -1932,51 +1901,15 @@ static reg_desc_t *get_func_rd_by_reg (MIR_context_t ctx, MIR_reg_t reg, MIR_fun
 }
 
 MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
-#if MIR_PARALLEL_GEN
-  pthread_mutex_lock (&ctx_mutex);
-#endif
-  MIR_reg_t res = get_func_rd_by_name (ctx, reg_name, func)->reg;
-#if MIR_PARALLEL_GEN
-  pthread_mutex_unlock (&ctx_mutex);
-#endif
-  return res;
+  return get_func_rd_by_name (ctx, reg_name, func)->reg;
 }
 
 MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  MIR_type_t type;
-
-#if !MIR_PARALLEL_GEN
-  if (reg_type_cache.func != func) {
-    reg_type_cache.func = func;
-    VARR_TRUNC (MIR_type_t, reg_type_cache.types, 0);
-  }
-  if (VARR_LENGTH (MIR_type_t, reg_type_cache.types) > reg
-      && (type = VARR_GET (MIR_type_t, reg_type_cache.types, reg)) != MIR_T_UNDEF)
-    return type;
-#else
-  pthread_mutex_lock (&ctx_mutex);
-#endif
-  type = get_func_rd_by_reg (ctx, reg, func)->type;
-#if MIR_PARALLEL_GEN
-  pthread_mutex_unlock (&ctx_mutex);
-#else
-  while (VARR_LENGTH (MIR_type_t, reg_type_cache.types) <= reg)
-    VARR_PUSH (MIR_type_t, reg_type_cache.types, MIR_T_UNDEF);
-  VARR_SET (MIR_type_t, reg_type_cache.types, reg, type);
-#endif
-  return type;
+  return get_func_rd_by_reg (ctx, reg, func)->type;
 }
 
 const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-#if MIR_PARALLEL_GEN
-  pthread_mutex_lock (&ctx_mutex);
-#endif
-  const char *res
-    = VARR_ADDR (string_t, strings)[get_func_rd_by_reg (ctx, reg, func)->name_num].str.s;
-#if MIR_PARALLEL_GEN
-  pthread_mutex_unlock (&ctx_mutex);
-#endif
-  return res;
+  return get_func_rd_by_reg (ctx, reg, func)->name;
 }
 
 /* Functions to create operands.  */
@@ -5155,16 +5088,16 @@ static MIR_label_t create_label_desc (MIR_context_t ctx, const char *name) {
 }
 
 static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
+  func_regs_t func_regs = func->internal;
   size_t rdn, tab_rdn;
   reg_desc_t rd;
   int res;
 
-  rd.name_num = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).num;
-  rd.func = func;
-  rdn = VARR_LENGTH (reg_desc_t, reg_descs);
-  VARR_PUSH (reg_desc_t, reg_descs, rd);
-  res = HTAB_DO (size_t, namenum2rdn_tab, rdn, HTAB_FIND, tab_rdn);
-  VARR_POP (reg_desc_t, reg_descs);
+  rd.name = (char *) name;
+  rdn = VARR_LENGTH (reg_desc_t, func_regs->reg_descs);
+  VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
+  res = HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_FIND, tab_rdn);
+  VARR_POP (reg_desc_t, func_regs->reg_descs);
   return res;
 }
 
