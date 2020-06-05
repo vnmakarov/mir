@@ -52,6 +52,7 @@ static lib_t std_libs[] = {
 #else
   {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
 #endif
+  {"/lib64/libpthread.so.0", NULL},
 };
 static const char *std_lib_dirs[] = {
   "/lib64",
