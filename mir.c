@@ -35,7 +35,6 @@ struct MIR_context {
   VARR (size_t) * insn_nops; /* constant after initialization */
   VARR (char) * temp_string;
   VARR (uint8_t) * temp_data;
-  char temp_buff[30];
   HTAB (MIR_item_t) * module_item_tab;
   /* Module to keep items potentially used by all modules:  */
   struct MIR_module environment_module;
@@ -57,7 +56,6 @@ struct MIR_context {
 #define insn_nops ctx->insn_nops
 #define temp_string ctx->temp_string
 #define temp_data ctx->temp_data
-#define temp_buff ctx->temp_buff
 #define module_item_tab ctx->module_item_tab
 #define environment_module ctx->environment_module
 #define curr_module ctx->curr_module
