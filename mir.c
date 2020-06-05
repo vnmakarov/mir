@@ -93,7 +93,7 @@ static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const c
 }
 
 static void MIR_NO_RETURN MIR_UNUSED util_error (MIR_context_t ctx, const char *message) {
-  (*error_func) (MIR_alloc_error, message);
+  MIR_get_error_func (ctx) (MIR_alloc_error, message);
 }
 
 #define HARD_REG_NAME_PREFIX "hr"
@@ -370,7 +370,7 @@ static string_t string_store (MIR_context_t ctx, VARR (string_t) * *strs,
 
   if (string_find (strs, str_tab, str, &el)) return el;
   if ((heap_str = malloc (str.len)) == NULL)
-    (*error_func) (MIR_alloc_error, "Not enough memory for strings");
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for strings");
   memcpy (heap_str, str.s, str.len);
   string.str.s = heap_str;
   string.str.len = str.len;
@@ -440,7 +440,7 @@ static void func_regs_init (MIR_context_t ctx, MIR_func_t func) {
   reg_desc_t rd = {NULL, MIR_T_I64, 0};
 
   if ((func_regs = func->internal = malloc (sizeof (struct func_regs))) == NULL)
-    (*error_func) (MIR_alloc_error, "Not enough memory for func regs info");
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for func regs info");
   VARR_CREATE (reg_desc_t, func_regs->reg_descs, 50);
   VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, func_regs->name2rdn_tab, 100, name2rdn_hash, name2rdn_eq, func_regs);
@@ -455,7 +455,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   int htab_res;
 
   if (!any_p && _MIR_reserved_name_p (ctx, name))
-    (*error_func) (MIR_reserved_name_error, "redefining a reserved name %s", name);
+    MIR_get_error_func (ctx) (MIR_reserved_name_error, "redefining a reserved name %s", name);
   rd.name = (char *) name;
   rd.type = type;
   rd.reg = reg; /* 0 is reserved */
@@ -463,10 +463,10 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
   if (HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
     VARR_POP (reg_desc_t, func_regs->reg_descs);
-    (*error_func) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
+    MIR_get_error_func (ctx) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
   }
   if ((rd.name = malloc (strlen (name) + 1)) == NULL)
-    (*error_func) (MIR_alloc_error, "Not enough memory for reg names");
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for reg names");
   VARR_ADDR (reg_desc_t, func_regs->reg_descs)[rdn].name = *name_ptr = rd.name;
   strcpy (*name_ptr, name);
   htab_res = HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
