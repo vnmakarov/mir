@@ -1111,17 +1111,14 @@ MIR_item_t MIR_new_vararg_proto_arr (MIR_context_t ctx, const char *name, size_t
 
 static MIR_item_t new_proto (MIR_context_t ctx, const char *name, size_t nres,
                              MIR_type_t *res_types, size_t nargs, int vararg_p, va_list argp) {
-  MIR_var_t arg;
+  MIR_var_t *args = alloca (nargs * sizeof (MIR_var_t));
   size_t i;
 
-  VARR_TRUNC (MIR_var_t, temp_vars, 0);
   for (i = 0; i < nargs; i++) {
-    arg.type = va_arg (argp, MIR_type_t);
-    arg.name = va_arg (argp, const char *);
-    VARR_PUSH (MIR_var_t, temp_vars, arg);
+    args[i].type = va_arg (argp, MIR_type_t);
+    args[i].name = va_arg (argp, const char *);
   }
-  return new_proto_arr (ctx, name, nres, res_types, nargs, vararg_p,
-                        VARR_ADDR (MIR_var_t, temp_vars));
+  return new_proto_arr (ctx, name, nres, res_types, nargs, vararg_p, args);
 }
 
 MIR_item_t MIR_new_proto (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types,
