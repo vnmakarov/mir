@@ -213,11 +213,11 @@ struct gen_ctx {
 DEF_VARR (MIR_item_t);
 struct all_gen_ctx {
 #if MIR_PARALLEL_GEN
-  pthread_mutex_t queue_mutex;
-  pthread_cond_t generate_signal, done_signal;
+  mir_mutex_t queue_mutex;
+  mir_cond_t generate_signal, done_signal;
   size_t funcs_start;
-  VARR (MIR_item_t) * funcs_to_generate;
 #endif
+  VARR (MIR_item_t) * funcs_to_generate;
   MIR_context_t ctx;
   size_t gens_num; /* size of the following array: */
   struct gen_ctx gen_ctx[1];
@@ -6362,19 +6362,13 @@ static void *gen (void *arg) {
   gen_ctx_t gen_ctx = arg;
   struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
   size_t len;
-#if 0
-  pthread_attr_t attr;
-  size_t stack_size;
 
-  pthread_attr_getstacksize (&attr, &stack_size);
-  fprintf (stderr, "%d:stack size=%lu\n", gen_ctx->gen_num, stack_size);
-#endif
   for (;;) {
-    pthread_mutex_lock (&queue_mutex);
+    mir_mutex_lock (&queue_mutex);
     while (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start)
-      pthread_cond_wait (&generate_signal, &queue_mutex);
+      mir_cond_wait (&generate_signal, &queue_mutex);
     if ((func_item = VARR_GET (MIR_item_t, funcs_to_generate, funcs_start)) == NULL) {
-      pthread_mutex_unlock (&queue_mutex);
+      mir_mutex_unlock (&queue_mutex);
       break;
     }
     funcs_start++;
@@ -6386,27 +6380,23 @@ static void *gen (void *arg) {
       funcs_start = 0;
     }
     gen_ctx->busy_p = TRUE;
-    pthread_mutex_unlock (&queue_mutex);
-    //    fprintf (stderr, ">>>Starting parallel generation of %s in %d\n", func_item->u.func->name,
-    //    gen_ctx->gen_num);
+    mir_mutex_unlock (&queue_mutex);
     MIR_gen (gen_ctx->ctx, gen_ctx->gen_num, func_item);
-    //    fprintf (stderr, ">>>Finishing parallel generation of %s in %d\n",
-    //    func_item->u.func->name, gen_ctx->gen_num);
-    pthread_mutex_lock (&queue_mutex);
+    mir_mutex_lock (&queue_mutex);
     gen_ctx->busy_p = FALSE;
-    pthread_cond_signal (&done_signal);
-    pthread_mutex_unlock (&queue_mutex);
+    mir_cond_signal (&done_signal);
+    mir_mutex_unlock (&queue_mutex);
   }
   return NULL;
 }
 
 static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
-  pthread_mutex_lock (&queue_mutex);
+  mir_mutex_lock (&queue_mutex);
   funcs_start = 0;
   VARR_TRUNC (MIR_item_t, funcs_to_generate, 0);
   VARR_PUSH (MIR_item_t, funcs_to_generate, NULL); /* flag to finish threads */
-  pthread_cond_broadcast (&generate_signal);
-  pthread_mutex_unlock (&queue_mutex);
+  mir_cond_broadcast (&generate_signal);
+  mir_mutex_unlock (&queue_mutex);
 }
 #endif
 
@@ -6427,14 +6417,14 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
 #if MIR_PARALLEL_GEN
   funcs_start = 0;
   VARR_CREATE (MIR_item_t, funcs_to_generate, 0);
-  if (pthread_mutex_init (&queue_mutex, NULL) != 0) {
+  if (mir_mutex_init (&queue_mutex, NULL) != 0) {
     (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread lock");
-  } else if (pthread_cond_init (&generate_signal, NULL) != 0) {
-    pthread_mutex_destroy (&queue_mutex);
+  } else if (mir_cond_init (&generate_signal, NULL) != 0) {
+    mir_mutex_destroy (&queue_mutex);
     (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
-  } else if (pthread_cond_init (&done_signal, NULL) != 0) {
-    pthread_cond_destroy (&generate_signal);
-    pthread_mutex_destroy (&queue_mutex);
+  } else if (mir_cond_init (&done_signal, NULL) != 0) {
+    mir_cond_destroy (&generate_signal);
+    mir_mutex_destroy (&queue_mutex);
     (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
   } else {
     for (int i = 0; i < gens_num; i++) {
@@ -6442,12 +6432,12 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
       gen_ctx->busy_p = FALSE;
       gen_ctx->gen_num = i;
       gen_ctx->all_gen_ctx = all_gen_ctx;
-      if (pthread_create (&gen_ctx->gen_thread, NULL, gen, gen_ctx) != 0) {
+      if (mir_thread_create (&gen_ctx->gen_thread, NULL, gen, gen_ctx) != 0) {
         signal_threads_to_finish (all_gen_ctx);
-        for (int j = 0; j < i; j++) pthread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
-        pthread_cond_destroy (&done_signal);
-        pthread_cond_destroy (&generate_signal);
-        pthread_mutex_destroy (&queue_mutex);
+        for (int j = 0; j < i; j++) mir_thread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
+        mir_cond_destroy (&done_signal);
+        mir_cond_destroy (&generate_signal);
+        mir_mutex_destroy (&queue_mutex);
         (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread");
       }
     }
@@ -6510,9 +6500,9 @@ void MIR_gen_finish (MIR_context_t ctx) {
 #if MIR_PARALLEL_GEN
   signal_threads_to_finish (all_gen_ctx);
   for (int i = 0; i < all_gen_ctx->gens_num; i++)
-    pthread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
-  if (pthread_mutex_destroy (&queue_mutex) != 0 || pthread_cond_destroy (&generate_signal) != 0
-      || pthread_cond_destroy (&done_signal) != 0) {  // ???
+    mir_thread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
+  if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&generate_signal) != 0
+      || mir_cond_destroy (&done_signal) != 0) {  // ???
     (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
                                               "can not destroy generator mutex  or signals");
   }
@@ -6560,20 +6550,20 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item == NULL) {
     size_t i;
 
-    pthread_mutex_lock (&queue_mutex);
+    mir_mutex_lock (&queue_mutex);
     for (;;) {
       for (i = 0; i < all_gen_ctx->gens_num; i++)
         if (all_gen_ctx->gen_ctx[i].busy_p) break;
       if (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
         break; /* nothing to generate and nothing is being generated */
-      pthread_cond_wait (&done_signal, &queue_mutex);
+      mir_cond_wait (&done_signal, &queue_mutex);
     }
-    pthread_mutex_unlock (&queue_mutex);
+    mir_mutex_unlock (&queue_mutex);
   } else {
-    pthread_mutex_lock (&queue_mutex);
+    mir_mutex_lock (&queue_mutex);
     VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
-    pthread_cond_broadcast (&generate_signal);
-    pthread_mutex_unlock (&queue_mutex);
+    mir_cond_broadcast (&generate_signal);
+    mir_mutex_unlock (&queue_mutex);
   }
 #endif
 }
