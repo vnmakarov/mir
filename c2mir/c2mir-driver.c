@@ -120,7 +120,7 @@ static VARR (char_ptr_t) * headers;
 DEF_VARR (uint8_t);
 
 static VARR (uint8_t) * input;
-static int interp_exec_p, gen_exec_p, lazy_gen_exec_p;
+static int interp_exec_p, gen_exec_p, lazy_gen_exec_p, parallel_p;
 static VARR (char_ptr_t) * exec_argv;
 static VARR (char_ptr_t) * source_file_names;
 
@@ -250,11 +250,12 @@ static void init_options (int argc, char *argv[]) {
     } else if (strcmp (argv[i], "-i") == 0) {
       VARR_PUSH (char_ptr_t, source_file_names, STDIN_SOURCE_NAME);
     } else if (strcmp (argv[i], "-ei") == 0 || strcmp (argv[i], "-eg") == 0
-               || strcmp (argv[i], "-el") == 0) {
+               || strcmp (argv[i], "-epg") == 0 || strcmp (argv[i], "-el") == 0) {
+      parallel_p = strcmp (argv[i], "-epg") == 0;
       VARR_TRUNC (char_ptr_t, exec_argv, 0);
       if (strcmp (argv[i], "-ei") == 0)
         interp_exec_p = TRUE;
-      else if (strcmp (argv[i], "-eg") == 0)
+      else if (strcmp (argv[i], "-eg") == 0 || strcmp (argv[i], "-epg") == 0)
         gen_exec_p = TRUE;
       else
         lazy_gen_exec_p = TRUE;
@@ -281,9 +282,10 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -S, -c -- generate corresponding textual or binary MIR files\n");
       fprintf (stderr, "  -o file -- put output code into given file\n");
       fprintf (stderr, "  -On -- use given optimization level in MIR-generator\n");
+      fprintf (stderr, "  -ei -- execute code in the interpreter\n");
       fprintf (stderr,
-               "  (-ei | -eg | -el) options -- execute code in the interpreter or (lazily) "
-               "generated code with given options\n");
+               "  (-eg | -epg) -- execute code (parallelly) generated with given options\n");
+      fprintf (stderr, "  -el -- execute code lazily generated code with given options\n");
       exit (0);
     } else {
       fprintf (stderr, "unknown command line option %s (use -h for usage) -- goodbye\n", argv[i]);
@@ -539,7 +541,9 @@ int main (int argc, char *argv[], char *env[]) {
           if (optimize_level >= 0) MIR_gen_set_optimize_level (ctx, i, (unsigned) optimize_level);
           if (gen_debug_p) MIR_gen_set_debug_file (ctx, i, stderr);
         }
-        MIR_link (ctx, gen_exec_p ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
+        MIR_link (ctx,
+                  gen_exec_p ? (parallel_p ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
+                             : MIR_set_lazy_gen_interface,
                   import_resolver);
         fun_addr = MIR_gen (ctx, 0, main_func);
         start_time = real_usec_time ();
