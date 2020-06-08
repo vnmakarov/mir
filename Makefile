@@ -216,12 +216,14 @@ c2mir-test: c2mir-simple-test c2mir-full-test
 c2mir-simple-test:
 	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl $(THREAD_LIB) && ./a.out -v sieve.c -ei
 
-c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap-test0 c2mir-bootstrap-test c2mir-bootstrap-test2
+c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-parallel-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap-test0 c2mir-bootstrap-test c2mir-bootstrap-test2
 
 c2mir-interp-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-interp
 c2mir-gen-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen
+c2mir-parallel-gen-test: c2m
+	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-parallel-gen
 c2mir-gen-test0: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-gen-O0
 c2mir-gen-test1: c2m
