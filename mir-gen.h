@@ -17,6 +17,7 @@ extern void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f);
 extern void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int level);
 extern void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item);
 extern void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item);
+extern void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item);
 extern void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item);
 extern void MIR_gen_finish (MIR_context_t ctx);
 
