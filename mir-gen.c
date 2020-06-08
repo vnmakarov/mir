@@ -216,8 +216,8 @@ struct all_gen_ctx {
   mir_mutex_t queue_mutex;
   mir_cond_t generate_signal, done_signal;
   size_t funcs_start;
-#endif
   VARR (MIR_item_t) * funcs_to_generate;
+#endif
   MIR_context_t ctx;
   size_t gens_num; /* size of the following array: */
   struct gen_ctx gen_ctx[1];
