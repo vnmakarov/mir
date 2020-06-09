@@ -19,10 +19,9 @@ typedef struct lib lib_t;
 
 #if defined(__unix__)
 #if UINTPTR_MAX == 0xffffffff
-static lib_t std_libs[] = {{"/lib/libc.so.6", NULL},
-                           {"/lib32/libc.so.6", NULL},
-                           {"/lib/libm.so.6", NULL},
-                           {"/lib32/libm.so.6", NULL}};
+static lib_t std_libs[]
+  = {{"/lib/libc.so.6", NULL},   {"/lib32/libc.so.6", NULL},     {"/lib/libm.so.6", NULL},
+     {"/lib32/libm.so.6", NULL}, {"/lib/libpthread.so.0", NULL}, {"/lib32/libpthread.so.0", NULL}};
 static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
 #if defined(__x86_64__)
