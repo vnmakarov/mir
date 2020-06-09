@@ -39,18 +39,17 @@ static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
 static lib_t std_libs[] = {
   {"/lib64/libc.so.6", NULL},
+  {"/lib64/libm.so.6", NULL},
+  {"/lib64/libpthread.so.0", NULL},
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libpthread.so.0", NULL},
 #else
   {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
-#endif
-  {"/lib64/libm.so.6", NULL},
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
-#else
   {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64-linux-gnu/libpthread.so.0", NULL},
 #endif
-  {"/lib64/libpthread.so.0", NULL},
 };
 static const char *std_lib_dirs[] = {
   "/lib64",
