@@ -35,28 +35,6 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_PARALLEL_GEN 0
 #endif
 
-#if MIR_PARALLEL_GEN
-#include <pthread.h>
-typedef pthread_mutex_t mir_mutex_t;
-typedef pthread_cond_t mir_cond_t;
-#define mir_thread_create(m, attr, f, arg) pthread_create (m, attr, f, arg)
-#define mir_thread_join(t, r) pthread_join (t, r)
-#define mir_mutex_init(m, a) pthread_mutex_init (m, a)
-#define mir_mutex_destroy(m) pthread_mutex_destroy (m)
-#define mir_mutex_lock(m) pthread_mutex_lock (m)
-#define mir_mutex_unlock(m) pthread_mutex_unlock (m)
-#define mir_cond_init(m, a) pthread_cond_init (m, a)
-#define mir_cond_destroy(m) pthread_cond_destroy (m)
-#define mir_cond_wait(c, m) pthread_cond_wait (c, m)
-#define mir_cond_signal(c) pthread_cond_signal (c)
-#define mir_cond_broadcast(c) pthread_cond_broadcast (c)
-#else
-#define mir_mutex_init(m, a)
-#define mir_mutex_destroy(m)
-#define mir_mutex_lock(m)
-#define mir_mutex_unlock(m)
-#endif
-
 #ifdef __GNUC__
 #define MIR_UNUSED __attribute__ ((unused))
 #else
@@ -90,6 +68,28 @@ typedef enum MIR_error_type {
 
 typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *format,
                                                 ...);
+
+#if MIR_PARALLEL_GEN
+#include <pthread.h>
+typedef pthread_mutex_t mir_mutex_t;
+typedef pthread_cond_t mir_cond_t;
+#define mir_thread_create(m, attr, f, arg) pthread_create (m, attr, f, arg)
+#define mir_thread_join(t, r) pthread_join (t, r)
+#define mir_mutex_init(m, a) pthread_mutex_init (m, a)
+#define mir_mutex_destroy(m) pthread_mutex_destroy (m)
+#define mir_mutex_lock(m) pthread_mutex_lock (m)
+#define mir_mutex_unlock(m) pthread_mutex_unlock (m)
+#define mir_cond_init(m, a) pthread_cond_init (m, a)
+#define mir_cond_destroy(m) pthread_cond_destroy (m)
+#define mir_cond_wait(c, m) pthread_cond_wait (c, m)
+#define mir_cond_signal(c) pthread_cond_signal (c)
+#define mir_cond_broadcast(c) pthread_cond_broadcast (c)
+#else
+#define mir_mutex_init(m, a) 0
+#define mir_mutex_destroy(m) 0
+#define mir_mutex_lock(m) 0
+#define mir_mutex_unlock(m) 0
+#endif
 
 #define INSN_EL(i) MIR_##i
 
