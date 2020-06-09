@@ -562,6 +562,10 @@ static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
 static void code_init (MIR_context_t ctx);
 static void code_finish (MIR_context_t ctx);
 
+static void parallel_error (MIR_context_t ctx, const char *err_message) {
+  MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
+}
+
 MIR_context_t MIR_init (void) {
   MIR_context_t ctx;
 
@@ -574,7 +578,7 @@ MIR_context_t MIR_init (void) {
   ctx->io_ctx = NULL;
   ctx->scan_ctx = NULL;
   ctx->interp_ctx = NULL;
-  mir_mutex_init (&ctx_mutex, NULL);
+  if (mir_mutex_init (&ctx_mutex, NULL)) parallel_error (ctx, "error in mutex init");
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++) mir_assert (c == insn_descs[c].code);
 #endif
@@ -707,7 +711,7 @@ void MIR_finish (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_finish_error, "finish when module %s is not finished",
                               curr_module->name);
   free (ctx->string_ctx);
-  mir_mutex_destroy (&ctx_mutex);
+  if (mir_mutex_destroy (&ctx_mutex)) parallel_error (ctx, "error in mutex destroy");
   free (ctx);
   ctx = NULL;
 }
@@ -3190,7 +3194,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   MIR_module_t saved_module = curr_module;
 
   va_start (argp, nargs);
-  mir_mutex_lock (&ctx_mutex);
+  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
   for (i = 0; i < nargs; i++) {
     args[i].type = va_arg (argp, MIR_type_t);
     args[i].name = va_arg (argp, const char *);
@@ -3207,7 +3211,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
         for (i = 0; i < nargs; i++)
           if (args[i].type != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type) break;
         if (i >= nargs) {
-          mir_mutex_unlock (&ctx_mutex);
+          if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
           return proto_item;
         }
       }
@@ -3222,7 +3226,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   DLIST_REMOVE (MIR_item_t, curr_module->items, proto_item);
   DLIST_PREPEND (MIR_item_t, curr_module->items, proto_item); /* make it first in the list */
   curr_module = saved_module;
-  mir_mutex_unlock (&ctx_mutex);
+  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
   return proto_item;
 }
 
@@ -3231,7 +3235,7 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
   MIR_item_t item, ref_item;
   MIR_module_t saved_module = curr_module;
 
-  mir_mutex_lock (&ctx_mutex);
+  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
   name = _MIR_uniq_string (ctx, name);
   if ((ref_item = find_item (ctx, name, &environment_module)) != NULL) {
     if (ref_item->item_type != MIR_import_item || ref_item->addr != addr)
@@ -3263,7 +3267,7 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
     item->ref_def = ref_item;
     curr_module = saved_module;
   }
-  mir_mutex_unlock (&ctx_mutex);
+  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
   return item;
 }
 
@@ -3379,10 +3383,10 @@ uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code,
   code_holder_t *ch_ptr;
   uint8_t *res = NULL;
 
-  mir_mutex_lock (&code_mutex);
+  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   if ((ch_ptr = get_last_code_holder (ctx, code_len)) != NULL)
     res = add_code (ctx, ch_ptr, code, code_len);
-  mir_mutex_unlock (&code_mutex);
+  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
   return res;
 }
 
@@ -3408,12 +3412,12 @@ void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
 
   start = (size_t) addr / page_size * page_size;
   len = (size_t) addr + code_len - start;
-  mir_mutex_lock (&code_mutex);
+  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   memcpy (addr, code, code_len);
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (addr, addr + code_len);
-  mir_mutex_unlock (&code_mutex);
+  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
@@ -3425,12 +3429,12 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
     if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
-  mir_mutex_lock (&code_mutex);
+  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
-  mir_mutex_unlock (&code_mutex);
+  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 
 void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* thread safe */
@@ -3448,7 +3452,7 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* 
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
   va_start (args, nloc);
-  mir_mutex_lock (&code_mutex);
+  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
   for (size_t i = 0; i < nloc; i++) {
     offset = va_arg (args, size_t);
@@ -3457,7 +3461,7 @@ void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* 
   }
   mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
-  mir_mutex_unlock (&code_mutex);
+  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
   va_end (args);
 }
 
@@ -3466,11 +3470,11 @@ static void code_init (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
-  mir_mutex_init (&code_mutex, NULL);
+  if (mir_mutex_init (&code_mutex, NULL)) parallel_error (ctx, "error in mutex init");
 }
 
 static void code_finish (MIR_context_t ctx) {
-  mir_mutex_destroy (&code_mutex);
+  if (mir_mutex_destroy (&code_mutex)) parallel_error (ctx, "error in mutex destroy");
   while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
     code_holder_t ch = VARR_POP (code_holder_t, code_holders);
     mem_unmap (ch.start, ch.bound - ch.start);
