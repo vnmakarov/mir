@@ -6356,19 +6356,25 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   optimize_level = level;
 }
 
+static void parallel_error (MIR_context_t ctx, const char *err_message) {
+  MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
+}
+
 #if MIR_PARALLEL_GEN
 static void *gen (void *arg) {
   MIR_item_t func_item;
   gen_ctx_t gen_ctx = arg;
   struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
+  MIR_context_t ctx = all_gen_ctx->ctx;
   size_t len;
 
   for (;;) {
-    mir_mutex_lock (&queue_mutex);
+    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     while (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start)
-      mir_cond_wait (&generate_signal, &queue_mutex);
+      if (mir_cond_wait (&generate_signal, &queue_mutex))
+        parallel_error (ctx, "error in cond wait");
     if ((func_item = VARR_GET (MIR_item_t, funcs_to_generate, funcs_start)) == NULL) {
-      mir_mutex_unlock (&queue_mutex);
+      if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
       break;
     }
     funcs_start++;
@@ -6380,23 +6386,25 @@ static void *gen (void *arg) {
       funcs_start = 0;
     }
     gen_ctx->busy_p = TRUE;
-    mir_mutex_unlock (&queue_mutex);
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
     MIR_gen (gen_ctx->ctx, gen_ctx->gen_num, func_item);
-    mir_mutex_lock (&queue_mutex);
+    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     gen_ctx->busy_p = FALSE;
-    mir_cond_signal (&done_signal);
-    mir_mutex_unlock (&queue_mutex);
+    if (mir_cond_signal (&done_signal)) parallel_error (ctx, "error in cond signal");
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   }
   return NULL;
 }
 
 static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
-  mir_mutex_lock (&queue_mutex);
+  MIR_context_t ctx = all_gen_ctx->ctx;
+
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
   funcs_start = 0;
   VARR_TRUNC (MIR_item_t, funcs_to_generate, 0);
   VARR_PUSH (MIR_item_t, funcs_to_generate, NULL); /* flag to finish threads */
-  mir_cond_broadcast (&generate_signal);
-  mir_mutex_unlock (&queue_mutex);
+  if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 #endif
 
@@ -6550,20 +6558,20 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item == NULL) {
     size_t i;
 
-    mir_mutex_lock (&queue_mutex);
+    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     for (;;) {
       for (i = 0; i < all_gen_ctx->gens_num; i++)
         if (all_gen_ctx->gen_ctx[i].busy_p) break;
       if (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
         break; /* nothing to generate and nothing is being generated */
-      mir_cond_wait (&done_signal, &queue_mutex);
+      if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
     }
-    mir_mutex_unlock (&queue_mutex);
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   } else {
-    mir_mutex_lock (&queue_mutex);
+    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
-    mir_cond_broadcast (&generate_signal);
-    mir_mutex_unlock (&queue_mutex);
+    if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   }
 #endif
 }
