@@ -25,11 +25,10 @@ static lib_t std_libs[]
 static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
 #if defined(__x86_64__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
-                           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
-                           {"/lib64/libm.so.6", NULL},
-                           {"/usr/lib64/libpthread.so.0", NULL},
-                           {"/lib/x86_64-linux-gnu/libm.so.6", NULL}};
+static lib_t std_libs[]
+  = {{"/lib64/libc.so.6", NULL},           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
+     {"/lib64/libm.so.6", NULL},           {"/lib/x86_64-linux-gnu/libm.so.6", NULL},
+     {"/usr/lib64/libpthread.so.0", NULL}, {"/lib/x86_64-linux-gnu/libpthread.so.0", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #elif (__aarch64__)
 static lib_t std_libs[]
