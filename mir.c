@@ -13,6 +13,7 @@ DEF_VARR (MIR_module_t);
 DEF_VARR (size_t);
 DEF_VARR (char);
 DEF_VARR (uint8_t);
+DEF_VARR (MIR_proto_t);
 
 struct gen_ctx;
 struct c2mir_ctx;
@@ -28,6 +29,7 @@ struct MIR_context {
   struct gen_ctx *gen_ctx;     /* should be the 1st member */
   struct c2mir_ctx *c2mir_ctx; /* should be the 2nd member */
   MIR_error_func_t error_func;
+  VARR (MIR_proto_t) * unspec_protos; /* protos of unspec insns */
   VARR (MIR_insn_t) * temp_insns, *temp_insns2;
   VARR (MIR_op_t) * temp_insn_ops;
   VARR (MIR_var_t) * temp_vars;
@@ -56,6 +58,7 @@ struct MIR_context {
 };
 
 #define error_func ctx->error_func
+#define unspec_protos ctx->unspec_protos
 #define temp_insns ctx->temp_insns
 #define temp_insns2 ctx->temp_insns2
 #define temp_insn_ops ctx->temp_insn_ops
@@ -604,6 +607,7 @@ MIR_context_t MIR_init (void) {
     (*error_func) (MIR_alloc_error, "Not enough memory for ctx");
   string_init (&strings, &string_tab);
   reg_init (ctx);
+  VARR_CREATE (MIR_proto_t, unspec_protos, 0);
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_insn_t, temp_insns2, 0);
   VARR_CREATE (MIR_op_t, temp_insn_ops, 0);
@@ -722,6 +726,12 @@ void MIR_finish (MIR_context_t ctx) {
   VARR_DESTROY (uint8_t, temp_data);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (MIR_reg_t, inline_reg_map);
+  while (VARR_LENGTH (MIR_proto_t, unspec_protos) != 0) {
+    MIR_proto_t proto = VARR_POP (MIR_proto_t, unspec_protos);
+    VARR_DESTROY (MIR_var_t, proto->args);
+    free (proto);
+  }
+  VARR_DESTROY (MIR_proto_t, unspec_protos);
   reg_finish (ctx);
   string_finish (&strings, &string_tab);
   vn_finish (ctx);
