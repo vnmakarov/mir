@@ -51,8 +51,8 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 typedef enum MIR_error_type {
   REP8 (ERR_EL, no, syntax, binary_io, alloc, finish, no_module, nested_module, no_func),
   REP4 (ERR_EL, func, vararg_func, nested_func, wrong_param_value),
-  REP4 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl),
-  REP8 (ERR_EL, reg_type, unique_reg, undeclared_op_ref, ops_num, call_op, ret, op_mode, out_op),
+  REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
+  REP8 (ERR_EL, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op, ret, op_mode, out_op),
   ERR_EL (invalid_insn)
 } MIR_error_type_t;
 
