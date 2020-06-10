@@ -3823,6 +3823,8 @@ static size_t write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t fu
   MIR_insn_code_t code = insn->code;
   size_t len;
 
+  if (code == MIR_UNSPEC)
+    (*error_func) (MIR_binary_io_error, "MIR_UNSPEC is not portable and can not be output");
   if (code == MIR_LABEL) return write_lab (ctx, writer, insn);
   nops = MIR_insn_nops (ctx, insn);
   len = write_uint (ctx, writer, code);
@@ -4633,6 +4635,8 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
 
       if (insn_code >= MIR_LABEL)
         (*error_func) (MIR_binary_io_error, "wrong insn code %d", insn_code);
+      if (insn_code == MIR_UNSPEC)
+        (*error_func) (MIR_binary_io_error, "UNSPEC is not portable and can not be read");
       for (uint64_t i = 0; i < VARR_LENGTH (uint64_t, insn_label_string_nums); i++) {
         lab = to_lab (ctx, VARR_GET (uint64_t, insn_label_string_nums, i));
         MIR_append_insn (ctx, func, lab);
