@@ -1827,10 +1827,10 @@ MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...) {
   va_list argp;
   size_t nops = insn_code_nops (ctx, code);
 
-  if (MIR_call_code_p (code) || code == MIR_RET || code == MIR_SWITCH)
+  if (MIR_call_code_p (code) || code == MIR_UNSPEC || code == MIR_RET || code == MIR_SWITCH)
     (*error_func) (MIR_call_op_error,
-                   "Use only MIR_new_insn_arr or MIR_new_{call,ret}_insn for creating a "
-                   "call/ret/switch insn");
+                   "Use only MIR_new_insn_arr or MIR_new_{call,unspec,ret}_insn for creating a "
+                   "call/unspec/ret/switch insn");
   va_start (argp, code);
   return new_insn (ctx, code, nops, argp);
 }
