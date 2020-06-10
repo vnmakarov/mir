@@ -2340,6 +2340,8 @@ void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t fu
     fprintf (f, i == 0 ? "\t" : ", ");
     MIR_output_op (ctx, f, insn->ops[i], func);
   }
+  if (insn->code == MIR_UNSPEC)
+    fprintf (f, " # %s", VARR_GET (MIR_proto_t, unspec_protos, insn->ops[0].u.u)->name);
   if (newline_p) fprintf (f, "\n");
 }
 
