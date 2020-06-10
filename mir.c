@@ -1849,6 +1849,18 @@ MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...) {
   return new_insn (ctx, MIR_RET, nops, argp);
 }
 
+MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...) {
+  va_list argp;
+
+  va_start (argp, nops);
+  return new_insn (ctx, MIR_UNSPEC, nops, argp);
+}
+
+uint64_t _MIR_register_unspec_insn (MIR_context_t ctx, MIR_proto_t proto) {
+  VARR_PUSH (MIR_proto_t, unspec_protos, proto);
+  return VARR_LENGTH (MIR_proto_t, unspec_protos) - 1;
+}
+
 MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn) {
   size_t size;
   mir_assert (insn != NULL);
