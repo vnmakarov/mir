@@ -1320,7 +1320,10 @@ void MIR_finish_func (MIR_context_t ctx) {
     } else if (MIR_call_code_p (code))
       expr_p = FALSE;
     for (i = 0; i < actual_nops; i++) {
-      if (MIR_call_code_p (code)) {
+      if (code == MIR_UNSPEC && i == 0) {
+        mir_assert (insn->ops[i].mode == MIR_OP_INT);
+        continue;
+      } else if (MIR_call_code_p (code)) {
         if (i == 0) {
           mir_assert (insn->ops[i].mode == MIR_OP_REF
                       && insn->ops[i].u.ref->item_type == MIR_proto_item);
