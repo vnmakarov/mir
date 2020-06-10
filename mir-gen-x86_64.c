@@ -856,6 +856,7 @@ struct pattern {
      i[0-3] - immediate of size 8,16,32,64-bits
      p[0-3] - reference
      s - immediate 1, 2, 4, or 8 (scale)
+     c<number> - immediate integer <number>
      m[0-3] - int (signed or unsigned) type memory of size 8,16,32,64-bits
      ms[0-3] - signed int type memory of size 8,16,32,64-bits
      mu[0-3] - unsigned int type memory of size 8,16,32,64-bits
@@ -1340,6 +1341,13 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
           || (op.u.i != 1 && op.u.i != 2 && op.u.i != 4 && op.u.i != 8))
         return FALSE;
       break;
+    case 'c': {
+      uint64_t n;
+      p++;
+      n = read_dec (&p);
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || op.u.u != n) return FALSE;
+      break;
+    }
     case 'm': {
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
       int u_p, s_p;
