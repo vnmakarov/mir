@@ -1241,6 +1241,22 @@ static int MIR_UNUSED uint16_p (int64_t v) { return 0 <= v && v <= UINT16_MAX; }
 static int int32_p (int64_t v) { return INT32_MIN <= v && v <= INT32_MAX; }
 static int uint32_p (int64_t v) { return 0 <= v && v <= UINT32_MAX; }
 
+static int dec_value (int ch) { return '0' <= ch && ch <= '9' ? ch - '0' : -1; }
+
+static uint64_t read_dec (const char **ptr) {
+  int v;
+  const char *p;
+  uint64_t res = 0;
+
+  for (p = *ptr; (v = dec_value (*p)) >= 0; p++) {
+    gen_assert ((res >> 60) == 0);
+    res = res * 10 + v;
+  }
+  gen_assert (p != *ptr);
+  *ptr = p - 1;
+  return res;
+}
+
 static int pattern_index_cmp (const void *a1, const void *a2) {
   int i1 = *(const int *) a1, i2 = *(const int *) a2;
   int c1 = (int) patterns[i1].code, c2 = (int) patterns[i2].code;
