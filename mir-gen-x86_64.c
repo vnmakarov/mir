@@ -777,6 +777,13 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op,
                            MIR_new_int_op (ctx, block_size + service_area_size));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= block size + service_area_size */
+#if 0
+  gen_add_insn_before (gen_ctx, anchor,
+                       _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
+                                             _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, 0, SP_HARD_REG,
+                                                                       MIR_NON_HARD_REG, 1),
+                                             _MIR_new_hard_reg_op (ctx, XMM13_HARD_REG)));
+#endif
   if (func->vararg_p) {
 #ifndef _WIN64
     start = block_size;
