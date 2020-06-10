@@ -1773,25 +1773,34 @@ static MIR_insn_t new_insn1 (MIR_context_t ctx, MIR_insn_code_t code) {
 MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_insn_t insn;
   MIR_proto_t proto;
-  size_t i = 0, expected_nops = insn_code_nops (ctx, code);
+  size_t args_start, i = 0, expected_nops = insn_code_nops (ctx, code);
   mir_assert (ops != NULL);
 
-  if (!MIR_call_code_p (code) && code != MIR_RET && code != MIR_SWITCH && nops != expected_nops) {
+  if (!MIR_call_code_p (code) && code != MIR_UNSPEC && code != MIR_RET && code != MIR_SWITCH
+      && nops != expected_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands for insn %s",
                    insn_descs[code].name);
   } else if (code == MIR_SWITCH) {
     if (nops < 2) (*error_func) (MIR_ops_num_error, "number of MIR_SWITCH operands is less 2");
-  } else if (MIR_call_code_p (code)) {
-    if (nops < 2) (*error_func) (MIR_ops_num_error, "wrong number of call operands");
-    if (ops[0].mode != MIR_OP_REF || ops[0].u.ref->item_type != MIR_proto_item)
-      (*error_func) (MIR_call_op_error, "the 1st call operand should be a prototype");
-    proto = ops[0].u.ref->u.proto;
+  } else if (MIR_call_code_p (code) || code == MIR_UNSPEC) {
+    args_start = code == MIR_UNSPEC ? 1 : 2;
+    if (nops < args_start)
+      (*error_func) (MIR_ops_num_error, "wrong number of call/unspec operands");
+    if (code == MIR_UNSPEC) {
+      if (ops[0].mode != MIR_OP_INT || ops[0].u.u >= VARR_LENGTH (MIR_proto_t, unspec_protos))
+        (*error_func) (MIR_unspec_op_error, "the 1st unspec operand should be valid unspec code");
+      proto = VARR_GET (MIR_proto_t, unspec_protos, ops[0].u.u);
+    } else {
+      if (ops[0].mode != MIR_OP_REF || ops[0].u.ref->item_type != MIR_proto_item)
+        (*error_func) (MIR_call_op_error, "the 1st call operand should be a prototype");
+      proto = ops[0].u.ref->u.proto;
+    }
     i = proto->nres;
     if (proto->args != NULL) i += VARR_LENGTH (MIR_var_t, proto->args);
-    if (nops < i + 2 || (nops != i + 2 && !proto->vararg_p))
-      (*error_func) (MIR_call_op_error,
-                     "number of call operands or results does not correspond to prototype %s",
-                     proto->name);
+    if (nops < i + args_start || (nops != i + args_start && !proto->vararg_p))
+      (*error_func) (code == MIR_UNSPEC ? MIR_unspec_op_error : MIR_call_op_error,
+                     "number of %s operands or results does not correspond to prototype %s",
+                     code == MIR_UNSPEC ? "unspec" : "call", proto->name);
   } else if (code == MIR_VA_ARG) {
     if (ops[2].mode != MIR_OP_MEM)
       (*error_func) (MIR_op_mode_error,
