@@ -315,6 +315,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_VA_START, "va_start", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LABEL, "label", {MIR_OP_BOUND}},
+  {MIR_UNSPEC, "unspec", {MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
 
