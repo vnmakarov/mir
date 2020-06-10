@@ -551,6 +551,8 @@ extern MIR_proto_t _MIR_create_proto (MIR_context_t ctx, const char *name, size_
                                       MIR_var_t *args);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
+extern MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...);
+extern uint64_t _MIR_register_unspec_insn (MIR_context_t ctx, MIR_proto_t proto);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
