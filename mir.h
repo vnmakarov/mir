@@ -545,6 +545,9 @@ extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
+extern MIR_proto_t _MIR_create_proto (MIR_context_t ctx, const char *name, size_t nres,
+                                      MIR_type_t *res_types, size_t nargs, int vararg_p,
+                                      MIR_var_t *args);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
