@@ -1694,23 +1694,32 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
     *out_p = FALSE;
     /* should be already checked in MIR_finish_func */
     return nop == 0 && code == MIR_SWITCH ? MIR_OP_INT : insn->ops[nop].mode;
-  } else if (MIR_call_code_p (code)) {
-    MIR_op_t proto_op = insn->ops[0];
+  } else if (MIR_call_code_p (code) || code == MIR_UNSPEC) {
+    MIR_op_t proto_op;
     MIR_proto_t proto;
+    size_t args_start;
 
-    mir_assert (proto_op.mode == MIR_OP_REF && proto_op.u.ref->item_type == MIR_proto_item);
-    proto = proto_op.u.ref->u.proto;
-    *out_p = 2 <= nop && nop < proto->nres + 2;
-    nargs = proto->nres + 2 + (proto->args == NULL ? 0 : VARR_LENGTH (MIR_var_t, proto->args));
+    if (code == MIR_UNSPEC) {
+      args_start = 1;
+      mir_assert (insn->ops[0].mode == MIR_OP_INT);
+      mir_assert (insn->ops[0].u.u < VARR_LENGTH (MIR_proto_t, unspec_protos));
+      proto = VARR_GET (MIR_proto_t, unspec_protos, insn->ops[0].u.u);
+    } else {
+      args_start = 2;
+      proto_op = insn->ops[0];
+      mir_assert (proto_op.mode == MIR_OP_REF && proto_op.u.ref->item_type == MIR_proto_item);
+      proto = proto_op.u.ref->u.proto;
+    }
+    *out_p = args_start <= nop && nop < proto->nres + args_start;
+    nargs
+      = proto->nres + args_start + (proto->args == NULL ? 0 : VARR_LENGTH (MIR_var_t, proto->args));
     if (proto->vararg_p && nop >= nargs) return MIR_OP_UNDEF; /* unknown */
     mir_assert (nops >= nargs && (proto->vararg_p || nops == nargs));
-    return (nop == 0
-              ? insn->ops[nop].mode
-              : nop == 1
-                  ? MIR_OP_INT
-                  : 2 <= nop && nop < proto->nres + 2
-                      ? type2mode (proto->res_types[nop - 2])
-                      : type2mode (VARR_GET (MIR_var_t, proto->args, nop - 2 - proto->nres).type));
+    if (nop == 0) return insn->ops[nop].mode;
+    if (nop == 1 && code != MIR_UNSPEC) return MIR_OP_INT; /* call func addr */
+    if (args_start <= nop && nop < proto->nres + args_start)
+      return type2mode (proto->res_types[nop - args_start]);
+    return type2mode (VARR_GET (MIR_var_t, proto->args, nop - args_start - proto->nres).type);
   }
   mode = insn_descs[code].op_modes[nop];
   *out_p = (mode & OUTPUT_FLAG) != 0;
