@@ -1056,6 +1056,10 @@ static const struct pattern patterns[] = {
   {MIR_LDMOV, "h33 mld", "DB /5 m1; D9 C9"},    /*only for ret and calls: fld m1; fxch */
   {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"}, /* fld m1; fstp m0 */
 
+  {MIR_UNSPEC, "c0 r r", "66 Y 0F 6F r1 R2"},  /* movdqa r0,r1 */
+  {MIR_UNSPEC, "c0 r md", "66 Y 0F 6F r1 m2"}, /* movdqa r0,m128 */
+  {MIR_UNSPEC, "c0 md r", "66 Y 0F 7F r2 m1"}, /* movdqa m128,r0 */
+
   {MIR_EXT8, "r r", "X 0F BE r0 R1"},    /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},   /* movsx r0,m1 */
   {MIR_EXT16, "r r", "X 0F BF r0 R1"},   /* movsx r0,r1 */
