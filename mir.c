@@ -1062,31 +1062,34 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
   return item;
 }
 
-static MIR_item_t new_proto_arr (MIR_context_t ctx, const char *name, size_t nres,
-                                 MIR_type_t *res_types, size_t nargs, int vararg_p,
-                                 MIR_var_t *args) {
-  MIR_item_t proto_item, tab_item;
-  MIR_proto_t proto;
-  size_t i;
+MIR_proto_t _MIR_create_proto (MIR_context_t ctx, const char *name, size_t nres,
+                               MIR_type_t *res_types, size_t nargs, int vararg_p, MIR_var_t *args) {
+  MIR_proto_t proto = malloc (sizeof (struct MIR_proto) + nres * sizeof (MIR_type_t));
 
-  if (curr_module == NULL)
-    (*error_func) (MIR_no_module_error, "Creating proto %s outside module", name);
-  proto_item = create_item (ctx, MIR_proto_item, "proto");
-  proto_item->u.proto = proto = malloc (sizeof (struct MIR_proto) + nres * sizeof (MIR_type_t));
-  if (proto == NULL) {
-    free (proto_item);
+  if (proto == NULL)
     (*error_func) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
-  }
   proto->name
     = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
   memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
   proto->nres = nres;
   proto->vararg_p = vararg_p != 0;
+  VARR_CREATE (MIR_var_t, proto->args, nargs);
+  for (size_t i = 0; i < nargs; i++) VARR_PUSH (MIR_var_t, proto->args, args[i]);
+  return proto;
+}
+
+static MIR_item_t new_proto_arr (MIR_context_t ctx, const char *name, size_t nres,
+                                 MIR_type_t *res_types, size_t nargs, int vararg_p,
+                                 MIR_var_t *args) {
+  MIR_item_t proto_item, tab_item;
+
+  if (curr_module == NULL)
+    (*error_func) (MIR_no_module_error, "Creating proto %s outside module", name);
+  proto_item = create_item (ctx, MIR_proto_item, "proto");
+  proto_item->u.proto = _MIR_create_proto (ctx, name, nres, res_types, nargs, vararg_p, args);
   tab_item = add_item (ctx, proto_item);
   mir_assert (tab_item == proto_item);
-  VARR_CREATE (MIR_var_t, proto->args, nargs);
-  for (i = 0; i < nargs; i++) VARR_PUSH (MIR_var_t, proto->args, args[i]);
   return proto_item;
 }
 
