@@ -448,6 +448,7 @@ DEF_VARR (MIR_code_reloc_t);
 struct target_ctx {
   unsigned char alloca_p, stack_arg_func_p, leaf_p;
   int start_sp_from_bp_offset;
+  uint64_t movdqa_code; /* unspec code for movdqa */
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -462,6 +463,7 @@ struct target_ctx {
 #define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define start_sp_from_bp_offset gen_ctx->target_ctx->start_sp_from_bp_offset
+#define movdqa_code gen_ctx->target_ctx->movdqa_code
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -2004,6 +2006,10 @@ static void target_init (gen_ctx_t gen_ctx) {
   VARR_CREATE (label_ref_t, label_refs, 0);
   VARR_CREATE (uint64_t, abs_address_locs, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, 0);
+  MIR_type_t res = MIR_T_D;
+  MIR_var_t args[] = {{MIR_T_D, "src"}};
+  MIR_proto_t proto = _MIR_create_proto (gen_ctx->ctx, "movdqa", 1, &res, 1, FALSE, args);
+  movdqa_code = _MIR_register_unspec_insn (gen_ctx->ctx, proto);
   patterns_init (gen_ctx);
 }
 
