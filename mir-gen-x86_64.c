@@ -747,14 +747,20 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
   MIR_op_t sp_reg_op, fp_reg_op;
-  int64_t bp_saved_reg_offset, start;
-  size_t i, n, service_area_size, saved_hard_regs_num, stack_slots_size, block_size;
+  int64_t bp_saved_reg_offset, offset;
+  size_t i, service_area_size, saved_hard_regs_size, stack_slots_size, block_size;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
-  for (i = saved_hard_regs_num = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) saved_hard_regs_num++;
-  if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_num == 0 && !func->vararg_p
+  for (i = saved_hard_regs_size = 0; i <= R15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+      saved_hard_regs_size += 8;
+#ifdef _WIN64
+  for (; i <= XMM15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+      saved_hard_regs_size += 16;
+#endif
+  if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
       && stack_slots_num == 0)
     return;
   sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
@@ -773,75 +779,75 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   service_area_size = func->vararg_p ? reg_save_area_size + 8 : 8;
   stack_slots_size = stack_slots_num * 8;
   /* stack slots, and saved regs as multiple of 16 bytes: */
-  block_size = (stack_slots_size + 8 * saved_hard_regs_num + 15) / 16 * 16;
+  block_size = (stack_slots_size + saved_hard_regs_size + 15) / 16 * 16;
   new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op,
                            MIR_new_int_op (ctx, block_size + service_area_size));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= block size + service_area_size */
-#if 0
-  gen_add_insn_before (gen_ctx, anchor,
-                       _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
-                                             _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, 0, SP_HARD_REG,
-                                                                       MIR_NON_HARD_REG, 1),
-                                             _MIR_new_hard_reg_op (ctx, XMM13_HARD_REG)));
-#endif
-  if (func->vararg_p) {
+  bp_saved_reg_offset = block_size;
 #ifndef _WIN64
-    start = block_size;
-    isave (gen_ctx, anchor, start, DI_HARD_REG);
-    isave (gen_ctx, anchor, start + 8, SI_HARD_REG);
-    isave (gen_ctx, anchor, start + 16, DX_HARD_REG);
-    isave (gen_ctx, anchor, start + 24, CX_HARD_REG);
-    isave (gen_ctx, anchor, start + 32, R8_HARD_REG);
-    isave (gen_ctx, anchor, start + 40, R9_HARD_REG);
-    dsave (gen_ctx, anchor, start + 48, XMM0_HARD_REG);
-    dsave (gen_ctx, anchor, start + 64, XMM1_HARD_REG);
-    dsave (gen_ctx, anchor, start + 80, XMM2_HARD_REG);
-    dsave (gen_ctx, anchor, start + 96, XMM3_HARD_REG);
-    dsave (gen_ctx, anchor, start + 112, XMM4_HARD_REG);
-    dsave (gen_ctx, anchor, start + 128, XMM5_HARD_REG);
-    dsave (gen_ctx, anchor, start + 144, XMM6_HARD_REG);
-    dsave (gen_ctx, anchor, start + 160, XMM7_HARD_REG);
-#endif
+  if (func->vararg_p) {
+    offset = block_size;
+    isave (gen_ctx, anchor, offset, DI_HARD_REG);
+    isave (gen_ctx, anchor, offset + 8, SI_HARD_REG);
+    isave (gen_ctx, anchor, offset + 16, DX_HARD_REG);
+    isave (gen_ctx, anchor, offset + 24, CX_HARD_REG);
+    isave (gen_ctx, anchor, offset + 32, R8_HARD_REG);
+    isave (gen_ctx, anchor, offset + 40, R9_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 48, XMM0_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 64, XMM1_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 80, XMM2_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 96, XMM3_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 112, XMM4_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 128, XMM5_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 144, XMM6_HARD_REG);
+    dsave (gen_ctx, anchor, offset + 160, XMM7_HARD_REG);
+    bp_saved_reg_offset += reg_save_area_size;
   }
-  bp_saved_reg_offset = block_size + (func->vararg_p ? reg_save_area_size : 0);
-  /* Saving callee saved hard registers: */
-  for (i = n = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      MIR_insn_code_t code = MIR_MOV;
-      MIR_type_t type = MIR_T_I64;
-#ifdef _WIN64
-      if (i > R15_HARD_REG) {
-        code = MIR_DMOV;
-        type = MIR_T_D;
-      }
-#else
-      assert (i <= R15_HARD_REG); /* xmm regs are always callee-clobbered */
 #endif
-      new_insn = MIR_new_insn (ctx, code,
-                               _MIR_new_hard_reg_mem_op (ctx, type,
-                                                         (int64_t) (n++ * 8) - bp_saved_reg_offset,
-                                                         FP_HARD_REG, MIR_NON_HARD_REG, 1),
+  /* Saving callee saved hard registers: */
+  offset = -bp_saved_reg_offset;
+#ifdef _WIN64
+  for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
+                                       _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
+                                                                 MIR_NON_HARD_REG, 1),
+                                       _MIR_new_hard_reg_op (ctx, i));
+      gen_add_insn_before (gen_ctx, anchor, new_insn); /* disp(sp) = saved hard reg */
+      offset += 16;
+    }
+#endif
+  for (i = 0; i <= R15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = MIR_new_insn (ctx, MIR_MOV,
+                               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, offset, FP_HARD_REG,
+                                                         MIR_NON_HARD_REG, 1),
                                _MIR_new_hard_reg_op (ctx, i));
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* disp(sp) = saved hard reg */
+      offset += 8;
     }
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
   /* Restoring hard registers: */
-  for (i = n = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      MIR_insn_code_t code = MIR_MOV;
-      MIR_type_t type = MIR_T_I64;
+  offset = -bp_saved_reg_offset;
 #ifdef _WIN64
-      if (i > R15_HARD_REG) {
-        code = MIR_DMOV;
-        type = MIR_T_D;
-      }
-#endif
-      new_insn = MIR_new_insn (ctx, code, _MIR_new_hard_reg_op (ctx, i),
-                               _MIR_new_hard_reg_mem_op (ctx, type,
-                                                         (int64_t) (n++ * 8) - bp_saved_reg_offset,
-                                                         FP_HARD_REG, MIR_NON_HARD_REG, 1));
+  for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
+                                       _MIR_new_hard_reg_op (ctx, i),
+                                       _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
+                                                                 MIR_NON_HARD_REG, 1));
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
+      offset += 16;
+    }
+#endif
+  for (i = 0; i <= R15_HARD_REG; i++)
+    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+      new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
+                               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, offset, FP_HARD_REG,
+                                                         MIR_NON_HARD_REG, 1));
+      gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
+      offset += 8;
     }
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, 8));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = bp + 8 */
