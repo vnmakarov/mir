@@ -809,7 +809,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #ifdef _WIN64
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
+      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, MOVDQA_CODE),
                                        _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
                                                                  MIR_NON_HARD_REG, 1),
                                        _MIR_new_hard_reg_op (ctx, i));
@@ -833,10 +833,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #ifdef _WIN64
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn
-        = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0), _MIR_new_hard_reg_op (ctx, i),
-                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
-                                                          MIR_NON_HARD_REG, 1));
+      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, MOVDQA_CODE),
+                                       _MIR_new_hard_reg_op (ctx, i),
+                                       _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
+                                                                 MIR_NON_HARD_REG, 1));
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
       offset += 16;
     }
