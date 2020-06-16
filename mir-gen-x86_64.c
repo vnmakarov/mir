@@ -445,10 +445,11 @@ DEF_VARR (label_ref_t);
 
 DEF_VARR (MIR_code_reloc_t);
 
+#define MOVDQA_CODE 0
+
 struct target_ctx {
   unsigned char alloca_p, stack_arg_func_p, leaf_p;
   int start_sp_from_bp_offset;
-  uint64_t movdqa_code; /* unspec code for movdqa */
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -463,7 +464,6 @@ struct target_ctx {
 #define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define start_sp_from_bp_offset gen_ctx->target_ctx->start_sp_from_bp_offset
-#define movdqa_code gen_ctx->target_ctx->movdqa_code
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -833,10 +833,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #ifdef _WIN64
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
-                                       _MIR_new_hard_reg_op (ctx, i),
-                                       _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
-                                                                 MIR_NON_HARD_REG, 1));
+      new_insn
+        = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0), _MIR_new_hard_reg_op (ctx, i),
+                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
+                                                          MIR_NON_HARD_REG, 1));
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
       offset += 16;
     }
@@ -1069,9 +1069,12 @@ static const struct pattern patterns[] = {
   {MIR_LDMOV, "h33 mld", "DB /5 m1; D9 C9"},    /*only for ret and calls: fld m1; fxch */
   {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"}, /* fld m1; fstp m0 */
 
-  {MIR_UNSPEC, "c0 r r", "66 Y 0F 6F r1 R2"},  /* movdqa r0,r1 */
-  {MIR_UNSPEC, "c0 r md", "66 Y 0F 6F r1 m2"}, /* movdqa r0,m128 */
-  {MIR_UNSPEC, "c0 md r", "66 Y 0F 7F r2 m1"}, /* movdqa m128,r0 */
+#define STR(c) #c
+#define STR_VAL(c) STR (c)
+
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r r", "66 Y 0F 6F r1 R2"},  /* movdqa r0,r1 */
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r md", "66 Y 0F 6F r1 m2"}, /* movdqa r0,m128 */
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " md r", "66 Y 0F 7F r2 m1"}, /* movdqa m128,r0 */
 
   {MIR_EXT8, "r r", "X 0F BE r0 R1"},    /* movsx r0,r1 */
   {MIR_EXT8, "r m0", "X 0F BE r0 m1"},   /* movsx r0,m1 */
@@ -2040,6 +2043,8 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
 }
 
 static void target_init (gen_ctx_t gen_ctx) {
+  uint64_t code;
+
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
@@ -2050,7 +2055,8 @@ static void target_init (gen_ctx_t gen_ctx) {
   MIR_type_t res = MIR_T_D;
   MIR_var_t args[] = {{MIR_T_D, "src"}};
   MIR_proto_t proto = _MIR_create_proto (gen_ctx->ctx, "movdqa", 1, &res, 1, FALSE, args);
-  movdqa_code = _MIR_register_unspec_insn (gen_ctx->ctx, proto);
+  code = _MIR_register_unspec_insn (gen_ctx->ctx, proto);
+  gen_assert (MOVDQA_CODE == code);
   patterns_init (gen_ctx);
 }
 
