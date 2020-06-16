@@ -12142,6 +12142,30 @@ static void print_node (MIR_context_t ctx, FILE *f, node_t n, int indent, int at
   }
 }
 
+static void parse_env_var(const char * name, VARR (char_ptr_t) * dst) {
+#ifdef _WIN32
+  static const char *delim = ";";
+#else
+  static const char *delim = ":";
+#endif
+  char *env_str, *str, *tok;
+  size_t len;
+
+  env_str = getenv (name);
+  if (env_str == NULL) return;
+  len = strlen (env_str);
+  if (len == 0) return;
+  str = (char *) malloc (len + 1);
+  if (str == NULL) return;
+  memcpy (str, env_str, len + 1);
+  tok = strtok (str, delim);
+  while (tok != NULL) {
+    VARR_PUSH (char_ptr_t, dst, tok);
+    tok = strtok (NULL, delim);
+  }
+  free (str);
+}
+
 static void init_include_dirs (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   const char *str;
@@ -12197,6 +12221,7 @@ static void init_include_dirs (MIR_context_t ctx) {
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
 #endif
+  parse_env_var ("C_INCLUDE_PATH", system_headers);
   VARR_PUSH (char_ptr_t, system_headers, NULL);
   header_dirs = (const char **) VARR_ADDR (char_ptr_t, headers);
   system_header_dirs = (const char **) VARR_ADDR (char_ptr_t, system_headers);
