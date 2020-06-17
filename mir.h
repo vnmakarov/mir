@@ -35,6 +35,11 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_PARALLEL_GEN 0
 #endif
 
+#if MIR_PARALLEL_GEN && defined(_WIN64) /* TODO: Win64 thread primitives ??? */
+#undef MIR_PARALLEL_GEN
+#define MIR_PARALLEL_GEN 0
+#endif
+
 #ifdef __GNUC__
 #define MIR_UNUSED __attribute__ ((unused))
 #else
