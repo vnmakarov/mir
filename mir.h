@@ -130,6 +130,7 @@ typedef enum {
   INSN_EL (VA_END), /* operand is va_list */
   INSN_EL (LABEL),  /* One immediate operand is unique label number  */
   INSN_EL (UNSPEC), /* First operand unspec code and the rest are args */
+  INSN_EL (PHI),    /* Used only internally in the generator, the first operand is output */
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
 } MIR_insn_code_t;

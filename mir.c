@@ -316,6 +316,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LABEL, "label", {MIR_OP_BOUND}},
   {MIR_UNSPEC, "unspec", {MIR_OP_BOUND}},
+  {MIR_PHI, "phi", {MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
 
@@ -1308,7 +1309,10 @@ void MIR_finish_func (MIR_context_t ctx) {
     int out_p, can_be_out_p;
 
     code = insn->code;
-    if (!curr_func->vararg_p && code == MIR_VA_START) {
+    if (code == MIR_PHI) {
+      curr_func = NULL;
+      (*error_func) (MIR_vararg_func_error, "phi can be used only internally");
+    } else if (!curr_func->vararg_p && code == MIR_VA_START) {
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error, "va_start is not in vararg function");
     } else if (code == MIR_RET && actual_nops != curr_func->nres) {
@@ -1694,6 +1698,9 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
     *out_p = FALSE;
     /* should be already checked in MIR_finish_func */
     return nop == 0 && code == MIR_SWITCH ? MIR_OP_INT : insn->ops[nop].mode;
+  } else if (code == MIR_PHI) {
+    *out_p = nop == 0;
+    return insn->ops[nop].mode;
   } else if (MIR_call_code_p (code) || code == MIR_UNSPEC) {
     MIR_op_t proto_op;
     MIR_proto_t proto;
@@ -1776,12 +1783,14 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
   size_t args_start, i = 0, expected_nops = insn_code_nops (ctx, code);
   mir_assert (ops != NULL);
 
-  if (!MIR_call_code_p (code) && code != MIR_UNSPEC && code != MIR_RET && code != MIR_SWITCH
-      && nops != expected_nops) {
+  if (!MIR_call_code_p (code) && code != MIR_UNSPEC && code != MIR_PHI && code != MIR_RET
+      && code != MIR_SWITCH && nops != expected_nops) {
     (*error_func) (MIR_ops_num_error, "wrong number of operands for insn %s",
                    insn_descs[code].name);
   } else if (code == MIR_SWITCH) {
     if (nops < 2) (*error_func) (MIR_ops_num_error, "number of MIR_SWITCH operands is less 2");
+  } else if (code == MIR_PHI) {
+    if (nops < 3) (*error_func) (MIR_ops_num_error, "number of MIR_PHI operands is less 3");
   } else if (MIR_call_code_p (code) || code == MIR_UNSPEC) {
     args_start = code == MIR_UNSPEC ? 1 : 2;
     if (nops < args_start)
@@ -1827,7 +1836,9 @@ MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...) {
   va_list argp;
   size_t nops = insn_code_nops (ctx, code);
 
-  if (MIR_call_code_p (code) || code == MIR_UNSPEC || code == MIR_RET || code == MIR_SWITCH)
+  if (code == MIR_PHI)
+    (*error_func) (MIR_call_op_error, "Use only MIR_new_insn_arr for creating a phi insn");
+  else if (MIR_call_code_p (code) || code == MIR_UNSPEC || code == MIR_RET || code == MIR_SWITCH)
     (*error_func) (MIR_call_op_error,
                    "Use only MIR_new_insn_arr or MIR_new_{call,unspec,ret}_insn for creating a "
                    "call/unspec/ret/switch insn");
@@ -2568,6 +2579,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
   MIR_op_mode_t value_mode = op->value_mode;
   int move_p = code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV || code == MIR_LDMOV;
 
+  if (code == MIR_PHI) return;                /* do nothing: it is a phi insn */
   if (code == MIR_UNSPEC && nop == 0) return; /* do nothing: it is an unspec code */
   if (MIR_call_code_p (code)) {
     if (nop == 0) return; /* do nothing: it is a prototype */
@@ -3823,8 +3835,8 @@ static size_t write_insn (MIR_context_t ctx, writer_func_t writer, MIR_func_t fu
   MIR_insn_code_t code = insn->code;
   size_t len;
 
-  if (code == MIR_UNSPEC)
-    (*error_func) (MIR_binary_io_error, "MIR_UNSPEC is not portable and can not be output");
+  if (code == MIR_UNSPEC || code == MIR_PHI)
+    (*error_func) (MIR_binary_io_error, "UNSPEC or PHI is not portable and can not be output");
   if (code == MIR_LABEL) return write_lab (ctx, writer, insn);
   nops = MIR_insn_nops (ctx, insn);
   len = write_uint (ctx, writer, code);
@@ -4635,8 +4647,8 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
 
       if (insn_code >= MIR_LABEL)
         (*error_func) (MIR_binary_io_error, "wrong insn code %d", insn_code);
-      if (insn_code == MIR_UNSPEC)
-        (*error_func) (MIR_binary_io_error, "UNSPEC is not portable and can not be read");
+      if (insn_code == MIR_UNSPEC || insn_code == MIR_PHI)
+        (*error_func) (MIR_binary_io_error, "UNSPEC or PHI is not portable and can not be read");
       for (uint64_t i = 0; i < VARR_LENGTH (uint64_t, insn_label_string_nums); i++) {
         lab = to_lab (ctx, VARR_GET (uint64_t, insn_label_string_nums, i));
         MIR_append_insn (ctx, func, lab);
@@ -5218,8 +5230,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (!HTAB_DO (insn_name_t, insn_name_tab, in, HTAB_FIND, el))
         scan_error (ctx, "Unknown insn %s", name);
       insn_code = el.code;
-      if (insn_code == MIR_UNSPEC)
-        scan_error (ctx, "UNSPEC is not portable and can not be scanned", name);
+      if (insn_code == MIR_UNSPEC || insn_code == MIR_PHI)
+        scan_error (ctx, "UNSPEC or PHI is not portable and can not be scanned", name);
       for (n = 0; n < VARR_LENGTH (label_name_t, label_names); n++) {
         label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n));
         if (func != NULL) MIR_append_insn (ctx, func, label);
