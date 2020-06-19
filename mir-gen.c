@@ -1701,11 +1701,15 @@ static void build_ssa (gen_ctx_t gen_ctx) {
     for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
       if (is_being_sealed_p (gen_ctx, e->dst)) seal_bb (gen_ctx, e->dst);
   }
+#if 0
   fprintf (stderr, "Removing (%ld):", insns_num);
+#endif
   do {
     change_p = FALSE;
     j = 0;
+#if 0
     fprintf (stderr, " %ld", VARR_LENGTH (bb_insn_t, phis));
+#endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
       if (trivial_phi (gen_ctx, phi, &op_num) == NULL) {
@@ -1717,7 +1721,9 @@ static void build_ssa (gen_ctx_t gen_ctx) {
     }
     VARR_TRUNC (bb_insn_t, phis, j);
   } while (change_p);
+#if 0
   fprintf (stderr, "\n");
+#endif
   VARR_TRUNC (int, var_indexes, 0);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
