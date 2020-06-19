@@ -763,9 +763,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
       && stack_slots_num == 0)
     return;
-  sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
-  sp_reg_op.u.hard_reg = SP_HARD_REG;
-  fp_reg_op.u.hard_reg = FP_HARD_REG;
+  sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
+  fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
   /* Prologue: */
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   new_insn
@@ -833,10 +832,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #ifdef _WIN64
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
-      new_insn = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0),
-                                       _MIR_new_hard_reg_op (ctx, i),
-                                       _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
-                                                                 MIR_NON_HARD_REG, 1));
+      new_insn
+        = _MIR_new_unspec_insn (ctx, 3, MIR_new_int_op (ctx, 0), _MIR_new_hard_reg_op (ctx, i),
+                                _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, offset, FP_HARD_REG,
+                                                          MIR_NON_HARD_REG, 1));
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
       offset += 16;
     }
