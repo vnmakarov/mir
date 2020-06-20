@@ -1441,7 +1441,7 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
 static void add_op_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
                          int use_op_num) {
   MIR_op_t *op_ref;
-  op_edge_t op_edge = gen_malloc (sizeof (struct op_edge));
+  op_edge_t op_edge = gen_malloc (gen_ctx, sizeof (struct op_edge));
 
   op_edge->use = use;
   op_edge->use_op_num = use_op_num;
