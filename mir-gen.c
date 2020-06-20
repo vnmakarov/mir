@@ -1436,8 +1436,8 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
   return el1.var == el2.var && el1.bb == el2.bb;
 }
 
-static void add_new_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
-                          int use_op_num) {
+static void add_op_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
+                         int use_op_num) {
   MIR_op_t *op_ref;
   op_edge_t op_edge = gen_malloc (sizeof (struct op_edge));
 
@@ -1554,7 +1554,7 @@ static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t var, bb_insn_t p
   for (in_edge = DLIST_HEAD (in_edge_t, phi->bb->in_edges); in_edge != NULL;
        in_edge = DLIST_NEXT (in_edge_t, in_edge)) {
     def = get_def (gen_ctx, var, in_edge->src, &def_op_num);
-    add_new_edge (gen_ctx, def, def_op_num, phi, nop++);
+    add_op_edge (gen_ctx, def, def_op_num, phi, nop++);
   }
   *op_num_ref = 0;
   VARR_PUSH (bb_insn_t, phis, phi);
@@ -1685,7 +1685,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
         FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
           if (out_p) continue;
           def = get_def (gen_ctx, var, bb, &def_op_num);
-          add_new_edge (gen_ctx, def, def_op_num, bb_insn, op_num);
+          add_op_edge (gen_ctx, def, def_op_num, bb_insn, op_num);
         }
         insns_num++;
       }
