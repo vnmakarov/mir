@@ -1614,7 +1614,10 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t var, bb_t bb, int *def_op
     incomplete_phis_t bb_phis = VARR_GET (incomplete_phis_t, bb_incomplete_phis, bb->index);
 
     *def_op_num_ref = 0;
-    for (size_t i = 0; i < VARR_LENGTH (var_phi_t, bb_phis); i++) {  // ??? effective search
+    for (size_t i = 0; i < VARR_LENGTH (var_phi_t, bb_phis); i++) {
+      /* Don't waste time to implement better asymptotically search. Linear search is adequate
+         here as in reality non-sealed blocks are rare in our traverse order and phi list is
+         short. */
       var_phi = VARR_GET (var_phi_t, bb_phis, i);
       if (var_phi.var == var) return var_phi.phi;
     }
