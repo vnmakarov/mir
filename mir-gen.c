@@ -1439,16 +1439,14 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
 static void add_new_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
                           int use_op_num) {
   MIR_op_t *op_ref;
-  op_edge_t op_edge = malloc (sizeof (struct op_edge));
+  op_edge_t op_edge = gen_malloc (sizeof (struct op_edge));
 
-  if (op_edge == NULL)
-    ;  // ???
   op_edge->use = use;
   op_edge->use_op_num = use_op_num;
   op_edge->def = def;
   op_edge->def_op_num = def_op_num;
   gen_assert (use->insn->ops[use_op_num].data == NULL);
-  use->insn->ops[use_op_num].data = op_edge;  // ??? non-null
+  use->insn->ops[use_op_num].data = op_edge;
   op_ref = &def->insn->ops[def_op_num];
   op_edge->next_use = op_ref->data;
   if (op_edge->next_use != NULL) op_edge->next_use->prev_use = op_edge;
