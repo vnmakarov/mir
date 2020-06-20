@@ -1366,7 +1366,8 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
 /* New Page */
 
 /* Building SSA.  First we build optimized maximal SSA, then we minimize it
-   getting minimal SSA for reducible CFGs.  SSA representation:
+   getting minimal SSA for reducible CFGs.
+   SSA representation (we don't use mir-lists to use less memory):
 
       phi|insn: out:v1, in, in
                     | (op.data)
@@ -1389,8 +1390,8 @@ struct op_edge {
 static int get_op_var_index (MIR_op_t op) { return ((op_edge_t) op.data)->def->index; }
 
 typedef struct def_tab_el {
-  bb_t bb;       /* key */
-  MIR_reg_t var; /* key */
+  bb_t bb;       /* table key */
+  MIR_reg_t var; /* another key */
   bb_insn_t def;
   uint32_t def_op_num;
 } def_tab_el_t;
