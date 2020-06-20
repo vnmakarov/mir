@@ -1412,11 +1412,11 @@ DEF_VARR (bb_insn_t);
 struct ssa_ctx {
   bitmap_t bb_processed;
   VARR (int) * var_indexes;
-  VARR (bb_insn_t) * arg_bb_insns;
-  VARR (bb_insn_t) * undef_insns;
+  /* Insns defining undef and initial arg values. They are not in insn lists. */
+  VARR (bb_insn_t) * arg_bb_insns, *undef_insns;
   VARR (bb_insn_t) * phis;
   VARR (MIR_op_t) * temp_ops;
-  HTAB (def_tab_el_t) * def_tab;
+  HTAB (def_tab_el_t) * def_tab;                 /* var,bb -> insn defining var  */
   VARR (incomplete_phis_t) * bb_incomplete_phis; /* bb index -> incomplete phis */
 };
 
