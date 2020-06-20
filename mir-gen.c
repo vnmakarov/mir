@@ -1365,11 +1365,13 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/*
+/* Building SSA.  First we build optimized maximal SSA, then we minimize it
+   getting minimal SSA for reducible CFGs.  SSA representation:
+
       phi|insn: out:v1, in, in
                     | (op.data)
                     V
-                  op_edge (next_use)---------------> out_edge
+                  op_edge (next_use)---------------> op_edge
                        ^                                ^
                        | (op.data)                      | (op.data)
       phi|insn: out, in:v1, ...        phi|insn: out, in:v1, ...
@@ -1463,7 +1465,7 @@ static void remove_op_edge (gen_ctx_t gen_ctx, op_edge_t op_edge) {
   }
   if (op_edge->next_use != NULL) op_edge->next_use->prev_use = op_edge->prev_use;
   op_edge->use->insn->ops[op_edge->use_op_num].data = NULL;
-  free (op_edge);  // ???
+  free (op_edge);
 }
 
 static MIR_insn_code_t get_move_code (MIR_type_t type);
@@ -1705,7 +1707,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
 #if 0
   fprintf (stderr, "Removing (%ld):", insns_num);
 #endif
-  do {
+  do { /* SSA minimization: */
     change_p = FALSE;
     j = 0;
 #if 0
