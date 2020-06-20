@@ -1544,8 +1544,7 @@ static void remove_trivial_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t def,
 
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t var, bb_t bb, int *def_op_num_ref);
 
-static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t var, bb_insn_t phi,
-                                   int *op_num_ref) {
+static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t var, bb_insn_t phi) {
   size_t nop = 1;
   bb_insn_t def;
   int def_op_num;
@@ -1629,8 +1628,8 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t var, bb_t bb, int *def_op
   el.def = def = phi;
   el.def_op_num = 0;
   HTAB_DO (def_tab_el_t, def_tab, el, HTAB_INSERT, tab_el);
-  el.def = add_phi_operands (gen_ctx, var, def, def_op_num_ref);
-  el.def_op_num = *def_op_num_ref;
+  el.def = add_phi_operands (gen_ctx, var, def);
+  *def_op_num_ref = el.def_op_num = 0;
   if (el.def != def) HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, tab_el);
   return el.def;
 }
@@ -1640,14 +1639,13 @@ static int is_being_sealed_p (gen_ctx_t gen_ctx, bb_t bb) {
   return sealed_p (gen_ctx, bb);
 }
 
-static void seal_bb (gen_ctx_t gen_ctx, bb_t bb) {
+static void seal_bb (gen_ctx_t gen_ctx, bb_t bb) { /* all bb preds are processed */
   var_phi_t var_phi;
-  int dummy;
   VARR (var_phi_t) *var_phis = VARR_GET (incomplete_phis_t, bb_incomplete_phis, bb->index);
 
   while (VARR_LENGTH (var_phi_t, var_phis) != 0) {
     var_phi = VARR_POP (var_phi_t, var_phis);
-    add_phi_operands (gen_ctx, var_phi.var, var_phi.phi, &dummy);
+    add_phi_operands (gen_ctx, var_phi.var, var_phi.phi);
   }
 }
 
