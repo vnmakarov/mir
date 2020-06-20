@@ -1599,8 +1599,6 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t var, bb_t bb, int *def_op
     *def_op_num_ref = tab_el.def_op_num;
     return tab_el.def;
   }
-  op = (var < MAX_HARD_REG ? _MIR_new_hard_reg_op (ctx, var)
-                           : MIR_new_reg_op (ctx, var - MAX_HARD_REG));
   if (DLIST_LENGTH (in_edge_t, bb->in_edges) == 1) {
     if ((src = DLIST_HEAD (in_edge_t, bb->in_edges)->src)->index == 0) { /* start bb: args */
       *def_op_num_ref = 0;
@@ -1608,6 +1606,8 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t var, bb_t bb, int *def_op
     }
     return get_def (gen_ctx, var, DLIST_HEAD (in_edge_t, bb->in_edges)->src, def_op_num_ref);
   }
+  op = (var < MAX_HARD_REG ? _MIR_new_hard_reg_op (ctx, var)
+                           : MIR_new_reg_op (ctx, var - MAX_HARD_REG));
   if (sealed_p (gen_ctx, bb)) {
     phi = create_phi (gen_ctx, bb, op);
   } else {
