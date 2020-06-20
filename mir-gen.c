@@ -1509,13 +1509,11 @@ static bb_insn_t trivial_phi (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_
   return def;
 }
 
-static void remove_trivial_phi (gen_ctx_t gen_ctx, bb_insn_t phi) {
+static void remove_trivial_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t def, int def_op_num) {
   MIR_op_t *op_ref;
-  int op_num, def_op_num;
-  bb_insn_t def;
+  int op_num;
   op_edge_t op_edge, use_edge, next_edge, first, last;
 
-  def = trivial_phi (gen_ctx, phi, &def_op_num);
   assert (def != NULL);
   first = last = NULL;
   for (use_edge = phi->insn->ops[0].data; use_edge != NULL; use_edge = next_edge) {
@@ -1715,11 +1713,11 @@ static void build_ssa (gen_ctx_t gen_ctx) {
 #endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
-      if (trivial_phi (gen_ctx, phi, &op_num) == NULL) {
+      if ((def = trivial_phi (gen_ctx, phi, &op_num)) == NULL) {
         VARR_SET (bb_insn_t, phis, j++, phi);
         continue;
       }
-      remove_trivial_phi (gen_ctx, phi);
+      remove_trivial_phi (gen_ctx, phi, def, op_num);
       change_p = TRUE;
     }
     VARR_TRUNC (bb_insn_t, phis, j);
