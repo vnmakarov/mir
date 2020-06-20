@@ -3391,7 +3391,7 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
 #ifndef __MIRC__
 void _MIR_flush_code_cache (void *start, void *bound) {
 #ifdef __GNUC__
-  __clear_cache (start, bound);
+  __builtin___clear_cache (start, bound);
 #endif
 }
 #endif
