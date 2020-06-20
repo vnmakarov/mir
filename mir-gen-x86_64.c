@@ -763,9 +763,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
       && stack_slots_num == 0)
     return;
-  sp_reg_op.mode = fp_reg_op.mode = MIR_OP_HARD_REG;
-  sp_reg_op.u.hard_reg = SP_HARD_REG;
-  fp_reg_op.u.hard_reg = FP_HARD_REG;
+  sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
+  fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
   /* Prologue: */
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   new_insn
