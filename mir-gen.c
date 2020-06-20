@@ -1473,7 +1473,7 @@ static MIR_insn_code_t get_move_code (MIR_type_t type);
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t var) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_type type;
+  MIR_type_t type;
   MIR_op_t op;
   MIR_insn_t insn;
   bb_insn_t bb_insn;
@@ -1555,7 +1555,6 @@ static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t var, bb_insn_t p
     def = get_def (gen_ctx, var, in_edge->src, &def_op_num);
     add_op_edge (gen_ctx, def, def_op_num, phi, nop++);
   }
-  *op_num_ref = 0;
   VARR_PUSH (bb_insn_t, phis, phi);
   return phi;
 }
