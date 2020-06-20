@@ -1473,7 +1473,9 @@ static MIR_insn_code_t get_move_code (MIR_type_t type);
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t var) {
   MIR_context_t ctx = gen_ctx->ctx;
+  MIR_type type;
   MIR_op_t op;
+  MIR_insn_t insn;
   bb_insn_t bb_insn;
 
   gen_assert (var >= MAX_HARD_REG && DLIST_HEAD (bb_t, curr_cfg->bbs)->index == 0);
@@ -1481,12 +1483,9 @@ static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_ins
   while (VARR_LENGTH (bb_insn_t, start_insns) <= var) VARR_PUSH (bb_insn_t, start_insns, NULL);
   if ((bb_insn = VARR_GET (bb_insn_t, start_insns, var)) == NULL) {
     gen_assert (var > MAX_HARD_REG);
-    bb_insn = create_bb_insn (gen_ctx,
-                              MIR_new_insn (ctx,
-                                            get_move_code (MIR_reg_type (ctx, var - MAX_HARD_REG,
-                                                                         curr_func_item->u.func)),
-                                            op, op),
-                              DLIST_HEAD (bb_t, curr_cfg->bbs));
+    type = MIR_reg_type (ctx, var - MAX_HARD_REG, curr_func_item->u.func);
+    insn = MIR_new_insn (ctx, get_move_code (type), op, op);
+    bb_insn = create_bb_insn (gen_ctx, insn, DLIST_HEAD (bb_t, curr_cfg->bbs));
     VARR_SET (bb_insn_t, start_insns, var, bb_insn);
   }
   return bb_insn;
