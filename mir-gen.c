@@ -1479,7 +1479,7 @@ static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_ins
   return bb_insn;
 }
 
-static bb_insn_t trivial_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
+static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
   bb_insn_t def = NULL;
   int op_num;
   op_edge_t op_edge;
@@ -1497,7 +1497,7 @@ static bb_insn_t trivial_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_
   return def;
 }
 
-static void remove_trivial_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t def, int def_op_num) {
+static void remove_redundant_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t def, int def_op_num) {
   MIR_op_t *op_ref;
   int op_num;
   op_edge_t op_edge, use_edge, next_edge, first, last;
@@ -1649,11 +1649,11 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
 #endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
-      if ((def = trivial_phi_def (gen_ctx, phi, &op_num)) == NULL) {
+      if ((def = redundant_phi_def (gen_ctx, phi, &op_num)) == NULL) {
         VARR_SET (bb_insn_t, phis, n++, phi);
         continue;
       }
-      remove_trivial_phi (gen_ctx, phi, def, op_num);
+      remove_redundant_phi (gen_ctx, phi, def, op_num);
       change_p = TRUE;
     }
     VARR_TRUNC (bb_insn_t, phis, n);
