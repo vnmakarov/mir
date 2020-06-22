@@ -1397,15 +1397,6 @@ typedef struct def_tab_el {
 } def_tab_el_t;
 DEF_HTAB (def_tab_el_t);
 
-typedef struct reg_phi {
-  MIR_reg_t reg;
-  bb_insn_t phi;
-} reg_phi_t;
-
-DEF_VARR (reg_phi_t);
-typedef VARR (reg_phi_t) * incomplete_phis_t;
-DEF_VARR (incomplete_phis_t);
-
 DEF_VARR (MIR_op_t);
 DEF_VARR (bb_insn_t);
 
@@ -1416,8 +1407,7 @@ struct ssa_ctx {
   VARR (bb_insn_t) * arg_bb_insns, *undef_insns;
   VARR (bb_insn_t) * phis;
   VARR (MIR_op_t) * temp_ops;
-  HTAB (def_tab_el_t) * def_tab;                 /* reg,bb -> insn defining reg  */
-  VARR (incomplete_phis_t) * bb_incomplete_phis; /* bb index -> incomplete phis */
+  HTAB (def_tab_el_t) * def_tab; /* reg,bb -> insn defining reg  */
 };
 
 #define undef_insn gen_ctx->ssa_ctx->undef_insn
@@ -1428,7 +1418,6 @@ struct ssa_ctx {
 #define phis gen_ctx->ssa_ctx->phis
 #define temp_ops gen_ctx->ssa_ctx->temp_ops
 #define def_tab gen_ctx->ssa_ctx->def_tab
-#define bb_incomplete_phis gen_ctx->ssa_ctx->bb_incomplete_phis
 
 static htab_hash_t def_tab_el_hash (def_tab_el_t el, void *arg) {
   return mir_hash_finish (
@@ -1586,7 +1575,6 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
   bb_t src;
   bb_insn_t def, bb_insn, arg_bb_insn, phi;
   def_tab_el_t el, tab_el;
-  reg_phi_t reg_phi;
   size_t len;
   MIR_op_t op;
   MIR_insn_t insn;
@@ -1608,20 +1596,16 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
   if (sealed_p (gen_ctx, bb)) {
     phi = create_phi (gen_ctx, bb, op);
   } else {
-    incomplete_phis_t bb_phis = VARR_GET (incomplete_phis_t, bb_incomplete_phis, bb->index);
-
     *def_op_num_ref = 0;
-    for (size_t i = 0; i < VARR_LENGTH (reg_phi_t, bb_phis); i++) {
-      /* Don't waste time to implement better asymptotically search. Linear search is adequate
-         here as in reality non-sealed blocks are rare in our traverse order and phi list is
-         short. */
-      reg_phi = VARR_GET (reg_phi_t, bb_phis, i);
-      if (reg_phi.reg == reg) return reg_phi.phi;
+    /* Don't waste time to implement better asymptotically search. Linear search is adequate here
+       as in reality non-sealed blocks are rare in our traverse order and phi list is short. */
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
+      if (insn->code != MIR_PHI) break;
+      if (insn->ops[0].u.reg == reg) return bb_insn;
     }
-    reg_phi.reg = reg;
-    reg_phi.phi = create_phi (gen_ctx, bb, op);
-    VARR_PUSH (reg_phi_t, bb_phis, reg_phi);
-    return reg_phi.phi;
+    return create_phi (gen_ctx, bb, op);
   }
   el.def = def = phi;
   el.def_op_num = 0;
@@ -1638,16 +1622,18 @@ static int is_being_sealed_p (gen_ctx_t gen_ctx, bb_t bb) {
 }
 
 static void seal_bb (gen_ctx_t gen_ctx, bb_t bb) { /* all bb preds are processed */
-  reg_phi_t reg_phi;
-  VARR (reg_phi_t) *reg_phis = VARR_GET (incomplete_phis_t, bb_incomplete_phis, bb->index);
+  MIR_insn_t insn;
 
-  while (VARR_LENGTH (reg_phi_t, reg_phis) != 0) {
-    reg_phi = VARR_POP (reg_phi_t, reg_phis);
-    add_phi_operands (gen_ctx, reg_phi.reg, reg_phi.phi);
+  for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+       bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+    if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
+    if (insn->code != MIR_PHI) return;
+    if (insn->nops > 1 && insn->ops[1].data == NULL) /* incomplete phi */
+      add_phi_operands (gen_ctx, bb_insn->insn->ops[0].u.reg, bb_insn);
   }
 }
 
-static void minimize_ssa (gen_ctx_t gen_ctx) {
+static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   bb_insn_t phi, def;
   size_t i, n;
   int op_num, change_p;
@@ -1691,13 +1677,6 @@ static void build_ssa (gen_ctx_t gen_ctx) {
   VARR_TRUNC (bb_t, worklist, 0);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     VARR_PUSH (bb_t, worklist, bb);
-    while (VARR_LENGTH (incomplete_phis_t, bb_incomplete_phis) <= bb->index) {
-      VARR (reg_phi_t) * varr;
-
-      VARR_CREATE (reg_phi_t, varr, 16);
-      VARR_PUSH (incomplete_phis_t, bb_incomplete_phis, varr);
-    }
-    VARR_TRUNC (reg_phi_t, VARR_GET (incomplete_phis_t, bb_incomplete_phis, bb->index), 0);
   }
   qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), rpost_cmp);
   bitmap_set_bit_p (bb_processed, 0); /* start bb */
@@ -1729,7 +1708,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
     for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
       if (is_being_sealed_p (gen_ctx, e->dst)) seal_bb (gen_ctx, e->dst);
   }
-  minimize_ssa (gen_ctx);
+  minimize_ssa (gen_ctx, insns_num);
   VARR_TRUNC (int, reg_indexes, 0);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
@@ -1811,7 +1790,6 @@ static void init_ssa (gen_ctx_t gen_ctx) {
   VARR_CREATE (bb_insn_t, phis, 0);
   VARR_CREATE (MIR_op_t, temp_ops, 16);
   HTAB_CREATE (def_tab_el_t, def_tab, 1024, def_tab_el_hash, def_tab_el_eq, gen_ctx);
-  VARR_CREATE (incomplete_phis_t, bb_incomplete_phis, 0);
 }
 
 static void finish_ssa (gen_ctx_t gen_ctx) {
@@ -1822,12 +1800,6 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
   VARR_DESTROY (bb_insn_t, phis);
   VARR_DESTROY (MIR_op_t, temp_ops);
   HTAB_DESTROY (def_tab_el_t, def_tab);
-  while (VARR_LENGTH (incomplete_phis_t, bb_incomplete_phis) != 0) {
-    incomplete_phis_t varr = VARR_POP (incomplete_phis_t, bb_incomplete_phis);
-
-    VARR_DESTROY (reg_phi_t, varr);
-  }
-  VARR_DESTROY (incomplete_phis_t, bb_incomplete_phis);
   free (gen_ctx->ssa_ctx);
   gen_ctx->ssa_ctx = NULL;
 }
@@ -6633,6 +6605,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
     undo_build_ssa (gen_ctx);
+    //    goto ret;
 #ifndef NO_CSE
     if (optimize_level >= 2) {
       DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
@@ -6768,9 +6741,10 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   });
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+ret:
   if (optimize_level != 0) {
     destroy_func_live_ranges (gen_ctx);
-    destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
+    if (curr_cfg->root_loop_node != NULL) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
     destroy_func_cfg (gen_ctx);
   }
   DEBUG ({
