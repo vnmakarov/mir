@@ -1593,26 +1593,11 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
     return get_def (gen_ctx, reg, DLIST_HEAD (in_edge_t, bb->in_edges)->src, def_op_num_ref);
   }
   op = MIR_new_reg_op (ctx, reg);
-  if (sealed_p (gen_ctx, bb)) {
-    phi = create_phi (gen_ctx, bb, op);
-  } else {
-    *def_op_num_ref = 0;
-    /* Don't waste time to implement better asymptotically search. Linear search is adequate here
-       as in reality non-sealed blocks are rare in our traverse order and phi list is short. */
-    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
-      if (insn->code != MIR_PHI) break;
-      if (insn->ops[0].u.reg == reg) return bb_insn;
-    }
-    return create_phi (gen_ctx, bb, op);
-  }
-  el.def = def = phi;
+  el.def = def = create_phi (gen_ctx, bb, op);
   el.def_op_num = 0;
   HTAB_DO (def_tab_el_t, def_tab, el, HTAB_INSERT, tab_el);
-  el.def = add_phi_operands (gen_ctx, reg, def);
+  if (sealed_p (gen_ctx, bb)) add_phi_operands (gen_ctx, reg, def);
   *def_op_num_ref = el.def_op_num = 0;
-  if (el.def != def) HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, tab_el);
   return el.def;
 }
 
