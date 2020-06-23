@@ -1532,7 +1532,7 @@ static void remove_redundant_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t de
 
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref);
 
-static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
+static void add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
   size_t nop = 1;
   bb_insn_t def;
   int def_op_num;
@@ -1544,7 +1544,6 @@ static bb_insn_t add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t p
     add_op_edge (gen_ctx, def, def_op_num, phi, nop++);
   }
   VARR_PUSH (bb_insn_t, phis, phi);
-  return phi;
 }
 
 static int sealed_p (gen_ctx_t gen_ctx, bb_t bb) {
@@ -1573,7 +1572,7 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t src;
-  bb_insn_t def, bb_insn, arg_bb_insn, phi;
+  bb_insn_t def, bb_insn, arg_bb_insn;
   def_tab_el_t el, tab_el;
   size_t len;
   MIR_op_t op;
