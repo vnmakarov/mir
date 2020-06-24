@@ -1365,29 +1365,16 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/* Building SSA.  First we build optimized maximal SSA, then we minimize it
-   getting minimal SSA for reducible CFGs.
-   SSA representation (we don't use mir-lists to use less memory):
+/* Building SSA.  First we build optimized maximal SSA, then we minimize it getting minimal
+   SSA for reducible CFGs.  Used operands refer to the definition through op.data field:
 
       phi|insn: out:v1, in, in
-                    | (op.data)
-                    V
-                  op_edge (next_use)---------------> op_edge
-                       ^                                ^
-                       | (op.data)                      | (op.data)
-      phi|insn: out, in:v1, ...        phi|insn: out, in:v1, ...
+                       ^
+                       | op.data
+      phi|insn: out, in:v1, ...
 */
 
-typedef struct op_edge *op_edge_t;
-
-struct op_edge {
-  int reg_index;
-  bb_insn_t use, def;
-  uint32_t use_op_num, def_op_num;
-  op_edge_t prev_use, next_use; /* of the same def: we have only head in op.data */
-};
-
-static int get_op_reg_index (MIR_op_t op) { return ((op_edge_t) op.data)->def->index; }
+static int get_op_reg_index (MIR_op_t op) { return ((bb_insn_t) op.data)->index; }
 
 typedef struct def_tab_el {
   bb_t bb;       /* table key */
@@ -1401,21 +1388,17 @@ DEF_VARR (MIR_op_t);
 DEF_VARR (bb_insn_t);
 
 struct ssa_ctx {
-  bitmap_t bb_processed;
-  VARR (int) * reg_indexes;
   /* Insns defining undef and initial arg values. They are not in insn lists. */
   VARR (bb_insn_t) * arg_bb_insns, *undef_insns;
-  VARR (bb_insn_t) * phis;
+  VARR (bb_insn_t) * phis, *deleted_phis;
   VARR (MIR_op_t) * temp_ops;
   HTAB (def_tab_el_t) * def_tab; /* reg,bb -> insn defining reg  */
 };
 
-#define undef_insn gen_ctx->ssa_ctx->undef_insn
-#define bb_processed gen_ctx->ssa_ctx->bb_processed
-#define reg_indexes gen_ctx->ssa_ctx->reg_indexes
 #define arg_bb_insns gen_ctx->ssa_ctx->arg_bb_insns
 #define undef_insns gen_ctx->ssa_ctx->undef_insns
 #define phis gen_ctx->ssa_ctx->phis
+#define deleted_phis gen_ctx->ssa_ctx->deleted_phis
 #define temp_ops gen_ctx->ssa_ctx->temp_ops
 #define def_tab gen_ctx->ssa_ctx->def_tab
 
@@ -1426,36 +1409,6 @@ static htab_hash_t def_tab_el_hash (def_tab_el_t el, void *arg) {
 
 static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
   return el1.reg == el2.reg && el1.bb == el2.bb;
-}
-
-static void add_op_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
-                         int use_op_num) {
-  MIR_op_t *op_ref;
-  op_edge_t op_edge = gen_malloc (gen_ctx, sizeof (struct op_edge));
-
-  op_edge->use = use;
-  op_edge->use_op_num = use_op_num;
-  op_edge->def = def;
-  op_edge->def_op_num = def_op_num;
-  gen_assert (use->insn->ops[use_op_num].data == NULL);
-  use->insn->ops[use_op_num].data = op_edge;
-  op_ref = &def->insn->ops[def_op_num];
-  op_edge->next_use = op_ref->data;
-  if (op_edge->next_use != NULL) op_edge->next_use->prev_use = op_edge;
-  op_edge->prev_use = NULL;
-  op_ref->data = op_edge;
-}
-
-static void remove_op_edge (gen_ctx_t gen_ctx, op_edge_t op_edge) {
-  if (op_edge->prev_use != NULL) {
-    op_edge->prev_use->next_use = op_edge->next_use;
-  } else {
-    MIR_op_t *op_ref = &op_edge->def->insn->ops[op_edge->def_op_num];
-    op_ref->data = op_edge->next_use;
-  }
-  if (op_edge->next_use != NULL) op_edge->next_use->prev_use = op_edge->prev_use;
-  op_edge->use->insn->ops[op_edge->use_op_num].data = NULL;
-  free (op_edge);
 }
 
 static MIR_insn_code_t get_move_code (MIR_type_t type);
@@ -1480,54 +1433,19 @@ static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_ins
 }
 
 static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
-  bb_insn_t def = NULL;
+  bb_insn_t def, same = NULL;
   int op_num;
-  op_edge_t op_edge;
 
   *def_op_num_ref = 0;
   for (op_num = 1; op_num < phi->insn->nops; op_num++) { /* check input defs: */
-    op_edge = phi->insn->ops[op_num].data;
-    if (op_edge->def == def || op_edge->def == phi) continue;
-    if (def != NULL) return NULL;
-    def = op_edge->def;
-    *def_op_num_ref = op_edge->def_op_num;
+    def = phi->insn->ops[op_num].data;
+    if (def == same || def == phi) continue;
+    if (same != NULL) return NULL;
+    same = def;
   }
   gen_assert (phi->insn->ops[0].mode == MIR_OP_REG);
-  if (def == NULL) def = get_start_insn (gen_ctx, undef_insns, phi->insn->ops[0].u.reg);
-  return def;
-}
-
-static void remove_redundant_phi (gen_ctx_t gen_ctx, bb_insn_t phi, bb_insn_t def, int def_op_num) {
-  MIR_op_t *op_ref;
-  int op_num;
-  op_edge_t op_edge, use_edge, next_edge, first, last;
-
-  assert (def != NULL);
-  first = last = NULL;
-  for (use_edge = phi->insn->ops[0].data; use_edge != NULL; use_edge = next_edge) {
-    next_edge = use_edge->next_use;
-    if (use_edge->use == phi) { /* loop */
-      remove_op_edge (gen_ctx, use_edge);
-    } else { /* reroute the uses: */
-      use_edge->def = def;
-      use_edge->def_op_num = def_op_num;
-      if (first == NULL) first = use_edge;
-      last = use_edge;
-    }
-  }
-  if (first != NULL) { /* prepend uses first..last to def: */
-    op_ref = &def->insn->ops[def_op_num];
-    last->next_use = op_ref->data;
-    if (last->next_use != NULL) last->next_use->prev_use = last;
-    first->prev_use = NULL;
-    op_ref->data = first;
-    phi->insn->ops[0].data = NULL;
-  }
-  for (op_num = 1; op_num < phi->insn->nops; op_num++) { /* remove input phi op edge: */
-    op_edge = phi->insn->ops[op_num].data;
-    if (op_edge != NULL) remove_op_edge (gen_ctx, op_edge);
-  }
-  gen_delete_insn (gen_ctx, phi->insn);
+  if (same == NULL) same = get_start_insn (gen_ctx, undef_insns, phi->insn->ops[0].u.reg);
+  return same;
 }
 
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref);
@@ -1541,21 +1459,14 @@ static void add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
   for (in_edge = DLIST_HEAD (in_edge_t, phi->bb->in_edges); in_edge != NULL;
        in_edge = DLIST_NEXT (in_edge_t, in_edge)) {
     def = get_def (gen_ctx, reg, in_edge->src, &def_op_num);
-    add_op_edge (gen_ctx, def, def_op_num, phi, nop++);
+    phi->insn->ops[nop++].data = def;
   }
-  VARR_PUSH (bb_insn_t, phis, phi);
-}
-
-static int sealed_p (gen_ctx_t gen_ctx, bb_t bb) {
-  for (in_edge_t e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
-    if (!bitmap_bit_p (bb_processed, e->src->index)) return FALSE;
-  return TRUE;
 }
 
 static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t phi_insn;
-  bb_insn_t bb_insn;
+  bb_insn_t bb_insn, phi;
   size_t len = DLIST_LENGTH (in_edge_t, bb->in_edges) + 1; /* output and inputs */
 
   VARR_TRUNC (MIR_op_t, temp_ops, 0);
@@ -1566,7 +1477,9 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
     gen_add_insn_after (gen_ctx, bb_insn->insn, phi_insn);
   else
     gen_add_insn_before (gen_ctx, bb_insn->insn, phi_insn);
-  return phi_insn->data; /* phi bb insn */
+  phi_insn->ops[0].data = phi = phi_insn->data;
+  VARR_PUSH (bb_insn_t, phis, phi);
+  return phi;
 }
 
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref) {
@@ -1595,54 +1508,54 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
   el.def = def = create_phi (gen_ctx, bb, op);
   el.def_op_num = 0;
   HTAB_DO (def_tab_el_t, def_tab, el, HTAB_INSERT, tab_el);
-  if (sealed_p (gen_ctx, bb)) add_phi_operands (gen_ctx, reg, def);
   *def_op_num_ref = el.def_op_num = 0;
   return el.def;
 }
 
-static int is_being_sealed_p (gen_ctx_t gen_ctx, bb_t bb) {
-  if (!bitmap_bit_p (bb_processed, bb->index)) return FALSE;
-  return sealed_p (gen_ctx, bb);
-}
-
-static void seal_bb (gen_ctx_t gen_ctx, bb_t bb) { /* all bb preds are processed */
-  MIR_insn_t insn;
-
-  for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-       bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-    if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
-    if (insn->code != MIR_PHI) return;
-    if (insn->nops > 1 && insn->ops[1].data == NULL) /* incomplete phi */
-      add_phi_operands (gen_ctx, bb_insn->insn->ops[0].u.reg, bb_insn);
-  }
-}
-
 static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   bb_insn_t phi, def;
-  size_t i, n;
+  size_t i, j, saved_bound;
   int op_num, change_p;
 
-#if 0
+#if CAA
   fprintf (stderr, "Removing (%ld):", insns_num);
 #endif
+  VARR_TRUNC (bb_insn_t, deleted_phis, 0);
   do {
     change_p = FALSE;
-    n = 0;
-#if 0
+    saved_bound = 0;
+#if CAA
     fprintf (stderr, " %ld", VARR_LENGTH (bb_insn_t, phis));
 #endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
+      for (j = 1; j < phi->insn->nops; j++) {
+        for (def = phi->insn->ops[j].data;
+             def->insn->code == MIR_PHI && def != def->insn->ops[0].data;
+             def = def->insn->ops[0].data)
+          ;
+        phi->insn->ops[j].data = def;
+      }
       if ((def = redundant_phi_def (gen_ctx, phi, &op_num)) == NULL) {
-        VARR_SET (bb_insn_t, phis, n++, phi);
+        VARR_SET (bb_insn_t, phis, saved_bound++, phi);
         continue;
       }
-      remove_redundant_phi (gen_ctx, phi, def, op_num);
+      phi->insn->ops[0].data = def;
+      gen_assert (phi != def);
+      VARR_PUSH (bb_insn_t, deleted_phis, phi);
       change_p = TRUE;
     }
-    VARR_TRUNC (bb_insn_t, phis, n);
+    VARR_TRUNC (bb_insn_t, phis, saved_bound);
   } while (change_p);
-#if 0
+  for (i = 0; i < VARR_LENGTH (bb_insn_t, deleted_phis); i++) {
+    phi = VARR_GET (bb_insn_t, deleted_phis, i);
+    gen_delete_insn (gen_ctx, phi->insn);
+  }
+  for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
+    phi = VARR_GET (bb_insn_t, phis, i);
+    phi->insn->ops[0].data = NULL;
+  }
+#if CAA
   fprintf (stderr, "\n");
 #endif
 }
@@ -1659,11 +1572,9 @@ static void build_ssa (gen_ctx_t gen_ctx) {
 
   HTAB_CLEAR (def_tab_el_t, def_tab);
   VARR_TRUNC (bb_t, worklist, 0);
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     VARR_PUSH (bb_t, worklist, bb);
-  }
   qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), rpost_cmp);
-  bitmap_set_bit_p (bb_processed, 0); /* start bb */
   VARR_TRUNC (bb_insn_t, phis, 0);
   insns_num = 0;
   for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
@@ -1675,46 +1586,30 @@ static void build_ssa (gen_ctx_t gen_ctx) {
           gen_assert (var > MAX_HARD_REG);
           if (out_p) continue;
           def = get_def (gen_ctx, var - MAX_HARD_REG, bb, &def_op_num);
-          add_op_edge (gen_ctx, def, def_op_num, bb_insn, op_num);
+          bb_insn->insn->ops[op_num].data = def;
         }
         insns_num++;
-	FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-	  if (!out_p) continue;
-	  el.bb = bb;
-	  el.reg = var - MAX_HARD_REG;
-	  el.def = bb_insn;
-	  el.def_op_num = op_num;
-	  HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
-	}
+        FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
+          if (!out_p) continue;
+          el.bb = bb;
+          el.reg = var - MAX_HARD_REG;
+          el.def = bb_insn;
+          el.def_op_num = op_num;
+          HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
+        }
       }
     }
-    bitmap_set_bit_p (bb_processed, bb->index);
-    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
-      if (is_being_sealed_p (gen_ctx, e->dst)) seal_bb (gen_ctx, e->dst);
+  }
+  for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
+    phi = VARR_GET (bb_insn_t, phis, i);
+    add_phi_operands (gen_ctx, phi->insn->ops[0].u.reg, phi);
   }
   minimize_ssa (gen_ctx, insns_num);
-  VARR_TRUNC (int, reg_indexes, 0);
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* enumerate vars: */
-      FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        gen_assert (var > MAX_HARD_REG);
-        if (!out_p) continue;
-        reg = var - MAX_HARD_REG;
-        while (VARR_LENGTH (int, reg_indexes) <= reg) VARR_PUSH (int, reg_indexes, 0);
-        reg_index = VARR_GET (int, reg_indexes, reg);
-        VARR_SET (int, reg_indexes, reg, reg_index + 1);
-        for (op_edge_t op_edge = bb_insn->insn->ops[op_num].data; op_edge != NULL;
-             op_edge = op_edge->next_use)
-          op_edge->reg_index = reg_index;
-      }
-    }
 }
 
 static void undo_build_ssa (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t bb_insn, next_bb_insn;
-  op_edge_t op_edge, next_use;
   int op_num, out_p, mem_p;
   size_t passed_mem_num;
   MIR_reg_t var;
@@ -1724,42 +1619,21 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p) continue;
-        for (op_edge = bb_insn->insn->ops[op_num].data; op_edge != NULL; op_edge = next_use) {
-          next_use = op_edge->next_use;
-          remove_op_edge (gen_ctx, op_edge);
-        }
+        bb_insn->insn->ops[op_num].data = NULL;
       }
     }
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (bb_insn->insn->code == MIR_PHI) {
-        for (op_edge = bb_insn->insn->ops[0].data; op_edge != NULL; op_edge = next_use) {
-          next_use = op_edge->next_use;
-          remove_op_edge (gen_ctx, op_edge);
-        }
-        for (size_t i = 1; i < bb_insn->insn->nops; i++)
-          if (bb_insn->insn->ops[i].data != NULL)
-            remove_op_edge (gen_ctx, bb_insn->insn->ops[i].data);
-        gen_delete_insn (gen_ctx, bb_insn->insn);
-      }
+      if (bb_insn->insn->code == MIR_PHI) gen_delete_insn (gen_ctx, bb_insn->insn);
     }
   while (VARR_LENGTH (bb_insn_t, arg_bb_insns) != 0)
     if ((bb_insn = VARR_POP (bb_insn_t, arg_bb_insns)) != NULL) {  // ??? specialized free funcs
-      for (op_edge = bb_insn->insn->ops[0].data; op_edge != NULL; op_edge = next_use) {
-        next_use = op_edge->next_use;
-        remove_op_edge (gen_ctx, op_edge);
-      }
       free (bb_insn->insn);
       free (bb_insn);
     }
   while (VARR_LENGTH (bb_insn_t, undef_insns) != 0)
     if ((bb_insn = VARR_POP (bb_insn_t, undef_insns)) != NULL) {  // ??? specialized free funcs
-      for (op_edge = bb_insn->insn->ops[0].data; op_edge != NULL; op_edge = next_use) {
-        next_use = op_edge->next_use;
-        remove_op_edge (gen_ctx, op_edge);
-      }
       free (bb_insn->insn);
       free (bb_insn);
     }
@@ -1767,21 +1641,19 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
 
 static void init_ssa (gen_ctx_t gen_ctx) {
   gen_ctx->ssa_ctx = gen_malloc (gen_ctx, sizeof (struct ssa_ctx));
-  bb_processed = bitmap_create ();
-  VARR_CREATE (int, reg_indexes, 0);
   VARR_CREATE (bb_insn_t, arg_bb_insns, 0);
   VARR_CREATE (bb_insn_t, undef_insns, 0);
   VARR_CREATE (bb_insn_t, phis, 0);
+  VARR_CREATE (bb_insn_t, deleted_phis, 0);
   VARR_CREATE (MIR_op_t, temp_ops, 16);
   HTAB_CREATE (def_tab_el_t, def_tab, 1024, def_tab_el_hash, def_tab_el_eq, gen_ctx);
 }
 
 static void finish_ssa (gen_ctx_t gen_ctx) {
-  bitmap_destroy (bb_processed);
-  VARR_DESTROY (int, reg_indexes);
   VARR_DESTROY (bb_insn_t, arg_bb_insns);
   VARR_DESTROY (bb_insn_t, undef_insns);
   VARR_DESTROY (bb_insn_t, phis);
+  VARR_DESTROY (bb_insn_t, deleted_phis);
   VARR_DESTROY (MIR_op_t, temp_ops);
   HTAB_DESTROY (def_tab_el_t, def_tab);
   free (gen_ctx->ssa_ctx);
@@ -6589,7 +6461,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
     undo_build_ssa (gen_ctx);
-    //    goto ret;
+    // goto ret;
 #ifndef NO_CSE
     if (optimize_level >= 2) {
       DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
