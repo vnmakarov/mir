@@ -1380,7 +1380,6 @@ typedef struct def_tab_el {
   bb_t bb;       /* table key */
   MIR_reg_t reg; /* another key */
   bb_insn_t def;
-  uint32_t def_op_num;
 } def_tab_el_t;
 DEF_HTAB (def_tab_el_t);
 
@@ -1448,17 +1447,16 @@ static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_o
   return same;
 }
 
-static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref);
+static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb);
 
 static void add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
   size_t nop = 1;
   bb_insn_t def;
-  int def_op_num;
   edge_t in_edge;
 
   for (in_edge = DLIST_HEAD (in_edge_t, phi->bb->in_edges); in_edge != NULL;
        in_edge = DLIST_NEXT (in_edge_t, in_edge)) {
-    def = get_def (gen_ctx, reg, in_edge->src, &def_op_num);
+    def = get_def (gen_ctx, reg, in_edge->src);
     phi->insn->ops[nop++].data = def;
   }
 }
@@ -1482,7 +1480,7 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
   return phi;
 }
 
-static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op_num_ref) {
+static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t src;
   bb_insn_t def, bb_insn, arg_bb_insn;
@@ -1493,22 +1491,16 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
 
   el.bb = bb;
   el.reg = reg;
-  if (HTAB_DO (def_tab_el_t, def_tab, el, HTAB_FIND, tab_el)) {
-    *def_op_num_ref = tab_el.def_op_num;
-    return tab_el.def;
-  }
+  if (HTAB_DO (def_tab_el_t, def_tab, el, HTAB_FIND, tab_el)) return tab_el.def;
   if (DLIST_LENGTH (in_edge_t, bb->in_edges) == 1) {
     if ((src = DLIST_HEAD (in_edge_t, bb->in_edges)->src)->index == 0) { /* start bb: args */
-      *def_op_num_ref = 0;
       return get_start_insn (gen_ctx, arg_bb_insns, reg);
     }
-    return get_def (gen_ctx, reg, DLIST_HEAD (in_edge_t, bb->in_edges)->src, def_op_num_ref);
+    return get_def (gen_ctx, reg, DLIST_HEAD (in_edge_t, bb->in_edges)->src);
   }
   op = MIR_new_reg_op (ctx, reg);
   el.def = def = create_phi (gen_ctx, bb, op);
-  el.def_op_num = 0;
   HTAB_DO (def_tab_el_t, def_tab, el, HTAB_INSERT, tab_el);
-  *def_op_num_ref = el.def_op_num = 0;
   return el.def;
 }
 
@@ -1564,7 +1556,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
   bb_t bb;
   out_edge_t e;
   bb_insn_t def, bb_insn, phi;
-  int op_num, out_p, mem_p, def_op_num, reg_index;
+  int op_num, out_p, mem_p;
   size_t passed_mem_num, insns_num, i;
   MIR_reg_t reg, var;
   def_tab_el_t el;
@@ -1585,7 +1577,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
         FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
           gen_assert (var > MAX_HARD_REG);
           if (out_p) continue;
-          def = get_def (gen_ctx, var - MAX_HARD_REG, bb, &def_op_num);
+          def = get_def (gen_ctx, var - MAX_HARD_REG, bb);
           bb_insn->insn->ops[op_num].data = def;
         }
         insns_num++;
@@ -1594,7 +1586,6 @@ static void build_ssa (gen_ctx_t gen_ctx) {
           el.bb = bb;
           el.reg = var - MAX_HARD_REG;
           el.def = bb_insn;
-          el.def_op_num = op_num;
           HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
         }
       }
