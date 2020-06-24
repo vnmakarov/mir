@@ -1447,20 +1447,6 @@ static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_o
   return same;
 }
 
-static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb);
-
-static void add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
-  size_t nop = 1;
-  bb_insn_t def;
-  edge_t in_edge;
-
-  for (in_edge = DLIST_HEAD (in_edge_t, phi->bb->in_edges); in_edge != NULL;
-       in_edge = DLIST_NEXT (in_edge_t, in_edge)) {
-    def = get_def (gen_ctx, reg, in_edge->src);
-    phi->insn->ops[nop++].data = def;
-  }
-}
-
 static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t phi_insn;
@@ -1502,6 +1488,18 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb) {
   el.def = def = create_phi (gen_ctx, bb, op);
   HTAB_DO (def_tab_el_t, def_tab, el, HTAB_INSERT, tab_el);
   return el.def;
+}
+
+static void add_phi_operands (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_insn_t phi) {
+  size_t nop = 1;
+  bb_insn_t def;
+  edge_t in_edge;
+
+  for (in_edge = DLIST_HEAD (in_edge_t, phi->bb->in_edges); in_edge != NULL;
+       in_edge = DLIST_NEXT (in_edge_t, in_edge)) {
+    def = get_def (gen_ctx, reg, in_edge->src);
+    phi->insn->ops[nop++].data = def;
+  }
 }
 
 static bb_insn_t skip_redundant_phis (bb_insn_t def) {
