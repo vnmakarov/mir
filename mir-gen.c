@@ -1678,14 +1678,14 @@ static void build_ssa (gen_ctx_t gen_ctx) {
           add_op_edge (gen_ctx, def, def_op_num, bb_insn, op_num);
         }
         insns_num++;
-      }
-      FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p) continue;
-        el.bb = bb;
-        el.reg = var - MAX_HARD_REG;
-        el.def = bb_insn;
-        el.def_op_num = op_num;
-        HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
+	FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
+	  if (!out_p) continue;
+	  el.bb = bb;
+	  el.reg = var - MAX_HARD_REG;
+	  el.def = bb_insn;
+	  el.def_op_num = op_num;
+	  HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
+	}
       }
     }
     bitmap_set_bit_p (bb_processed, bb->index);
