@@ -1512,16 +1512,10 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   size_t i, j, saved_bound;
   int op_num, change_p;
 
-#if CAA
-  fprintf (stderr, "Removing (%ld):", insns_num);
-#endif
   VARR_TRUNC (bb_insn_t, deleted_phis, 0);
   do {
     change_p = FALSE;
     saved_bound = 0;
-#if CAA
-    fprintf (stderr, " %ld", VARR_LENGTH (bb_insn_t, phis));
-#endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
       for (j = 1; j < phi->insn->nops; j++)
@@ -1537,6 +1531,11 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
     }
     VARR_TRUNC (bb_insn_t, phis, saved_bound);
   } while (change_p);
+  DEBUG ({
+    fprintf (debug_file, "Minimizing SSA phis: from %ld to %ld phis (non-phi insns %ld)\n",
+             (long) VARR_LENGTH (bb_insn_t, deleted_phis) + VARR_LENGTH (bb_insn_t, phis),
+             (long) VARR_LENGTH (bb_insn_t, phis), (long) insns_num);
+  });
   for (i = 0; i < VARR_LENGTH (bb_insn_t, deleted_phis); i++) {
     phi = VARR_GET (bb_insn_t, deleted_phis, i);
     gen_delete_insn (gen_ctx, phi->insn);
@@ -1545,9 +1544,6 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
     phi = VARR_GET (bb_insn_t, phis, i);
     phi->insn->ops[0].data = NULL;
   }
-#if CAA
-  fprintf (stderr, "\n");
-#endif
 }
 
 static void build_ssa (gen_ctx_t gen_ctx) {
