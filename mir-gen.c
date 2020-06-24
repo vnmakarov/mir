@@ -1512,6 +1512,11 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int *def_op
   return el.def;
 }
 
+static bb_insn_t skip_redundant_phis (bb_insn_t def) {
+  while (def->insn->code == MIR_PHI && def != def->insn->ops[0].data) def = def->insn->ops[0].data;
+  return def;
+}
+
 static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   bb_insn_t phi, def;
   size_t i, j, saved_bound;
@@ -1529,13 +1534,8 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
 #endif
     for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
       phi = VARR_GET (bb_insn_t, phis, i);
-      for (j = 1; j < phi->insn->nops; j++) {
-        for (def = phi->insn->ops[j].data;
-             def->insn->code == MIR_PHI && def != def->insn->ops[0].data;
-             def = def->insn->ops[0].data)
-          ;
-        phi->insn->ops[j].data = def;
-      }
+      for (j = 1; j < phi->insn->nops; j++)
+        phi->insn->ops[j].data = skip_redundant_phis (phi->insn->ops[j].data);
       if ((def = redundant_phi_def (gen_ctx, phi, &op_num)) == NULL) {
         VARR_SET (bb_insn_t, phis, saved_bound++, phi);
         continue;
