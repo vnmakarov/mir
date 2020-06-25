@@ -6555,13 +6555,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
     });
-    build_ssa (gen_ctx, TRUE);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-    });
-    undo_build_ssa (gen_ctx);
-    // goto ret;
 #ifndef NO_CSE
     if (optimize_level >= 2) {
       DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
@@ -6618,6 +6611,11 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #ifndef NO_CCP
     if (optimize_level >= 2) {
       DEBUG ({ fprintf (debug_file, "+++++++++++++CCP:\n"); });
+      build_ssa (gen_ctx, TRUE);
+      DEBUG ({
+        fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
+        print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+      });
       if (ccp (gen_ctx)) {
         DEBUG ({
           fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
@@ -6629,9 +6627,10 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
           print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
         });
       }
+      undo_build_ssa (gen_ctx);
+      ccp_clear (gen_ctx);
     }
 #endif /* #ifndef NO_CCP */
-    ccp_clear (gen_ctx);
   }
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
