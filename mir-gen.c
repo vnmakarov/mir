@@ -6207,9 +6207,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
           print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
         });
       }
+      ccp_clear (gen_ctx);
     }
 #endif /* #ifndef NO_CCP */
-    ccp_clear (gen_ctx);
   }
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
