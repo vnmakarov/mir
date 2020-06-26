@@ -312,7 +312,6 @@ DEF_DLIST (dead_var_t, dead_var_link);
 struct bb_insn {
   MIR_insn_t insn;
   unsigned char flag, flag2; /* used for CCP and LICM */
-  void *attr;                /* used for CCP */
   size_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
