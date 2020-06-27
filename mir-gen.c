@@ -1606,9 +1606,11 @@ static void remove_ssa_edge (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
     ssa_edge->prev_use->next_use = ssa_edge->next_use;
   } else {
     MIR_op_t *op_ref = &ssa_edge->def->insn->ops[ssa_edge->def_op_num];
+    gen_assert (op_ref->data == ssa_edge);
     op_ref->data = ssa_edge->next_use;
   }
   if (ssa_edge->next_use != NULL) ssa_edge->next_use->prev_use = ssa_edge->prev_use;
+  gen_assert (ssa_edge->use->insn->ops[ssa_edge->use_op_num].data == ssa_edge);
   ssa_edge->use->insn->ops[ssa_edge->use_op_num].data = NULL;
   free (ssa_edge);
 }
@@ -3768,8 +3770,11 @@ static int get_ccp_res_val (gen_ctx_t gen_ctx, MIR_insn_t insn, const_t *val) {
 }
 
 static void ccp_remove_insn_ssa_edges (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  for (size_t i = 0; i < insn->nops; i++)
-    if (insn->ops[i].data != NULL) remove_ssa_edge (gen_ctx, insn->ops[i].data);
+  ssa_edge_t ssa_edge;
+  for (size_t i = 0; i < insn->nops; i++) {
+    /* output operand refers to chain of ssa edges -- remove them all: */
+    while ((ssa_edge = insn->ops[i].data) != NULL) remove_ssa_edge (gen_ctx, ssa_edge);
+  }
 }
 
 static int ccp_modify (gen_ctx_t gen_ctx) {
@@ -3859,14 +3864,14 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
     if (!res) {
       DEBUG ({
         fprintf (debug_file, "  removing branch insn ");
-        MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
       });
       ccp_remove_insn_ssa_edges (gen_ctx, insn);
       gen_delete_insn (gen_ctx, insn);
       delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
     } else {
-      insn = MIR_new_insn (ctx, MIR_JMP, bb_insn->insn->ops[0]); /* label is always 0-th op */
+      insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]); /* label is always 0-th op */
       DEBUG ({
         fprintf (debug_file, "  changing branch insn ");
         MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
