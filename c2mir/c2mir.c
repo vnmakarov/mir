@@ -5071,6 +5071,7 @@ static void symbol_insert (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, 
   symbol.def_node = def_node;
   symbol.aux_node = aux_node;
   VARR_CREATE (node_t, symbol.defs, 4);
+  VARR_PUSH (node_t, symbol.defs, def_node);
   HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_INSERT, el);
 }
 
