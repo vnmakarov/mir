@@ -11008,6 +11008,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
         res = get_new_temp (ctx, t);
+        op1 = cast (ctx, op1, t, FALSE);
         emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
       } else if (desirable_dest == NULL) {
         res = get_new_temp (ctx, MIR_T_I64);
@@ -11023,6 +11024,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     op1 = gen (ctx, false_expr, NULL, NULL, !void_p && t != MIR_T_UNDEF, NULL);
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
+        op1 = cast (ctx, op1, t, FALSE);
         emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
       } else if (desirable_dest == NULL) {
         addr = mem_to_address (ctx, op1);
