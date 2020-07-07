@@ -1526,6 +1526,8 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   mir_assert (m != NULL);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
+    MIR_item_t first_item = item;
+
     if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item
         || item->item_type == MIR_ref_data_item || item->item_type == MIR_expr_data_item) {
       item = load_bss_data_section (ctx, item, FALSE);
@@ -1538,10 +1540,11 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
       }
       _MIR_redirect_thunk (ctx, item->addr, undefined_interface);
     }
-    if (item->export_p) { /* update global item table */
-      mir_assert (item->item_type != MIR_export_item && item->item_type != MIR_import_item
-                  && item->item_type != MIR_forward_item);
-      setup_global (ctx, MIR_item_name (ctx, item), item->addr, item);
+    if (first_item->export_p) { /* update global item table */
+      mir_assert (first_item->item_type != MIR_export_item
+                  && first_item->item_type != MIR_import_item
+                  && first_item->item_type != MIR_forward_item);
+      setup_global (ctx, MIR_item_name (ctx, first_item), first_item->addr, first_item);
     }
   }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
