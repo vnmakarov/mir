@@ -5075,6 +5075,18 @@ static void symbol_insert (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, 
   HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_INSERT, el);
 }
 
+static void symbol_def_replace (c2m_ctx_t c2m_ctx, symbol_t symbol, node_t def_node) {
+  symbol_t el;
+  VARR (node_t) * defs;
+
+  VARR_CREATE (node_t, defs, 4);
+  for (size_t i = 0; i < VARR_LENGTH (node_t, symbol.defs); i++)
+    VARR_PUSH (node_t, defs, VARR_GET (node_t, symbol.defs, i));
+  symbol.defs = defs;
+  symbol.def_node = def_node;
+  HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_REPLACE, el);
+}
+
 static void symbol_finish (c2m_ctx_t c2m_ctx) {
   if (symbol_tab != NULL) HTAB_DESTROY (symbol_t, symbol_tab);
 }
@@ -5939,6 +5951,9 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
       || (decl_spec.linkage == N_STATIC && linkage == N_EXTERN))
     warning (c2m_ctx, id->pos, "%s defined with external and internal linkage", id->u.s.s);
   VARR_PUSH (node_t, sym.defs, def_node);
+  if (!incomplete_type_p (c2m_ctx, decl_spec.type)
+      && incomplete_type_p (c2m_ctx, tab_decl_spec.type))
+    symbol_def_replace (c2m_ctx, sym, def_node);
 }
 
 static void make_type_complete (c2m_ctx_t c2m_ctx, struct type *type) {
