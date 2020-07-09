@@ -8214,12 +8214,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       *e->type = *t2;
     } else if ((t2->mode == TM_PTR && null_const_p (e3, t3))
                || (t3->mode == TM_PTR && null_const_p (e2, t2))) {
-      e->type->mode = TM_PTR;
-      e->type->pos_node = r;
-      e->type->u.ptr_type = create_type (c2m_ctx, NULL);
-      e->type->u.ptr_type->pos_node = r;
-      e->type->u.ptr_type->mode = TM_BASIC;
-      e->type->u.ptr_type->u.basic_type = TP_VOID;
+      e->type = null_const_p (e3, t2) ? t3 : t2;
     } else if (t2->mode != TM_PTR && t3->mode != TM_PTR) {
       error (c2m_ctx, r->pos, "incompatible types in true and false parts of cond-expression");
       break;
