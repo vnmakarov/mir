@@ -546,13 +546,12 @@ extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
-extern MIR_proto_t _MIR_create_proto (MIR_context_t ctx, const char *name, size_t nres,
-                                      MIR_type_t *res_types, size_t nargs, int vararg_p,
-                                      MIR_var_t *args);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
 extern MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...);
-extern uint64_t _MIR_register_unspec_insn (MIR_context_t ctx, MIR_proto_t proto);
+extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const char *name,
+                                       size_t nres, MIR_type_t *res_types, size_t nargs,
+                                       int vararg_p, MIR_var_t *args);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,

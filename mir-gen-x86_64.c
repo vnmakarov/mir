@@ -2042,8 +2042,6 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
 }
 
 static void target_init (gen_ctx_t gen_ctx) {
-  uint64_t code;
-
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
@@ -2053,9 +2051,7 @@ static void target_init (gen_ctx_t gen_ctx) {
   VARR_CREATE (MIR_code_reloc_t, relocs, 0);
   MIR_type_t res = MIR_T_D;
   MIR_var_t args[] = {{MIR_T_D, "src"}};
-  MIR_proto_t proto = _MIR_create_proto (gen_ctx->ctx, "movdqa", 1, &res, 1, FALSE, args);
-  code = _MIR_register_unspec_insn (gen_ctx->ctx, proto);
-  gen_assert (MOVDQA_CODE == code);
+  _MIR_register_unspec_insn (gen_ctx->ctx, MOVDQA_CODE, "movdqa", 1, &res, 1, FALSE, args);
   patterns_init (gen_ctx);
 }
 

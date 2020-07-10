@@ -1073,8 +1073,9 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
   return item;
 }
 
-MIR_proto_t _MIR_create_proto (MIR_context_t ctx, const char *name, size_t nres,
-                               MIR_type_t *res_types, size_t nargs, int vararg_p, MIR_var_t *args) {
+static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nres,
+                                 MIR_type_t *res_types, size_t nargs, int vararg_p,
+                                 MIR_var_t *args) {
   MIR_proto_t proto = malloc (sizeof (struct MIR_proto) + nres * sizeof (MIR_type_t));
 
   if (proto == NULL)
@@ -1098,7 +1099,7 @@ static MIR_item_t new_proto_arr (MIR_context_t ctx, const char *name, size_t nre
   if (curr_module == NULL)
     (*error_func) (MIR_no_module_error, "Creating proto %s outside module", name);
   proto_item = create_item (ctx, MIR_proto_item, "proto");
-  proto_item->u.proto = _MIR_create_proto (ctx, name, nres, res_types, nargs, vararg_p, args);
+  proto_item->u.proto = create_proto (ctx, name, nres, res_types, nargs, vararg_p, args);
   tab_item = add_item (ctx, proto_item);
   mir_assert (tab_item == proto_item);
   return proto_item;
@@ -1866,9 +1867,19 @@ MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...) {
   return new_insn (ctx, MIR_UNSPEC, nops, argp);
 }
 
-uint64_t _MIR_register_unspec_insn (MIR_context_t ctx, MIR_proto_t proto) {
-  VARR_PUSH (MIR_proto_t, unspec_protos, proto);
-  return VARR_LENGTH (MIR_proto_t, unspec_protos) - 1;
+void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const char *name, size_t nres,
+                                MIR_type_t *res_types, size_t nargs, int vararg_p,
+                                MIR_var_t *args) {
+  MIR_proto_t proto;
+
+  while (VARR_LENGTH (MIR_proto_t, unspec_protos) <= code)
+    VARR_PUSH (MIR_proto_t, unspec_protos, NULL);
+  if ((proto = VARR_GET (MIR_proto_t, unspec_protos, code)) == NULL) {
+    VARR_SET (MIR_proto_t, unspec_protos, code,
+              create_proto (ctx, name, nres, res_types, nargs, vararg_p, args));
+  } else {
+    assert (strcmp (proto->name, name) == 0);
+  }
 }
 
 MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn) {
