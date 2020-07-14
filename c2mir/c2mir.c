@@ -9131,6 +9131,8 @@ DEF_HTAB (reg_var_t);
 
 static VARR (MIR_var_t) * vars;
 
+DEF_VARR (MIR_type_t);
+
 struct init_el {
   mir_size_t num, offset;
   decl_t member_decl; /* NULL for non-member initialization  */
@@ -9150,6 +9152,7 @@ struct gen_ctx {
   HTAB (reg_var_t) * reg_var_tab;
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
+  VARR (MIR_type_t) * ret_types;
   VARR (node_t) * mem_params;
   VARR (init_el_t) * init_els;
   MIR_item_t memset_proto, memset_item;
@@ -9167,6 +9170,7 @@ struct gen_ctx {
 #define reg_free_mark c2m_ctx->gen_ctx->reg_free_mark
 #define continue_label c2m_ctx->gen_ctx->continue_label
 #define break_label c2m_ctx->gen_ctx->break_label
+#define ret_types c2m_ctx->gen_ctx->ret_types
 #define mem_params c2m_ctx->gen_ctx->mem_params
 #define init_els c2m_ctx->gen_ctx->init_els
 #define memset_proto c2m_ctx->gen_ctx->memset_proto
@@ -9994,8 +9998,7 @@ static const char *get_param_name (MIR_context_t ctx, MIR_type_t *type, struct t
   return get_reg_var_name (ctx, promote_mir_int_type (*type), name, 0);
 }
 
-static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *func_type,
-                                         MIR_type_t *ret_type) {
+static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *func_type) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   node_t declarator, id, first_param, p;
   struct type *param_type;
@@ -10005,6 +10008,7 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
   first_param = NL_HEAD (func_type->param_list->ops);
   VARR_TRUNC (MIR_var_t, vars, 0);
   VARR_TRUNC (node_t, mem_params, 0);
+  VARR_TRUNC (MIR_type_t, ret_types, 0);
   if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
@@ -10033,7 +10037,7 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
     }
   }
   set_type_layout (c2m_ctx, func_type->ret_type);
-  *ret_type = get_mir_type (ctx, func_type->ret_type);
+  VARR_PUSH (MIR_type_t, ret_types, get_mir_type (ctx, func_type->ret_type));
 }
 
 static mir_size_t get_object_path_offset (c2m_ctx_t c2m_ctx) {
@@ -11329,7 +11333,9 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     reg_free_mark = 0;
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
-    collect_args_and_func_types (ctx, decl_type->u.func_type, &res_type);
+    collect_args_and_func_types (ctx, decl_type->u.func_type);
+    assert (VARR_LENGTH (MIR_type_t, ret_types) == 1);
+    res_type = VARR_GET (MIR_type_t, ret_types, 0);
     curr_func
       = ((decl_type->u.func_type->dots_p
             ? MIR_new_vararg_func_arr
@@ -11740,7 +11746,9 @@ static void gen_mir_protos (MIR_context_t ctx) {
     set_type_layout (c2m_ctx, type);
     func_type = type->u.ptr_type->u.func_type;
     assert (func_type->param_list->code == N_LIST);
-    collect_args_and_func_types (ctx, func_type, &ret_type);
+    collect_args_and_func_types (ctx, func_type);
+    assert (VARR_LENGTH (MIR_type_t, ret_types) == 1);
+    ret_type = VARR_GET (MIR_type_t, ret_types, 0);
     func_type->proto_item
       = get_mir_proto (ctx, func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL,
                        ret_type, vars);
@@ -11754,6 +11762,7 @@ static void gen_finish (MIR_context_t ctx) {
   if (c2m_ctx == NULL || c2m_ctx->gen_ctx == NULL) return;
   finish_reg_vars (ctx);
   if (vars != NULL) VARR_DESTROY (MIR_var_t, vars);
+  if (ret_types != NULL) VARR_DESTROY (MIR_type_t, ret_types);
   if (mem_params != NULL) VARR_DESTROY (node_t, mem_params);
   if (call_ops != NULL) VARR_DESTROY (MIR_op_t, call_ops);
   if (switch_ops != NULL) VARR_DESTROY (MIR_op_t, switch_ops);
@@ -11771,6 +11780,7 @@ static void gen_mir (MIR_context_t ctx, node_t r) {
   minus_one_op = new_op (NULL, MIR_new_int_op (ctx, -1));
   init_reg_vars (ctx);
   VARR_CREATE (MIR_var_t, vars, 32);
+  VARR_CREATE (MIR_type_t, ret_types, 16);
   VARR_CREATE (node_t, mem_params, 16);
   gen_mir_protos (ctx);
   VARR_CREATE (MIR_op_t, call_ops, 32);
