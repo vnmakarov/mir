@@ -9149,9 +9149,11 @@ struct gen_ctx {
   HTAB (reg_var_t) * reg_var_tab;
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
-  VARR (MIR_var_t) * ret_vars;
-  VARR (MIR_var_t) * arg_vars;
-  VARR (node_t) * mem_params;
+  struct {
+    VARR (MIR_var_t) * ret_vars;
+    VARR (MIR_var_t) * arg_vars;
+    VARR (node_t) * mem_params;
+  } call_info;
   VARR (init_el_t) * init_els;
   MIR_item_t memset_proto, memset_item;
   MIR_item_t memcpy_proto, memcpy_item;
@@ -9168,9 +9170,7 @@ struct gen_ctx {
 #define reg_free_mark c2m_ctx->gen_ctx->reg_free_mark
 #define continue_label c2m_ctx->gen_ctx->continue_label
 #define break_label c2m_ctx->gen_ctx->break_label
-#define arg_vars c2m_ctx->gen_ctx->arg_vars
-#define ret_vars c2m_ctx->gen_ctx->ret_vars
-#define mem_params c2m_ctx->gen_ctx->mem_params
+#define call_info c2m_ctx->gen_ctx->call_info
 #define init_els c2m_ctx->gen_ctx->init_els
 #define memset_proto c2m_ctx->gen_ctx->memset_proto
 #define memset_item c2m_ctx->gen_ctx->memset_item
@@ -10005,13 +10005,13 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
   MIR_type_t type;
 
   first_param = NL_HEAD (func_type->param_list->ops);
-  VARR_TRUNC (MIR_var_t, arg_vars, 0);
-  VARR_TRUNC (node_t, mem_params, 0);
-  VARR_TRUNC (MIR_var_t, ret_vars, 0);
+  VARR_TRUNC (MIR_var_t, call_info.arg_vars, 0);
+  VARR_TRUNC (node_t, call_info.mem_params, 0);
+  VARR_TRUNC (MIR_var_t, call_info.ret_vars, 0);
   if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
-    VARR_PUSH (MIR_var_t, arg_vars, var);
+    VARR_PUSH (MIR_var_t, call_info.arg_vars, var);
   }
   if (first_param != NULL && !void_param_p (first_param)) {
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
@@ -10029,16 +10029,16 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
         var.name = get_param_name (ctx, &type, param_type, id->u.s.s);
         if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
             || !((decl_t) p->attr)->reg_p)
-          VARR_PUSH (node_t, mem_params, p);
+          VARR_PUSH (node_t, call_info.mem_params, p);
       }
       var.type = type;
-      VARR_PUSH (MIR_var_t, arg_vars, var);
+      VARR_PUSH (MIR_var_t, call_info.arg_vars, var);
     }
   }
   set_type_layout (c2m_ctx, func_type->ret_type);
   var.name = RET_VAL_NAME;
   var.type = get_mir_type (ctx, func_type->ret_type);
-  VARR_PUSH (MIR_var_t, ret_vars, var);
+  VARR_PUSH (MIR_var_t, call_info.ret_vars, var);
 }
 
 static mir_size_t get_object_path_offset (c2m_ctx_t c2m_ctx) {
@@ -11336,15 +11336,15 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
     collect_args_and_func_types (ctx, decl_type->u.func_type);
-    assert (VARR_LENGTH (MIR_var_t, ret_vars) == 1);
-    ret_var = VARR_GET (MIR_var_t, ret_vars, 0);
+    assert (VARR_LENGTH (MIR_var_t, call_info.ret_vars) == 1);
+    ret_var = VARR_GET (MIR_var_t, call_info.ret_vars, 0);
     res_type = ret_var.type;
     curr_func = ((decl_type->u.func_type->dots_p
                     ? MIR_new_vararg_func_arr
                     : MIR_new_func_arr) (ctx, NL_HEAD (declarator->ops)->u.s.s,
                                          res_type == MIR_T_UNDEF ? 0 : 1, &res_type,
-                                         VARR_LENGTH (MIR_var_t, arg_vars),
-                                         VARR_ADDR (MIR_var_t, arg_vars)));
+                                         VARR_LENGTH (MIR_var_t, call_info.arg_vars),
+                                         VARR_ADDR (MIR_var_t, call_info.arg_vars)));
     decl->item = curr_func;
     if (ns->stack_var_p /* we can have empty struct only with size 0 and still need a frame: */
         || ns->size > 0) {
@@ -11353,10 +11353,10 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
                        MIR_new_insn (ctx, MIR_ALLOCA, MIR_new_reg_op (ctx, fp_reg),
                                      MIR_new_int_op (ctx, ns->size)));
     }
-    for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, arg_vars); i++)
-      get_reg_var (ctx, MIR_T_UNDEF, VARR_GET (MIR_var_t, arg_vars, i).name);
-    for (size_t i = 0; i < VARR_LENGTH (node_t, mem_params); i++) {
-      param = VARR_GET (node_t, mem_params, i);
+    for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, call_info.arg_vars); i++)
+      get_reg_var (ctx, MIR_T_UNDEF, VARR_GET (MIR_var_t, call_info.arg_vars, i).name);
+    for (size_t i = 0; i < VARR_LENGTH (node_t, call_info.mem_params); i++) {
+      param = VARR_GET (node_t, call_info.mem_params, i);
       param_declarator = NL_EL (param->ops, 1);
       param_decl = param->attr;
       assert (param_declarator != NULL && param_declarator->code == N_DECL);
@@ -11724,9 +11724,10 @@ static MIR_item_t get_mir_proto (MIR_context_t ctx, int vararg_p, MIR_type_t ret
   p.args = vars;
   if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
   sprintf (buf, "proto%d", curr_mir_proto_num++);
-  el = (vararg_p ? MIR_new_vararg_proto_arr : MIR_new_proto_arr) (ctx, buf, p.nres, &ret_type,
-                                                                  VARR_LENGTH (MIR_var_t, arg_vars),
-                                                                  VARR_ADDR (MIR_var_t, arg_vars));
+  el = (vararg_p ? MIR_new_vararg_proto_arr
+                 : MIR_new_proto_arr) (ctx, buf, p.nres, &ret_type,
+                                       VARR_LENGTH (MIR_var_t, call_info.arg_vars),
+                                       VARR_ADDR (MIR_var_t, call_info.arg_vars));
   HTAB_DO (MIR_item_t, proto_tab, el, HTAB_INSERT, el);
   return el;
 }
@@ -11751,12 +11752,12 @@ static void gen_mir_protos (MIR_context_t ctx) {
     func_type = type->u.ptr_type->u.func_type;
     assert (func_type->param_list->code == N_LIST);
     collect_args_and_func_types (ctx, func_type);
-    assert (VARR_LENGTH (MIR_var_t, ret_vars) == 1);
-    var = VARR_GET (MIR_var_t, ret_vars, 0);
+    assert (VARR_LENGTH (MIR_var_t, call_info.ret_vars) == 1);
+    var = VARR_GET (MIR_var_t, call_info.ret_vars, 0);
     ret_type = var.type;
     func_type->proto_item
       = get_mir_proto (ctx, func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL,
-                       ret_type, arg_vars);
+                       ret_type, call_info.arg_vars);
   }
   HTAB_DESTROY (MIR_item_t, proto_tab);
 }
@@ -11766,9 +11767,9 @@ static void gen_finish (MIR_context_t ctx) {
 
   if (c2m_ctx == NULL || c2m_ctx->gen_ctx == NULL) return;
   finish_reg_vars (ctx);
-  if (arg_vars != NULL) VARR_DESTROY (MIR_var_t, arg_vars);
-  if (ret_vars != NULL) VARR_DESTROY (MIR_var_t, ret_vars);
-  if (mem_params != NULL) VARR_DESTROY (node_t, mem_params);
+  if (call_info.arg_vars != NULL) VARR_DESTROY (MIR_var_t, call_info.arg_vars);
+  if (call_info.ret_vars != NULL) VARR_DESTROY (MIR_var_t, call_info.ret_vars);
+  if (call_info.mem_params != NULL) VARR_DESTROY (node_t, call_info.mem_params);
   if (call_ops != NULL) VARR_DESTROY (MIR_op_t, call_ops);
   if (switch_ops != NULL) VARR_DESTROY (MIR_op_t, switch_ops);
   if (switch_cases != NULL) VARR_DESTROY (case_t, switch_cases);
@@ -11784,9 +11785,9 @@ static void gen_mir (MIR_context_t ctx, node_t r) {
   one_op = new_op (NULL, MIR_new_int_op (ctx, 1));
   minus_one_op = new_op (NULL, MIR_new_int_op (ctx, -1));
   init_reg_vars (ctx);
-  VARR_CREATE (MIR_var_t, arg_vars, 32);
-  VARR_CREATE (MIR_var_t, ret_vars, 16);
-  VARR_CREATE (node_t, mem_params, 16);
+  VARR_CREATE (MIR_var_t, call_info.arg_vars, 32);
+  VARR_CREATE (MIR_var_t, call_info.ret_vars, 16);
+  VARR_CREATE (node_t, call_info.mem_params, 16);
   gen_mir_protos (ctx);
   VARR_CREATE (MIR_op_t, call_ops, 32);
   VARR_CREATE (MIR_op_t, switch_ops, 128);
