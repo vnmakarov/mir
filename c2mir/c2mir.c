@@ -9150,6 +9150,7 @@ struct gen_ctx {
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
   struct {
+    int res_ref_p; /* flag of returning an aggregate by reference */
     VARR (MIR_var_t) * ret_vars;
     VARR (MIR_var_t) * arg_vars;
     VARR (node_t) * mem_params;
@@ -10008,10 +10009,12 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
   VARR_TRUNC (MIR_var_t, call_info.arg_vars, 0);
   VARR_TRUNC (node_t, call_info.mem_params, 0);
   VARR_TRUNC (MIR_var_t, call_info.ret_vars, 0);
+  call_info.res_ref_p = FALSE;
   if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
     VARR_PUSH (MIR_var_t, call_info.arg_vars, var);
+    call_info.res_ref_p = TRUE;
   }
   if (first_param != NULL && !void_param_p (first_param)) {
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
