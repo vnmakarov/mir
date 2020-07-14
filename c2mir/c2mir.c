@@ -5297,6 +5297,10 @@ struct decl {
   int bit_offset, width; /* for bitfields, -1 bit_offset for non bitfields. */
   mir_size_t offset;     /* var offset in frame or bss */
   node_t scope;          /* declaration scope */
+  /* The next 2 members are used only for param decls. The 1st member is number of the start MIR
+     func arg. The 2nd one is number or MIR func args used to pass param value, it is positive only
+     for aggregates passed by value.  */
+  uint32_t param_args_start, param_args_num;
   struct decl_spec decl_spec;
   /* Unnamed member if this scope is anon struct/union for the member,
      NULL otherwise: */
@@ -7144,6 +7148,7 @@ static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
   decl->reg_p = decl->used_p = FALSE;
   decl->offset = 0;
   decl->bit_offset = -1;
+  decl->param_args_start = decl->param_args_num = 0;
   decl->scope = curr_scope;
   decl->containing_unnamed_anon_struct_union_member = curr_unnamed_anon_struct_union_member;
   decl->item = NULL;
@@ -9129,6 +9134,7 @@ struct reg_var {
 typedef struct reg_var reg_var_t;
 
 DEF_HTAB (reg_var_t);
+DEF_VARR (int);
 
 struct init_el {
   mir_size_t num, offset;
@@ -10002,6 +10008,7 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   node_t declarator, id, first_param, p;
   struct type *param_type;
+  decl_t param_decl;
   MIR_var_t var;
   MIR_type_t type;
 
@@ -10028,11 +10035,13 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
         declarator = NL_EL (p->ops, 1);
         assert (p->code == N_SPEC_DECL && declarator != NULL && declarator->code == N_DECL);
         id = NL_HEAD (declarator->ops);
-        param_type = ((decl_t) p->attr)->decl_spec.type;
+        param_decl = p->attr;
+        param_type = param_decl->decl_spec.type;
         var.name = get_param_name (ctx, &type, param_type, id->u.s.s);
-        if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
-            || !((decl_t) p->attr)->reg_p)
+        if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION || !param_decl->reg_p)
           VARR_PUSH (node_t, call_info.mem_params, p);
+        param_decl->param_args_num = 0;
+        param_decl->param_args_start = VARR_LENGTH (MIR_var_t, call_info.arg_vars);
       }
       var.type = type;
       VARR_PUSH (MIR_var_t, call_info.arg_vars, var);
