@@ -151,6 +151,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
       case MIR_T_F:
       case MIR_T_D: n_fregs++; break;
       case NO_CLASS: break; /* ??? no class */
+      case X87UP_CLASS:
       case MIR_T_LD: n_qwords = 0; goto pass_by_ref;
       case MIR_T_UNDEF: assert (FALSE);
       }
