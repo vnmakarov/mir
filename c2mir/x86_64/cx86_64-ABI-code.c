@@ -145,7 +145,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
   if (n_qwords != 0) {
     n_iregs = n_fregs = 0;
     for (n = n_qwords - 1; n >= 0; n--) { /* start from the last qword */
-      switch ((type = qword_types[n_qwords])) {
+      switch ((type = qword_types[n])) {
       case MIR_T_I32:
       case MIR_T_I64: n_iregs++; break;
       case MIR_T_F:
