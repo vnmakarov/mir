@@ -151,7 +151,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
       case MIR_T_F:
       case MIR_T_D: n_fregs++; break;
       case NO_CLASS: break; /* ??? no class */
-      case MIR_T_LD:
+      case MIR_T_LD: n_qwords = 0; goto pass_by_ref;
       case MIR_T_UNDEF: assert (FALSE);
       }
     }
@@ -177,6 +177,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
       }
     }
   }
+pass_by_ref:
   if (n_qwords == 0) { /* pass by ref for aggregates and pass by value for others: */
     type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
               ? MIR_POINTER_TYPE
