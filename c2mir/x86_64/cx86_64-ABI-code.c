@@ -129,19 +129,49 @@ static const char *qword_name (MIR_context_t ctx, const char *name, int num) {
 static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
                             target_arg_info_t *arg_info) {
   MIR_var_t var;
+  MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_type_t qword_types[MAX_QWORDS];
+  int n_iregs, n_fregs, n_stregs, n;
+  int n_qwords = classify_arg (ctx, func_type->ret_type, qword_types, 0, FALSE);
+
+  if (n_qwords != 0) {
+    n_iregs = n_fregs = n_stregs = 0;
+    for (n = n_qwords - 1; n >= 0; n--) { /* start from the last qword */
+      switch ((type = qword_types[n_qwords])) {
+      case MIR_T_I32:
+      case MIR_T_I64: n_iregs++; break;
+      case MIR_T_F:
+      case MIR_T_D: n_fregs++; break;
+      case MIR_T_LD: n_stregs++; break;
+      case X87UP_CLASS: n_qwords--; break;
+      case NO_CLASS: break; /* ??? no class */
+      case MIR_T_UNDEF: assert (FALSE);
+      }
+    }
+    if (n_iregs > 2 || n_fregs > 2 || n_stregs > 1) {
+      n_qwords = 0;
+    }
+  }
 
   proto_info.res_ref_p = FALSE;
-  if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
+  if (n_qwords == 0) { /* return by reference */
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
     VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
     proto_info.res_ref_p = TRUE;
     arg_info->n_iregs++;
+    var.name = RET_VAL_NAME;
+    var.type = MIR_T_UNDEF;
+    VARR_PUSH (MIR_var_t, proto_info.ret_vars, var);
+    return;
+  } else {
+    for (n = n_qwords - 1; n >= 0; n--) {
+      var.name = qword_name (ctx, RET_VAL_NAME, n);
+      var.type = qword_types[n];
+      VARR_PUSH (MIR_var_t, proto_info.ret_vars, var);
+    }
   }
-  var.name = RET_VAL_NAME;
-  var.type = get_mir_type (ctx, func_type->ret_type);
-  VARR_PUSH (MIR_var_t, proto_info.ret_vars, var);
 }
 
 static void target_add_param (MIR_context_t ctx, const char *name, struct type *param_type,
