@@ -115,6 +115,17 @@ static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info
   arg_info->n_iregs = arg_info->n_fregs = 0;
 }
 
+static const char *qword_name (MIR_context_t ctx, const char *name, int num) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  char prefix[50];
+
+  sprintf (prefix, "Q%u_", num);
+  VARR_TRUNC (char, temp_string, 0);
+  add_to_temp_string (c2m_ctx, prefix);
+  add_to_temp_string (c2m_ctx, name);
+  return uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
+}
+
 static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
                             target_arg_info_t *arg_info) {
   MIR_var_t var;
@@ -166,14 +177,8 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
         param_decl->param_args_start = VARR_LENGTH (MIR_var_t, proto_info.arg_vars);
       }
       for (n = n_qwords - 1; n >= 0; n--) {
-        char prefix[50];
-
-        sprintf (prefix, "Q%u_", n);
-        VARR_TRUNC (char, temp_string, 0);
-        add_to_temp_string (c2m_ctx, prefix);
-        add_to_temp_string (c2m_ctx, name);
-        var.name = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-        var.type = type;
+        var.name = qword_name (ctx, name, n);
+        var.type = qword_types[n];
         VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
       }
     }
