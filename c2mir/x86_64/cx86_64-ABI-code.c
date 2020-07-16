@@ -81,6 +81,8 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
     default: assert (FALSE);
     }
 
+    if (n_qwords > 2) return 0; /* as we don't have vector values (see SSEUP_CLASS) */
+
     for (i = 0; i < n_qwords; i++) {
       if (types[i] == MIR_T_UNDEF) return 0; /* pass in memory if a word class is memory.  */
       if (types[i] == X87UP_CLASS && (i == 0 || types[i - 1] != MIR_T_LD)) return 0;
