@@ -97,7 +97,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
     types[1] = X87UP_CLASS;
     return 2;
   default:
-    if (!bit_field_p && size <= 4) {
+    if (!bit_field_p && offset % 8 + size <= 4) {
       types[0] = MIR_T_I32;
     } else {
       assert (size <= 8);
