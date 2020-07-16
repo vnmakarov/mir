@@ -10003,6 +10003,10 @@ static const char *get_param_name (MIR_context_t ctx, struct type *param_type, c
   return get_reg_var_name (ctx, promote_mir_int_type (type), name, 0);
 }
 
+#if 0 && defined(__x86_64__)
+#include "x86_64/cx86_64-ABI-code.c"
+#endif
+
 #ifndef ATYPICAL_CALL_ABI
 typedef int target_arg_info_t;
 
