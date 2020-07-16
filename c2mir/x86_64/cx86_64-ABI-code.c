@@ -37,7 +37,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
                          mir_size_t offset, int bit_field_p) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   size_t size = type_size (c2m_ctx, type);
-  int i, n_el_qwords, n_qwords = (size + 7) / 8 * 8;
+  int i, n_el_qwords, n_qwords = (size + 7) / 8;
   MIR_type_t mir_type;
 
   if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_STRUCT) {
@@ -64,7 +64,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
-          int start_qword = (offset + decl->offset + 7) / 8 * 8;
+          int start_qword = (offset + decl->offset) / 8;
 
           if (decl->bit_offset >= 0) {
             types[start_qword] = get_result_type (MIR_T_I64, types[start_qword]);
