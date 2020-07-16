@@ -137,9 +137,11 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
   if (void_type_p (func_type->ret_type)) return;
   n_qwords = classify_arg (ctx, func_type->ret_type, qword_types, 0, FALSE);
   if (n_qwords != 0) {
-    n_iregs = n_fregs = n_stregs = 0;
-    for (n = n_qwords - 1; n >= 0; n--) { /* start from the last qword */
-      switch ((type = qword_types[n_qwords])) {
+    n_iregs = n_fregs = n_stregs = curr = 0;
+    for (n = 0; n < n_qwords; n++) { /* start from the last qword */
+      type = qword_types[n];
+      qword_types[curr++] = type;
+      switch (type) {
       case MIR_T_I32:
       case MIR_T_I64: n_iregs++; break;
       case MIR_T_F:
@@ -179,7 +181,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
 
   if (n_qwords != 0) {
     n_iregs = n_fregs = 0;
-    for (n = n_qwords - 1; n >= 0; n--) { /* start from the last qword */
+    for (n = 0; n < n_qwords; n++) { /* start from the last qword */
       switch ((type = qword_types[n])) {
       case MIR_T_I32:
       case MIR_T_I64: n_iregs++; break;
@@ -200,7 +202,7 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
         param_decl->param_args_num = n_iregs + n_fregs;
         param_decl->param_args_start = VARR_LENGTH (MIR_var_t, proto_info.arg_vars);
       }
-      for (n = n_qwords - 1; n >= 0; n--) {
+      for (n = 0; n < n_qwords; n++) {
         var.name = qword_name (ctx, name, n);
         var.type = qword_types[n];
         VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
