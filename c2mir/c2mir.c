@@ -10015,13 +10015,14 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
 
   proto_info.res_ref_p = FALSE;
   if (void_type_p (func_type->ret_type)) return;
-  if (func_type->ret_type->mode == TM_STRUCT || func_type->ret_type->mode == TM_UNION) {
-    var.name = RET_ADDR_NAME;
-    var.type = MIR_POINTER_TYPE;
-    VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
-    proto_info.res_ref_p = TRUE;
+  if (func_type->ret_type->mode != TM_STRUCT && func_type->ret_type->mode != TM_UNION) {
+    VARR_PUSH (MIR_type_t, proto_info.ret_types, get_mir_type (ctx, func_type->ret_type));
+    return;
   }
-  VARR_PUSH (MIR_type_t, proto_info.ret_types, get_mir_type (ctx, func_type->ret_type));
+  var.name = RET_ADDR_NAME;
+  var.type = MIR_POINTER_TYPE;
+  VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
+  proto_info.res_ref_p = TRUE;
 }
 
 static void target_add_param (MIR_context_t ctx, const char *name, struct type *param_type,
