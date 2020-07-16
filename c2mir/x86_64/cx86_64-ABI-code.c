@@ -162,9 +162,6 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
     VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
     proto_info.res_ref_p = TRUE;
     arg_info->n_iregs++;
-    var.name = RET_VAL_NAME;
-    var.type = MIR_T_UNDEF;
-    VARR_PUSH (MIR_var_t, proto_info.ret_vars, var);
     return;
   } else {
     for (n = n_qwords - 1; n >= 0; n--) {
