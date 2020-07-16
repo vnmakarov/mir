@@ -147,8 +147,11 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
       case MIR_T_F:
       case MIR_T_D: n_fregs++; break;
       case MIR_T_LD: n_stregs++; break;
-      case X87UP_CLASS: n_qwords--; break;
-      case NO_CLASS: break; /* ??? no class */
+      case X87UP_CLASS:
+        n_qwords--;
+        curr--;
+        break;
+      case NO_CLASS:
       case MIR_T_UNDEF: assert (FALSE);
       }
     }
@@ -187,9 +190,9 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
       case MIR_T_I64: n_iregs++; break;
       case MIR_T_F:
       case MIR_T_D: n_fregs++; break;
-      case NO_CLASS: break; /* ??? no class */
       case X87UP_CLASS:
       case MIR_T_LD: n_qwords = 0; goto pass_by_ref;
+      case NO_CLASS:
       case MIR_T_UNDEF: assert (FALSE);
       }
     }
