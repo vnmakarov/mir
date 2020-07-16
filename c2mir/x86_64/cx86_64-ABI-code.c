@@ -132,9 +132,10 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
   MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_type_t qword_types[MAX_QWORDS];
-  int n_iregs, n_fregs, n_stregs, n;
-  int n_qwords = classify_arg (ctx, func_type->ret_type, qword_types, 0, FALSE);
+  int n_iregs, n_fregs, n_stregs, n, n_qwords, curr;
 
+  if (void_type_p (func_type->ret_type)) return;
+  n_qwords = classify_arg (ctx, func_type->ret_type, qword_types, 0, FALSE);
   if (n_qwords != 0) {
     n_iregs = n_fregs = n_stregs = 0;
     for (n = n_qwords - 1; n >= 0; n--) { /* start from the last qword */
