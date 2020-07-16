@@ -90,8 +90,8 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
 
   assert (scalar_type_p (type));
   switch (mir_type = get_mir_type (ctx, type)) {
-  case MIR_T_F:
-  case MIR_T_D: types[0] = mir_type; return 1;
+  case MIR_T_F: types[0] = offset % 8 != 0 ? MIR_T_D : MIR_T_F; return 1;
+  case MIR_T_D: types[0] = MIR_T_D; return 1;
   case MIR_T_LD:
     types[0] = MIR_T_LD;
     types[1] = X87UP_CLASS;
