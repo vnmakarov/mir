@@ -994,8 +994,13 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
                          const void *els) {
   MIR_item_t tab_item, item = create_item (ctx, MIR_data_item, "data");
   MIR_data_t data;
-  size_t el_len = _MIR_type_size (ctx, el_type);
+  size_t el_len;
 
+  if (wrong_type_p (el_type)) {
+    free (item);
+    (*error_func) (MIR_wrong_type_error, "wrong type in data %s", name);
+  }
+  el_len = _MIR_type_size (ctx, el_type);
   item->u.data = data = malloc (sizeof (struct MIR_data) + el_len * nel);
   if (data == NULL) {
     free (item);
@@ -1100,6 +1105,9 @@ static MIR_item_t new_proto_arr (MIR_context_t ctx, const char *name, size_t nre
 
   if (curr_module == NULL)
     (*error_func) (MIR_no_module_error, "Creating proto %s outside module", name);
+  for (size_t i = 0; i < nres; i++)
+    if (wrong_type_p (res_types[i]))
+      (*error_func) (MIR_wrong_type_error, "wrong result type in proto %s", name);
   proto_item = create_item (ctx, MIR_proto_item, "proto");
   proto_item->u.proto = create_proto (ctx, name, nres, res_types, nargs, vararg_p, args);
   tab_item = add_item (ctx, proto_item);
@@ -1166,6 +1174,9 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   if (nargs == 0 && vararg_p)
     (*error_func) (MIR_vararg_func_error, "Variable arg function %s w/o any mandatory argument",
                    name);
+  for (size_t i = 0; i < nres; i++)
+    if (wrong_type_p (res_types[i]))
+      (*error_func) (MIR_wrong_type_error, "wrong result type in func %s", name);
   func_item = create_item (ctx, MIR_func_item, "function");
   curr_func = func_item->u.func = func
     = malloc (sizeof (struct MIR_func) + nres * sizeof (MIR_type_t));
