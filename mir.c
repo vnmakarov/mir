@@ -5155,6 +5155,7 @@ static MIR_type_t str2type (const char *type_name) {
   if (strcmp (type_name, "u16") == 0) return MIR_T_U16;
   if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
   if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
+  if (strcmp (type_name, "undef") == 0) return MIR_T_UNDEF;
   return MIR_T_BOUND;
 }
 
