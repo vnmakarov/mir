@@ -785,6 +785,7 @@ static const char *type_str (MIR_type_t tp) {
   case MIR_T_D: return "d";
   case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
+  case MIR_T_BLK: return "blk";
   case MIR_T_UNDEF: return "undef";
   default: return "";
   }

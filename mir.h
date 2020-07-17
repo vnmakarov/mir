@@ -140,7 +140,7 @@ typedef enum {
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
   REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
-  TYPE_EL (P),                                          /* Pointer */
+  REP2 (P, BLK),                                        /* Pointer and memory block */
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
