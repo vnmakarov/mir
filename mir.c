@@ -1803,7 +1803,7 @@ static MIR_insn_t new_insn1 (MIR_context_t ctx, MIR_insn_code_t code) {
 MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nops, MIR_op_t *ops) {
   MIR_insn_t insn;
   MIR_proto_t proto;
-  size_t args_start, i = 0, expected_nops = insn_code_nops (ctx, code);
+  size_t args_start, narg, i = 0, expected_nops = insn_code_nops (ctx, code);
   mir_assert (ops != NULL);
 
   if (!MIR_call_code_p (code) && code != MIR_UNSPEC && code != MIR_RET && code != MIR_SWITCH
@@ -1831,7 +1831,27 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
       (*error_func) (code == MIR_UNSPEC ? MIR_unspec_op_error : MIR_call_op_error,
                      "number of %s operands or results does not correspond to prototype %s",
                      code == MIR_UNSPEC ? "unspec" : "call", proto->name);
-  } else if (code == MIR_VA_ARG) {
+    for (i = args_start; i < nops; i++) {
+      if (ops[i].mode == MIR_OP_MEM && ops[i].u.mem.type == MIR_T_UNDEF) {
+        if (i - args_start < proto->nres)
+          (*error_func) (MIR_wrong_type_error, "result of %s is undefined type memory",
+                         code == MIR_UNSPEC ? "unspec" : "call");
+        else if ((narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
+                 && VARR_GET (MIR_var_t, proto->args, narg).type != MIR_T_UNDEF) {
+          (*error_func) (MIR_wrong_type_error,
+                         "arg of %s is undefined type memory but param is not of undefined type",
+                         code == MIR_UNSPEC ? "unspec" : "call");
+        }
+      } else if (i - args_start >= proto->nres
+                 && (narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
+                 && VARR_GET (MIR_var_t, proto->args, narg).type == MIR_T_UNDEF) {
+        (*error_func) (MIR_wrong_type_error,
+                       "param of %s is of undefined type but arg is not of undefined type memory "
+                       "but ",
+                       code == MIR_UNSPEC ? "unspec" : "call");
+      }
+    }
+  } else if (code == MIR_VA_ARG) {  // undef mem ???
     if (ops[2].mode != MIR_OP_MEM)
       (*error_func) (MIR_op_mode_error,
                      "3rd operand of va_arg should be any memory with given type");
