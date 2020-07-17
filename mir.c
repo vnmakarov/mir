@@ -989,7 +989,7 @@ size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type) {
   }
 }
 
-static int wrong_type_p (MIR_type_t type) { return type < MIR_T_I8 || type >= MIR_T_UNDEF; }
+static int wrong_type_p (MIR_type_t type) { return type < MIR_T_I8 || type >= MIR_T_BLK; }
 
 MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel,
                          const void *els) {
@@ -1379,7 +1379,7 @@ void MIR_finish_func (MIR_context_t ctx) {
       case MIR_OP_MEM:
         expr_p = FALSE;
         if (wrong_type_p (insn->ops[i].u.mem.type)
-            && (insn->ops[i].u.mem.type != MIR_T_UNDEF || !MIR_call_code_p (code))) {
+            && (insn->ops[i].u.mem.type != MIR_T_BLK || !MIR_call_code_p (code))) {
           curr_func = NULL;
           (*error_func) (MIR_wrong_type_error, "func %s: in instruction '%s': wrong type memory",
                          func_name, insn_descs[code].name);
@@ -1835,21 +1835,21 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
                      "number of %s operands or results does not correspond to prototype %s",
                      code == MIR_UNSPEC ? "unspec" : "call", proto->name);
     for (i = args_start; i < nops; i++) {
-      if (ops[i].mode == MIR_OP_MEM && ops[i].u.mem.type == MIR_T_UNDEF) {
+      if (ops[i].mode == MIR_OP_MEM && ops[i].u.mem.type == MIR_T_BLK) {
         if (i - args_start < proto->nres)
-          (*error_func) (MIR_wrong_type_error, "result of %s is undefined type memory",
+          (*error_func) (MIR_wrong_type_error, "result of %s is block type memory",
                          code == MIR_UNSPEC ? "unspec" : "call");
         else if ((narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
-                 && VARR_GET (MIR_var_t, proto->args, narg).type != MIR_T_UNDEF) {
+                 && VARR_GET (MIR_var_t, proto->args, narg).type != MIR_T_BLK) {
           (*error_func) (MIR_wrong_type_error,
-                         "arg of %s is undefined type memory but param is not of undefined type",
+                         "arg of %s is block type memory but param is not of block type",
                          code == MIR_UNSPEC ? "unspec" : "call");
         }
       } else if (i - args_start >= proto->nres
                  && (narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
-                 && VARR_GET (MIR_var_t, proto->args, narg).type == MIR_T_UNDEF) {
+                 && VARR_GET (MIR_var_t, proto->args, narg).type == MIR_T_BLK) {
         (*error_func) (MIR_wrong_type_error,
-                       "param of %s is of undefined type but arg is not of undefined type memory "
+                       "param of %s is of block type but arg is not of block type memory "
                        "but ",
                        code == MIR_UNSPEC ? "unspec" : "call");
       }
@@ -5158,7 +5158,7 @@ static MIR_type_t str2type (const char *type_name) {
   if (strcmp (type_name, "u16") == 0) return MIR_T_U16;
   if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
   if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
-  if (strcmp (type_name, "undef") == 0) return MIR_T_UNDEF;
+  if (strcmp (type_name, "blk") == 0) return MIR_T_BLK;
   return MIR_T_BOUND;
 }
 
