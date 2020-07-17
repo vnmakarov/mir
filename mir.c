@@ -988,6 +988,8 @@ size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type) {
   }
 }
 
+static int wrong_type_p (MIR_type_t type) { return type < MIR_T_I8 || type >= MIR_T_UNDEF; }
+
 MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel,
                          const void *els) {
   MIR_item_t tab_item, item = create_item (ctx, MIR_data_item, "data");
