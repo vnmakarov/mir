@@ -1329,11 +1329,13 @@ void MIR_finish_func (MIR_context_t ctx) {
       (*error_func) (MIR_vararg_func_error, "func %s: va_start is not in vararg function",
                      func_name);
     } else if (code == MIR_RET && actual_nops != curr_func->nres) {
+      int nres = curr_func->nres;
+
       curr_func = NULL;
       (*error_func) (MIR_vararg_func_error,
                      "func %s: in instruction '%s': number of operands in return does not "
                      "correspond number of function returns. Expected %d, got %d",
-                     func_name, insn_descs[code].name, curr_func->nres, actual_nops);
+                     func_name, insn_descs[code].name, nres, actual_nops);
     } else if (MIR_call_code_p (code))
       expr_p = FALSE;
     for (i = 0; i < actual_nops; i++) {
