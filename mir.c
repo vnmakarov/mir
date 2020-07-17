@@ -1375,6 +1375,12 @@ void MIR_finish_func (MIR_context_t ctx) {
         break;
       case MIR_OP_MEM:
         expr_p = FALSE;
+        if (wrong_type_p (insn->ops[i].u.mem.type)
+            && (insn->ops[i].u.mem.type != MIR_T_UNDEF || !MIR_call_code_p (code))) {
+          curr_func = NULL;
+          (*error_func) (MIR_wrong_type_error, "func %s: in instruction '%s': wrong type memory",
+                         func_name, insn_descs[code].name);
+        }
         if (insn->ops[i].u.mem.base != 0) {
           rd = find_rd_by_reg (ctx, insn->ops[i].u.mem.base, curr_func);
           mir_assert (rd != NULL && insn->ops[i].u.mem.base == rd->reg);
