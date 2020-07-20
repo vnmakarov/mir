@@ -4020,6 +4020,7 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
     var = VARR_GET (MIR_var_t, func->vars, i);
     len += write_type (ctx, writer, var.type);
     len += write_name (ctx, writer, var.name);
+    if (var.type == MIR_T_BLK) len += write_uint (ctx, writer, var.size);
   }
   len += put_byte (ctx, writer, TAG_EOI);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
@@ -4434,6 +4435,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
       (*error_func) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
     var.name = read_name (ctx, module, "wrong arg name");
+    if (var.type == MIR_T_BLK) var.size = read_uint (ctx, "wrong block arg size");
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
   *nres_ptr = nres;
