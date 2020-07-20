@@ -5151,7 +5151,9 @@ static void read_func_proto (MIR_context_t ctx, size_t nops, MIR_op_t *ops) {
     if (ops[i].mode != MIR_OP_MEM) scan_error (ctx, "wrong prototype/func arg");
     var.type = ops[i].u.mem.type;
     var.name = (const char *) ops[i].u.mem.disp;
-    if (var.name == NULL) scan_error (ctx, "all func/prototype args should have type:name form");
+    if (var.name == NULL)
+      scan_error (ctx, "all func/prototype args should have form type:name or blk:size(name)");
+    if (var.type == MIR_T_BLK) var.size = ops[i].u.mem.base;
     VARR_PUSH (MIR_var_t, temp_vars, var);
   }
 }
@@ -5354,8 +5356,21 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         if (proto_p || func_p || local_p) {
           if (t.code == TC_COL) {
             scan_token (ctx, &t, get_string_char, unget_string_char);
-            if (t.code != TC_NAME) scan_error (ctx, func_p ? "wrong arg" : "wrong local var");
-            op.u.mem.disp = (MIR_disp_t) t.u.name;
+            if (t.code == TC_NAME) {
+              op.u.mem.disp = (MIR_disp_t) t.u.name;
+            } else if (local_p || t.code != TC_INT || type != MIR_T_BLK) {
+              scan_error (ctx, local_p ? "wrong var" : "wrong arg");
+            } else {
+              op.u.mem.base = t.u.i;
+              if (t.u.i <= 0 || t.u.i >= (1l << sizeof (MIR_reg_t) * 8))
+                scan_error (ctx, "invalid block arg size");
+              if (t.code != TC_LEFT_PAR) scan_error (ctx, "wrong block arg");
+              scan_token (ctx, &t, get_string_char, unget_string_char);
+              if (t.code != TC_NAME) scan_error (ctx, "wrong block arg");
+              op.u.mem.disp = (MIR_disp_t) t.u.name;
+              scan_token (ctx, &t, get_string_char, unget_string_char);
+              if (t.code != TC_RIGHT_PAR) scan_error (ctx, "wrong block arg");
+            }
             scan_token (ctx, &t, get_string_char, unget_string_char);
           }
         } else {
