@@ -257,8 +257,9 @@ struct MIR_insn {
 DEF_DLIST (MIR_insn_t, insn_link);
 
 typedef struct MIR_var {
-  MIR_type_t type;
+  MIR_type_t type; /* MIR_T_BLK can be used only args */
   const char *name;
+  size_t size; /* ignored for type != MIR_T_BLK */
 } MIR_var_t;
 
 DEF_VARR (MIR_var_t);
