@@ -2427,7 +2427,10 @@ static void output_func_proto (FILE *f, size_t nres, MIR_type_t *types, size_t n
     var = VARR_GET (MIR_var_t, args, i);
     if (i != 0 || nres != 0) fprintf (f, ", ");
     mir_assert (var.name != NULL);
-    fprintf (f, "%s:%s", MIR_type_str (NULL, var.type), var.name);
+    if (var.type != MIR_T_BLK)
+      fprintf (f, "%s:%s", MIR_type_str (NULL, var.type), var.name);
+    else
+      fprintf (f, "%s:%lu(%s)", MIR_type_str (NULL, var.type), (unsigned long) var.size, var.name);
   }
   if (vararg_p) fprintf (f, nargs == 0 && nres == 0 ? "..." : ", ...");
   fprintf (f, "\n");
