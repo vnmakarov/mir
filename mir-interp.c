@@ -1472,7 +1472,8 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     case MIR_T_F: call_res_args[i + nres].f = arg_vals[i].f; break;
     case MIR_T_D: call_res_args[i + nres].d = arg_vals[i].d; break;
     case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
-    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
+    case MIR_T_P:
+    case MIR_T_BLK: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
     default: mir_assert (FALSE);
     }
   }
