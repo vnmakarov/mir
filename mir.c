@@ -1845,11 +1845,18 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
         if (i - args_start < proto->nres)
           (*error_func) (MIR_wrong_type_error, "result of %s is block type memory",
                          code == MIR_UNSPEC ? "unspec" : "call");
-        else if ((narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
-                 && VARR_GET (MIR_var_t, proto->args, narg).type != MIR_T_BLK) {
-          (*error_func) (MIR_wrong_type_error,
-                         "arg of %s is block type memory but param is not of block type",
-                         code == MIR_UNSPEC ? "unspec" : "call");
+        else if ((narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)) {
+          if (VARR_GET (MIR_var_t, proto->args, narg).type != MIR_T_BLK) {
+            (*error_func) (MIR_wrong_type_error,
+                           "arg of %s is block type memory but param is not of block type",
+                           code == MIR_UNSPEC ? "unspec" : "call");
+          } else if (VARR_GET (MIR_var_t, proto->args, narg).size != ops[i].u.mem.disp) {
+            (*error_func) (MIR_wrong_type_error,
+                           "different sizes (%lu vs %lu) of arg and param block memory in %s insn",
+                           (unsigned long) VARR_GET (MIR_var_t, proto->args, narg).size,
+                           (unsigned long) ops[i].u.mem.disp,
+                           code == MIR_UNSPEC ? "unspec" : "call");
+          }
         }
       } else if (i - args_start >= proto->nres
                  && (narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
