@@ -181,6 +181,23 @@ static void gen_mov (MIR_context_t ctx, uint32_t offset, uint32_t reg, int ld_p)
   addr[2] |= (reg & 7) << 3;
 }
 
+static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offset,
+                         uint32_t qwords) {
+  static const uint8_t blk_mov_pat[] = {
+    /*0:*/ 0x4c,  0x8b, 0xa3, 0,    0, 0, 0,    /*mov <addr_offset>(%rbx),%r12*/
+    /*7:*/ 0x48,  0xc7, 0xc0, 0,    0, 0, 0,    /*mov <qwords>,%rax*/
+    /*e:*/ 0x48,  0x83, 0xe8, 0x01,             /*sub $0x1,%rax*/
+    /*12:*/ 0x4d, 0x8b, 0x14, 0xc4,             /*mov (%r12,%rax,8),%r10*/
+    /*16:*/ 0x4c, 0x89, 0x94, 0xc4, 0, 0, 0, 0, /*mov %r10,<offset>(%rsp,%rax,8)*/
+    /*1e:*/ 0x48, 0x85, 0xc0,                   /*test %rax,%rax*/
+    /*21:*/ 0x7f, 0xeb,                         /*jg f <L0>*/
+  };
+  uint8_t *addr = push_insns (ctx, blk_mov_pat, sizeof (blk_mov_pat));
+  memcpy (addr + 3, &addr_offset, sizeof (uint32_t));
+  memcpy (addr + 10, &qwords, sizeof (uint32_t));
+  memcpy (addr + 26, &offset, sizeof (uint32_t));
+}
+
 static void gen_movxmm (MIR_context_t ctx, uint32_t offset, uint32_t reg, int b32_p, int ld_p) {
   static const uint8_t ld_xmm_reg_pat[] = {
     0xf2, 0x0f, 0x10, 0x83, 0, 0, 0, 0 /* movs[sd] <offset>(%rbx),%xmm */
