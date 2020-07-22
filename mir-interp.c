@@ -28,10 +28,14 @@ typedef struct func_desc {
   MIR_val_t code[1];
 } * func_desc_t;
 
+static void update_max_nreg (MIR_reg_t reg, MIR_reg_t *max_nreg) {
+  if (*max_nreg < reg) *max_nreg = reg;
+}
+
 static MIR_reg_t get_reg (MIR_op_t op, MIR_reg_t *max_nreg) {
   /* We do not interpret code with hard regs */
   mir_assert (op.mode == MIR_OP_REG);
-  if (*max_nreg < op.u.reg) *max_nreg = op.u.reg;
+  update_max_nreg (op.u.reg, max_nreg);
   return op.u.reg;
 }
 
@@ -392,6 +396,10 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         } else if (code == MIR_SWITCH && i > 0) {
           mir_assert (ops[i].mode == MIR_OP_LABEL);
           v.i = 0;
+        } else if (MIR_call_code_p (code) && ops[i].mode == MIR_OP_MEM) {
+          mir_assert (ops[i].u.mem.type == MIR_T_BLK);
+          v.i = ops[i].u.mem.base;
+          update_max_nreg (v.i, &max_nreg);
         } else {
           mir_assert (ops[i].mode == MIR_OP_REG);
           v.i = get_reg (ops[i], &max_nreg);
