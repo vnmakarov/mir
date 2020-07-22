@@ -2796,7 +2796,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
                 || (code == MIR_VA_END && nop == 0))
                && mem_op.u.mem.type == MIR_T_UNDEF) {
       *op = MIR_new_reg_op (ctx, addr_reg);
-    } else {
+    } else if (mem_op.u.mem.type != MIR_T_BLK || !MIR_call_code_p (code)) {
       type = (mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D
                   || mem_op.u.mem.type == MIR_T_LD
                 ? mem_op.u.mem.type
