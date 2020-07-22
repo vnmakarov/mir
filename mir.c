@@ -1644,8 +1644,8 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
         process_inlines (ctx, item);
         item->data = NULL;
 #if 0
-	fprintf (stderr, "+++++ Function after inlining:\n");
-	MIR_output_item (ctx, stderr, func_item);
+        fprintf (stderr, "+++++ Function after inlining:\n");
+        MIR_output_item (ctx, stderr, item);
 #endif
       } else if (item->item_type == MIR_ref_data_item) {
         assert (item->u.ref_data->ref_item->addr != NULL);
