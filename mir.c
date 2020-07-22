@@ -5364,6 +5364,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
               op.u.mem.base = t.u.i;
               if (t.u.i <= 0 || t.u.i >= (1l << sizeof (MIR_reg_t) * 8))
                 scan_error (ctx, "invalid block arg size");
+              scan_token (ctx, &t, get_string_char, unget_string_char);
               if (t.code != TC_LEFT_PAR) scan_error (ctx, "wrong block arg");
               scan_token (ctx, &t, get_string_char, unget_string_char);
               if (t.code != TC_NAME) scan_error (ctx, "wrong block arg");
