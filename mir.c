@@ -1431,7 +1431,8 @@ void MIR_finish_func (MIR_context_t ctx) {
       }
       insn->ops[i].value_mode = mode;
       if (mode == MIR_OP_UNDEF && insn->ops[i].mode == MIR_OP_MEM
-          && ((code == MIR_VA_START && i == 0) || (code == MIR_VA_ARG && i == 1)
+          && ((code == MIR_VA_START && i == 0)
+              || ((code == MIR_VA_ARG || code == MIR_VA_STACK_ARG) && i == 1)
               || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
         insn->ops[i].value_mode = expected_mode;
       } else if (expected_mode != MIR_OP_UNDEF
@@ -2795,7 +2796,8 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     mem_op.u.mem.scale = 0;
     if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
-    } else if (((code == MIR_VA_START && nop == 0) || (code == MIR_VA_ARG && nop == 1)
+    } else if (((code == MIR_VA_START && nop == 0)
+                || ((code == MIR_VA_ARG || code == MIR_VA_STACK_ARG) && nop == 1)
                 || (code == MIR_VA_END && nop == 0))
                && mem_op.u.mem.type == MIR_T_UNDEF) {
       *op = MIR_new_reg_op (ctx, addr_reg);
@@ -3244,8 +3246,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       inline_insns_after++;
       actual_nops = MIR_insn_nops (ctx, insn);
       new_insn = MIR_copy_insn (ctx, insn);
-      mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_START
-                  && insn->code != MIR_VA_END);
+      mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_STACK_ARG
+                  && insn->code != MIR_VA_START && insn->code != MIR_VA_END);
       if (insn->code == MIR_ALLOCA) alloca_p = TRUE;
       for (i = 0; i < actual_nops; i++) switch (new_insn->ops[i].mode) {
         case MIR_OP_REG:
