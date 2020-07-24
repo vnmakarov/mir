@@ -590,6 +590,7 @@ extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
 extern void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...);
 
 extern void *va_arg_builtin (void *p, uint64_t t);
+extern void *va_stack_arg_builtin (void *p, size_t s);
 extern void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a);
 extern void va_end_interp_builtin (MIR_context_t ctx, void *p);
 
