@@ -3155,6 +3155,45 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 #define MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE MIR_MAX_INSNS_FOR_INLINE
 #endif
 
+static void add_blk_move (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t before, MIR_op_t dest,
+                          MIR_op_t src, size_t src_size) { /* simplified MIR only */
+  MIR_func_t func = func_item->u.func;
+  size_t blk_size = (src_size + 7) / 8 * 8;
+  MIR_insn_t insn;
+  MIR_reg_t addr_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
+  MIR_op_t addr = MIR_new_reg_op (ctx, addr_reg);
+  MIR_op_t disp = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx, MIR_T_I64, func));
+  MIR_op_t size = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx, MIR_T_I64, func));
+  MIR_op_t step = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx, MIR_T_I64, func));
+  MIR_op_t temp = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx, MIR_T_I64, func));
+  MIR_label_t loop = MIR_new_label (ctx), skip = MIR_new_label (ctx);
+
+  insn = MIR_new_insn (ctx, MIR_MOV, size, MIR_new_int_op (ctx, blk_size));
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_ALLOCA, dest, size);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_MOV, disp, MIR_new_int_op (ctx, 0));
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_BLT, MIR_new_label_op (ctx, skip), size, disp);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  MIR_insert_insn_before (ctx, func_item, before, loop);
+  insn = MIR_new_insn (ctx, MIR_ADD, addr, src, disp);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_MOV, temp, MIR_new_mem_op (ctx, MIR_T_I64, 0, addr_reg, 0, 1));
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_ADD, addr, dest, disp);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, addr_reg, 0, 1), temp);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_MOV, step, MIR_new_int_op (ctx, 8));
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_ADD, disp, disp, step);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  insn = MIR_new_insn (ctx, MIR_BLT, MIR_new_label_op (ctx, loop), disp, size);
+  MIR_insert_insn_before (ctx, func_item, before, insn);
+  MIR_insert_insn_before (ctx, func_item, before, skip);
+}
+
 /* Only simplified code should be inlined because we need already
    extensions and one return.  */
 static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
@@ -3166,7 +3205,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_insn, ret_label;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
-  size_t func_insns_num, called_func_insns_num;
+  size_t func_insns_num, called_func_insns_num, blk_size;
   char buff[50];
 
   mir_assert (func_item->item_type == MIR_func_item);
@@ -3225,13 +3264,21 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, temp_string));
       set_inline_reg_map (ctx, old_reg, new_reg);
       if (i < nargs && call->nops > i + 2 + called_func->nres) { /* Parameter passing */
-        new_insn
-          = MIR_new_insn (ctx,
-                          type == MIR_T_F
-                            ? MIR_FMOV
-                            : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
-                          MIR_new_reg_op (ctx, new_reg), call->ops[i + 2 + called_func->nres]);
-        MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
+        if (var.type == MIR_T_BLK) {                             /* alloca and block move: */
+          MIR_op_t op = call->ops[i + 2 + called_func->nres];
+
+          mir_assert (op.mode == MIR_OP_MEM);
+          add_blk_move (ctx, func_item, ret_label, MIR_new_reg_op (ctx, new_reg),
+                        MIR_new_reg_op (ctx, op.u.mem.base), var.size);
+        } else {
+          new_insn
+            = MIR_new_insn (ctx,
+                            type == MIR_T_F
+                              ? MIR_FMOV
+                              : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
+                            MIR_new_reg_op (ctx, new_reg), call->ops[i + 2 + called_func->nres]);
+          MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
+        }
       }
     }
     /* ??? No frame only alloca */
