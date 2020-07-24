@@ -11738,6 +11738,7 @@ static htab_hash_t proto_hash (MIR_item_t pi, void *arg) {
   for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, p->args); i++) {
     h = mir_hash_step (h, args[i].type);
     h = mir_hash_step (h, mir_hash (args[i].name, strlen (args[i].name), 24));
+    if (args[i].type == MIR_T_BLK) h = mir_hash_step (h, args[i].size);
   }
   return mir_hash_finish (h);
 }
@@ -11754,7 +11755,9 @@ static int proto_eq (MIR_item_t pi1, MIR_item_t pi2, void *arg) {
   MIR_var_t *args1 = VARR_ADDR (MIR_var_t, p1->args), *args2 = VARR_ADDR (MIR_var_t, p2->args);
 
   for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, p1->args); i++)
-    if (args1[i].type != args2[i].type || strcmp (args1[i].name, args2[i].name) != 0) return FALSE;
+    if (args1[i].type != args2[i].type || strcmp (args1[i].name, args2[i].name) != 0
+        || args1[i].type == MIR_T_BLK && args1[i].size != args2[i].size)
+      return FALSE;
   return TRUE;
 }
 
