@@ -555,10 +555,20 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   start_sp_from_bp_offset = 8;
   for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
-    /* Prologue: generate arg_var = hard_reg|stack mem ... */
+    /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
     type = VARR_GET (MIR_var_t, func->vars, i).type;
-    arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code);
-    if (arg_reg != MIR_NON_HARD_REG) {
+    if (type == MIR_T_BLK) {
+      stack_arg_func_p = TRUE;
+      new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
+                               _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
+                               MIR_new_int_op (ctx, mem_size + 8 /* ret */
+                                                      + start_sp_from_bp_offset));
+      MIR_prepend_insn (ctx, curr_func_item, new_insn);
+      next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+      create_new_bb_insns (gen_ctx, NULL, next_insn, NULL);
+      mem_size += (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8 * 8;
+    } else if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code))
+               != MIR_NON_HARD_REG) {
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
       MIR_prepend_insn (ctx, curr_func_item, new_insn);
