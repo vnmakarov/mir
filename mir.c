@@ -1387,11 +1387,11 @@ void MIR_finish_func (MIR_context_t ctx) {
           (*error_func) (MIR_wrong_type_error, "func %s: in instruction '%s': wrong type memory",
                          func_name, insn_descs[code].name);
         }
-        if (insn->ops[i].u.mem.type == MIR_T_BLK && insn->ops[i].u.mem.disp <= 0) {
+        if (insn->ops[i].u.mem.type == MIR_T_BLK && insn->ops[i].u.mem.disp < 0) {
           curr_func = NULL;
           (*error_func) (MIR_wrong_type_error,
-                         "func %s: in instruction '%s': block type memory with disp <= 0",
-                         func_name, insn_descs[code].name);
+                         "func %s: in instruction '%s': block type memory with disp < 0", func_name,
+                         insn_descs[code].name);
         }
         if (insn->ops[i].u.mem.base != 0) {
           rd = find_rd_by_reg (ctx, insn->ops[i].u.mem.base, curr_func);
