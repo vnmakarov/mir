@@ -9614,14 +9614,26 @@ static op_t promote (MIR_context_t ctx, op_t op, MIR_type_t t, int new_op_p) {
   return cast (ctx, op, t, new_op_p);
 }
 
-static op_t mem_to_address (MIR_context_t ctx, op_t mem) {
+static op_t mem_to_address (MIR_context_t ctx, op_t mem, int reg_p) {
   op_t temp;
 
-  if (mem.mir_op.mode == MIR_OP_STR) return mem;
+  if (mem.mir_op.mode == MIR_OP_STR) {
+    if (!reg_p) return mem;
+    temp = get_new_temp (ctx, MIR_T_I64);
+    emit2 (ctx, MIR_MOV, temp.mir_op, mem.mir_op);
+    temp.mir_op.value_mode = MIR_OP_INT;
+    return temp;
+  }
   assert (mem.mir_op.mode == MIR_OP_MEM);
   if (mem.mir_op.u.mem.base == 0 && mem.mir_op.u.mem.index == 0) {
-    mem.mir_op.mode = MIR_OP_INT;
-    mem.mir_op.u.i = mem.mir_op.u.mem.disp;
+    if (!reg_p) {
+      mem.mir_op.mode = MIR_OP_INT;
+      mem.mir_op.u.i = mem.mir_op.u.mem.disp;
+    } else {
+      temp = get_new_temp (ctx, MIR_T_I64);
+      emit2 (ctx, MIR_MOV, temp.mir_op, MIR_new_int_op (ctx, mem.mir_op.u.mem.disp));
+      mem = temp;
+    }
   } else if (mem.mir_op.u.mem.index == 0 && mem.mir_op.u.mem.disp == 0) {
     mem.mir_op.mode = MIR_OP_REG;
     mem.mir_op.u.reg = mem.mir_op.u.mem.base;
@@ -9654,7 +9666,7 @@ static op_t force_val (MIR_context_t ctx, op_t op, int arr_p) {
 
   if (arr_p && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
-    return mem_to_address (ctx, op);
+    return mem_to_address (ctx, op, FALSE);
   }
   if (op.decl == NULL || op.decl->bit_offset < 0) return op;
   c2m_ctx = *c2m_ctx_loc (ctx);
@@ -9935,7 +9947,7 @@ static void block_move (MIR_context_t ctx, op_t var, op_t val, mir_size_t size) 
 
   if (MIR_op_eq_p (ctx, var.mir_op, val.mir_op)) return;
   if (size > 5) {
-    var = mem_to_address (ctx, var);
+    var = mem_to_address (ctx, var, TRUE);
     assert (var.mir_op.mode == MIR_OP_REG);
     gen_memcpy (ctx, 0, var.mir_op.u.reg, val, size);
   } else {
@@ -10326,7 +10338,7 @@ static void gen_memcpy (MIR_context_t ctx, MIR_disp_t disp, MIR_reg_t base, op_t
     emit3 (ctx, MIR_ADD, treg_op, MIR_new_reg_op (ctx, base), MIR_new_int_op (ctx, disp));
   }
   args[3] = treg_op;
-  args[4] = mem_to_address (ctx, val).mir_op;
+  args[4] = mem_to_address (ctx, val, FALSE).mir_op;
   args[5] = MIR_new_uint_op (ctx, len);
   emit_insn (ctx, MIR_new_insn_arr (ctx, MIR_CALL, 6 /* args + proto + func + res */, args));
 }
@@ -11070,7 +11082,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
       } else if (desirable_dest == NULL) {
         res = get_new_temp (ctx, MIR_T_I64);
-        addr = mem_to_address (ctx, op1);
+        addr = mem_to_address (ctx, op1, FALSE);
         emit2 (ctx, MIR_MOV, res.mir_op, addr.mir_op);
       } else {
         block_move (ctx, *desirable_dest, op1, size);
@@ -11085,7 +11097,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         op1 = cast (ctx, op1, t, FALSE);
         emit2 (ctx, tp_mov (t), res.mir_op, op1.mir_op);
       } else if (desirable_dest == NULL) {
-        addr = mem_to_address (ctx, op1);
+        addr = mem_to_address (ctx, op1, FALSE);
         emit2 (ctx, MIR_MOV, res.mir_op, addr.mir_op);
         res = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, res.mir_op.u.reg, 0, 1));
       } else {
@@ -11229,7 +11241,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
                 || func_type->u.func_type->dots_p);
         if (struct_p) { /* pass an adress of struct/union: */
           assert (op2.mir_op.mode == MIR_OP_MEM);
-          op2 = mem_to_address (ctx, op2);
+          op2 = mem_to_address (ctx, op2, FALSE);
         } else if (param != NULL) {
           assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
           decl_spec = get_param_decl_spec (param);
