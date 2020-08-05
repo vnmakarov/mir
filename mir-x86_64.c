@@ -190,7 +190,7 @@ static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offse
     /*12:*/ 0x4d, 0x8b, 0x14, 0xc4,             /*mov (%r12,%rax,8),%r10*/
     /*16:*/ 0x4c, 0x89, 0x94, 0xc4, 0, 0, 0, 0, /*mov %r10,<offset>(%rsp,%rax,8)*/
     /*1e:*/ 0x48, 0x85, 0xc0,                   /*test %rax,%rax*/
-    /*21:*/ 0x7f, 0xeb,                         /*jg f <L0>*/
+    /*21:*/ 0x7f, 0xeb,                         /*jg e <L0>*/
   };
   uint8_t *addr = push_insns (ctx, blk_mov_pat, sizeof (blk_mov_pat));
   memcpy (addr + 3, &addr_offset, sizeof (uint32_t));
