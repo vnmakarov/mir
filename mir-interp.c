@@ -1656,7 +1656,13 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_D: arg_vals[i].d = va_arg (va, double); break;
     case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
     case MIR_T_P: arg_vals[i].a = va_arg (va, void *); break;
-    case MIR_T_BLK: arg_vals[i].a = va_stack_arg_builtin (va, arg_vars[i].size); break;
+    case MIR_T_BLK:
+#if VA_LIST_IS_ARRAY_P
+      arg_vals[i].a = va_stack_arg_builtin (&va, arg_vars[i].size);
+#else
+      arg_vals[i].a = va_stack_arg_builtin (va, arg_vars[i].size);
+#endif
+      break;
     default: mir_assert (FALSE);
     }
   }
