@@ -219,6 +219,14 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
+void *va_stack_arg_builtin (void *p, size_t s) {
+  struct ppc64_va_list *va = p;
+  void *a = va->arg_area;
+
+  va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  return a;
+}
+
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   struct ppc64_va_list **va = p;
   va_list *vap = a;
