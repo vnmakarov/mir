@@ -391,8 +391,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   int vararg_p = func->vararg_p;
   MIR_type_t type, *res_types = func->res_types;
   MIR_var_t *arg_vars = VARR_ADDR (MIR_var_t, func->vars);
-  int disp, size, frame_size, local_var_size, param_offset, va_reg = 11, caller_r1 = 12,
-                                                            res_reg = 14;
+  int disp, start_disp, qwords, size, frame_size, local_var_size, param_offset;
+  int va_reg = 11, caller_r1 = 12, res_reg = 14;
   int n_gpregs, n_fpregs;
   static uint32_t start_pattern[] = {
     0x7c0802a6, /* mflr r0 */
@@ -406,27 +406,28 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   frame_size = PPC64_STACK_HEADER_SIZE + 64; /* header + 8(param area) */
-  local_var_size = nres * 16 + 8;            /* saved r14, results */
+  local_var_size = nres * 16 + 16;           /* saved r14, r15, results */
   if (vararg_p) {
     for (unsigned reg = 3; reg <= 10; reg++) /* std rn,dispn(r1) : */
       ppc64_gen_st (ctx, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8, MIR_T_I64);
     ppc64_gen_addi (ctx, va_reg, 1, PPC64_STACK_HEADER_SIZE);
   } else {
     ppc64_gen_mov (ctx, caller_r1, 1); /* caller frame r1 */
-    for (uint32_t i = 0; i < nargs; i++) {
-      type = arg_vars[i].type;
-      local_var_size += type == MIR_T_LD ? 16 : 8;
-    }
+    for (uint32_t i = 0; i < nargs; i++)
+      if ((type = arg_vars[i].type) == MIR_T_BLK)
+        local_var_size += (arg_vars[i].size + 7) / 8 * 8;
+      else
+        local_var_size += type == MIR_T_LD ? 16 : 8;
   }
   frame_size += local_var_size;
   if (frame_size % 16 != 0) frame_size += 8; /* align */
   push_insns (ctx, start_pattern, sizeof (start_pattern));
   ppc64_gen_stdu (ctx, -frame_size);
   ppc64_gen_st (ctx, res_reg, 1, PPC64_STACK_HEADER_SIZE + 64, MIR_T_I64); /* save res_reg */
+  ppc64_gen_st (ctx, 15, 1, PPC64_STACK_HEADER_SIZE + 72, MIR_T_I64);      /* save r15 */
   if (!vararg_p) { /* save args in local vars: */
-    /* header_size + 64 + nres * 16 + 8 -- start of stack memory to keep args: */
-    disp = PPC64_STACK_HEADER_SIZE + 64 + nres * 16 + 8;
-    ppc64_gen_addi (ctx, va_reg, 1, disp);
+    /* header_size + 64 + nres * 16 + 16 -- start of stack memory to keep args: */
+    start_disp = disp = PPC64_STACK_HEADER_SIZE + 64 + nres * 16 + 16;
     param_offset = PPC64_STACK_HEADER_SIZE;
     n_gpregs = n_fpregs = 0;
     for (uint32_t i = 0; i < nargs; i++) {
@@ -443,6 +444,16 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
             ppc64_gen_st (ctx, 0, 1, disp + 8, MIR_T_D);
           }
         }
+      } else if (type == MIR_T_BLK) {  // ??? FBLK
+        qwords = (arg_vars[i].size + 7) / 8;
+        for (; qwords > 0 && n_gpregs < 8; qwords--, n_gpregs++, disp += 8, param_offset += 8)
+          ppc64_gen_st (ctx, n_gpregs + 3, 1, disp, MIR_T_I64);
+        if (qwords > 0) {
+          gen_blk_mov (ctx, disp, caller_r1, param_offset, qwords);
+          disp += qwords * 8;
+          param_offset += qwords * 8;
+        }
+        continue;
       } else if (n_gpregs < 8) {
         ppc64_gen_st (ctx, n_gpregs + 3, 1, disp, MIR_T_I64);
       } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
@@ -461,8 +472,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       param_offset += size;
       n_gpregs += type == MIR_T_LD ? 2 : 1;
     }
+    ppc64_gen_addi (ctx, va_reg, 1, start_disp);
   }
-  ppc64_gen_addi (ctx, res_reg, 1, 64 + PPC64_STACK_HEADER_SIZE + 8);
+  ppc64_gen_addi (ctx, res_reg, 1, 64 + PPC64_STACK_HEADER_SIZE + 16);
   ppc64_gen_address (ctx, 3, ctx);
   ppc64_gen_address (ctx, 4, func_item);
   ppc64_gen_mov (ctx, 5, va_reg);
@@ -490,6 +502,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     disp += 16;
   }
   ppc64_gen_ld (ctx, res_reg, 1, PPC64_STACK_HEADER_SIZE + 64, MIR_T_I64); /* restore res_reg */
+  ppc64_gen_ld (ctx, 15, 1, PPC64_STACK_HEADER_SIZE + 72, MIR_T_I64);      /* restore r15 */
   ppc64_gen_addi (ctx, 1, 1, frame_size);
   push_insns (ctx, finish_pattern, sizeof (finish_pattern));
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
