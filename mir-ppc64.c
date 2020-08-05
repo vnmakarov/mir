@@ -59,6 +59,10 @@ static void ppc64_gen_addi (MIR_context_t ctx, unsigned rt_reg, unsigned ra_reg,
   push_insn (ctx, (14 << 26) | (rt_reg << 21) | (ra_reg << 16) | (disp & 0xffff));
 }
 
+static void ppc64_gen_add (MIR_context_t ctx, unsigned rt_reg, unsigned ra_reg, unsigned rb_reg) {
+  push_insn (ctx, (31 << 26) | (266 << 1) | (rt_reg << 21) | (ra_reg << 16) | (rb_reg << 11));
+}
+
 static void ppc64_gen_ld (MIR_context_t ctx, unsigned to, unsigned base, int disp,
                           MIR_type_t type) {
   int single_p = type == MIR_T_F;
