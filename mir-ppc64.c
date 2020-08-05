@@ -120,6 +120,30 @@ static void ppc64_gen_jump (MIR_context_t ctx, unsigned int reg, int call_p) {
   push_insn (ctx, (19 << 26) | (528 << 1) | (20 << 21) | (call_p ? 1 : 0)); /* bcctr[l] */
 }
 
+/* r11=addr_reg+addr_disp; r15=r1(sp)+sp_offset; r0=qwords-1;
+   ctr=r0; L: r0=mem[r11]; r11+=8; mem[r15]=r0; r15+=8; bdnz L; */
+static void gen_blk_mov (MIR_context_t ctx, size_t sp_offset, unsigned int addr_reg, int addr_disp,
+                         size_t qwords) {
+  static const uint32_t blk_mov_loop[] = {
+    /*0:*/ 0x7c0903a6,  /*mctr r0*/
+    /*4:*/ 0xe80b0000,  /*ld r0,0(r11)*/
+    /*8:*/ 0x396b0008,  /*addi r11,r11,8*/
+    /*12:*/ 0xf80f0000, /*std r0,0(r15)*/
+    /*16:*/ 0x39ef0008, /*addi r15,r15,8*/
+    /*20:*/ 0x4200fff0, /*bdnz 4*/
+  };
+  /* r11=addr_reg+addr_disp: */
+  if (addr_reg != 11 || addr_disp != 0) ppc64_gen_addi (ctx, 11, addr_reg, addr_disp);
+  if (sp_offset < 0x10000) {
+    ppc64_gen_addi (ctx, 15, 1, sp_offset);
+  } else {
+    ppc64_gen_address (ctx, 15, (void *) sp_offset);
+    ppc64_gen_add (ctx, 15, 15, 1);
+  }
+  ppc64_gen_address (ctx, 0, (void *) qwords); /*r0 = qwords*/
+  push_insns (ctx, blk_mov_loop, sizeof (blk_mov_loop));
+}
+
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   static const uint32_t bstart_code[] = {
     0x7c230b78, /* mr 3,1 */
