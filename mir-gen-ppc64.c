@@ -1083,11 +1083,11 @@ static const struct pattern patterns[] = {
   {MIR_LDMOV, "r mld", "o50 rt0 m; o50 nt0 mn"},         /* lfd rt,disp-mem; lfd rt+1,disp+8-mem */
   {MIR_LDMOV, "mld r", "o54 rt1 m; o54 nt1 mn"}, /* stfd rt,disp-mem; stfdx rt+1,disp+8-mem */
   {MIR_LDMOV, "r mld0",
-   "o31 O444 ha10 hs0 hb0; o50 rt0 ha10; o50 nt0 ha10 i8"}, /* mr r10,r0; lfd rt,(r10); lfd
-                                                               rt+1,8(r10) */
+   "o31 O444 ha11 hs0 hb0; o50 rt0 ha11; o50 nt0 ha11 i8"}, /* mr r11,r0; lfd rt,(r11); lfd
+                                                               rt+1,8(r11) */
   {MIR_LDMOV, "mld0 r",
-   "o31 O444 ha10 hs0 hb0; o54 rt1 ha10; o54 nt1 ha10 i8"}, /* mr r10,r0; stfd rt,(r10); stfdx
-                                                               rt+1,8(r10) */
+   "o31 O444 ha11 hs0 hb0; o54 rt1 ha11; o54 nt1 ha11 i8"}, /* mr r11,r0; stfd rt,(r11); stfdx
+                                                               rt+1,8(r11) */
 
   {MIR_EXT8, "r r", "o31 O954 ra0 rs1"},  /* extsb ra,rs */
   {MIR_EXT16, "r r", "o31 O922 ra0 rs1"}, /* extsh ra,rs */
@@ -1447,7 +1447,7 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
              || code == MIR_F2I || code == MIR_D2I) {
     *hr1 = F0_HARD_REG;
   } else if (code == MIR_LDMOV) { /* if mem base reg is R0 */
-    *hr1 = R10_HARD_REG;
+    *hr1 = R11_HARD_REG; /* don't use arg regs as ldmov can be used in param passing part */
   } else if (code == MIR_CALL || code == MIR_INLINE) {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     *hr1 = R12_HARD_REG;
