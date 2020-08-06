@@ -1009,6 +1009,9 @@ static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int
 static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_op_t op;
+  int first_p;
+  size_t nel;
+  bitmap_iterator_t bi;
 
   MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
   if (with_notes_p) {
@@ -1023,6 +1026,13 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
       }
       fprintf (debug_file, dv == DLIST_HEAD (dead_var_t, bb_insn->dead_vars) ? " # dead: " : " ");
       MIR_output_op (ctx, debug_file, op, curr_func_item->u.func);
+    }
+    if (MIR_call_code_p (bb_insn->insn->code)) {
+      first_p = TRUE;
+      FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+	fprintf (debug_file, first_p ? " # call used: hr%d" : " hr%d", nel);
+	first_p = FALSE;
+      }
     }
   }
   fprintf (debug_file, "\n");
