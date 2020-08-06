@@ -591,7 +591,7 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
 static void set_prev_sp_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *prev_sp_op) {
   if (!stack_arg_func_p) {
     stack_arg_func_p = TRUE;
-    *prev_sp_op = _MIR_new_hard_reg_op (gen_ctx->ctx, R11_HARD_REG);
+    *prev_sp_op = _MIR_new_hard_reg_op (gen_ctx->ctx, R12_HARD_REG);
     gen_mov (gen_ctx, anchor, MIR_MOV, *prev_sp_op,
              _MIR_new_hard_reg_mem_op (gen_ctx->ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG,
                                        1));
@@ -626,7 +626,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
         arg_reg_op = _MIR_new_hard_reg_op (ctx, F14_HARD_REG);
         gen_mov (gen_ctx, anchor, MIR_DMOV, arg_reg_op,
-                 _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, disp + 8, R11_HARD_REG, MIR_NON_HARD_REG,
+                 _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, disp + 8, R12_HARD_REG, MIR_NON_HARD_REG,
                                            1));
       }
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + fp_arg_num);
@@ -645,7 +645,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     } else { /* mov arg, arg_memory */
       set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
       gen_mov (gen_ctx, anchor, MIR_MOV, arg_var_op,
-               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
+               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, disp, R12_HARD_REG, MIR_NON_HARD_REG, 1));
     }
     disp += type == MIR_T_LD ? 16 : 8;
     int_arg_num += type == MIR_T_LD ? 2 : 1;
