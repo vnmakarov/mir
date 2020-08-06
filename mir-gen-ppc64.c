@@ -599,6 +599,7 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
 
 static void set_prev_sp_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *prev_sp_op) {
   if (!stack_arg_func_p) {
+    /* don't use r11 as we can have spilled param<-mem in param set up which needs r11 as a temp */
     stack_arg_func_p = TRUE;
     *prev_sp_op = _MIR_new_hard_reg_op (gen_ctx->ctx, R12_HARD_REG);
     gen_mov (gen_ctx, anchor, MIR_MOV, *prev_sp_op,
