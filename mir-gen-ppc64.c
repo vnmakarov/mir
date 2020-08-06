@@ -606,7 +606,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_insn_t insn, next_insn, new_insn, anchor;
   MIR_reg_t ret_reg;
   MIR_op_t ret_reg_op, arg_reg_op, prev_sp_op, temp_op, arg_var_op;
-  size_t i, int_arg_num, fp_arg_num, disp, var_args_start;
+  size_t i, int_arg_num, fp_arg_num, disp, var_args_start, qwords, offset;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
@@ -638,7 +638,26 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
       gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
                arg_var_op,
-               _MIR_new_hard_reg_mem_op (ctx, type, disp, R11_HARD_REG, MIR_NON_HARD_REG, 1));
+               _MIR_new_hard_reg_mem_op (ctx, type, disp, R12_HARD_REG, MIR_NON_HARD_REG, 1));
+    } else if (type == MIR_T_BLK) {  // ??? FBLK
+      qwords = (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8;
+      offset = int_arg_num < 8 ? PPC64_STACK_HEADER_SIZE + int_arg_num * 8 : disp;
+      set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
+      for (; qwords > 0 && int_arg_num < 8; qwords--, int_arg_num++, disp += 8) {
+        if (!func->vararg_p)
+          gen_mov (gen_ctx, anchor, MIR_MOV,
+                   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
+                                             PPC64_STACK_HEADER_SIZE + int_arg_num * 8,
+                                             R12_HARD_REG, MIR_NON_HARD_REG, 1),
+                   _MIR_new_hard_reg_op (ctx, R3_HARD_REG + int_arg_num));
+      }
+      gen_add_insn_before (gen_ctx, anchor,
+                           MIR_new_insn (ctx, MIR_ADD, arg_var_op,
+                                         _MIR_new_hard_reg_op (ctx, R12_HARD_REG),
+                                         MIR_new_int_op (ctx, offset)));
+      disp += qwords * 8;
+      int_arg_num += qwords;
+      continue;
     } else if (int_arg_num < 8) { /* mov arg, arg_hard_reg */
       arg_reg_op = _MIR_new_hard_reg_op (ctx, R3_HARD_REG + int_arg_num);
       gen_mov (gen_ctx, anchor, MIR_MOV, arg_var_op, arg_reg_op);
