@@ -4065,6 +4065,7 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
       var = VARR_GET (MIR_var_t, proto->args, i);
       len += write_type (ctx, writer, var.type);
       len += write_name (ctx, writer, var.name);
+      if (var.type == MIR_T_BLK) len += write_uint (ctx, writer, var.size);
     }
     len += put_byte (ctx, writer, TAG_EOI);
     return len;
