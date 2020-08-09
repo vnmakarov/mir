@@ -22,6 +22,11 @@ ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
 endif
 
 CFLAGS=-O3 -g -DNDEBUG
+ifeq ($(OS),Windows_NT)
+  MIR_LIBS=-lm -lkernel32
+else
+  MIR_LIBS=-lm -ldl
+endif
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h \
              mir-gen-x86_64.c mir-gen-aarch64.c mir-gen-ppc64.c mir-gen-s390x.c
@@ -43,13 +48,13 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 c2m: mir.o mir-gen.o c2mir/c2mir.h c2mir/mirc.h c2mir/c2mir.c c2mir/c2mir-driver.c
-	$(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o -lm -ldl -o $@
+	$(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o $(MIR_LIBS) -o $@
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<
 
 l2m: llvm2mir.o $(MIR_DEPS) llvm2mir/llvm2mir.h llvm2mir/llvm2mir-driver.c mir-gen.c mir-gen.h 
-	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM -lm -ldl -o l2m
+	$(CC) -I. $(CFLAGS) mir.c mir-gen.c llvm2mir.o llvm2mir/llvm2mir-driver.c -lLLVM $(MIR_LIBS) -o l2m
 
 m2b: mir.o mir-utils/m2b.c
 	$(CC) -I. $(CFLAGS) -o $@ mir.o mir-utils/m2b.c
@@ -206,7 +211,7 @@ readme-example-test:
 c2mir-test: c2mir-simple-test c2mir-full-test
 
 c2mir-simple-test:
-	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl -o test && ./test -v sieve.c -ei
+	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c $(MIR_LIBS) -o test && ./test -v sieve.c -ei
 
 c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap-test0 c2mir-bootstrap-test c2mir-bootstrap-test2
 
@@ -246,7 +251,7 @@ c2mir-bootstrap-test3: c2m b2ctab
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test 2 '(usually it takes about 10-20 sec) ... '
 	$(Q) ./c2m -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./b2ctab <1.bmir >mir-ctab
-	$(Q) $(CC) $(CFLAGS) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c -lm -ldl -o test
+	$(Q) $(CC) $(CFLAGS) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c $(MIR_LIBS) -o test
 	$(Q) ./test -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
@@ -259,7 +264,7 @@ c2mir-bootstrap-test4: c2m
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-sieve-bench:
-	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c -lm -ldl -o test && ./test -v sieve.c -eg && size ./test
+	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c $(MIR_LIBS) -o test && ./test -v sieve.c -eg && size ./test
 
 c2mir-bench: c2m
 	c-benchmarks/run-benchmarks.sh
