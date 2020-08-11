@@ -423,6 +423,8 @@ static const char *LDNEG_P = "mir.ldneg.p";
 
 static const char *VA_ARG_P = "mir.va_arg.p";
 static const char *VA_ARG = "mir.va_arg";
+static const char *VA_STACK_ARG_P = "mir.va_stack_arg.p";
+static const char *VA_STACK_ARG = "mir.va_stack_arg";
 
 static int64_t mir_ldeq (long double d1, long double d2) { return d1 == d2; }
 static const char *LDEQ = "mir.ldeq";
@@ -568,6 +570,13 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
     *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "type");
     *func_import_item = _MIR_builtin_func (ctx, curr_func_item->module, VA_ARG, va_arg_builtin);
+    return 2;
+  case MIR_VA_STACK_ARG:
+    res_type = MIR_T_I64;
+    *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_STACK_ARG_P, 1, &res_type, 2,
+                                      MIR_T_I64, "va", MIR_T_I64, "size");
+    *func_import_item
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_STACK_ARG, va_stack_arg_builtin);
     return 2;
   default: return 0;
   }
