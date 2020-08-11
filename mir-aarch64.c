@@ -60,6 +60,8 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
+void *va_stack_arg_builtin (void *p, size_t s) { return *(void **) va_arg_builtin (p, MIR_T_I64); }
+
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   struct aarch64_va_list *va = p;
   va_list *vap = a;
