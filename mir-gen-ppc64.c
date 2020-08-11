@@ -834,7 +834,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       isave (gen_ctx, anchor, PPC64_STACK_HEADER_SIZE + i * 8, i + R3_HARD_REG);
   }
   for (i = saved_iregs_num = saved_fregs_num = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       if (i < F0_HARD_REG)
         saved_iregs_num++;
       else
@@ -868,7 +868,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
                                      MIR_NON_HARD_REG, 1),
            _MIR_new_hard_reg_op (ctx, R2_HARD_REG)); /* mem[r1+toc_off] = r2 */
   for (n = i = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       if (i < F0_HARD_REG)
         isave (gen_ctx, anchor, start_save_regs_offset + (n++) * 8, i);
       else
@@ -881,7 +881,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   assert (anchor->code == MIR_RET);
   /* Restoring hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       if (i < F0_HARD_REG) {
         gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                  _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, start_save_regs_offset + (n++) * 8,

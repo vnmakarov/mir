@@ -815,7 +815,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       fsave (gen_ctx, anchor, S390X_FP_REG_ARG_SAVE_AREA_START + i * 8, i * 2 + F0_HARD_REG);
   }
   for (i = saved_fregs_num = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       saved_regs_p = TRUE;
       if (i >= F0_HARD_REG) saved_fregs_num++;
     }
@@ -839,7 +839,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
                                      R15_HARD_REG, MIR_NON_HARD_REG, 1),
            r11_reg_op);                        /* mem[r15+76] = r11 */
   for (i = R2_HARD_REG; i < R15_HARD_REG; i++) /* exclude r15 */
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)
         && (i != 6 || !func->vararg_p))
       isave (gen_ctx, anchor, S390X_GP_REG_RSAVE_AREA_START + (i - R2_HARD_REG) * 8, i);
   gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op, r15_reg_op); /* r0 = r15 */
@@ -849,7 +849,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R15_HARD_REG, MIR_NON_HARD_REG, 1),
            r0_reg_op); /* mem[r15] = r0 */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       fsave (gen_ctx, anchor, start_saved_fregs_offset + (n++) * 8, i);
   gen_mov (gen_ctx, anchor, MIR_MOV, r11_reg_op, r15_reg_op); /* r11 = r15 */
   /* Epilogue: */
@@ -857,7 +857,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_assert (anchor->code == MIR_RET || anchor->code == MIR_JMP);
   /* Restoring fp hard registers: */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       gen_mov (gen_ctx, anchor, MIR_DMOV, _MIR_new_hard_reg_op (ctx, i),
                _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, start_saved_fregs_offset + (n++) * 8,
                                          R11_HARD_REG, MIR_NON_HARD_REG, 1));
@@ -865,7 +865,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* r15 = r11 + frame_size */
   /* Restore saved gp regs (including r11 and excluding r15) and r14 */
   for (i = R2_HARD_REG; i < R15_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
                                          S390X_GP_REG_RSAVE_AREA_START + (i - R2_HARD_REG) * 8,
