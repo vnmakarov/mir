@@ -88,10 +88,11 @@ static int setup_imm64_insns (MIR_context_t ctx, uint32_t *to, int reg, uint64_t
   return sizeof (imm64_pat) / sizeof (uint32_t);
 }
 
-static void push_insns (MIR_context_t ctx, const uint32_t *pat, size_t pat_len) {
+static uint8_t *push_insns (MIR_context_t ctx, const uint32_t *pat, size_t pat_len) {
   uint8_t *p = (uint8_t *) pat;
 
   for (size_t i = 0; i < pat_len; i++) VARR_PUSH (uint8_t, machine_insns, p[i]);
+  return VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns) - pat_len;
 }
 
 static size_t gen_mov_addr (MIR_context_t ctx, int reg, void *addr) {
