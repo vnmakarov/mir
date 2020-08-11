@@ -151,6 +151,34 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   }
 }
 
+static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offset, uint32_t qwords,
+			 uint32_t addr_reg) {
+  static const uint32_t blk_mov_pat[] = {
+    /* 0:*/	0xf940026c, /* ldr x12, [x19,<addr_offset>]*/
+    /* 4:*/	0x910003e0, /* add <addr_reg>, sp, <offset>*/
+    /* 8:*/	0xd280000b, /* mov x11, 0*/
+    /* c:*/	0xd280000e, /* mov x14, <qwords>*/
+    /* 10:*/	0xf86c696a, /* ldr x10, [x11,x12]*/
+    /* 14:*/	0xd10005ce, /* sub x14, x14, #0x1*/
+    /* 18:*/	0xf820696a, /* str x10, [x11,<addr_reg>x13]*/
+    /* 1c:*/	0xf10001df, /* cmp x14, 0*/
+    /* 20:*/	0x9100216b, /* add x11, x11, 8*/
+    /* 24:*/	0x54ffff61, /* b.ne 10 */
+  };
+  if (qwords == 0) {
+    uint32_t pat = 0x910003e0 | addr_reg | (offset << 10); /* add <add_reg>, sp, <offset>*/
+    push_insns (ctx, &pat, sizeof (pat));
+  } else {
+    uint32_t *addr = (uint32_t *) push_insns (ctx, blk_mov_pat, sizeof (blk_mov_pat));
+    mir_assert (offset < (1 << 12) && addr_offset % 8 == 0 && (addr_offset >> 3) < (1 << 12));
+    mir_assert (addr_reg < 32 && qwords < (1 << 16));
+    addr[0] |= (addr_offset >> 3) << 10;
+    addr[1] |= addr_reg | (offset << 10);
+    addr[3] |= qwords << 5;
+    addr[6] |= addr_reg << 16;
+  }
+}
+
 /* save r0-r7, v0-v7 */
 static const uint32_t save_insns[] = {
   0xa9bf1fe6, /* stp R6, R7, [SP, #-16]! */
