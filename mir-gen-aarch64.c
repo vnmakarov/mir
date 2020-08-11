@@ -219,7 +219,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0;
+  size_t int_arg_num = 0, fp_arg_num = 0, mem_size = 0, blk_offset = 0, qwords;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -246,11 +246,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     call_insn->ops[1] = temp_op;
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
-  for (size_t i = start; i < nops; i++) {
-    arg_op = call_insn->ops[i];
-    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
+  for (size_t i = start; i < nops; i++) { /* caclulate offset for blk params */
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
+    } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
+      type = MIR_T_BLK;
+      gen_assert (call_insn->ops[i].u.mem.type == type);
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
@@ -260,14 +261,45 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
+    if (get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code) == MIR_NON_HARD_REG) {
+      if (type == MIR_T_LD && blk_offset % 16 != 0) blk_offset = (blk_offset + 15) / 16 * 16;
+      blk_offset += type == MIR_T_LD ? 16 : 8;
+    }
+  }
+  blk_offset = (blk_offset + 15) / 16 * 16;
+  int_arg_num = fp_arg_num = 0;
+  for (size_t i = start; i < nops; i++) {
+    arg_op = call_insn->ops[i];
+    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
+		|| (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.type == MIR_T_BLK));
+    if (i - start < nargs) {
+      type = arg_vars[i - start].type;
+    } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
+      type = MIR_T_BLK;
+      gen_assert (call_insn->ops[i].u.mem.type == type);
+    } else {
+      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
+      type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
+    }
     ext_insn = NULL;
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
+    if (type == MIR_T_BLK) {
+      gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
+      qwords = (arg_op.u.mem.disp + 7) / 8;
+      gen_blk_mov (gen_ctx, call_insn, blk_offset, SP_HARD_REG, 0, arg_op.u.mem.base, qwords, int_arg_num);
+      arg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+      gen_add_insn_before (gen_ctx, call_insn,
+			   MIR_new_insn (gen_ctx->ctx, MIR_ADD, arg_op,
+					 _MIR_new_hard_reg_op (ctx, SP_HARD_REG),
+					 MIR_new_int_op (ctx, blk_offset)));
+      blk_offset += qwords * 8;
+    }
     if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code))
-        != MIR_NON_HARD_REG) {
+	!= MIR_NON_HARD_REG) {
       /* put arguments to argument hard regs */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
@@ -292,6 +324,8 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_after (gen_ctx, prev_call_insn, ext_insn);
     }
   }
+  blk_offset = (blk_offset + 15) / 16 * 16;
+  if (blk_offset != 0) mem_size = blk_offset;
   n_iregs = n_vregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
     int float_p;
