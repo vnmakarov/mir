@@ -62,7 +62,7 @@ static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
           || hard_reg == TEMP_LDOUBLE_HARD_REG2);
 }
 
-static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
   gen_assert (hard_reg <= MAX_HARD_REG);
   return ((R0_HARD_REG <= hard_reg && hard_reg <= R5_HARD_REG) || hard_reg == R14_HARD_REG
           || (F0_HARD_REG <= hard_reg && hard_reg <= F7_HARD_REG));
