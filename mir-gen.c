@@ -1030,7 +1030,7 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
     if (MIR_call_code_p (bb_insn->insn->code)) {
       first_p = TRUE;
       FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
-	fprintf (debug_file, first_p ? " # call used: hr%d" : " hr%d", nel);
+	fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
 	first_p = FALSE;
       }
     }
