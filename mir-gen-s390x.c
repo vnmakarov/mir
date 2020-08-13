@@ -143,7 +143,7 @@ DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
   unsigned char alloca_p, leaf_p, stack_param_p, switch_p;
-  size_t param_save_area_size, ld_value_save_area_size;
+  size_t param_save_area_size, blk_ld_value_save_area_size;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -160,7 +160,7 @@ struct target_ctx {
 #define stack_param_p gen_ctx->target_ctx->stack_param_p
 #define switch_p gen_ctx->target_ctx->switch_p
 #define param_save_area_size gen_ctx->target_ctx->param_save_area_size
-#define ld_value_save_area_size gen_ctx->target_ctx->ld_value_save_area_size
+#define blk_ld_value_save_area_size gen_ctx->target_ctx->blk_ld_value_save_area_size
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -252,7 +252,8 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   int vararg_p = proto->vararg_p;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t param_mem_size, call_ld_value_area_size, ld_n_iregs, n_iregs, n_fregs, ld_value_disp;
+  size_t param_mem_size, call_blk_ld_value_area_size, ld_n_iregs, n_iregs, n_fregs;
+  size_t qwords, blk_ld_value_disp;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -276,15 +277,19 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     call_insn->ops[1] = temp_op;
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
-  n_iregs = n_fregs = param_mem_size = call_ld_value_area_size = 0;
+  n_iregs = n_fregs = param_mem_size = call_blk_ld_value_area_size = 0;
   for (size_t i = 2; i < nops; i++) {
-    /* process long double results and args to calculate memory for them: */
+    arg_op = call_insn->ops[i];
+    /* process long double results and ld and block args to calculate memory for them: */
     if (i < start) {
       type = proto->res_types[i - 2];
     } else if (i - start < nargs) {
       type = arg_vars[i - start].type;
+    } else if (arg_op.mode == MIR_OP_MEM) {
+      type = MIR_T_BLK;
+      gen_assert (arg_op.u.mem.type == type);
     } else {
-      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
+      mode = arg_op.value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
                   || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
@@ -293,7 +298,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     if (type != MIR_T_LD && i < start) continue;
-    if (type == MIR_T_LD) call_ld_value_area_size += 16;
+    if (type == MIR_T_LD)
+      call_blk_ld_value_area_size += 16;
+    else if (type == MIR_T_BLK) {
+      gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
+      call_blk_ld_value_area_size += (arg_op.u.mem.disp + 7) / 8 * 8;
+    }
     if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
       /* put arguments to argument hard regs: */
       n_fregs++;
@@ -304,17 +314,21 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     }
   }
   if (param_save_area_size < param_mem_size) param_save_area_size = param_mem_size;
-  if (ld_value_save_area_size < call_ld_value_area_size)
-    ld_value_save_area_size = call_ld_value_area_size;
-  ld_value_disp = param_mem_size;
+  if (blk_ld_value_save_area_size < call_blk_ld_value_area_size)
+    blk_ld_value_save_area_size = call_blk_ld_value_area_size;
+  blk_ld_value_disp = param_mem_size;
   param_mem_size = n_fregs = n_iregs = 0;
   for (size_t i = 2; i < nops; i++) { /* process args and ???long double results: */
     arg_op = call_insn->ops[i];
-    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
+    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
+                || (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.type == MIR_T_BLK));
     if (i < start) {
       type = proto->res_types[i - 2];
     } else if (i - start < nargs) {
       type = arg_vars[i - start].type;
+    } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
+      type = MIR_T_BLK;
+      gen_assert (call_insn->ops[i].u.mem.type == type);
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_DOUBLE
@@ -328,17 +342,24 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (type == MIR_T_LD) {
-      if (i >= start) { /* put arg value in saved ld value area: */
-        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, ld_value_disp + S390X_STACK_HEADER_SIZE,
-                                           FP_HARD_REG, MIR_NON_HARD_REG, 1);
-        gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
+    if (type == MIR_T_LD || type == MIR_T_BLK) {
+      if (i >= start) { /* put arg value in saved blk/ld value area: */
+        if (type == MIR_T_LD) {
+          mem_op
+            = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, blk_ld_value_disp + S390X_STACK_HEADER_SIZE,
+                                        FP_HARD_REG, MIR_NON_HARD_REG, 1);
+          gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
+        } else {
+          qwords = (arg_op.u.mem.disp + 7) / 8;
+          gen_blk_mov (gen_ctx, call_insn, S390X_STACK_HEADER_SIZE + blk_ld_value_disp, FP_HARD_REG,
+                       0, arg_op.u.mem.base, qwords, n_iregs);
+        }
       }
       arg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       new_insn = MIR_new_insn (ctx, MIR_ADD, arg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
-                               MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + ld_value_disp));
+                               MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + blk_ld_value_disp));
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
-      ld_value_disp += 16;
+      blk_ld_value_disp += type == MIR_T_LD ? 16 : qwords * 8;
     }
     mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
     if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
@@ -365,7 +386,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     }
   }
   ld_n_iregs = n_iregs = n_fregs = 0;
-  ld_value_disp = param_mem_size;
+  blk_ld_value_disp = param_mem_size;
   for (size_t i = 0; i < proto->nres; i++) {
     ret_op = call_insn->ops[i + 2];
     gen_assert (ret_op.mode == MIR_OP_REG || ret_op.mode == MIR_OP_HARD_REG);
@@ -373,14 +394,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     if (type == MIR_T_LD) { /* returned by address */
       new_insn_code = MIR_LDMOV;
       call_res_op = ret_val_op
-        = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, S390X_STACK_HEADER_SIZE + ld_value_disp,
+        = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, S390X_STACK_HEADER_SIZE + blk_ld_value_disp,
                                     FP_HARD_REG, MIR_NON_HARD_REG, 1);
       if (n_iregs < 5) { /* use it as a call result to keep assignment to ld_n_iregs: */
         call_res_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, 0, R2_HARD_REG + ld_n_iregs,
                                                 MIR_NON_HARD_REG, 1);
         ld_n_iregs++;
       }
-      ld_value_disp += 16;
+      blk_ld_value_disp += 16;
     } else if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
       new_insn_code = type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
       call_res_op = ret_val_op = _MIR_new_hard_reg_op (ctx, F0_HARD_REG + n_fregs * 2);
@@ -619,7 +640,7 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   return ((MIR_disp_t) slot * 8 + S390X_STACK_HEADER_SIZE + param_save_area_size
-          + ld_value_save_area_size);
+          + blk_ld_value_save_area_size);
 }
 
 static void set_prev_sp_reg (gen_ctx_t gen_ctx, MIR_insn_t anchor, int *prev_sp_set_p,
@@ -706,7 +727,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   stack_param_p = disp != 0;
   switch_p = alloca_p = FALSE;
   leaf_p = TRUE;
-  param_save_area_size = ld_value_save_area_size = 0;
+  param_save_area_size = blk_ld_value_save_area_size = 0;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_item_t proto_item, func_import_item;
     int nargs;
@@ -904,7 +925,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   r14_reg_op = _MIR_new_hard_reg_op (ctx, R14_HARD_REG);
   r15_reg_op = _MIR_new_hard_reg_op (ctx, R15_HARD_REG);
   /* Prologue: */
-  frame_size = (param_save_area_size + S390X_STACK_HEADER_SIZE + ld_value_save_area_size
+  frame_size = (param_save_area_size + S390X_STACK_HEADER_SIZE + blk_ld_value_save_area_size
                 + stack_slots_num * 8);
   start_saved_fregs_offset = frame_size;
   frame_size += saved_fregs_num * 8;
