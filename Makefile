@@ -191,7 +191,13 @@ gen-test13:
 gen-test14:
 	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -g mir-tests/test14.mir
 
-gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14
+gen-test15:
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -g mir-tests/test15.mir
+
+gen-test16:
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -g mir-tests/test16.mir
+
+gen-test: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7 gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
 	$(CC) -g -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c -o test && ./test
 	$(CC) -g -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 mir.c mir-gen.c mir-tests/loop-sieve-gen.c -o test && ./test
 
