@@ -12,8 +12,9 @@
 
 #define S390X_STACK_HEADER_SIZE 160
 
-static void push_insns (MIR_context_t ctx, const uint8_t *pat, size_t pat_len) {
+static uint8_t *push_insns (MIR_context_t ctx, const uint8_t *pat, size_t pat_len) {
   for (size_t i = 0; i < pat_len; i++) VARR_PUSH (uint8_t, machine_insns, pat[i]);
+  return VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns) - pat_len;
 }
 
 static void s390x_gen_mov (MIR_context_t ctx, unsigned to, unsigned from) {
