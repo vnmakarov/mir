@@ -256,6 +256,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     }
   }
   s390x_gen_ldstm (ctx, 6, 7, 15, 48, FALSE); /* stmg 6,7,48(r15) : */
+  s390x_gen_ldstm (ctx, 8, 9, 15, 64, FALSE); /* stmg 8,9,64(r15) : */
+  s390x_gen_st (ctx, 10, 15, 80, MIR_T_I64);  /* stg r10,80(r15) */
   s390x_gen_st (ctx, 14, 15, 112, MIR_T_I64); /* stg r14,112(r15) */
   s390x_gen_addi (ctx, 15, 15, -frame_size);  /* lay r15,-frame_size(r15) */
   s390x_gen_mov (ctx, 1, 2);                  /* fun_addr */
@@ -313,6 +315,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   }
   s390x_gen_addi (ctx, 15, 15, frame_size);   /* lay 15,frame_size(15) */
   s390x_gen_ldstm (ctx, 6, 7, 15, 48, TRUE);  /* lmg 6,7,48(r15) : */
+  s390x_gen_ldstm (ctx, 8, 9, 15, 64, TRUE);  /* lmg 8,9,64(r15) : */
+  s390x_gen_ld (ctx, 10, 15, 80, MIR_T_I64);  /* lg 10,80(r15) */
   s390x_gen_ld (ctx, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (ctx, 14, FALSE);            /* bcr m15,r14 */
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
@@ -381,7 +385,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     disp += 16;
   }
   s390x_gen_addi (ctx, 15, 15, frame_size);   /* lay 15,frame_size(15) */
-  s390x_gen_ld (ctx, 6, 15, 48, MIR_T_I64);       /* lg 6,48(r15) : */
+  s390x_gen_ld (ctx, 6, 15, 48, MIR_T_I64);   /* lg 6,48(r15) : */
   s390x_gen_ld (ctx, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (ctx, 14, FALSE);            /* bcr m15,r14 */
   return _MIR_publish_code (ctx, VARR_ADDR (uint8_t, machine_insns),
