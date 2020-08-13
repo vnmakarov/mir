@@ -10052,10 +10052,17 @@ static void target_add_param (MIR_context_t ctx, const char *name, struct type *
     param_decl->param_args_start = VARR_LENGTH (MIR_var_t, proto_info.arg_vars);
   }
   type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
+#ifdef BLK_PARAM
+            ? MIR_T_BLK
+#else
             ? MIR_POINTER_TYPE
+#endif
             : get_mir_type (ctx, param_type));
   var.name = name;
   var.type = type;
+#ifdef BLK_PARAM
+  if (type == MIR_T_BLK) var.size = type_size (c2m_ctx, param_type);
+#endif
   VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
 }
 
@@ -11210,13 +11217,25 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (va_arg_p) {
       op1 = get_new_temp (ctx, MIR_T_I64);
       op2 = gen (ctx, NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
-      MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
-                                     MIR_new_mem_op (ctx, t, 0, 0, 0, 1)));
-      op2 = get_new_temp (ctx, t);
-      MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
-                                     MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
+#ifdef BLK_PARAM
+      if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
+        MIR_append_insn (ctx, curr_func,
+                         MIR_new_insn (ctx, MIR_VA_STACK_ARG, op1.mir_op, op2.mir_op,
+                                       MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
+        op2 = op1;
+      } else
+#endif
+      {
+	if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
+	  op2 = mem_to_address (ctx, op2, FALSE);
+        MIR_append_insn (ctx, curr_func,
+                         MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
+                                       MIR_new_mem_op (ctx, t, 0, 0, 0, 1)));
+        op2 = get_new_temp (ctx, t);
+        MIR_append_insn (ctx, curr_func,
+                         MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
+                                       MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
+      }
       if (res.mir_op.mode == MIR_OP_REG) {
         res = op2;
       } else {
@@ -11241,7 +11260,12 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
                 || func_type->u.func_type->dots_p);
         if (struct_p) { /* pass an adress of struct/union: */
           assert (op2.mir_op.mode == MIR_OP_MEM);
-          op2 = mem_to_address (ctx, op2, FALSE);
+          op2 = mem_to_address (ctx, op2, TRUE);
+#ifdef BLK_PARAM
+          assert (op2.mir_op.mode == MIR_OP_REG);
+          op2 = new_op (NULL /*???*/, MIR_new_mem_op (ctx, MIR_T_BLK, type_size (c2m_ctx, e->type),
+                                                      op2.mir_op.u.reg, 0, 1));
+#endif
         } else if (param != NULL) {
           assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
           decl_spec = get_param_decl_spec (param);
