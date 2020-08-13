@@ -1657,7 +1657,7 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
     case MIR_T_P: arg_vals[i].a = va_arg (va, void *); break;
     case MIR_T_BLK:
-#if defined(__PPC64__)
+#if defined(__PPC64__) || defined(__aarch64__)
       arg_vals[i].a = va_stack_arg_builtin (&va, arg_vars[i].size);
 #else
           arg_vals[i].a = va_stack_arg_builtin (va, arg_vars[i].size);
