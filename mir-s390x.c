@@ -110,6 +110,26 @@ static void s390x_gen_3addrs (MIR_context_t ctx, unsigned int r1, void *a1, unsi
   push_insns (ctx, (uint8_t *) &a3, 8);
 }
 
+static void s390x_gen_blk_mov (MIR_context_t ctx, uint32_t param_offset, uint32_t addr_offset,
+                               uint32_t qwords, uint32_t addr_reg) {
+  uint16_t *addr;
+  static const uint16_t blk_mov_pat[] = {
+    /*0:*/ 0xa7a9,  0x0000,         /* lghi	%r10,<size> */
+    /*4:*/ 0xa7ab,  0xfff8,         /* aghi	%r10,-8 */
+    /*8:*/ 0xe30a,  0x9000, 0x0004, /* lg %r0,0(%r10,%r9) */
+    /*14:*/ 0xe30a, 0x0000, 0x0024, /* stg %r0,0(%r10,<addr_reg:2-6,8>) */
+    /*20:*/ 0xb902, 0x00aa,         /* ltgr %r10,%r10 */
+    /*24:*/ 0xa724, 0xfff6,         /* jh 4 */
+  };
+  s390x_gen_addi (ctx, addr_reg, 15, addr_offset); /* lay <addr_reg>,addr_offset(r15) */
+  if (qwords == 0) return;
+  assert (qwords * 8 < (1 << 15) && addr_reg < 16 && addr_offset % 8 == 0);
+  s390x_gen_ld (ctx, 9, 7, param_offset, MIR_T_I64); /* lg* 9,param_offset(r7) */
+  addr = (uint16_t *) push_insns (ctx, (uint8_t *) blk_mov_pat, sizeof (blk_mov_pat));
+  addr[1] |= qwords * 8;     /* lghi */
+  addr[8] |= addr_reg << 12; /* stg */
+}
+
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   VARR_TRUNC (uint8_t, machine_insns, 0);
   s390x_gen_mov (ctx, 2, 15);      /* lgr r2,15 */
