@@ -11244,6 +11244,8 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
     } else if (va_start_p) {
       op1 = gen (ctx, NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
+      if (op1.mir_op.mode == MIR_OP_MEM && op1.mir_op.u.mem.type == MIR_T_UNDEF)
+	op1 = mem_to_address (ctx, op1, FALSE);
       MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_VA_START, op1.mir_op));
     } else if (alloca_p) {
       res = get_new_temp (ctx, t);
