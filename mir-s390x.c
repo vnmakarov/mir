@@ -231,28 +231,29 @@ void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
    allocate and stack frame (S390X_STACK_HEADER_SIZE + param area size + ld arg values size);
    r1=r2 (fun_addr);
    r7=r3 (res_arg_addresses);
-   (arg_reg=mem[r7,arg_offset] or (f1,r0)=mem[r7,arg_offset];mem[r15,S390X_STACK_HEADER_SIZE+offset]=(f1,r0)) ...
-   call *r1;
+   (arg_reg=mem[r7,arg_offset] or
+   (f1,r0)=mem[r7,arg_offset];mem[r15,S390X_STACK_HEADER_SIZE+offset]=(f1,r0)) ... call *r1;
    r0=mem[r7,<res_offset>]; res_reg=mem[r0]; ...
    restore r15; restore r6, r7, r14; return. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        MIR_type_t *arg_types, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
   MIR_type_t type;
-  int n_gpregs = 0, n_fpregs = 0, res_reg = 7, frame_size, disp, param_offset, param_size = 0;
+  int n_gpregs = 0, n_fpregs = 0, res_reg = 7, frame_size, disp, param_offset, blk_offset;
+  uint32_t qwords, addr_reg;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
-  frame_size = S390X_STACK_HEADER_SIZE;
+  blk_offset = frame_size = S390X_STACK_HEADER_SIZE;
   if (nres > 0 && res_types[0] == MIR_T_LD) n_gpregs++; /* ld address */
   for (uint32_t i = 0; i < nargs; i++) {                /* calculate param area size: */
-    type = arg_types[i];
-    if (type == MIR_T_LD) frame_size += 16; /* address for ld value */
+    type = arg_descs[i].type;
+    if (type == MIR_T_BLK) frame_size += (arg_descs[i].size + 7) / 8; /* blk value space */
     if ((type == MIR_T_F || type == MIR_T_D) && n_fpregs < 4) {
       n_fpregs++;
     } else if (type != MIR_T_F && type != MIR_T_D && n_gpregs < 5) {
       n_gpregs++;
     } else {
       frame_size += 8;
-      param_size += 8;
+      blk_offset += 8;
     }
   }
   s390x_gen_ldstm (ctx, 6, 7, 15, 48, FALSE); /* stmg 6,7,48(r15) : */
@@ -270,14 +271,14 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     n_gpregs++;
   }
   for (uint32_t i = 0; i < nargs; i++) { /* load args: */
-    type = arg_types[i];
+    type = arg_descs[i].type;
     if ((type == MIR_T_F || type == MIR_T_D) && n_fpregs < 4) {
       /* (le,ld) (f0,f2,f4,f6),param_ofset(r7) */
       s390x_gen_ld (ctx, n_fpregs * 2, res_reg, param_offset, type);
       n_fpregs++;
     } else if (type == MIR_T_F || type == MIR_T_D) {
-      s390x_gen_ld (ctx, 1, res_reg, param_offset, type);        /* (le,ld) f1,param_offset(r7) */
-      s390x_gen_st (ctx, 1, 15, disp, type);                     /* (ste,std) f1,disp(r15) */
+      s390x_gen_ld (ctx, 1, res_reg, param_offset, type); /* (le,ld) f1,param_offset(r7) */
+      s390x_gen_st (ctx, 1, 15, disp, type);              /* (ste,std) f1,disp(r15) */
       disp += 8;
     } else if (type == MIR_T_LD && n_gpregs < 5) {               /* ld address */
       s390x_gen_addi (ctx, n_gpregs + 2, res_reg, param_offset); /* lay rn,param_offset(r7) */
@@ -286,12 +287,24 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       s390x_gen_addi (ctx, 0, res_reg, param_offset); /* lay r0,param_offset(r7) */
       s390x_gen_st (ctx, 0, 15, disp, MIR_T_I64);     /* stg r0,disp(r15) */
       disp += 8;
+    } else if (type == MIR_T_BLK) {
+      qwords = (arg_descs[i].size + 7) / 8;
+      addr_reg = n_gpregs < 5 ? n_gpregs + 2 : 8;
+      s390x_gen_blk_mov (ctx, param_offset, blk_offset, qwords, addr_reg);
+      blk_offset += qwords * 8;
+      if (n_gpregs < 5) {
+        n_gpregs++;
+      } else {
+        s390x_gen_st (ctx, 8, 15, disp, MIR_T_I64); /* stg r8,disp(r15) */
+        disp += 8;
+      }
     } else if (n_gpregs < 5) {
-      s390x_gen_ld (ctx, n_gpregs + 2, res_reg, param_offset, MIR_T_I64); /* lg* rn,param_offset(r7) */
+      s390x_gen_ld (ctx, n_gpregs + 2, res_reg, param_offset,
+                    MIR_T_I64); /* lg* rn,param_offset(r7) */
       n_gpregs++;
     } else {
       s390x_gen_ld (ctx, 0, res_reg, param_offset, MIR_T_I64); /* lg* r0,param_offset(r7) */
-      s390x_gen_st (ctx, 0, 15, disp, MIR_T_I64);         /* stg* r0,disp(r15) */
+      s390x_gen_st (ctx, 0, 15, disp, MIR_T_I64);              /* stg* r0,disp(r15) */
       disp += 8;
     }
     param_offset += 16;
