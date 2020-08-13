@@ -141,8 +141,14 @@ interp-test13:
 interp-test14:
 	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -i mir-tests/test14.mir
 
+interp-test15:
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -i mir-tests/test16.mir
+
+interp-test16:
+	$(CC) -g mir.c mir-gen.c mir-tests/run-test.c -o test && ./test -i mir-tests/test16.mir
+
 interp-test: interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7 interp-test8\
-             interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
+             interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14 interp-test15 interp-test16
 
 interp-bench:
 	$(CC) $(CFLAGS) mir.c mir-tests/loop-interp.c -o test && ./test && size ./test
