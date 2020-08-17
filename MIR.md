@@ -123,6 +123,9 @@
                      {<insn>}
                      endfun
 ```
+    * Textual presentation of block type argument in `func` has form `blk:<size>(<var_name>)`.
+      The corresponding argument in `call` insn should have analogous form
+      `blk:<the same size>(<local var name containing address of passed block data>)`
   * Non-argument function variables are created through API function
     `MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name)`
     * The only permitted integer type for the variable is `MIR_T_I64` (or MIR_T_U64???)
