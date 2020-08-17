@@ -199,7 +199,8 @@ machine-dependent functions and definitions used by MIR-generator:
     * change MIR insn operands on some hard register if the corresponding target insn works
       only with this hard register.  In this case you need generate move insn to copy the original
       operand into the hard register
-
+    * implements block data argument passing in a way to implement target call ABI for C aggregates
+    
     Adding and deleting MIR insns should be done with MIR-generator
     functions `gen_add_insn_before`, `gen_add_insn_after`, and
     `gen_delete_insn`.
