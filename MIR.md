@@ -46,9 +46,10 @@
        or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead.
        So please don't expect machine-independence of MIR code working with long double values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
+     * `MIR_T_BLK` -- block data.  This type can be used only argument of function
    * MIR textual representation of the types are correspondingly `i8`,
-     `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
-     and `v`
+     `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `ld`, `p`,
+     and `blk`
    * Function `int MIR_int_type_p (MIR_type_t t)` returns TRUE if given type is an integer one (it includes pointer type too)
    * Function `int MIR_fp_type_p (MIR_type_t t)` returns TRUE if given type is a floating point type
    
