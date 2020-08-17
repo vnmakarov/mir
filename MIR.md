@@ -393,7 +393,7 @@
   * The first insn saves the stack pointer in the operand
   * The second insn restores stack pointer from the operand
   
-### MIR_VA_START, MIR_VA_ARG, and MIR_VA_END insns
+### MIR_VA_START, MIR_VA_ARG, MIR_VA_STACK_ARG, and MIR_VA_END insns
   * These insns are only for variable number arguments functions
   * `MIR_VA_START` and `MIR_VA_END` have one input operand, an address
     of va_list structure (see C stdarg.h for more details).  Unlike C
@@ -401,6 +401,9 @@
   * `MIR_VA_ARG` takes va_list and any memory operand and returns
     address of the next argument in the 1st insn operand.  The memory
     operand type defines the type of the argument
+  * `MIR_VA_STACK_ARG` takes va_list and integer operand and returns
+    address of the next argument passed as a block argument
+    of the size given by the integer operand
   * va_list operand can be memory with undefined type.  In this case
     address of the va_list is not in the memory but is the
     memory address
