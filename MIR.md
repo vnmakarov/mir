@@ -433,7 +433,9 @@
   MIR_finish_module (ctx);
 ```
 
-## MIR text example
+## MIR text examples
+
+  * Sieve of eratosthenes:
 
 ```
 m_sieve:  module
@@ -473,6 +475,29 @@ ex100:    func v
           call p_sieve, sieve, r, 100
           call p_printf, printf, format, r
           endfunc
+          endmodule
+```
+
+  * Example of block arguments and `va_stack_arg`
+  
+```
+m0:       module
+f_p:	  proto i64, 16:blk(a), ...
+f:	  func i64, 16:blk(a), ...
+          local i64:r, i64:va, i64:a2
+	  alloca va, 32  # allocate enough space va_list
+	  va_start va
+	  va_stack_arg a2, va, 16 # get address of the 2nd blk arg
+	  add r, i64:0(a), i64:8(a2)
+	  ret r
+main:	  func
+	  local i64:a, i64:r
+	  alloca a, 16
+          mov i64:0(a), 42
+          mov i64:8(a), 24
+	  call f_p, f, r, blk:16(a), blk:16(a)
+	  ret r
+	  endfunc
           endmodule
 ```
 
