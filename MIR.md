@@ -99,6 +99,7 @@
     * A variable should have an unique name in the function
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
+      * The structure contains also type size for variable of `MIR_T_BLK` type
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (MIR_context_t ctx, const
     char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
     or function `MIR_item_t MIR_new_func_arr (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, MIR_var_t *arg_vars)`
