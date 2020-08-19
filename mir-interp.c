@@ -4,6 +4,18 @@
    File contains MIR interpreter which is an obligatory part of MIR API.
 */
 
+#ifdef MIR_NO_INTERP
+static void interp_init (MIR_context_t ctx) {}
+static void finish_func_interpretation (MIR_item_t func_item) {}
+static void interp_finish (MIR_context_t ctx) {}
+void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...) {}
+void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
+                          MIR_val_t *vals, va_list va) {}
+void MIR_interp_arr (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
+                     MIR_val_t *vals) {}
+void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {}
+#else
+
 #ifndef MIR_INTERP_TRACE
 #define MIR_INTERP_TRACE 0
 #endif
@@ -1680,3 +1692,5 @@ static void redirect_interface_to_interp (MIR_context_t ctx, MIR_item_t func_ite
 void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {
   redirect_interface_to_interp (ctx, func_item);
 }
+
+#endif /* #ifdef MIR_NO_INTERP */
