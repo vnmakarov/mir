@@ -321,21 +321,6 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       if (qwords > 0) ppc64_gen_ld (ctx, 11, res_reg, param_offset, MIR_T_I64);
       for (blk_disp = 0; qwords > 0 && n_gpregs < 8; qwords--, n_gpregs++, blk_disp += 8, disp += 8)
         ppc64_gen_ld (ctx, n_gpregs + 3, 11, blk_disp, MIR_T_I64);
-#if 0
-      /* passing FBLK: */
-      for (blk_disp = 0, qwords = (arg_descs[i].size + 7) / 8;
-	   qwords > 0 && n_fpregs < 13;
-	   qwords--, n_fpregs++, blk_disp += 8, disp += 8) {
-	ppc64_gen_ld (ctx, n_fpregs + 1, 11, blk_disp, MIR_T_D);
-	if (vararg_p) {
-	  if (n_gpregs < 8) { /* load into gp reg too */
-	    ppc64_gen_ld (ctx, n_gpregs + 3, 11, blk_disp, MIR_T_I64);
-	  } else {
-	    ppc64_gen_st (ctx, 1 + n_fpregs, 1, disp, MIR_T_D);
-	  }
-	}
-      }
-#endif
       if (qwords > 0) gen_blk_mov (ctx, disp, 11, blk_disp, qwords);
       disp += qwords * 8;
       param_offset += 16;
@@ -444,7 +429,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
             ppc64_gen_st (ctx, 0, 1, disp + 8, MIR_T_D);
           }
         }
-      } else if (type == MIR_T_BLK) {  // ??? FBLK
+      } else if (type == MIR_T_BLK) {
         qwords = (arg_vars[i].size + 7) / 8;
         for (; qwords > 0 && n_gpregs < 8; qwords--, n_gpregs++, disp += 8, param_offset += 8)
           ppc64_gen_st (ctx, n_gpregs + 3, 1, disp, MIR_T_I64);
