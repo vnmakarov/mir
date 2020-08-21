@@ -649,7 +649,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
                arg_var_op,
                _MIR_new_hard_reg_mem_op (ctx, type, disp, R12_HARD_REG, MIR_NON_HARD_REG, 1));
-    } else if (type == MIR_T_BLK) {  // ??? FBLK
+    } else if (type == MIR_T_BLK) {
       qwords = (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8;
       offset = int_arg_num < 8 ? PPC64_STACK_HEADER_SIZE + int_arg_num * 8 : disp;
       set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
