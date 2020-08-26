@@ -13,6 +13,10 @@
 #include "mir-varr.h"
 #include "mir-htab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 #ifdef NDEBUG
 static inline int mir_assert (int cond) { return 0 && cond; }
 #else
@@ -608,5 +612,9 @@ extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* #ifndef MIR_H */
