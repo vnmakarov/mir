@@ -76,7 +76,7 @@ typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, con
 
    There are additional constraints on insn operands:
 
-   o A register in porgram can contain only one type values: integer,
+   o A register in program can contain only one type values: integer,
      float, double, or long double.
    o Operand types should be what the insn expects */
 typedef enum {
