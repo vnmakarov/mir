@@ -71,8 +71,8 @@ typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, con
 
 #define INSN_EL(i) MIR_##i
 
-/* The most MIR insns have destination operand and one or two source
-   operands.  The destination can be ony a register or memory.
+/* The majority of MIR insns have a destination operand and one or two source
+   operands.  The destination can be only be a register or memory.
 
    There are additional constraints on insn operands:
 
