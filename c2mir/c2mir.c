@@ -2089,6 +2089,7 @@ static void define (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, id->pos, "macro definition of %s", name);
     } else {
       new_macro (c2m_ctx, id, params, repl);
+      params = NULL;
     }
   } else if (m->replacement == NULL) {
     error (c2m_ctx, id->pos, "standard macro %s redefinition", name);
@@ -2097,6 +2098,8 @@ static void define (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, id->pos, "different macro redefinition of %s", name);
     VARR_DESTROY (token_t, repl);
   }
+  if (params != NULL)
+    VARR_DESTROY(token_t, params);
 }
 
 #ifdef C2MIR_PREPRO_DEBUG
