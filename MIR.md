@@ -605,9 +605,9 @@ main:	  func
       works only on the same targets as MIR generator
 
 # MIR generator (file mir-gen.h)
-  * Before use of MIR generator you should initialize it by API function `MIR_gen_init (MIR_context ctx)`
-  * API function `MIR_gen_finish (MIR_context ctx)` should be called last after any generator usage.
-    It frees all internal generator data
+  * Before use of MIR generator for given context you should initialize it by API function `MIR_gen_init (MIR_context ctx)`
+  * API function `MIR_gen_finish (MIR_context ctx)` frees all internal generator data for the context.
+    If you want to generate code for the context again after the `MIR_gen_finish` call, you should call `MIR_gen_init` again first
   * API function `void *MIR_gen (MIR_context ctx, MIR_item_t func_item)` generates machine code of given MIR function
     and returns an address to call it.  You can call the code as usual C function by using this address
     as the called function address
