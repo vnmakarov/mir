@@ -340,11 +340,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   disp = 0;
   for (uint32_t i = 0; i < nres; i++) {
     type = res_types[i];
-    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 4) {
+    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 8) {
       ppc64_gen_st (ctx, n_fpregs + 1, res_reg, disp, type);
       n_fpregs++;
       if (type == MIR_T_LD) {
-        if (n_fpregs >= 4)
+        if (n_fpregs >= 8)
           (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
         ppc64_gen_st (ctx, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
