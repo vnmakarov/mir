@@ -9167,7 +9167,7 @@ struct gen_ctx {
   VARR (init_el_t) * init_els;
   MIR_item_t memset_proto, memset_item;
   MIR_item_t memcpy_proto, memcpy_item;
-  VARR (MIR_op_t) * call_ops, *switch_ops;
+  VARR (MIR_op_t) * call_ops, *ret_ops, *switch_ops;
   VARR (case_t) * switch_cases;
   int curr_mir_proto_num;
 };
@@ -9187,6 +9187,7 @@ struct gen_ctx {
 #define memcpy_proto c2m_ctx->gen_ctx->memcpy_proto
 #define memcpy_item c2m_ctx->gen_ctx->memcpy_item
 #define call_ops c2m_ctx->gen_ctx->call_ops
+#define ret_ops c2m_ctx->gen_ctx->ret_ops
 #define switch_ops c2m_ctx->gen_ctx->switch_ops
 #define switch_cases c2m_ctx->gen_ctx->switch_cases
 #define curr_mir_proto_num c2m_ctx->gen_ctx->curr_mir_proto_num
@@ -11857,6 +11858,7 @@ static void gen_finish (MIR_context_t ctx) {
   if (proto_info.arg_vars != NULL) VARR_DESTROY (MIR_var_t, proto_info.arg_vars);
   if (proto_info.ret_types != NULL) VARR_DESTROY (MIR_type_t, proto_info.ret_types);
   if (call_ops != NULL) VARR_DESTROY (MIR_op_t, call_ops);
+  if (ret_ops != NULL) VARR_DESTROY (MIR_op_t, ret_ops);
   if (switch_ops != NULL) VARR_DESTROY (MIR_op_t, switch_ops);
   if (switch_cases != NULL) VARR_DESTROY (case_t, switch_cases);
   if (init_els != NULL) VARR_DESTROY (init_el_t, init_els);
@@ -11875,6 +11877,7 @@ static void gen_mir (MIR_context_t ctx, node_t r) {
   VARR_CREATE (MIR_type_t, proto_info.ret_types, 16);
   gen_mir_protos (ctx);
   VARR_CREATE (MIR_op_t, call_ops, 32);
+  VARR_CREATE (MIR_op_t, ret_ops, 8);
   VARR_CREATE (MIR_op_t, switch_ops, 128);
   VARR_CREATE (case_t, switch_cases, 64);
   VARR_CREATE (init_el_t, init_els, 128);
