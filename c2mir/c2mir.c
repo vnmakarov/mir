@@ -10133,7 +10133,7 @@ static int simple_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
 
 #if 0 && defined(__x86_64__)
 #include "x86_64/cx86_64-ABI-code.c"
-#elif defined(__PPC64__)
+#elif 0 && defined(__PPC64__)
 #include "ppc64/cppc64-ABI-code.c"
 #else
 typedef int target_arg_info_t; /* whatever */
