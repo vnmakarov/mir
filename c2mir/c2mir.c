@@ -11510,6 +11510,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     MIR_insn_t insn;
     MIR_type_t res_type, param_mir_type;
     MIR_reg_t fp_reg, param_reg;
+    target_arg_info_t arg_info;
     const char *name;
 
     assert (declarator != NULL && declarator->code == N_DECL
@@ -11539,6 +11540,7 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     }
     for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, proto_info.arg_vars); i++)
       get_reg_var (ctx, MIR_T_UNDEF, VARR_GET (MIR_var_t, proto_info.arg_vars, i).name);
+    target_init_arg_vars (ctx, &arg_info);
     if ((first_param = NL_HEAD (decl_type->u.func_type->param_list->ops)) != NULL
         && !void_param_p (first_param)) {
       for (param = first_param; param != NULL; param = NL_NEXT (param)) {
@@ -11549,22 +11551,23 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         param_type = param_decl->decl_spec.type;
         assert (!param_decl->reg_p
                 || (param_type->mode != TM_STRUCT && param_type->mode != TM_UNION));
-        if (param_decl->reg_p) continue;
         name = get_param_name (ctx, param_type, param_id->u.s.s);
-        if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION) {
+	if (target_gen_gather_arg (ctx, name, param_type, param_decl, &arg_info)) continue;
+	if (param_decl->reg_p) continue;
+        if (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION) { /* ??? only block pass */
           param_reg = get_reg_var (ctx, MIR_POINTER_TYPE, name).reg;
           val = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, param_reg, 0, 1));
           var
             = new_op (param_decl, MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
                                                   MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1));
           block_move (ctx, var, val, type_size (c2m_ctx, param_type));
-        } else {
-          param_mir_type = get_mir_type (ctx, param_type);
-          emit2 (ctx, tp_mov (param_mir_type),
-                 MIR_new_mem_op (ctx, param_mir_type, param_decl->offset,
-                                 MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
-                 MIR_new_reg_op (ctx, get_reg_var (ctx, MIR_T_UNDEF, name).reg));
-        }
+	} else {
+	  param_mir_type = get_mir_type (ctx, param_type);
+	  emit2 (ctx, tp_mov (param_mir_type),
+		 MIR_new_mem_op (ctx, param_mir_type, param_decl->offset,
+				 MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
+		 MIR_new_reg_op (ctx, get_reg_var (ctx, MIR_T_UNDEF, name).reg));
+	}
       }
     }
     gen (ctx, stmt, NULL, NULL, FALSE, NULL);
