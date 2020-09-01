@@ -9949,7 +9949,7 @@ static void block_move (MIR_context_t ctx, op_t var, op_t val, mir_size_t size) 
   MIR_label_t repeat_label;
   op_t index;
 
-  if (MIR_op_eq_p (ctx, var.mir_op, val.mir_op)) return;
+  if (MIR_op_eq_p (ctx, var.mir_op, val.mir_op) || size == 0) return;
   if (size > 5) {
     var = mem_to_address (ctx, var, TRUE);
     assert (var.mir_op.mode == MIR_OP_REG);
