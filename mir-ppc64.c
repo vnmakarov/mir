@@ -478,7 +478,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         ppc64_gen_ld (ctx, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }
-    } else if (n_gpregs < 1) {  // just one gp reg
+    } else if (n_gpregs < 2) {  // just one-two gp reg
       ppc64_gen_ld (ctx, n_gpregs + 3, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
