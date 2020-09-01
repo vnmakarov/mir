@@ -11812,7 +11812,8 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     decl_t func_decl = curr_func_def->attr;
     struct type *func_type = func_decl->decl_spec.type;
     struct type *ret_type = func_type->u.func_type->ret_type;
-    int scalar_p = scalar_type_p (ret_type);
+    int scalar_p = ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION;
+    int ret_by_addr_p = target_return_by_addr_p (ctx, ret_type);
     mir_size_t size = type_size (c2m_ctx, ret_type);
 
     assert (false_label == NULL && true_label == NULL);
@@ -11821,21 +11822,21 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
       emit_insn (ctx, MIR_new_ret_insn (ctx, 0));
       break;
     }
-    if (!scalar_p) {
+    if (ret_by_addr_p) {
       MIR_reg_t ret_addr_reg = MIR_reg (ctx, RET_ADDR_NAME, curr_func->u.func);
 
       var = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, ret_addr_reg, 0, 1));
     }
-    val = gen (ctx, NL_EL (r->ops, 1), NULL, NULL, scalar_p, scalar_p ? NULL : &var);
-    if (scalar_p) {
+    val = gen (ctx, NL_EL (r->ops, 1), NULL, NULL, !ret_by_addr_p && scalar_p, !ret_by_addr_p || scalar_p ? NULL : &var);
+    if (!ret_by_addr_p && scalar_p) {
       t = get_mir_type (ctx, ret_type);
       t = promote_mir_int_type (t);
       val = promote (ctx, val, t, FALSE);
-      emit_insn (ctx, MIR_new_ret_insn (ctx, 1, val.mir_op));
-    } else { /* block return */
-      block_move (ctx, var, val, size);
-      emit_insn (ctx, MIR_new_ret_insn (ctx, 0));
     }
+    VARR_TRUNC (MIR_op_t, ret_ops, 0);
+    target_add_ret_ops (ctx, func_type->u.func_type->ret_type, val);
+    emit_insn (ctx, MIR_new_insn_arr (ctx, MIR_RET, VARR_LENGTH (MIR_op_t, ret_ops),
+				      VARR_ADDR (MIR_op_t, ret_ops)));
     break;
   }
   case N_EXPR:
