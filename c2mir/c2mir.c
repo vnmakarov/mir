@@ -10019,57 +10019,158 @@ static const char *get_param_name (MIR_context_t ctx, struct type *param_type, c
   return get_reg_var_name (ctx, promote_mir_int_type (type), name, 0);
 }
 
-#if 0 && defined(__x86_64__)
-#include "x86_64/cx86_64-ABI-code.c"
-#endif
-
-#ifndef ATYPICAL_CALL_ABI
-typedef int target_arg_info_t;
-
-static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {}
-
-static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
-                            target_arg_info_t *arg_info) {
-  MIR_var_t var;
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-
-  proto_info.res_ref_p = FALSE;
-  if (void_type_p (func_type->ret_type)) return;
-  if (func_type->ret_type->mode != TM_STRUCT && func_type->ret_type->mode != TM_UNION) {
-    VARR_PUSH (MIR_type_t, proto_info.ret_types, get_mir_type (ctx, func_type->ret_type));
-    return;
-  }
-  var.name = RET_ADDR_NAME;
-  var.type = MIR_POINTER_TYPE;
-  VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
-  proto_info.res_ref_p = TRUE;
+static void simple_init_arg_vars (MIR_context_t ctx, void *arg_info) {
 }
 
-static void target_add_param (MIR_context_t ctx, const char *name, struct type *param_type,
-                              decl_t param_decl, target_arg_info_t *arg_info) {
+static int simple_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
+  return ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION;
+}
+
+static void simple_add_res_proto (MIR_context_t ctx, struct type *ret_type,
+				  void *arg_info, VARR (MIR_type_t) *res_types,
+				  VARR (MIR_var_t) *arg_vars) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_var_t var;
+  MIR_type_t type;
+  int i, n, s;
+  
+  if (void_type_p (ret_type)) return;
+  if (!simple_return_by_addr_p (ctx, ret_type)) {
+    VARR_PUSH (MIR_type_t, res_types, get_mir_type (ctx, ret_type));
+  } else {
+    var.name = RET_ADDR_NAME;
+    var.type = MIR_POINTER_TYPE;
+    VARR_PUSH (MIR_var_t, arg_vars, var);
+  }
+}
+
+static int simple_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
+				   void *arg_info, size_t call_arg_area_offset) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_type_t type;
+  op_t temp;
+  int i, n, s;
+  
+  if (void_type_p (ret_type)) return -1;
+  if (!simple_return_by_addr_p (ctx, ret_type)) {
+    type = promote_mir_int_type (get_mir_type (ctx, ret_type));
+    temp = get_new_temp (ctx, type);
+    VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
+    return 1;
+  }
+  temp = get_new_temp (ctx, MIR_T_I64);
+  emit3 (ctx, MIR_ADD, temp.mir_op,
+	 MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
+	 MIR_new_int_op (ctx, call_arg_area_offset));
+  VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
+  return 0;
+}
+
+static op_t simple_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_type,
+					   op_t res, MIR_insn_t call, size_t call_ops_start) {
+  return res;
+}
+
+static void simple_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_type_t type;
+  MIR_insn_t insn;
+  MIR_reg_t ret_addr_reg;
+  op_t temp, var;
+  int i, n;
+  
+  if (void_type_p (ret_type)) return;
+  if (!simple_return_by_addr_p (ctx, ret_type)) {
+    VARR_PUSH (MIR_op_t, ret_ops, val.mir_op);
+  } else {
+    ret_addr_reg = MIR_reg (ctx, RET_ADDR_NAME, curr_func->u.func);
+    var = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, ret_addr_reg, 0, 1));
+    block_move (ctx, var, val, type_size (c2m_ctx, ret_type));
+  }
+}
+
+static void simple_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
+				  void *arg_info,
+				  VARR (MIR_var_t) *arg_vars) {
   MIR_var_t var;
   MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  int n;
 
-  if (param_decl != NULL) {
-    param_decl->param_args_num = 0;
-    param_decl->param_args_start = VARR_LENGTH (MIR_var_t, proto_info.arg_vars);
-  }
-  type = (param_type->mode == TM_STRUCT || param_type->mode == TM_UNION
-#ifdef BLK_PARAM
-            ? MIR_T_BLK
-#else
-            ? MIR_POINTER_TYPE
-#endif
-            : get_mir_type (ctx, param_type));
+  type = (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION
+	  ? MIR_T_BLK
+	  : get_mir_type (ctx, arg_type));
   var.name = name;
   var.type = type;
-#ifdef BLK_PARAM
-  if (type == MIR_T_BLK) var.size = type_size (c2m_ctx, param_type);
-#endif
-  VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
+  if (type == MIR_T_BLK) var.size = type_size (c2m_ctx, arg_type);
+  VARR_PUSH (MIR_var_t, arg_vars, var);
 }
 
+static void simple_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
+				    void *arg_info, op_t arg) {
+  MIR_var_t var;
+  MIR_type_t type;
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  int n;
+
+  type = (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION
+	  ? MIR_T_BLK
+	  : get_mir_type (ctx, arg_type));
+  if (type != MIR_T_BLK) {
+    VARR_PUSH (MIR_op_t, call_ops, arg.mir_op);
+  } else {
+    assert (arg.mir_op.mode == MIR_OP_MEM);
+    arg = mem_to_address (ctx, arg, TRUE);
+    VARR_PUSH (MIR_op_t, call_ops, MIR_new_mem_op (ctx, MIR_T_BLK, type_size (c2m_ctx, arg_type),
+						   arg.mir_op.u.reg, 0, 1));
+  }
+}
+
+static int simple_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
+				  decl_t param_decl, void *arg_info) {
+  return FALSE;
+}
+
+#if 0 && defined(__x86_64__)
+#include "x86_64/cx86_64-ABI-code.c"
+#elif defined(__PPC64__)
+#include "ppc64/cppc64-ABI-code.c"
+#else
+typedef int target_arg_info_t; /* whatever */
+static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {
+  simple_init_arg_vars (ctx, arg_info);
+}
+static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
+  return simple_return_by_addr_p (ctx, ret_type);
+}
+static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
+				  target_arg_info_t *arg_info, VARR (MIR_type_t) *res_types,
+				  VARR (MIR_var_t) *arg_vars) {
+  simple_add_res_proto (ctx, ret_type, arg_info, res_types, arg_vars);
+}
+static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
+				   target_arg_info_t *arg_info, size_t call_arg_area_offset) {
+  return simple_add_call_res_op (ctx, ret_type, arg_info, call_arg_area_offset);
+}
+static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_type,
+					   op_t res, MIR_insn_t call, size_t call_ops_start) {
+  return simple_gen_post_call_res_code (ctx, ret_type, res, call, call_ops_start);
+}
+static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
+  simple_add_ret_ops (ctx, ret_type, val);
+}
+static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
+				  target_arg_info_t *arg_info, VARR (MIR_var_t) *arg_vars) {
+  simple_add_arg_proto (ctx, name, arg_type, arg_info, arg_vars);
+}
+static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
+				    target_arg_info_t *arg_info, op_t arg) {
+  simple_add_call_arg_op (ctx, arg_type, arg_info, arg);
+}
+static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
+				  decl_t param_decl, target_arg_info_t *arg_info) {
+  return simple_gen_gather_arg (ctx, name, arg_type, param_decl, arg_info);
+}
 #endif
 
 static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *func_type) {
@@ -10086,7 +10187,7 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
   proto_info.res_ref_p = FALSE;
   target_init_arg_vars (ctx, &arg_info);
   set_type_layout (c2m_ctx, func_type->ret_type);
-  target_add_res (ctx, func_type, &arg_info);
+  target_add_res_proto (ctx, func_type->ret_type, &arg_info, proto_info.ret_types, proto_info.arg_vars);
   if (first_param != NULL && !void_param_p (first_param)) {
     for (p = first_param; p != NULL; p = NL_NEXT (p)) {
       if (p->code == N_TYPE) {
@@ -10101,7 +10202,7 @@ static void collect_args_and_func_types (MIR_context_t ctx, struct func_type *fu
         param_type = param_decl->decl_spec.type;
         name = get_param_name (ctx, param_type, id->u.s.s);
       }
-      target_add_param (ctx, name, param_type, param_decl, &arg_info);
+      target_add_arg_proto (ctx, name, param_type, &arg_info, proto_info.arg_vars);
     }
   }
 }
@@ -11178,12 +11279,16 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     struct type *func_type = NULL; /* to remove an uninitialized warning */
     struct type *type = call_expr->type;
     MIR_item_t proto_item;
-    mir_size_t saved_call_arg_area_offset_before_args;
+    MIR_insn_t call_insn;
+    mir_size_t saved_call_arg_area_offset_before_args, arg_area_offset;
     int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
     int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
     int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
     int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
-    int struct_p;
+    node_t block = NL_EL (curr_func_def->ops, 3);
+    struct node_scope *ns = block->attr;
+    target_arg_info_t arg_info;
+    int n, struct_p;
 
     ops_start = VARR_LENGTH (MIR_op_t, call_ops);
     if (!builtin_call_p) {
@@ -11199,37 +11304,38 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         inline_p = TRUE;
       VARR_PUSH (MIR_op_t, call_ops, op1.mir_op);
     }
-    if (scalar_type_p (type)) {
-      t = get_mir_type (ctx, type);
-      t = promote_mir_int_type (t);
-      res = get_new_temp (ctx, t);
-      VARR_PUSH (MIR_op_t, call_ops, res.mir_op);
-    } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
-      node_t block = NL_EL (curr_func_def->ops, 3);
-      struct node_scope *ns = block->attr;
-
-      res = get_new_temp (ctx, MIR_T_I64);
-      emit3 (ctx, MIR_ADD, res.mir_op,
-             MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
-             MIR_new_int_op (ctx, curr_call_arg_area_offset + ns->size - ns->call_arg_area_size));
+    target_init_arg_vars (ctx, &arg_info);
+    arg_area_offset = curr_call_arg_area_offset + ns->size - ns->call_arg_area_size;
+    if ((n = target_add_call_res_op (ctx, type, &arg_info, arg_area_offset)) < 0) { /* pass nothing */
+    } else if (n == 0) { /* by addr */
       if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
-      VARR_PUSH (MIR_op_t, call_ops, res.mir_op);
+      res = new_op (NULL, VARR_LAST (MIR_op_t, call_ops));
+      assert (res.mir_op.mode == MIR_OP_REG);
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
       t = MIR_T_I64;
+    } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) { /* passed in regs */
+      res = get_new_temp (ctx, MIR_T_I64);
+      emit3 (ctx, MIR_ADD, res.mir_op,
+	     MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
+	     MIR_new_int_op (ctx, arg_area_offset));
+      if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
+      res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
+      t = MIR_T_I64;
+    } else if (n > 0) {
+      assert (n == 1);
+      t = promote_mir_int_type (get_mir_type (ctx, type));
+      res = new_op (NULL, VARR_LAST (MIR_op_t, call_ops));
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
     if (va_arg_p) {
       op1 = get_new_temp (ctx, MIR_T_I64);
       op2 = gen (ctx, NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
-#ifdef BLK_PARAM
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_STACK_ARG, op1.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
-        op2 = op1;
-      } else
-#endif
-      {
+	op2 = op1;
+      } else {
 	if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
 	  op2 = mem_to_address (ctx, op2, FALSE);
         MIR_append_insn (ctx, curr_func,
@@ -11241,10 +11347,10 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
                                        MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
       }
       if (res.mir_op.mode == MIR_OP_REG) {
-        res = op2;
+	res = op2;
       } else {
-        assert (res.mir_op.mode == MIR_OP_MEM);
-        res.mir_op.u.mem.base = op2.mir_op.u.reg;
+	assert (res.mir_op.mode == MIR_OP_MEM);
+	res.mir_op.u.mem.base = op2.mir_op.u.reg;
       }
     } else if (va_start_p) {
       op1 = gen (ctx, NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
@@ -11264,32 +11370,26 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
         op2 = gen (ctx, arg, NULL, NULL, !struct_p, NULL);
         assert (param != NULL || NL_HEAD (param_list->ops) == NULL
                 || func_type->u.func_type->dots_p);
-        if (struct_p) { /* pass an adress of struct/union: */
-          assert (op2.mir_op.mode == MIR_OP_MEM);
-          op2 = mem_to_address (ctx, op2, TRUE);
-#ifdef BLK_PARAM
-          assert (op2.mir_op.mode == MIR_OP_REG);
-          op2 = new_op (NULL /*???*/, MIR_new_mem_op (ctx, MIR_T_BLK, type_size (c2m_ctx, e->type),
-                                                      op2.mir_op.u.reg, 0, 1));
-#endif
-        } else if (param != NULL) {
-          assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
-          decl_spec = get_param_decl_spec (param);
-          t = get_mir_type (ctx, decl_spec->type);
-          t = promote_mir_int_type (t);
-          op2 = promote (ctx, op2, t, FALSE);
-        } else {
-          t = get_mir_type (ctx, e->type);
-          t = promote_mir_int_type (t);
-          op2 = promote (ctx, op2, t == MIR_T_F ? MIR_T_D : t, FALSE);
-        }
-        VARR_PUSH (MIR_op_t, call_ops, op2.mir_op);
+	if (struct_p) {
+	} else if (param != NULL) {
+	  assert (param->code == N_SPEC_DECL || param->code == N_TYPE);
+	  decl_spec = get_param_decl_spec (param);
+	  t = get_mir_type (ctx, decl_spec->type);
+	  t = promote_mir_int_type (t);
+	  op2 = promote (ctx, op2, t, FALSE);
+	} else {
+	  t = get_mir_type (ctx, e->type);
+	  t = promote_mir_int_type (t);
+	  op2 = promote (ctx, op2, t == MIR_T_F ? MIR_T_D : t, FALSE);
+	}
+	target_add_call_arg_op (ctx, e->type, &arg_info, op2);
         if (param != NULL) param = NL_NEXT (param);
       }
-      MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn_arr (ctx, (inline_p ? MIR_INLINE : MIR_CALL),
-                                         VARR_LENGTH (MIR_op_t, call_ops) - ops_start,
-                                         VARR_ADDR (MIR_op_t, call_ops) + ops_start));
+      call_insn = MIR_new_insn_arr (ctx, (inline_p ? MIR_INLINE : MIR_CALL),
+				    VARR_LENGTH (MIR_op_t, call_ops) - ops_start,
+				    VARR_ADDR (MIR_op_t, call_ops) + ops_start);
+      MIR_append_insn (ctx, curr_func, call_insn);
+      res = target_gen_post_call_res_code (ctx, func_type->u.func_type->ret_type, res, call_insn, ops_start);
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
     VARR_TRUNC (MIR_op_t, call_ops, ops_start);
