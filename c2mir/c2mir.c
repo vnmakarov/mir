@@ -11326,14 +11326,14 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (va_arg_p) {
       op1 = get_new_temp (ctx, MIR_T_I64);
       op2 = gen (ctx, NL_HEAD (args->ops), NULL, NULL, TRUE, NULL);
+      if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
+        op2 = mem_to_address (ctx, op2, FALSE);
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_STACK_ARG, op1.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
         op2 = op1;
       } else {
-        if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
-          op2 = mem_to_address (ctx, op2, FALSE);
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
                                        MIR_new_mem_op (ctx, t, 0, 0, 0, 1)));
