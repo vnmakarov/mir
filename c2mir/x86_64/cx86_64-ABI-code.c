@@ -349,8 +349,9 @@ static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
   int n, n_qwords = process_aggregate_arg (ctx, arg_type, arg_info, qword_types);
 
   if (n_qwords != 0) {
+    assert (arg.mir_op.mode == MIR_OP_MEM);
+    arg = mem_to_address (ctx, arg, TRUE);
     for (n = 0; n < n_qwords; n++) {
-      assert (arg.mir_op.mode == MIR_OP_REG);
       type = qword_types[n];
       temp = get_new_temp (ctx, type);
       MIR_append_insn (ctx, curr_func,
