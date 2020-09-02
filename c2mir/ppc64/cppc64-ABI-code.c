@@ -259,8 +259,9 @@ static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
   int n;
 
   if (((type = fp_homogeneous_type (ctx, arg_type, &n)) == MIR_T_F || type == MIR_T_D) && n <= 8) {
+    assert (arg.mir_op.mode == MIR_OP_MEM);
+    arg = mem_to_address (ctx, arg, TRUE);
     for (int i = 0; i < n; i++) {
-      assert (arg.mir_op.mode == MIR_OP_REG);
       temp = get_new_temp (ctx, type);
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type), temp.mir_op,
