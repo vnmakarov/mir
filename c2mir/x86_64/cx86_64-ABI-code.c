@@ -132,6 +132,7 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
   int n, n_iregs, n_fregs, n_stregs, curr;
   int n_qwords = classify_arg (ctx, ret_type, qword_types, 0, FALSE);
 
+  if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) return 0;
   if (n_qwords != 0) {
     n_iregs = n_fregs = n_stregs = curr = 0;
     for (n = 0; n < n_qwords; n++) { /* start from the last qword */
@@ -287,6 +288,7 @@ static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
   int n, n_iregs, n_fregs, n_qwords = classify_arg (ctx, arg_type, qword_types, 0, FALSE);
 
   if (n_qwords == 0) return 0;
+  if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) return 0;
   n_iregs = n_fregs = 0;
   for (n = 0; n < n_qwords; n++) { /* start from the last qword */
     switch ((type = qword_types[n])) {
