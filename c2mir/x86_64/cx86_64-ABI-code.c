@@ -38,7 +38,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
   int i, n_el_qwords, n_qwords = (size + 7) / 8;
   MIR_type_t mir_type;
 
-  if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_STRUCT) {
+  if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ARR) {
     MIR_type_t subtypes[MAX_QWORDS];
 
     if (n_qwords > 8) return 0; /* too big aggregate */
