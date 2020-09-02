@@ -334,7 +334,6 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   } else {
     var.type = MIR_T_BLK;
     var.size = type_size (c2m_ctx, arg_type);
-    VARR_PUSH (MIR_var_t, arg_vars, var);
   }
   VARR_PUSH (MIR_var_t, arg_vars, var);
 }
