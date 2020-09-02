@@ -328,6 +328,8 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   /* pass aggregates on the stack and pass by value for others: */
   var.name = name;
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
+    type = get_mir_type (ctx, arg_type);
+    type = promote_mir_int_type (type);
     var.type = type;
     if (type == MIR_T_F || type == MIR_T_D)
       arg_info->n_fregs++;
