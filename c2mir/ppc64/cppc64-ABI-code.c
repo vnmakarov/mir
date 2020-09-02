@@ -171,10 +171,8 @@ static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_t
 
   if (void_type_p (ret_type)) return res;
   if (((type = fp_homogeneous_type (ctx, ret_type, &n)) == MIR_T_F || type == MIR_T_D) && n <= 8) {
-    assert (res.mir_op.mode == MIR_OP_REG); /* addr */
+    assert (res.mir_op.mode == MIR_OP_MEM);
     for (i = 0; i < n; i++) {
-      assert (res.mir_op.mode == MIR_OP_MEM);
-      //      res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
       insn = MIR_new_insn (ctx, tp_mov (type),
                            MIR_new_mem_op (ctx, type,
                                            res.mir_op.u.mem.disp + (type == MIR_T_F ? 4 : 8) * i,
