@@ -126,16 +126,12 @@ static const char *qword_name (MIR_context_t ctx, const char *name, int num) {
   return uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
 }
 
-static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
-                            target_arg_info_t *arg_info) {
-  MIR_var_t var;
+static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
+                             MIR_type_t qword_types[MAX_QWORDS]) {
   MIR_type_t type;
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  MIR_type_t qword_types[MAX_QWORDS];
-  int n_iregs, n_fregs, n_stregs, n, n_qwords, curr;
+  int n, n_iregs, n_fregs, n_stregs, curr;
+  int n_qwords = classify_arg (ctx, ret_type, qword_types, 0, FALSE);
 
-  if (void_type_p (func_type->ret_type)) return;
-  n_qwords = classify_arg (ctx, func_type->ret_type, qword_types, 0, FALSE);
   if (n_qwords != 0) {
     n_iregs = n_fregs = n_stregs = curr = 0;
     for (n = 0; n < n_qwords; n++) { /* start from the last qword */
@@ -155,21 +151,43 @@ static void target_add_res (MIR_context_t ctx, struct func_type *func_type,
       case MIR_T_UNDEF: assert (FALSE);
       }
     }
-    if (n_iregs > 2 || n_fregs > 2 || n_stregs > 1) {
-      n_qwords = 0;
-    }
+    if (n_iregs > 2 || n_fregs > 2 || n_stregs > 1) n_qwords = 0;
   }
+  return n_qwords;
+}
 
-  proto_info.res_ref_p = FALSE;
-  if (n_qwords == 0) { /* return by reference */
+static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_type_t qword_types[MAX_QWORDS];
+  int n_qwords;
+
+  if (void_type_p (ret_type)) return FALSE;
+  n_qwords = process_ret_type (ctx, ret_type, qword_types);
+  return n_qwords == 0 && (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION);
+}
+
+static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
+                                  target_arg_info_t *arg_info, VARR (MIR_type_t) * res_types,
+                                  VARR (MIR_var_t) * arg_vars) {
+  MIR_var_t var;
+  MIR_type_t type;
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_type_t qword_types[MAX_QWORDS];
+  int n, n_qwords;
+
+  if (void_type_p (ret_type)) return;
+  n_qwords = process_ret_type (ctx, ret_type, qword_types);
+  if (n_qwords != 0) {
+    for (n = 0; n < n_qwords; n++) VARR_PUSH (MIR_type_t, res_types, qword_types[n]);
+  } else if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) {
+    type = get_mir_type (ctx, ret_type);
+    type = promote_mir_int_type (type);
+    VARR_PUSH (MIR_type_t, res_types, type);
+  } else { /* return by reference */
     var.name = RET_ADDR_NAME;
     var.type = MIR_POINTER_TYPE;
-    VARR_PUSH (MIR_var_t, proto_info.arg_vars, var);
-    proto_info.res_ref_p = TRUE;
+    VARR_PUSH (MIR_var_t, arg_vars, var);
     arg_info->n_iregs++;
-    return;
-  } else {
-    for (n = 0; n < n_qwords; n++) VARR_PUSH (MIR_type_t, proto_info.ret_types, qword_types[n]);
   }
 }
 
