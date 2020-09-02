@@ -3,8 +3,6 @@
    x86_64 ABI target specific code.
 */
 
-#define ATYPICAL_CALL_ABI
-
 /* See https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf.  We use MIR_T_UNDEF for
    MEMORY. */
 
