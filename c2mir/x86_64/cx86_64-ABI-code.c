@@ -390,7 +390,7 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   for (i = 0; i < n_qwords; i++) {
     assert (!param_decl->reg_p);
     type = qword_types[i];
-    reg_var = get_reg_var (ctx, type, name);
+    reg_var = get_reg_var (ctx, type, qword_name (ctx, name, i));
     MIR_append_insn (ctx, curr_func,
                      MIR_new_insn (ctx, tp_mov (type), MIR_new_reg_op (ctx, reg_var.reg),
                                    MIR_new_mem_op (ctx, type, param_decl->offset + 8 * i,
