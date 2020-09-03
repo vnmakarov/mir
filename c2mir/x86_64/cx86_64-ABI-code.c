@@ -184,7 +184,6 @@ static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
       VARR_PUSH (MIR_type_t, res_types, promote_mir_int_type (qword_types[n]));
   } else if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) {
     type = get_mir_type (ctx, ret_type);
-    type = promote_mir_int_type (type);
     VARR_PUSH (MIR_type_t, res_types, type);
   } else { /* return by reference */
     var.name = RET_ADDR_NAME;
@@ -332,7 +331,6 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   var.name = name;
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
     type = get_mir_type (ctx, arg_type);
-    type = promote_mir_int_type (type);
     var.type = type;
     if (type == MIR_T_F || type == MIR_T_D)
       arg_info->n_fregs++;
