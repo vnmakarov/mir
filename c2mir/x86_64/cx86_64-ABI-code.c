@@ -140,6 +140,8 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
       type = qword_types[n];
       qword_types[curr++] = type;
       switch (type) {
+      case MIR_T_I8:
+      case MIR_T_I16:
       case MIR_T_I32:
       case MIR_T_I64: n_iregs++; break;
       case MIR_T_F:
@@ -294,6 +296,8 @@ static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
   n_iregs = n_fregs = 0;
   for (n = 0; n < n_qwords; n++) { /* start from the last qword */
     switch ((type = qword_types[n])) {
+    case MIR_T_I8:
+    case MIR_T_I16:
     case MIR_T_I32:
     case MIR_T_I64: n_iregs++; break;
     case MIR_T_F:
