@@ -29,7 +29,7 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
 }
 
 static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[MAX_QWORDS],
-                         mir_size_t offset, int bit_field_p) {
+                         int bit_field_p) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   size_t size = type_size (c2m_ctx, type);
   int i, n_el_qwords, n_qwords = (size + 7) / 8;
@@ -44,13 +44,11 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
 
     switch (type->mode) {
     case TM_ARR: { /* Arrays are handled as small records.  */
-      n_el_qwords = classify_arg (ctx, type->u.arr_type->el_type, subtypes, 0, FALSE);
+      n_el_qwords = classify_arg (ctx, type->u.arr_type->el_type, subtypes, FALSE);
       if (n_el_qwords == 0) return 0;
       /* make full types: */
-      if (subtypes[0] == MIR_T_F && size != 4) subtypes[0] = MIR_T_D;
-      if (subtypes[0] == MIR_T_I32 && (bit_field_p || size != 4)) subtypes[0] = MIR_T_I64;
-      for (i = 0; i < n_qwords; i++) types[i] = subtypes[i % n_el_qwords];
-
+      for (i = 0; i < n_qwords; i++)
+        types[i] = get_result_type (types[i], subtypes[i % n_el_qwords]);
       break;
     }
     case TM_STRUCT:
@@ -59,14 +57,12 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
-          int start_qword = (offset + decl->offset) / 8;
+          int start_qword = decl->offset / 8;
 
           if (decl->bit_offset >= 0) {
             types[start_qword] = get_result_type (MIR_T_I64, types[start_qword]);
           } else {
-            n_el_qwords = classify_arg (ctx, decl->decl_spec.type, subtypes,
-                                        offset + (type->mode == TM_STRUCT ? decl->offset : 0),
-                                        decl->bit_offset >= 0);
+            n_el_qwords = classify_arg (ctx, decl->decl_spec.type, subtypes, decl->bit_offset >= 0);
             if (n_el_qwords == 0) return 0;
             for (i = 0; i < n_el_qwords && (i + start_qword) < n_qwords; i++)
               types[i + start_qword] = get_result_type (subtypes[i], types[i + start_qword]);
@@ -87,20 +83,13 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
 
   assert (scalar_type_p (type));
   switch (mir_type = get_mir_type (ctx, type)) {
-  case MIR_T_F: types[0] = offset % 8 != 0 ? MIR_T_D : MIR_T_F; return 1;
+  case MIR_T_F:
   case MIR_T_D: types[0] = MIR_T_D; return 1;
   case MIR_T_LD:
     types[0] = MIR_T_LD;
     types[1] = X87UP_CLASS;
     return 2;
-  default:
-    if (!bit_field_p && offset % 8 + size <= 4) {
-      types[0] = MIR_T_I32;
-    } else {
-      assert (size <= 8);
-      types[0] = MIR_T_I64;
-    }
-    return 1;
+  default: types[0] = MIR_T_I64; return 1;
   }
 }
 
@@ -127,7 +116,7 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
                              MIR_type_t qword_types[MAX_QWORDS]) {
   MIR_type_t type;
   int n, n_iregs, n_fregs, n_stregs, curr;
-  int n_qwords = classify_arg (ctx, ret_type, qword_types, 0, FALSE);
+  int n_qwords = classify_arg (ctx, ret_type, qword_types, FALSE);
 
   if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) return 0;
   if (n_qwords != 0) {
@@ -282,7 +271,7 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
 static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
                                   target_arg_info_t *arg_info, MIR_type_t qword_types[MAX_QWORDS]) {
   MIR_type_t type;
-  int n, n_iregs, n_fregs, n_qwords = classify_arg (ctx, arg_type, qword_types, 0, FALSE);
+  int n, n_iregs, n_fregs, n_qwords = classify_arg (ctx, arg_type, qword_types, FALSE);
 
   if (n_qwords == 0) return 0;
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) return 0;
