@@ -112,6 +112,20 @@ static const char *qword_name (MIR_context_t ctx, const char *name, int num) {
   return uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
 }
 
+static void update_last_qword_type (MIR_context_t ctx, struct type *type,
+                                    MIR_type_t qword_types[MAX_QWORDS], int n) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  size_t last_size, size = type_size (c2m_ctx, type);
+  MIR_type_t mir_type;
+
+  assert (n != 0);
+  if ((last_size = size % 8) == 0 || n > 1) return;
+  mir_type = qword_types[n - 1];
+  if (last_size <= 4 && mir_type == MIR_T_D) qword_types[n - 1] = MIR_T_F;
+  if (last_size <= 4 && mir_type == MIR_T_I64)
+    qword_types[n - 1] = last_size <= 1 ? MIR_T_I8 : last_size <= 2 ? MIR_T_I16 : MIR_T_I32;
+}
+
 static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
                              MIR_type_t qword_types[MAX_QWORDS]) {
   MIR_type_t type;
@@ -120,6 +134,7 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
 
   if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) return 0;
   if (n_qwords != 0) {
+    update_last_qword_type (ctx, ret_type, qword_types, n_qwords);
     n_iregs = n_fregs = n_stregs = curr = 0;
     for (n = 0; n < n_qwords; n++) { /* start from the last qword */
       type = qword_types[n];
@@ -275,6 +290,7 @@ static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
 
   if (n_qwords == 0) return 0;
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) return 0;
+  update_last_qword_type (ctx, arg_type, qword_types, n_qwords);
   n_iregs = n_fregs = 0;
   for (n = 0; n < n_qwords; n++) { /* start from the last qword */
     switch ((type = qword_types[n])) {
