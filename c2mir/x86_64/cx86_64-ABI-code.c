@@ -180,7 +180,8 @@ static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
   if (void_type_p (ret_type)) return;
   n_qwords = process_ret_type (ctx, ret_type, qword_types);
   if (n_qwords != 0) {
-    for (n = 0; n < n_qwords; n++) VARR_PUSH (MIR_type_t, res_types, qword_types[n]);
+    for (n = 0; n < n_qwords; n++)
+      VARR_PUSH (MIR_type_t, res_types, promote_mir_int_type (qword_types[n]));
   } else if (ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION) {
     type = get_mir_type (ctx, ret_type);
     type = promote_mir_int_type (type);
@@ -206,7 +207,7 @@ static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
   n_qwords = process_ret_type (ctx, ret_type, qword_types);
   if (n_qwords != 0) {
     for (i = 0; i < n_qwords; i++) {
-      temp = get_new_temp (ctx, qword_types[i]);
+      temp = get_new_temp (ctx, promote_mir_int_type (qword_types[i]));
       VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
     }
     return n_qwords;
@@ -265,7 +266,7 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
   if (n_qwords != 0) {
     for (i = 0; i < n_qwords; i++) {
       type = qword_types[i];
-      temp = get_new_temp (ctx, type);
+      temp = get_new_temp (ctx, promote_mir_int_type (type));
       insn = MIR_new_insn (ctx, tp_mov (type), temp.mir_op,
                            MIR_new_mem_op (ctx, type, res.mir_op.u.mem.disp + 8 * i,
                                            res.mir_op.u.mem.base, res.mir_op.u.mem.index,
@@ -322,7 +323,7 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   if (n_qwords != 0) {
     for (n = 0; n < n_qwords; n++) {
       var.name = qword_name (ctx, name, n);
-      var.type = qword_types[n];
+      var.type = promote_mir_int_type (qword_types[n]);
       VARR_PUSH (MIR_var_t, arg_vars, var);
     }
     return;
@@ -358,7 +359,7 @@ static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
     arg = mem_to_address (ctx, arg, TRUE);
     for (n = 0; n < n_qwords; n++) {
       type = qword_types[n];
-      temp = get_new_temp (ctx, type);
+      temp = get_new_temp (ctx, promote_mir_int_type (type));
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type), temp.mir_op,
                                      MIR_new_mem_op (ctx, type, 8 * n, arg.mir_op.u.reg, 0, 1)));
