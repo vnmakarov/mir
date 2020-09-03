@@ -396,6 +396,15 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   op_t temp;
   int i, n_qwords = process_aggregate_arg (ctx, arg_type, arg_info, qword_types);
 
+  if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
+    assert (n_qwords == 0);
+    type = get_mir_type (ctx, arg_type);
+    if (type == MIR_T_F || type == MIR_T_D)
+      arg_info->n_fregs++;
+    else if (type != MIR_T_LD)
+      arg_info->n_iregs++;
+    return FALSE;
+  }
   if (n_qwords == 0) return FALSE;
   for (i = 0; i < n_qwords; i++) {
     assert (!param_decl->reg_p);
