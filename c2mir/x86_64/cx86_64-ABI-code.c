@@ -213,6 +213,7 @@ static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
     }
     return n_qwords;
   } else if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) { /* return by reference */
+    arg_info->n_iregs++;
     temp = get_new_temp (ctx, MIR_T_I64);
     emit3 (ctx, MIR_ADD, temp.mir_op,
            MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
