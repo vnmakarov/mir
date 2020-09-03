@@ -17,9 +17,6 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
 
   if (arg_type1 == MIR_T_UNDEF || arg_type2 == MIR_T_UNDEF) return MIR_T_UNDEF;
 
-  if ((arg_type1 == MIR_T_I32 && arg_type2 == MIR_T_F)
-      || (arg_type2 == MIR_T_I32 && arg_type1 == MIR_T_F))
-    return MIR_T_I32;
   if (arg_type1 == MIR_T_I64 || arg_type1 == MIR_T_I32 || arg_type2 == MIR_T_I64
       || arg_type2 == MIR_T_I32)
     return MIR_T_I64;
