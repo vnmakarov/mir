@@ -3664,7 +3664,7 @@ typedef enum {
   REP3 (TAG_EL, MEM_DISP_INDEX, MEM_BASE_INDEX, MEM_DISP_BASE_INDEX),
   /* MIR types. The same order as MIR types: */
   REP8 (TAG_EL, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64),
-  REP6 (TAG_EL, TF, TD, TP, TV, TBLOCK, EOI),
+  REP7 (TAG_EL, TF, TD, TP, TV, TBLOCK, TRBLOCK, EOI),
   TAG_EL (EOFILE), /* end of insn with variable number operands (e.g. a call) or end of file */
   /* unsigned integer 0..127 is kept in one byte.  The most significant bit of the byte is 1: */
   U0_MASK = 0x7f,
@@ -4326,7 +4326,7 @@ static MIR_type_t tag_type (bin_tag_t tag) { return (MIR_type_t) (tag - TAG_TI8)
 static MIR_type_t read_type (MIR_context_t ctx, const char *err_msg) {
   int c = get_byte (ctx);
 
-  if (TAG_TI8 > c || c > TAG_TBLOCK) (*error_func) (MIR_binary_io_error, err_msg);
+  if (TAG_TI8 > c || c > TAG_TRBLOCK) (*error_func) (MIR_binary_io_error, err_msg);
   return tag_type (c);
 }
 
@@ -4381,7 +4381,7 @@ static bin_tag_t read_token (MIR_context_t ctx, token_attr_t *attr) {
     REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOFILE)
     break;
     REP8 (TAG_CASE, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64)
-    REP5 (TAG_CASE, TF, TD, TP, TV, TBLOCK)
+    REP6 (TAG_CASE, TF, TD, TP, TV, TBLOCK, TRBLOCK)
     attr->t = (MIR_type_t) (c - TAG_TI8) + MIR_T_I8;
     break;
   default: (*error_func) (MIR_binary_io_error, "wrong tag %d", c);
@@ -4488,7 +4488,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
   VARR_TRUNC (MIR_type_t, temp_types, 0);
   for (i = 0; i < nres; i++) {
     tag = read_token (ctx, &attr);
-    if (TAG_TI8 > tag || tag > TAG_TBLOCK)
+    if (TAG_TI8 > tag || tag > TAG_TRBLOCK)
       (*error_func) (MIR_binary_io_error, "wrong prototype result type tag %d", tag);
     VARR_PUSH (MIR_type_t, temp_types, tag_type (tag));
   }
@@ -4496,7 +4496,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
   for (;;) {
     tag = read_token (ctx, &attr);
     if (tag == TAG_EOI) break;
-    if (TAG_TI8 > tag || tag > TAG_TBLOCK)
+    if (TAG_TI8 > tag || tag > TAG_TRBLOCK)
       (*error_func) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
     var.name = read_name (ctx, module, "wrong arg name");
@@ -4660,7 +4660,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
           (*error_func) (MIR_binary_io_error, "data %s should have no labels",
                          name == NULL ? "" : name);
         tag = read_token (ctx, &attr);
-        if (TAG_TI8 > tag || tag > TAG_TBLOCK)
+        if (TAG_TI8 > tag || tag > TAG_TRBLOCK)
           (*error_func) (MIR_binary_io_error, "wrong data type tag %d", tag);
         type = tag_type (tag);
         VARR_TRUNC (uint8_t, temp_data, 0);
@@ -4761,7 +4761,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
         for (;;) {
           tag = read_token (ctx, &attr);
           if (tag == TAG_EOI) break;
-          if (TAG_TI8 > tag || tag > TAG_TBLOCK)
+          if (TAG_TI8 > tag || tag > TAG_TRBLOCK)
             (*error_func) (MIR_binary_io_error, "wrong local var type tag %d", tag);
           MIR_new_func_reg (ctx, func->u.func, tag_type (tag),
                             read_name (ctx, module, "wrong local var name"));
