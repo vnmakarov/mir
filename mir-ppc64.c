@@ -325,7 +325,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       disp += qwords * 8;
       param_offset += 16;
       continue;
-    } else if (n_gpregs < 8) {
+    } else if (n_gpregs < 8) { /* including RBLK */
       ppc64_gen_ld (ctx, n_gpregs + 3, res_reg, param_offset, MIR_T_I64);
     } else {
       ppc64_gen_ld (ctx, 0, res_reg, param_offset, MIR_T_I64);
