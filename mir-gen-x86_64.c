@@ -182,7 +182,7 @@ static MIR_reg_t get_arg_reg (MIR_type_t arg_type, size_t *int_arg_num, size_t *
     (*int_arg_num)++; /* arg slot used by fp, skip int register */
 #endif
     *mov_code = arg_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
-  } else {
+  } else { /* including RBLK */
     arg_reg = get_int_arg_reg (*int_arg_num);
 #ifdef _WIN64
     (*fp_arg_num)++; /* arg slot used by int, skip fp register */
@@ -203,7 +203,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
   MIR_reg_t arg_reg;
-  MIR_op_t arg_op, temp_op, arg_reg_op, ret_reg_op, mem_op;
+  MIR_op_t arg_op, new_arg_op, temp_op, ret_reg_op, mem_op;
   MIR_insn_code_t new_insn_code, ext_code;
   MIR_insn_t new_insn, prev_insn, next_insn, ext_insn;
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
@@ -226,13 +226,15 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   }
   for (size_t i = start; i < nops; i++) {
     arg_op = call_insn->ops[i];
-    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
-                || (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.type == MIR_T_BLK)
-                || (arg_op.mode == MIR_OP_HARD_REG_MEM && arg_op.u.hard_reg_mem.type == MIR_T_BLK));
+    gen_assert (
+      arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
+      || (arg_op.mode == MIR_OP_MEM && MIR_blk_type_p (arg_op.u.mem.type))
+      || (arg_op.mode == MIR_OP_HARD_REG_MEM && MIR_blk_type_p (arg_op.u.hard_reg_mem.type)));
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else if (arg_op.mode == MIR_OP_MEM || arg_op.mode == MIR_OP_HARD_REG_MEM) {
-      type = MIR_T_BLK;
+      type = arg_op.mode == MIR_OP_MEM ? arg_op.u.mem.type : arg_op.u.hard_reg_mem.type;
+      assert (type == MIR_T_BLK || type == MIR_T_RBLK);
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
@@ -642,7 +644,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
           mem_offset += 16;
         } else if (var.type == MIR_T_BLK) {
           mem_offset += var.size;
-        } else {
+        } else { /* including RBLK */
           gp_offset += 8;
           if (gp_offset >= 48) mem_offset += 8;
         }
