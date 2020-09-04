@@ -297,7 +297,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = arg_descs[i].type;
 
-    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P) {
+    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_RBLK) {
       if (n_iregs < max_iregs) {
         gen_mov (ctx, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
 #ifdef _WIN64
