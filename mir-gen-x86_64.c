@@ -317,10 +317,23 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                != MIR_NON_HARD_REG) {
       /* put arguments to argument hard regs */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
-      arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
-      new_insn = MIR_new_insn (ctx, new_insn_code, arg_reg_op, arg_op);
+      if (type != MIR_T_RBLK) {
+        new_arg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
+        new_insn = MIR_new_insn (ctx, new_insn_code, new_arg_op, arg_op);
+      } else if (arg_op.mode == MIR_OP_MEM) {
+        new_insn = MIR_new_insn (ctx, new_insn_code, _MIR_new_hard_reg_op (ctx, arg_reg),
+                                 MIR_new_reg_op (ctx, arg_op.u.mem.base));
+        new_arg_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_RBLK, arg_op.u.mem.disp, arg_reg,
+                                               MIR_NON_HARD_REG, 1);
+      } else {
+        assert (arg_op.mode == MIR_OP_HARD_REG_MEM);
+        new_insn = MIR_new_insn (ctx, new_insn_code, _MIR_new_hard_reg_op (ctx, arg_reg),
+                                 _MIR_new_hard_reg_op (ctx, arg_op.u.hard_reg_mem.base));
+        new_arg_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_RBLK, arg_op.u.hard_reg_mem.disp, arg_reg,
+                                               MIR_NON_HARD_REG, 1);
+      }
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
-      call_insn->ops[i] = arg_reg_op;
+      call_insn->ops[i] = new_arg_op;
 #ifdef _WIN64
       /* copy fp reg varargs into corresponding int regs */
       if (proto->vararg_p && type == MIR_T_D) {
@@ -337,6 +350,11 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       }
 #endif
     } else { /* put arguments on the stack */
+      if (type == MIR_T_RBLK) {
+        assert (arg_op.mode == MIR_OP_MEM || arg_op.mode == MIR_OP_HARD_REG_MEM);
+        arg_op = arg_op.mode == MIR_OP_MEM ? MIR_new_reg_op (ctx, arg_op.u.mem.base)
+                                           : _MIR_new_hard_reg_op (ctx, arg_op.u.hard_reg_mem.base);
+      }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
       new_insn_code
         = (type == MIR_T_F ? MIR_FMOV
