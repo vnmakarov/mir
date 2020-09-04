@@ -3268,19 +3268,20 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, temp_string));
       set_inline_reg_map (ctx, old_reg, new_reg);
       if (i < nargs && call->nops > i + 2 + called_func->nres) { /* Parameter passing */
-        if (var.type == MIR_T_BLK) {                             /* alloca and block move: */
-          MIR_op_t op = call->ops[i + 2 + called_func->nres];
+        MIR_op_t op = call->ops[i + 2 + called_func->nres];
 
-          mir_assert (op.mode == MIR_OP_MEM);
+        mir_assert (!MIR_blk_type_p (type) || (op.mode == MIR_OP_MEM && type == MIR_T_I64));
+        if (var.type == MIR_T_BLK) { /* alloca and block move: */
           add_blk_move (ctx, func_item, ret_label, MIR_new_reg_op (ctx, new_reg),
                         MIR_new_reg_op (ctx, op.u.mem.base), var.size);
         } else {
+          if (var.type == MIR_T_RBLK) op = MIR_new_reg_op (ctx, op.u.mem.base);
           new_insn
             = MIR_new_insn (ctx,
                             type == MIR_T_F
                               ? MIR_FMOV
                               : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
-                            MIR_new_reg_op (ctx, new_reg), call->ops[i + 2 + called_func->nres]);
+                            MIR_new_reg_op (ctx, new_reg), op);
           MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
         }
       }
