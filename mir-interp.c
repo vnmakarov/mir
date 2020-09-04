@@ -409,7 +409,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
           mir_assert (ops[i].mode == MIR_OP_LABEL);
           v.i = 0;
         } else if (MIR_call_code_p (code) && ops[i].mode == MIR_OP_MEM) {
-          mir_assert (ops[i].u.mem.type == MIR_T_BLK);
+          mir_assert (MIR_blk_type_p (ops[i].u.mem.type));
           v.i = ops[i].u.mem.base;
           update_max_nreg (v.i, &max_nreg);
         } else {
@@ -1375,7 +1375,7 @@ static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg) {
   h = mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres, h);
   for (size_t n = 0; n < i->nargs; n++) {
     h = mir_hash_step (h, i->arg_descs[n].type);
-    if (i->arg_descs[n].type == MIR_T_BLK) h = mir_hash_step (h, i->arg_descs[n].size);
+    if (MIR_blk_type_p (i->arg_descs[n].type)) h = mir_hash_step (h, i->arg_descs[n].size);
   }
   return mir_hash_finish (h);
 }
@@ -1385,7 +1385,7 @@ static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg) {
   if (memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) != 0) return FALSE;
   for (size_t n = 0; n < i1->nargs; n++) {
     if (i1->arg_descs[n].type != i2->arg_descs[n].type) return FALSE;
-    if (i1->arg_descs[n].type == MIR_T_BLK && i1->arg_descs[n].size != i2->arg_descs[n].size)
+    if (MIR_blk_type_p (i1->arg_descs[n].type) && i1->arg_descs[n].size != i2->arg_descs[n].size)
       return FALSE;
   }
   return TRUE;
@@ -1452,12 +1452,12 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     for (i = 0; i < nargs; i++) {
       if (i < arg_vars_num) {
         call_arg_descs[i].type = arg_vars[i].type;
-        if (arg_vars[i].type == MIR_T_BLK) call_arg_descs[i].size = arg_vars[i].size;
+        if (MIR_blk_type_p (arg_vars[i].type)) call_arg_descs[i].size = arg_vars[i].size;
         continue;
       }
-      if (insn_arg_ops[i].mode == MIR_OP_MEM) { /* block arg */
-        mir_assert (insn_arg_ops[i].u.mem.type == MIR_T_BLK);
-        call_arg_descs[i].type = MIR_T_BLK;
+      if (insn_arg_ops[i].mode == MIR_OP_MEM) { /* (r)block arg */
+        mir_assert (MIR_blk_type_p (insn_arg_ops[i].u.mem.type));
+        call_arg_descs[i].type = insn_arg_ops[i].u.mem.type;
         call_arg_descs[i].size = insn_arg_ops[i].u.mem.disp;
       } else {
         mode = insn_arg_ops[i].value_mode;
