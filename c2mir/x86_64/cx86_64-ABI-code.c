@@ -189,7 +189,8 @@ static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
     VARR_PUSH (MIR_type_t, res_types, type);
   } else { /* return by reference */
     var.name = RET_ADDR_NAME;
-    var.type = MIR_POINTER_TYPE;
+    var.type = MIR_T_RBLK;
+    var.size = type_size (c2m_ctx, ret_type);
     VARR_PUSH (MIR_var_t, arg_vars, var);
     arg_info->n_iregs++;
   }
@@ -218,6 +219,8 @@ static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
     emit3 (ctx, MIR_ADD, temp.mir_op,
            MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
            MIR_new_int_op (ctx, call_arg_area_offset));
+    temp.mir_op
+      = MIR_new_mem_op (ctx, MIR_T_RBLK, type_size (c2m_ctx, ret_type), temp.mir_op.u.reg, 0, 1);
     VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
     return 0;
   } else {
