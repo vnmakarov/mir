@@ -1862,6 +1862,10 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
                            (unsigned long) ops[i].u.mem.disp,
                            code == MIR_UNSPEC ? "unspec" : "call");
           }
+        } else if (ops[i].u.mem.type == MIR_T_RBLK) {
+          (*error_func) (MIR_wrong_type_error,
+                         "RBLK memory can not correspond to unnamed param in %s insn",
+                         code == MIR_UNSPEC ? "unspec" : "call");
         }
       } else if (i - args_start >= proto->nres
                  && (narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
