@@ -10036,7 +10036,8 @@ static void simple_add_res_proto (MIR_context_t ctx, struct type *ret_type, void
     VARR_PUSH (MIR_type_t, res_types, get_mir_type (ctx, ret_type));
   } else {
     var.name = RET_ADDR_NAME;
-    var.type = MIR_POINTER_TYPE;
+    var.type = MIR_T_RBLK;
+    var.size = type_size (c2m_ctx, ret_type);
     VARR_PUSH (MIR_var_t, arg_vars, var);
   }
 }
@@ -11301,13 +11302,13 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     }
     target_init_arg_vars (ctx, &arg_info);
     arg_area_offset = curr_call_arg_area_offset + ns->size - ns->call_arg_area_size;
-    if ((n = target_add_call_res_op (ctx, type, &arg_info, arg_area_offset))
-        < 0) {           /* pass nothing */
+    if ((n = target_add_call_res_op (ctx, type, &arg_info, arg_area_offset)) < 0) {
+      /* pass nothing */
     } else if (n == 0) { /* by addr */
       if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
       res = new_op (NULL, VARR_LAST (MIR_op_t, call_ops));
-      assert (res.mir_op.mode == MIR_OP_REG);
-      res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
+      assert (res.mir_op.mode == MIR_OP_MEM && res.mir_op.u.mem.type == MIR_T_RBLK);
+      res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.mem.base, 0, 1);
       t = MIR_T_I64;
     } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) { /* passed in regs */
       res = get_new_temp (ctx, MIR_T_I64);
