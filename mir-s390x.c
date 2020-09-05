@@ -249,7 +249,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     if (type == MIR_T_BLK) frame_size += (arg_descs[i].size + 7) / 8; /* blk value space */
     if ((type == MIR_T_F || type == MIR_T_D) && n_fpregs < 4) {
       n_fpregs++;
-    } else if (type != MIR_T_F && type != MIR_T_D && n_gpregs < 5) {
+    } else if (type != MIR_T_F && type != MIR_T_D && n_gpregs < 5) { /* RBLK too */
       n_gpregs++;
     } else {
       frame_size += 8;
@@ -298,7 +298,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         s390x_gen_st (ctx, 8, 15, disp, MIR_T_I64); /* stg r8,disp(r15) */
         disp += 8;
       }
-    } else if (n_gpregs < 5) {
+    } else if (n_gpregs < 5) { /* RBLK too */
       s390x_gen_ld (ctx, n_gpregs + 2, res_reg, param_offset,
                     MIR_T_I64); /* lg* rn,param_offset(r7) */
       n_gpregs++;
