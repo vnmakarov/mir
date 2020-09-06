@@ -10128,6 +10128,72 @@ static int simple_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   return FALSE;
 }
 
+/* Can be used by target functions */
+static inline void multiple_load_store (MIR_context_t ctx, struct type *type, MIR_op_t *var_ops,
+                                        MIR_op_t mem_op, int load_p) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  MIR_op_t op, var_op;
+  MIR_insn_t insn;
+  int i, sh, size = type_size (c2m_ctx, type);
+
+  if (size == 0) return;
+  if (type_align (type) == 8) {
+    assert (size % 8 == 0);
+    for (i = 0; size > 0; size -= 8, i++) {
+      if (load_p) {
+        insn = MIR_new_insn (ctx, MIR_MOV, var_ops[i],
+                             MIR_new_mem_op (ctx, MIR_T_I64, mem_op.u.mem.disp + i * 8,
+                                             mem_op.u.mem.base, mem_op.u.mem.index,
+                                             mem_op.u.mem.scale));
+      } else {
+        insn = MIR_new_insn (ctx, MIR_MOV,
+                             MIR_new_mem_op (ctx, MIR_T_I64, mem_op.u.mem.disp + i * 8,
+                                             mem_op.u.mem.base, mem_op.u.mem.index,
+                                             mem_op.u.mem.scale),
+                             var_ops[i]);
+      }
+      MIR_append_insn (ctx, curr_func, insn);
+    }
+  } else {
+    op = get_new_temp (ctx, MIR_T_I64).mir_op;
+    if (load_p) {
+      for (i = 0; i < size; i += 8) {
+        var_op = var_ops[i / 8];
+        insn = MIR_new_insn (ctx, MIR_MOV, var_op, MIR_new_int_op (ctx, 0));
+        MIR_append_insn (ctx, curr_func, insn);
+      }
+    }
+    for (i = 0; size > 0; size--, i++) {
+      var_op = var_ops[i / 8];
+      if (load_p) {
+        insn
+          = MIR_new_insn (ctx, MIR_MOV, op,
+                          MIR_new_mem_op (ctx, MIR_T_U8, mem_op.u.mem.disp + i, mem_op.u.mem.base,
+                                          mem_op.u.mem.index, mem_op.u.mem.scale));
+        MIR_append_insn (ctx, curr_func, insn);
+        if ((sh = i * 8 % 64) != 0) {
+          insn = MIR_new_insn (ctx, MIR_LSH, op, op, MIR_new_int_op (ctx, sh));
+          MIR_append_insn (ctx, curr_func, insn);
+        }
+        insn = MIR_new_insn (ctx, MIR_OR, var_op, var_op, op);
+        MIR_append_insn (ctx, curr_func, insn);
+      } else {
+        if ((sh = i * 8 % 64) == 0)
+          insn = MIR_new_insn (ctx, MIR_MOV, op, var_op);
+        else
+          insn = MIR_new_insn (ctx, MIR_URSH, op, var_op, MIR_new_int_op (ctx, sh));
+        MIR_append_insn (ctx, curr_func, insn);
+        insn
+          = MIR_new_insn (ctx, MIR_MOV,
+                          MIR_new_mem_op (ctx, MIR_T_U8, mem_op.u.mem.disp + i, mem_op.u.mem.base,
+                                          mem_op.u.mem.index, mem_op.u.mem.scale),
+                          op);
+        MIR_append_insn (ctx, curr_func, insn);
+      }
+    }
+  }
+}
+
 #if 0 && defined(__x86_64__)
 #include "x86_64/cx86_64-ABI-code.c"
 #elif 0 && defined(__PPC64__)
