@@ -246,7 +246,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   mir_assert (sizeof (long double) == 16);
   for (size_t i = 0; i < nargs; i++) { /* caclulate offset for blk params */
     type = arg_descs[i].type;
-    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_type_blk_p (type)) {
+    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_blk_type_p (type)) {
       if (n_xregs++ >= 8) blk_offset += 8;
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
       if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD ? 16 : 8;
