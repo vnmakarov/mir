@@ -154,18 +154,18 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
 }
 
 static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offset, uint32_t qwords,
-			 uint32_t addr_reg) {
+                         uint32_t addr_reg) {
   static const uint32_t blk_mov_pat[] = {
-    /* 0:*/	0xf940026c, /* ldr x12, [x19,<addr_offset>]*/
-    /* 4:*/	0x910003e0, /* add <addr_reg>, sp, <offset>*/
-    /* 8:*/	0xd280000b, /* mov x11, 0*/
-    /* c:*/	0xd280000e, /* mov x14, <qwords>*/
-    /* 10:*/	0xf86c696a, /* ldr x10, [x11,x12]*/
-    /* 14:*/	0xd10005ce, /* sub x14, x14, #0x1*/
-    /* 18:*/	0xf820696a, /* str x10, [x11,<addr_reg>x13]*/
-    /* 1c:*/	0xf10001df, /* cmp x14, 0*/
-    /* 20:*/	0x9100216b, /* add x11, x11, 8*/
-    /* 24:*/	0x54ffff61, /* b.ne 10 */
+    /* 0:*/ 0xf940026c,  /* ldr x12, [x19,<addr_offset>]*/
+    /* 4:*/ 0x910003e0,  /* add <addr_reg>, sp, <offset>*/
+    /* 8:*/ 0xd280000b,  /* mov x11, 0*/
+    /* c:*/ 0xd280000e,  /* mov x14, <qwords>*/
+    /* 10:*/ 0xf86c696a, /* ldr x10, [x11,x12]*/
+    /* 14:*/ 0xd10005ce, /* sub x14, x14, #0x1*/
+    /* 18:*/ 0xf820696a, /* str x10, [x11,<addr_reg>x13]*/
+    /* 1c:*/ 0xf10001df, /* cmp x14, 0*/
+    /* 20:*/ 0x9100216b, /* add x11, x11, 8*/
+    /* 24:*/ 0x54ffff61, /* b.ne 10 */
   };
   if (qwords == 0) {
     uint32_t pat = 0x910003e0 | addr_reg | (offset << 10); /* add <add_reg>, sp, <offset>*/
@@ -246,7 +246,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   mir_assert (sizeof (long double) == 16);
   for (size_t i = 0; i < nargs; i++) { /* caclulate offset for blk params */
     type = arg_descs[i].type;
-    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_BLK) {
+    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_type_blk_p (type)) {
       if (n_xregs++ >= 8) blk_offset += 8;
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
       if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD ? 16 : 8;
@@ -269,10 +269,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       blk_offset += qwords * 8;
       if (n_xregs++ >= 8) {
         pat = st_pat | ((sp_offset >> scale) << 10) | addr_reg | (sp << 5);
-	push_insns (ctx, &pat, sizeof (pat));
+        push_insns (ctx, &pat, sizeof (pat));
         sp_offset += 8;
       }
-    } else if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P) {
+    } else if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_RBLK) {
       if (n_xregs < 8) {
         pat = ld_pat | offset_imm | n_xregs++;
       } else {
