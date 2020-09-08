@@ -841,7 +841,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         saved_fregs_num++;
     }
   if (leaf_p && !alloca_p && saved_iregs_num == 0 && saved_fregs_num == 0 && !func->vararg_p
-      && stack_slots_num == 0)
+      && stack_slots_num == 0 && !stack_arg_func_p)
     return;
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
