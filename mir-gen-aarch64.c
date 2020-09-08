@@ -303,7 +303,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       /* put arguments to argument hard regs */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
-      new_insn = MIR_new_insn (ctx, new_insn_code, arg_reg_op, arg_op);
+      if (type != MIR_T_RBLK) {
+	new_insn = MIR_new_insn (ctx, new_insn_code, arg_reg_op, arg_op);
+      } else {
+        assert (arg_op.mode == MIR_OP_MEM);
+        new_insn = MIR_new_insn (ctx, MIR_MOV, arg_reg_op, MIR_new_reg_op (ctx, arg_op.u.mem.base));
+        arg_reg_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_RBLK, arg_op.u.mem.disp,
+                                               arg_reg, MIR_NON_HARD_REG, 1);
+      }
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
@@ -313,7 +320,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
         = (type == MIR_T_F ? MIR_FMOV
                            : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
-      new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
+      if (type != MIR_T_RBLK) {
+	new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
+      } else {
+        assert (arg_op.mode == MIR_OP_MEM);
+	new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, MIR_new_reg_op (ctx, arg_op.u.mem.base));
+      }
       gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st after simplification */
       MIR_insert_insn_after (ctx, curr_func_item, prev_call_insn, new_insn);
       prev_insn = DLIST_PREV (MIR_insn_t, new_insn);
