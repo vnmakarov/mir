@@ -10200,7 +10200,7 @@ static inline void multiple_load_store (MIR_context_t ctx, struct type *type, MI
 #include "aarch64/caarch64-ABI-code.c"
 #elif 0 && defined(__PPC64__)
 #include "ppc64/cppc64-ABI-code.c"
-#elif 0 && defined(__s390x__)
+#elif defined(__s390x__)
 #include "s390x/cs390x-ABI-code.c"
 #else
 typedef int target_arg_info_t; /* whatever */
