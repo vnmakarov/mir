@@ -319,7 +319,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       pat |= offset_imm | n_vregs++ | (19 << 5);
       push_insns (ctx, &pat, sizeof (pat));
     } else {
-      (*error_func) (MIR_ret_error, "x86-64 can not handle this combination of return values");
+      (*error_func) (MIR_ret_error, "aarch64 can not handle this combination of return values");
     }
   }
   push_insns (ctx, epilog, sizeof (epilog));
