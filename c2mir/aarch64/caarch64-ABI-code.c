@@ -3,13 +3,9 @@
    aarch64 call ABI target specific code.
 */
 
-typedef struct target_arg_info {
-  int n_iregs;
-} target_arg_info_t;
+typedef int target_arg_info_t;
 
-static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {
-  arg_info->n_iregs = 0;
-}
+static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {}
 
 static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
   return ((ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION)
