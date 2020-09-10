@@ -9,11 +9,8 @@ static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info
 
 static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
   return ((ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION)
-	  && type_size (*c2m_ctx_loc (ctx), ret_type) > 2 * 8);
+          && type_size (*c2m_ctx_loc (ctx), ret_type) > 2 * 8);
 }
-
-static const char *RET_AGGR_NAME = "Ret_Aggr";
-static const char *RET_AGGR2_NAME = "Ret_Aggr2";
 
 static int reg_aggregate_size (c2m_ctx_t c2m_ctx, struct type *type) {
   int size;
@@ -48,7 +45,8 @@ static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
   if (size == 0) return -1;
   VARR_PUSH (MIR_op_t, call_ops, MIR_new_reg_op (ctx, get_new_temp (ctx, MIR_T_I64).mir_op.u.reg));
   if (size > 8)
-    VARR_PUSH (MIR_op_t, call_ops, MIR_new_reg_op (ctx, get_new_temp (ctx, MIR_T_I64).mir_op.u.reg));
+    VARR_PUSH (MIR_op_t, call_ops,
+               MIR_new_reg_op (ctx, get_new_temp (ctx, MIR_T_I64).mir_op.u.reg));
   return size <= 8 ? 1 : 2;
 }
 
