@@ -3,8 +3,6 @@
    ppc64 call ABI target specific code.
 */
 
-#define CUSTOM_CALL_ABI
-
 typedef int target_arg_info_t;
 
 static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {}
