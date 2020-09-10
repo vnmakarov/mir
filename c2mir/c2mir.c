@@ -10129,8 +10129,21 @@ static int simple_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
 }
 
 /* Can be used by target functions */
-static inline void multiple_load_store (MIR_context_t ctx, struct type *type, MIR_op_t *var_ops,
-                                        MIR_op_t mem_op, int load_p) {
+static const char *gen_get_indexed_name (MIR_context_t ctx, const char *name, int index) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+
+  assert (index >= 0 && index <= 9);
+  VARR_TRUNC (char, temp_string, 0);
+  VARR_PUSH_ARR (char, temp_string, name, strlen (name));
+  VARR_PUSH (char, temp_string, '#');
+  VARR_PUSH (char, temp_string, '0' + index);
+  VARR_PUSH (char, temp_string, '\0');
+  return _MIR_uniq_string (ctx, VARR_ADDR (char, temp_string));
+}
+
+/* Can be used by target functions */
+static inline void gen_multiple_load_store (MIR_context_t ctx, struct type *type, MIR_op_t *var_ops,
+                                            MIR_op_t mem_op, int load_p) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_op_t op, var_op;
   MIR_insn_t insn;

@@ -117,8 +117,8 @@ static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_t
   } else if ((ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION)
              && reg_aggregate_p (c2m_ctx, ret_type)) {
     assert (res.mir_op.mode == MIR_OP_MEM); /* addr */
-    multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, call_ops)[call_ops_start + 2],
-                         res.mir_op, FALSE);
+    gen_multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, call_ops)[call_ops_start + 2],
+                             res.mir_op, FALSE);
   }
   return res;
 }
@@ -151,7 +151,7 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
     assert (res.mir_op.mode == MIR_OP_MEM && VARR_LENGTH (MIR_op_t, ret_ops) == 0);
     for (int i = 0; size > 0; size -= 8, i++)
       VARR_PUSH (MIR_op_t, ret_ops, get_new_temp (ctx, MIR_T_I64).mir_op);
-    multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, ret_ops)[0], res.mir_op, TRUE);
+    gen_multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, ret_ops)[0], res.mir_op, TRUE);
   } else {
     ret_addr_reg = MIR_reg (ctx, RET_ADDR_NAME, curr_func->u.func);
     var = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, ret_addr_reg, 0, 1));

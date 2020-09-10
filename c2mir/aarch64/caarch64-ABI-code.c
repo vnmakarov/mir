@@ -58,8 +58,8 @@ static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_t
   if ((size = reg_aggregate_size (c2m_ctx, ret_type)) < 0)
     return simple_gen_post_call_res_code (ctx, ret_type, res, call, call_ops_start);
   if (size != 0)
-    multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, call_ops)[call_ops_start + 2],
-			 res.mir_op, FALSE);
+    gen_multiple_load_store (ctx, ret_type, &VARR_ADDR (MIR_op_t, call_ops)[call_ops_start + 2],
+                             res.mir_op, FALSE);
   return res;
 }
 
@@ -74,19 +74,7 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
   assert (res.mir_op.mode == MIR_OP_MEM && VARR_LENGTH (MIR_op_t, ret_ops) == 0 && size <= 2 * 8);
   for (i = 0; size > 0; size -= 8, i++)
     VARR_PUSH (MIR_op_t, ret_ops, get_new_temp (ctx, MIR_T_I64).mir_op);
-  multiple_load_store (ctx, ret_type, VARR_ADDR (MIR_op_t, ret_ops), res.mir_op, TRUE);
-}
-
-static const char *get_indexed_name (MIR_context_t ctx, const char *name, int index) {
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-
-  assert (index >= 0 && index <= 9);
-  VARR_TRUNC (char, temp_string, 0);
-  VARR_PUSH_ARR (char, temp_string, name, strlen (name));
-  VARR_PUSH (char, temp_string, '#');
-  VARR_PUSH (char, temp_string, '0' + index);
-  VARR_PUSH (char, temp_string,'\0');
-  return _MIR_uniq_string (ctx, VARR_ADDR (char, temp_string));
+  gen_multiple_load_store (ctx, ret_type, VARR_ADDR (MIR_op_t, ret_ops), res.mir_op, TRUE);
 }
 
 static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
@@ -102,7 +90,7 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   }
   assert (size <= 2 * 8);
   for (i = 0; size > 0; size -= 8, i++) {
-    var.name = get_indexed_name (ctx, name, i);
+    var.name = gen_get_indexed_name (ctx, name, i);
     var.type = MIR_T_I64;
     VARR_PUSH (MIR_var_t, arg_vars, var);
   }
@@ -123,7 +111,7 @@ static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
     ops[i] = get_new_temp (ctx, MIR_T_I64).mir_op;
     VARR_PUSH (MIR_op_t, call_ops, ops[i]);
   }
-  multiple_load_store (ctx, arg_type, ops, arg.mir_op, TRUE);
+  gen_multiple_load_store (ctx, arg_type, ops, arg.mir_op, TRUE);
 }
 
 static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
@@ -134,16 +122,15 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   reg_var_t reg_var;
 
-  if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0)
-    return FALSE;
+  if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0) return FALSE;
   assert (!param_decl->reg_p && size <= 2 * 8);
   for (i = 0; size > 0; size -= 8, i++) {
-    reg_var = get_reg_var (ctx, MIR_T_I64, get_indexed_name (ctx, name, i));
+    reg_var = get_reg_var (ctx, MIR_T_I64, gen_get_indexed_name (ctx, name, i));
     param_ops[i] = MIR_new_reg_op (ctx, reg_var.reg);
   }
-  multiple_load_store (ctx, arg_type, param_ops,
-                       MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
-                                       MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
-                       FALSE);
+  gen_multiple_load_store (ctx, arg_type, param_ops,
+                           MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
+                                           MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
+                           FALSE);
   return TRUE;
 }

@@ -64,7 +64,7 @@ static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
   } else if (reg_aggregate_p (c2m_ctx, arg_type)) {
     assert (arg.mir_op.mode == MIR_OP_MEM);
     temp = get_new_temp (ctx, MIR_T_I64);
-    multiple_load_store (ctx, arg_type, &temp.mir_op, arg.mir_op, TRUE);
+    gen_multiple_load_store (ctx, arg_type, &temp.mir_op, arg.mir_op, TRUE);
     VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
   } else {
     assert (arg.mir_op.mode == MIR_OP_MEM);
@@ -88,9 +88,9 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   assert (!param_decl->reg_p);
   reg_var = get_reg_var (ctx, MIR_T_I64, name);
   param_op = MIR_new_reg_op (ctx, reg_var.reg);
-  multiple_load_store (ctx, arg_type, &param_op,
-                       MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
-                                       MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
-                       FALSE);
+  gen_multiple_load_store (ctx, arg_type, &param_op,
+                           MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
+                                           MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
+                           FALSE);
   return TRUE;
 }
