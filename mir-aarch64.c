@@ -64,8 +64,14 @@ void *va_stack_arg_builtin (void *p, size_t s) {
 #ifdef SWITCHITFORABI
   struct aarch64_va_list *va = p;
   void *a;
-  size_t size = (s + 7) / 8 * 8;
+  long size = (s + 7) / 8 * 8;
 
+  if (size <= 2 * 8 && va->__gr_offs + size > 0) { /* not enough regs to pass: */
+    a = va->__stack;
+    va->__stack = (char *) va->__stack + size;
+    va->__gr_offs += size;
+    return a;
+  }
   if (size > 2 * 8) size = 8;
   if (va->__gr_offs < 0) {
     a = (char *) va->__gr_top + va->__gr_offs;
