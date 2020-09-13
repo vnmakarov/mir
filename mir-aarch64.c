@@ -206,23 +206,25 @@ static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offse
   }
 }
 
-/* save r0-r7, v0-v7 */
-static const uint32_t save_insns[] = {
+static const uint32_t save_insns[] = { /* save r0-r8,v0-v7 */
   0xa9bf1fe6, /* stp R6, R7, [SP, #-16]! */
   0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
   0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
   0xa9bf07e0, /* stp R0, R1, [SP, #-16]! */
+  0xd10043ff, /* sub SP, SP, #16 */
+  0xf90007e8, /* str x8, [SP, #8] */
   0xadbf1fe6, /* stp Q6, Q7, [SP, #-32]! */
   0xadbf17e4, /* stp Q4, Q5, [SP, #-32]! */
   0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
   0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
 };
-
-static const uint32_t restore_insns[] = {
+static const uint32_t restore_insns[] = { /* restore r0-r8,v0-v7 */
   0xacc107e0, /* ldp Q0, Q1, SP, #32 */
   0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
   0xacc117e4, /* ldp Q4, Q5, SP, #32 */
   0xacc11fe6, /* ldp Q6, Q7, SP, #32 */
+  0xf94007e8, /* ldr x8, [SP, #8] */
+  0x910043ff, /* add SP, SP, #16 */
   0xa8c107e0, /* ldp R0, R1, SP, #16 */
   0xa8c10fe2, /* ldp R2, R3, SP, #16 */
   0xa8c117e4, /* ldp R4, R5, SP, #16 */
@@ -357,20 +359,21 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
   static const uint32_t save_x19_pat = 0xf81f0ff3; /* str x19, [sp,-16]! */
+  static const uint32_t set_gr_offs = 0x128007e9; /* mov w9, #-64 # gr_offs */
+  static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
   static const uint32_t prepare_pat[] = {
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
-    0x910003e8, /* mov x8, sp # va_list addr         */
-    0x128007e9, /* mov w9, #-64 # gr_offs */
-    0xb9001909, /* str w9,[x8, 24] # va_list.gr_offs */
+    0x910003ea, /* mov x10, sp # va_list addr         */
+    0xb9001949, /* str w9,[x10, 24] # va_list.gr_offs */
     0x12800fe9, /* mov w9, #-128 # vr_offs */
-    0xb9001d09, /* str w9,[x8, 28]  #va_list.vr_offs */
-    0x910383e9, /* add x9, sp, #224 # gr_top */
-    0xf9000509, /* str x9,[x8, 8] # va_list.gr_top */
+    0xb9001d49, /* str w9,[x10, 28]  #va_list.vr_offs */
+    0x9103c3e9, /* add x9, sp, #240 # gr_top */
+    0xf9000549, /* str x9,[x10, 8] # va_list.gr_top */
     0x91004129, /* add x9, x9, #16 # stack */
-    0xf9000109, /* str x9,[x8] # valist.stack */
+    0xf9000149, /* str x9,[x10] # valist.stack */
     0x910283e9, /* add x9, sp, #160 # vr_top*/
-    0xf9000909, /* str x9,[x8, 16] # va_list.vr_top */
-    0xaa0803e2, /* mov x2, x8 # va arg  */
+    0xf9000949, /* str x9,[x10, 16] # va_list.vr_top */
+    0xaa0a03e2, /* mov x2, x10 # va arg  */
     0xd2800009, /* mov x9, <(nres+1)*16> */
     0xcb2963ff, /* sub sp, sp, x9 */
     0x910043e3, /* add x3, sp, 16 # results arg */
@@ -379,18 +382,24 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   };
   static const uint32_t shim_end[] = {
     0xf94003fe, /* ldr x30, [sp] */
-    0xd2800009, /* mov x9, 224+(nres+1)*16 */
+    0xd2800009, /* mov x9, 240+(nres+1)*16 */
     0x8b2963ff, /* add sp, sp, x9 */
     0xf84107f3, /* ldr x19, sp, 16 */
     0xd65f03c0, /* ret x30 */
   };
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
-  uint32_t nres = func_item->u.func->nres;
-  MIR_type_t *results = func_item->u.func->res_types;
+  MIR_func_t func = func_item->u.func;
+  uint32_t nres = func->nres;
+  int x8_res_p = func->nargs != 0 && VARR_GET (MIR_var_t, func->vars, 0).type == MIR_T_RBLK;
+  MIR_type_t *results = func->res_types;
 
   VARR_TRUNC (uint8_t, machine_insns, 0);
   push_insns (ctx, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (ctx, save_insns, sizeof (save_insns));
+  if (x8_res_p)
+    push_insns (ctx, &set_x8_gr_offs, sizeof (set_x8_gr_offs));
+  else
+    push_insns (ctx, &set_gr_offs, sizeof (set_gr_offs));
   push_insns (ctx, prepare_pat, sizeof (prepare_pat));
   imm = (nres + 1) * 16;
   mir_assert (imm < (1 << 16));
@@ -420,7 +429,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     offset += 16;
   }
   push_insns (ctx, shim_end, sizeof (shim_end));
-  imm = 224 + (nres + 1) * 16;
+  imm = 240 + (nres + 1) * 16;
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, machine_insns) + VARR_LENGTH (uint8_t, machine_insns)))[-4]
     |= imm << 5;
