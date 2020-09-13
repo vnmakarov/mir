@@ -437,14 +437,14 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
                             VARR_LENGTH (uint8_t, machine_insns));
 }
 
-/* Save regs x0-x7, q0-q7; x9 = call hook_address (ctx, called_func); restore regs; br x9 */
+/* Save regs x8, x0-x7, q0-q7; x9 = call hook_address (ctx, called_func); restore regs; br x9 */
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   static const uint32_t jmp_insn = 0xd61f0120;     /* br x9 */
   static const uint32_t move_insn = 0xaa0003e9;    /* mov x9, x0 */
   static const uint32_t save_fplr = 0xa9bf7bfd;    /* stp R29, R30, [SP, #-16]! */
   static const uint32_t restore_fplr = 0xa8c17bfd; /* ldp R29, R30, SP, #16 */
   uint8_t *base_addr, *curr_addr, *code;
-  size_t len = sizeof (save_insns) + sizeof (restore_insns); /* initial code length */
+  size_t len = sizeof (save_insns) + sizeof (restore_insns);
 
   for (;;) {
     curr_addr = base_addr = _MIR_get_new_code_addr (ctx, len);
