@@ -206,7 +206,8 @@ static void gen_blk_mov (MIR_context_t ctx, uint32_t offset, uint32_t addr_offse
   }
 }
 
-static const uint32_t save_insns[] = { /* save r0-r8,v0-v7 */
+static const uint32_t save_insns[] = {
+  /* save r0-r8,v0-v7 */
   0xa9bf1fe6, /* stp R6, R7, [SP, #-16]! */
   0xa9bf17e4, /* stp R4, R5, [SP, #-16]! */
   0xa9bf0fe2, /* stp R2, R3, [SP, #-16]! */
@@ -218,7 +219,8 @@ static const uint32_t save_insns[] = { /* save r0-r8,v0-v7 */
   0xadbf0fe2, /* stp Q2, Q3, [SP, #-32]! */
   0xadbf07e0, /* stp Q0, Q1, [SP, #-32]! */
 };
-static const uint32_t restore_insns[] = { /* restore r0-r8,v0-v7 */
+static const uint32_t restore_insns[] = {
+  /* restore r0-r8,v0-v7 */
   0xacc107e0, /* ldp Q0, Q1, SP, #32 */
   0xacc10fe2, /* ldp Q2, Q3, SP, #32 */
   0xacc117e4, /* ldp Q4, Q5, SP, #32 */
@@ -260,11 +262,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0xa8c17bf3, /* ldp x19,x30,[sp],16 */
     0xd65f03c0, /* ret x30 */
   };
-  static const uint32_t gen_ld_pat = 0xf9400000;   /* ldr x, [xn|sp], offset */
-  static const uint32_t st_pat = 0xf9000000;   /* str x, [xn|sp], offset */
-  static const uint32_t sts_pat = 0xbd000000;  /* str s, [xn|sp], offset */
-  static const uint32_t std_pat = 0xfd000000;  /* str d, [xn|sp], offset */
-  static const uint32_t stld_pat = 0x3d800000; /* str q, [xn|sp], offset */
+  static const uint32_t gen_ld_pat = 0xf9400000; /* ldr x, [xn|sp], offset */
+  static const uint32_t st_pat = 0xf9000000;     /* str x, [xn|sp], offset */
+  static const uint32_t sts_pat = 0xbd000000;    /* str s, [xn|sp], offset */
+  static const uint32_t std_pat = 0xfd000000;    /* str d, [xn|sp], offset */
+  static const uint32_t stld_pat = 0x3d800000;   /* str q, [xn|sp], offset */
   MIR_type_t type;
   uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, blk_offset = 0, pat, offset_imm, scale;
   uint32_t sp = 31, addr_reg, qwords;
@@ -276,10 +278,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     type = arg_descs[i].type;
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_blk_type_p (type)) {
       if (type == MIR_T_BLK && (qwords = (arg_descs[i].size + 7) / 8) <= 2) {
-	if (n_xregs + qwords > 8) blk_offset += qwords * 8;
-	n_xregs += qwords;
+        if (n_xregs + qwords > 8) blk_offset += qwords * 8;
+        n_xregs += qwords;
       } else {
-	if (n_xregs++ >= 8) blk_offset += 8;
+        if (n_xregs++ >= 8) blk_offset += 8;
       }
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
       if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD ? 16 : 8;
@@ -298,33 +300,33 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     if (type == MIR_T_BLK) {
       qwords = (arg_descs[i].size + 7) / 8;
       if (qwords <= 2) {
-	addr_reg = 13;
-	pat = ld_pat | offset_imm | addr_reg;
-	push_insns (ctx, &pat, sizeof (pat));
-	if (n_xregs + qwords <= 8) {
-	  for (int n = 0; n < qwords; n++) {
-	    pat = gen_ld_pat | (((n * 8) >> scale) << 10) | (n_xregs + n) | (addr_reg << 5);
-	    push_insns (ctx, &pat, sizeof (pat));
-	  }
-	} else {
-	  for (int n = 0; n < qwords; n++) {
-	    pat = gen_ld_pat | (((n * 8) >> scale) << 10) | temp_reg | (addr_reg << 5);
-	    push_insns (ctx, &pat, sizeof (pat));
-	    pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
-	    push_insns (ctx, &pat, sizeof (pat));
-	    sp_offset += 8;
-	  }
-	}
-	n_xregs += qwords;
+        addr_reg = 13;
+        pat = ld_pat | offset_imm | addr_reg;
+        push_insns (ctx, &pat, sizeof (pat));
+        if (n_xregs + qwords <= 8) {
+          for (int n = 0; n < qwords; n++) {
+            pat = gen_ld_pat | (((n * 8) >> scale) << 10) | (n_xregs + n) | (addr_reg << 5);
+            push_insns (ctx, &pat, sizeof (pat));
+          }
+        } else {
+          for (int n = 0; n < qwords; n++) {
+            pat = gen_ld_pat | (((n * 8) >> scale) << 10) | temp_reg | (addr_reg << 5);
+            push_insns (ctx, &pat, sizeof (pat));
+            pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
+            push_insns (ctx, &pat, sizeof (pat));
+            sp_offset += 8;
+          }
+        }
+        n_xregs += qwords;
       } else {
-	addr_reg = n_xregs < 8 ? n_xregs : 13;
-	gen_blk_mov (ctx, blk_offset, (i + nres) * sizeof (long double), qwords, addr_reg);
-	blk_offset += qwords * 8;
-	if (n_xregs++ >= 8) {
-	  pat = st_pat | ((sp_offset >> scale) << 10) | addr_reg | (sp << 5);
-	  push_insns (ctx, &pat, sizeof (pat));
-	  sp_offset += 8;
-	}
+        addr_reg = n_xregs < 8 ? n_xregs : 13;
+        gen_blk_mov (ctx, blk_offset, (i + nres) * sizeof (long double), qwords, addr_reg);
+        blk_offset += qwords * 8;
+        if (n_xregs++ >= 8) {
+          pat = st_pat | ((sp_offset >> scale) << 10) | addr_reg | (sp << 5);
+          push_insns (ctx, &pat, sizeof (pat));
+          sp_offset += 8;
+        }
       }
     } else if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_RBLK) {
       if (type == MIR_T_RBLK && i == 0) {
@@ -387,8 +389,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
-  static const uint32_t save_x19_pat = 0xf81f0ff3; /* str x19, [sp,-16]! */
-  static const uint32_t set_gr_offs = 0x128007e9; /* mov w9, #-64 # gr_offs */
+  static const uint32_t save_x19_pat = 0xf81f0ff3;   /* str x19, [sp,-16]! */
+  static const uint32_t set_gr_offs = 0x128007e9;    /* mov w9, #-64 # gr_offs */
   static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
   static const uint32_t prepare_pat[] = {
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
