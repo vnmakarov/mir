@@ -261,7 +261,11 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
-    if (get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code) == MIR_NON_HARD_REG) {
+    gen_assert (!MIR_blk_type_p (type) || call_insn->ops[i].mode == MIR_OP_MEM);
+    if (type == MIR_T_BLK && (qwords = (call_insn->ops[i].u.mem.disp + 7) / 8) <= 2) {
+      if (int_arg_num + qwords > 8) blk_offset += qwords * 8;
+      int_arg_num += qwords;
+    } else if (get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code) == MIR_NON_HARD_REG) {
       if (type == MIR_T_LD && blk_offset % 16 != 0) blk_offset = (blk_offset + 15) / 16 * 16;
       blk_offset += type == MIR_T_LD ? 16 : 8;
     }
@@ -290,6 +294,31 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     if (type == MIR_T_BLK) {
       gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
       qwords = (arg_op.u.mem.disp + 7) / 8;
+      if (qwords <= 2) {
+	arg_reg = R0_HARD_REG + int_arg_num;
+	if (int_arg_num + qwords <= 8) {
+	  /* A trick to keep arg regs live: */
+	  call_insn->ops[i] = _MIR_new_hard_reg_mem_op (ctx, MIR_T_UNDEF, 0, int_arg_num,
+							qwords < 2 ? MIR_NON_HARD_REG : int_arg_num + 1, 1);
+	  if (qwords == 0) continue;
+	  new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, R0_HARD_REG + int_arg_num++),
+				   MIR_new_mem_op (ctx, MIR_T_I64, 0, arg_op.u.mem.base, 0, 1));
+	  gen_add_insn_before (gen_ctx, call_insn, new_insn);
+	  if (qwords == 2) {
+	    new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, R0_HARD_REG + int_arg_num++),
+				     MIR_new_mem_op (ctx, MIR_T_I64, 8, arg_op.u.mem.base, 0, 1));
+	    gen_add_insn_before (gen_ctx, call_insn, new_insn);
+	  }
+	} else { /* pass on stack w/o address: */
+	  gen_blk_mov (gen_ctx, call_insn, mem_size, SP_HARD_REG, 0, arg_op.u.mem.base, qwords, int_arg_num);
+	  call_insn->ops[i] = _MIR_new_hard_reg_mem_op (ctx, MIR_T_UNDEF, mem_size, SP_HARD_REG,
+							MIR_NON_HARD_REG, 1);
+	  mem_size += qwords * 8;
+	  blk_offset += qwords * 8;
+	  int_arg_num += qwords;
+	}
+	continue;
+      }
       gen_blk_mov (gen_ctx, call_insn, blk_offset, SP_HARD_REG, 0, arg_op.u.mem.base, qwords, int_arg_num);
       arg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       gen_add_insn_before (gen_ctx, call_insn,
