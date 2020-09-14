@@ -66,6 +66,12 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
     function argument.  The generated function is used to implement
     `MIR_BEND` insn in the interpreter
 
+  * `void *va_arg_builtin (void *p, uint64_t t)` returns address of
+    the next argument of MIR type `t`, where `p` is `va_list`
+  
+  * `void *va_stack_arg_builtin (void *p, size_t s)` returns address of
+    the next argument of MIR type `MIR_T_BLK` of size `s`, where `p` is `va_list`
+  
   * `void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t
     func_item, void *handler)` generates and returns a function behaving as usual
     C function which calls function `void handler (MIR_context_t ctx,
