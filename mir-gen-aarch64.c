@@ -647,6 +647,7 @@ DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
   unsigned char alloca_p, stack_arg_func_p, leaf_p;
+  size_t small_aggregate_save_area;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -658,6 +659,7 @@ struct target_ctx {
 #define alloca_p gen_ctx->target_ctx->alloca_p
 #define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
+#define small_aggregate_save_area gen_ctx->target_ctx->small_aggregate_save_area
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -679,18 +681,48 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_type_t type, mem_type, res_type;
   MIR_insn_code_t code, new_insn_code;
   MIR_insn_t insn, next_insn, new_insn, anchor;
+  MIR_var_t var;
   MIR_reg_t ret_reg, arg_reg;
   MIR_op_t ret_reg_op, arg_reg_op, mem_op, prev_sp_op, temp_op;
-  size_t i, int_arg_num, fp_arg_num, mem_size;
+  size_t i, int_arg_num, fp_arg_num, mem_size, qwords;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
   stack_arg_func_p = FALSE;
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
+  small_aggregate_save_area = 0;
   for (i = int_arg_num = fp_arg_num = mem_size = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
-    /* Prologue: generate arg_var = hard_reg|stack mem ... */
-    type = VARR_GET (MIR_var_t, func->vars, i).type;
+    /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
+    var = VARR_GET (MIR_var_t, func->vars, i);
+    type = var.type;
+    if (type == MIR_T_BLK && (qwords = (var.size + 7) / 8) <= 2) {
+      if (int_arg_num + qwords <= 8) {
+	small_aggregate_save_area += qwords * 8;
+	new_insn = MIR_new_insn (ctx, MIR_SUB, MIR_new_reg_op (ctx, i + 1),
+				 _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
+				 MIR_new_int_op (ctx, small_aggregate_save_area));
+	gen_add_insn_before (gen_ctx, anchor, new_insn);
+	if (qwords == 0) continue;
+	gen_mov (gen_ctx, anchor, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, i + 1, 0, 1),
+		 _MIR_new_hard_reg_op (ctx, int_arg_num));
+	if (qwords == 2)
+	  gen_mov (gen_ctx, anchor, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 8, i + 1, 0, 1),
+		   _MIR_new_hard_reg_op (ctx, int_arg_num + 1));
+      } else { /* pass on stack w/o address: */
+	if (!stack_arg_func_p) {
+	  stack_arg_func_p = TRUE;
+	  gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R8_HARD_REG),
+		   _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_HARD_REG, 1));
+	}
+	gen_add_insn_before (gen_ctx, anchor, MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
+							    _MIR_new_hard_reg_op (ctx, R8_HARD_REG),
+							    MIR_new_int_op (ctx, mem_size)));
+	mem_size += qwords * 8;
+      }
+      int_arg_num += qwords;
+      continue;
+    }
     arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code);
     if (arg_reg != MIR_NON_HARD_REG) {
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
@@ -699,8 +731,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       /* arg is on the stack */
       if (!stack_arg_func_p) {
         stack_arg_func_p = TRUE;
-        prev_sp_op = _MIR_new_hard_reg_op (ctx, R8_HARD_REG);
-        gen_mov (gen_ctx, anchor, MIR_MOV, prev_sp_op,
+        gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R8_HARD_REG),
                  _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_HARD_REG, 1));
       }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
@@ -882,7 +913,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         saved_fregs_num++;
     }
   if (leaf_p && !alloca_p && saved_iregs_num == 0 && saved_fregs_num == 0 && !func->vararg_p
-      && stack_slots_num == 0 && !stack_arg_func_p)
+      && stack_slots_num == 0 && !stack_arg_func_p && small_aggregate_save_area == 0)
     return;
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
@@ -929,7 +960,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
            _MIR_new_hard_reg_op (ctx, FP_HARD_REG));        /* mem[sp] = fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op); /* fp = sp */
-  if (func->vararg_p) {
+  if (func->vararg_p) { // ??? saving only regs corresponding to ...
     MIR_reg_t base = SP_HARD_REG;
 
     start = (int64_t) frame_size - reg_save_area_size;
@@ -974,6 +1005,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         offset += 16;
       }
     }
+  if (small_aggregate_save_area != 0) { // ??? duplication with vararg saved regs
+    if (small_aggregate_save_area % 16 != 0)
+      small_aggregate_save_area = (small_aggregate_save_area + 15) / 16 * 16;
+    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, small_aggregate_save_area));
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= <small aggr save area size> */
+  }
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
   assert (anchor->code == MIR_RET);
