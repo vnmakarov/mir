@@ -10217,36 +10217,53 @@ static inline void gen_multiple_load_store (MIR_context_t ctx, struct type *type
 #include "s390x/cs390x-ABI-code.c"
 #else
 typedef int target_arg_info_t; /* whatever */
+/* Initiate ARG_INFO for generating call, prototype, or prologue. */
 static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {
   simple_init_arg_vars (ctx, arg_info);
 }
+/* Return true if result of RET_TYPE should be return by addr. */
 static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
   return simple_return_by_addr_p (ctx, ret_type);
 }
+/* Add prototype result types to RES_TYPES or arg vars to ARG_VARS
+   used to return value of RET_TYPES. */
 static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
                                   target_arg_info_t *arg_info, VARR (MIR_type_t) * res_types,
                                   VARR (MIR_var_t) * arg_vars) {
   simple_add_res_proto (ctx, ret_type, arg_info, res_types, arg_vars);
 }
+/* Generate code and result operands or an input operand to call_ops
+   for returning call result of RET_TYPE.  Return -1 if no any call op
+   was added, 0 if only input operand (result address) was added or
+   number of added results. Use CALL_ARG_AREA_OFFSET for result
+   address offset on the stack.  */
 static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
   return simple_add_call_res_op (ctx, ret_type, arg_info, call_arg_area_offset);
 }
+/* Generate code to gather returned values of CALL into RES.  Return
+   value of RET_TYPE.  CALL_OPS_START is start index of all call
+   operands in call_ops for given call. */
 static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_type, op_t res,
                                            MIR_insn_t call, size_t call_ops_start) {
   return simple_gen_post_call_res_code (ctx, ret_type, res, call, call_ops_start);
 }
+/* Generate code and add operands to ret_ops which return VAL of RET_TYPE. */
 static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
   simple_add_ret_ops (ctx, ret_type, val);
 }
+/* Add one or more vars to arg_vars which pass arg NAME of ARG_TYPE. */
 static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
   simple_add_arg_proto (ctx, name, arg_type, arg_info, arg_vars);
 }
+/* Add operands to call_ops which pass ARG of ARG_TYPE. */
 static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
   simple_add_call_arg_op (ctx, arg_type, arg_info, arg);
 }
+/* Add code to gather aggregate arg with NAME, ARG_TYPE and PARAM_DECL passed by non-block args.
+   Return true if it was the case.  */
 static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
   return simple_gen_gather_arg (ctx, name, arg_type, param_decl, arg_info);
