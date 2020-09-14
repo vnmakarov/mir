@@ -4,7 +4,11 @@
 
 #define VA_LIST_IS_ARRAY_P 0
 
-// _MIR_get_thunk, _MIR_redirect_thunk, _MIR_get_interp_shim, _MIR_get_ff_call, _MIR_get_wrapper
+/* Small BLK (less or equal to two quadwords) args are passed in
+   *fully* regs or on stack (w/o address), otherwise it is put
+   somehwere on stack and its address passed instead. First RBLK arg
+   is passed in r8. Other RBLK independently of size is always passed
+   by address as an usual argument.  */
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   static const uint32_t bstart_code[] = {
