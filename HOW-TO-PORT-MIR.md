@@ -96,10 +96,10 @@ with the interpreter.  You need to create a lot files but they are
 mostly copies of already existing ones.
 
   * First create directory `c2mir/<target>` and files `c<target>.h`,
-    `c<target>-code.c`, and `mirc-<target>-linux.h` in this directory.
-    The simplest way to do this is to copy an existing directory
-    `x86_64` or `aarch64`, rename files in the new directory, and
-    modify them
+    `c<target>-code.c`, `c<target>-ABI-code.c`, and
+    `mirc-<target>-linux.h` in this directory.  The simplest way to do
+    this is to copy an existing directory `x86_64` or `aarch64`,
+    rename files in the new directory, and modify them
 
     * file `c<target>.h` defines types and macros used by C2MIR compiler.
       In most cases of 64-bit target, you don't need to change
@@ -109,6 +109,16 @@ mostly copies of already existing ones.
       (e.g. standard include directories) and functions (concerning
       data alignments) used by C2MIR compiler. You just need to rename
       definitions containing `<target>` in their names
+
+    * file `c<target>-ABI-code.c` defines platform depended data and
+      functions to generate ABI-compliant calls.  You can use some
+      functions of simple ABI in file `c2mir.c` or write code to
+      generate ABI compliant calls.  See comments for functions
+      `target_init_arg_vars`, `target_return_by_addr_p`,
+      `target_add_res_proto`, `target_add_call_res_op`,
+      `target_gen_post_call_res_code`, `target_add_ret_ops`,
+      `target_add_arg_proto`, `target_add_call_arg_op`, and
+      `target_gen_gather_arg`
 
     * file `mirc-target-linux.h` contains predefined macros of C2MIR
       compiler.  You should rename some of them.  To find what macros
