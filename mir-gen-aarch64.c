@@ -272,6 +272,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     gen_assert (!MIR_blk_type_p (type) || call_insn->ops[i].mode == MIR_OP_MEM);
+    if (type == MIR_T_RBLK && i == start) continue; /* hidden arg */
     if (type == MIR_T_BLK && (qwords = (call_insn->ops[i].u.mem.disp + 7) / 8) <= 2) {
       if (int_arg_num + qwords > 8) blk_offset += qwords * 8;
       int_arg_num += qwords;
@@ -301,8 +302,15 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (type == MIR_T_BLK) {
-      gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
+    gen_assert (
+      !MIR_blk_type_p (type)
+      || (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0));
+    if (type == MIR_T_RBLK && i == start) { /* hidden arg */
+      arg_reg_op = _MIR_new_hard_reg_op (ctx, R8_HARD_REG);
+      gen_mov (gen_ctx, call_insn, MIR_MOV, arg_reg_op, MIR_new_reg_op (ctx, arg_op.u.mem.base));
+      call_insn->ops[i] = arg_reg_op;
+      continue;
+    } else if (type == MIR_T_BLK) {
       qwords = (arg_op.u.mem.disp + 7) / 8;
       if (qwords <= 2) {
         arg_reg = R0_HARD_REG + int_arg_num;
@@ -712,7 +720,11 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
     var = VARR_GET (MIR_var_t, func->vars, i);
     type = var.type;
-    if (type == MIR_T_BLK && (qwords = (var.size + 7) / 8) <= 2) {
+    if (type == MIR_T_RBLK && i == 0) { /* hidden arg */
+      arg_reg_op = _MIR_new_hard_reg_op (ctx, R8_HARD_REG);
+      gen_mov (gen_ctx, anchor, MIR_MOV, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
+      continue;
+    } else if (type == MIR_T_BLK && (qwords = (var.size + 7) / 8) <= 2) {
       if (int_arg_num + qwords <= 8) {
         small_aggregate_save_area += qwords * 8;
         new_insn = MIR_new_insn (ctx, MIR_SUB, MIR_new_reg_op (ctx, i + 1),
