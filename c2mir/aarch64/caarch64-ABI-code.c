@@ -79,58 +79,15 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
 
 static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
-  MIR_var_t var;
-  MIR_type_t type;
-  int i, size;
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-
-  if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0) {
-    simple_add_arg_proto (ctx, name, arg_type, arg_info, arg_vars);
-    return;
-  }
-  assert (size <= 2 * 8);
-  for (i = 0; size > 0; size -= 8, i++) {
-    var.name = gen_get_indexed_name (ctx, name, i);
-    var.type = MIR_T_I64;
-    VARR_PUSH (MIR_var_t, arg_vars, var);
-  }
+  simple_add_arg_proto (ctx, name, arg_type, arg_info, arg_vars);
 }
 
 static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  int i, size;
-  MIR_op_t ops[2];
-
-  if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0) {
-    simple_add_call_arg_op (ctx, arg_type, arg_info, arg);
-    return;
-  }
-  assert (size <= 2 * 8);
-  for (i = 0; size > 0; size -= 8, i++) {
-    ops[i] = get_new_temp (ctx, MIR_T_I64).mir_op;
-    VARR_PUSH (MIR_op_t, call_ops, ops[i]);
-  }
-  gen_multiple_load_store (ctx, arg_type, ops, arg.mir_op, TRUE);
+  simple_add_call_arg_op (ctx, arg_type, arg_info, arg);
 }
 
 static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
-  MIR_type_t type;
-  MIR_op_t param_ops[2];
-  int i, size;
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  reg_var_t reg_var;
-
-  if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0) return FALSE;
-  assert (!param_decl->reg_p && size <= 2 * 8);
-  for (i = 0; size > 0; size -= 8, i++) {
-    reg_var = get_reg_var (ctx, MIR_T_I64, gen_get_indexed_name (ctx, name, i));
-    param_ops[i] = MIR_new_reg_op (ctx, reg_var.reg);
-  }
-  gen_multiple_load_store (ctx, arg_type, param_ops,
-                           MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
-                                           MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
-                           FALSE);
-  return TRUE;
+  return FALSE;
 }
