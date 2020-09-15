@@ -2,7 +2,9 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-// _MIR_get_thunk, _MIR_redirect_thunk, _MIR_get_interp_shim, _MIR_get_ff_call, _MIR_get_wrapper
+/* BLK is passed in int regs, and if the regs are not enough, the rest is passed on the stack.
+   RBLK is always passed by address.  */
+
 #define VA_LIST_IS_ARRAY_P 1 /* one element which is a pointer to args */
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
