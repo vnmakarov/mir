@@ -7,13 +7,62 @@ typedef int target_arg_info_t;
 
 static void target_init_arg_vars (MIR_context_t ctx, target_arg_info_t *arg_info) {}
 
-static MIR_type_t fp_homogeneous_type (MIR_context_t ctx, struct type *param_type, int *num) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+static MIR_type_t fp_homogeneous_type (MIR_context_t ctx, struct type *param_type, int *num) {
   return MIR_T_UNDEF;
-#else
-  return MIR_T_UNDEF;
-#endif
 }
+#else
+static MIR_type_t fp_homogeneous_type_1 (MIR_context_t ctx, MIR_type_t curr_type, struct type *type,
+                                         int *num) {
+  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
+  int n;
+  MIR_type_t t;
+
+  if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ARR) {
+    switch (type->mode) {
+    case TM_ARR: { /* Arrays are handled as small records.  */
+      struct arr_type *arr_type = type->u.arr_type;
+      struct expr *cexpr = arr_type->size->attr;
+
+      if ((t = fp_homogeneous_type_1 (ctx, curr_type, type->u.arr_type->el_type, &n))
+          == MIR_T_UNDEF)
+        return MIR_T_UNDEF;
+      *num = arr_type->size->code == N_IGNORE || !cexpr->const_p ? 1 : cexpr->u.i_val;
+      return t;
+    }
+    case TM_STRUCT:
+    case TM_UNION:
+      t = curr_type;
+      *num = 0;
+      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
+           el = NL_NEXT (el))
+        if (el->code == N_MEMBER) {
+          decl_t decl = el->attr;
+
+          if ((t = fp_homogeneous_type_1 (ctx, t, decl->decl_spec.type, &n)) == MIR_T_UNDEF)
+            return MIR_T_UNDEF;
+          if (type->mode == TM_STRUCT)
+            *num += n;
+          else if (*num < n)
+            *num = n;
+        }
+      return t;
+    default: assert (FALSE);
+    }
+  }
+
+  assert (scalar_type_p (type));
+  if ((t = get_mir_type (ctx, type)) != MIR_T_F && t != MIR_T_D) return MIR_T_UNDEF;
+  if (curr_type != t && curr_type != MIR_T_UNDEF) return MIR_T_UNDEF;
+  *num = 1;
+  return t;
+}
+
+static MIR_type_t fp_homogeneous_type (MIR_context_t ctx, struct type *param_type, int *num) {
+  if (param_type->mode != TM_STRUCT && param_type->mode != TM_UNION) return MIR_T_UNDEF;
+  return fp_homogeneous_type_1 (ctx, MIR_T_UNDEF, param_type, num);
+}
+#endif
 
 static int reg_aggregate_p (c2m_ctx_t c2m_ctx, struct type *ret_type) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
