@@ -172,7 +172,7 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
 
   if (((type = fp_homogeneous_type (ctx, arg_type, &n)) == MIR_T_F || type == MIR_T_D) && n <= 8) {
     for (int i = 0; i < n; i++) {
-      var.name = name;
+      var.name = gen_get_indexed_name (ctx, name, i);
       var.type = type;
       VARR_PUSH (MIR_var_t, arg_vars, var);
     }
@@ -229,7 +229,7 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   if (((type = fp_homogeneous_type (ctx, arg_type, &n)) == MIR_T_F || type == MIR_T_D) && n <= 8) {
     for (i = 0; i < n; i++) {
       assert (!param_decl->reg_p);
-      reg_var = get_reg_var (ctx, type, name);
+      reg_var = get_reg_var (ctx, type, gen_get_indexed_name (ctx, name, i));
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type), MIR_new_reg_op (ctx, reg_var.reg),
                                      MIR_new_mem_op (ctx, type,
