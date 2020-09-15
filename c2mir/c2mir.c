@@ -10207,7 +10207,7 @@ static inline void gen_multiple_load_store (MIR_context_t ctx, struct type *type
   }
 }
 
-#if 0 && defined(__x86_64__)
+#if defined(__x86_64__)
 #include "x86_64/cx86_64-ABI-code.c"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64-ABI-code.c"
