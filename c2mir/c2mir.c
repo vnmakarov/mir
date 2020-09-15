@@ -10211,7 +10211,7 @@ static inline void gen_multiple_load_store (MIR_context_t ctx, struct type *type
 #include "x86_64/cx86_64-ABI-code.c"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64-ABI-code.c"
-#elif 0 && defined(__PPC64__)
+#elif defined(__PPC64__)
 #include "ppc64/cppc64-ABI-code.c"
 #elif defined(__s390x__)
 #include "s390x/cs390x-ABI-code.c"
