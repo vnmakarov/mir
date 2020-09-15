@@ -8,7 +8,7 @@
 
 enum { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
-#define MAX_QWORDS 8
+#define MAX_QWORDS 2
 
 static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
   if (arg_type1 == arg_type2) return arg_type1;
@@ -38,7 +38,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
   if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ARR) {
     MIR_type_t subtypes[MAX_QWORDS];
 
-    if (n_qwords > 8) return 0; /* too big aggregate */
+    if (n_qwords > MAX_QWORDS) return 0; /* too big aggregate */
 
     for (i = 0; i < n_qwords; i++) types[i] = NO_CLASS;
 
