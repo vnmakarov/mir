@@ -259,7 +259,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       gen_assert (arg_op.mode == MIR_OP_MEM);
       size = (arg_op.u.mem.disp + 7) / 8 * 8;
       gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st after simplification */
-      if (size > 0 && size <= 8 * 8) {     /* upto 8 moves */
+      if (size > 0 && size <= 2 * 8) {     /* upto 2 moves */
         disp = 0;
         first_p = TRUE;
         temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
