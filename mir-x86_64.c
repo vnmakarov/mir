@@ -2,6 +2,8 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+/* BLK and RBLK args are always passed by address.  BLK first is copied on the caller stack.  */
+
 #define VA_LIST_IS_ARRAY_P 1
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
