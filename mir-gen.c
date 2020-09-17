@@ -4040,7 +4040,7 @@ static void update_bb_pressure (gen_ctx_t gen_ctx) {
 static void calculate_func_cfg_live_info (gen_ctx_t gen_ctx, int moves_p) {
   initiate_live_info (gen_ctx, moves_p);
   solve_dataflow (gen_ctx, FALSE, live_con_func_0, live_con_func_n, live_trans_func);
-  update_bb_pressure (gen_ctx);
+  if (optimize_level != 0) update_bb_pressure (gen_ctx);
 }
 
 static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
