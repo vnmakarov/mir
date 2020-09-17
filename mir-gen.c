@@ -4359,7 +4359,7 @@ DEF_VARR (breg_info_t);
 struct ra_ctx {
   VARR (MIR_reg_t) * breg_renumber;
   VARR (breg_info_t) * sorted_bregs;
-  VARR (bitmap_t) * point_used_locs; /* indexed by bb or point */
+  VARR (bitmap_t) * used_locs; /* indexed by bb or point */
   VARR (bitmap_t) * var_bbs;
   bitmap_t conflict_locs;
   reg_info_t *curr_breg_infos;
@@ -4370,7 +4370,7 @@ struct ra_ctx {
 
 #define breg_renumber gen_ctx->ra_ctx->breg_renumber
 #define sorted_bregs gen_ctx->ra_ctx->sorted_bregs
-#define point_used_locs gen_ctx->ra_ctx->point_used_locs
+#define used_locs gen_ctx->ra_ctx->used_locs
 #define var_bbs gen_ctx->ra_ctx->var_bbs
 #define conflict_locs gen_ctx->ra_ctx->conflict_locs
 #define curr_breg_infos gen_ctx->ra_ctx->curr_breg_infos
@@ -4384,7 +4384,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
   int slots_num;
   int j, k;
   bitmap_t bm;
-  bitmap_t *point_used_locs_addr;
+  bitmap_t *used_locs_addr;
   size_t nel;
   bitmap_iterator_t bi;
 
@@ -4406,16 +4406,16 @@ static void fast_assign (gen_ctx_t gen_ctx) {
   }
   VARR_TRUNC (MIR_reg_t, breg_renumber, 0);
   for (i = 0; i < nregs; i++) VARR_PUSH (MIR_reg_t, breg_renumber, MIR_NON_HARD_REG);
-  for (size_t n = 0; n < curr_bb_index && n < VARR_LENGTH (bitmap_t, point_used_locs); n++)
-    bitmap_clear (VARR_GET (bitmap_t, point_used_locs, n));
-  while (VARR_LENGTH (bitmap_t, point_used_locs) < curr_bb_index) {
+  for (size_t n = 0; n < curr_bb_index && n < VARR_LENGTH (bitmap_t, used_locs); n++)
+    bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+  while (VARR_LENGTH (bitmap_t, used_locs) < curr_bb_index) {
     bm = bitmap_create2 (2 * MAX_HARD_REG + 1);
-    VARR_PUSH (bitmap_t, point_used_locs, bm);
+    VARR_PUSH (bitmap_t, used_locs, bm);
   }
-  point_used_locs_addr = VARR_ADDR (bitmap_t, point_used_locs);
+  used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
   for (i = 0; i <= MAX_HARD_REG; i++)
     FOREACH_BITMAP_BIT (bi, VARR_GET (bitmap_t, var_bbs, i), nel) {
-      bitmap_set_bit_p (point_used_locs_addr[nel], i);
+      bitmap_set_bit_p (used_locs_addr[nel], i);
     }
   bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
@@ -4424,7 +4424,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
     var = reg2var (gen_ctx, reg);
     bitmap_clear (conflict_locs);
     FOREACH_BITMAP_BIT (bi, VARR_GET (bitmap_t, var_bbs, var), nel) {
-      bitmap_ior (conflict_locs, conflict_locs, point_used_locs_addr[nel]);
+      bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[nel]);
     }
     type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
     /* Call used hard regs are already taken into account above for call crossed regs. */
@@ -4480,7 +4480,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
     slots_num = target_locs_num (best_loc, type);
     FOREACH_BITMAP_BIT (bi, VARR_GET (bitmap_t, var_bbs, var), nel) {
       for (k = 0; k < slots_num; k++)
-        bitmap_set_bit_p (point_used_locs_addr[nel], target_nth_loc (best_loc, type, k));
+        bitmap_set_bit_p (used_locs_addr[nel], target_nth_loc (best_loc, type, k));
     }
   }
 }
@@ -4564,7 +4564,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   live_range_t lr;
   bitmap_t bm;
   size_t length, profit, best_profit;
-  bitmap_t *point_used_locs_addr;
+  bitmap_t *used_locs_addr;
   breg_info_t breg_info;
 
   func_stack_slots_num = 0;
@@ -4594,19 +4594,19 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_PUSH (size_t, loc_profits, 0);
     VARR_PUSH (size_t, loc_profit_ages, 0);
   }
-  for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, point_used_locs); n++)
-    bitmap_clear (VARR_GET (bitmap_t, point_used_locs, n));
-  while (VARR_LENGTH (bitmap_t, point_used_locs) <= curr_point) {
+  for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, used_locs); n++)
+    bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+  while (VARR_LENGTH (bitmap_t, used_locs) <= curr_point) {
     bm = bitmap_create2 (MAX_HARD_REG + 1);
-    VARR_PUSH (bitmap_t, point_used_locs, bm);
+    VARR_PUSH (bitmap_t, used_locs, bm);
   }
   qsort (VARR_ADDR (breg_info_t, sorted_bregs), nregs, sizeof (breg_info_t),
          breg_info_compare_func);
   curr_age = 0;
-  point_used_locs_addr = VARR_ADDR (bitmap_t, point_used_locs);
+  used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
   for (i = 0; i <= MAX_HARD_REG; i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (point_used_locs_addr[j], i);
+      for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
   }
   bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
@@ -4617,7 +4617,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     bitmap_clear (conflict_locs);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
-        bitmap_ior (conflict_locs, conflict_locs, point_used_locs_addr[j]);
+        bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
     curr_age++;
     setup_loc_profits (gen_ctx, breg);
     best_loc = MIR_NON_HARD_REG;
@@ -4695,7 +4695,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
       for (j = lr->start; j <= lr->finish; j++)
         for (k = 0; k < slots_num; k++)
-          bitmap_set_bit_p (point_used_locs_addr[j], target_nth_loc (best_loc, type, k));
+          bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
 }
 
@@ -4871,7 +4871,7 @@ static void init_ra (gen_ctx_t gen_ctx) {
   gen_ctx->ra_ctx = gen_malloc (gen_ctx, sizeof (struct ra_ctx));
   VARR_CREATE (MIR_reg_t, breg_renumber, 0);
   VARR_CREATE (breg_info_t, sorted_bregs, 0);
-  VARR_CREATE (bitmap_t, point_used_locs, 0);
+  VARR_CREATE (bitmap_t, used_locs, 0);
   VARR_CREATE (bitmap_t, var_bbs, 0);
   VARR_CREATE (size_t, loc_profits, 0);
   VARR_CREATE (size_t, loc_profit_ages, 0);
@@ -4881,9 +4881,8 @@ static void init_ra (gen_ctx_t gen_ctx) {
 static void finish_ra (gen_ctx_t gen_ctx) {
   VARR_DESTROY (MIR_reg_t, breg_renumber);
   VARR_DESTROY (breg_info_t, sorted_bregs);
-  while (VARR_LENGTH (bitmap_t, point_used_locs) != 0)
-    bitmap_destroy (VARR_POP (bitmap_t, point_used_locs));
-  VARR_DESTROY (bitmap_t, point_used_locs);
+  while (VARR_LENGTH (bitmap_t, used_locs) != 0) bitmap_destroy (VARR_POP (bitmap_t, used_locs));
+  VARR_DESTROY (bitmap_t, used_locs);
   while (VARR_LENGTH (bitmap_t, var_bbs) != 0) bitmap_destroy (VARR_POP (bitmap_t, var_bbs));
   VARR_DESTROY (bitmap_t, var_bbs);
   VARR_DESTROY (size_t, loc_profits);
