@@ -4558,7 +4558,7 @@ static void setup_loc_profits (gen_ctx_t gen_ctx, MIR_reg_t breg) {
     setup_loc_profit_from_op (gen_ctx, mv->bb_insn->insn->ops[1], mv->freq);
 }
 
-static void assign (gen_ctx_t gen_ctx) {
+static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
   int slots_num;
@@ -4699,6 +4699,15 @@ static void assign (gen_ctx_t gen_ctx) {
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (point_used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
+}
+
+static void assign (gen_ctx_t gen_ctx) {
+  MIR_reg_t i, reg, nregs = get_nregs (gen_ctx);
+
+  if (optimize_level == 0)
+    fast_assign (gen_ctx);
+  else
+    quality_assign (gen_ctx);
   DEBUG ({
     fprintf (debug_file, "+++++++++++++Disposition after assignment:");
     for (i = 0; i < nregs; i++) {
