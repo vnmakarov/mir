@@ -570,11 +570,15 @@ static void create_new_bb_insns (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
   bb_insn_t bb_insn, new_bb_insn;
   bb_t bb;
 
-  if (curr_cfg == NULL) return;
-  if (insn_for_bb == NULL)                  /* It should be in the 1st block */
-    bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); /* Skip entry and exit blocks */
-  else
-    bb = ((bb_insn_t) insn_for_bb->data)->bb;
+  /* Null insn_for_bb means it should be in the 1st block: skip entry and exit blocks: */
+  bb = insn_for_bb == NULL ? DLIST_EL (bb_t, curr_cfg->bbs, 2) : get_insn_bb (gen_ctx, insn_for_bb);
+  if (optimize_level == 0) {
+    for (insn = (before == NULL ? DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns)
+                                : DLIST_NEXT (MIR_insn_t, before));
+         insn != after; insn = DLIST_NEXT (MIR_insn_t, insn))
+      setup_insn_data (gen_ctx, insn, bb);
+    return;
+  }
   if (before != NULL && (bb_insn = before->data)->bb == bb) {
     for (insn = DLIST_NEXT (MIR_insn_t, before); insn != after;
          insn = DLIST_NEXT (MIR_insn_t, insn), bb_insn = new_bb_insn) {
