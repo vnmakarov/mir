@@ -601,7 +601,10 @@ static void create_new_bb_insns (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 }
 
 static void gen_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  if (curr_cfg != NULL) delete_bb_insn (insn->data);
+  if (optimize_level == 0)
+    delete_insn_data (insn);
+  else
+    delete_bb_insn (insn->data);
   MIR_remove_insn (gen_ctx->ctx, curr_func_item, insn);
 }
 
