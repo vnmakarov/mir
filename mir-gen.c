@@ -1301,48 +1301,6 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
   curr_func_item->data = NULL;
 }
 
-static void add_new_bb_insns (gen_ctx_t gen_ctx) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  MIR_func_t func;
-  size_t i, nops;
-  MIR_op_t op;
-  bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
-  bb_insn_t bb_insn, last_bb_insn = NULL;
-
-  gen_assert (curr_func_item->item_type == MIR_func_item);
-  func = curr_func_item->u.func;
-  for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
-       insn = DLIST_NEXT (MIR_insn_t, insn))
-    if (insn->data != NULL) {
-      bb = (last_bb_insn = insn->data)->bb;
-      if (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH) {
-        bb = DLIST_NEXT (bb_t, bb);
-        last_bb_insn = NULL;
-      }
-    } else { /* New insn: */
-      gen_assert (bb != NULL);
-      bb_insn = create_bb_insn (gen_ctx, insn, bb);
-      if (last_bb_insn != NULL) {
-        DLIST_INSERT_AFTER (bb_insn_t, bb->bb_insns, last_bb_insn, bb_insn);
-      } else {
-        gen_assert (DLIST_HEAD (bb_insn_t, bb->bb_insns) != NULL
-                    && DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn->code != MIR_LABEL);
-        DLIST_PREPEND (bb_insn_t, bb->bb_insns, bb_insn);
-      }
-      last_bb_insn = bb_insn;
-      nops = MIR_insn_nops (ctx, insn);
-      for (i = 0; i < nops; i++) {
-        op = insn->ops[i];
-        if (op.mode == MIR_OP_REG) {
-          update_min_max_reg (gen_ctx, op.u.reg);
-        } else if (op.mode == MIR_OP_MEM) {
-          update_min_max_reg (gen_ctx, op.u.mem.base);
-          update_min_max_reg (gen_ctx, op.u.mem.index);
-        }
-      }
-    }
-}
-
 static int rpost_cmp (const void *a1, const void *a2) {
   return (*(const struct bb **) a1)->rpost - (*(const struct bb **) a2)->rpost;
 }
@@ -5727,7 +5685,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #endif /* #ifndef NO_CCP */
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
-  if (0 && optimize_level != 0) add_new_bb_insns (gen_ctx);
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
