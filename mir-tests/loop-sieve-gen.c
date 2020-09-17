@@ -71,7 +71,7 @@ int main (void) {
     fprintf (stderr, "sieve () -> %ld", (long) res);
 #endif
     fprintf (stderr, " -- call %.0f usec", real_usec_time () - start_execution_time);
-    if (level == 0) /* we can accurately messure memory only for the 1st run */
+    if (level == 0) /* we can accurately meassure memory only for the 1st run */
       fprintf (stderr, ", memory used = %.1f KB\n", ((char *) sbrk (0) - start_heap) / 1000.0);
     else
       fprintf (stderr, "\n");

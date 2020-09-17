@@ -62,7 +62,7 @@ static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
           || hard_reg == TEMP_LDOUBLE_HARD_REG2);
 }
 
-static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
   gen_assert (hard_reg <= MAX_HARD_REG);
   return ((R0_HARD_REG <= hard_reg && hard_reg <= R5_HARD_REG) || hard_reg == R14_HARD_REG
           || (F0_HARD_REG <= hard_reg && hard_reg <= F7_HARD_REG));
@@ -143,7 +143,7 @@ DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
   unsigned char alloca_p, leaf_p, stack_param_p, switch_p;
-  size_t param_save_area_size, ld_value_save_area_size;
+  size_t param_save_area_size, blk_ld_value_save_area_size;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -160,7 +160,7 @@ struct target_ctx {
 #define stack_param_p gen_ctx->target_ctx->stack_param_p
 #define switch_p gen_ctx->target_ctx->switch_p
 #define param_save_area_size gen_ctx->target_ctx->param_save_area_size
-#define ld_value_save_area_size gen_ctx->target_ctx->ld_value_save_area_size
+#define blk_ld_value_save_area_size gen_ctx->target_ctx->blk_ld_value_save_area_size
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -176,13 +176,84 @@ static void gen_mov (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_insn_code_t code,
   gen_add_insn_before (gen_ctx, anchor, MIR_new_insn (gen_ctx->ctx, code, dst_op, src_op));
 }
 
+static void mir_blk_mov (uint64_t *to, uint64_t *from, uint64_t nwords) {
+  for (; nwords > 0; nwords--) *to++ = *from++;
+}
+
+static const char *BLK_MOV = "mir.blk_mov";
+static const char *BLK_MOV_P = "mir.blk_mov.p";
+
+static void gen_blk_mov (gen_ctx_t gen_ctx, MIR_insn_t anchor, size_t to_disp,
+                         MIR_reg_t to_base_hard_reg, size_t from_disp, MIR_reg_t from_base_reg,
+                         size_t qwords, int save_regs) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_item_t proto_item, func_import_item;
+  MIR_insn_t new_insn;
+  MIR_op_t ops[5], freg_op, treg_op, treg_op2, treg_op3;
+
+  treg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+  if (qwords <= 16) {
+    for (; qwords > 0; qwords--, to_disp += 8, from_disp += 8) {
+      gen_mov (gen_ctx, anchor, MIR_MOV, treg_op,
+               MIR_new_mem_op (ctx, MIR_T_I64, from_disp, from_base_reg, 0, 1));
+      gen_mov (gen_ctx, anchor, MIR_MOV,
+               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, to_disp, to_base_hard_reg,
+                                         MIR_NON_HARD_REG, 1),
+               treg_op);
+    }
+    return;
+  }
+  treg_op2 = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+  treg_op3 = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+  /* Save arg regs: */
+  if (save_regs > 0)
+    gen_mov (gen_ctx, anchor, MIR_MOV, treg_op, _MIR_new_hard_reg_op (ctx, R2_HARD_REG));
+  if (save_regs > 1)
+    gen_mov (gen_ctx, anchor, MIR_MOV, treg_op2, _MIR_new_hard_reg_op (ctx, R3_HARD_REG));
+  if (save_regs > 2)
+    gen_mov (gen_ctx, anchor, MIR_MOV, treg_op3, _MIR_new_hard_reg_op (ctx, R4_HARD_REG));
+  /* call blk move: */
+  proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, BLK_MOV_P, 0, NULL, 3, MIR_T_I64,
+                                   "to", MIR_T_I64, "from", MIR_T_I64, "nwords");
+  func_import_item = _MIR_builtin_func (ctx, curr_func_item->module, BLK_MOV, mir_blk_mov);
+  freg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+  new_insn = MIR_new_insn (ctx, MIR_MOV, freg_op, MIR_new_ref_op (ctx, func_import_item));
+  gen_add_insn_before (gen_ctx, anchor, new_insn);
+  gen_add_insn_before (gen_ctx, anchor,
+                       MIR_new_insn (gen_ctx->ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, R2_HARD_REG),
+                                     _MIR_new_hard_reg_op (ctx, to_base_hard_reg),
+                                     MIR_new_int_op (ctx, to_disp)));
+  gen_add_insn_before (gen_ctx, anchor,
+                       MIR_new_insn (gen_ctx->ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, R3_HARD_REG),
+                                     MIR_new_reg_op (ctx, from_base_reg),
+                                     MIR_new_int_op (ctx, from_disp)));
+  gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R4_HARD_REG),
+           MIR_new_int_op (ctx, qwords));
+  ops[0] = MIR_new_ref_op (ctx, proto_item);
+  ops[1] = freg_op;
+  ops[2] = _MIR_new_hard_reg_op (ctx, R2_HARD_REG);
+  ops[3] = _MIR_new_hard_reg_op (ctx, R3_HARD_REG);
+  ops[4] = _MIR_new_hard_reg_op (ctx, R4_HARD_REG);
+  new_insn = MIR_new_insn_arr (ctx, MIR_CALL, 5, ops);
+  gen_add_insn_before (gen_ctx, anchor, new_insn);
+  /* Restore arg regs: */
+  if (save_regs > 0)
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R2_HARD_REG), treg_op);
+  if (save_regs > 1)
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R3_HARD_REG), treg_op2);
+  if (save_regs > 2)
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R4_HARD_REG), treg_op3);
+}
+
 static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   int vararg_p = proto->vararg_p;
   size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t param_mem_size, call_ld_value_area_size, ld_n_iregs, n_iregs, n_fregs, ld_value_disp;
+  size_t param_mem_size, call_blk_ld_value_area_size, ld_n_iregs, n_iregs, n_fregs;
+  size_t qwords, blk_ld_value_disp;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
   MIR_var_t *arg_vars = NULL;
@@ -206,15 +277,19 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     call_insn->ops[1] = temp_op;
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
-  n_iregs = n_fregs = param_mem_size = call_ld_value_area_size = 0;
+  n_iregs = n_fregs = param_mem_size = call_blk_ld_value_area_size = 0;
   for (size_t i = 2; i < nops; i++) {
-    /* process long double results and args to calculate memory for them: */
+    arg_op = call_insn->ops[i];
+    /* process long double results and ld and block args to calculate memory for them: */
     if (i < start) {
       type = proto->res_types[i - 2];
     } else if (i - start < nargs) {
       type = arg_vars[i - start].type;
+    } else if (arg_op.mode == MIR_OP_MEM) {
+      type = arg_op.u.mem.type;
+      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
     } else {
-      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
+      mode = arg_op.value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
                   || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
@@ -223,28 +298,37 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     if (type != MIR_T_LD && i < start) continue;
-    if (type == MIR_T_LD) call_ld_value_area_size += 16;
+    if (type == MIR_T_LD)
+      call_blk_ld_value_area_size += 16;
+    else if (type == MIR_T_BLK) {
+      gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
+      call_blk_ld_value_area_size += (arg_op.u.mem.disp + 7) / 8 * 8;
+    }
     if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
       /* put arguments to argument hard regs: */
       n_fregs++;
-    } else if (type != MIR_T_F && type != MIR_T_D && n_iregs < 5) {
+    } else if (type != MIR_T_F && type != MIR_T_D && n_iregs < 5) { /* RBLK too */
       n_iregs++;
     } else { /* put arguments on the stack */
       param_mem_size += 8;
     }
   }
   if (param_save_area_size < param_mem_size) param_save_area_size = param_mem_size;
-  if (ld_value_save_area_size < call_ld_value_area_size)
-    ld_value_save_area_size = call_ld_value_area_size;
-  ld_value_disp = param_mem_size;
+  if (blk_ld_value_save_area_size < call_blk_ld_value_area_size)
+    blk_ld_value_save_area_size = call_blk_ld_value_area_size;
+  blk_ld_value_disp = param_mem_size;
   param_mem_size = n_fregs = n_iregs = 0;
   for (size_t i = 2; i < nops; i++) { /* process args and ???long double results: */
     arg_op = call_insn->ops[i];
-    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG);
+    gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
+                || (arg_op.mode == MIR_OP_MEM && MIR_blk_type_p (arg_op.u.mem.type)));
     if (i < start) {
       type = proto->res_types[i - 2];
     } else if (i - start < nargs) {
       type = arg_vars[i - start].type;
+    } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
+      type = call_insn->ops[i].u.mem.type;
+      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_DOUBLE
@@ -258,17 +342,24 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (type == MIR_T_LD) {
-      if (i >= start) { /* put arg value in saved ld value area: */
-        mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, ld_value_disp + S390X_STACK_HEADER_SIZE,
-                                           FP_HARD_REG, MIR_NON_HARD_REG, 1);
-        gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
+    if (type == MIR_T_LD || type == MIR_T_BLK) {
+      if (i >= start) { /* put arg value in saved blk/ld value area: */
+        if (type == MIR_T_LD) {
+          mem_op
+            = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, blk_ld_value_disp + S390X_STACK_HEADER_SIZE,
+                                        FP_HARD_REG, MIR_NON_HARD_REG, 1);
+          gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
+        } else {
+          qwords = (arg_op.u.mem.disp + 7) / 8;
+          gen_blk_mov (gen_ctx, call_insn, S390X_STACK_HEADER_SIZE + blk_ld_value_disp, FP_HARD_REG,
+                       0, arg_op.u.mem.base, qwords, n_iregs);
+        }
       }
       arg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       new_insn = MIR_new_insn (ctx, MIR_ADD, arg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
-                               MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + ld_value_disp));
+                               MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + blk_ld_value_disp));
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
-      ld_value_disp += 16;
+      blk_ld_value_disp += type == MIR_T_LD ? 16 : qwords * 8;
     }
     mem_type = type == MIR_T_F || type == MIR_T_D ? type : MIR_T_I64;
     if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
@@ -281,7 +372,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     } else if (type != MIR_T_F && type != MIR_T_D && n_iregs < 5) {
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, R2_HARD_REG + n_iregs);
-      gen_mov (gen_ctx, call_insn, MIR_MOV, arg_reg_op, arg_op);
+      if (type != MIR_T_RBLK) {
+        gen_mov (gen_ctx, call_insn, MIR_MOV, arg_reg_op, arg_op);
+      } else {
+        assert (arg_op.mode == MIR_OP_MEM);
+        gen_mov (gen_ctx, call_insn, MIR_MOV, arg_reg_op, MIR_new_reg_op (ctx, arg_op.u.mem.base));
+        arg_reg_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_RBLK, arg_op.u.mem.disp,
+                                               R2_HARD_REG + n_iregs, MIR_NON_HARD_REG, 1);
+      }
       if (i >= start) call_insn->ops[i] = arg_reg_op; /* don't change LD return yet */
       n_iregs++;
     } else { /* put arguments on the stack: */
@@ -289,13 +387,19 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       new_insn_code = (type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, param_mem_size + S390X_STACK_HEADER_SIZE,
                                          SP_HARD_REG, MIR_NON_HARD_REG, 1);
-      gen_mov (gen_ctx, call_insn, new_insn_code, mem_op, arg_op);
+      if (type != MIR_T_RBLK) {
+        gen_mov (gen_ctx, call_insn, new_insn_code, mem_op, arg_op);
+      } else {
+        assert (arg_op.mode == MIR_OP_MEM);
+        gen_mov (gen_ctx, call_insn, new_insn_code, mem_op,
+                 MIR_new_reg_op (ctx, arg_op.u.mem.base));
+      }
       if (i >= start) call_insn->ops[i] = mem_op;
       param_mem_size += 8;
     }
   }
   ld_n_iregs = n_iregs = n_fregs = 0;
-  ld_value_disp = param_mem_size;
+  blk_ld_value_disp = param_mem_size;
   for (size_t i = 0; i < proto->nres; i++) {
     ret_op = call_insn->ops[i + 2];
     gen_assert (ret_op.mode == MIR_OP_REG || ret_op.mode == MIR_OP_HARD_REG);
@@ -303,14 +407,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     if (type == MIR_T_LD) { /* returned by address */
       new_insn_code = MIR_LDMOV;
       call_res_op = ret_val_op
-        = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, S390X_STACK_HEADER_SIZE + ld_value_disp,
+        = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, S390X_STACK_HEADER_SIZE + blk_ld_value_disp,
                                     FP_HARD_REG, MIR_NON_HARD_REG, 1);
       if (n_iregs < 5) { /* use it as a call result to keep assignment to ld_n_iregs: */
         call_res_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, 0, R2_HARD_REG + ld_n_iregs,
                                                 MIR_NON_HARD_REG, 1);
         ld_n_iregs++;
       }
-      ld_value_disp += 16;
+      blk_ld_value_disp += 16;
     } else if ((type == MIR_T_F || type == MIR_T_D) && n_fregs < 4) {
       new_insn_code = type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
       call_res_op = ret_val_op = _MIR_new_hard_reg_op (ctx, F0_HARD_REG + n_fregs * 2);
@@ -386,6 +490,8 @@ static const char *LDNEG_P = "mir.ldneg.p";
 
 static const char *VA_ARG_P = "mir.va_arg.p";
 static const char *VA_ARG = "mir.va_arg";
+static const char *VA_STACK_ARG_P = "mir.va_stack_arg.p";
+static const char *VA_STACK_ARG = "mir.va_stack_arg";
 
 static int64_t mir_ldeq (long double d1, long double d2) { return d1 == d2; }
 static const char *LDEQ = "mir.ldeq";
@@ -532,6 +638,13 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
                                       MIR_T_I64, "va", MIR_T_I64, "type");
     *func_import_item = _MIR_builtin_func (ctx, curr_func_item->module, VA_ARG, va_arg_builtin);
     return 2;
+  case MIR_VA_STACK_ARG:
+    res_type = MIR_T_I64;
+    *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_STACK_ARG_P, 1, &res_type, 2,
+                                      MIR_T_I64, "va", MIR_T_I64, "size");
+    *func_import_item
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_STACK_ARG, va_stack_arg_builtin);
+    return 2;
   default: return 0;
   }
 }
@@ -540,7 +653,7 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   return ((MIR_disp_t) slot * 8 + S390X_STACK_HEADER_SIZE + param_save_area_size
-          + ld_value_save_area_size);
+          + blk_ld_value_save_area_size);
 }
 
 static void set_prev_sp_reg (gen_ctx_t gen_ctx, MIR_insn_t anchor, int *prev_sp_set_p,
@@ -627,7 +740,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   stack_param_p = disp != 0;
   switch_p = alloca_p = FALSE;
   leaf_p = TRUE;
-  param_save_area_size = ld_value_save_area_size = 0;
+  param_save_area_size = blk_ld_value_save_area_size = 0;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_item_t proto_item, func_import_item;
     int nargs;
@@ -815,7 +928,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       fsave (gen_ctx, anchor, S390X_FP_REG_ARG_SAVE_AREA_START + i * 8, i * 2 + F0_HARD_REG);
   }
   for (i = saved_fregs_num = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)) {
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       saved_regs_p = TRUE;
       if (i >= F0_HARD_REG) saved_fregs_num++;
     }
@@ -825,7 +938,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   r14_reg_op = _MIR_new_hard_reg_op (ctx, R14_HARD_REG);
   r15_reg_op = _MIR_new_hard_reg_op (ctx, R15_HARD_REG);
   /* Prologue: */
-  frame_size = (param_save_area_size + S390X_STACK_HEADER_SIZE + ld_value_save_area_size
+  frame_size = (param_save_area_size + S390X_STACK_HEADER_SIZE + blk_ld_value_save_area_size
                 + stack_slots_num * 8);
   start_saved_fregs_offset = frame_size;
   frame_size += saved_fregs_num * 8;
@@ -839,7 +952,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
                                      R15_HARD_REG, MIR_NON_HARD_REG, 1),
            r11_reg_op);                        /* mem[r15+76] = r11 */
   for (i = R2_HARD_REG; i < R15_HARD_REG; i++) /* exclude r15 */
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i)
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)
         && (i != 6 || !func->vararg_p))
       isave (gen_ctx, anchor, S390X_GP_REG_RSAVE_AREA_START + (i - R2_HARD_REG) * 8, i);
   gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op, r15_reg_op); /* r0 = r15 */
@@ -849,7 +962,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, R15_HARD_REG, MIR_NON_HARD_REG, 1),
            r0_reg_op); /* mem[r15] = r0 */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       fsave (gen_ctx, anchor, start_saved_fregs_offset + (n++) * 8, i);
   gen_mov (gen_ctx, anchor, MIR_MOV, r11_reg_op, r15_reg_op); /* r11 = r15 */
   /* Epilogue: */
@@ -857,7 +970,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_assert (anchor->code == MIR_RET || anchor->code == MIR_JMP);
   /* Restoring fp hard registers: */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       gen_mov (gen_ctx, anchor, MIR_DMOV, _MIR_new_hard_reg_op (ctx, i),
                _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, start_saved_fregs_offset + (n++) * 8,
                                          R11_HARD_REG, MIR_NON_HARD_REG, 1));
@@ -865,7 +978,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* r15 = r11 + frame_size */
   /* Restore saved gp regs (including r11 and excluding r15) and r14 */
   for (i = R2_HARD_REG; i < R15_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i) && bitmap_bit_p (used_hard_regs, i))
+    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, i),
                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64,
                                          S390X_GP_REG_RSAVE_AREA_START + (i - R2_HARD_REG) * 8,

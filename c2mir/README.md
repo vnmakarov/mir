@@ -121,4 +121,5 @@
       MIR compiles `c2m` sources again and generate another binary
       MIR, and the two binary MIR files are identical
     * The bootstrap test takes about CPU 10 sec (for comparison GCC minimal bootstrap takes about 2 CPU hours)    
-  * Full x86-64 call ABI (multiple return regs, passing structures through regs) is not implemented yet
+  * ABI compliant calls (multiple return regs, passing structures through regs) has implemented for x86-64, ppc64,
+    aarch64, and s390x

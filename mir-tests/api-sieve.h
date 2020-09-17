@@ -1,7 +1,7 @@
 static MIR_item_t create_mir_func_sieve_api (MIR_context_t ctx, MIR_module_t *m_res) {
   MIR_item_t func;
   MIR_module_t m;
-  MIR_reg_t iter, count, i, k, prime, temp, flags;
+  MIR_reg_t iter, count, i, k, prime, flags;
   MIR_type_t res_type;
   MIR_label_t loop = MIR_new_label (ctx), loop2 = MIR_new_label (ctx), loop3 = MIR_new_label (ctx),
               loop4 = MIR_new_label (ctx);
@@ -18,7 +18,6 @@ static MIR_item_t create_mir_func_sieve_api (MIR_context_t ctx, MIR_module_t *m_
   i = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "i");
   k = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "k");
   prime = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "prime");
-  temp = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "temp");
   flags = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "flags");
   MIR_append_insn (ctx, func,
                    MIR_new_insn (ctx, MIR_ALLOCA, MIR_new_reg_op (ctx, flags),
@@ -48,7 +47,7 @@ static MIR_item_t create_mir_func_sieve_api (MIR_context_t ctx, MIR_module_t *m_
   MIR_append_insn (ctx, func, MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, loop2)));
   MIR_append_insn (ctx, func, fin2);
   MIR_append_insn (ctx, func,
-                   MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, i), MIR_new_int_op (ctx, 0)));
+                   MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, i), MIR_new_int_op (ctx, 1)));
   MIR_append_insn (ctx, func, loop3);
   MIR_append_insn (ctx, func,
                    MIR_new_insn (ctx, MIR_BGE, MIR_new_label_op (ctx, fin3),
@@ -58,11 +57,8 @@ static MIR_item_t create_mir_func_sieve_api (MIR_context_t ctx, MIR_module_t *m_
                                  MIR_new_mem_op (ctx, MIR_T_U8, 0, flags, i, 1),
                                  MIR_new_int_op (ctx, 0)));
   MIR_append_insn (ctx, func,
-                   MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, temp), MIR_new_reg_op (ctx, i),
-                                 MIR_new_reg_op (ctx, i)));
-  MIR_append_insn (ctx, func,
-                   MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, prime),
-                                 MIR_new_reg_op (ctx, temp), MIR_new_int_op (ctx, 3)));
+                   MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, prime), MIR_new_reg_op (ctx, i),
+                                 MIR_new_int_op (ctx, 1)));
   MIR_append_insn (ctx, func,
                    MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, k), MIR_new_reg_op (ctx, i),
                                  MIR_new_reg_op (ctx, prime)));

@@ -154,7 +154,7 @@ struct gen_ctx {
   FILE *debug_file;
 #endif
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
-  bitmap_t call_used_hard_regs, func_used_hard_regs;
+  bitmap_t call_used_hard_regs[MIR_T_BOUND], func_used_hard_regs;
   func_cfg_t curr_cfg;
   size_t curr_bb_index, curr_loop_node_index;
   struct target_ctx *target_ctx;
@@ -1014,6 +1014,9 @@ static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op);
 static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_op_t op;
+  int first_p;
+  size_t nel;
+  bitmap_iterator_t bi;
 
   MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
   fprintf (debug_file, " # indexes: ");
@@ -1037,6 +1040,13 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
       }
       fprintf (debug_file, dv == DLIST_HEAD (dead_var_t, bb_insn->dead_vars) ? " # dead: " : " ");
       MIR_output_op (ctx, debug_file, op, curr_func_item->u.func);
+    }
+    if (MIR_call_code_p (bb_insn->insn->code)) {
+      first_p = TRUE;
+      FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+	fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
+	first_p = FALSE;
+      }
     }
   }
   fprintf (debug_file, "\n");
@@ -2031,7 +2041,7 @@ static void create_av_bitmaps (gen_ctx_t gen_ctx) {
         FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
           make_obsolete_var_exprs (gen_ctx, nel);
         }
-        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) {
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
           make_obsolete_var_exprs (gen_ctx, nel);
         }
         bitmap_and_compl (bb->av_gen, bb->av_gen, memory_exprs);
@@ -2134,7 +2144,7 @@ static void cse_modify (gen_ctx_t gen_ctx) {
         FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
           make_obsolete_var_exprs (gen_ctx, nel);
         }
-        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) {
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
           make_obsolete_var_exprs (gen_ctx, nel);
         }
         bitmap_and_compl (av, av, memory_exprs);
@@ -4002,8 +4012,8 @@ static size_t initiate_bb_live_info (gen_ctx_t gen_ctx, bb_t bb, int moves_p) {
        bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
     insn = bb_insn->insn;
     if (MIR_call_code_p (insn->code)) {
-      bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs);
-      bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs);
+      bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs[MIR_T_UNDEF]);
+      bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs[MIR_T_UNDEF]);
     }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
@@ -4121,7 +4131,7 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_clear_bit_p (live, var);
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
+      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) continue;
         if (bitmap_set_bit_p (live, var)) add_bb_insn_dead_var (gen_ctx, bb_insn, var);
@@ -4320,7 +4330,7 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
         if (out_p) incr_p |= make_var_dead (gen_ctx, var, curr_point);
       }
       if (MIR_call_code_p (insn->code)) {
-        FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) {
+        FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
           make_var_dead (gen_ctx, nel, curr_point);
         }
         FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
@@ -4571,7 +4581,7 @@ static void assign (gen_ctx_t gen_ctx) {
     best_profit = 0;
     type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
     if (curr_breg_infos[breg].calls_num > 0)
-      bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs);
+      bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
     for (loc = 0; loc <= MAX_HARD_REG; loc++) {
       if (bitmap_bit_p (conflict_locs, loc)) continue;
       if (!target_hard_reg_type_ok_p (loc, type) || target_fixed_hard_reg_p (loc)) continue;
@@ -5348,7 +5358,7 @@ static void combine (gen_ctx_t gen_ctx) {
                           TRUE);
         if (MIR_call_code_p (code = insn->code)) {
           for (size_t hr = 0; hr <= MAX_HARD_REG; hr++)
-            if (bitmap_bit_p (call_used_hard_regs, hr)) {
+            if (bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hr)) {
               setup_hreg_ref (gen_ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
             }
         } else if (code == MIR_RET) {
@@ -5476,7 +5486,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
         gen_delete_insn (gen_ctx, insn);
         continue;
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs);
+      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
@@ -5858,7 +5868,7 @@ static MIR_reg_t assign_to_loc (gen_ctx_t gen_ctx, insn_var_t *insn_var_ref, int
     }
   }
   if (live_before_p && live_after_p && MIR_call_code_p (insn->code)) {
-    bitmap_ior (blocked_hard_regs, blocked_hard_regs, call_used_hard_regs);
+    bitmap_ior (blocked_hard_regs, blocked_hard_regs, call_used_hard_regs[MIR_T_UNDEF]);
   }
   hreg = out_p ? insn_var_ref->hreg : curr_var_infos[var].hreg;
   if (hreg != MIR_NON_HARD_REG && !locs_in_bitmap_p (blocked_hard_regs, hreg, type)) {
@@ -6056,7 +6066,7 @@ static void fast_gen (gen_ctx_t gen_ctx) {
     if (hard_reg2 != MIR_NON_HARD_REG && !target_fixed_hard_reg_p (hard_reg2))
       spill_vars (gen_ctx, hard_reg2, hard_reg2, MIR_T_UNDEF, insn);
     if (MIR_call_code_p (code)) {
-      FOREACH_BITMAP_BIT (bi, call_used_hard_regs, nel) {
+      FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
         if (!target_fixed_hard_reg_p (nel)) {
           spill_vars (gen_ctx, nel, nel, MIR_T_UNDEF, insn);
         }
@@ -6363,6 +6373,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
           print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
         });
       }
+      ccp_clear (gen_ctx);
     }
 #endif /* #ifndef NO_CCP */
   }
@@ -6501,12 +6512,17 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_selection (gen_ctx);
   init_fast_gen (gen_ctx);
   target_init (gen_ctx);
-  call_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
   max_int_hard_regs = max_fp_hard_regs = 0;
   for (i = 0; i <= MAX_HARD_REG; i++) {
     if (target_fixed_hard_reg_p (i)) continue;
-    if (target_call_used_hard_reg_p (i)) bitmap_set_bit_p (call_used_hard_regs, i);
     target_hard_reg_type_ok_p (i, MIR_T_I32) ? max_int_hard_regs++ : max_fp_hard_regs++;
+  }
+  for (MIR_type_t type = MIR_T_I8; type < MIR_T_BOUND; type++) {
+    call_used_hard_regs[type] = bitmap_create2 (MAX_HARD_REG + 1);
+    for (i = 0; i <= MAX_HARD_REG; i++) {
+      if (target_fixed_hard_reg_p (i)) continue;
+      if (target_call_used_hard_reg_p (i, type)) bitmap_set_bit_p (call_used_hard_regs[type], i);
+    }
   }
   insn_to_consider = bitmap_create2 (1024);
   func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
@@ -6529,7 +6545,8 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_ra (gen_ctx);
   finish_selection (gen_ctx);
   finish_fast_gen (gen_ctx);
-  bitmap_destroy (call_used_hard_regs);
+  for (MIR_type_t type = MIR_T_I8; type < MIR_T_BOUND; type++)
+    bitmap_destroy (call_used_hard_regs[type]);
   bitmap_destroy (insn_to_consider);
   bitmap_destroy (func_used_hard_regs);
   target_finish (gen_ctx);
