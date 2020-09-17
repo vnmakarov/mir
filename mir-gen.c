@@ -618,37 +618,40 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
     gen_assert (insn_for_bb == NULL || !MIR_branch_code_p (insn_for_bb->code));
   }
   MIR_insert_insn_before (ctx, curr_func_item, before, insn);
-  if (curr_cfg != NULL)
-    create_new_bb_insns (gen_ctx, DLIST_PREV (MIR_insn_t, insn), before, insn_for_bb);
+  create_new_bb_insns (gen_ctx, DLIST_PREV (MIR_insn_t, insn), before, insn_for_bb);
 }
 
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn) {
   gen_assert (insn->code != MIR_LABEL);
   gen_assert (!MIR_branch_code_p (after->code));
   MIR_insert_insn_after (gen_ctx->ctx, curr_func_item, after, insn);
-  if (curr_cfg != NULL) create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
+  create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
 }
 
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg) {
+  insn_data_t insn_data;
+
   gen_assert (MIR_call_code_p (call_insn->code) && hard_reg <= MAX_HARD_REG);
-  if (curr_cfg != NULL) {
+  if (optimize_level != 0) {
     bitmap_set_bit_p (((bb_insn_t) call_insn->data)->call_hard_reg_args, hard_reg);
     return;
   }
-  if (call_insn->data == NULL) call_insn->data = (void *) bitmap_create2 (MAX_HARD_REG + 1);
-  bitmap_set_bit_p ((bitmap_t) call_insn->data, hard_reg);
+  if ((insn_data = call_insn->data)->u.call_hard_reg_args == NULL)
+    insn_data->u.call_hard_reg_args = (void *) bitmap_create2 (MAX_HARD_REG + 1);
+  bitmap_set_bit_p (insn_data->u.call_hard_reg_args, hard_reg);
 }
 
 static void set_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn, size_t disp) {
   gen_assert (insn->code == MIR_LABEL);
-  if (curr_cfg == NULL)
-    insn->data = (void *) disp;
+  if (optimize_level == 0)
+    ((insn_data_t) insn->data)->u.label_disp = disp;
   else
     ((bb_insn_t) insn->data)->label_disp = disp;
 }
 static size_t get_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   gen_assert (insn->code == MIR_LABEL);
-  return curr_cfg == NULL ? (size_t) insn->data : ((bb_insn_t) insn->data)->label_disp;
+  return (optimize_level == 0 ? ((insn_data_t) insn->data)->u.label_disp
+                              : ((bb_insn_t) insn->data)->label_disp);
 }
 
 static void setup_used_hard_regs (gen_ctx_t gen_ctx, MIR_type_t type, MIR_reg_t hard_reg) {
