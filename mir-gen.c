@@ -4025,7 +4025,8 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_clear_bit_p (live, var);
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
+      if (MIR_call_code_p (insn->code))
+        bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) continue;
         if (bitmap_set_bit_p (live, var)) add_bb_insn_dead_var (gen_ctx, bb_insn, var);
@@ -4086,7 +4087,7 @@ static void destroy_live_range (live_range_t lr) {
   }
 }
 
-static int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
+static inline int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
   live_range_t lr;
 
   if (bitmap_clear_bit_p (live_vars, var)) {
@@ -4100,7 +4101,7 @@ static int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
   return TRUE;
 }
 
-static int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
+static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
   live_range_t lr;
 
   if (!bitmap_set_bit_p (live_vars, var)) return FALSE;
