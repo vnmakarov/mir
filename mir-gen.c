@@ -276,6 +276,8 @@ typedef struct bb *bb_t;
 
 DEF_DLIST_LINK (bb_t);
 
+typedef struct insn_data *insn_data_t;
+
 typedef struct bb_insn *bb_insn_t;
 
 DEF_DLIST_LINK (bb_insn_t);
@@ -306,6 +308,14 @@ struct dead_var {
 };
 
 DEF_DLIST (dead_var_t, dead_var_link);
+
+struct insn_data { /* used only for calls/labels in -O0 mode */
+  bb_t bb;
+  union {
+    bitmap_t call_hard_reg_args; /* non-null for calls */
+    size_t label_disp;           /* used for labels */
+  } u;
+};
 
 struct bb_insn {
   MIR_insn_t insn;
@@ -493,6 +503,35 @@ static void move_bb_insn_dead_vars (bb_insn_t bb_insn, bb_insn_t from_bb_insn) {
   }
 }
 
+static int insn_data_p (MIR_insn_t insn) {
+  return insn->code == MIR_LABEL || MIR_call_code_p (insn->code);
+}
+
+static void setup_insn_data (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
+  insn_data_t insn_data;
+
+  if (!insn_data_p (insn)) {
+    insn->data = bb;
+    return;
+  }
+  insn_data = insn->data = gen_malloc (gen_ctx, sizeof (struct insn_data));
+  insn_data->bb = bb;
+  insn_data->u.call_hard_reg_args = NULL;
+}
+
+static bb_t get_insn_data_bb (MIR_insn_t insn) {
+  return insn_data_p (insn) ? ((insn_data_t) insn->data)->bb : (bb_t) insn->data;
+}
+
+static void delete_insn_data (MIR_insn_t insn) {
+  insn_data_t insn_data = insn->data;
+
+  if (insn_data == NULL || !insn_data_p (insn)) return;
+  if (MIR_call_code_p (insn->code) && insn_data->u.call_hard_reg_args != NULL)
+    bitmap_destroy (insn_data->u.call_hard_reg_args);
+  free (insn_data);
+}
+
 static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn_t bb_insn = gen_malloc (gen_ctx, sizeof (struct bb_insn));
 
@@ -519,6 +558,10 @@ static void delete_bb_insn (bb_insn_t bb_insn) {
   clear_bb_insn_dead_vars (bb_insn);
   if (bb_insn->call_hard_reg_args != NULL) bitmap_destroy (bb_insn->call_hard_reg_args);
   free (bb_insn);
+}
+
+static bb_t get_insn_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  return optimize_level == 0 ? get_insn_data_bb (insn) : ((bb_insn_t) insn->data)->bb;
 }
 
 static void create_new_bb_insns (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_t after,
