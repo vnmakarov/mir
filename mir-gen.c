@@ -424,6 +424,7 @@ struct func_cfg {
   MIR_reg_t min_reg, max_reg;
   size_t non_conflicting_moves;  /* # of moves with non-conflicting regs */
   VARR (reg_info_t) * breg_info; /* bregs */
+  bitmap_t call_crossed_bregs;
   DLIST (bb_t) bbs;
   DLIST (mv_t) used_moves, free_moves;
   loop_node_t root_loop_node;
@@ -1263,6 +1264,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   }
   enumerate_bbs (gen_ctx);
   VARR_CREATE (reg_info_t, curr_cfg->breg_info, 128);
+  curr_cfg->call_crossed_bregs = bitmap_create2 (curr_cfg->max_reg);
 }
 
 static void destroy_func_cfg (gen_ctx_t gen_ctx) {
@@ -1295,6 +1297,7 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
     free (mv);
   }
   VARR_DESTROY (reg_info_t, curr_cfg->breg_info);
+  bitmap_destroy (curr_cfg->call_crossed_bregs);
   free (curr_func_item->data);
   curr_func_item->data = NULL;
 }
@@ -5419,7 +5422,8 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
         gen_delete_insn (gen_ctx, insn);
         continue;
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
+      if (MIR_call_code_p (insn->code))
+        bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
