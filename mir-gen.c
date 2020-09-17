@@ -683,7 +683,12 @@ static bb_t create_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   bb->dom_in = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->dom_out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->max_int_pressure = bb->max_fp_pressure = 0;
-  if (insn != NULL) add_new_bb_insn (gen_ctx, insn, bb);
+  if (insn != NULL) {
+    if (optimize_level == 0)
+      setup_insn_data (gen_ctx, insn, bb);
+    else
+      add_new_bb_insn (gen_ctx, insn, bb);
+  }
   return bb;
 }
 
