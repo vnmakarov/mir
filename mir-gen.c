@@ -910,7 +910,7 @@ static void update_min_max_reg (gen_ctx_t gen_ctx, MIR_reg_t reg) {
 static MIR_reg_t gen_new_temp_reg (gen_ctx_t gen_ctx, MIR_type_t type, MIR_func_t func) {
   MIR_reg_t reg = _MIR_new_temp_reg (gen_ctx->ctx, type, func);
 
-  if (curr_cfg != NULL) update_min_max_reg (gen_ctx, reg);
+  update_min_max_reg (gen_ctx, reg);
   return reg;
 }
 
