@@ -4721,15 +4721,15 @@ static void assign (gen_ctx_t gen_ctx) {
 }
 
 static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
-                             MIR_op_mode_t data_mode, int first_p, bb_insn_t bb_insn, int out_p) {
+                             MIR_op_mode_t data_mode, int first_p, MIR_insn_t insn, int out_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t loc = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (gen_ctx, reg));
   MIR_reg_t hard_reg;
   MIR_disp_t offset;
   MIR_insn_code_t code;
+  MIR_insn_t new_insn;
   MIR_type_t type;
-  MIR_insn_t insn;
-  bb_insn_t new_bb_insn;
+  bb_insn_t bb_insn, new_bb_insn;
   MIR_op_t hard_reg_op;
 
   gen_assert (loc != MIR_NON_HARD_REG);
@@ -4756,24 +4756,28 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   if (hard_reg == MIR_NON_HARD_REG) return hard_reg;
   hard_reg_op = _MIR_new_hard_reg_op (ctx, hard_reg);
   if (out_p) {
-    insn = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
-    MIR_insert_insn_after (ctx, curr_func_item, bb_insn->insn, insn);
+    new_insn = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
+    MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
   } else {
-    insn = MIR_new_insn (ctx, code, hard_reg_op, *mem_op);
-    MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
+    new_insn = MIR_new_insn (ctx, code, hard_reg_op, *mem_op);
+    MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
   }
-  new_bb_insn = create_bb_insn (gen_ctx, insn, bb_insn->bb);
-  if (out_p)
-    DLIST_INSERT_AFTER (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
-  else
-    DLIST_INSERT_BEFORE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+  if (optimize_level == 0) {
+    new_insn->data = get_insn_data_bb (insn);
+  } else {
+    bb_insn = insn->data;
+    new_bb_insn = create_bb_insn (gen_ctx, new_insn, bb_insn->bb);
+    if (out_p)
+      DLIST_INSERT_AFTER (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+    else
+      DLIST_INSERT_BEFORE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+  }
   return hard_reg;
 }
 
 static void rewrite (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_insn_t insn;
-  bb_insn_t bb_insn, next_bb_insn;
+  MIR_insn_t insn, next_insn;
   size_t nops, i;
   MIR_op_t *op, mem_op;
 #if !MIR_NO_GEN_DEBUG
@@ -4786,73 +4790,70 @@ static void rewrite (gen_ctx_t gen_ctx) {
   int out_p, first_in_p;
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
 
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
-      next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      insn = bb_insn->insn;
-      nops = MIR_insn_nops (ctx, insn);
-      first_in_p = TRUE;
-      for (i = 0; i < nops; i++) {
-        op = &insn->ops[i];
-        data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
-        DEBUG ({
-          if (out_p)
-            out_op = *op; /* we don't care about multiple call outputs here */
-          else
-            in_op = *op;
-        });
-        switch (op->mode) {
-        case MIR_OP_HARD_REG: bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg); break;
-        case MIR_OP_HARD_REG_MEM:
-          if (op->u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.base);
-          if (op->u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.index);
-          break;
-        case MIR_OP_REG:
-          hard_reg = change_reg (gen_ctx, &mem_op, op->u.reg, data_mode, out_p || first_in_p,
-                                 bb_insn, out_p);
-          if (!out_p) first_in_p = FALSE;
-          if (hard_reg == MIR_NON_HARD_REG) {
-            *op = mem_op;
-          } else {
-            op->mode = MIR_OP_HARD_REG;
-            op->u.hard_reg = hard_reg;
-          }
-          break;
-        case MIR_OP_MEM:
-          mem = op->u.mem;
-          /* Always second for mov MEM[R2], R1 or mov R1, MEM[R2]. */
-          if (op->u.mem.base == 0) {
-            mem.base = MIR_NON_HARD_REG;
-          } else {
-            mem.base
-              = change_reg (gen_ctx, &mem_op, op->u.mem.base, MIR_OP_INT, FALSE, bb_insn, FALSE);
-            gen_assert (mem.base != MIR_NON_HARD_REG); /* we can always use GP regs */
-          }
-          gen_assert (op->u.mem.index == 0);
-          mem.index = MIR_NON_HARD_REG;
-          op->mode = MIR_OP_HARD_REG_MEM;
-          op->u.hard_reg_mem = mem;
-          break;
-        default: /* do nothing */ break;
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = next_insn) {
+    next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    nops = MIR_insn_nops (ctx, insn);
+    first_in_p = TRUE;
+    for (i = 0; i < nops; i++) {
+      op = &insn->ops[i];
+      data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
+      DEBUG ({
+        if (out_p)
+          out_op = *op; /* we don't care about multiple call outputs here */
+        else
+          in_op = *op;
+      });
+      switch (op->mode) {
+      case MIR_OP_HARD_REG: bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg); break;
+      case MIR_OP_HARD_REG_MEM:
+        if (op->u.hard_reg_mem.base != MIR_NON_HARD_REG)
+          bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.base);
+        if (op->u.hard_reg_mem.index != MIR_NON_HARD_REG)
+          bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.index);
+        break;
+      case MIR_OP_REG:
+        hard_reg
+          = change_reg (gen_ctx, &mem_op, op->u.reg, data_mode, out_p || first_in_p, insn, out_p);
+        if (!out_p) first_in_p = FALSE;
+        if (hard_reg == MIR_NON_HARD_REG) {
+          *op = mem_op;
+        } else {
+          op->mode = MIR_OP_HARD_REG;
+          op->u.hard_reg = hard_reg;
         }
+        break;
+      case MIR_OP_MEM:
+        mem = op->u.mem;
+        /* Always second for mov MEM[R2], R1 or mov R1, MEM[R2]. */
+        if (op->u.mem.base == 0) {
+          mem.base = MIR_NON_HARD_REG;
+        } else {
+          mem.base = change_reg (gen_ctx, &mem_op, op->u.mem.base, MIR_OP_INT, FALSE, insn, FALSE);
+          gen_assert (mem.base != MIR_NON_HARD_REG); /* we can always use GP regs */
+        }
+        gen_assert (op->u.mem.index == 0);
+        mem.index = MIR_NON_HARD_REG;
+        op->mode = MIR_OP_HARD_REG_MEM;
+        op->u.hard_reg_mem = mem;
+        break;
+      default: /* do nothing */ break;
       }
-      insns_num++;
-      if (move_code_p (insn->code)) {
-        movs_num++;
-        if (MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
-          DEBUG ({
-            fprintf (debug_file, "Deleting noop move ");
-            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
-            fprintf (debug_file, " which was ");
-            insn->ops[0] = out_op;
-            insn->ops[1] = in_op;
-            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-          });
-          deleted_movs_num++;
-          gen_delete_insn (gen_ctx, insn);
-        }
+    }
+    insns_num++;
+    if (move_code_p (insn->code)) {
+      movs_num++;
+      if (MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
+        DEBUG ({
+          fprintf (debug_file, "Deleting noop move ");
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+          fprintf (debug_file, " which was ");
+          insn->ops[0] = out_op;
+          insn->ops[1] = in_op;
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+        });
+        deleted_movs_num++;
+        gen_delete_insn (gen_ctx, insn);
       }
     }
   }
