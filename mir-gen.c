@@ -1271,20 +1271,17 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
   bb_t bb, next_bb;
   mv_t mv, next_mv;
 
-  if (curr_cfg == NULL) {
-    for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-         insn = DLIST_NEXT (MIR_insn_t, insn))
-      if (MIR_call_code_p (insn->code) && insn->data != NULL)
-        bitmap_destroy ((bitmap_t) insn->data);
-    return;
-  }
   gen_assert (curr_func_item->item_type == MIR_func_item && curr_func_item->data != NULL);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-       insn = DLIST_NEXT (MIR_insn_t, insn)) {
-    bb_insn = insn->data;
-    gen_assert (bb_insn != NULL);
-    delete_bb_insn (bb_insn);
-  }
+       insn = DLIST_NEXT (MIR_insn_t, insn))
+    if (optimize_level == 0) {
+      gen_assert (insn->data != NULL);
+      delete_insn_data (insn);
+    } else {
+      bb_insn = insn->data;
+      gen_assert (bb_insn != NULL);
+      delete_bb_insn (bb_insn);
+    }
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
     delete_bb (gen_ctx, bb);
