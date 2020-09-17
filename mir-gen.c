@@ -1186,11 +1186,11 @@ static void free_move (gen_ctx_t gen_ctx, mv_t mv) {
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn, next_insn;
-  bb_insn_t bb_insn, label_bb_insn;
+  bb_insn_t bb_insn;
   size_t i, nops;
   MIR_op_t *op;
   MIR_var_t var;
-  bb_t bb, prev_bb, entry_bb, exit_bb;
+  bb_t bb, prev_bb, entry_bb, exit_bb, label_bb;
 
   DLIST_INIT (bb_t, curr_cfg->bbs);
   DLIST_INIT (mv_t, curr_cfg->used_moves);
@@ -1220,14 +1220,19 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   }
   for (; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    if (insn->data == NULL) add_new_bb_insn (gen_ctx, insn, bb);
+    if (insn->data == NULL) {
+      if (optimize_level != 0)
+        add_new_bb_insn (gen_ctx, insn, bb);
+      else
+        setup_insn_data (gen_ctx, insn, bb);
+    }
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
         && (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
             || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
-      if (next_insn->code == MIR_LABEL && (label_bb_insn = next_insn->data) != NULL)
-        bb = label_bb_insn->bb;
+      if (next_insn->code == MIR_LABEL && next_insn->data != NULL)
+        bb = get_insn_bb (gen_ctx, next_insn);
       else
         bb = create_bb (gen_ctx, next_insn);
       add_bb (gen_ctx, bb);
@@ -1236,12 +1241,9 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
     }
     for (i = 0; i < nops; i++)
       if ((op = &insn->ops[i])->mode == MIR_OP_LABEL) {
-        if ((label_bb_insn = op->u.label->data) == NULL) {
-          create_bb (gen_ctx, op->u.label);
-          label_bb_insn = op->u.label->data;
-        }
-        bb_insn = insn->data;
-        create_edge (gen_ctx, bb_insn->bb, label_bb_insn->bb, TRUE);
+        if (op->u.label->data == NULL) create_bb (gen_ctx, op->u.label);
+        label_bb = get_insn_bb (gen_ctx, op->u.label);
+        create_edge (gen_ctx, get_insn_bb (gen_ctx, insn), label_bb, TRUE);
       } else if (op->mode == MIR_OP_REG) {
         update_min_max_reg (gen_ctx, op->u.reg);
       } else if (op->mode == MIR_OP_MEM) {
