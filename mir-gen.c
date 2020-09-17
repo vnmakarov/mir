@@ -3904,9 +3904,11 @@ static void increase_pressure (int int_p, bb_t bb, int *int_pressure, int *fp_pr
   }
 }
 
-static size_t initiate_bb_live_info (gen_ctx_t gen_ctx, bb_t bb, int moves_p) {
+static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn, int moves_p,
+                                         size_t *mvs_num) {
+  bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
   MIR_insn_t insn;
-  size_t niter, passed_mem_num, bb_freq, mvs_num = 0;
+  size_t niter, passed_mem_num, bb_freq;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int op_num, out_p, mem_p, int_p;
   int bb_int_pressure, bb_fp_pressure;
@@ -3914,20 +3916,14 @@ static size_t initiate_bb_live_info (gen_ctx_t gen_ctx, bb_t bb, int moves_p) {
   reg_info_t *breg_infos;
   insn_var_iterator_t insn_var_iter;
 
-  gen_assert (bb->live_in != NULL && bb->live_out != NULL && bb->live_gen != NULL
-              && bb->live_kill != NULL);
-  bitmap_clear (bb->live_in);
-  bitmap_clear (bb->live_out);
-  bitmap_clear (bb->live_gen);
-  bitmap_clear (bb->live_kill);
+  gen_assert (!moves_p || optimize_level != 0);
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   bb_freq = 1;
   if (moves_p)
     for (int i = bb_loop_level (bb); i > 0; i--) bb_freq *= 5;
   bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
-  for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-       bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
-    insn = bb_insn->insn;
+  for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
+       insn = DLIST_PREV (MIR_insn_t, insn)) {
     if (MIR_call_code_p (insn->code)) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs[MIR_T_UNDEF]);
       bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs[MIR_T_UNDEF]);
@@ -3936,11 +3932,11 @@ static size_t initiate_bb_live_info (gen_ctx_t gen_ctx, bb_t bb, int moves_p) {
     for (niter = 0; niter <= 1; niter++) {
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p && niter != 0) {
-          if (bitmap_set_bit_p (bb->live_gen, var))
+          if (bitmap_set_bit_p (bb->live_gen, var) && optimize_level != 0)
             increase_pressure (int_var_type_p (gen_ctx, var), bb, &bb_int_pressure,
                                &bb_fp_pressure);
         } else if (niter == 0) {
-          if (bitmap_clear_bit_p (bb->live_gen, var))
+          if (bitmap_clear_bit_p (bb->live_gen, var) && optimize_level != 0)
             (int_var_type_p (gen_ctx, var) ? bb_int_pressure-- : bb_fp_pressure--);
           bitmap_set_bit_p (bb->live_kill, var);
         }
@@ -3950,37 +3946,47 @@ static size_t initiate_bb_live_info (gen_ctx_t gen_ctx, bb_t bb, int moves_p) {
     target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                           &early_clobbered_hard_reg2);
     if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
-      int_p = int_var_type_p (gen_ctx, early_clobbered_hard_reg1);
-      increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
+      if (optimize_level != 0) {
+        int_p = int_var_type_p (gen_ctx, early_clobbered_hard_reg1);
+        increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
+      }
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg1);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg1);
-      (int_p ? bb_int_pressure-- : bb_fp_pressure--);
+      if (optimize_level != 0) (int_p ? bb_int_pressure-- : bb_fp_pressure--);
     }
     if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
-      int_p = int_var_type_p (gen_ctx, early_clobbered_hard_reg2);
-      increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
+      if (optimize_level != 0) {
+        int_p = int_var_type_p (gen_ctx, early_clobbered_hard_reg2);
+        increase_pressure (int_p, bb, &bb_int_pressure, &bb_fp_pressure);
+      }
       bitmap_clear_bit_p (bb->live_gen, early_clobbered_hard_reg2);
       bitmap_set_bit_p (bb->live_kill, early_clobbered_hard_reg2);
-      (int_p ? bb_int_pressure-- : bb_fp_pressure--);
+      if (optimize_level != 0) (int_p ? bb_int_pressure-- : bb_fp_pressure--);
     }
-    if (MIR_call_code_p (insn->code))
-      bitmap_ior (bb->live_gen, bb->live_gen, bb_insn->call_hard_reg_args);
+    if (MIR_call_code_p (insn->code)) {
+      bitmap_t reg_args;
+
+      if (optimize_level != 0)
+        bitmap_ior (bb->live_gen, bb->live_gen, ((bb_insn_t) insn->data)->call_hard_reg_args);
+      else if ((reg_args = ((insn_data_t) insn->data)->u.call_hard_reg_args) != NULL)
+        bitmap_ior (bb->live_gen, bb->live_gen, reg_args);
+    }
     if (moves_p && move_p (insn)) {
       mv = get_free_move (gen_ctx);
-      mv->bb_insn = bb_insn;
+      mv->bb_insn = insn->data;
       mv->freq = bb_freq;
       if (insn->ops[0].mode == MIR_OP_REG)
         DLIST_APPEND (dst_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[0].u.reg)].dst_moves, mv);
       if (insn->ops[1].mode == MIR_OP_REG)
         DLIST_APPEND (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
-      mvs_num++;
+      (*mvs_num)++;
       DEBUG ({
         fprintf (debug_file, "  move with freq %10lu:", (unsigned long) mv->freq);
-        MIR_output_insn (gen_ctx->ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+        MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
       });
     }
   }
-  return mvs_num;
+  return insn;
 }
 
 static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
@@ -4004,8 +4010,16 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
     DLIST_INIT (src_mv_t, ri.src_moves);
     VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
   }
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    mvs_num += initiate_bb_live_info (gen_ctx, bb, moves_p);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    gen_assert (bb != NULL && bb->live_in != NULL && bb->live_out != NULL && bb->live_gen != NULL
+                && bb->live_kill != NULL);
+    bitmap_clear (bb->live_in);
+    bitmap_clear (bb->live_out);
+    bitmap_clear (bb->live_gen);
+    bitmap_clear (bb->live_kill);
+  }
+  for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
+    tail = initiate_bb_live_info (gen_ctx, tail, moves_p, &mvs_num);
   if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
 }
 
