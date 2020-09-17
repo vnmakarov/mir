@@ -4427,8 +4427,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
       bitmap_ior (conflict_locs, conflict_locs, point_used_locs_addr[nel]);
     }
     type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
-    if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
-      bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
+    /* Call used hard regs are already taken into account above for call crossed regs. */
     best_loc = MIR_NON_HARD_REG;
     for (loc = 0; loc <= MAX_HARD_REG; loc++) {
       if (bitmap_bit_p (conflict_locs, loc)) continue;
