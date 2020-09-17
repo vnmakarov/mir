@@ -1160,6 +1160,7 @@ static void print_loop_subtree (gen_ctx_t gen_ctx, loop_node_t root, int level, 
 }
 
 static void print_loop_tree (gen_ctx_t gen_ctx, int bb_p) {
+  if (curr_cfg->root_loop_node == NULL) return;
   fprintf (debug_file, "Loop Tree\n");
   print_loop_subtree (gen_ctx, curr_cfg->root_loop_node, 0, bb_p);
 }
