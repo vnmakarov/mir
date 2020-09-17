@@ -280,12 +280,13 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
       assert (!param_decl->reg_p);
       reg_var = get_reg_var (ctx, type, gen_get_indexed_name (ctx, name, i));
       MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn (ctx, tp_mov (type), MIR_new_reg_op (ctx, reg_var.reg),
+                       MIR_new_insn (ctx, tp_mov (type),
                                      MIR_new_mem_op (ctx, type,
                                                      param_decl->offset
                                                        + (type == MIR_T_F ? 4 : 8) * i,
                                                      MIR_reg (ctx, FP_NAME, curr_func->u.func), 0,
-                                                     1)));
+                                                     1),
+                                     MIR_new_reg_op (ctx, reg_var.reg)));
     }
     return TRUE;
   }
