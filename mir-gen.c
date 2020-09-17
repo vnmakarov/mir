@@ -911,12 +911,8 @@ static MIR_reg_t gen_new_temp_reg (gen_ctx_t gen_ctx, MIR_type_t type, MIR_func_
   return reg;
 }
 
-static MIR_reg_t reg2breg (gen_ctx_t gen_ctx, MIR_reg_t reg) {
-  return reg - (curr_cfg == NULL ? 0 : curr_cfg->min_reg);
-}
-static MIR_reg_t breg2reg (gen_ctx_t gen_ctx, MIR_reg_t breg) {
-  return breg + (curr_cfg == NULL ? 0 : curr_cfg->min_reg);
-}
+static MIR_reg_t reg2breg (gen_ctx_t gen_ctx, MIR_reg_t reg) { return reg - curr_cfg->min_reg; }
+static MIR_reg_t breg2reg (gen_ctx_t gen_ctx, MIR_reg_t breg) { return breg + curr_cfg->min_reg; }
 static MIR_reg_t reg2var (gen_ctx_t gen_ctx, MIR_reg_t reg) {
   return reg2breg (gen_ctx, reg) + MAX_HARD_REG + 1;
 }
@@ -1085,8 +1081,8 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
     if (MIR_call_code_p (bb_insn->insn->code)) {
       first_p = TRUE;
       FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
-	fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
-	first_p = FALSE;
+        fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
+        first_p = FALSE;
       }
     }
   }
@@ -1095,15 +1091,27 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
 
 static void print_CFG (gen_ctx_t gen_ctx, int bb_p, int pressure_p, int insns_p, int insn_index_p,
                        void (*bb_info_print_func) (gen_ctx_t, bb_t)) {
-  if (curr_cfg == NULL) {
-    if (insns_p) {
-      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-           insn = DLIST_NEXT (MIR_insn_t, insn))
-        MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+  bb_t bb, insn_bb;
+
+  if (optimize_level == 0) {
+    bb = NULL;
+    for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+         insn = DLIST_NEXT (MIR_insn_t, insn)) {
+      if (bb_p && (insn_bb = get_insn_data_bb (insn)) != bb) {
+        bb = insn_bb;
+        fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
+        output_in_edges (gen_ctx, bb);
+        output_out_edges (gen_ctx, bb);
+        if (bb_info_print_func != NULL) {
+          bb_info_print_func (gen_ctx, bb);
+          fprintf (debug_file, "\n");
+        }
+      }
+      if (insns_p) MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
     }
     return;
   }
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb_p) {
       fprintf (debug_file, "BB %3lu", (unsigned long) bb->index);
       if (pressure_p)
