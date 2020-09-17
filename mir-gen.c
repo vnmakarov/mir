@@ -389,7 +389,6 @@ DEF_DLIST (src_mv_t, src_link);
 
 struct reg_info {
   long freq;
-  size_t calls_num;
   /* The followd members are defined and used only in RA */
   long thread_freq; /* thread accumulated freq, defined for first thread breg */
   /* first/next breg of the same thread, MIR_MAX_REG_NUM is end mark  */
@@ -4005,7 +4004,7 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   VARR_TRUNC (reg_info_t, curr_cfg->breg_info, 0);
   nregs = get_nregs (gen_ctx);
   for (n = 0; n < nregs; n++) {
-    ri.freq = ri.thread_freq = ri.calls_num = 0;
+    ri.freq = ri.thread_freq = 0;
     ri.live_length = 0;
     ri.thread_first = n;
     ri.thread_next = MIR_MAX_REG_NUM;
@@ -4278,7 +4277,7 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
           if (!var_is_reg_p (nel)) continue;
           breg = reg2breg (gen_ctx, var2reg (gen_ctx, nel));
           bri = &VARR_ADDR (reg_info_t, curr_cfg->breg_info)[breg];
-          bri->calls_num++;
+          bitmap_set_bit_p (curr_cfg->call_crossed_bregs, breg);
         }
       }
       if (incr_p) curr_point++;
@@ -4625,7 +4624,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     best_loc = MIR_NON_HARD_REG;
     best_profit = 0;
     type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
-    if (curr_breg_infos[breg].calls_num > 0)
+    if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
     for (loc = 0; loc <= MAX_HARD_REG; loc++) {
       if (bitmap_bit_p (conflict_locs, loc)) continue;
