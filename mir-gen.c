@@ -1044,8 +1044,8 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
     if (MIR_call_code_p (bb_insn->insn->code)) {
       first_p = TRUE;
       FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
-	fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
-	first_p = FALSE;
+        fprintf (debug_file, first_p ? " # call used: hr%ld" : " hr%ld", (unsigned long) nel);
+        first_p = FALSE;
       }
     }
   }
@@ -3842,6 +3842,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         }
 #endif
         insn = MIR_new_insn (ctx, MIR_MOV, bb_insn->insn->ops[0], op); /* copy ops[0].data too! */
+        // changing def in ssa_edges ????
         MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
         bb_insn->insn->ops[0].data = NULL;
         ccp_remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
@@ -4131,7 +4132,8 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) bitmap_clear_bit_p (live, var);
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
+      if (MIR_call_code_p (insn->code))
+        bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p) continue;
         if (bitmap_set_bit_p (live, var)) add_bb_insn_dead_var (gen_ctx, bb_insn, var);
@@ -5486,7 +5488,8 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
         gen_delete_insn (gen_ctx, insn);
         continue;
       }
-      if (MIR_call_code_p (insn->code)) bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
+      if (MIR_call_code_p (insn->code))
+        bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
@@ -6373,7 +6376,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
           print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
         });
       }
-      ccp_clear (gen_ctx);
     }
 #endif /* #ifndef NO_CCP */
   }
