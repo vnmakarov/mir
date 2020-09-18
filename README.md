@@ -256,11 +256,10 @@ ex100:    func v, 0
   * **Find Loops**: finding natural loops and building loop tree
   * **Build Live Info**: calculating live in and live out for the basic blocks
   * **Build Live Ranges**: calculating program point ranges for registers
-  * **Assign**: priority-based assigning hard regs and stack slots to registers
+  * **Assign**: fast RA for `-O0` or priority-based linear scan RA for `-O1` and above
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
   * **Combine** (code selection): merging data-depended insns into one
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Fast Generator**: 4-5 times faster generation of code whose performance is on par with `-O0` of GCC/Clang
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
   
 ## C to MIR translation
