@@ -19,19 +19,12 @@
     ----------------------     -----------     ---------     ------------     -------------
    |  Sparse Conditional  |-->| Machinize |-->| Finding |-->| Build Live |-->| Build Live  |
    | Constant Propagation |    -----------    |  Loops  |   |    Info    |   |   Ranges    |
-    ----------------------          |          ---------     ------------     -------------
-                                    V                                               |
-                               -----------                                          V
-                              |    Fast   |                                      ---------
-                              | Generator |                                     | Assign  |
-                               -----------                                       ---------
-                                    |                                               |
-                                    V                                               V
-                             ---------------     -------------     ---------     ---------
-                 Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |
-                  Insns     | machine insns |   | Elimination |    ---------     ---------
-                             ---------------     ------------
-
+    ----------------------                     ---------     ------------     -------------
+                                                                                    |
+                                                                                    V
+                ---------------     -------------     ---------     ---------     ---------
+    Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |<--| Assign  |
+     Insns     | machine insns |   | Elimination |    ---------     ---------     ---------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
@@ -54,16 +47,16 @@
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
    Finding Loops: Building loop tree which is used in subsequent register allocation.
                   Only for -O1 and above.
-   Building Live Info: Calculating live in and live out for the basic blocks.  Only for -O1 and
-   above. Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and
-   above. Assign: Priority-based assigning hard regs and stack slots to registers.  Only for -O1 and
-   above. Rewrite: Transform MIR according to the assign using reserved hard regs.  Only for -O1 and
-   above. Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
+   Building Live Info: Calculating live in and live out for the basic blocks.
+   Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
+   Assign: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
+   Rewrite: Transform MIR according to the assign using reserved hard regs.
+   Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O1 and above.
-   Fast Generator: Code generation about 4-5 times faster than one with -O1.  The generated code
-                   performance is approximately on par with -O0 GCC/Clang.  Only for -O0.
    Generate machine insns: Machine-dependent code (e.g. in
                            mir-gen-x86_64.c) creating machine insns. Always.
+
+   -O0 is 2 times faster than -O1 but generates much slower code.
 
    Terminology:
    reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP_MEM)
