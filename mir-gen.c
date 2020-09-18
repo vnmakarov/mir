@@ -1463,7 +1463,10 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
   return el1.reg == el2.reg && el1.bb == el2.bb;
 }
 
-static MIR_insn_code_t get_move_code (MIR_type_t type);
+static MIR_insn_code_t get_move_code (MIR_type_t type) {
+  return (type == MIR_T_F ? MIR_FMOV
+                          : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+}
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t reg) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -5831,76 +5834,76 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       });
     }
   }
-}
 #endif /* #ifndef NO_CCP */
-make_io_dup_op_insns (gen_ctx);
-target_machinize (gen_ctx);
-DEBUG ({
-  fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
-  print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-});
-if (optimize_level != 0) build_loop_tree (gen_ctx);
-calculate_func_cfg_live_info (gen_ctx, optimize_level != 0);
-DEBUG ({
-  add_bb_insn_dead_vars (gen_ctx);
-  fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
-  print_loop_tree (gen_ctx, TRUE);
-  print_CFG (gen_ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
-});
-if (optimize_level != 0) build_live_ranges (gen_ctx);
-assign (gen_ctx);
-rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
-DEBUG ({
-  fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
-  print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-});
+  make_io_dup_op_insns (gen_ctx);
+  target_machinize (gen_ctx);
+  DEBUG ({
+    fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
+    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+  });
+  if (optimize_level != 0) build_loop_tree (gen_ctx);
+  calculate_func_cfg_live_info (gen_ctx, optimize_level != 0);
+  DEBUG ({
+    add_bb_insn_dead_vars (gen_ctx);
+    fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
+    print_loop_tree (gen_ctx, TRUE);
+    print_CFG (gen_ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
+  });
+  if (optimize_level != 0) build_live_ranges (gen_ctx);
+  assign (gen_ctx);
+  rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
+  DEBUG ({
+    fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
+    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+  });
 #ifndef NO_COMBINE
-if (optimize_level >= 1) {
-  calculate_func_cfg_live_info (gen_ctx, FALSE);
-  add_bb_insn_dead_vars (gen_ctx);
-  DEBUG ({
-    fprintf (debug_file, "+++++++++++++MIR before combine:\n");
-    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  });
-  combine (gen_ctx); /* After combine the BB live info is still valid */
-  DEBUG ({
-    fprintf (debug_file, "+++++++++++++MIR after combine:\n");
-    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-  });
-  dead_code_elimination (gen_ctx);
-  DEBUG ({
-    fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
-    print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-  });
-}
+  if (optimize_level >= 1) {
+    calculate_func_cfg_live_info (gen_ctx, FALSE);
+    add_bb_insn_dead_vars (gen_ctx);
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR before combine:\n");
+      print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    });
+    combine (gen_ctx); /* After combine the BB live info is still valid */
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR after combine:\n");
+      print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    });
+    dead_code_elimination (gen_ctx);
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+    });
+  }
 #endif /* #ifndef NO_COMBINE */
-target_make_prolog_epilog (gen_ctx, func_used_hard_regs, func_stack_slots_num);
-DEBUG ({
-  fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
-  print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
-});
-code = target_translate (gen_ctx, &code_len);
-func_item->u.func->machine_code = func_item->u.func->call_addr
-  = _MIR_publish_code (ctx, code, code_len);
-target_rebase (gen_ctx, func_item->u.func->machine_code);
+  target_make_prolog_epilog (gen_ctx, func_used_hard_regs, func_stack_slots_num);
+  DEBUG ({
+    fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
+    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+  });
+  code = target_translate (gen_ctx, &code_len);
+  func_item->u.func->machine_code = func_item->u.func->call_addr
+    = _MIR_publish_code (ctx, code, code_len);
+  target_rebase (gen_ctx, func_item->u.func->machine_code);
 #if MIR_GEN_CALL_TRACE
-func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
+  func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
-DEBUG ({
-  print_code (gen_ctx, func_item->u.func->machine_code, code_len, func_item->u.func->machine_code);
-  fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
-});
-_MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
-destroy_func_live_ranges (gen_ctx);
-if (optimize_level != 0) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
-destroy_func_cfg (gen_ctx);
-DEBUG ({
-  fprintf (debug_file, "Generation of code for %s: %lu MIR insns -- time %.0f usec\n",
-           MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
-           real_usec_time () - start_time);
-});
-_MIR_restore_func_insns (ctx, func_item);
-return func_item->addr;
+  DEBUG ({
+    print_code (gen_ctx, func_item->u.func->machine_code, code_len,
+                func_item->u.func->machine_code);
+    fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
+  });
+  _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+  destroy_func_live_ranges (gen_ctx);
+  if (optimize_level != 0) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
+  destroy_func_cfg (gen_ctx);
+  DEBUG ({
+    fprintf (debug_file, "Generation of code for %s: %lu MIR insns -- time %.0f usec\n",
+             MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
+             real_usec_time () - start_time);
+  });
+  _MIR_restore_func_insns (ctx, func_item);
+  return func_item->addr;
 }
 
 void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f) {
