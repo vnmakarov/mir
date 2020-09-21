@@ -139,6 +139,9 @@ struct fg_ctx;
 typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
 
+typedef struct bb_insn *bb_insn_t;
+DEF_VARR (bb_insn_t);
+
 struct gen_ctx {
   MIR_context_t ctx;
   unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
@@ -162,6 +165,7 @@ struct gen_ctx {
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
   struct fg_ctx *fg_ctx;
+  VARR (bb_insn_t) * dead_bb_insns;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
   int max_int_hard_regs, max_fp_hard_regs;
   /* Slots num for variables.  Some variable can take several slots and can be aligned. */
@@ -181,6 +185,7 @@ static inline gen_ctx_t *gen_ctx_loc (MIR_context_t ctx) { return (gen_ctx_t *) 
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
 #define curr_loop_node_index gen_ctx->curr_loop_node_index
+#define dead_bb_insns gen_ctx->dead_bb_insns
 #define loop_nodes gen_ctx->loop_nodes
 #define queue_nodes gen_ctx->queue_nodes
 #define loop_entries gen_ctx->loop_entries
@@ -272,8 +277,6 @@ typedef struct bb *bb_t;
 DEF_DLIST_LINK (bb_t);
 
 typedef struct insn_data *insn_data_t;
-
-typedef struct bb_insn *bb_insn_t;
 
 DEF_DLIST_LINK (bb_insn_t);
 
@@ -1433,7 +1436,6 @@ typedef struct def_tab_el {
 DEF_HTAB (def_tab_el_t);
 
 DEF_VARR (MIR_op_t);
-DEF_VARR (bb_insn_t);
 
 struct ssa_ctx {
   int def_use_repr_p; /* flag of def_use_chains */
@@ -5678,6 +5680,67 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
+/* SSA dead code elimnination */
+
+static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_insn_t insn = bb_insn->insn;
+  int op_num, out_p, mem_p, output_exists_p = FALSE;
+  size_t passed_mem_num;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+  ssa_edge_t ssa_edge;
+
+  /* check control insns with possible output: */
+  if (MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA || insn->code == MIR_BSTART
+      || insn->code == MIR_VA_START || insn->code == MIR_VA_ARG
+      || (insn->ops[0].mode == MIR_OP_HARD_REG
+          && (insn->ops[0].u.hard_reg == FP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG)))
+    return FALSE;
+  if (start_insn_p (gen_ctx, bb_insn)) return FALSE;
+  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    if (!out_p) continue;
+    output_exists_p = TRUE;
+    if (mem_p || (ssa_edge = insn->ops[op_num].data) != NULL) return FALSE;
+  }
+  return output_exists_p;
+}
+
+static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
+  MIR_insn_t insn;
+  bb_insn_t bb_insn, def;
+  int op_num, out_p, mem_p;
+  size_t passed_mem_num;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+  ssa_edge_t ssa_edge;
+
+  DEBUG ({ fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
+  gen_assert (def_use_repr_p);
+  VARR_TRUNC (bb_insn_t, dead_bb_insns, 0);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+      if (dead_insn_p (gen_ctx, bb_insn)) VARR_PUSH (bb_insn_t, dead_bb_insns, bb_insn);
+  while (VARR_LENGTH (bb_insn_t, dead_bb_insns) != 0) {
+    bb_insn = VARR_POP (bb_insn_t, dead_bb_insns);
+    insn = bb_insn->insn;
+    DEBUG ({
+      fprintf (debug_file, "  Removing dead insn %-5lu", (unsigned long) bb_insn->index);
+      MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+    });
+    FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+      if (out_p && !mem_p) continue;
+      if ((ssa_edge = insn->ops[op_num].data) == NULL) continue;
+      def = ssa_edge->def;
+      remove_ssa_edge (gen_ctx, ssa_edge);
+      if (dead_insn_p (gen_ctx, def)) VARR_PUSH (bb_insn_t, dead_bb_insns, def);
+    }
+    gen_delete_insn (gen_ctx, insn);
+  }
+}
+
+/* New Page */
+
 #if !MIR_NO_GEN_DEBUG
 
 #include <sys/types.h>
@@ -5956,6 +6019,7 @@ void MIR_gen_init (MIR_context_t ctx) {
 #if !MIR_NO_GEN_DEBUG
   debug_file = NULL;
 #endif
+  VARR_CREATE (bb_insn_t, dead_bb_insns, 16);
   VARR_CREATE (loop_node_t, loop_nodes, 32);
   VARR_CREATE (loop_node_t, queue_nodes, 32);
   VARR_CREATE (loop_node_t, loop_entries, 16);
@@ -6012,6 +6076,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   target_finish (gen_ctx);
   finish_dead_vars ();
   free (gen_ctx->data_flow_ctx);
+  VARR_DESTROY (bb_insn_t, dead_bb_insns);
   VARR_DESTROY (loop_node_t, loop_nodes);
   VARR_DESTROY (loop_node_t, queue_nodes);
   VARR_DESTROY (loop_node_t, loop_entries);
