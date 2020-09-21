@@ -1,3 +1,4 @@
+# test for returns
 mc:       module
 	  import printf
 p_printf: proto p:fmt, ...
