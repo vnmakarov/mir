@@ -1487,6 +1487,10 @@ static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_ins
   return bb_insn;
 }
 
+static int start_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  return bb_insn->bb == DLIST_HEAD (bb_t, curr_cfg->bbs);
+}
+
 static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
   bb_insn_t def, same = NULL;
   int op_num;
@@ -1731,6 +1735,8 @@ static void build_ssa (gen_ctx_t gen_ctx, int def_use_p) {
     phi = VARR_GET (bb_insn_t, phis, i);
     add_phi_operands (gen_ctx, phi->insn->ops[0].u.reg, phi);
   }
+  /* minimization can not be switched off for def_use representation
+     building as it clears ops[0].data: */
   minimize_ssa (gen_ctx, insns_num);
   if (def_use_p) make_ssa_def_use_repr (gen_ctx);
 }
