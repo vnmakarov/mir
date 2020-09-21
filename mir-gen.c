@@ -5894,20 +5894,18 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
-    if (!ccp (gen_ctx)) {
-      undo_build_ssa (gen_ctx);
-    } else {
+    if (ccp (gen_ctx)) {
       DEBUG ({
         fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
         print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
       });
-      undo_build_ssa (gen_ctx);
-      dead_code_elimination (gen_ctx);
+      ssa_dead_code_elimination (gen_ctx);
       DEBUG ({
         fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
         print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
       });
     }
+    undo_build_ssa (gen_ctx);
   }
 #endif /* #ifndef NO_CCP */
   make_io_dup_op_insns (gen_ctx);
