@@ -1,3 +1,4 @@
+# SCCP test
 m2:    module
 ccp:   func i64
        local i64:a, i64:b, i64:c

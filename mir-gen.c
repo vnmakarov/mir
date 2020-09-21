@@ -755,6 +755,8 @@ static void DFS (bb_t bb, size_t *pre, size_t *rpost) {
 static void enumerate_bbs (gen_ctx_t gen_ctx) {
   size_t pre, rpost;
 
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    bb->pre = bb->rpost = 0;
   pre = 1;
   rpost = DLIST_LENGTH (bb_t, curr_cfg->bbs);
   DFS (DLIST_HEAD (bb_t, curr_cfg->bbs), &pre, &rpost);
@@ -2711,22 +2713,26 @@ static void create_preheader_from_edge (gen_ctx_t gen_ctx, edge_t e, loop_node_t
   loop->preheader = new_bb;
 }
 
-static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
+static int licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
   bb_insn_t bb_insn;
   edge_t e;
+  int new_bb_p = FALSE;
 
   for (loop_node_t node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
     if (node->bb == NULL) /* process sub-loops */
-      licm_add_loop_preheaders (gen_ctx, node);
-  if (loop == curr_cfg->root_loop_node) return;
+      new_bb_p = licm_add_loop_preheaders (gen_ctx, node) || new_bb_p;
+  if (loop == curr_cfg->root_loop_node) return new_bb_p;
   loop->preheader = NULL;
-  if ((e = find_loop_entry_edge (gen_ctx, loop->entry->bb)) == NULL) return;
+  if ((e = find_loop_entry_edge (gen_ctx, loop->entry->bb)) == NULL) return new_bb_p;
   if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
       || !MIR_branch_code_p (bb_insn->insn->code))
     loop->preheader = e->src; /* The preheader already exists */
-  else
+  else {
     create_preheader_from_edge (gen_ctx, e, loop);
+    new_bb_p = TRUE;
+  }
+  return new_bb_p;
 }
 
 static void dom_con_func_0 (bb_t bb) { bitmap_clear (bb->dom_in); }
@@ -4318,7 +4324,7 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   n++;
   DEBUG ({
     fprintf (debug_file, "Compressing live ranges: from %d to %ld - %ld%%\n", curr_point, n,
-             100 * n / curr_point);
+             curr_point == 0 ? 100 : 100 * n / curr_point);
   });
   curr_point = n;
 
@@ -5645,7 +5651,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
                && (insn->ops[0].u.hard_reg == FP_HARD_REG
                    || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
         DEBUG ({
-          fprintf (debug_file, "  Removing dead insn");
+          fprintf (debug_file, "  Removing dead insn %-5lu", (unsigned long) bb_insn->index);
           MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         });
         gen_delete_insn (gen_ctx, insn);
@@ -5802,7 +5808,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
 #ifndef NO_LICM
   if (optimize_level >= 3) {
     if (build_loop_tree (gen_ctx)) {
-      licm_add_loop_preheaders (gen_ctx, curr_cfg->root_loop_node);
+      if (licm_add_loop_preheaders (gen_ctx, curr_cfg->root_loop_node)) enumerate_bbs (gen_ctx);
       calculate_reaching_defs (gen_ctx);
       DEBUG ({ fprintf (debug_file, "+++++++++++++LICM:\n"); });
       licm (gen_ctx);

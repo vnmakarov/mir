@@ -1,3 +1,4 @@
+# Test for CSE based on availability
 m1:    module
 cse:   func i64, i64:i
        local i64:l, i64:j, i64:k
