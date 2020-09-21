@@ -5892,6 +5892,20 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     build_ssa (gen_ctx, TRUE);
     DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
+      fprintf (debug_file, "undef init insns:\n");
+      for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, undef_insns); i++) {
+        bb_insn_t bb_insn = VARR_GET (bb_insn_t, undef_insns, i);
+        if (bb_insn == NULL) continue;
+        fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      }
+      fprintf (debug_file, "arg init insns:\n");
+      for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, arg_bb_insns); i++) {
+        bb_insn_t bb_insn = VARR_GET (bb_insn_t, arg_bb_insns, i);
+        if (bb_insn == NULL) continue;
+        fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      }
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
     if (ccp (gen_ctx)) {
