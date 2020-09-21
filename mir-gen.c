@@ -1154,6 +1154,16 @@ static void print_CFG (gen_ctx_t gen_ctx, int bb_p, int pressure_p, int insns_p,
   }
 }
 
+static void print_varr_insns (gen_ctx_t gen_ctx, const char *title, VARR (bb_insn_t) * bb_insns) {
+  fprintf (debug_file, "%s insns:\n", title);
+  for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, bb_insns); i++) {
+    bb_insn_t bb_insn = VARR_GET (bb_insn_t, bb_insns, i);
+    if (bb_insn == NULL) continue;
+    fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
+    print_bb_insn (gen_ctx, bb_insn, TRUE);
+  }
+}
+
 static void print_loop_subtree (gen_ctx_t gen_ctx, loop_node_t root, int level, int bb_p) {
   if (root->bb != NULL && !bb_p) return;
   for (int i = 0; i < 2 * level + 2; i++) fprintf (debug_file, " ");
@@ -5892,20 +5902,9 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     build_ssa (gen_ctx, TRUE);
     DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
-      fprintf (debug_file, "undef init insns:\n");
-      for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, undef_insns); i++) {
-        bb_insn_t bb_insn = VARR_GET (bb_insn_t, undef_insns, i);
-        if (bb_insn == NULL) continue;
-        fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
-        print_bb_insn (gen_ctx, bb_insn, TRUE);
-      }
-      fprintf (debug_file, "arg init insns:\n");
-      for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, arg_bb_insns); i++) {
-        bb_insn_t bb_insn = VARR_GET (bb_insn_t, arg_bb_insns, i);
-        if (bb_insn == NULL) continue;
-        fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
-        print_bb_insn (gen_ctx, bb_insn, TRUE);
-      }
+      print_varr_insns (gen_ctx, "undef init", undef_insns);
+      print_varr_insns (gen_ctx, "arg init", arg_bb_insns);
+      fprintf (debug_file, "\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
     if (ccp (gen_ctx)) {
