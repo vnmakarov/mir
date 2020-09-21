@@ -751,6 +751,8 @@ static void DFS (bb_t bb, size_t *pre, size_t *rpost) {
 static void enumerate_bbs (gen_ctx_t gen_ctx) {
   size_t pre, rpost;
 
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    bb->pre = bb->rpost = 0;
   pre = 1;
   rpost = DLIST_LENGTH (bb_t, curr_cfg->bbs);
   DFS (DLIST_HEAD (bb_t, curr_cfg->bbs), &pre, &rpost);
