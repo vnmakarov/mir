@@ -5493,7 +5493,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
                && (insn->ops[0].u.hard_reg == FP_HARD_REG
                    || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
         DEBUG ({
-          fprintf (debug_file, "  Removing dead insn");
+          fprintf (debug_file, "  Removing dead insn %-5lu", (unsigned long) bb_insn->index);
           MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         });
         gen_delete_insn (gen_ctx, insn);
