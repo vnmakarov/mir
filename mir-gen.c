@@ -4165,7 +4165,7 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   n++;
   DEBUG ({
     fprintf (debug_file, "Compressing live ranges: from %d to %ld - %ld%%\n", curr_point, n,
-             100 * n / curr_point);
+             curr_point == 0 ? 100 : 100 * n / curr_point);
   });
   curr_point = n;
 
