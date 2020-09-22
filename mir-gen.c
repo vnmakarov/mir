@@ -1434,7 +1434,9 @@ typedef struct ssa_edge *ssa_edge_t;
 
 struct ssa_edge {
   bb_insn_t use, def;
-  uint32_t use_op_num, def_op_num;
+  char flag;
+  uint16_t def_op_num;
+  uint32_t use_op_num;
   ssa_edge_t prev_use, next_use; /* of the same def: we have only head in op.data */
 };
 
@@ -1638,10 +1640,12 @@ static void add_ssa_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_i
   MIR_op_t *op_ref;
   ssa_edge_t ssa_edge = gen_malloc (gen_ctx, sizeof (struct ssa_edge));
 
-  ssa_edge->use = use;
-  ssa_edge->use_op_num = use_op_num;
+  gen_assert (use_op_num >= 0 && def_op_num >= 0 && def_op_num < (1 << 16));
+  ssa_edge->flag = FALSE;
   ssa_edge->def = def;
   ssa_edge->def_op_num = def_op_num;
+  ssa_edge->use = use;
+  ssa_edge->use_op_num = use_op_num;
   gen_assert (use->insn->ops[use_op_num].data == NULL);
   use->insn->ops[use_op_num].data = ssa_edge;
   op_ref = &def->insn->ops[def_op_num];
