@@ -9,22 +9,18 @@
             ----------------      -----------     |    Elimination   |	  | Elimination |
                                                    ------------------	   -------------
                                                                                   |
-                                                                                  V
-       ----------------     ------------     ---------     -----------     ------------
-      | Loop Invariant |   |  Reaching  |   | Finding |   | Variable  |   |  Reaching  |
-      | Code Motion    |<--| Definitons |<--|  Loops  |<--| Renaming  |<--| Definitons |
-       ----------------    |  Analysis  |    ---------     -----------    |  Analysis  |
-              |             ------------                                   ------------
-              V
-    ----------------------     -----------     ---------     ------------     -------------
-   |  Sparse Conditional  |-->| Machinize |-->| Finding |-->| Build Live |-->| Build Live  |
-   | Constant Propagation |    -----------    |  Loops  |   |    Info    |   |   Ranges    |
-    ----------------------                     ---------     ------------     -------------
-                                                                                    |
-                                                                                    V
-                ---------------     -------------     ---------     ---------     ---------
-    Machine <--|   Generate    |<--|  Dead Code  |<--| Combine |<--| Rewrite |<--| Assign  |
-     Insns     | machine insns |   | Elimination |    ---------     ---------     ---------
+                                                           -------------          V
+    --------     -------     ---------                    |   Sparse    |    -----------
+   | Build  |   | Build |   | Finding |    -----------    | Conditional |   | Variable  |
+   | Live   |<--| Live  |<--|  Loops  |<--| Machinize |<--|  Constant   |<--| Renaming  |
+   | Ranges |   | Info  |    ---------     -----------    | Propagation |    -----------
+    --------     -------                                   -------------
+       |
+       V
+    ---------     ---------     ---------      -------------     ---------------
+   | Assign  |<--| Rewrite |<--| Combine | -->|  Dead Code  |-->|   Generate    |--> Machine
+    ---------     ---------     ---------     | Elimination |   | machine insns |     Insns
+                                               -------------     ---------------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
@@ -32,15 +28,8 @@
                                       we need the right value numbering after simplification).
                                       Only for -O2 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
-   Reaching definition Analysis: Analysis required for subsequent variable renaming.  Only for -O3.
    Variable renaming: Rename disjoint live ranges of variables which is beneficial for
-                      register allocation and loop invariant code motion.  Only for -O3.
-   Finding Loops: Building loop tree which is used in subsequent loop invariant code motion.
-                  Only for -O3.
-   Reaching definition Analysis: Analysis required for subsequent loop invariant code motion.
-                                 Only for -O3.
-   Loop Invariant Code Motion (LICM): Register pressure sensitive moves loop invariant insns out
-                                      of the loop.  Only for -O3.
+                      register allocation.  Only for -O3.
    Sparse Conditional Constant Propagation: Constant propagation and removing death paths of CFG.
                                             Only for -O2 and above.
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
@@ -2291,7 +2280,6 @@ static void finish_cse (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/* Register (variable) renaming.  Reaching definitions info should exist. */
 /* Register (variable) renaming. */
 
 DEF_VARR (ssa_edge_t);
