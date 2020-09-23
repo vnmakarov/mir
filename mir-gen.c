@@ -3,11 +3,11 @@
 */
 
 /* Optimization pipeline:
-
-            ----------------      -----------      ------------------      -------------
-   MIR --->|    Simplify    |--->| Build CFG |--->|  Common Sub-Expr |--->|  Dead Code  |
-            ----------------      -----------     |    Elimination   |	  | Elimination |
-                                                   ------------------	   -------------
+                                                          -------------
+           ----------     -----------     -----------    |   Common    |    -------------
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->|  Sub-Expr   |-->|  Dead Code  |
+           ----------      -----------    -----------    | Elimination |   | Elimination |
+                                                          -------------     -------------
                                                                                   |
                                                            -------------          V
     --------     -------     ---------                    |   Sparse    |    -----------
@@ -16,14 +16,15 @@
    | Ranges |   | Info  |    ---------     -----------    | Propagation |    -----------
     --------     -------                                   -------------
        |
-       V
-    ---------     ---------     ---------      -------------     ---------------
-   | Assign  |<--| Rewrite |<--| Combine | -->|  Dead Code  |-->|   Generate    |--> Machine
-    ---------     ---------     ---------     | Elimination |   | machine insns |     Insns
-                                               -------------     ---------------
+       V                                                                   ----------
+   --------     --------     ---------     ---------     -------------    | Generate |
+  | Out of |-->| Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |-->| Machine  |--> Machine
+  |  SSA   |    --------     ---------     ---------    | Elimination |   |  Insns   |     Insns
+   --------                                              -------------     ----------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
+   Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
    Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
                                       we need the right value numbering after simplification).
                                       Only for -O2 and above.
@@ -38,6 +39,7 @@
                   Only for -O1 and above.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
+   Out of SSA: Removing phi nodes and SSA edges (we keep convetional SSA all the time)
    Assign: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
    Rewrite: Transform MIR according to the assign using reserved hard regs.
    Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
