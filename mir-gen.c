@@ -5558,7 +5558,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->cse_ctx = NULL;
   gen_ctx->rdef_ctx = NULL;
   gen_ctx->rename_ctx = NULL;
-  gen_ctx->licm_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
@@ -5576,7 +5575,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_cse (gen_ctx);
   init_rdef (gen_ctx);
   init_rename (gen_ctx);
-  init_licm (gen_ctx);
   init_ccp (gen_ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -5609,7 +5607,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_cse (gen_ctx);
   finish_rdef (gen_ctx);
   finish_rename (gen_ctx);
-  finish_licm (gen_ctx);
   finish_ccp (gen_ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
