@@ -5194,16 +5194,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     cse_clear (gen_ctx);
   }
 #endif /* #ifndef NO_CSE */
-  if (optimize_level >= 2) calculate_func_cfg_live_info (gen_ctx, FALSE);
-#ifndef NO_CSE
-  if (optimize_level >= 2) {
-    dead_code_elimination (gen_ctx);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
-      print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-    });
-  }
-#endif /* #ifndef NO_CSE */
   if (optimize_level >= 2) {
     build_ssa (gen_ctx, TRUE);
     DEBUG ({
@@ -5214,6 +5204,15 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
+#ifndef NO_CSE
+  if (optimize_level >= 2) {
+    ssa_dead_code_elimination (gen_ctx);
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+    });
+  }
+#endif /* #ifndef NO_CSE */
 #ifndef NO_RENAME
   if (optimize_level >= 3) {
     DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
