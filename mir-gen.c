@@ -1846,6 +1846,35 @@ struct cse_ctx {
 #define curr_bb_av_gen gen_ctx->cse_ctx->curr_bb_av_gen
 #define curr_bb_av_kill gen_ctx->cse_ctx->curr_bb_av_kill
 
+static void dom_con_func_0 (bb_t bb) { bitmap_clear (bb->dom_in); }
+
+static int dom_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
+  edge_t e, head;
+  bitmap_t prev_dom_in = temp_bitmap;
+
+  bitmap_copy (prev_dom_in, bb->dom_in);
+  head = DLIST_HEAD (in_edge_t, bb->in_edges);
+  bitmap_copy (bb->dom_in, head->src->dom_out);
+  for (e = DLIST_NEXT (in_edge_t, head); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+    bitmap_and (bb->dom_in, bb->dom_in, e->src->dom_out); /* dom_in &= dom_out */
+  return !bitmap_equal_p (bb->dom_in, prev_dom_in);
+}
+
+static int dom_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
+  bitmap_clear (temp_bitmap);
+  bitmap_set_bit_p (temp_bitmap, bb->index);
+  return bitmap_ior (bb->dom_out, bb->dom_in, temp_bitmap);
+}
+
+static void calculate_dominators (gen_ctx_t gen_ctx) {
+  bb_t entry_bb = DLIST_HEAD (bb_t, curr_cfg->bbs);
+
+  bitmap_clear (entry_bb->dom_out);
+  for (bb_t bb = DLIST_NEXT (bb_t, entry_bb); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    bitmap_set_bit_range_p (bb->dom_out, 0, curr_bb_index);
+  solve_dataflow (gen_ctx, TRUE, dom_con_func_0, dom_con_func_n, dom_trans_func);
+}
+
 static int op_eq (gen_ctx_t gen_ctx, MIR_op_t op1, MIR_op_t op2) {
   return MIR_op_eq_p (gen_ctx->ctx, op1, op2);
 }
