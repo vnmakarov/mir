@@ -5221,7 +5221,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       fprintf (debug_file, "+++++++++++++MIR after rename:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
-    calculate_func_cfg_live_info (gen_ctx, FALSE); /* restore live info */
   }
 #endif /* #ifndef NO_RENAME */
 #ifndef NO_CCP
