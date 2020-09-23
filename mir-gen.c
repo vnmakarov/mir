@@ -350,8 +350,6 @@ struct loop_node {
   bb_t bb;      /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
-  bb_t preheader;      /* used in LICM */
-  unsigned int call_p; /* used in LICM: call is present in the loop */
   DLIST (loop_node_t) children;
   DLIST_LINK (loop_node_t) children_link;
   int max_int_pressure, max_fp_pressure;
@@ -786,7 +784,6 @@ static loop_node_t create_loop_node (gen_ctx_t gen_ctx, bb_t bb) {
   if (bb != NULL) bb->loop_node = loop_node;
   loop_node->parent = NULL;
   loop_node->entry = NULL;
-  loop_node->preheader = NULL;
   loop_node->max_int_pressure = loop_node->max_fp_pressure = 0;
   DLIST_INIT (loop_node_t, loop_node->children);
   return loop_node;
