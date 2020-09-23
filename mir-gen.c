@@ -3588,6 +3588,12 @@ static void increase_pressure (int int_p, bb_t bb, int *int_pressure, int *fp_pr
   }
 }
 
+static int int_var_type_p (gen_ctx_t gen_ctx, MIR_reg_t var) {
+  if (!var_is_reg_p (var)) return target_hard_reg_type_ok_p (var, MIR_T_I32);
+  return MIR_int_type_p (
+    MIR_reg_type (gen_ctx->ctx, var2reg (gen_ctx, var), curr_func_item->u.func));
+}
+
 static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn, int moves_p,
                                          size_t *mvs_num) {
   bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
