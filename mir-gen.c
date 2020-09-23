@@ -313,7 +313,7 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 
 struct bb_insn {
   MIR_insn_t insn;
-  unsigned char flag, flag2; /* used for CCP and LICM */
+  unsigned char flag; /* used for CCP */
   size_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
@@ -335,7 +335,7 @@ struct bb {
   DLIST (bb_insn_t) bb_insns;
   size_t freq;
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
-  bitmap_t dom_in, dom_out;    /* additional var bitmaps LICM */
+  bitmap_t dom_in, dom_out;    /* additional var bitmaps */
   loop_node_t loop_node;
   int max_int_pressure, max_fp_pressure;
 };
@@ -2263,14 +2263,6 @@ static void finish_cse (gen_ctx_t gen_ctx) {
 #undef av_kill
 #undef av_gen
 
-#undef rdef_in
-#undef rdef_out
-#undef rdef_kill
-#undef rdef_gen
-
-/* New Page */
-
-/* Register (variable) renaming.  Reaching definitions info should exist. */
 /* New Page */
 
 /* Register (variable) renaming.  Reaching definitions info should exist. */
