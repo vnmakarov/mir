@@ -127,7 +127,6 @@ struct target_ctx;
 struct data_flow_ctx;
 struct ssa_ctx;
 struct cse_ctx;
-struct rdef_ctx;
 struct rename_ctx;
 struct ccp_ctx;
 struct lr_ctx;
@@ -157,7 +156,6 @@ struct gen_ctx {
   struct ssa_ctx *ssa_ctx;
   struct cse_ctx *cse_ctx;
   struct rename_ctx *rename_ctx;
-  struct rdef_ctx *rdef_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
@@ -2264,167 +2262,6 @@ static void finish_cse (gen_ctx_t gen_ctx) {
 #undef av_out
 #undef av_kill
 #undef av_gen
-
-/* New Page */
-
-/* Reaching definitions. */
-
-#define rdef_in in
-#define rdef_out out
-#define rdef_kill kill
-#define rdef_gen gen
-
-struct rdef_ctx {
-  VARR (bb_insn_t) * def_bb_insns;
-  VARR (bitmap_t) * var_uses, *var_defs;
-  bitmap_t artificial_def_bitmap, curr_rdef_bitmap;
-};
-
-#define def_bb_insns gen_ctx->rdef_ctx->def_bb_insns
-#define var_uses gen_ctx->rdef_ctx->var_uses
-#define var_defs gen_ctx->rdef_ctx->var_defs
-#define artificial_def_bitmap gen_ctx->rdef_ctx->artificial_def_bitmap
-#define curr_rdef_bitmap gen_ctx->rdef_ctx->curr_rdef_bitmap
-
-static void rdef_con_func_0 (bb_t bb) { bitmap_clear (bb->rdef_in); }
-
-static int rdef_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
-  int first_bb_p = bb == DLIST_EL (bb_t, curr_cfg->bbs, 2);
-  edge_t e, head;
-  bitmap_t prev_rdef_in = temp_bitmap;
-
-  if (first_bb_p) bitmap_ior (bb->rdef_in, bb->rdef_in, artificial_def_bitmap);
-  bitmap_copy (prev_rdef_in, bb->rdef_in);
-  head = DLIST_HEAD (in_edge_t, bb->in_edges);
-  bitmap_copy (bb->rdef_in, head->src->rdef_out);
-  for (e = DLIST_NEXT (in_edge_t, head); e != NULL; e = DLIST_NEXT (in_edge_t, e))
-    bitmap_ior (bb->rdef_in, bb->rdef_in, e->src->rdef_out); /* rdef_in |= rdef_out */
-  if (first_bb_p) bitmap_ior (bb->rdef_in, bb->rdef_in, artificial_def_bitmap);
-  return !bitmap_equal_p (bb->rdef_in, prev_rdef_in);
-}
-
-static int rdef_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
-  return bitmap_ior_and_compl (bb->rdef_out, bb->rdef_gen, bb->rdef_in, bb->rdef_kill);
-}
-
-static bitmap_t get_var_uses_or_defs (gen_ctx_t gen_ctx, MIR_reg_t var, int uses_p) {
-  bitmap_t bm;
-  VARR (bitmap_t) *bitmap_varr = uses_p ? var_uses : var_defs;
-
-  while (VARR_LENGTH (bitmap_t, bitmap_varr) <= var) VARR_PUSH (bitmap_t, bitmap_varr, NULL);
-  if ((bm = VARR_GET (bitmap_t, bitmap_varr, var)) != NULL) return bm;
-  bm = bitmap_create2 (2 * curr_cfg->max_reg);
-  VARR_SET (bitmap_t, bitmap_varr, var, bm);
-  return bm;
-}
-
-static void calculate_reaching_defs (gen_ctx_t gen_ctx) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  MIR_func_t func = curr_func_item->u.func;
-  bb_t entry_bb = DLIST_HEAD (bb_t, curr_cfg->bbs);
-  int op_num, out_p, mem_p;
-  size_t i, passed_mem_num, n_out, def;
-  MIR_reg_t var;
-  const char *var_name;
-  bitmap_t def_bitmap;
-  insn_var_iterator_t iter;
-
-  VARR_TRUNC (bb_insn_t, def_bb_insns, 0);
-  for (bb_t bb = entry_bb; bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    /* Set up: var -> def insn indexes; bb_insn -> insn index; var = use insn indexes */
-    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      n_out = 0;
-      bb_insn->index = VARR_LENGTH (bb_insn_t, def_bb_insns);
-      VARR_PUSH (bb_insn_t, def_bb_insns, bb_insn);
-      FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p) {
-          bitmap_set_bit_p (get_var_uses_or_defs (gen_ctx, var, TRUE), bb_insn->index);
-        } else {
-          if (n_out != 0) VARR_PUSH (bb_insn_t, def_bb_insns, bb_insn);
-          bitmap_set_bit_p (get_var_uses_or_defs (gen_ctx, var, FALSE), bb_insn->index + n_out++);
-        }
-      }
-    }
-  }
-  /* Add special defs for each fucn arg */
-  bitmap_clear (artificial_def_bitmap);
-  DEBUG ({ fprintf (debug_file, " Adding special defs name(reg,def):"); });
-  for (i = 0; i < func->nargs; i++) {
-    var_name = VARR_GET (MIR_var_t, func->vars, i).name;
-    var = reg2var (gen_ctx, MIR_reg (ctx, var_name, func));
-    gen_assert (var_is_reg_p (var));
-    def_bitmap = get_var_uses_or_defs (gen_ctx, var, FALSE);
-    def = VARR_LENGTH (bb_insn_t, def_bb_insns);
-    DEBUG ({
-      fprintf (debug_file, " %s(%lu,%lu)", var_name, (unsigned long) var2reg (gen_ctx, var),
-               (unsigned long) def);
-    });
-    VARR_PUSH (bb_insn_t, def_bb_insns, NULL);
-    bitmap_set_bit_p (def_bitmap, def);
-    bitmap_set_bit_p (artificial_def_bitmap, def);
-  }
-  DEBUG ({
-    if (i > 0) fprintf (debug_file, "\n");
-  });
-  for (bb_t bb = entry_bb; bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    /* Set up rdef gen/kill; initialize rdef in/out */
-    bitmap_clear (bb->rdef_in);
-    bitmap_clear (bb->rdef_out);
-    bitmap_clear (bb->rdef_gen);
-    bitmap_clear (bb->rdef_kill);
-    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      n_out = 0;
-      FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p) continue;
-        def_bitmap = get_var_uses_or_defs (gen_ctx, var, FALSE);
-        gen_assert (def_bitmap != NULL);
-        bitmap_ior (bb->rdef_kill, bb->rdef_kill, def_bitmap);
-        bitmap_and_compl (bb->rdef_gen, bb->rdef_gen, def_bitmap);
-        bitmap_set_bit_p (bb->rdef_gen, bb_insn->index + n_out++);
-      }
-    }
-  }
-  solve_dataflow (gen_ctx, TRUE, rdef_con_func_0, rdef_con_func_n, rdef_trans_func);
-}
-
-#if !MIR_NO_GEN_DEBUG
-static void output_bb_rdef_info (gen_ctx_t gen_ctx, bb_t bb) {
-  output_bitmap (gen_ctx, "  rdef_in:", bb->rdef_in, FALSE);
-  output_bitmap (gen_ctx, "  rdef_out:", bb->rdef_out, FALSE);
-  output_bitmap (gen_ctx, "  rdef_gen:", bb->rdef_gen, FALSE);
-  output_bitmap (gen_ctx, "  rdef_kill:", bb->rdef_kill, FALSE);
-}
-#endif
-
-static void rdef_clear (gen_ctx_t gen_ctx) {
-  bitmap_t bm;
-
-  while (VARR_LENGTH (bitmap_t, var_uses) != 0)
-    if ((bm = VARR_POP (bitmap_t, var_uses)) != NULL) bitmap_destroy (bm);
-  while (VARR_LENGTH (bitmap_t, var_defs) != 0)
-    if ((bm = VARR_POP (bitmap_t, var_defs)) != NULL) bitmap_destroy (bm);
-}
-
-static void init_rdef (gen_ctx_t gen_ctx) {
-  gen_ctx->rdef_ctx = gen_malloc (gen_ctx, sizeof (struct rdef_ctx));
-  VARR_CREATE (bb_insn_t, def_bb_insns, 0);
-  VARR_CREATE (bitmap_t, var_uses, 0);
-  VARR_CREATE (bitmap_t, var_defs, 0);
-  artificial_def_bitmap = bitmap_create ();
-  curr_rdef_bitmap = bitmap_create ();
-}
-
-static void finish_rdef (gen_ctx_t gen_ctx) {
-  VARR_DESTROY (bb_insn_t, def_bb_insns);
-  VARR_DESTROY (bitmap_t, var_uses);
-  VARR_DESTROY (bitmap_t, var_defs);
-  bitmap_destroy (artificial_def_bitmap);
-  bitmap_destroy (curr_rdef_bitmap);
-  free (gen_ctx->rdef_ctx);
-  gen_ctx->rdef_ctx = NULL;
-}
 
 #undef rdef_in
 #undef rdef_out
@@ -5496,7 +5333,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
   gen_ctx->cse_ctx = NULL;
-  gen_ctx->rdef_ctx = NULL;
   gen_ctx->rename_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
@@ -5513,7 +5349,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_data_flow (gen_ctx);
   init_ssa (gen_ctx);
   init_cse (gen_ctx);
-  init_rdef (gen_ctx);
   init_rename (gen_ctx);
   init_ccp (gen_ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -5545,7 +5380,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_data_flow (gen_ctx);
   finish_ssa (gen_ctx);
   finish_cse (gen_ctx);
-  finish_rdef (gen_ctx);
   finish_rename (gen_ctx);
   finish_ccp (gen_ctx);
   bitmap_destroy (temp_bitmap);
