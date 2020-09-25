@@ -3644,6 +3644,7 @@ typedef struct breg_info {
 } breg_info_t;
 
 DEF_VARR (breg_info_t);
+DEF_VARR (bitmap_t);
 
 struct ra_ctx {
   VARR (MIR_reg_t) * breg_renumber;
