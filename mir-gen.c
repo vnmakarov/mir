@@ -1974,26 +1974,30 @@ static int gvn_insn_p (MIR_insn_t insn) {
                   && insn->ops[1].mode != MIR_OP_MEM && insn->ops[1].mode != MIR_OP_HARD_REG_MEM)));
 }
 
-static void create_exprs (gen_ctx_t gen_ctx) {
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      expr_t e;
-      MIR_insn_t insn = bb_insn->insn;
+#if !MIR_NO_GEN_DEBUG
+static void print_expr (gen_ctx_t gen_ctx, expr_t e, const char *title) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  size_t nops;
 
-      if (gvn_insn_p (insn)) {
-        if (!find_expr (gen_ctx, insn, &e)) e = add_expr (gen_ctx, insn);
-        bb_insn->gvn_val = e->num;
-      }
-    }
+  fprintf (debug_file, "  %s %3lu: ", title, (unsigned long) e->num);
+  fprintf (debug_file, "%s _", MIR_insn_name (ctx, e->insn->code));
+  nops = MIR_insn_nops (ctx, e->insn);
+  for (size_t j = 1; j < nops; j++) {
+    fprintf (debug_file, ", ");
+    MIR_output_op (ctx, debug_file, e->insn->ops[j], curr_func_item->u.func);
+  }
+  fprintf (debug_file, "\n");
 }
+#endif
 
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
+  bb_t bb;
   bb_insn_t bb_insn, new_bb_insn, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
 
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+  for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
+    bb = VARR_GET (bb_t, worklist, i);
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e;
       MIR_op_t op;
@@ -2004,14 +2008,15 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       ssa_edge_t list;
 
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (!gvn_insn_p (insn) || move_p (insn)
+      if (!gvn_insn_p (insn)) continue;
+      if (!find_expr (gen_ctx, insn, &e)) {
+        e = add_expr (gen_ctx, insn);
+        DEBUG ({ print_expr (gen_ctx, e, "Adding"); });
+      }
+      bb_insn->gvn_val = e->num;
+      if (e->insn == insn || move_p (insn)
           || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
-      if (!find_expr (gen_ctx, insn, &e)) {
-        gen_assert (FALSE);
-        continue;
-      }
-      if (e->insn == insn) continue;
       expr_bb_insn = e->insn->data;
       if (!bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index)) continue;
       add_def_p = e->temp_reg == 0;
@@ -2062,31 +2067,11 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   }
 }
 
-#if !MIR_NO_GEN_DEBUG
-static void print_exprs (gen_ctx_t gen_ctx) {
-  MIR_context_t ctx = gen_ctx->ctx;
-
-  fprintf (debug_file, "  Expressions:\n");
-  for (size_t i = 0; i < VARR_LENGTH (expr_t, exprs); i++) {
-    size_t nops;
-    expr_t e = VARR_GET (expr_t, exprs, i);
-
-    fprintf (debug_file, "  %3lu: ", (unsigned long) i);
-    fprintf (debug_file, "%s _", MIR_insn_name (ctx, e->insn->code));
-    nops = MIR_insn_nops (ctx, e->insn);
-    for (size_t j = 1; j < nops; j++) {
-      fprintf (debug_file, ", ");
-      MIR_output_op (ctx, debug_file, e->insn->ops[j], curr_func_item->u.func);
-    }
-    fprintf (debug_file, "\n");
-  }
-}
-#endif
-
 static void gvn (gen_ctx_t gen_ctx) {
   calculate_dominators (gen_ctx);
-  create_exprs (gen_ctx);
-  DEBUG ({ print_exprs (gen_ctx); });
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    VARR_PUSH (bb_t, worklist, bb);
+  qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), rpost_cmp);
   gvn_modify (gen_ctx);
 }
 
