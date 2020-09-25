@@ -117,7 +117,7 @@ typedef struct func_cfg *func_cfg_t;
 struct target_ctx;
 struct data_flow_ctx;
 struct ssa_ctx;
-struct cse_ctx;
+struct gvn_ctx;
 struct rename_ctx;
 struct ccp_ctx;
 struct lr_ctx;
@@ -133,7 +133,7 @@ DEF_VARR (bb_insn_t);
 
 struct gen_ctx {
   MIR_context_t ctx;
-  unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +CSE/CCP (default); >=3: everything  */
+  unsigned optimize_level; /* 0:fast gen; 1:RA+combiner; 2: +GVN/CCP (default); >=3: everything  */
   MIR_item_t curr_func_item;
 #if !MIR_NO_GEN_DEBUG
   FILE *debug_file;
@@ -145,7 +145,7 @@ struct gen_ctx {
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct ssa_ctx *ssa_ctx;
-  struct cse_ctx *cse_ctx;
+  struct gvn_ctx *gvn_ctx;
   struct rename_ctx *rename_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
@@ -305,7 +305,7 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 struct bb_insn {
   MIR_insn_t insn;
   unsigned char flag; /* used for CCP */
-  int32_t cse_val;    /* used for CSE, it is negative index for non CSE expr insns */
+  int32_t gvn_val;    /* used for GVN, it is negative index for non GVN expr insns */
   size_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
@@ -527,7 +527,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->call_hard_reg_args = NULL;
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
   gen_assert (bb_insn->index < (1ul << 31));
-  bb_insn->cse_val = -(int32_t) bb_insn->index;
+  bb_insn->gvn_val = -(int32_t) bb_insn->index;
   DLIST_INIT (dead_var_t, bb_insn->dead_vars);
   if (MIR_call_code_p (insn->code)) bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
   return bb_insn;
@@ -1807,7 +1807,7 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/* Common Sub-expression Elimination.  */
+/* Removing redundant insns through GVN.  */
 
 typedef struct expr {
   MIR_insn_t insn;    /* opcode and input operands are the expr keys */
@@ -1818,13 +1818,13 @@ typedef struct expr {
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
 
-struct cse_ctx {
+struct gvn_ctx {
   VARR (expr_t) * exprs;    /* the expr number -> expression */
   HTAB (expr_t) * expr_tab; /* keys: insn code and input operands */
 };
 
-#define exprs gen_ctx->cse_ctx->exprs
-#define expr_tab gen_ctx->cse_ctx->expr_tab
+#define exprs gen_ctx->gvn_ctx->exprs
+#define expr_tab gen_ctx->gvn_ctx->expr_tab
 
 static void dom_con_func_0 (bb_t bb) { bitmap_clear (bb->dom_in); }
 
@@ -1878,7 +1878,7 @@ static int expr_eq (expr_t e1, expr_t e2, void *arg) {
     ssa_edge1 = insn1->ops[i].data;
     ssa_edge2 = insn2->ops[i].data;
     if (ssa_edge1 != NULL && ssa_edge2 != NULL
-        && ssa_edge1->def->cse_val != ssa_edge2->def->cse_val)
+        && ssa_edge1->def->gvn_val != ssa_edge2->def->gvn_val)
       return FALSE;
   }
   return TRUE;
@@ -1899,7 +1899,7 @@ static htab_hash_t expr_hash (expr_t e, void *arg) {
     if (out_p) continue;
     if (e->insn->ops[i].mode != MIR_OP_REG) h = MIR_op_hash_step (ctx, h, e->insn->ops[i]);
     if ((ssa_edge = e->insn->ops[i].data) != NULL)
-      h = mir_hash_step (h, (uint64_t) ssa_edge->def->cse_val);
+      h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
   }
   return mir_hash_finish (h);
 }
@@ -1947,7 +1947,7 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
   return e->temp_reg;
 }
 
-static int cse_insn_p (MIR_insn_t insn) {
+static int gvn_insn_p (MIR_insn_t insn) {
   return (!MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_SWITCH
           && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
           && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
@@ -1966,14 +1966,14 @@ static void create_exprs (gen_ctx_t gen_ctx) {
       expr_t e;
       MIR_insn_t insn = bb_insn->insn;
 
-      if (cse_insn_p (insn)) {
+      if (gvn_insn_p (insn)) {
         if (!find_expr (gen_ctx, insn, &e)) e = add_expr (gen_ctx, insn);
-        bb_insn->cse_val = e->num;
+        bb_insn->gvn_val = e->num;
       }
     }
 }
 
-static void cse_modify (gen_ctx_t gen_ctx) {
+static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_insn_t bb_insn, new_bb_insn, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
@@ -1989,7 +1989,7 @@ static void cse_modify (gen_ctx_t gen_ctx) {
       ssa_edge_t list;
 
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (!cse_insn_p (insn) || move_p (insn)
+      if (!gvn_insn_p (insn) || move_p (insn)
           || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
       if (!find_expr (gen_ctx, insn, &e)) {
@@ -2027,7 +2027,7 @@ static void cse_modify (gen_ctx_t gen_ctx) {
           }
         }
         if (!find_expr (gen_ctx, new_insn, &new_e)) new_e = add_expr (gen_ctx, new_insn);
-        new_bb_insn->cse_val = e->num;
+        new_bb_insn->gvn_val = e->num;
         DEBUG ({
           fprintf (debug_file, "  adding insn ");
           MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, FALSE);
@@ -2045,7 +2045,7 @@ static void cse_modify (gen_ctx_t gen_ctx) {
       new_bb_insn = new_insn->data;
       for (ssa_edge_t se = list; se != NULL; se = se->next_use) se->def = new_bb_insn;
       if (!find_expr (gen_ctx, new_insn, &new_e)) new_e = add_expr (gen_ctx, new_insn);
-      new_bb_insn->cse_val = e->num;
+      new_bb_insn->gvn_val = e->num;
       DEBUG ({
         fprintf (debug_file, "  adding insn ");
         MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, FALSE);
@@ -2077,29 +2077,29 @@ static void print_exprs (gen_ctx_t gen_ctx) {
 }
 #endif
 
-static void cse (gen_ctx_t gen_ctx) {
+static void gvn (gen_ctx_t gen_ctx) {
   calculate_dominators (gen_ctx);
   create_exprs (gen_ctx);
   DEBUG ({ print_exprs (gen_ctx); });
-  cse_modify (gen_ctx);
+  gvn_modify (gen_ctx);
 }
 
-static void cse_clear (gen_ctx_t gen_ctx) {
+static void gvn_clear (gen_ctx_t gen_ctx) {
   HTAB_CLEAR (expr_t, expr_tab);
   while (VARR_LENGTH (expr_t, exprs) != 0) free (VARR_POP (expr_t, exprs));
 }
 
-static void init_cse (gen_ctx_t gen_ctx) {
-  gen_ctx->cse_ctx = gen_malloc (gen_ctx, sizeof (struct cse_ctx));
+static void init_gvn (gen_ctx_t gen_ctx) {
+  gen_ctx->gvn_ctx = gen_malloc (gen_ctx, sizeof (struct gvn_ctx));
   VARR_CREATE (expr_t, exprs, 512);
   HTAB_CREATE (expr_t, expr_tab, 1024, expr_hash, expr_eq, gen_ctx);
 }
 
-static void finish_cse (gen_ctx_t gen_ctx) {
+static void finish_gvn (gen_ctx_t gen_ctx) {
   VARR_DESTROY (expr_t, exprs);
   HTAB_DESTROY (expr_t, expr_tab);
-  free (gen_ctx->cse_ctx);
-  gen_ctx->cse_ctx = NULL;
+  free (gen_ctx->gvn_ctx);
+  gen_ctx->gvn_ctx = NULL;
 }
 
 /* New Page */
@@ -5015,26 +5015,26 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#ifndef NO_CSE
+#ifndef NO_GVN
   if (optimize_level >= 2) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++CSE:\n"); });
-    cse (gen_ctx);
+    DEBUG ({ fprintf (debug_file, "+++++++++++++GVN:\n"); });
+    gvn (gen_ctx);
     DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after CSE:\n");
+      fprintf (debug_file, "+++++++++++++MIR after GVN:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
-    cse_clear (gen_ctx);
+    gvn_clear (gen_ctx);
   }
-#endif /* #ifndef NO_CSE */
-#ifndef NO_CSE
+#endif /* #ifndef NO_GVN */
+#ifndef NO_GVN
   if (optimize_level >= 2) {
     ssa_dead_code_elimination (gen_ctx);
     DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CSE:\n");
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after GVN:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #ifndef NO_CSE */
+#endif /* #ifndef NO_GVN */
 #ifndef NO_RENAME
   if (optimize_level >= 3) {
     DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
@@ -5160,7 +5160,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   optimize_level = 2;
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
-  gen_ctx->cse_ctx = NULL;
+  gen_ctx->gvn_ctx = NULL;
   gen_ctx->rename_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
@@ -5176,7 +5176,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_dead_vars ();
   init_data_flow (gen_ctx);
   init_ssa (gen_ctx);
-  init_cse (gen_ctx);
+  init_gvn (gen_ctx);
   init_rename (gen_ctx);
   init_ccp (gen_ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -5207,7 +5207,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
 
   finish_data_flow (gen_ctx);
   finish_ssa (gen_ctx);
-  finish_cse (gen_ctx);
+  finish_gvn (gen_ctx);
   finish_rename (gen_ctx);
   finish_ccp (gen_ctx);
   bitmap_destroy (temp_bitmap);
