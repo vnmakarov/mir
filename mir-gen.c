@@ -305,6 +305,7 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 struct bb_insn {
   MIR_insn_t insn;
   unsigned char flag; /* used for CCP */
+  int32_t cse_val;    /* used for CSE, it is negative index for non CSE expr insns */
   size_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
@@ -525,6 +526,8 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->flag = FALSE;
   bb_insn->call_hard_reg_args = NULL;
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
+  gen_assert (bb_insn->index < (1ul << 31));
+  bb_insn->cse_val = -(int32_t) bb_insn->index;
   DLIST_INIT (dead_var_t, bb_insn->dead_vars);
   if (MIR_call_code_p (insn->code)) bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
   return bb_insn;
