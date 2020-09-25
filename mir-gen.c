@@ -4,9 +4,9 @@
 
 /* Optimization pipeline:
                                                           -------------
-           ----------     -----------     -----------    |   Common    |    -------------
-   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->|  Sub-Expr   |-->|  Dead Code  |
-           ----------      -----------    -----------    | Elimination |   | Elimination |
+           ----------     -----------     -----------    |   Global    |    -------------
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->|   Value     |-->|  Dead Code  |
+           ----------      -----------    -----------    |  Numbering  |   | Elimination |
                                                           -------------     -------------
                                                                                   |
                                                            -------------          V
@@ -25,9 +25,7 @@
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
    Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
-   Common Sub-Expression Elimination: Reusing calculated values (it is before SCCP because
-                                      we need the right value numbering after simplification).
-                                      Only for -O2 and above.
+   Global Value Numbering: Removing redundant insns through GVN. Only for -O2 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
    Variable renaming: Rename disjoint live ranges of variables which is beneficial for
                       register allocation.  Only for -O3.
