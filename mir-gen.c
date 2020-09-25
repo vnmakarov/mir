@@ -1654,6 +1654,23 @@ static void remove_ssa_edge (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
   free (ssa_edge);
 }
 
+static void change_ssa_edge_list_def (ssa_edge_t list, bb_insn_t new_bb_insn,
+                                      unsigned new_def_op_num, MIR_reg_t reg, MIR_reg_t new_reg) {
+  for (ssa_edge_t se = list; se != NULL; se = se->next_use) {
+    se->def = new_bb_insn;
+    se->def_op_num = new_def_op_num;
+    if (new_reg != 0) {
+      MIR_op_t *op_ref = &se->use->insn->ops[se->use_op_num];
+      if (op_ref->mode == MIR_OP_REG) {
+        op_ref->u.reg = new_reg;
+      } else {
+        gen_assert (op_ref->mode == MIR_OP_MEM && op_ref->u.mem.base == reg);
+        op_ref->u.mem.base = new_reg;
+      }
+    }
+  }
+}
+
 static int get_var_def_op_num (gen_ctx_t gen_ctx, MIR_reg_t var, MIR_insn_t insn) {
   int op_num, out_p, mem_p;
   size_t passed_mem_num;
@@ -1979,7 +1996,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e;
-      MIR_op_t op, *op_ref;
+      MIR_op_t op;
       int out_p, add_def_p;
       MIR_type_t type;
       MIR_insn_code_t move_code;
@@ -2006,7 +2023,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       gen_assert (out_p);
 #endif
       move_code = get_move_code (type);
-      if (add_def_p) {  // ??? SSA edges
+      if (add_def_p) {
         list = e->insn->ops[0].data;
         e->insn->ops[0].data = NULL;
         new_insn = MIR_new_insn (ctx, move_code, op, e->insn->ops[0]);
@@ -2014,16 +2031,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         add_ssa_edge (gen_ctx, e->insn->data, 0, new_insn->data, 1);
         new_insn->ops[0].data = list;
         new_bb_insn = new_insn->data;
-        for (ssa_edge_t se = list; se != NULL; se = se->next_use) {
-          se->def = new_bb_insn;
-          op_ref = &se->use->insn->ops[se->use_op_num];
-          if (op_ref->mode == MIR_OP_REG) {
-            op_ref->u.reg = temp_reg;
-          } else {
-            gen_assert (op_ref->mode == MIR_OP_MEM && op_ref->u.mem.base == e->insn->ops[0].u.reg);
-            op_ref->u.mem.base = temp_reg;
-          }
-        }
+        change_ssa_edge_list_def (list, new_bb_insn, 0, e->insn->ops[0].u.reg, temp_reg);
         if (!find_expr (gen_ctx, new_insn, &new_e)) new_e = add_expr (gen_ctx, new_insn);
         new_bb_insn->gvn_val = e->num;
         DEBUG ({
@@ -2034,14 +2042,14 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         });
       }
       list = insn->ops[0].data;
-      insn->ops[0].data = NULL;
+      insn->ops[0].data = NULL; /* make redundant insn having no uses */
       new_insn = MIR_new_insn (ctx, move_code, insn->ops[0], op);
       gen_add_insn_after (gen_ctx, insn, new_insn);
       def_insn = DLIST_NEXT (MIR_insn_t, e->insn);
       add_ssa_edge (gen_ctx, def_insn->data, 0, new_insn->data, 1);
       new_insn->ops[0].data = list;
       new_bb_insn = new_insn->data;
-      for (ssa_edge_t se = list; se != NULL; se = se->next_use) se->def = new_bb_insn;
+      change_ssa_edge_list_def (list, new_bb_insn, 0, 0, 0);
       if (!find_expr (gen_ctx, new_insn, &new_e)) new_e = add_expr (gen_ctx, new_insn);
       new_bb_insn->gvn_val = e->num;
       DEBUG ({
