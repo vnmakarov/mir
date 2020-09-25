@@ -489,7 +489,7 @@ parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
                              | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
 id_list: N_LIST: N_ID*
 initializer: assign_expr | initialize_list
-initialize_list: N_LIST: N_INIT(N_LIST:(const_expr | N_FIELD_ID (N_ID))* initializer)+
+initializer_list: N_LIST: N_INIT(N_LIST:(const_expr | N_FIELD_ID (N_ID))* initializer)*
 type_name: N_TYPE(spec_qual_list, abstract_declarator)
 abstract_declarator: the same as abstract direct declarator
 abstract_direct_declarator: N_DECL(ignore,
@@ -4576,6 +4576,10 @@ D (initializer_list) {
   int first_p;
 
   list = new_node (c2m_ctx, N_LIST);
+  if (C ('}')) {
+    (options->pedantic_p ? error : warning) (c2m_ctx, curr_token->pos, "empty initializer list");
+    return list;
+  }
   for (;;) { /* designation */
     list2 = new_node (c2m_ctx, N_LIST);
     for (first_p = TRUE;; first_p = FALSE) { /* designator-list, designator */
@@ -5637,7 +5641,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
 
           if (anon_process_p) update_members_offset (decl->decl_spec.type, MIR_SIZE_MAX);
           set_type_layout (c2m_ctx, decl->decl_spec.type);
-          member_size = type_size (c2m_ctx, decl->decl_spec.type);
+          if ((member_size = type_size (c2m_ctx, decl->decl_spec.type)) == 0) continue;
           member_align = type_align (decl->decl_spec.type);
           bits = width->code == N_IGNORE || !(expr = width->attr)->const_p ? -1 : expr->u.u_val;
           if (bits != 0) {
@@ -6546,9 +6550,10 @@ static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int fun
         error (c2m_ctx, size_node->pos, "non-integer array size type");
       } else if (!cexpr->const_p) {
         error (c2m_ctx, size_node->pos, "variable size arrays are not supported");
-      } else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val <= 0)
-                 || (!signed_integer_type_p (cexpr->type) && cexpr->u.u_val == 0)) {
-        error (c2m_ctx, size_node->pos, "array size should be positive");
+      } else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
+        error (c2m_ctx, size_node->pos, "array size should be not negative");
+      } else if (cexpr->u.i_val == 0) {
+        (options->pedantic_p ? error : warning) (c2m_ctx, size_node->pos, "zero array size");
       }
     }
     check_type (c2m_ctx, el_type, level + 1, FALSE);
@@ -7008,7 +7013,7 @@ check_one_value:
   }
   init = NL_HEAD (initializer->ops);
   if (((str = initializer)->code == N_STR /* string or string in parentheses  */
-       || (init->code == N_INIT && NL_EL (initializer->ops, 1) == NULL
+       || (init != NULL && init->code == N_INIT && NL_EL (initializer->ops, 1) == NULL
            && (des_list = NL_HEAD (init->ops))->code == N_LIST && NL_HEAD (des_list->ops) == NULL
            && NL_EL (init->ops, 1) != NULL && (str = NL_EL (init->ops, 1))->code == N_STR))
       && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
@@ -7023,6 +7028,7 @@ check_one_value:
     }
     return;
   }
+  if (init == NULL) return;
   assert (init->code == N_INIT);
   des_list = NL_HEAD (init->ops);
   assert (des_list->code == N_LIST);
@@ -10362,7 +10368,7 @@ check_one_value:
   }
   init = NL_HEAD (initializer->ops);
   if (((str = initializer)->code == N_STR /* string or string in parentheses  */
-       || (init->code == N_INIT && NL_EL (initializer->ops, 1) == NULL
+       || (init != NULL && init->code == N_INIT && NL_EL (initializer->ops, 1) == NULL
            && (des_list = NL_HEAD (init->ops))->code == N_LIST && NL_HEAD (des_list->ops) == NULL
            && NL_EL (init->ops, 1) != NULL && (str = NL_EL (init->ops, 1))->code == N_STR))
       && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
@@ -10374,6 +10380,7 @@ check_one_value:
     VARR_PUSH (init_el_t, init_els, init_el);
     return;
   }
+  if (init == NULL) return;
   assert (init->code == N_INIT);
   des_list = NL_HEAD (init->ops);
   assert (des_list->code == N_LIST);
