@@ -342,10 +342,10 @@ ex100:    func v, 0
     * RyuJIT optimizations is basically MIR-generator optimizations minus SCCP
     * RyuJIT uses SSA
   * Other candidates:
-    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-,
+    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA,
       ASM generation-, LGPL2
     * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-,
-      big- (70K LOC of Rust-), SSA-, Apache License
+      big- (70K LOC of Rust-), SSA, Apache License
     * [**NanoJIT**](https://github.com/dibyendumajumdar/nanojit), standalone+, medium (40K C++ LOC), only simple RA-,
       Mozilla Public License
 
