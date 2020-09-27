@@ -9,17 +9,18 @@
            ----------      -----------    -----------    |  Numbering  |   | Elimination |
                                                           -------------     -------------
                                                                                   |
-                                                           -------------          V
-    --------     -------     ---------                    |   Sparse    |    -----------
-   | Build  |   | Build |   | Finding |    -----------    | Conditional |   | Variable  |
-   | Live   |<--| Live  |<--|  Loops  |<--| Machinize |<--|  Constant   |<--| Renaming  |
-   | Ranges |   | Info  |    ---------     -----------    | Propagation |    -----------
-    --------     -------                                   -------------
+                                                            -------------         V
+    -------     ---------                     --------     |   Sparse    |    -----------
+   | Build |   | Finding |    -----------    | Out of |    | Conditional |   | Variable  |
+   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<---|  Constant   |<--| Renaming  |
+   | Info  |    ---------     -----------     --------     | Propagation |    -----------
+    -------                                                 -------------
        |
-       V                                                                   ----------
-   --------     --------     ---------     ---------     -------------    | Generate |
-  | Out of |-->| Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |-->| Machine  |--> Machine
-  |  SSA   |    --------     ---------     ---------    | Elimination |   |  Insns   |     Insns
+       V
+   --------                                                                ----------
+  | Build  |    --------     ---------     ---------     -------------    | Generate |
+  | Live   |-->| Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |-->| Machine  |--> Machine
+  | Ranges |    --------     ---------     ---------    | Elimination |   |  Insns   |     Insns
    --------                                              -------------     ----------
 
    Simplify: Lowering MIR (in mir.c).  Always.
@@ -31,13 +32,13 @@
                       register allocation.  Only for -O3.
    Sparse Conditional Constant Propagation: Constant propagation and removing death paths of CFG.
                                             Only for -O2 and above.
+   Out of SSA: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
    Finding Loops: Building loop tree which is used in subsequent register allocation.
                   Only for -O1 and above.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
-   Out of SSA: Removing phi nodes and SSA edges (we keep convetional SSA all the time)
    Assign: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
    Rewrite: Transform MIR according to the assign using reserved hard regs.
    Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
