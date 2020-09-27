@@ -224,16 +224,10 @@ ex100:    func v, 0
     * fast **register allocator** with implicit coalescing hard registers and stack slots
       for copy elimination
   * Different optimization levels to tune compilation speed vs generated code performance
-  * **No SSA** (single static assignment form) for:
-    * Faster optimizations for short optimizations pipeline and small functions (a target usage scenario) 
-      * Currently SSA could be used only for two optimizations (CCP
-        and GCSE).  SSA usage would mean 4 additional passes over IR.  If we implement more optimizations,
-        SSA transition is possible when additional time for expensive in/out SSA
-        passes will be less than additional time for non-SSA
-        optimization implementation
-    * Simpler and more compact generator code because we can avoid to
-      implement a lot of nontrivial code (for dominator and dominator
-      frontier calculation, a good out of SSA code)
+  * **SSA** form of MIR is used before register allocation
+    * We use a form of Braun's algorithm to build SSA (M. Braun et al. "Simple and Efficient
+      Construction of Static Single Assignment Form")
+    * We keep SSA in **conventional form** all the time to make out-of-SSA pass trivial
   * Simplicity of optimizations implementation over extreme generated code performance
 
   * More details about **full JIT compiler pipeline**:
