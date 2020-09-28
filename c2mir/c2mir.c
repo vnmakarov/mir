@@ -3256,7 +3256,7 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 }
 
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
-  token_t t, t1, t2;
+  token_t t;
   struct macro macro_struct;
   macro_t m;
   macro_call_t mc;
@@ -9105,7 +9105,6 @@ static void context_finish (MIR_context_t ctx) {
 
 static const char *FP_NAME = "fp";
 static const char *RET_ADDR_NAME = "Ret_Addr";
-static const char *RET_VAL_NAME = "Ret_Val";
 
 /* New attribute for non-empty label LIST is a MIR label.  */
 
@@ -10028,8 +10027,6 @@ static void simple_add_res_proto (MIR_context_t ctx, struct type *ret_type, void
                                   VARR (MIR_type_t) * res_types, VARR (MIR_var_t) * arg_vars) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_var_t var;
-  MIR_type_t type;
-  int i, n, s;
 
   if (void_type_p (ret_type)) return;
   if (!simple_return_by_addr_p (ctx, ret_type)) {
@@ -10047,7 +10044,6 @@ static int simple_add_call_res_op (MIR_context_t ctx, struct type *ret_type, voi
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_type_t type;
   op_t temp;
-  int i, n, s;
 
   if (void_type_p (ret_type)) return -1;
   if (!simple_return_by_addr_p (ctx, ret_type)) {
@@ -10072,11 +10068,8 @@ static op_t simple_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_t
 
 static void simple_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  MIR_type_t type;
-  MIR_insn_t insn;
   MIR_reg_t ret_addr_reg;
-  op_t temp, var;
-  int i, n;
+  op_t var;
 
   if (void_type_p (ret_type)) return;
   if (!simple_return_by_addr_p (ctx, ret_type)) {
@@ -10108,7 +10101,6 @@ static void simple_add_call_arg_op (MIR_context_t ctx, struct type *arg_type, vo
   MIR_var_t var;
   MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  int n;
 
   type = (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION ? MIR_T_BLK
                                                                     : get_mir_type (ctx, arg_type));
@@ -11915,7 +11907,6 @@ static op_t gen (MIR_context_t ctx, node_t r, MIR_label_t true_label, MIR_label_
     struct type *ret_type = func_type->u.func_type->ret_type;
     int scalar_p = ret_type->mode != TM_STRUCT && ret_type->mode != TM_UNION;
     int ret_by_addr_p = target_return_by_addr_p (ctx, ret_type);
-    mir_size_t size = type_size (c2m_ctx, ret_type);
 
     assert (false_label == NULL && true_label == NULL);
     emit_label (ctx, r);
