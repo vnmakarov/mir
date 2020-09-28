@@ -9664,14 +9664,13 @@ static op_t mem_to_address (MIR_context_t ctx, op_t mem, int reg_p) {
 static op_t force_val (MIR_context_t ctx, op_t op, int arr_p) {
   op_t temp_op;
   int sh;
-  c2m_ctx_t c2m_ctx;
+  c2m_ctx_t MIR_UNUSED c2m_ctx = *c2m_ctx_loc (ctx);
 
   if (arr_p && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
     return mem_to_address (ctx, op, FALSE);
   }
   if (op.decl == NULL || op.decl->bit_offset < 0) return op;
-  c2m_ctx = *c2m_ctx_loc (ctx);
   assert (op.mir_op.mode == MIR_OP_MEM);
   temp_op = get_new_temp (ctx, MIR_T_I64);
   emit2 (ctx, MIR_MOV, temp_op.mir_op, op.mir_op);
@@ -10017,14 +10016,15 @@ static const char *get_param_name (MIR_context_t ctx, struct type *param_type, c
   return get_reg_var_name (ctx, promote_mir_int_type (type), name, 0);
 }
 
-static void simple_init_arg_vars (MIR_context_t ctx, void *arg_info) {}
+static void MIR_UNUSED simple_init_arg_vars (MIR_context_t ctx, void *arg_info) {}
 
 static int simple_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
   return ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION;
 }
 
-static void simple_add_res_proto (MIR_context_t ctx, struct type *ret_type, void *arg_info,
-                                  VARR (MIR_type_t) * res_types, VARR (MIR_var_t) * arg_vars) {
+static void MIR_UNUSED simple_add_res_proto (MIR_context_t ctx, struct type *ret_type,
+                                             void *arg_info, VARR (MIR_type_t) * res_types,
+                                             VARR (MIR_var_t) * arg_vars) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_var_t var;
 
@@ -10039,8 +10039,8 @@ static void simple_add_res_proto (MIR_context_t ctx, struct type *ret_type, void
   }
 }
 
-static int simple_add_call_res_op (MIR_context_t ctx, struct type *ret_type, void *arg_info,
-                                   size_t call_arg_area_offset) {
+static int MIR_UNUSED simple_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
+                                              void *arg_info, size_t call_arg_area_offset) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_type_t type;
   op_t temp;
@@ -10061,12 +10061,13 @@ static int simple_add_call_res_op (MIR_context_t ctx, struct type *ret_type, voi
   return 0;
 }
 
-static op_t simple_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_type, op_t res,
-                                           MIR_insn_t call, size_t call_ops_start) {
+static op_t MIR_UNUSED simple_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_type,
+                                                      op_t res, MIR_insn_t call,
+                                                      size_t call_ops_start) {
   return res;
 }
 
-static void simple_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
+static void MIR_UNUSED simple_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t val) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_reg_t ret_addr_reg;
   op_t var;
@@ -10081,12 +10082,12 @@ static void simple_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t v
   }
 }
 
-static void simple_add_arg_proto (MIR_context_t ctx, const char *name, struct type *arg_type,
-                                  void *arg_info, VARR (MIR_var_t) * arg_vars) {
+static void MIR_UNUSED simple_add_arg_proto (MIR_context_t ctx, const char *name,
+                                             struct type *arg_type, void *arg_info,
+                                             VARR (MIR_var_t) * arg_vars) {
   MIR_var_t var;
   MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  int n;
 
   type = (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION ? MIR_T_BLK
                                                                     : get_mir_type (ctx, arg_type));
@@ -10096,9 +10097,8 @@ static void simple_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
   VARR_PUSH (MIR_var_t, arg_vars, var);
 }
 
-static void simple_add_call_arg_op (MIR_context_t ctx, struct type *arg_type, void *arg_info,
-                                    op_t arg) {
-  MIR_var_t var;
+static void MIR_UNUSED simple_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
+                                               void *arg_info, op_t arg) {
   MIR_type_t type;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
@@ -10115,13 +10115,15 @@ static void simple_add_call_arg_op (MIR_context_t ctx, struct type *arg_type, vo
   }
 }
 
-static int simple_gen_gather_arg (MIR_context_t ctx, const char *name, struct type *arg_type,
-                                  decl_t param_decl, void *arg_info) {
+static int MIR_UNUSED simple_gen_gather_arg (MIR_context_t ctx, const char *name,
+                                             struct type *arg_type, decl_t param_decl,
+                                             void *arg_info) {
   return FALSE;
 }
 
 /* Can be used by target functions */
-static const char *gen_get_indexed_name (MIR_context_t ctx, const char *name, int index) {
+static MIR_UNUSED const char *gen_get_indexed_name (MIR_context_t ctx, const char *name,
+                                                    int index) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
   assert (index >= 0 && index <= 9);
@@ -10554,7 +10556,7 @@ static void emit_scalar_assign (MIR_context_t ctx, op_t var, op_t *val, MIR_type
     uint64_t mask, mask2;
     op_t temp_op1, temp_op2, temp_op3, temp_op4;
     c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-    size_t size = type_size (c2m_ctx, var.decl->decl_spec.type) * MIR_CHAR_BIT;
+    size_t MIR_UNUSED size = type_size (c2m_ctx, var.decl->decl_spec.type) * MIR_CHAR_BIT;
 
     assert (var.mir_op.mode == MIR_OP_MEM);
     mask = 0xffffffffffffffff >> (64 - width);
@@ -10606,7 +10608,7 @@ static void add_bit_field (MIR_context_t ctx, uint64_t *u, uint64_t v, decl_t me
   uint64_t mask, mask2;
   int bit_offset = member_decl->bit_offset, width = member_decl->width;
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  size_t size = type_size (c2m_ctx, member_decl->decl_spec.type) * MIR_CHAR_BIT;
+  size_t MIR_UNUSED size = type_size (c2m_ctx, member_decl->decl_spec.type) * MIR_CHAR_BIT;
 
   mask = 0xffffffffffffffff >> (64 - width);
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -12459,7 +12461,7 @@ static void print_node (MIR_context_t ctx, FILE *f, node_t n, int indent, int at
 static void init_include_dirs (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   const char *str;
-  int added_p = FALSE;
+  int MIR_UNUSED added_p = FALSE;
 
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
