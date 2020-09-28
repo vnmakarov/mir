@@ -140,7 +140,7 @@ struct gen_ctx {
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
   bitmap_t call_used_hard_regs[MIR_T_BOUND], func_used_hard_regs;
   func_cfg_t curr_cfg;
-  size_t curr_bb_index, curr_loop_node_index;
+  uint32_t curr_bb_index, curr_loop_node_index;
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
   struct ssa_ctx *ssa_ctx;
@@ -304,8 +304,8 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 struct bb_insn {
   MIR_insn_t insn;
   unsigned char flag; /* used for CCP */
-  int32_t gvn_val;    /* used for GVN, it is negative index for non GVN expr insns */
-  size_t index;
+  uint32_t gvn_val;   /* used for GVN, it is negative index for non GVN expr insns */
+  uint32_t index;
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
   DLIST (dead_var_t) dead_vars;
@@ -337,8 +337,8 @@ DEF_DLIST_LINK (loop_node_t);
 DEF_DLIST_TYPE (loop_node_t);
 
 struct loop_node {
-  size_t index; /* if BB != NULL, it is index of BB */
-  bb_t bb;      /* NULL for internal tree node  */
+  uint32_t index; /* if BB != NULL, it is index of BB */
+  bb_t bb;        /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
   DLIST (loop_node_t) children;
@@ -404,8 +404,8 @@ static void print_const (FILE *f, const_t c) {
 
 struct func_cfg {
   MIR_reg_t min_reg, max_reg;
-  size_t non_conflicting_moves; /* # of moves with non-conflicting regs */
-  size_t curr_bb_insn_index;
+  uint32_t non_conflicting_moves; /* # of moves with non-conflicting regs */
+  uint32_t curr_bb_insn_index;
   VARR (reg_info_t) * breg_info; /* bregs */
   bitmap_t call_crossed_bregs;
   DLIST (bb_t) bbs;
@@ -524,9 +524,9 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->insn = insn;
   bb_insn->flag = FALSE;
   bb_insn->call_hard_reg_args = NULL;
+  gen_assert (curr_cfg->curr_bb_insn_index < (1ull << 32));
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
-  gen_assert (bb_insn->index < (1ul << 31));
-  bb_insn->gvn_val = -(int32_t) bb_insn->index;
+  bb_insn->gvn_val = bb_insn->index;
   DLIST_INIT (dead_var_t, bb_insn->dead_vars);
   if (MIR_call_code_p (insn->code)) bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
   return bb_insn;
@@ -1827,7 +1827,7 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
 
 typedef struct expr {
   MIR_insn_t insn;    /* opcode and input operands are the expr keys */
-  unsigned int num;   /* the expression number (0, 1 ...) */
+  uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
 } * expr_t;
 
@@ -1939,7 +1939,7 @@ static expr_t add_expr (gen_ctx_t gen_ctx, MIR_insn_t insn) {
 
   gen_assert (!MIR_call_code_p (insn->code) && insn->code != MIR_RET);
   e->insn = insn;
-  e->num = VARR_LENGTH (expr_t, exprs);
+  e->num = ((bb_insn_t) insn->data)->index;
   e->temp_reg = 0;
   VARR_PUSH (expr_t, exprs, e);
   insert_expr (gen_ctx, e);
@@ -2153,7 +2153,7 @@ static void rename_op (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, MIR_r
     MIR_func_t func = curr_func_item->u.func;
 
     fprintf (debug_file, "    Change %s to %s in insn %-5lu", MIR_reg_name (ctx, reg, func),
-             MIR_reg_name (ctx, new_reg, func), ((bb_insn_t) insn->data)->index);
+             MIR_reg_name (ctx, new_reg, func), (long unsigned) ((bb_insn_t) insn->data)->index);
     print_bb_insn (gen_ctx, insn->data, FALSE);
   });
 }
@@ -2223,7 +2223,7 @@ static void reg_rename (gen_ctx_t gen_ctx) {
         ssa_edge = insn->ops[op_num].data;
         if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
         DEBUG ({
-          fprintf (debug_file, "  Start def insn %-5lu", bb_insn->index);
+          fprintf (debug_file, "  Start def insn %-5lu", (long unsigned) bb_insn->index);
           print_bb_insn (gen_ctx, bb_insn, FALSE);
         });
         reg = var2reg (gen_ctx, var);
@@ -3276,7 +3276,7 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   MIR_reg_t nregs, n;
   mv_t mv, next_mv;
   reg_info_t ri;
-  size_t mvs_num = 0;
+  uint32_t mvs_num = 0;
 
   for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
     next_mv = DLIST_NEXT (mv_t, mv);
