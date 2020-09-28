@@ -11997,7 +11997,7 @@ static int proto_eq (MIR_item_t pi1, MIR_item_t pi2, void *arg) {
 
   for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, p1->args); i++)
     if (args1[i].type != args2[i].type || strcmp (args1[i].name, args2[i].name) != 0
-        || MIR_blk_type_p (args1[i].type) && args1[i].size != args2[i].size)
+        || (MIR_blk_type_p (args1[i].type) && args1[i].size != args2[i].size))
       return FALSE;
   return TRUE;
 }
