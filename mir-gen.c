@@ -1197,7 +1197,6 @@ static void free_move (gen_ctx_t gen_ctx, mv_t mv) {
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn, next_insn;
-  bb_insn_t bb_insn;
   size_t i, nops;
   MIR_op_t *op;
   MIR_var_t var;
@@ -1531,11 +1530,9 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t src;
-  bb_insn_t def, bb_insn, arg_bb_insn;
+  bb_insn_t def;
   def_tab_el_t el, tab_el;
-  size_t len;
   MIR_op_t op;
-  MIR_insn_t insn;
 
   el.bb = bb;
   el.reg = reg;
@@ -1689,7 +1686,7 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   bb_t bb;
   bb_insn_t bb_insn, def;
-  int op_num, def_op_num, out_p, mem_p;
+  int op_num, out_p, mem_p;
   size_t passed_mem_num;
   MIR_reg_t var;
   insn_var_iterator_t iter;
@@ -1712,11 +1709,10 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
 
 static void build_ssa (gen_ctx_t gen_ctx, int def_use_p) {
   bb_t bb;
-  out_edge_t e;
   bb_insn_t def, bb_insn, phi;
   int op_num, out_p, mem_p;
   size_t passed_mem_num, insns_num, i;
-  MIR_reg_t reg, var;
+  MIR_reg_t var;
   def_tab_el_t el;
   insn_var_iterator_t iter;
 
@@ -2200,7 +2196,7 @@ static void reg_rename (gen_ctx_t gen_ctx) {
   MIR_reg_t var, reg, new_reg;
   MIR_insn_t insn, def_insn, use_insn;
   bb_insn_t bb_insn;
-  ssa_edge_t ssa_edge, curr_edge;
+  ssa_edge_t ssa_edge;
   insn_var_iterator_t iter;
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -2843,7 +2839,6 @@ static void ccp_process_active_edge (gen_ctx_t gen_ctx, edge_t e) {
 }
 
 static void ccp_make_insn_update (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  int i;
   MIR_op_t op;
   ccp_val_t ccp_val;
 
@@ -3552,12 +3547,10 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
           make_var_live (gen_ctx, nel, curr_point);
         }
         FOREACH_BITMAP_BIT (bi, live_vars, nel) {
-          reg_info_t *bri;
           MIR_reg_t breg;
 
           if (!var_is_reg_p (nel)) continue;
           breg = reg2breg (gen_ctx, var2reg (gen_ctx, nel));
-          bri = &VARR_ADDR (reg_info_t, curr_cfg->breg_info)[breg];
           bitmap_set_bit_p (curr_cfg->call_crossed_bregs, breg);
         }
       }
@@ -3664,7 +3657,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
   int slots_num;
-  int j, k;
+  int k;
   bitmap_t bm;
   bitmap_t *used_locs_addr;
   size_t nel;
