@@ -162,7 +162,6 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
 }
 
 static int target_return_by_addr_p (MIR_context_t ctx, struct type *ret_type) {
-  c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   MIR_type_t qword_types[MAX_QWORDS];
   int n_qwords;
 
@@ -200,11 +199,10 @@ static void target_add_res_proto (MIR_context_t ctx, struct type *ret_type,
 static int target_add_call_res_op (MIR_context_t ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  MIR_var_t var;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
   op_t temp;
-  int i, n, n_qwords;
+  int i, n_qwords;
 
   if (void_type_p (ret_type)) return -1;
   n_qwords = process_ret_type (ctx, ret_type, qword_types);
@@ -239,7 +237,7 @@ static op_t target_gen_post_call_res_code (MIR_context_t ctx, struct type *ret_t
   MIR_type_t type;
   MIR_insn_t insn;
   MIR_type_t qword_types[MAX_QWORDS];
-  int i, n_iregs, n_fregs, n_stregs, n, n_qwords, curr;
+  int i, n_qwords;
 
   if (void_type_p (ret_type)) return res;
   n_qwords = process_ret_type (ctx, ret_type, qword_types);
@@ -265,7 +263,7 @@ static void target_add_ret_ops (MIR_context_t ctx, struct type *ret_type, op_t r
   MIR_insn_t insn;
   MIR_reg_t ret_addr_reg;
   op_t temp, var;
-  int i, n, size, n_iregs, n_fregs, n_stregs, n_qwords, curr;
+  int i, size, n_qwords;
 
   if (void_type_p (ret_type)) return;
   n_qwords = process_ret_type (ctx, ret_type, qword_types);
@@ -354,7 +352,6 @@ static void target_add_arg_proto (MIR_context_t ctx, const char *name, struct ty
 static void target_add_call_arg_op (MIR_context_t ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
-  MIR_var_t var;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
   op_t temp;
@@ -396,7 +393,6 @@ static int target_gen_gather_arg (MIR_context_t ctx, const char *name, struct ty
   MIR_type_t type;
   reg_var_t reg_var;
   MIR_type_t qword_types[MAX_QWORDS];
-  op_t temp;
   int i, n_qwords = process_aggregate_arg (ctx, arg_type, arg_info, qword_types);
 
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
