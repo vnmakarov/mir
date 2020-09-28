@@ -6,14 +6,14 @@
 /* See https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf.  We use MIR_T_UNDEF for
    MEMORY. */
 
-enum { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
+enum add_arg_class { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
 #define MAX_QWORDS 2
 
 static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
   if (arg_type1 == arg_type2) return arg_type1;
-  if (arg_type1 == NO_CLASS) return arg_type2;
-  if (arg_type2 == NO_CLASS) return arg_type1;
+  if ((enum add_arg_class) arg_type1 == NO_CLASS) return arg_type2;
+  if ((enum add_arg_class) arg_type2 == NO_CLASS) return arg_type1;
 
   if (arg_type1 == MIR_T_UNDEF || arg_type2 == MIR_T_UNDEF) return MIR_T_UNDEF;
 
@@ -21,8 +21,9 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
       || arg_type2 == MIR_T_I32)
     return MIR_T_I64;
 
-  if (arg_type1 == MIR_T_LD || arg_type2 == MIR_T_LD || arg_type1 == X87UP_CLASS
-      || arg_type2 == X87UP_CLASS)
+  if (arg_type1 == MIR_T_LD || arg_type2 == MIR_T_LD
+      || (enum add_arg_class) arg_type1 == X87UP_CLASS
+      || (enum add_arg_class) arg_type2 == X87UP_CLASS)
     return MIR_T_UNDEF;
 
   return MIR_T_D;
@@ -76,7 +77,8 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
 
     for (i = 0; i < n_qwords; i++) {
       if (types[i] == MIR_T_UNDEF) return 0; /* pass in memory if a word class is memory.  */
-      if (types[i] == X87UP_CLASS && (i == 0 || types[i - 1] != MIR_T_LD)) return 0;
+      if ((enum add_arg_class) types[i] == X87UP_CLASS && (i == 0 || types[i - 1] != MIR_T_LD))
+        return 0;
     }
     return n_qwords;
   }
