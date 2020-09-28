@@ -3183,12 +3183,12 @@ static int int_var_type_p (gen_ctx_t gen_ctx, MIR_reg_t var) {
 }
 
 static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn, int moves_p,
-                                         size_t *mvs_num) {
+                                         uint32_t *mvs_num) {
   bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
   MIR_insn_t insn;
   size_t niter, passed_mem_num, bb_freq;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int op_num, out_p, mem_p, int_p;
+  int op_num, out_p, mem_p, int_p = FALSE;
   int bb_int_pressure, bb_fp_pressure;
   mv_t mv;
   reg_info_t *breg_infos;
