@@ -2004,7 +2004,15 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         e = add_expr (gen_ctx, insn);
         DEBUG ({ print_expr (gen_ctx, e, "Adding"); });
       }
-      bb_insn->gvn_val = e->num;
+      if (move_p (insn))
+        bb_insn->gvn_val = ((ssa_edge_t) insn->ops[1].data)->def->gvn_val;
+      else
+        bb_insn->gvn_val = e->num;
+      DEBUG ({
+        fprintf (debug_file, "Val=%lu for insn %lu:", (unsigned long) bb_insn->gvn_val,
+                 (unsigned long) bb_insn->index);
+        MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
+      });
       if (e->insn == insn || move_p (insn)
           || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
