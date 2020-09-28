@@ -141,7 +141,7 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
     for (n = 0; n < n_qwords; n++) { /* start from the last qword */
       type = qword_types[n];
       qword_types[curr++] = type;
-      switch (type) {
+      switch ((int) type) {
       case MIR_T_I8:
       case MIR_T_I16:
       case MIR_T_I32:
@@ -153,8 +153,7 @@ static int process_ret_type (MIR_context_t ctx, struct type *ret_type,
         n_qwords--;
         curr--;
         break;
-      case NO_CLASS:
-      case MIR_T_UNDEF: assert (FALSE);
+      default: assert (FALSE);
       }
     }
     if (n_iregs > 2 || n_fregs > 2 || n_stregs > 1) n_qwords = 0;
@@ -301,7 +300,7 @@ static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
   update_last_qword_type (ctx, arg_type, qword_types, n_qwords);
   n_iregs = n_fregs = 0;
   for (n = 0; n < n_qwords; n++) { /* start from the last qword */
-    switch ((type = qword_types[n])) {
+    switch ((int) (type = qword_types[n])) {
     case MIR_T_I8:
     case MIR_T_I16:
     case MIR_T_I32:
@@ -310,8 +309,7 @@ static int process_aggregate_arg (MIR_context_t ctx, struct type *arg_type,
     case MIR_T_D: n_fregs++; break;
     case X87UP_CLASS:
     case MIR_T_LD: return 0;
-    case NO_CLASS:
-    case MIR_T_UNDEF: assert (FALSE);
+    default: assert (FALSE);
     }
   }
   if (arg_info->n_iregs + n_iregs > 6 || arg_info->n_fregs + n_fregs > 8) return 0;
