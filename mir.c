@@ -658,8 +658,6 @@ static void remove_func_insns (MIR_context_t ctx, MIR_item_t func_item,
 }
 
 static void remove_item (MIR_context_t ctx, MIR_item_t item) {
-  MIR_module_t module = item->module;
-
   switch (item->item_type) {
   case MIR_func_item:
     remove_func_insns (ctx, item, &item->u.func->insns);
@@ -3221,7 +3219,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_insn, ret_label;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
-  size_t func_insns_num, called_func_insns_num, blk_size;
+  size_t func_insns_num, called_func_insns_num;
   char buff[50];
 
   mir_assert (func_item->item_type == MIR_func_item);
@@ -3514,10 +3512,9 @@ struct machine_code_ctx {
 #define machine_insns ctx->machine_code_ctx->machine_insns
 
 static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
-  uint8_t *mem, *free_adddr;
+  uint8_t *mem;
   size_t len, npages;
   code_holder_t ch, *ch_ptr;
-  int new_p = TRUE;
 
   if ((len = VARR_LENGTH (code_holder_t, code_holders)) > 0) {
     ch_ptr = VARR_ADDR (code_holder_t, code_holders) + len - 1;
