@@ -1975,6 +1975,12 @@ static void print_expr (gen_ctx_t gen_ctx, expr_t e, const char *title) {
 }
 #endif
 
+static int phi_use_p (MIR_insn_t insn) {
+  for (ssa_edge_t se = insn->ops[0].data; se != NULL; se = se->next_use)
+    if (se->use->insn->code == MIR_PHI) return TRUE;
+  return FALSE;
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -2002,6 +2008,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       if (e->insn == insn || move_p (insn)
           || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
+      if (phi_use_p (e->insn)) continue; /* keep conventional SSA */
       expr_bb_insn = e->insn->data;
       if (!bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index)) continue;
       add_def_p = e->temp_reg == 0;
