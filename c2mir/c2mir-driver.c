@@ -8,7 +8,8 @@
 #include <sys/stat.h>
 #endif
 #else
-#include <libloaderapi.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 #include "c2mir.h"

@@ -3458,8 +3458,8 @@ static void *mem_map (size_t len) {
 
 static size_t mem_page_size () { return sysconf (_SC_PAGE_SIZE); }
 #else
-#include <memoryapi.h>
-#include <sysinfoapi.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 
 #define PROT_WRITE_EXEC PAGE_EXECUTE_READWRITE
 #define PROT_READ_EXEC PAGE_EXECUTE_READ
