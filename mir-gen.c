@@ -186,7 +186,7 @@ static inline gen_ctx_t *gen_ctx_loc (MIR_context_t ctx) { return (gen_ctx_t *) 
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 #define func_stack_slots_num gen_ctx->func_stack_slots_num
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-gen-aarch64.c"

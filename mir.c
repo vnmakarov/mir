@@ -5714,7 +5714,7 @@ static void scan_finish (MIR_context_t ctx) {
 
 /* New Page */
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-aarch64.c"

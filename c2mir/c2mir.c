@@ -25,7 +25,7 @@
 
 #include "c2mir.h"
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "x86_64/cx86_64.h"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64.h"
@@ -313,7 +313,7 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   return type->raw_size;
 }
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "x86_64/cx86_64-code.c"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64-code.c"
@@ -10213,7 +10213,7 @@ static inline void gen_multiple_load_store (MIR_context_t ctx, struct type *type
   }
 }
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "x86_64/cx86_64-ABI-code.c"
 #elif defined(__aarch64__)
 #include "aarch64/caarch64-ABI-code.c"
