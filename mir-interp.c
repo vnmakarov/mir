@@ -32,6 +32,10 @@ void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {}
 #define ALWAYS_INLINE inline
 #endif
 
+#if defined(_MSC_VER)
+#define alloca _alloca
+#endif
+
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
