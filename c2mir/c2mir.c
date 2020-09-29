@@ -159,7 +159,7 @@ struct c2m_ctx {
 
 typedef struct c2m_ctx *c2m_ctx_t;
 
-#define options c2m_ctx->options
+#define c2m_options c2m_ctx->options
 #define headers c2m_ctx->headers
 #define system_headers c2m_ctx->system_headers
 #define header_dirs c2m_ctx->header_dirs
@@ -823,7 +823,7 @@ static void error (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
   va_list args;
   FILE *f;
 
-  if ((f = options->message_file) == NULL) return;
+  if ((f = c2m_options->message_file) == NULL) return;
   n_errors++;
   va_start (args, format);
   print_pos (f, pos, TRUE);
@@ -836,7 +836,7 @@ static void warning (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
   va_list args;
   FILE *f;
 
-  if ((f = options->message_file) == NULL) return;
+  if ((f = c2m_options->message_file) == NULL) return;
   n_warnings++;
   va_start (args, format);
   print_pos (f, pos, TRUE);
@@ -960,7 +960,7 @@ static int get_line (c2m_ctx_t c2m_ctx) { /* translation phase 1 and 2 */
   if (eof_p) {
     if (VARR_LENGTH (char, cs->ln) == 0) return FALSE;
     if (c != '\n')
-      (options->pedantic_p ? error : warning) (c2m_ctx, cs->pos, "no end of line at file end");
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, cs->pos, "no end of line at file end");
   }
   remove_trigraphs (c2m_ctx);
   VARR_PUSH (char, cs->ln, '\n');
@@ -1039,7 +1039,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
     case '\?':
     case '\"': break;
     case 'e':
-      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "non-standard escape sequence \\e");
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "non-standard escape sequence \\e");
       curr_c = '\033';
       break;
     case '0':
@@ -1082,7 +1082,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
       if (first_p)
         error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
       else if (v > MIR_UCHAR_MAX)
-        (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "too big hexadecimal char 0x%x",
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "too big hexadecimal char 0x%x",
                                                  v);
       curr_c = v;
       i--;
@@ -1390,8 +1390,8 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       cs = VARR_LAST (stream_t, streams);
       if (cs->f == NULL && cs->fname != NULL && !string_stream_p (cs)) {
         if ((cs->f = fopen (cs->fname, "r")) == NULL) {
-          if (options->message_file != NULL)
-            fprintf (options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
+          if (c2m_options->message_file != NULL)
+            fprintf (c2m_options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
           longjmp (c2m_ctx->env, 1);  // ???
         }
         fsetpos (cs->f, &cs->fpos);
@@ -1655,7 +1655,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
     if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
       base = 16;
     } else if (repr[0] == '0' && (repr[1] == 'b' || repr[1] == 'B')) {
-      (options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
                                                "binary number is not a standard: %s", t->repr);
       base = 2;
       start += 2;
@@ -1720,14 +1720,14 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
         = get_int_node_from_repr (c2m_ctx, start, &stop, base, uns_p, long_p, llong_p, t->pos);
     }
     if (stop != &repr[last + 1]) {
-      if (options->message_file != NULL)
-        fprintf (options->message_file, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
+      if (c2m_options->message_file != NULL)
+        fprintf (c2m_options->message_file, "%s:%s:%s\n", repr, stop, &repr[last + 1]);
       error (c2m_ctx, t->pos, "wrong number: %s", t->repr);
     } else if (errno) {
       if (float_p || double_p || ldouble_p) {
         warning (c2m_ctx, t->pos, "number %s is out of range -- using IEEE infinity", t->repr);
       } else {
-        (options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
                                                  t->repr);
       }
     }
@@ -1846,7 +1846,7 @@ static void init_macros (c2m_ctx_t c2m_ctx) {
   new_std_macro (c2m_ctx, "__LINE__");
   VARR_CREATE (token_t, params, 1);
   VARR_PUSH (token_t, params, new_id_token (c2m_ctx, no_pos, "$"));
-  if (!options->pedantic_p)
+  if (!c2m_options->pedantic_p)
     new_macro (c2m_ctx, new_id_token (c2m_ctx, no_pos, "__has_include"), params, NULL);
 }
 
@@ -1964,7 +1964,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_
 
   assert (fname != NULL);
   if ((f = fopen (fname, "r")) == NULL) {
-    if (options->message_file != NULL) error (c2m_ctx, err_pos, "error in opening file %s", fname);
+    if (c2m_options->message_file != NULL) error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
   add_stream (c2m_ctx, f, fname, NULL);
@@ -2831,7 +2831,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
     for (t1 = get_next_pptoken (c2m_ctx); t1->code != '\n'; t1 = get_next_pptoken (c2m_ctx))
       add_to_temp_string (c2m_ctx, t1->repr);
     error (c2m_ctx, t->pos, "%s", VARR_ADDR (char, temp_string));
-  } else if (!options->pedantic_p && strcmp (t->repr, "warning") == 0) {
+  } else if (!c2m_options->pedantic_p && strcmp (t->repr, "warning") == 0) {
     VARR_TRUNC (char, temp_string, 0);
     add_to_temp_string (c2m_ctx, "#warning");
     for (t1 = get_next_pptoken (c2m_ctx); t1->code != '\n'; t1 = get_next_pptoken (c2m_ctx))
@@ -3396,7 +3396,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
 
 static void pre_text_out (c2m_ctx_t c2m_ctx, token_t t) { /* NULL means end of output */
   int i;
-  FILE *f = options->prepro_output_file;
+  FILE *f = c2m_options->prepro_output_file;
 
   if (t == NULL && pre_last_token != NULL && pre_last_token->code == '\n') {
     fprintf (f, "\n");
@@ -3456,7 +3456,7 @@ static void pre_out (c2m_ctx_t c2m_ctx, token_t t) {
 
 static void common_pre_out (c2m_ctx_t c2m_ctx, token_t t) {
   pptokens_num++;
-  (options->prepro_only_p ? pre_text_out : pre_out) (c2m_ctx, t);
+  (c2m_options->prepro_only_p ? pre_text_out : pre_out) (c2m_ctx, t);
 }
 
 static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
@@ -3466,7 +3466,7 @@ static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
   actual_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
-  if (!options->no_prepro_p) {
+  if (!c2m_options->no_prepro_p) {
     processing (c2m_ctx, FALSE);
   } else {
     for (;;) {
@@ -3477,8 +3477,8 @@ static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
     }
   }
   pre_out_token_func (c2m_ctx, NULL);
-  if (options->verbose_p && options->message_file != NULL)
-    fprintf (options->message_file, "    preprocessor tokens -- %lu, parse tokens -- %lu\n",
+  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+    fprintf (c2m_options->message_file, "    preprocessor tokens -- %lu, parse tokens -- %lu\n",
              pptokens_num, (unsigned long) VARR_LENGTH (token_t, recorded_tokens));
 }
 
@@ -3522,7 +3522,7 @@ static void record_stop (c2m_ctx_t c2m_ctx, size_t mark, int restore_p) {
 static void syntax_error (c2m_ctx_t c2m_ctx, const char *expected_name) {
   FILE *f;
 
-  if ((f = options->message_file) == NULL) return;
+  if ((f = c2m_options->message_file) == NULL) return;
   print_pos (f, curr_token->pos, TRUE);
   fprintf (f, "syntax error on %s", get_token_name (c2m_ctx, curr_token->code));
   fprintf (f, " (expected '%s'):", expected_name);
@@ -3914,14 +3914,14 @@ D (asm_spec) {
 static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
   node_t r;
 
-  if (options->pedantic_p) return NULL;
+  if (c2m_options->pedantic_p) return NULL;
   if ((r = TRY (attr_spec)) != err_node) {
-    if (options->pedantic_p)
+    if (c2m_options->pedantic_p)
       error (c2m_ctx, pos, "GCC attributes are not implemented");
     else
       /*warning (c2m_ctx, pos, "GCC attributes are not implemented -- ignoring them")*/;
   } else if ((r = TRY (asm_spec)) != err_node) {
-    if (options->pedantic_p)
+    if (c2m_options->pedantic_p)
       error (c2m_ctx, pos, "asm is not implemented");
     else
       /*warning (c2m_ctx, pos, "asm is not implemented -- ignoring it")*/;
@@ -3938,7 +3938,7 @@ D (declaration) {
     P (st_assert);
   } else if (MP (';', pos)) {
     r = new_node (c2m_ctx, N_LIST);
-    if (curr_scope == top_scope && options->pedantic_p)
+    if (curr_scope == top_scope && c2m_options->pedantic_p)
       warning (c2m_ctx, pos, "extra ; outside of a function");
   } else {
     try_attr_spec (c2m_ctx, curr_token->pos);
@@ -4042,7 +4042,7 @@ DA (declaration_specs) {
     op_append (list, r);
   }
   if (prev_type_spec == NULL && arg != NULL) {
-    if (options->pedantic_p) warning (c2m_ctx, pos, "type defaults to int");
+    if (c2m_options->pedantic_p) warning (c2m_ctx, pos, "type defaults to int");
     r = new_pos_node (c2m_ctx, N_INT, pos);
     op_append (list, r);
   }
@@ -4116,7 +4116,7 @@ DA (type_spec) {
       if (!C ('}')) {
         P (struct_declaration_list);
       } else {
-        (options->pedantic_p ? error : warning) (c2m_ctx, pos, "empty struct/union");
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "empty struct/union");
         r = new_node (c2m_ctx, N_LIST);
       }
       PT ('}');
@@ -4577,7 +4577,7 @@ D (initializer_list) {
 
   list = new_node (c2m_ctx, N_LIST);
   if (C ('}')) {
-    (options->pedantic_p ? error : warning) (c2m_ctx, curr_token->pos, "empty initializer list");
+    (c2m_options->pedantic_p ? error : warning) (c2m_ctx, curr_token->pos, "empty initializer list");
     return list;
   }
   for (;;) { /* designation */
@@ -4781,7 +4781,7 @@ D (stmt) {
 
 static void error_recovery (c2m_ctx_t c2m_ctx, int par_lev, const char *expected) {
   syntax_error (c2m_ctx, expected);
-  if (options->debug_p) fprintf (stderr, "error recovery: skipping");
+  if (c2m_options->debug_p) fprintf (stderr, "error recovery: skipping");
   for (;;) {
     if (curr_token->code == T_EOFILE || (par_lev == 0 && curr_token->code == ';')) break;
     if (curr_token->code == '{') {
@@ -4789,12 +4789,12 @@ static void error_recovery (c2m_ctx_t c2m_ctx, int par_lev, const char *expected
     } else if (curr_token->code == '}') {
       if (--par_lev <= 0) break;
     }
-    if (options->debug_p)
+    if (c2m_options->debug_p)
       fprintf (stderr, " %s(%d:%d)", get_token_name (c2m_ctx, curr_token->code),
                curr_token->pos.lno, curr_token->pos.ln_pos);
     read_token (c2m_ctx);
   }
-  if (options->debug_p) fprintf (stderr, " %s\n", get_token_name (c2m_ctx, curr_token->code));
+  if (c2m_options->debug_p) fprintf (stderr, " %s\n", get_token_name (c2m_ctx, curr_token->code));
   if (curr_token->code != T_EOFILE) read_token (c2m_ctx);
 }
 
@@ -4860,7 +4860,7 @@ D (transl_unit) {
 }
 
 static void fatal_error (c2m_ctx_t c2m_ctx, C_error_code_t code, const char *message) {
-  if (options->message_file != NULL) fprintf (options->message_file, "%s\n", message);
+  if (c2m_options->message_file != NULL) fprintf (c2m_options->message_file, "%s\n", message);
   longjmp (c2m_ctx->env, 1);
 }
 
@@ -6280,7 +6280,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     }
   if (type->mode == TM_BASIC && type->u.basic_type == TP_UNDEF) {
     if (size == 0 && sign == 0) {
-      (options->pedantic_p ? error (c2m_ctx, r->pos, "no any type specifier")
+      (c2m_options->pedantic_p ? error (c2m_ctx, r->pos, "no any type specifier")
                            : warning (c2m_ctx, r->pos, "type defaults to int"));
       type->u.basic_type = TP_INT;
     } else if (size == 0) {
@@ -6495,7 +6495,7 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
         ok_p = check_case_expr (c2m_ctx, case_expr, type, target);
         if (case_expr2 != NULL) {
           ok_p = check_case_expr (c2m_ctx, case_expr2, type, target) && ok_p;
-          (options->pedantic_p ? error : warning) (c2m_ctx, l->pos,
+          (c2m_options->pedantic_p ? error : warning) (c2m_ctx, l->pos,
                                                    "range cases are not a part of C standard");
         }
       }
@@ -6553,7 +6553,7 @@ static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int fun
       } else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
         error (c2m_ctx, size_node->pos, "array size should be not negative");
       } else if (cexpr->u.i_val == 0) {
-        (options->pedantic_p ? error : warning) (c2m_ctx, size_node->pos, "zero array size");
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, size_node->pos, "zero array size");
       }
     }
     check_type (c2m_ctx, el_type, level + 1, FALSE);
@@ -6626,7 +6626,7 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
           = (code == N_CALL ? "using pointer without cast for integer type parameter"
                             : code == N_RETURN ? "returning pointer without cast for integer result"
                                                : "assigning pointer without cast to integer");
-        (options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
       } else {
         msg = (code == N_CALL
                  ? "incompatible argument type for arithemtic type parameter"
@@ -6657,19 +6657,19 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                               : code == N_RETURN
                                   ? "incompatible pointer types of return-expr and function result"
                                   : "incompatible pointer types in assignment");
-        (options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
       } else if (integer_type_p (right)) {
         msg
           = (code == N_CALL ? "using integer without cast for pointer type parameter"
                             : code == N_RETURN ? "returning integer without cast for pointer result"
                                                : "assigning integer without cast to pointer");
-        (options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
       } else {
         msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
                               : code == N_RETURN
                                   ? "incompatible return-expr type in function returning a pointer"
                                   : "incompatible types in assignment to a pointer");
-        (options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx, pos, "%s", msg);
+        (c2m_options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx, pos, "%s", msg);
       }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
@@ -6681,7 +6681,7 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                ? "discarding type qualifiers in passing argument"
                : code == N_RETURN ? "return discards a type qualifier from a pointer"
                                   : "assignment discards a type qualifier from a pointer");
-      (options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "%s", msg);
     }
   }
 }
@@ -7200,9 +7200,9 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
       def_symbol (c2m_ctx, S_REGULAR, id, top_scope, decl_node, N_EXTERN);
     if (func_p && decl->decl_spec.thread_local_p) {
       error (c2m_ctx, id->pos, "thread local function declaration");
-      if (options->message_file != NULL) {
-        if (id->code != N_IGNORE) fprintf (options->message_file, " of %s", id->u.s.s);
-        fprintf (options->message_file, "\n");
+      if (c2m_options->message_file != NULL) {
+        if (id->code != N_IGNORE) fprintf (c2m_options->message_file, " of %s", id->u.s.s);
+        fprintf (c2m_options->message_file, "\n");
       }
     }
   }
@@ -8701,7 +8701,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       if (p->code != N_ID) break;
       NL_REMOVE (param_list->ops, p);
       if (!symbol_find (c2m_ctx, S_REGULAR, p, curr_scope, &sym)) {
-        if (options->pedantic_p) {
+        if (c2m_options->pedantic_p) {
           error (c2m_ctx, p->pos, "parameter %s has no type", p->u.s.s);
         } else {
           warning (c2m_ctx, p->pos, "type of parameter %s defaults to int", p->u.s.s);
@@ -12479,9 +12479,9 @@ static void init_include_dirs (MIR_context_t ctx) {
 
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (char_ptr_t, system_headers, 0);
-  for (size_t i = 0; i < options->include_dirs_num; i++) {
-    VARR_PUSH (char_ptr_t, headers, options->include_dirs[i]);
-    VARR_PUSH (char_ptr_t, system_headers, options->include_dirs[i]);
+  for (size_t i = 0; i < c2m_options->include_dirs_num; i++) {
+    VARR_PUSH (char_ptr_t, headers, c2m_options->include_dirs[i]);
+    VARR_PUSH (char_ptr_t, system_headers, c2m_options->include_dirs[i]);
   }
   VARR_PUSH (char_ptr_t, headers, NULL);
   for (size_t i = 0; i < sizeof (standard_include_dirs) / sizeof (char *); i++) {
@@ -12542,8 +12542,8 @@ static int check_id_p (c2m_ctx_t c2m_ctx, const char *str) {
         break;
       }
   }
-  if (!ok_p && options->message_file != NULL)
-    fprintf (options->message_file, "macro name %s is not an identifier\n", str);
+  if (!ok_p && c2m_options->message_file != NULL)
+    fprintf (c2m_options->message_file, "macro name %s is not an identifier\n", str);
   return ok_p;
 }
 
@@ -12569,8 +12569,8 @@ static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *d
   if (check_id_p (c2m_ctx, id->repr)) {
     macro.id = id;
     if (HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_m)) {
-      if (!replacement_eq_p (tab_m->replacement, repl) && options->message_file != NULL)
-        fprintf (options->message_file, "warning -- redefinition of macro %s on the command line\n",
+      if (!replacement_eq_p (tab_m->replacement, repl) && c2m_options->message_file != NULL)
+        fprintf (c2m_options->message_file, "warning -- redefinition of macro %s on the command line\n",
                  id->repr);
       HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_m);
     }
@@ -12597,18 +12597,18 @@ static void undefine_cmd_macro (c2m_ctx_t c2m_ctx, const char *name) {
 static void process_macro_commands (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
-  for (size_t i = 0; i < options->macro_commands_num; i++)
-    if (options->macro_commands[i].def)
-      define_cmd_macro (c2m_ctx, options->macro_commands[i].name, options->macro_commands[i].def);
+  for (size_t i = 0; i < c2m_options->macro_commands_num; i++)
+    if (c2m_options->macro_commands[i].def)
+      define_cmd_macro (c2m_ctx, c2m_options->macro_commands[i].name, c2m_options->macro_commands[i].def);
     else
-      undefine_cmd_macro (c2m_ctx, options->macro_commands[i].name);
+      undefine_cmd_macro (c2m_ctx, c2m_options->macro_commands[i].name);
 }
 
 static void compile_init (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
                           void *getc_data) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
 
-  options = ops;
+  c2m_options = ops;
   n_errors = n_warnings = 0;
   c_getc = getc_func;
   c_getc_data = getc_data;
@@ -12644,7 +12644,7 @@ static const char *get_module_name (MIR_context_t ctx) {
   c2m_ctx_t c2m_ctx = *c2m_ctx_loc (ctx);
   static char str[50];
 
-  sprintf (str, "M%ld", (long) options->module_num);
+  sprintf (str, "M%ld", (long) c2m_options->module_num);
   return str;
 }
 
@@ -12664,58 +12664,58 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
     return 0;
   }
   compile_init (ctx, ops, getc_func, getc_data);
-  if (options->verbose_p && options->message_file != NULL)
-    fprintf (options->message_file, "C2MIR init end           -- %.0f usec\n",
+  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+    fprintf (c2m_options->message_file, "C2MIR init end           -- %.0f usec\n",
              real_usec_time () - start_time);
   add_stream (c2m_ctx, NULL, source_name, top_level_getc);
-  if (!options->no_prepro_p) add_standard_includes (c2m_ctx);
+  if (!c2m_options->no_prepro_p) add_standard_includes (c2m_ctx);
   pre (c2m_ctx, source_name);
-  if (options->verbose_p && options->message_file != NULL)
-    fprintf (options->message_file, "  C2MIR preprocessor end    -- %.0f usec\n",
+  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+    fprintf (c2m_options->message_file, "  C2MIR preprocessor end    -- %.0f usec\n",
              real_usec_time () - start_time);
-  if (!options->prepro_only_p) {
+  if (!c2m_options->prepro_only_p) {
     r = parse (c2m_ctx);
-    if (options->verbose_p && options->message_file != NULL)
-      fprintf (options->message_file, "  C2MIR parser end          -- %.0f usec\n",
+    if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+      fprintf (c2m_options->message_file, "  C2MIR parser end          -- %.0f usec\n",
                real_usec_time () - start_time);
-    if (options->verbose_p && options->message_file != NULL && n_errors)
-      fprintf (options->message_file, "parser - FAIL\n");
-    if (!options->syntax_only_p) {
+    if (c2m_options->verbose_p && c2m_options->message_file != NULL && n_errors)
+      fprintf (c2m_options->message_file, "parser - FAIL\n");
+    if (!c2m_options->syntax_only_p) {
       n_error_before = n_errors;
       do_context (c2m_ctx, r);
       if (n_errors > n_error_before) {
-        if (options->debug_p) print_node (ctx, options->message_file, r, 0, FALSE);
-        if (options->verbose_p && options->message_file != NULL)
-          fprintf (options->message_file, "C2MIR context checker - FAIL\n");
+        if (c2m_options->debug_p) print_node (ctx, c2m_options->message_file, r, 0, FALSE);
+        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+          fprintf (c2m_options->message_file, "C2MIR context checker - FAIL\n");
       } else {
-        if (options->debug_p) print_node (ctx, options->message_file, r, 0, TRUE);
-        if (options->verbose_p && options->message_file != NULL)
-          fprintf (options->message_file, "  C2MIR context checker end -- %.0f usec\n",
+        if (c2m_options->debug_p) print_node (ctx, c2m_options->message_file, r, 0, TRUE);
+        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+          fprintf (c2m_options->message_file, "  C2MIR context checker end -- %.0f usec\n",
                    real_usec_time () - start_time);
         m = MIR_new_module (ctx, get_module_name (ctx));
         gen_mir (ctx, r);
-        if ((options->asm_p || options->object_p) && n_errors == 0) {
+        if ((c2m_options->asm_p || c2m_options->object_p) && n_errors == 0) {
           if (strcmp (source_name, COMMAND_LINE_SOURCE_NAME) == 0) {
-            MIR_output_module (ctx, options->message_file, m);
+            MIR_output_module (ctx, c2m_options->message_file, m);
           } else if (output_file != NULL) {
-            (options->asm_p ? MIR_output_module : MIR_write_module) (ctx, output_file, m);
+            (c2m_options->asm_p ? MIR_output_module : MIR_write_module) (ctx, output_file, m);
             if (ferror (output_file) || fclose (output_file)) {
-              fprintf (options->message_file, "C2MIR error in writing mir for source file %s\n",
+              fprintf (c2m_options->message_file, "C2MIR error in writing mir for source file %s\n",
                        source_name);
               n_errors++;
             }
           }
         }
         MIR_finish_module (ctx);
-        if (options->verbose_p && options->message_file != NULL)
-          fprintf (options->message_file, "  C2MIR generator end       -- %.0f usec\n",
+        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+          fprintf (c2m_options->message_file, "  C2MIR generator end       -- %.0f usec\n",
                    real_usec_time () - start_time);
       }
     }
   }
   compile_finish (ctx);
-  if (options->verbose_p && options->message_file != NULL)
-    fprintf (options->message_file, "C2MIR compiler end                -- %.0f usec\n",
+  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
+    fprintf (c2m_options->message_file, "C2MIR compiler end                -- %.0f usec\n",
              real_usec_time () - start_time);
   return n_errors == 0;
 }
