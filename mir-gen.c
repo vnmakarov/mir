@@ -1835,6 +1835,92 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
+/* Copy propagation */
+
+static int get_ext_params (MIR_insn_code_t code, int *sign_p) {
+  *sign_p = code == MIR_EXT8 || code == MIR_EXT16 || code == MIR_EXT32;
+  switch (code) {
+  case MIR_EXT8:
+  case MIR_UEXT8: return 8;
+  case MIR_EXT16:
+  case MIR_UEXT16: return 16;
+  case MIR_EXT32:
+  case MIR_UEXT32: return 32;
+  default: return 0;
+  }
+}
+
+static void copy_prop (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t insn, def_insn;
+  bb_insn_t bb_insn, next_bb_insn, def;
+  ssa_edge_t se;
+  int op_num, out_p, mem_p, w, w2, sign_p, sign2_p;
+  size_t passed_mem_num;
+  MIR_reg_t var, reg, new_reg;
+  insn_var_iterator_t iter;
+
+  bitmap_clear (temp_bitmap);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
+      if (insn->code != MIR_PHI) break;
+      bitmap_set_bit_p (temp_bitmap, insn->ops[0].u.reg);
+    }
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
+      next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
+      insn = bb_insn->insn;
+      if (insn->code == MIR_PHI) continue; /* keep conventional SSA */
+      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+        if (out_p || !var_is_reg_p (var)) continue;
+        for (;;) {
+          se = insn->ops[op_num].data;
+          def = se->def;
+          if (def->bb->index == 0) break; /* arg init or undef insn */
+          def_insn = def->insn;
+          if (se->prev_use != NULL || se->next_use != NULL || !move_p (def_insn)
+              || bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg))
+            break;
+          DEBUG ({
+            fprintf (debug_file, "  Removing copy insn %-5lu", (unsigned long) def->index);
+            MIR_output_insn (gen_ctx->ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
+          });
+          reg = var2reg (gen_ctx, var);
+          new_reg = def_insn->ops[1].u.reg;
+          remove_ssa_edge (gen_ctx, se);
+          insn->ops[op_num].data = def_insn->ops[1].data;
+          gen_delete_insn (gen_ctx, def_insn);
+          se = insn->ops[op_num].data;
+          se->use = bb_insn;
+          se->use_op_num = op_num;
+          rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+        }
+      }
+      w = get_ext_params (insn->code, &sign_p);
+      if (w != 0 && insn->ops[1].mode == MIR_OP_REG && var_is_reg_p (insn->ops[1].u.reg)) {
+        se = insn->ops[op_num].data;
+        def_insn = se->def->insn;
+        w2 = get_ext_params (def_insn->code, &sign2_p);
+        if (w2 != 0 && sign_p == sign2_p && w2 <= w
+            && !bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) {
+          DEBUG ({
+            fprintf (debug_file, "    Change code of insn %lu: before", bb_insn->index);
+            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+          });
+          insn->code = MIR_MOV;
+          DEBUG ({
+            fprintf (debug_file, "    after", bb_insn->index);
+            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+          });
+        }
+      }
+    }
+}
+
+/* New Page */
+
 /* Removing redundant insns through GVN.  */
 
 typedef struct expr {
