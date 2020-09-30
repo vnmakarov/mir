@@ -5089,6 +5089,26 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
+#ifndef NO_RENAME
+  if (optimize_level >= 2) {
+    DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
+    reg_rename (gen_ctx);
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR after rename:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #ifndef NO_RENAME */
+#ifndef NO_COPY_PROP
+  if (0 && optimize_level >= 2) {
+    DEBUG ({ fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
+    copy_prop (gen_ctx);
+    DEBUG ({
+      fprintf (debug_file, "+++++++++++++MIR after Copy Propagation:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #ifndef NO_COPY_PROP */
 #ifndef NO_GVN
   if (optimize_level >= 2) {
     DEBUG ({ fprintf (debug_file, "+++++++++++++GVN:\n"); });
@@ -5109,16 +5129,6 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     });
   }
 #endif /* #ifndef NO_GVN */
-#ifndef NO_RENAME
-  if (optimize_level >= 3) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
-    reg_rename (gen_ctx);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after rename:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-    });
-  }
-#endif /* #ifndef NO_RENAME */
 #ifndef NO_CCP
   if (optimize_level >= 2) {
     DEBUG ({ fprintf (debug_file, "+++++++++++++CCP:\n"); });
