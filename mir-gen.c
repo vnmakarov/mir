@@ -1695,7 +1695,7 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
     }
 }
 
-static void build_ssa (gen_ctx_t gen_ctx, int def_use_p) {
+static void build_ssa (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t def, bb_insn, phi;
   int op_num, out_p, mem_p;
@@ -1743,7 +1743,7 @@ static void build_ssa (gen_ctx_t gen_ctx, int def_use_p) {
   /* minimization can not be switched off for def_use representation
      building as it clears ops[0].data: */
   minimize_ssa (gen_ctx, insns_num);
-  if (def_use_p) make_ssa_def_use_repr (gen_ctx);
+  make_ssa_def_use_repr (gen_ctx);
 }
 
 static void undo_build_ssa (gen_ctx_t gen_ctx) {
@@ -4994,7 +4994,7 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
     print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
   });
   if (optimize_level >= 2) {
-    build_ssa (gen_ctx, TRUE);
+    build_ssa (gen_ctx);
     DEBUG ({
       fprintf (debug_file, "+++++++++++++MIR after building SSA:\n");
       print_varr_insns (gen_ctx, "undef init", undef_insns);
