@@ -117,7 +117,6 @@ struct target_ctx;
 struct data_flow_ctx;
 struct ssa_ctx;
 struct gvn_ctx;
-struct rename_ctx;
 struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
@@ -145,7 +144,6 @@ struct gen_ctx {
   struct data_flow_ctx *data_flow_ctx;
   struct ssa_ctx *ssa_ctx;
   struct gvn_ctx *gvn_ctx;
-  struct rename_ctx *rename_ctx;
   struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
@@ -1449,6 +1447,9 @@ typedef struct def_tab_el {
 DEF_HTAB (def_tab_el_t);
 
 DEF_VARR (MIR_op_t);
+DEF_VARR (ssa_edge_t);
+DEF_VARR (char);
+DEF_VARR (size_t);
 
 struct ssa_ctx {
   int def_use_repr_p; /* flag of def_use_chains */
@@ -1457,6 +1458,10 @@ struct ssa_ctx {
   VARR (bb_insn_t) * phis, *deleted_phis;
   VARR (MIR_op_t) * temp_ops;
   HTAB (def_tab_el_t) * def_tab; /* reg,bb -> insn defining reg  */
+  /* used for renaming: */
+  VARR (ssa_edge_t) * ssa_edges_to_process;
+  VARR (size_t) * curr_reg_indexes;
+  VARR (char) * reg_name;
 };
 
 #define def_use_repr_p gen_ctx->ssa_ctx->def_use_repr_p
@@ -1466,6 +1471,9 @@ struct ssa_ctx {
 #define deleted_phis gen_ctx->ssa_ctx->deleted_phis
 #define temp_ops gen_ctx->ssa_ctx->temp_ops
 #define def_tab gen_ctx->ssa_ctx->def_tab
+#define ssa_edges_to_process gen_ctx->ssa_ctx->ssa_edges_to_process
+#define curr_reg_indexes gen_ctx->ssa_ctx->curr_reg_indexes
+#define reg_name gen_ctx->ssa_ctx->reg_name
 
 static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op) {
   return def_use_repr_p ? ((ssa_edge_t) op.data)->def->index : ((bb_insn_t) op.data)->index;
@@ -1723,6 +1731,116 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
     }
 }
 
+static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_type_t type = MIR_reg_type (ctx, reg, func);
+  const char *name = MIR_reg_name (ctx, reg, func);
+  char ind_str[20];
+  MIR_reg_t new_reg;
+
+  VARR_TRUNC (char, reg_name, 0);
+  VARR_PUSH_ARR (char, reg_name, name, strlen (name));
+  VARR_PUSH (char, reg_name, '@');
+  sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
+  VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
+  new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
+  update_min_max_reg (gen_ctx, new_reg);
+  return new_reg;
+}
+
+static int push_to_rename (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
+  if (ssa_edge->flag) return FALSE;
+  VARR_PUSH (ssa_edge_t, ssa_edges_to_process, ssa_edge);
+  ssa_edge->flag = TRUE;
+  DEBUG ({
+    fprintf (debug_file, "     Adding ssa edge: def %lu:%d -> use %lu:%d:\n      ",
+             (unsigned long) ssa_edge->def->index, ssa_edge->def_op_num,
+             (unsigned long) ssa_edge->use->index, ssa_edge->use_op_num);
+    print_bb_insn (gen_ctx, ssa_edge->def, FALSE);
+    fprintf (debug_file, "     ");
+    print_bb_insn (gen_ctx, ssa_edge->use, FALSE);
+  });
+  return TRUE;
+}
+
+static int pop_to_rename (gen_ctx_t gen_ctx, ssa_edge_t *ssa_edge) {
+  if (VARR_LENGTH (ssa_edge_t, ssa_edges_to_process) == 0) return FALSE;
+  *ssa_edge = VARR_POP (ssa_edge_t, ssa_edges_to_process);
+  return TRUE;
+}
+
+static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_num) {
+  for (ssa_edge_t curr_edge = insn->ops[op_num].data; curr_edge != NULL;
+       curr_edge = curr_edge->next_use)
+    if (push_to_rename (gen_ctx, curr_edge) && curr_edge->use->insn->code == MIR_PHI)
+      process_insn_to_rename (gen_ctx, curr_edge->use->insn, 0);
+  if (insn->code != MIR_PHI) return;
+  for (size_t i = 1; i < insn->nops; i++) { /* process a def -> the phi use */
+    ssa_edge_t ssa_edge = insn->ops[i].data;
+    bb_insn_t def = ssa_edge->def;
+
+    /* process the def -> other uses: */
+    if (push_to_rename (gen_ctx, ssa_edge)) process_insn_to_rename (gen_ctx, def->insn, 0);
+  }
+}
+
+static void rename_regs (gen_ctx_t gen_ctx) {
+  int op_num, out_p, mem_p;
+  size_t passed_mem_num, reg_index;
+  MIR_reg_t var, reg, new_reg;
+  MIR_insn_t insn, def_insn, use_insn;
+  bb_insn_t bb_insn;
+  ssa_edge_t ssa_edge;
+  insn_var_iterator_t iter;
+
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* clear all ssa edge flags */
+      insn = bb_insn->insn;
+      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+        if (out_p || !var_is_reg_p (var)) continue;
+        ssa_edge = insn->ops[op_num].data;
+        ssa_edge->flag = FALSE;
+      }
+    }
+  VARR_TRUNC (size_t, curr_reg_indexes, 0);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      insn = bb_insn->insn;
+      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+        if (!out_p || !var_is_reg_p (var)) continue;
+        ssa_edge = insn->ops[op_num].data;
+        if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
+        DEBUG ({
+          fprintf (debug_file, "  Start def insn %-5lu", (long unsigned) bb_insn->index);
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        reg = var2reg (gen_ctx, var);
+        while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg)
+          VARR_PUSH (size_t, curr_reg_indexes, 0);
+        reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
+        VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
+        new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
+        if (ssa_edge == NULL) { /* special case: unused output */
+          if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+          continue;
+        }
+        VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
+        process_insn_to_rename (gen_ctx, insn, op_num);
+        if (new_reg != 0) {
+          while (pop_to_rename (gen_ctx, &ssa_edge)) {
+            def_insn = ssa_edge->def->insn;
+            use_insn = ssa_edge->use->insn;
+            rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
+            rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
+          }
+        }
+      }
+    }
+}
+
 static void build_ssa (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t def, bb_insn, phi;
@@ -1772,6 +1890,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
      building as it clears ops[0].data: */
   minimize_ssa (gen_ctx, insns_num);
   make_ssa_def_use_repr (gen_ctx);
+  rename_regs (gen_ctx);
 }
 
 static void undo_build_ssa (gen_ctx_t gen_ctx) {
@@ -1820,6 +1939,9 @@ static void init_ssa (gen_ctx_t gen_ctx) {
   VARR_CREATE (bb_insn_t, deleted_phis, 0);
   VARR_CREATE (MIR_op_t, temp_ops, 16);
   HTAB_CREATE (def_tab_el_t, def_tab, 1024, def_tab_el_hash, def_tab_el_eq, gen_ctx);
+  VARR_CREATE (ssa_edge_t, ssa_edges_to_process, 512);
+  VARR_CREATE (size_t, curr_reg_indexes, 4096);
+  VARR_CREATE (char, reg_name, 20);
 }
 
 static void finish_ssa (gen_ctx_t gen_ctx) {
@@ -1829,6 +1951,9 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
   VARR_DESTROY (bb_insn_t, deleted_phis);
   VARR_DESTROY (MIR_op_t, temp_ops);
   HTAB_DESTROY (def_tab_el_t, def_tab);
+  VARR_DESTROY (ssa_edge_t, ssa_edges_to_process);
+  VARR_DESTROY (size_t, curr_reg_indexes);
+  VARR_DESTROY (char, reg_name);
   free (gen_ctx->ssa_ctx);
   gen_ctx->ssa_ctx = NULL;
 }
@@ -2205,149 +2330,6 @@ static void finish_gvn (gen_ctx_t gen_ctx) {
   HTAB_DESTROY (expr_t, expr_tab);
   free (gen_ctx->gvn_ctx);
   gen_ctx->gvn_ctx = NULL;
-}
-
-/* New Page */
-
-/* Register (variable) renaming. */
-
-DEF_VARR (ssa_edge_t);
-DEF_VARR (char);
-DEF_VARR (size_t);
-
-struct rename_ctx {
-  VARR (ssa_edge_t) * ssa_edges_to_process;
-  VARR (size_t) * curr_reg_indexes;
-  VARR (char) * reg_name;
-};
-
-#define ssa_edges_to_process gen_ctx->rename_ctx->ssa_edges_to_process
-#define curr_reg_indexes gen_ctx->rename_ctx->curr_reg_indexes
-#define reg_name gen_ctx->rename_ctx->reg_name
-
-static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  MIR_func_t func = curr_func_item->u.func;
-  MIR_type_t type = MIR_reg_type (ctx, reg, func);
-  const char *name = MIR_reg_name (ctx, reg, func);
-  char ind_str[20];
-  MIR_reg_t new_reg;
-
-  VARR_TRUNC (char, reg_name, 0);
-  VARR_PUSH_ARR (char, reg_name, name, strlen (name));
-  VARR_PUSH (char, reg_name, '@');
-  sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
-  VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
-  new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
-  update_min_max_reg (gen_ctx, new_reg);
-  return new_reg;
-}
-
-static int push_to_rename (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
-  if (ssa_edge->flag) return FALSE;
-  VARR_PUSH (ssa_edge_t, ssa_edges_to_process, ssa_edge);
-  ssa_edge->flag = TRUE;
-  DEBUG ({
-    fprintf (debug_file, "     Adding ssa edge: def %lu:%d -> use %lu:%d:\n      ",
-             (unsigned long) ssa_edge->def->index, ssa_edge->def_op_num,
-             (unsigned long) ssa_edge->use->index, ssa_edge->use_op_num);
-    print_bb_insn (gen_ctx, ssa_edge->def, FALSE);
-    fprintf (debug_file, "     ");
-    print_bb_insn (gen_ctx, ssa_edge->use, FALSE);
-  });
-  return TRUE;
-}
-
-static int pop_to_rename (gen_ctx_t gen_ctx, ssa_edge_t *ssa_edge) {
-  if (VARR_LENGTH (ssa_edge_t, ssa_edges_to_process) == 0) return FALSE;
-  *ssa_edge = VARR_POP (ssa_edge_t, ssa_edges_to_process);
-  return TRUE;
-}
-
-static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_num) {
-  for (ssa_edge_t curr_edge = insn->ops[op_num].data; curr_edge != NULL;
-       curr_edge = curr_edge->next_use)
-    if (push_to_rename (gen_ctx, curr_edge) && curr_edge->use->insn->code == MIR_PHI)
-      process_insn_to_rename (gen_ctx, curr_edge->use->insn, 0);
-  if (insn->code != MIR_PHI) return;
-  for (size_t i = 1; i < insn->nops; i++) { /* process a def -> the phi use */
-    ssa_edge_t ssa_edge = insn->ops[i].data;
-    bb_insn_t def = ssa_edge->def;
-
-    /* process the def -> other uses: */
-    if (push_to_rename (gen_ctx, ssa_edge)) process_insn_to_rename (gen_ctx, def->insn, 0);
-  }
-}
-
-static void reg_rename (gen_ctx_t gen_ctx) {
-  int op_num, out_p, mem_p;
-  size_t passed_mem_num, reg_index;
-  MIR_reg_t var, reg, new_reg;
-  MIR_insn_t insn, def_insn, use_insn;
-  bb_insn_t bb_insn;
-  ssa_edge_t ssa_edge;
-  insn_var_iterator_t iter;
-
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* clear all ssa edge flags */
-      insn = bb_insn->insn;
-      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var)) continue;
-        ssa_edge = insn->ops[op_num].data;
-        ssa_edge->flag = FALSE;
-      }
-    }
-  VARR_TRUNC (size_t, curr_reg_indexes, 0);
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      insn = bb_insn->insn;
-      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p || !var_is_reg_p (var)) continue;
-        ssa_edge = insn->ops[op_num].data;
-        if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
-        DEBUG ({
-          fprintf (debug_file, "  Start def insn %-5lu", (long unsigned) bb_insn->index);
-          print_bb_insn (gen_ctx, bb_insn, FALSE);
-        });
-        reg = var2reg (gen_ctx, var);
-        while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg)
-          VARR_PUSH (size_t, curr_reg_indexes, 0);
-        reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
-        VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
-        new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
-        if (ssa_edge == NULL) { /* special case: unused output */
-          if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
-          continue;
-        }
-        VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
-        process_insn_to_rename (gen_ctx, insn, op_num);
-        if (new_reg != 0) {
-          while (pop_to_rename (gen_ctx, &ssa_edge)) {
-            def_insn = ssa_edge->def->insn;
-            use_insn = ssa_edge->use->insn;
-            rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
-            rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
-          }
-        }
-      }
-    }
-}
-
-static void init_rename (gen_ctx_t gen_ctx) {
-  gen_ctx->rename_ctx = gen_malloc (gen_ctx, sizeof (struct rename_ctx));
-  VARR_CREATE (ssa_edge_t, ssa_edges_to_process, 512);
-  VARR_CREATE (size_t, curr_reg_indexes, 4096);
-  VARR_CREATE (char, reg_name, 20);
-}
-
-static void finish_rename (gen_ctx_t gen_ctx) {
-  VARR_DESTROY (ssa_edge_t, ssa_edges_to_process);
-  VARR_DESTROY (size_t, curr_reg_indexes);
-  VARR_DESTROY (char, reg_name);
-  free (gen_ctx->rename_ctx);
-  gen_ctx->rename_ctx = NULL;
 }
 
 /* New Page */
@@ -5089,18 +5071,8 @@ void *MIR_gen (MIR_context_t ctx, MIR_item_t func_item) {
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#ifndef NO_RENAME
-  if (optimize_level >= 2) {
-    DEBUG ({ fprintf (debug_file, "+++++++++++++Rename:\n"); });
-    reg_rename (gen_ctx);
-    DEBUG ({
-      fprintf (debug_file, "+++++++++++++MIR after rename:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-    });
-  }
-#endif /* #ifndef NO_RENAME */
 #ifndef NO_COPY_PROP
-  if (0 && optimize_level >= 2) {
+  if (optimize_level >= 2) {
     DEBUG ({ fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
     copy_prop (gen_ctx);
     DEBUG ({
@@ -5245,7 +5217,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   gen_ctx->target_ctx = NULL;
   gen_ctx->data_flow_ctx = NULL;
   gen_ctx->gvn_ctx = NULL;
-  gen_ctx->rename_ctx = NULL;
   gen_ctx->ccp_ctx = NULL;
   gen_ctx->lr_ctx = NULL;
   gen_ctx->ra_ctx = NULL;
@@ -5261,7 +5232,6 @@ void MIR_gen_init (MIR_context_t ctx) {
   init_data_flow (gen_ctx);
   init_ssa (gen_ctx);
   init_gvn (gen_ctx);
-  init_rename (gen_ctx);
   init_ccp (gen_ctx);
   temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -5292,7 +5262,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
   finish_data_flow (gen_ctx);
   finish_ssa (gen_ctx);
   finish_gvn (gen_ctx);
-  finish_rename (gen_ctx);
   finish_ccp (gen_ctx);
   bitmap_destroy (temp_bitmap);
   bitmap_destroy (temp_bitmap2);
