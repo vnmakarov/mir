@@ -22,11 +22,17 @@
 #define MIR_HASH_UNALIGNED_ACCESS 0
 #endif
 
+#if (defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)) || defined(_MSC_VER)
+#define MIR_LITTLE_ENDIAN 1
+#else
+#define MIR_LITTLE_ENDIAN 0
+#endif
+
 static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax_p) {
   size_t i, start = 0;
   uint64_t tail = 0;
 
-  if (relax_p || __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__) {
+  if (relax_p || MIR_LITTLE_ENDIAN) {
 #if MIR_HASH_UNALIGNED_ACCESS
     if (len == sizeof (uint64_t)) return *(uint64_t *) v;
     if (len >= sizeof (uint32_t)) {
