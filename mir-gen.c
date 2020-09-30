@@ -1166,6 +1166,34 @@ static void print_loop_tree (gen_ctx_t gen_ctx, int bb_p) {
 
 #endif
 
+static void rename_op_reg (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, MIR_reg_t new_reg,
+                           MIR_insn_t insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  int change_p = FALSE;
+
+  if (op_ref->mode == MIR_OP_REG && op_ref->u.reg == reg) {
+    op_ref->u.reg = new_reg;
+    change_p = TRUE;
+  } else if (op_ref->mode == MIR_OP_MEM) {
+    if (op_ref->u.mem.base == reg) {
+      op_ref->u.mem.base = new_reg;
+      change_p = TRUE;
+    }
+    if (op_ref->u.mem.index == reg) {
+      op_ref->u.mem.index = new_reg;
+      change_p = TRUE;
+    }
+  }
+  if (!change_p) return; /* definition was already changed from another use */
+  DEBUG ({
+    MIR_func_t func = curr_func_item->u.func;
+
+    fprintf (debug_file, "    Change %s to %s in insn %-5lu", MIR_reg_name (ctx, reg, func),
+             MIR_reg_name (ctx, new_reg, func), (long unsigned) ((bb_insn_t) insn->data)->index);
+    print_bb_insn (gen_ctx, insn->data, FALSE);
+  });
+}
+
 static mv_t get_free_move (gen_ctx_t gen_ctx) {
   mv_t mv;
 
@@ -2129,34 +2157,6 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
   return new_reg;
 }
 
-static void rename_op (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, MIR_reg_t new_reg,
-                       MIR_insn_t insn) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  int change_p = FALSE;
-
-  if (op_ref->mode == MIR_OP_REG && op_ref->u.reg == reg) {
-    op_ref->u.reg = new_reg;
-    change_p = TRUE;
-  } else if (op_ref->mode == MIR_OP_MEM) {
-    if (op_ref->u.mem.base == reg) {
-      op_ref->u.mem.base = new_reg;
-      change_p = TRUE;
-    }
-    if (op_ref->u.mem.index == reg) {
-      op_ref->u.mem.index = new_reg;
-      change_p = TRUE;
-    }
-  }
-  if (!change_p) return; /* definition was already changed from another use */
-  DEBUG ({
-    MIR_func_t func = curr_func_item->u.func;
-
-    fprintf (debug_file, "    Change %s to %s in insn %-5lu", MIR_reg_name (ctx, reg, func),
-             MIR_reg_name (ctx, new_reg, func), (long unsigned) ((bb_insn_t) insn->data)->index);
-    print_bb_insn (gen_ctx, insn->data, FALSE);
-  });
-}
-
 static int push_to_rename (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
   if (ssa_edge->flag) return FALSE;
   VARR_PUSH (ssa_edge_t, ssa_edges_to_process, ssa_edge);
@@ -2232,7 +2232,7 @@ static void reg_rename (gen_ctx_t gen_ctx) {
         VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
         new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
         if (ssa_edge == NULL) { /* special case: unused output */
-          if (new_reg != 0) rename_op (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+          if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
           continue;
         }
         VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
@@ -2241,8 +2241,8 @@ static void reg_rename (gen_ctx_t gen_ctx) {
           while (pop_to_rename (gen_ctx, &ssa_edge)) {
             def_insn = ssa_edge->def->insn;
             use_insn = ssa_edge->use->insn;
-            rename_op (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
-            rename_op (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
+            rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
+            rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
           }
         }
       }
