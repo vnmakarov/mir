@@ -3,18 +3,18 @@
 */
 
 /* Optimization pipeline:
-                                                          -------------
-           ----------     -----------     -----------    |   Global    |    -------------
-   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->|   Value     |-->|  Dead Code  |
-           ----------      -----------    -----------    |  Numbering  |   | Elimination |
                                                           -------------     -------------
-                                                                                  |
-                                                            -------------         V
-    -------     ---------                     --------     |   Sparse    |    -----------
-   | Build |   | Finding |    -----------    | Out of |    | Conditional |   | Variable  |
-   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<---|  Constant   |<--| Renaming  |
-   | Info  |    ---------     -----------     --------     | Propagation |    -----------
-    -------                                                 -------------
+           ----------     -----------     -----------    |  Copy       |   |   Global    |
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Propagation |-->|   Value     |
+           ----------     -----------     -----------    |             |   |  Numbering  |
+                                                          -------------     -------------
+                                                                                   |
+                                                           -------------           V
+    -------     ---------                     --------    |   Sparse    |    -------------
+   | Build |   | Finding |    -----------    | Out of |   | Conditional |   |  Dead Code  |
+   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<--|  Constant   |<--| Elimination |
+   | Info  |    ---------     -----------     --------    | Propagation |    -------------
+    -------                                                -------------
        |
        V
    --------                                                                ----------
@@ -26,10 +26,10 @@
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
    Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
+   Copy Propagation: SSA copy propagation keeping conventional SSA form and removing redundant
+                     extension insns
    Global Value Numbering: Removing redundant insns through GVN. Only for -O2 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
-   Variable renaming: Rename disjoint live ranges of variables which is beneficial for
-                      register allocation.  Only for -O3.
    Sparse Conditional Constant Propagation: Constant propagation and removing death paths of CFG.
                                             Only for -O2 and above.
    Out of SSA: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
@@ -56,8 +56,7 @@
          are based reg numbers + MAX_HARD_REG + 1)
    loc - hard register and stack locations (stack slot numbers start with MAX_HARD_REG + 1).
 
-   We don't use SSA because the optimization pipeline could use SSA is
-   short (2 passes) and going into / out of SSA is expensive.
+   We use conventional SSA to make out-of-ssa fast and simple.
 */
 
 #include <stdlib.h>
