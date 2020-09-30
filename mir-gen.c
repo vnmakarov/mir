@@ -1427,6 +1427,12 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
                        ^                                ^
                        | (op.data)                      | (op.data)
       phi|insn: out, in:v1, ...        phi|insn: out, in:v1, ...
+
+   We use conventional SSA to make out-of-ssa fast and simple.  We don't rename all regs for SSA.
+   All phi insns always use the same reg to guarantee conventional SSA.  It also means that
+   some regs have more one definition but ssa edges represent the correct SSA.  The only
+   optimization in the pipeline which would benefit from full renaming is copy propagation (full
+   SSA copy propgation would not keep conventional SSA).
 */
 
 typedef struct ssa_edge *ssa_edge_t;
