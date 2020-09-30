@@ -88,6 +88,10 @@ EOF
       run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
       first=
   fi
+  if tcc $tempc >/dev/null 2>&1; then
+      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
+      first=
+  fi
 #  run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first" 1
 }
