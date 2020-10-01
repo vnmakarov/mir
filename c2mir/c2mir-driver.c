@@ -8,7 +8,8 @@
 #include <sys/stat.h>
 #endif
 #else
-#include <libloaderapi.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 #include "c2mir.h"
@@ -90,7 +91,7 @@ static const char *lib_suffix = ".dylib";
 
 #ifdef _WIN32
 static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
-static const char *std_lib_dirs[] = {};
+static const char *std_lib_dirs[] = {""};
 static const char *lib_suffix = ".dll";
 #define dlopen(n, f) LoadLibrary(n)
 #define dlclose(h) FreeLibrary(h)

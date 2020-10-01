@@ -176,7 +176,7 @@ static inline gen_ctx_t *gen_ctx_loc (MIR_context_t ctx) { return (gen_ctx_t *) 
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 #define func_stack_slots_num gen_ctx->func_stack_slots_num
 
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-gen-aarch64.c"
@@ -4976,8 +4976,16 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
 
 #if !MIR_NO_GEN_DEBUG
 
+#ifndef _WIN32
 #include <sys/types.h>
 #include <unistd.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#define getpid GetCurrentProcessId
+#define popen _popen
+#define pclose _pclose
+#endif
 
 static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void *start_addr) {
   size_t i;
