@@ -8,7 +8,11 @@
 
 enum add_arg_class { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
+#ifndef _WIN64
 #define MAX_QWORDS 2
+#else
+#define MAX_QWORDS 1
+#endif
 
 static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
   if (arg_type1 == arg_type2) return arg_type1;
@@ -41,6 +45,7 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
 
     if (n_qwords > MAX_QWORDS) return 0; /* too big aggregate */
 
+#ifndef _WIN64
     for (i = 0; i < n_qwords; i++) types[i] = NO_CLASS;
 
     switch (type->mode) {
@@ -81,6 +86,10 @@ static int classify_arg (MIR_context_t ctx, struct type *type, MIR_type_t types[
         return 0;
     }
     return n_qwords;
+#else
+    types[0] = MIR_T_I64;
+    return 1;
+#endif
   }
 
   assert (scalar_type_p (type));
