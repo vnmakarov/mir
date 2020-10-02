@@ -75,20 +75,33 @@ runbench () {
   #include <stdio.h>
   int main (void) {printf ("hi\n"); return 0;}
 EOF
-  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" first
+  first=first
   if gcc $tempc >/dev/null 2>&1; then
-      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      first=
   fi
   if clang $tempc >/dev/null 2>&1; then
-      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
+  fi
+  if cproc $tempc >/dev/null 2>&1; then
+      run "cproc" "cproc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
   fi
   if tcc $tempc >/dev/null 2>&1; then
-      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
+  fi
+  if lacc $tempc >/dev/null 2>&1; then
+      run "lacc -O3" "lacc -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
   fi
   if chibicc $tempc >/dev/null 2>&1; then
-      run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
   fi
+  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
 #  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
 }
 
