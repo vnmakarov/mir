@@ -15,9 +15,7 @@ rm -f $temp3
 percent () {
     val=`awk "BEGIN {if ($2==0) print \"Inf\"; else printf \"%.2f\n\", $1/$2;}"`
     echo "$val"x
-    if test x$c2m != x; then
-	echo $val >>$temp3
-    fi
+    echo "$3:$val" >>$temp3
 }
 
 skip () {
@@ -29,7 +27,6 @@ skip () {
 print_time() {
     title="$1"
     secs=$2
-    c2m=$3
     if test "x$NECHO" = x; then
 	echo $title:
 	echo "   " $secs
@@ -39,7 +36,7 @@ print_time() {
 	skip ${#n} 40
 	$NECHO "$secs"
 	skip ${#secs} 10
-        echo " " `percent $base_time $secs $c2m`
+        echo " " `percent $base_time $secs "$title"`
     fi
 }
 
@@ -50,10 +47,9 @@ run () {
   expect_out=$4
   inputf=$5
   flag=$6
-  c2m=$7
   ok=
   if test x"$preparation" != x; then
-    $preparation 2>$errf
+    sh -c "$preparation" 2>$errf
     if test $? != 0; then echo "$2": FAIL; cat $errf; return 1; fi
   fi
   if test x$inputf = x; then inputf=/dev/null;fi
@@ -66,7 +62,7 @@ run () {
   fi
   secs=`egrep 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t//`
   if test x$flag != x;then base_time=$secs;fi
-  print_time "$title" $secs $c2m
+  print_time "$title" $secs
 }
 
 runbench () {
@@ -75,25 +71,25 @@ runbench () {
   base_time=0.01
   inputf=
   if test -f $bench.expect; then expect_out=$bench.expect; else expect_out=; fi
-  first=first
   cat >$tempc <<EOF
   #include <stdio.h>
   int main (void) {printf ("hi\n"); return 0;}
 EOF
+  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" first
   if gcc $tempc >/dev/null 2>&1; then
-      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
-      first=
+      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
   fi
   if clang $tempc >/dev/null 2>&1; then
-      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
-      first=
+      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
   fi
   if tcc $tempc >/dev/null 2>&1; then
-      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" "$first"
-      first=
+      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
   fi
-#  run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
-  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" "$first" 1
+  if chibicc $tempc >/dev/null 2>&1; then
+      run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+  fi
+#  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
 }
 
 start_bench_num=$1
@@ -112,14 +108,24 @@ do
     bench_num=`expr $bench_num + 1`
 done
 
-s="C2M Average:"
-$NECHO $s
-skip ${#s} 53
-awk '{f = f + $1} END {printf "%0.2fx\n", f / NR;}' < $temp3
+echo ============AVERAGE:=========
+IFS=$'\n'
+for i in `awk -F: '{print $1}' $temp3|sort|uniq`; do
+    unset IFS
+    s="$i:"
+    $NECHO "$s"
+    skip ${#s} 53
+    awk -F: -v name="$i" "name==\$1 {f = f + \$2; n++} END {printf \"%0.2fx\n\", f / n;}" < $temp3
+done
 
-s="C2M Geomean:"
-$NECHO $s
-skip ${#s} 53
-awk 'BEGIN {f = 1.0} {f = f * $1} END {printf "%0.2fx\n", f ^  (1.0/NR);}' < $temp3
+echo ============GEOMEAN:=========
+IFS=$'\n'
+for i in `awk -F: '{print $1}' $temp3|sort|uniq`; do
+    unset IFS
+    s="$i:"
+    $NECHO "$s"
+    skip ${#s} 53
+    awk -F: -v name="$i" "BEGIN {f = 1.0} name==\$1 {f = f * \$2; n++} END {printf \"%0.2fx\n\", f ^  (1.0/n);}" < $temp3
+done
 
 rm -f $tempc $temp $temp2 $temp3 $errf
