@@ -235,17 +235,14 @@ ex100:    func v, 0
   * **Simplify**: lowering MIR
   * **Inline**: inlining MIR calls
   * **Build CFG**: building Control Flow Graph (basic blocks and CFG edges)
-  * **Global Common Sub-Expression Elimination**: reusing calculated values
+  * **Build SSA**: Building Single Static Assignment Form by adding phi nodes and SSA edges to operands
+  * **Copy Propagation**: SSA copy propagation keeping conventional SSA form and removing redundant
+    extension insns
+  * **Global Value Numbering**: Removing redundant insns through GVN
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Reaching Definition Analysis** required for subsequent variable renaming
-  * **Variable renaming** renaming disjoint live ranges of variables which is beneficial for
-    register allocation and loop invariant code motion
-  * **Find Loops** finding natural loops for subsequent loop invariant code motion
-  * **Reaching Definition Analysis** required for subsequent loop invariant code motion
-  * **Loop Invariant Code Motion (LICM)** doing register pressure sensitive move of loop invariant
-    insns out of the loop
   * **Sparse Conditional Constant Propagation**: constant propagation
     and removing death paths of CFG
+  * **Out of SSA**: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Find Loops**: finding natural loops and building loop tree
   * **Build Live Info**: calculating live in and live out for the basic blocks
