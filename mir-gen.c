@@ -2036,12 +2036,13 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         if (w2 != 0 && sign_p == sign2_p && w2 <= w
             && !bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) {
           DEBUG ({
-            fprintf (debug_file, "    Change code of insn %lu: before", bb_insn->index);
+            fprintf (debug_file, "    Change code of insn %lu: before",
+                     (unsigned long) bb_insn->index);
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
           });
           insn->code = MIR_MOV;
           DEBUG ({
-            fprintf (debug_file, "    after", bb_insn->index);
+            fprintf (debug_file, "    after");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
           });
         }
