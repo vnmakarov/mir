@@ -1169,7 +1169,7 @@ static const struct pattern patterns[] = {
   {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"}, /* mov m0,i8 */
   {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1"}, /* mov m0,i32 */
 
-  {MIR_FMOV, "r r", "F3 Y 0F 10 r0 R1"},  /* movss r0,r1 */
+  {MIR_FMOV, "r r", "Y 0F 28 r0 R1"},     /* movaps r0,r1 */
   {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1"}, /* movss r0,m32 */
   {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0"}, /* movss r0,m32 */
 
