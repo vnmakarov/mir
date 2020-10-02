@@ -19,6 +19,5 @@ git:
 branches:
   only:
     - master
-    - ssa
 script:
   - make c2mir-test
