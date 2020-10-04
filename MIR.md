@@ -418,7 +418,7 @@
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
-```
+```c
   MIR_module_t m = MIR_new_module (ctx, "m");
   MIR_item_t func = MIR_new_func (ctx, "loop", MIR_T_I64, 1, MIR_T_I64, "arg1");
   MIR_reg_t COUNT = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "count");
@@ -444,7 +444,7 @@
 
   * Sieve of eratosthenes:
 
-```
+```mir
 m_sieve:  module
           export sieve
 sieve:    func i32, i32:N
@@ -487,7 +487,7 @@ ex100:    func v
 
   * Example of block arguments and `va_stack_arg`
   
-```
+```mir
 m0:       module
 f_p:	  proto i64, 16:blk(a), ...
 f:	  func i64, 16:blk(a), ...

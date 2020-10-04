@@ -65,7 +65,7 @@
   * You can also create MIR from MIR **binary** or **text** file
   * The best way to get a feel about MIR is to use textual MIR representation
   * Example of Eratosthenes sieve on C
-```
+```c
 #define Size 819000
 int sieve (int N) {
   int64_t i, k, prime, count, n; char flags[Size];
@@ -89,7 +89,7 @@ void ex100 (void) {
 }
 ```
   * Example of MIR textual file for the same function:
-```
+```mir
 m_sieve:  module
           export sieve
 sieve:    func i32, i32:N
@@ -167,7 +167,7 @@ ex100:    func v, 0
     can be also dependent on the interface 
   * Running code from the above example could look like the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
-```
+```c
     /* ctx is a context created by MIR_init */
     MIR_load_module (ctx, m1); MIR_load_module (ctx, m2);
     MIR_load_external (ctx, "printf", printf);
