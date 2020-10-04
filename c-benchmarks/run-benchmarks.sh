@@ -85,6 +85,10 @@ EOF
       run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
+  if pcc $tempc >/dev/null 2>&1; then
+      run "pcc -O" "pcc -O $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
+  fi
   if cproc $tempc >/dev/null 2>&1; then
       run "cproc" "cproc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
