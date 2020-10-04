@@ -2096,8 +2096,16 @@ static void define (c2m_ctx_t c2m_ctx) {
   } else if (m->replacement == NULL) {
     error (c2m_ctx, id->pos, "standard macro %s redefinition", name);
   } else {
-    if (!params_eq_p (m->params, params) || !replacement_eq_p (m->replacement, repl))
-      error (c2m_ctx, id->pos, "different macro redefinition of %s", name);
+    if (!params_eq_p (m->params, params) || !replacement_eq_p (m->replacement, repl)) {
+      if (c2m_options->pedantic_p) {
+        error (c2m_ctx, id->pos, "different macro redefinition of %s", name);
+      } else {
+        VARR (token_t) * temp;
+        warning (c2m_ctx, id->pos, "different macro redefinition of %s", name);
+        temp = m->params, m->params = params, params = temp;
+        temp = m->replacement, m->replacement = repl, repl = temp;
+      }
+    }
     VARR_DESTROY (token_t, repl);
   }
   if (params != NULL) VARR_DESTROY (token_t, params);
