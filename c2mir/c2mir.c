@@ -1039,7 +1039,8 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
     case '\?':
     case '\"': break;
     case 'e':
-      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "non-standard escape sequence \\e");
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                   "non-standard escape sequence \\e");
       curr_c = '\033';
       break;
     case '0':
@@ -1082,8 +1083,8 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
       if (first_p)
         error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
       else if (v > MIR_UCHAR_MAX)
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "too big hexadecimal char 0x%x",
-                                                 v);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                     "too big hexadecimal char 0x%x", v);
       curr_c = v;
       i--;
       break;
@@ -1656,7 +1657,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
       base = 16;
     } else if (repr[0] == '0' && (repr[1] == 'b' || repr[1] == 'B')) {
       (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
-                                               "binary number is not a standard: %s", t->repr);
+                                                   "binary number is not a standard: %s", t->repr);
       base = 2;
       start += 2;
     } else if (repr[0] == '0') {
@@ -1728,7 +1729,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
         warning (c2m_ctx, t->pos, "number %s is out of range -- using IEEE infinity", t->repr);
       } else {
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos, "number %s is out of range",
-                                                 t->repr);
+                                                     t->repr);
       }
     }
   }
@@ -1964,7 +1965,8 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_
 
   assert (fname != NULL);
   if ((f = fopen (fname, "r")) == NULL) {
-    if (c2m_options->message_file != NULL) error (c2m_ctx, err_pos, "error in opening file %s", fname);
+    if (c2m_options->message_file != NULL)
+      error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
   add_stream (c2m_ctx, f, fname, NULL);
@@ -4577,7 +4579,8 @@ D (initializer_list) {
 
   list = new_node (c2m_ctx, N_LIST);
   if (C ('}')) {
-    (c2m_options->pedantic_p ? error : warning) (c2m_ctx, curr_token->pos, "empty initializer list");
+    (c2m_options->pedantic_p ? error : warning) (c2m_ctx, curr_token->pos,
+                                                 "empty initializer list");
     return list;
   }
   for (;;) { /* designation */
@@ -6281,7 +6284,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
   if (type->mode == TM_BASIC && type->u.basic_type == TP_UNDEF) {
     if (size == 0 && sign == 0) {
       (c2m_options->pedantic_p ? error (c2m_ctx, r->pos, "no any type specifier")
-                           : warning (c2m_ctx, r->pos, "type defaults to int"));
+                               : warning (c2m_ctx, r->pos, "type defaults to int"));
       type->u.basic_type = TP_INT;
     } else if (size == 0) {
       type->u.basic_type = sign >= 0 ? TP_INT : TP_UINT;
@@ -6496,7 +6499,7 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
         if (case_expr2 != NULL) {
           ok_p = check_case_expr (c2m_ctx, case_expr2, type, target) && ok_p;
           (c2m_options->pedantic_p ? error : warning) (c2m_ctx, l->pos,
-                                                   "range cases are not a part of C standard");
+                                                       "range cases are not a part of C standard");
         }
       }
       if (ok_p) {
@@ -6669,7 +6672,8 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                               : code == N_RETURN
                                   ? "incompatible return-expr type in function returning a pointer"
                                   : "incompatible types in assignment to a pointer");
-        (c2m_options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx, pos, "%s", msg);
+        (c2m_options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx, pos, "%s",
+                                                                              msg);
       }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
@@ -12563,8 +12567,8 @@ static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *d
     macro.id = id;
     if (HTAB_DO (macro_t, macro_tab, &macro, HTAB_FIND, tab_m)) {
       if (!replacement_eq_p (tab_m->replacement, repl) && c2m_options->message_file != NULL)
-        fprintf (c2m_options->message_file, "warning -- redefinition of macro %s on the command line\n",
-                 id->repr);
+        fprintf (c2m_options->message_file,
+                 "warning -- redefinition of macro %s on the command line\n", id->repr);
       HTAB_DO (macro_t, macro_tab, &macro, HTAB_DELETE, tab_m);
     }
     new_macro (c2m_ctx, macro.id, NULL, repl);
@@ -12592,7 +12596,8 @@ static void process_macro_commands (MIR_context_t ctx) {
 
   for (size_t i = 0; i < c2m_options->macro_commands_num; i++)
     if (c2m_options->macro_commands[i].def)
-      define_cmd_macro (c2m_ctx, c2m_options->macro_commands[i].name, c2m_options->macro_commands[i].def);
+      define_cmd_macro (c2m_ctx, c2m_options->macro_commands[i].name,
+                        c2m_options->macro_commands[i].def);
     else
       undefine_cmd_macro (c2m_ctx, c2m_options->macro_commands[i].name);
 }
