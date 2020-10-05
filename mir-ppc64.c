@@ -17,13 +17,13 @@
 #define PPC64_FUNC_DESC_LEN 24
 #endif
 
-static void ppc64_push_func_desc (VARR (uint8_t) * insn_varr);
-void (*ppc64_func_desc) (VARR (uint8_t) * insn_varr) = ppc64_push_func_desc;
+static void ppc64_push_func_desc (VARR (uint8_t) ** insn_varr);
+void (*ppc64_func_desc) (VARR (uint8_t) ** insn_varr) = ppc64_push_func_desc;
 
-static void ppc64_push_func_desc (VARR (uint8_t) * insn_varr) {
-  VARR_CREATE (uint8_t, insn_varr, 128);
+static void ppc64_push_func_desc (VARR (uint8_t) ** insn_varr) {
+  VARR_CREATE (uint8_t, *insn_varr, 128);
   for (int i = 0; i < PPC64_FUNC_DESC_LEN; i++)
-    VARR_PUSH (uint8_t, insn_varr, ((uint8_t *) ppc64_func_desc)[i]);
+    VARR_PUSH (uint8_t, *insn_varr, ((uint8_t *) ppc64_func_desc)[i]);
 }
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
@@ -156,7 +156,7 @@ void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   };
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (code);
+  ppc64_push_func_desc (&code);
   push_insns (code, bstart_code, sizeof (bstart_code));
   return ppc64_publish_func_and_redirect (ctx, code);
 }
@@ -168,7 +168,7 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   };
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (code);
+  ppc64_push_func_desc (&code);
   ppc64_gen_ld (code, 0, 1, 0, MIR_T_I64);                /* r0 = 0(r1) */
   ppc64_gen_st (code, 0, 3, 0, MIR_T_I64);                /* 0(r3) = r0 */
   ppc64_gen_ld (code, 0, 1, PPC64_TOC_OFFSET, MIR_T_I64); /* r0 = toc_offset(r1) */
@@ -181,7 +181,7 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
   VARR (uint8_t) * code;
 
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  ppc64_push_func_desc (code);
+  ppc64_push_func_desc (&code);
   return ppc64_publish_func_and_redirect (ctx, code);
 #else
   const uint32_t nop_insn = 24 << (32 - 6);                                /* ori 0,0,0 */
@@ -275,7 +275,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   int disp, blk_disp, param_offset, param_size = 0;
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (code);
+  ppc64_push_func_desc (&code);
   for (uint32_t i = 0; i < nargs; i++)
     if ((type = arg_descs[i].type) == MIR_T_BLK)
       param_size += (arg_descs[i].size + 7) / 8 * 8;
