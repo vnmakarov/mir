@@ -33,7 +33,7 @@ struct MIR_context {
 #endif
   MIR_error_func_t error_func;
   VARR (size_t) * insn_nops;          /* constant after initialization */
-  VARR (MIR_proto_t) * unspec_protos; /* protos of unspec insns */
+  VARR (MIR_proto_t) * unspec_protos; /* protos of unspec insns (set only during initialization) */
   VARR (char) * temp_string;
   VARR (uint8_t) * temp_data;
   HTAB (MIR_item_t) * module_item_tab;
