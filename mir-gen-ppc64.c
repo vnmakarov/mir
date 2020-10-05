@@ -2341,7 +2341,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         if (insn->ops[2].u.i == 0) {
           gen_mov (gen_ctx, insn, MIR_MOV, insn->ops[0], insn->ops[1]);
           old_insn = insn;
-          insn = DLIST_NEXT (MIR_insn_t, insn);
+          insn = DLIST_PREV (MIR_insn_t, insn);
           gen_delete_insn (gen_ctx, old_insn);
         } else {
           if (insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i < 0) {
