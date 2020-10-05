@@ -251,28 +251,28 @@ c2mir-gen-test3: c2m
 c2mir-bootstrap-test0: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O0 '... '
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 1.bmir -el -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with default optimize level '... '
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -el -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test1: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O1 '... '
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 1.bmir -el -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test3: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O3 '... '
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 1.bmir -el -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
