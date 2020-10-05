@@ -495,7 +495,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       n_fpregs++;
       if (type == MIR_T_LD) {
         if (n_fpregs >= 8)
-          (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
+          MIR_get_error_func (ctx) (MIR_ret_error,
+                                    "ppc64 can not handle this combination of return values");
         ppc64_gen_ld (code, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }

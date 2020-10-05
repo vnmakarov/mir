@@ -290,7 +290,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
       if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD ? 16 : 8;
     } else {
-      (*error_func) (MIR_call_op_error, "wrong type of arg value");
+      MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
     }
   }
   blk_offset = (blk_offset + 15) / 16 * 16;
