@@ -2,7 +2,9 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-// _MIR_get_thunk, _MIR_redirect_thunk, _MIR_get_interp_shim, _MIR_get_ff_call, _MIR_get_wrapper
+/* BLK is passed in int regs, and if the regs are not enough, the rest is passed on the stack.
+   RBLK is always passed by address.  */
+
 #define VA_LIST_IS_ARRAY_P 1 /* one element which is a pointer to args */
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -61,6 +63,11 @@ static void ppc64_gen_addi (VARR (uint8_t) * insn_varr, unsigned rt_reg, unsigne
   push_insn (insn_varr, (14 << 26) | (rt_reg << 21) | (ra_reg << 16) | (disp & 0xffff));
 }
 
+static void ppc64_gen_add (VARR (uint8_t) * insn_varr, unsigned rt_reg, unsigned ra_reg,
+                           unsigned rb_reg) {
+  push_insn (insn_varr, (31 << 26) | (266 << 1) | (rt_reg << 21) | (ra_reg << 16) | (rb_reg << 11));
+}
+
 static void ppc64_gen_ld (VARR (uint8_t) * insn_varr, unsigned to, unsigned base, int disp,
                           MIR_type_t type) {
   int single_p = type == MIR_T_F;
@@ -116,6 +123,30 @@ static void ppc64_gen_jump (VARR (uint8_t) * insn_varr, unsigned int reg, int ca
   push_insn (insn_varr, (31 << 26) | (467 << 1) | (12 << 21) | (9 << 16)); /* mctr 12 */
 #endif
   push_insn (insn_varr, (19 << 26) | (528 << 1) | (20 << 21) | (call_p ? 1 : 0)); /* bcctr[l] */
+}
+
+/* r11=addr_reg+addr_disp; r15=r1(sp)+sp_offset; r0=qwords-1;
+   ctr=r0; L: r0=mem[r11]; r11+=8; mem[r15]=r0; r15+=8; bdnz L; */
+static void gen_blk_mov (VARR (uint8_t) * insn_varr, size_t sp_offset, unsigned int addr_reg,
+                         int addr_disp, size_t qwords) {
+  static const uint32_t blk_mov_loop[] = {
+    /*0:*/ 0x7c0903a6,  /*mctr r0*/
+    /*4:*/ 0xe80b0000,  /*ld r0,0(r11)*/
+    /*8:*/ 0x396b0008,  /*addi r11,r11,8*/
+    /*12:*/ 0xf80f0000, /*std r0,0(r15)*/
+    /*16:*/ 0x39ef0008, /*addi r15,r15,8*/
+    /*20:*/ 0x4200fff0, /*bdnz 4*/
+  };
+  /* r11=addr_reg+addr_disp: */
+  if (addr_reg != 11 || addr_disp != 0) ppc64_gen_addi (insn_varr, 11, addr_reg, addr_disp);
+  if (sp_offset < 0x10000) {
+    ppc64_gen_addi (insn_varr, 15, 1, sp_offset);
+  } else {
+    ppc64_gen_address (insn_varr, 15, (void *) sp_offset);
+    ppc64_gen_add (insn_varr, 15, 15, 1);
+  }
+  ppc64_gen_address (insn_varr, 0, (void *) qwords); /*r0 = qwords*/
+  push_insns (insn_varr, blk_mov_loop, sizeof (blk_mov_loop));
 }
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
@@ -204,6 +235,14 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
+void *va_stack_arg_builtin (void *p, size_t s) {
+  struct ppc64_va_list *va = p;
+  void *a = va->arg_area;
+
+  va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  return a;
+}
+
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   struct ppc64_va_list **va = p;
   va_list *vap = a;
@@ -215,15 +254,13 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
 
 /* Generation: fun (fun_addr, res_arg_addresses):
-   save lr (r1 + 16); allocate and form minimal stack frame (with necessary param area); save r14;
-   r12=fun_addr (r3); r14 = res_arg_addresses (r4);
-   r0=mem[r14,<args_offset>]; (arg_reg=mem[r0] or r0=mem[r0];mem[r1,r1_offset]=r0) ...
-   if func is vararg: put fp args also in gp regs
-   call *r12;
-   r0=mem[r14,<offset>]; res_reg=mem[r0]; ...
-   restore r14, r1, lr; return. */
+   save lr (r1 + 16); allocate and form minimal stack frame (with necessary param area); save
+   r14,r15; r12=fun_addr (r3); r14 = res_arg_addresses (r4); r0=mem[r14,<args_offset>];
+   (arg_reg=mem[r0] or r0=mem[r0];mem[r1,r1_offset]=r0) ... if func is vararg: put fp args also in
+   gp regs call *r12; r0=mem[r14,<offset>]; res_reg=mem[r0]; ... restore r15, r14, r1, lr; return.
+ */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        MIR_type_t *arg_types, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
   static uint32_t start_pattern[] = {
     0x7c0802a6, /* mflr r0 */
     0xf8010010, /* std  r0,16(r1) */
@@ -234,19 +271,25 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x4e800020, /* blr */
   };
   MIR_type_t type;
-  int n_gpregs = 0, n_fpregs = 0, res_reg = 14, frame_size, disp, param_offset, param_size = 0;
+  int n_gpregs = 0, n_fpregs = 0, res_reg = 14, qwords, frame_size;
+  int disp, blk_disp, param_offset, param_size = 0;
   VARR (uint8_t) * code;
 
   ppc64_push_func_desc (code);
-  for (uint32_t i = 0; i < nargs; i++) param_size += arg_types[i] == MIR_T_LD ? 16 : 8;
+  for (uint32_t i = 0; i < nargs; i++)
+    if ((type = arg_descs[i].type) == MIR_T_BLK)
+      param_size += (arg_descs[i].size + 7) / 8 * 8;
+    else
+      param_size += type == MIR_T_LD ? 16 : 8;
   if (param_size < 64) param_size = 64;
-  frame_size = PPC64_STACK_HEADER_SIZE + param_size + 8; /* +local var to save res_reg */
-  if (frame_size % 16 != 0) frame_size += 8;             /* align */
+  frame_size = PPC64_STACK_HEADER_SIZE + param_size + 16; /* +local var to save res_reg and 15 */
+  if (frame_size % 16 != 0) frame_size += 8;              /* align */
   ppc64_gen_st (code, 2, 1, PPC64_TOC_OFFSET, MIR_T_I64);
   push_insns (code, start_pattern, sizeof (start_pattern));
   ppc64_gen_stdu (code, -frame_size);
   ppc64_gen_st (code, res_reg, 1, PPC64_STACK_HEADER_SIZE + param_size,
                 MIR_T_I64); /* save res_reg */
+  ppc64_gen_st (code, 15, 1, PPC64_STACK_HEADER_SIZE + param_size + 8, MIR_T_I64); /* save 15 */
   mir_assert (sizeof (long double) == 16);
   ppc64_gen_mov (code, res_reg, 4); /* results & args */
   ppc64_gen_mov (code, 12, 3);      /* func addr */
@@ -254,7 +297,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   param_offset = nres * 16;              /* args start */
   disp = PPC64_STACK_HEADER_SIZE;        /* param area start */
   for (uint32_t i = 0; i < nargs; i++) { /* load args: */
-    type = arg_types[i];
+    type = arg_descs[i].type;
     if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 13) {
       ppc64_gen_ld (code, 1 + n_fpregs, res_reg, param_offset, type);
       if (vararg_p) {
@@ -290,7 +333,16 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         ppc64_gen_ld (code, 0, res_reg, param_offset + 8, type);
         ppc64_gen_st (code, 0, 1, disp + 8, MIR_T_D);
       }
-    } else if (n_gpregs < 8) {
+    } else if (type == MIR_T_BLK) {
+      qwords = (arg_descs[i].size + 7) / 8;
+      if (qwords > 0) ppc64_gen_ld (code, 11, res_reg, param_offset, MIR_T_I64);
+      for (blk_disp = 0; qwords > 0 && n_gpregs < 8; qwords--, n_gpregs++, blk_disp += 8, disp += 8)
+        ppc64_gen_ld (code, n_gpregs + 3, 11, blk_disp, MIR_T_I64);
+      if (qwords > 0) gen_blk_mov (code, disp, 11, blk_disp, qwords);
+      disp += qwords * 8;
+      param_offset += 16;
+      continue;
+    } else if (n_gpregs < 8) { /* including RBLK */
       ppc64_gen_ld (code, n_gpregs + 3, res_reg, param_offset, MIR_T_I64);
     } else {
       ppc64_gen_ld (code, 0, res_reg, param_offset, MIR_T_I64);
@@ -305,17 +357,17 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   disp = 0;
   for (uint32_t i = 0; i < nres; i++) {
     type = res_types[i];
-    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 4) {
+    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 8) {
       ppc64_gen_st (code, n_fpregs + 1, res_reg, disp, type);
       n_fpregs++;
       if (type == MIR_T_LD) {
-        if (n_fpregs >= 4)
+        if (n_fpregs >= 8)
           MIR_get_error_func (ctx) (MIR_ret_error,
                                     "ppc64 can not handle this combination of return values");
         ppc64_gen_st (code, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }
-    } else if (n_gpregs < 1) {  // just one gp reg
+    } else if (n_gpregs < 2) {  // just one-two gp reg
       ppc64_gen_st (code, n_gpregs + 3, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
@@ -326,6 +378,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   }
   ppc64_gen_ld (code, res_reg, 1, PPC64_STACK_HEADER_SIZE + param_size,
                 MIR_T_I64); /* restore res_reg */
+  ppc64_gen_ld (code, 15, 1, PPC64_STACK_HEADER_SIZE + param_size + 8, MIR_T_I64); /* restore r15 */
   ppc64_gen_addi (code, 1, 1, frame_size);
   push_insns (code, finish_pattern, sizeof (finish_pattern));
   return ppc64_publish_func_and_redirect (ctx, code);
@@ -342,8 +395,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   int vararg_p = func->vararg_p;
   MIR_type_t type, *res_types = func->res_types;
   MIR_var_t *arg_vars = VARR_ADDR (MIR_var_t, func->vars);
-  int disp, size, frame_size, local_var_size, param_offset, va_reg = 11, caller_r1 = 12,
-                                                            res_reg = 14;
+  int disp, start_disp, qwords, size, frame_size, local_var_size, param_offset;
+  int va_reg = 11, caller_r1 = 12, res_reg = 14;
   int n_gpregs, n_fpregs;
   static uint32_t start_pattern[] = {
     0x7c0802a6, /* mflr r0 */
@@ -359,27 +412,28 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 
   VARR_CREATE (uint8_t, code, 256);
   frame_size = PPC64_STACK_HEADER_SIZE + 64; /* header + 8(param area) */
-  local_var_size = nres * 16 + 8;            /* saved r14, results */
+  local_var_size = nres * 16 + 16;           /* saved r14, r15, results */
   if (vararg_p) {
     for (unsigned reg = 3; reg <= 10; reg++) /* std rn,dispn(r1) : */
       ppc64_gen_st (code, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8, MIR_T_I64);
     ppc64_gen_addi (code, va_reg, 1, PPC64_STACK_HEADER_SIZE);
   } else {
     ppc64_gen_mov (code, caller_r1, 1); /* caller frame r1 */
-    for (uint32_t i = 0; i < nargs; i++) {
-      type = arg_vars[i].type;
-      local_var_size += type == MIR_T_LD ? 16 : 8;
-    }
+    for (uint32_t i = 0; i < nargs; i++)
+      if ((type = arg_vars[i].type) == MIR_T_BLK)
+        local_var_size += (arg_vars[i].size + 7) / 8 * 8;
+      else
+        local_var_size += type == MIR_T_LD ? 16 : 8;
   }
   frame_size += local_var_size;
   if (frame_size % 16 != 0) frame_size += 8; /* align */
   push_insns (code, start_pattern, sizeof (start_pattern));
   ppc64_gen_stdu (code, -frame_size);
   ppc64_gen_st (code, res_reg, 1, PPC64_STACK_HEADER_SIZE + 64, MIR_T_I64); /* save res_reg */
+  ppc64_gen_st (code, 15, 1, PPC64_STACK_HEADER_SIZE + 72, MIR_T_I64);      /* save r15 */
   if (!vararg_p) { /* save args in local vars: */
-    /* header_size + 64 + nres * 16 + 8 -- start of stack memory to keep args: */
-    disp = PPC64_STACK_HEADER_SIZE + 64 + nres * 16 + 8;
-    ppc64_gen_addi (code, va_reg, 1, disp);
+    /* header_size + 64 + nres * 16 + 16 -- start of stack memory to keep args: */
+    start_disp = disp = PPC64_STACK_HEADER_SIZE + 64 + nres * 16 + 16;
     param_offset = PPC64_STACK_HEADER_SIZE;
     n_gpregs = n_fpregs = 0;
     for (uint32_t i = 0; i < nargs; i++) {
@@ -396,6 +450,16 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
             ppc64_gen_st (code, 0, 1, disp + 8, MIR_T_D);
           }
         }
+      } else if (type == MIR_T_BLK) {
+        qwords = (arg_vars[i].size + 7) / 8;
+        for (; qwords > 0 && n_gpregs < 8; qwords--, n_gpregs++, disp += 8, param_offset += 8)
+          ppc64_gen_st (code, n_gpregs + 3, 1, disp, MIR_T_I64);
+        if (qwords > 0) {
+          gen_blk_mov (code, disp, caller_r1, param_offset, qwords);
+          disp += qwords * 8;
+          param_offset += qwords * 8;
+        }
+        continue;
       } else if (n_gpregs < 8) {
         ppc64_gen_st (code, n_gpregs + 3, 1, disp, MIR_T_I64);
       } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
@@ -414,8 +478,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       param_offset += size;
       n_gpregs += type == MIR_T_LD ? 2 : 1;
     }
+    ppc64_gen_addi (code, va_reg, 1, start_disp);
   }
-  ppc64_gen_addi (code, res_reg, 1, 64 + PPC64_STACK_HEADER_SIZE + 8);
+  ppc64_gen_addi (code, res_reg, 1, 64 + PPC64_STACK_HEADER_SIZE + 16);
   ppc64_gen_address (code, 3, ctx);
   ppc64_gen_address (code, 4, func_item);
   ppc64_gen_mov (code, 5, va_reg);
@@ -425,17 +490,16 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   disp = n_gpregs = n_fpregs = 0;
   for (uint32_t i = 0; i < nres; i++) {
     type = res_types[i];
-    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 4) {
+    if ((type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) && n_fpregs < 8) {
       ppc64_gen_ld (code, n_fpregs + 1, res_reg, disp, type);
       n_fpregs++;
       if (type == MIR_T_LD) {
-        if (n_fpregs >= 4)
-          MIR_get_error_func (ctx) (MIR_ret_error,
-                                    "ppc64 can not handle this combination of return values");
+        if (n_fpregs >= 8)
+          (*error_func) (MIR_ret_error, "ppc64 can not handle this combination of return values");
         ppc64_gen_ld (code, n_fpregs + 1, res_reg, disp + 8, type);
         n_fpregs++;
       }
-    } else if (n_gpregs < 1) {  // just one gp reg
+    } else if (n_gpregs < 2) {  // just one-two gp reg
       ppc64_gen_ld (code, n_gpregs + 3, res_reg, disp, MIR_T_I64);
       n_gpregs++;
     } else {
@@ -445,6 +509,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     disp += 16;
   }
   ppc64_gen_ld (code, res_reg, 1, PPC64_STACK_HEADER_SIZE + 64, MIR_T_I64); /* restore res_reg */
+  ppc64_gen_ld (code, 15, 1, PPC64_STACK_HEADER_SIZE + 72, MIR_T_I64);      /* restore r15 */
   ppc64_gen_addi (code, 1, 1, frame_size);
   push_insns (code, finish_pattern, sizeof (finish_pattern));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));

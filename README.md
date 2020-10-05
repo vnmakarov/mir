@@ -65,7 +65,7 @@
   * You can also create MIR from MIR **binary** or **text** file
   * The best way to get a feel about MIR is to use textual MIR representation
   * Example of Eratosthenes sieve on C
-```
+```c
 #define Size 819000
 int sieve (int N) {
   int64_t i, k, prime, count, n; char flags[Size];
@@ -89,7 +89,7 @@ void ex100 (void) {
 }
 ```
   * Example of MIR textual file for the same function:
-```
+```mir
 m_sieve:  module
           export sieve
 sieve:    func i32, i32:N
@@ -167,7 +167,7 @@ ex100:    func v, 0
     can be also dependent on the interface 
   * Running code from the above example could look like the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
-```
+```c
     /* ctx is a context created by MIR_init */
     MIR_load_module (ctx, m1); MIR_load_module (ctx, m2);
     MIR_load_external (ctx, "printf", printf);
@@ -224,16 +224,10 @@ ex100:    func v, 0
     * fast **register allocator** with implicit coalescing hard registers and stack slots
       for copy elimination
   * Different optimization levels to tune compilation speed vs generated code performance
-  * **No SSA** (single static assignment form) for:
-    * Faster optimizations for short optimizations pipeline and small functions (a target usage scenario) 
-      * Currently SSA could be used only for two optimizations (CCP
-        and GCSE).  SSA usage would mean 4 additional passes over IR.  If we implement more optimizations,
-        SSA transition is possible when additional time for expensive in/out SSA
-        passes will be less than additional time for non-SSA
-        optimization implementation
-    * Simpler and more compact generator code because we can avoid to
-      implement a lot of nontrivial code (for dominator and dominator
-      frontier calculation, a good out of SSA code)
+  * **SSA** form of MIR is used before register allocation
+    * We use a form of Braun's algorithm to build SSA (M. Braun et al. "Simple and Efficient
+      Construction of Static Single Assignment Form")
+    * We keep SSA in **conventional form** all the time to make out-of-SSA pass trivial
   * Simplicity of optimizations implementation over extreme generated code performance
 
   * More details about **full JIT compiler pipeline**:
@@ -241,26 +235,22 @@ ex100:    func v, 0
   * **Simplify**: lowering MIR
   * **Inline**: inlining MIR calls
   * **Build CFG**: building Control Flow Graph (basic blocks and CFG edges)
-  * **Global Common Sub-Expression Elimination**: reusing calculated values
+  * **Build SSA**: Building Single Static Assignment Form by adding phi nodes and SSA edges to operands
+  * **Copy Propagation**: SSA copy propagation keeping conventional SSA form and removing redundant
+    extension insns
+  * **Global Value Numbering**: Removing redundant insns through GVN
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Reaching Definition Analysis** required for subsequent variable renaming
-  * **Variable renaming** renaming disjoint live ranges of variables which is beneficial for
-    register allocation and loop invariant code motion
-  * **Find Loops** finding natural loops for subsequent loop invariant code motion
-  * **Reaching Definition Analysis** required for subsequent loop invariant code motion
-  * **Loop Invariant Code Motion (LICM)** doing register pressure sensitive move of loop invariant
-    insns out of the loop
   * **Sparse Conditional Constant Propagation**: constant propagation
     and removing death paths of CFG
+  * **Out of SSA**: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Find Loops**: finding natural loops and building loop tree
   * **Build Live Info**: calculating live in and live out for the basic blocks
   * **Build Live Ranges**: calculating program point ranges for registers
-  * **Assign**: priority-based assigning hard regs and stack slots to registers
+  * **Assign**: fast RA for `-O0` or priority-based linear scan RA for `-O1` and above
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
   * **Combine** (code selection): merging data-depended insns into one
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Fast Generator**: 4-5 times faster generation of code whose performance is on par with `-O0` of GCC/Clang
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
   
 ## C to MIR translation
@@ -343,10 +333,10 @@ ex100:    func v, 0
     * RyuJIT optimizations is basically MIR-generator optimizations minus SCCP
     * RyuJIT uses SSA
   * Other candidates:
-    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA-,
+    * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA,
       ASM generation-, LGPL2
     * [**CraneLift**](https://github.com/CraneStation/cranelift): less standalone-,
-      big- (70K LOC of Rust-), SSA-, Apache License
+      big- (70K LOC of Rust-), SSA, Apache License
     * [**NanoJIT**](https://github.com/dibyendumajumdar/nanojit), standalone+, medium (40K C++ LOC), only simple RA-,
       Mozilla Public License
 

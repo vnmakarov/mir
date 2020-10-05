@@ -222,13 +222,11 @@ DEF_VARR (htab_ind_t)
                                                                                                  \
   static inline void HTAB_OP_DEF (T, foreach_elem) (HTAB (T) * htab,                             \
                                                     void (*func) (T el, void *arg), void *arg) { \
-    htab_ind_t *addr;                                                                            \
-    htab_size_t i, size;                                                                         \
+    htab_size_t i;                                                                               \
     HTAB_EL (T) * els_addr;                                                                      \
                                                                                                  \
     HTAB_ASSERT (htab != NULL, "foreach_elem", T);                                               \
     els_addr = VARR_ADDR (HTAB_EL (T), htab->els);                                               \
-    size = VARR_LENGTH (HTAB_EL (T), htab->els);                                                 \
     for (i = 0; i < htab->els_bound; i++)                                                        \
       if (els_addr[i].hash != HTAB_DELETED_HASH) func (els_addr[i].el, arg);                     \
   }

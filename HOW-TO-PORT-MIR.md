@@ -66,6 +66,12 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
     function argument.  The generated function is used to implement
     `MIR_BEND` insn in the interpreter
 
+  * `void *va_arg_builtin (void *p, uint64_t t)` returns address of
+    the next argument of MIR type `t`, where `p` is `va_list`
+  
+  * `void *va_stack_arg_builtin (void *p, size_t s)` returns address of
+    the next argument of MIR type `MIR_T_BLK` of size `s`, where `p` is `va_list`
+  
   * `void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t
     func_item, void *handler)` generates and returns a function behaving as usual
     C function which calls function `void handler (MIR_context_t ctx,
@@ -96,10 +102,10 @@ with the interpreter.  You need to create a lot files but they are
 mostly copies of already existing ones.
 
   * First create directory `c2mir/<target>` and files `c<target>.h`,
-    `c<target>-code.c`, and `mirc-<target>-linux.h` in this directory.
-    The simplest way to do this is to copy an existing directory
-    `x86_64` or `aarch64`, rename files in the new directory, and
-    modify them
+    `c<target>-code.c`, `c<target>-ABI-code.c`, and
+    `mirc-<target>-linux.h` in this directory.  The simplest way to do
+    this is to copy an existing directory `x86_64` or `aarch64`,
+    rename files in the new directory, and modify them
 
     * file `c<target>.h` defines types and macros used by C2MIR compiler.
       In most cases of 64-bit target, you don't need to change
@@ -109,6 +115,16 @@ mostly copies of already existing ones.
       (e.g. standard include directories) and functions (concerning
       data alignments) used by C2MIR compiler. You just need to rename
       definitions containing `<target>` in their names
+
+    * file `c<target>-ABI-code.c` defines platform depended data and
+      functions to generate ABI-compliant calls.  You can use some
+      functions of simple ABI in file `c2mir.c` or write code to
+      generate ABI compliant calls.  See comments for functions
+      `target_init_arg_vars`, `target_return_by_addr_p`,
+      `target_add_res_proto`, `target_add_call_res_op`,
+      `target_gen_post_call_res_code`, `target_add_ret_ops`,
+      `target_add_arg_proto`, `target_add_call_arg_op`, and
+      `target_gen_gather_arg`
 
     * file `mirc-target-linux.h` contains predefined macros of C2MIR
       compiler.  You should rename some of them.  To find what macros
@@ -199,7 +215,8 @@ machine-dependent functions and definitions used by MIR-generator:
     * change MIR insn operands on some hard register if the corresponding target insn works
       only with this hard register.  In this case you need generate move insn to copy the original
       operand into the hard register
-
+    * implements block data argument passing in a way to implement target call ABI for C aggregates
+    
     Adding and deleting MIR insns should be done with MIR-generator
     functions `gen_add_insn_before`, `gen_add_insn_after`, and
     `gen_delete_insn`.

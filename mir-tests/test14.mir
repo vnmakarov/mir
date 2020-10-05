@@ -1,3 +1,4 @@
+# Test for switch
 mc:       module
 	  import printf
 p_printf: proto p:fmt, ...

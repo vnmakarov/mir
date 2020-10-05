@@ -133,7 +133,6 @@ int main (int argc, char *argv[], char *env[]) {
     exit_code = val.i;
   } else {
     MIR_gen_init (ctx, 1);
-    MIR_gen_set_debug_file (ctx, 0, stderr);
     MIR_link (ctx, MIR_USE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
 #if MIR_BIN_DEBUG

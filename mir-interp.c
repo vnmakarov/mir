@@ -4,6 +4,18 @@
    File contains MIR interpreter which is an obligatory part of MIR API.
 */
 
+#ifdef MIR_NO_INTERP
+static void interp_init (MIR_context_t ctx) {}
+static void finish_func_interpretation (MIR_item_t func_item) {}
+static void interp_finish (MIR_context_t ctx) {}
+void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...) {}
+void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
+                          MIR_val_t *vals, va_list va) {}
+void MIR_interp_arr (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
+                     MIR_val_t *vals) {}
+void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {}
+#else
+
 #ifndef MIR_INTERP_TRACE
 #define MIR_INTERP_TRACE 0
 #endif
@@ -20,6 +32,10 @@
 #define ALWAYS_INLINE inline
 #endif
 
+#if defined(_MSC_VER)
+#define alloca _alloca
+#endif
+
 typedef MIR_val_t *code_t;
 
 typedef struct func_desc {
@@ -28,10 +44,14 @@ typedef struct func_desc {
   MIR_val_t code[1];
 } * func_desc_t;
 
+static void update_max_nreg (MIR_reg_t reg, MIR_reg_t *max_nreg) {
+  if (*max_nreg < reg) *max_nreg = reg;
+}
+
 static MIR_reg_t get_reg (MIR_op_t op, MIR_reg_t *max_nreg) {
   /* We do not interpret code with hard regs */
   mir_assert (op.mode == MIR_OP_REG);
-  if (*max_nreg < op.u.reg) *max_nreg = op.u.reg;
+  update_max_nreg (op.u.reg, max_nreg);
   return op.u.reg;
 }
 
@@ -52,12 +72,15 @@ DEF_VARR (MIR_val_t);
 struct ff_interface {
   size_t nres, nargs;
   int vararg_p;
-  MIR_type_t *res_types, *arg_types;
+  MIR_type_t *res_types;
+  _MIR_arg_desc_t *arg_descs;
   void *interface_addr;
 };
 
 typedef struct ff_interface *ff_interface_t;
 DEF_HTAB (ff_interface_t);
+
+DEF_VARR (_MIR_arg_desc_t);
 
 struct interp_ctx {
 #if DIRECT_THREADED_DISPATCH
@@ -74,8 +97,8 @@ struct interp_ctx {
   void (*bend_builtin) (void *);
   VARR (MIR_val_t) * call_res_args_varr;
   MIR_val_t *call_res_args;
-  VARR (MIR_type_t) * call_arg_types_varr;
-  MIR_type_t *call_arg_types;
+  VARR (_MIR_arg_desc_t) * call_arg_descs_varr;
+  _MIR_arg_desc_t *call_arg_descs;
   HTAB (ff_interface_t) * ff_interface_tab;
 };
 
@@ -90,8 +113,8 @@ struct interp_ctx {
 #define bend_builtin interp_ctx->bend_builtin
 #define call_res_args_varr interp_ctx->call_res_args_varr
 #define call_res_args interp_ctx->call_res_args
-#define call_arg_types_varr interp_ctx->call_arg_types_varr
-#define call_arg_types interp_ctx->call_arg_types
+#define call_arg_descs_varr interp_ctx->call_arg_descs_varr
+#define call_arg_descs interp_ctx->call_arg_descs
 #define ff_interface_tab interp_ctx->ff_interface_tab
 
 static void get_icode (struct interp_ctx *interp_ctx, MIR_val_t *v, int code) {
@@ -389,6 +412,10 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         } else if (code == MIR_SWITCH && i > 0) {
           mir_assert (ops[i].mode == MIR_OP_LABEL);
           v.i = 0;
+        } else if (MIR_call_code_p (code) && ops[i].mode == MIR_OP_MEM) {
+          mir_assert (MIR_blk_type_p (ops[i].u.mem.type));
+          v.i = ops[i].u.mem.base;
+          update_max_nreg (v.i, &max_nreg);
         } else {
           mir_assert (ops[i].mode == MIR_OP_REG);
           v.i = get_reg (ops[i], &max_nreg);
@@ -888,7 +915,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT, MIR_LDBGT, MIR_BGE, MIR_BGES);
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
     REP4 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_SWITCH, MIR_RET);
-    REP6 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND, MIR_VA_ARG, MIR_VA_START, MIR_VA_END);
+    REP3 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND);
+    REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_STACK_ARG, MIR_VA_START, MIR_VA_END);
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
     REP8 (LAB_EL, IC_LDD, IC_LDLD, IC_STI8, IC_STU8, IC_STI16, IC_STU16, IC_STI32, IC_STU32);
     REP8 (LAB_EL, IC_STI64, IC_STF, IC_STD, IC_STLD, IC_MOVI, IC_MOVP, IC_MOVF, IC_MOVD);
@@ -1277,6 +1305,13 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *r = (uint64_t) va_arg_builtin ((void *) va, tp);
     END_INSN;
   }
+  CASE (MIR_VA_STACK_ARG, 3) {
+    int64_t *r, va, size;
+
+    r = get_3iops (bp, ops, &va, &size);
+    *r = (uint64_t) va_stack_arg_builtin ((void *) va, size);
+    END_INSN;
+  }
   SCASE (MIR_VA_START, 1, va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a));
   SCASE (MIR_VA_END, 1, va_end_interp_builtin (ctx, bp[get_i (ops)].a));
 
@@ -1342,20 +1377,28 @@ static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg) {
   h = mir_hash_step (h, i->nargs);
   h = mir_hash_step (h, i->vararg_p);
   h = mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres, h);
-  h = mir_hash (i->arg_types, sizeof (MIR_type_t) * i->nargs, h);
+  for (size_t n = 0; n < i->nargs; n++) {
+    h = mir_hash_step (h, i->arg_descs[n].type);
+    if (MIR_blk_type_p (i->arg_descs[n].type)) h = mir_hash_step (h, i->arg_descs[n].size);
+  }
   return mir_hash_finish (h);
 }
 
 static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg) {
-  return (i1->nres == i2->nres && i1->nargs == i2->nargs && i1->vararg_p == i2->vararg_p
-          && memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) == 0
-          && memcmp (i1->arg_types, i2->arg_types, sizeof (MIR_type_t) * i1->nargs) == 0);
+  if (i1->nres != i2->nres || i1->nargs != i2->nargs || i1->vararg_p != i2->vararg_p) return FALSE;
+  if (memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) != 0) return FALSE;
+  for (size_t n = 0; n < i1->nargs; n++) {
+    if (i1->arg_descs[n].type != i2->arg_descs[n].type) return FALSE;
+    if (MIR_blk_type_p (i1->arg_descs[n].type) && i1->arg_descs[n].size != i2->arg_descs[n].size)
+      return FALSE;
+  }
+  return TRUE;
 }
 
 static void ff_interface_clear (ff_interface_t ffi, void *arg) { free (ffi); }
 
 static void *get_ff_interface (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                               MIR_type_t *arg_types, int vararg_p) {
+                               _MIR_arg_desc_t *arg_descs, int vararg_p) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   struct ff_interface ffi_s;
   ff_interface_t tab_ffi, ffi;
@@ -1365,18 +1408,19 @@ static void *get_ff_interface (MIR_context_t ctx, size_t nres, MIR_type_t *res_t
   ffi_s.nargs = nargs;
   ffi_s.vararg_p = !!vararg_p;
   ffi_s.res_types = res_types;
-  ffi_s.arg_types = arg_types;
+  ffi_s.arg_descs = arg_descs;
   if (HTAB_DO (ff_interface_t, ff_interface_tab, &ffi_s, HTAB_FIND, tab_ffi))
     return tab_ffi->interface_addr;
-  ffi = malloc (sizeof (struct ff_interface) + sizeof (MIR_type_t) * (nres + nargs));
+  ffi = malloc (sizeof (struct ff_interface) + sizeof (_MIR_arg_desc_t) * nargs
+                + sizeof (MIR_type_t) * nres);
   ffi->nres = nres;
   ffi->nargs = nargs;
   ffi->vararg_p = !!vararg_p;
-  ffi->res_types = (MIR_type_t *) ((char *) ffi + sizeof (struct ff_interface));
-  ffi->arg_types = ffi->res_types + nres;
+  ffi->arg_descs = (_MIR_arg_desc_t *) ((char *) ffi + sizeof (struct ff_interface));
+  ffi->res_types = (MIR_type_t *) ((char *) ffi->arg_descs + nargs * sizeof (_MIR_arg_desc_t));
   memcpy (ffi->res_types, res_types, sizeof (MIR_type_t) * nres);
-  memcpy (ffi->arg_types, arg_types, sizeof (MIR_type_t) * nargs);
-  ffi->interface_addr = _MIR_get_ff_call (ctx, nres, res_types, nargs, call_arg_types, vararg_p);
+  memcpy (ffi->arg_descs, arg_descs, sizeof (_MIR_arg_desc_t) * nargs);
+  ffi->interface_addr = _MIR_get_ff_call (ctx, nres, res_types, nargs, call_arg_descs, vararg_p);
   htab_res = HTAB_DO (ff_interface_t, ff_interface_tab, ffi, HTAB_INSERT, tab_ffi);
   mir_assert (!htab_res && ffi == tab_ffi);
   return ffi->interface_addr;
@@ -1404,27 +1448,34 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
   }
   nres = proto->nres;
   if (VARR_EXPAND (MIR_val_t, call_res_args_varr, nargs + nres)
-      || VARR_EXPAND (MIR_type_t, call_arg_types_varr, nargs + nres)) {
+      || VARR_EXPAND (_MIR_arg_desc_t, call_arg_descs_varr, nargs)) {
     call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
-    call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
+    call_arg_descs = VARR_ADDR (_MIR_arg_desc_t, call_arg_descs_varr);
   }
   if ((ff_interface_addr = ffi_address_ptr->a) == NULL) {
     for (i = 0; i < nargs; i++) {
       if (i < arg_vars_num) {
-        call_arg_types[i] = arg_vars[i].type;
+        call_arg_descs[i].type = arg_vars[i].type;
+        if (MIR_blk_type_p (arg_vars[i].type)) call_arg_descs[i].size = arg_vars[i].size;
         continue;
       }
-      mode = insn_arg_ops[i].value_mode;
-      mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
-                  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
-      if (mode == MIR_OP_FLOAT)
-        (*MIR_get_error_func (ctx)) (MIR_call_op_error,
-                                     "passing float variadic arg (should be passed as double)");
-      call_arg_types[i]
-        = (mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
+      if (insn_arg_ops[i].mode == MIR_OP_MEM) { /* (r)block arg */
+        mir_assert (MIR_blk_type_p (insn_arg_ops[i].u.mem.type));
+        call_arg_descs[i].type = insn_arg_ops[i].u.mem.type;
+        call_arg_descs[i].size = insn_arg_ops[i].u.mem.disp;
+      } else {
+        mode = insn_arg_ops[i].value_mode;
+        mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
+                    || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
+        if (mode == MIR_OP_FLOAT)
+          (*MIR_get_error_func (ctx)) (MIR_call_op_error,
+                                       "passing float variadic arg (should be passed as double)");
+        call_arg_descs[i].type
+          = (mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
+      }
     }
     ff_interface_addr = ffi_address_ptr->a
-      = get_ff_interface (ctx, nres, proto->res_types, nargs, call_arg_types, proto->vararg_p);
+      = get_ff_interface (ctx, nres, proto->res_types, nargs, call_arg_descs, proto->vararg_p);
   }
 
   for (i = 0; i < nargs; i++) {
@@ -1445,7 +1496,9 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     case MIR_T_F: call_res_args[i + nres].f = arg_vals[i].f; break;
     case MIR_T_D: call_res_args[i + nres].d = arg_vals[i].d; break;
     case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
-    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
+    case MIR_T_P:
+    case MIR_T_BLK:
+    case MIR_T_RBLK: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
     default: mir_assert (FALSE);
     }
   }
@@ -1483,9 +1536,9 @@ static void interp_init (MIR_context_t ctx) {
   VARR_CREATE (MIR_val_t, arg_vals_varr, 0);
   arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
   VARR_CREATE (MIR_val_t, call_res_args_varr, 0);
-  VARR_CREATE (MIR_type_t, call_arg_types_varr, 0);
+  VARR_CREATE (_MIR_arg_desc_t, call_arg_descs_varr, 0);
   call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
-  call_arg_types = VARR_ADDR (MIR_type_t, call_arg_types_varr);
+  call_arg_descs = VARR_ADDR (_MIR_arg_desc_t, call_arg_descs_varr);
   HTAB_CREATE_WITH_FREE_FUNC (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash,
                               ff_interface_eq, ff_interface_clear, NULL);
 #if MIR_INTERP_TRACE
@@ -1502,7 +1555,7 @@ static void interp_finish (MIR_context_t ctx) {
   VARR_DESTROY (MIR_val_t, code_varr);
   VARR_DESTROY (MIR_val_t, arg_vals_varr);
   VARR_DESTROY (MIR_val_t, call_res_args_varr);
-  VARR_DESTROY (MIR_type_t, call_arg_types_varr);
+  VARR_DESTROY (_MIR_arg_desc_t, call_arg_descs_varr);
   HTAB_DESTROY (ff_interface_t, ff_interface_tab);
   /* Clear func descs???  */
   free (ctx->interp_ctx);
@@ -1619,7 +1672,15 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     }
     case MIR_T_D: arg_vals[i].d = va_arg (va, double); break;
     case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
-    case MIR_T_P: arg_vals[i].a = va_arg (va, void *); break;
+    case MIR_T_P:
+    case MIR_T_RBLK: arg_vals[i].a = va_arg (va, void *); break;
+    case MIR_T_BLK:
+#if defined(__PPC64__) || defined(__aarch64__)
+      arg_vals[i].a = va_stack_arg_builtin (&va, arg_vars[i].size);
+#else
+          arg_vals[i].a = va_stack_arg_builtin (va, arg_vars[i].size);
+#endif
+      break;
     default: mir_assert (FALSE);
     }
   }
@@ -1637,3 +1698,5 @@ static void redirect_interface_to_interp (MIR_context_t ctx, MIR_item_t func_ite
 void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item != NULL) redirect_interface_to_interp (ctx, func_item);
 }
+
+#endif /* #ifdef MIR_NO_INTERP */

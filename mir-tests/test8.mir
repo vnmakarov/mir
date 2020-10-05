@@ -1,3 +1,4 @@
+# Extern call test
 m:		module
 exit_p:		proto  i64:v
 printf_p:	proto  p:fmt, ...

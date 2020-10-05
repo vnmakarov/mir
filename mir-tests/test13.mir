@@ -1,3 +1,4 @@
+# test for link-time expression
 mc:       module
 	  import printf
 e:	  func i64          # expression function

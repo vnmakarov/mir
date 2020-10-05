@@ -1,9 +1,15 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+
+#ifndef _WIN32
 #include <dlfcn.h>
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/stat.h>
+#endif
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 #include "c2mir.h"
@@ -82,6 +88,15 @@ static const int slash = '/';
 static lib_t std_libs[] = {{"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib", NULL}};
 static const char *std_lib_dirs[] = {"/usr/lib"};
 static const char *lib_suffix = ".dylib";
+#endif
+
+#ifdef _WIN32
+static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
+static const char *std_lib_dirs[] = {""};
+static const char *lib_suffix = ".dll";
+#define dlopen(n, f) LoadLibrary(n)
+#define dlclose(h) FreeLibrary(h)
+#define dlsym(h, s) GetProcAddress(h, s)
 #endif
 
 static struct c2mir_options options;
@@ -313,10 +328,16 @@ static void *import_resolver (const char *name) {
           && (sym = dlsym (handler, name)) != NULL)
         break;
   if (sym == NULL) {
+#ifdef _WIN32
+    if (strcmp (name, "LoadLibrary") == 0) return LoadLibrary;
+    if (strcmp (name, "FreeLibrary") == 0) return FreeLibrary;
+    if (strcmp (name, "GetProcAddress") == 0) return GetProcAddress;
+#else
     if (strcmp (name, "dlopen") == 0) return dlopen;
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
     if (strcmp (name, "stat") == 0) return stat;
+#endif
     fprintf (stderr, "can not load symbol %s\n", name);
     close_std_libs ();
     exit (1);

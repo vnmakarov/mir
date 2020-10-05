@@ -46,9 +46,11 @@
        or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead.
        So please don't expect machine-independence of MIR code working with long double values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
+     * `MIR_T_BLK` -- block data.  This type can be used only for argument of function
+     * `MIR_T_RBLK` -- return block data.  This type can be used only for argument of function
    * MIR textual representation of the types are correspondingly `i8`,
-     `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `p`,
-     and `v`
+     `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `ld`, `p`,
+     and `blk`
    * Function `int MIR_int_type_p (MIR_type_t t)` returns TRUE if given type is an integer one (it includes pointer type too)
    * Function `int MIR_fp_type_p (MIR_type_t t)` returns TRUE if given type is a floating point type
    
@@ -98,6 +100,7 @@
     * A variable should have an unique name in the function
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
+      * The structure contains also type size for variable of `MIR_T_BLK` or `MIR_T_RBLK` type
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (MIR_context_t ctx, const
     char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
     or function `MIR_item_t MIR_new_func_arr (MIR_context_t ctx, const char *name, size_t nres, MIR_type_t *res_types, size_t nargs, MIR_var_t *arg_vars)`
@@ -121,6 +124,12 @@
                      {<insn>}
                      endfun
 ```
+    * Textual presentation of block type argument in `func` has form `blk:<size>(<var_name>)`.
+      The corresponding argument in `call` insn should have analogous form
+      `blk:<the same size>(<local var name containing address of passed block data>)`
+    * Block data are passed by value.  How they are exactly passed is machine-defined:
+      * they are always passed on stack for x86-64, aarch64, and s390x
+      * they can (partially) passed through registers and on stack for ppc64
   * Non-argument function variables are created through API function
     `MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name)`
     * The only permitted integer type for the variable is `MIR_T_I64` (or MIR_T_U64???)
@@ -391,7 +400,7 @@
   * The first insn saves the stack pointer in the operand
   * The second insn restores stack pointer from the operand
   
-### MIR_VA_START, MIR_VA_ARG, and MIR_VA_END insns
+### MIR_VA_START, MIR_VA_ARG, MIR_VA_STACK_ARG, and MIR_VA_END insns
   * These insns are only for variable number arguments functions
   * `MIR_VA_START` and `MIR_VA_END` have one input operand, an address
     of va_list structure (see C stdarg.h for more details).  Unlike C
@@ -399,6 +408,9 @@
   * `MIR_VA_ARG` takes va_list and any memory operand and returns
     address of the next argument in the 1st insn operand.  The memory
     operand type defines the type of the argument
+  * `MIR_VA_STACK_ARG` takes va_list and integer operand and returns
+    address of the next argument passed as a block argument
+    of the size given by the integer operand
   * va_list operand can be memory with undefined type.  In this case
     address of the va_list is not in the memory but is the
     memory address
@@ -406,7 +418,7 @@
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
-```
+```c
   MIR_module_t m = MIR_new_module (ctx, "m");
   MIR_item_t func = MIR_new_func (ctx, "loop", MIR_T_I64, 1, MIR_T_I64, "arg1");
   MIR_reg_t COUNT = MIR_new_func_reg (ctx, func->u.func, MIR_T_I64, "count");
@@ -428,9 +440,11 @@
   MIR_finish_module (ctx);
 ```
 
-## MIR text example
+## MIR text examples
 
-```
+  * Sieve of eratosthenes:
+
+```mir
 m_sieve:  module
           export sieve
 sieve:    func i32, i32:N
@@ -468,6 +482,29 @@ ex100:    func v
           call p_sieve, sieve, r, 100
           call p_printf, printf, format, r
           endfunc
+          endmodule
+```
+
+  * Example of block arguments and `va_stack_arg`
+  
+```mir
+m0:       module
+f_p:	  proto i64, 16:blk(a), ...
+f:	  func i64, 16:blk(a), ...
+          local i64:r, i64:va, i64:a2
+	  alloca va, 32  # allocate enough space va_list
+	  va_start va
+	  va_stack_arg a2, va, 16 # get address of the 2nd blk arg
+	  add r, i64:0(a), i64:8(a2)
+	  ret r
+main:	  func
+	  local i64:a, i64:r
+	  alloca a, 16
+          mov i64:0(a), 42
+          mov i64:8(a), 24
+	  call f_p, f, r, blk:16(a), blk:16(a)
+	  ret r
+	  endfunc
           endmodule
 ```
 
@@ -569,9 +606,9 @@ ex100:    func v
       works only on the same targets as MIR generator
 
 # MIR generator (file mir-gen.h)
-  * Before use of MIR generator you should initialize it by API function `MIR_gen_init (MIR_context ctx)`
-  * API function `MIR_gen_finish (MIR_context ctx)` should be called last after any generator usage.
-    It frees all internal generator data
+  * Before use of MIR generator for given context you should initialize it by API function `MIR_gen_init (MIR_context ctx)`
+  * API function `MIR_gen_finish (MIR_context ctx)` frees all internal generator data for the context.
+    If you want to generate code for the context again after the `MIR_gen_finish` call, you should call `MIR_gen_init` again first
   * API function `void *MIR_gen (MIR_context ctx, MIR_item_t func_item)` generates machine code of given MIR function
     and returns an address to call it.  You can call the code as usual C function by using this address
     as the called function address

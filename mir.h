@@ -60,9 +60,9 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 typedef enum MIR_error_type {
   REP8 (ERR_EL, no, syntax, binary_io, alloc, finish, no_module, nested_module, no_func),
   REP4 (ERR_EL, func, vararg_func, nested_func, wrong_param_value),
-  REP4 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl),
-  REP8 (ERR_EL, reg_type, unique_reg, undeclared_op_ref, ops_num, call_op, ret, op_mode, out_op),
-  REP2 (ERR_EL, invalid_insn, parallel)
+  REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
+  REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
+  REP5 (ERR_EL, ret, op_mode, out_op, invalid_insn, parallel)
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -156,10 +156,13 @@ typedef enum {
   INSN_EL (ALLOCA),             /* 2 operands: result address and size  */
   REP2 (INSN_EL, BSTART, BEND), /* block start: result addr; block end: addr from block start */
   /* Special insns: */
-  INSN_EL (VA_ARG), /* result is arg address, operands: va_list addr and memory */
+  INSN_EL (VA_ARG),       /* result is arg address, operands: va_list addr and memory */
+  INSN_EL (VA_STACK_ARG), /* result is arg address, operands: va_list addr and integer (size) */
   INSN_EL (VA_START),
   INSN_EL (VA_END), /* operand is va_list */
   INSN_EL (LABEL),  /* One immediate operand is unique label number  */
+  INSN_EL (UNSPEC), /* First operand unspec code and the rest are args */
+  INSN_EL (PHI),    /* Used only internally in the generator, the first operand is output */
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
 } MIR_insn_code_t;
@@ -170,7 +173,7 @@ typedef enum {
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
   REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
-  TYPE_EL (P),                                          /* Pointer */
+  REP3 (TYPE_EL, P, BLK, RBLK),                         /* Pointer, (return) memory block */
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
@@ -179,6 +182,8 @@ static inline int MIR_int_type_p (MIR_type_t t) {
 }
 
 static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
+
+static inline int MIR_blk_type_p (MIR_type_t t) { return t == MIR_T_BLK || t == MIR_T_RBLK; }
 
 #if UINTPTR_MAX == 0xffffffff
 #define MIR_PTR32 1
@@ -287,8 +292,9 @@ struct MIR_insn {
 DEF_DLIST (MIR_insn_t, insn_link);
 
 typedef struct MIR_var {
-  MIR_type_t type;
+  MIR_type_t type; /* MIR_T_BLK and MIR_T_RBLK can be used only args */
   const char *name;
+  size_t size; /* ignored for type != MIR_T_BLK, MIR_T_RBLK */
 } MIR_var_t;
 
 DEF_VARR (MIR_var_t);
@@ -579,6 +585,10 @@ extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
+extern MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...);
+extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const char *name,
+                                       size_t nres, MIR_type_t *res_types, size_t nargs,
+                                       int vararg_p, MIR_var_t *args);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
@@ -616,14 +626,20 @@ extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
 extern void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...);
 
 extern void *va_arg_builtin (void *p, uint64_t t);
+extern void *va_stack_arg_builtin (void *p, size_t s);
 extern void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a);
 extern void va_end_interp_builtin (MIR_context_t ctx, void *p);
 
 extern void *_MIR_get_bstart_builtin (MIR_context_t ctx);
 extern void *_MIR_get_bend_builtin (MIR_context_t ctx);
 
+typedef struct {
+  MIR_type_t type;
+  size_t size; /* used only for block arg (type == MIR_T_BLK, MIR_T_RBLK) */
+} _MIR_arg_desc_t;
+
 extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                               MIR_type_t *arg_types, int vararg_p);
+                               _MIR_arg_desc_t *arg_descs, int vararg_p);
 extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
