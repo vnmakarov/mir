@@ -7,7 +7,22 @@
 #endif
 
 #include <inttypes.h>
+#ifndef _WIN32
 #include <unistd.h>
+uint64_t get_heap () {
+  return sbrk (0);
+}
+#else
+#include <windows.h>
+#include <psapi.h>
+uint64_t get_heap () {
+  HANDLE ph = GetCurrentProcess ();
+  PROCESS_MEMORY_COUNTERS pmc;
+  if (GetProcessMemoryInfo (ph, &pmc, sizeof (pmc)))
+      return pmc.WorkingSetSize;
+  return 0;
+}
+#endif
 
 #ifndef TEST_GEN_DEBUG
 #define TEST_GEN_DEBUG 0
@@ -16,7 +31,7 @@
 int main (void) {
   const int N = TEST_GEN_DEBUG ? 1 : 1000;
   double start_time = real_usec_time ();
-  char *start_heap = sbrk (0);
+  uint64_t start_heap = get_heap ();
   double start_execution_time;
   MIR_context_t ctx;
   MIR_module_t m;
@@ -30,7 +45,7 @@ int main (void) {
 #endif
   for (unsigned level = 0; level <= 3; level++) {
     fprintf (stderr, "+++++++++++++Optimize level = %u:\n", level);
-    start_heap = sbrk (0);
+    start_heap = get_heap ();
     start_time = real_usec_time ();
     ctx = MIR_init ();
     fprintf (stderr, "MIR_init end -- %.0f usec\n", real_usec_time () - start_time);
@@ -72,7 +87,7 @@ int main (void) {
 #endif
     fprintf (stderr, " -- call %.0f usec", real_usec_time () - start_execution_time);
     if (level == 0) /* we can accurately meassure memory only for the 1st run */
-      fprintf (stderr, ", memory used = %.1f KB\n", ((char *) sbrk (0) - start_heap) / 1000.0);
+      fprintf (stderr, ", memory used = %.1f KB\n", (get_heap () - start_heap) / 1000.0);
     else
       fprintf (stderr, "\n");
     MIR_gen_finish (ctx);
