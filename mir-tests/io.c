@@ -4,7 +4,11 @@
 
 int main (void) {
   FILE *f;
+#ifndef _WIN32
   const char *fname = "/tmp/__tmp.mirb";
+#else
+  const char *fname = "__tmp.mirb";
+#endif
   MIR_context_t ctx = MIR_init ();
 
   create_mir_func_sieve (ctx, NULL, NULL);
