@@ -1,6 +1,6 @@
 static char *read_file (const char *name) {
   FILE *f;
-  size_t len;
+  size_t flen, rlen;
   char *str;
 
   if ((f = fopen (name, "r")) == NULL) {
@@ -8,14 +8,17 @@ static char *read_file (const char *name) {
     exit (1);
   }
   fseek (f, 0, SEEK_END);
-  len = ftell (f);
+  flen = ftell (f);
   rewind (f);
-  str = (char *) malloc (len + 1);
-  if (fread (str, 1, len, f) != len) {
+  str = (char *) malloc (flen + 1);
+  rlen = fread (str, 1, flen, f);
+#ifndef _MSC_VER
+  if (rlen != flen) {
     fprintf (stderr, "file %s was changed\n", name);
     free (str);
     exit (1);
   }
-  str[len] = 0;
+#endif
+  str[rlen] = 0;
   return str;
 }
