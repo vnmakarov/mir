@@ -3308,8 +3308,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       inline_insns_after++;
       actual_nops = MIR_insn_nops (ctx, insn);
       new_insn = MIR_copy_insn (ctx, insn);
-      mir_assert (insn->code != MIR_VA_ARG && insn->code != MIR_VA_STACK_ARG
-                  && insn->code != MIR_VA_START && insn->code != MIR_VA_END);
+      /* va insns are possible here as va_list can be passed as arg */
       if (insn->code == MIR_ALLOCA) alloca_p = TRUE;
       for (i = 0; i < actual_nops; i++) switch (new_insn->ops[i].mode) {
         case MIR_OP_REG:
