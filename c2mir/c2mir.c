@@ -122,7 +122,6 @@ struct init_object {
 typedef struct init_object init_object_t;
 DEF_VARR (init_object_t);
 
-struct all_gen_ctx;
 struct pre_ctx;
 struct parse_ctx;
 struct check_ctx;
@@ -130,7 +129,6 @@ struct gen_ctx;
 
 struct c2m_ctx {
   MIR_context_t ctx;
-  int c2m_num;
   jmp_buf env;
   struct c2mir_options *options;
   VARR (char_ptr_t) * headers;
@@ -1929,7 +1927,11 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   c2m_ctx->pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
   no_out_p = skip_if_part_p = FALSE;
   t = time (&time_loc);
+#ifdef _MSC_VER
+  tm = localtime (&t);
+#else
   tm = localtime_r (&t, &tm_loc);
+#endif
   if (tm == NULL) {
     strcpy (date_str_repr, "\"Unknown date\"");
     strcpy (time_str_repr, "\"Unknown time\"");
