@@ -122,7 +122,6 @@ struct init_object {
 typedef struct init_object init_object_t;
 DEF_VARR (init_object_t);
 
-struct all_gen_ctx;
 struct pre_ctx;
 struct parse_ctx;
 struct check_ctx;
@@ -130,7 +129,6 @@ struct gen_ctx;
 
 struct c2m_ctx {
   MIR_context_t ctx;
-  int c2m_num;
   jmp_buf env;
   struct c2mir_options *options;
   VARR (char_ptr_t) * headers;
