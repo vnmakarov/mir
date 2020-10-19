@@ -555,7 +555,7 @@ static int item_eq (MIR_item_t it1, MIR_item_t it2, void *arg) {
   return it1->module == it2->module && MIR_item_name (NULL, it1) == MIR_item_name (NULL, it2);
 }
 
-static MIR_item_t find_item (MIR_context_t ctx, const char *name, MIR_module_t module) {
+static MIR_item_t item_tab_find (MIR_context_t ctx, const char *name, MIR_module_t module) {
   MIR_item_t tab_item;
   struct MIR_item item_s;
   struct MIR_func func_s;
@@ -804,7 +804,7 @@ static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
   int replace_p;
   MIR_item_t tab_item;
 
-  if ((tab_item = find_item (ctx, MIR_item_name (ctx, item), item->module)) == NULL) {
+  if ((tab_item = item_tab_find (ctx, MIR_item_name (ctx, item), item->module)) == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
     HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, item);
     return item;
@@ -1456,7 +1456,7 @@ static void setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_i
   curr_module = &environment_module;
   /* Use import for proto representation: */
   item = new_export_import_forward (ctx, name, MIR_import_item, "import", TRUE);
-  if ((tab_item = find_item (ctx, MIR_item_name (ctx, item), &environment_module)) != item
+  if ((tab_item = item_tab_find (ctx, MIR_item_name (ctx, item), &environment_module)) != item
       && tab_item != NULL) {
     free (item);
   } else {
@@ -1605,24 +1605,24 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
         assert (item->data == NULL);
         if (simplify_func (ctx, item, TRUE)) item->data = (void *) 1; /* flag inlining */
       } else if (item->item_type == MIR_import_item) {
-        if ((tab_item = find_item (ctx, item->u.import_id, &environment_module)) == NULL) {
+        if ((tab_item = item_tab_find (ctx, item->u.import_id, &environment_module)) == NULL) {
           if (import_resolver == NULL || (addr = import_resolver (item->u.import_id)) == NULL)
             MIR_get_error_func (ctx) (MIR_undeclared_op_ref_error, "import of undefined item %s",
                                       item->u.import_id);
           MIR_load_external (ctx, item->u.import_id, addr);
-          tab_item = find_item (ctx, item->u.import_id, &environment_module);
+          tab_item = item_tab_find (ctx, item->u.import_id, &environment_module);
           mir_assert (tab_item != NULL);
         }
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
       } else if (item->item_type == MIR_export_item) {
-        if ((tab_item = find_item (ctx, item->u.export_id, m)) == NULL)
+        if ((tab_item = item_tab_find (ctx, item->u.export_id, m)) == NULL)
           MIR_get_error_func (ctx) (MIR_undeclared_op_ref_error, "export of undefined item %s",
                                     item->u.export_id);
         item->addr = tab_item->addr;
         item->ref_def = tab_item;
       } else if (item->item_type == MIR_forward_item) {
-        if ((tab_item = find_item (ctx, item->u.forward_id, m)) == NULL)
+        if ((tab_item = item_tab_find (ctx, item->u.forward_id, m)) == NULL)
           MIR_get_error_func (ctx) (MIR_undeclared_op_ref_error, "forward of undefined item %s",
                                     item->u.forward_id);
         item->addr = tab_item->addr;
@@ -3401,7 +3401,7 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   }
   va_end (argp);
   name = _MIR_uniq_string (ctx, name);
-  proto_item = find_item (ctx, name, module);
+  proto_item = item_tab_find (ctx, name, module);
   if (proto_item != NULL) {
     if (proto_item->item_type == MIR_proto_item && proto_item->u.proto->nres == nres
         && VARR_LENGTH (MIR_var_t, proto_item->u.proto->args) == nargs) {
@@ -3437,7 +3437,7 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
 
   if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
   name = _MIR_uniq_string (ctx, name);
-  if ((ref_item = find_item (ctx, name, &environment_module)) != NULL) {
+  if ((ref_item = item_tab_find (ctx, name, &environment_module)) != NULL) {
     if (ref_item->item_type != MIR_import_item || ref_item->addr != addr)
       MIR_get_error_func (ctx) (MIR_repeated_decl_error,
                                 "_MIR_builtin_func: func %s has already another address", name);
@@ -3451,7 +3451,7 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
     ref_item->addr = addr;
     curr_module = saved_module;
   }
-  if ((item = find_item (ctx, name, module)) != NULL) {
+  if ((item = item_tab_find (ctx, name, module)) != NULL) {
     if (item->item_type != MIR_import_item || item->addr != addr || item->ref_def != ref_item)
       MIR_get_error_func (
         ctx) (MIR_repeated_decl_error,
@@ -4491,7 +4491,7 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
     break;
     REP4 (TAG_CASE, NAME1, NAME2, NAME3, NAME4) {
       const char *name = to_str (ctx, attr.u).s;
-      MIR_item_t item = find_item (ctx, name, func->module);
+      MIR_item_t item = item_tab_find (ctx, name, func->module);
 
       if (item == NULL) MIR_get_error_func (ctx) (MIR_binary_io_error, "not found item %s", name);
       *op = MIR_new_ref_op (ctx, item);
@@ -4686,7 +4686,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
           MIR_get_error_func (ctx) (MIR_binary_io_error, "ref data %s should have no labels",
                                     name == NULL ? "" : name);
         item_name = read_name (ctx, module, "wrong ref data item name");
-        if ((item = find_item (ctx, item_name, module)) == NULL)
+        if ((item = item_tab_find (ctx, item_name, module)) == NULL)
           MIR_get_error_func (ctx) (MIR_binary_io_error, "ref data refers to non-existing item %s",
                                     item_name);
         i = read_int (ctx, "wrong ref disp");
@@ -4697,7 +4697,8 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
           MIR_get_error_func (ctx) (MIR_binary_io_error, "expr %s should have no labels",
                                     name == NULL ? "" : name);
         item_name = read_name (ctx, module, "wrong expr func name");
-        if ((item = find_item (ctx, item_name, module)) == NULL || item->item_type != MIR_func_item)
+        if ((item = item_tab_find (ctx, item_name, module)) == NULL
+            || item->item_type != MIR_func_item)
           MIR_get_error_func (ctx) (MIR_binary_io_error, "expr refers to non-function %s",
                                     item_name);
         MIR_new_expr_data (ctx, name, item);
@@ -5485,7 +5486,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           } else if (!expr_p && !ref_p && func_reg_p (ctx, func->u.func, name)) {
             op.mode = MIR_OP_REG;
             op.u.reg = MIR_reg (ctx, name, func->u.func);
-          } else if ((item = find_item (ctx, name, module)) != NULL) {
+          } else if ((item = item_tab_find (ctx, name, module)) != NULL) {
             op = MIR_new_ref_op (ctx, item);
           } else {
             scan_error (ctx, "undeclared name %s", name);
