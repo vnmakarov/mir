@@ -388,6 +388,14 @@ static string_t string_store (MIR_context_t ctx, VARR (string_t) * *strs,
   return string;
 }
 
+static struct string get_ctx_string (MIR_context_t ctx, MIR_str_t str) {
+  return string_store (ctx, &strings, &string_tab, str);
+}
+
+static const char *get_ctx_str (MIR_context_t ctx, const char *string) {
+  return get_ctx_string (ctx, (MIR_str_t){strlen (string) + 1, string}).str.s;
+}
+
 static void string_finish (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) {
   size_t i;
 
