@@ -571,7 +571,7 @@ static MIR_item_t find_item (MIR_context_t ctx, const char *name, MIR_module_t m
 static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->data = NULL;
   m->last_temp_item_num = 0;
-  m->name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  m->name = get_ctx_str (ctx, name);
   DLIST_INIT (MIR_item_t, m->items);
 }
 
@@ -901,7 +901,7 @@ static MIR_item_t new_export_import_forward (MIR_context_t ctx, const char *name
   const char *uniq_name;
 
   item = create_item (ctx, item_type, item_name);
-  uniq_name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  uniq_name = get_ctx_str (ctx, name);
   if (item_type == MIR_export_item)
     item->u.export_id = uniq_name;
   else if (item_type == MIR_import_item)
@@ -936,8 +936,7 @@ MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len) {
     free (item);
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of bss %s", name);
   }
-  if (name != NULL)
-    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  if (name != NULL) name = get_ctx_str (ctx, name);
   item->u.bss->name = name;
   item->u.bss->len = len;
   if (name == NULL) {
@@ -993,8 +992,7 @@ MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of data %s",
                               name == NULL ? "" : name);
   }
-  if (name != NULL)
-    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  if (name != NULL) name = get_ctx_str (ctx, name);
   data->name = name;
   if (name == NULL) {
     DLIST_APPEND (MIR_item_t, curr_module->items, item);
@@ -1023,8 +1021,7 @@ MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of ref data %s",
                               name == NULL ? "" : name);
   }
-  if (name != NULL)
-    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  if (name != NULL) name = get_ctx_str (ctx, name);
   ref_data->name = name;
   ref_data->ref_item = ref_item;
   ref_data->disp = disp;
@@ -1054,8 +1051,7 @@ MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t ex
       ctx) (MIR_binary_io_error,
             "%s can not be an expr which should be non-argument, one result function",
             MIR_item_name (ctx, expr_item));
-  if (name != NULL)
-    name = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  if (name != NULL) name = get_ctx_str (ctx, name);
   expr_data->name = name;
   expr_data->expr_item = expr_item;
   if (name == NULL) {
@@ -1074,8 +1070,7 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
 
   if (proto == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
-  proto->name
-    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  proto->name = get_ctx_str (ctx, name);
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
   memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
   proto->nres = nres;
@@ -1169,8 +1164,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     free (func_item);
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of func %s", name);
   }
-  func->name
-    = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
+  func->name = get_ctx_str (ctx, name);
   func->nres = nres;
   func->res_types = (MIR_type_t *) ((char *) func + sizeof (struct MIR_func));
   for (size_t i = 0; i < nres; i++) func->res_types[i] = canon_type (res_types[i]);
@@ -2105,7 +2099,7 @@ MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_STR);
-  op.u.str = string_store (ctx, &strings, &string_tab, str).str;
+  op.u.str = get_ctx_string (ctx, str).str;
   return op;
 }
 
@@ -3136,7 +3130,8 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
     } else if (MIR_branch_code_p (code) && insn->ops[0].mode == MIR_OP_LABEL
                && (jmp_insn = skip_labels (insn->ops[0].u.label, NULL)) != NULL
                && jmp_insn->code == MIR_JMP && ++jmps_num < MAX_JUMP_CHAIN_LEN) {
-      /* B L;...;L<labels>:JMP L2 => B L2; ... Also constrain processing to avoid infinite loops */
+      /* B L;...;L<labels>:JMP L2 => B L2; ... Also constrain processing to avoid infinite loops
+       */
       insn->ops[0] = jmp_insn->ops[0];
       next_insn = insn;
       continue;
@@ -3384,9 +3379,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
 
 /* New Page */
 
-const char *_MIR_uniq_string (MIR_context_t ctx, const char *str) {
-  return string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (str) + 1, str}).str.s;
-}
+const char *_MIR_uniq_string (MIR_context_t ctx, const char *str) { return get_ctx_str (ctx, str); }
 
 /* The next two function can be called any time relative to
    load/linkage.  You can also call them many times for the same name
@@ -4375,7 +4368,7 @@ static void read_all_strings (MIR_context_t ctx, uint64_t nstr) {
     }
     str.s = VARR_ADDR (char, temp_string);
     str.len = len;
-    str = string_store (ctx, &strings, &string_tab, str).str;
+    str = get_ctx_string (ctx, str).str;
     VARR_PUSH (MIR_str_t, bin_strings, str);
   }
 }
