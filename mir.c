@@ -568,6 +568,17 @@ static MIR_item_t item_tab_find (MIR_context_t ctx, const char *name, MIR_module
   return NULL;
 }
 
+static MIR_item_t item_tab_insert (MIR_context_t ctx, MIR_item_t item) {
+  MIR_item_t tab_item;
+
+  HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
+  return tab_item;
+}
+
+static MIR_item_t item_tab_remove (MIR_context_t ctx, MIR_item_t item) {
+  HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_DELETE, item);
+}
+
 static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->data = NULL;
   m->last_temp_item_num = 0;
@@ -837,8 +848,8 @@ static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
     if (replace_p) { /* replace forward by export or export/forward by its definition: */
       tab_item->ref_def = item;
       if (tab_item->item_type == MIR_export_item) item->export_p = TRUE;
-      HTAB_DO (MIR_item_t, module_item_tab, tab_item, HTAB_DELETE, tab_item);
-      HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
+      item_tab_remove (ctx, tab_item);
+      tab_item = item_tab_insert (ctx, item);
       mir_assert (item == tab_item);
     }
     break;
