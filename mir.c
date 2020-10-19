@@ -2328,6 +2328,68 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   DLIST_INIT (MIR_insn_t, func->original_insns);
 }
 
+static void set_item_name (MIR_item_t item, const char *name) {
+  mir_assert (item != NULL);
+  switch (item->item_type) {
+  case MIR_func_item: item->u.func->name = name; break;
+  case MIR_proto_item: item->u.proto->name = name; break;
+  case MIR_import_item: item->u.import_id = name; break;
+  case MIR_export_item: item->u.export_id = name; break;
+  case MIR_forward_item: item->u.forward_id = name; break;
+  case MIR_bss_item: item->u.bss->name = name; break;
+  case MIR_data_item: item->u.data->name = name; break;
+  case MIR_ref_data_item: item->u.ref_data->name = name; break;
+  case MIR_expr_data_item: item->u.expr_data->name = name; break;
+  default: mir_assert (FALSE);
+  }
+}
+
+static void change_var_names (MIR_context_t new_ctx, VARR (MIR_var_t) * vars) {
+  for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++) {
+    MIR_var_t *var_ptr = &VARR_ADDR (MIR_var_t, vars)[i];
+    var_ptr->name = get_ctx_str (new_ctx, var_ptr->name);
+  }
+}
+
+/* It is not thread-safe */
+void MIR_change_module_ctx (MIR_context_t old_ctx, MIR_module_t m, MIR_context_t new_ctx) {
+  MIR_item_t item, tab_item;
+  MIR_op_mode_t mode;
+  const char *name, *new_name;
+
+  DLIST_REMOVE (MIR_module_t, *MIR_get_module_list (old_ctx), m);
+  DLIST_APPEND (MIR_module_t, *MIR_get_module_list (new_ctx), m);
+  m->name = get_ctx_str (new_ctx, m->name);
+  for (item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->addr != NULL)
+      MIR_get_error_func (old_ctx) (MIR_ctx_change_error, "Change context of a loaded module");
+    if ((name = MIR_item_name (old_ctx, item)) != NULL) {
+      new_name = get_ctx_str (new_ctx, name);
+      if (item_tab_find (old_ctx, name, m) != item) {
+        set_item_name (item, new_name);
+      } else {
+        item_tab_remove (old_ctx, item);
+        set_item_name (item, new_name);
+        tab_item = item_tab_insert (new_ctx, item);
+        mir_assert (item == tab_item);
+      }
+    }
+    if (item->item_type == MIR_proto_item) {
+      change_var_names (new_ctx, item->u.proto->args);
+    } else if (item->item_type == MIR_func_item) {
+      func_regs_t func_regs = item->u.func->internal;
+      change_var_names (new_ctx, item->u.func->vars);
+      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
+           insn = DLIST_NEXT (MIR_insn_t, insn))
+        for (size_t i = 0; i < insn->nops; i++) {
+          if ((mode = insn->ops[i].mode) == MIR_OP_STR)
+            insn->ops[i].u.str = get_ctx_string (new_ctx, insn->ops[i].u.str).str;
+        }
+    }
+  }
+}
+
 static void output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (NULL, tp)); }
 
 static void output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
