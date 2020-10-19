@@ -276,7 +276,7 @@ static void init_options (int argc, char *argv[]) {
       VARR_TRUNC (char_ptr_t, exec_argv, 0);
       if (strcmp (argv[i], "-ei") == 0)
         interp_exec_p = TRUE;
-      else if (strcmp (argv[i], "-eg") == 0 || strcmp (argv[i], "-epg") == 0)
+      else if (strcmp (argv[i], "-eg") == 0)
         gen_exec_p = TRUE;
       else
         lazy_gen_exec_p = TRUE;
