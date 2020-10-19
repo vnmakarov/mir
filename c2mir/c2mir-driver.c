@@ -320,6 +320,9 @@ static void init_options (int argc, char *argv[]) {
   options.include_dirs = VARR_ADDR (char_ptr_t, headers);
   options.macro_commands_num = VARR_LENGTH (macro_command_t, macro_commands);
   options.macro_commands = VARR_ADDR (macro_command_t, macro_commands);
+#if !MIR_PARALLEL_GEN
+  threads_num = 0;
+#endif
 }
 
 static int t_getc (void *data) {
@@ -763,7 +766,7 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "exit code: %lu\n", (long unsigned) result_code);
         }
       } else {
-        int n_gen = gen_debug_p ? 1 : threads_num;
+        int n_gen = gen_debug_p || threads_num == 0 ? 1 : threads_num;
 
         MIR_gen_init (main_ctx, n_gen);
         for (int i = 0; i < n_gen; i++) {
