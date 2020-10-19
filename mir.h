@@ -62,7 +62,7 @@ typedef enum MIR_error_type {
   REP4 (ERR_EL, func, vararg_func, nested_func, wrong_param_value),
   REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
   REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
-  REP5 (ERR_EL, ret, op_mode, out_op, invalid_insn, parallel)
+  REP6 (ERR_EL, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
 } MIR_error_type_t;
 
 #ifdef __GNUC__
