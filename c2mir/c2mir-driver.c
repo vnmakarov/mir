@@ -587,6 +587,9 @@ int main (int argc, char *argv[], char *env[]) {
   options.prepro_output_file = NULL;
   init_options (argc, argv);
   main_ctx = MIR_init ();
+#if !MIR_PARALLEL_GEN
+  c2mir_init (main_ctx);
+#endif
   init_compilers ();
   result_code = 0;
   for (i = options.module_num = 0;; i++, options.module_num++) {
@@ -708,8 +711,10 @@ int main (int argc, char *argv[], char *env[]) {
     uint64_t (*fun_addr) (int, void *argv, char *env[]);
     double start_time;
 
+#if MIR_PARALLEL_GEN
     for (int i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
     sort_modules (main_ctx);
+#endif
     for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (main_ctx)); module != NULL;
          module = DLIST_NEXT (MIR_module_t, module)) {
       for (func = DLIST_HEAD (MIR_item_t, module->items); func != NULL;
@@ -786,6 +791,9 @@ int main (int argc, char *argv[], char *env[]) {
   close_cmdline_libs ();
   close_std_libs ();
   finish_compilers ();
+#if !MIR_PARALLEL_GEN
+  c2mir_finish (main_ctx);
+#endif
   MIR_finish (main_ctx);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (char_ptr_t, headers);
