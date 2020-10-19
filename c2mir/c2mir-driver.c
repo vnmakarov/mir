@@ -94,9 +94,9 @@ static const char *lib_suffix = ".dylib";
 static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
 static const char *std_lib_dirs[] = {""};
 static const char *lib_suffix = ".dll";
-#define dlopen(n, f) LoadLibrary(n)
-#define dlclose(h) FreeLibrary(h)
-#define dlsym(h, s) GetProcAddress(h, s)
+#define dlopen(n, f) LoadLibrary (n)
+#define dlclose(h) FreeLibrary (h)
+#define dlsym(h, s) GetProcAddress (h, s)
 #endif
 
 static struct c2mir_options options;
@@ -262,8 +262,7 @@ static void init_options (int argc, char *argv[]) {
     } else if (strcmp (argv[i], "-i") == 0) {
       VARR_PUSH (char_ptr_t, source_file_names, STDIN_SOURCE_NAME);
     } else if (strcmp (argv[i], "-ei") == 0 || strcmp (argv[i], "-eg") == 0
-               || strcmp (argv[i], "-epg") == 0 || strcmp (argv[i], "-el") == 0) {
-      parallel_p = strcmp (argv[i], "-epg") == 0;
+               || strcmp (argv[i], "-el") == 0) {
       VARR_TRUNC (char_ptr_t, exec_argv, 0);
       if (strcmp (argv[i], "-ei") == 0)
         interp_exec_p = TRUE;
