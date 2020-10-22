@@ -4927,7 +4927,7 @@ static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   /* check control insns with possible output: */
   if (MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA || insn->code == MIR_BSTART
       || insn->code == MIR_VA_START || insn->code == MIR_VA_ARG
-      || (insn->ops[0].mode == MIR_OP_HARD_REG
+      || (insn->nops > 0 && insn->ops[0].mode == MIR_OP_HARD_REG
           && (insn->ops[0].u.hard_reg == FP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG)))
     return FALSE;
   if (start_insn_p (gen_ctx, bb_insn)) return FALSE;
