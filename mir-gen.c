@@ -4768,6 +4768,7 @@ static void combine (gen_ctx_t gen_ctx) {
             if (bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hr)) {
               setup_hreg_ref (gen_ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
             }
+          last_mem_ref_insn_num = curr_insn_num; /* Potentially call can change memory */
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
         } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL) {
