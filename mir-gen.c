@@ -5262,7 +5262,7 @@ void MIR_gen_init (MIR_context_t ctx) {
   for (MIR_type_t type = MIR_T_I8; type < MIR_T_BOUND; type++) {
     call_used_hard_regs[type] = bitmap_create2 (MAX_HARD_REG + 1);
     for (i = 0; i <= MAX_HARD_REG; i++) {
-      if (target_fixed_hard_reg_p (i)) continue;
+      /* We need call_used_hard_regs even for fixed regs in combine. */
       if (target_call_used_hard_reg_p (i, type)) bitmap_set_bit_p (call_used_hard_regs[type], i);
     }
   }
