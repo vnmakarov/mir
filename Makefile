@@ -233,7 +233,8 @@ c2mir-test: c2mir-simple-test c2mir-full-test
 c2mir-simple-test:
 	$(CC) -g -I. mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c $(MIR_LIBS) $(THREAD_LIB) -o test && ./test -v sieve.c -ei
 
-c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 
+c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap
+c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test
 
 c2mir-interp-test: c2m
 	$(SHELL) c-tests/runtests.sh c-tests/use-c2m-interp
@@ -259,6 +260,13 @@ c2mir-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with default optimize level '... '
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
+	$(Q) rm -rf 1.bmir a.bmir
+
+c2mir-parallel-bootstrap-test: c2m
+	$(Q) echo -n +++++++ C2MIR Parallel Bootstrap Test with default optimize level '... '
+	$(Q) ./c2m -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -p4 $(C2M_BOOTSTRAP_FLAGS) 1.bmir -eg -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
