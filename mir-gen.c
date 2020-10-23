@@ -5489,7 +5489,23 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
+#if !MIR_PARALLEL_GEN
   MIR_gen (ctx, 0, func_item);
+#else
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  MIR_func_t func = func_item->u.func;
+
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
+  if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  for (;;) {
+    if (func->machine_code != NULL) break;
+    if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
+  }
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
+#endif
   return func_item->u.func->machine_code;
 }
 
