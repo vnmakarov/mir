@@ -4799,6 +4799,7 @@ static void combine (gen_ctx_t gen_ctx) {
             if (bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hr)) {
               setup_hreg_ref (gen_ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
             }
+          last_mem_ref_insn_num = curr_insn_num; /* Potentially call can change memory */
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
         } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL) {
@@ -4958,7 +4959,7 @@ static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   /* check control insns with possible output: */
   if (MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA || insn->code == MIR_BSTART
       || insn->code == MIR_VA_START || insn->code == MIR_VA_ARG
-      || (insn->ops[0].mode == MIR_OP_HARD_REG
+      || (insn->nops > 0 && insn->ops[0].mode == MIR_OP_HARD_REG
           && (insn->ops[0].u.hard_reg == FP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG)))
     return FALSE;
   if (start_insn_p (gen_ctx, bb_insn)) return FALSE;
@@ -5413,7 +5414,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     for (MIR_type_t type = MIR_T_I8; type < MIR_T_BOUND; type++) {
       call_used_hard_regs[type] = bitmap_create2 (MAX_HARD_REG + 1);
       for (int i = 0; i <= MAX_HARD_REG; i++) {
-        if (target_fixed_hard_reg_p (i)) continue;
+        /* We need call_used_hard_regs even for fixed regs in combine. */
         if (target_call_used_hard_reg_p (i, type)) bitmap_set_bit_p (call_used_hard_regs[type], i);
       }
     }
