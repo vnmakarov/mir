@@ -5239,6 +5239,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
+  /* ??? We should use atomic here but c2mir does not implement them yet.  */
 #if MIR_PARALLEL_GEN
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
 #endif
