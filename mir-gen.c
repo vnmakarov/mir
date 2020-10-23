@@ -5075,10 +5075,15 @@ static void *print_and_execute_wrapper (gen_ctx_t gen_ctx, MIR_item_t called_fun
 }
 #endif
 
+static void parallel_error (MIR_context_t ctx, const char *err_message) {
+  MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
+}
+
 void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
   uint8_t *code;
+  void *machine_code;
   size_t code_len;
   double start_time = real_usec_time ();
 
@@ -5213,15 +5218,13 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
   code = target_translate (gen_ctx, &code_len);
-  func_item->u.func->machine_code = func_item->u.func->call_addr
-    = _MIR_publish_code (ctx, code, code_len);
-  target_rebase (gen_ctx, func_item->u.func->machine_code);
+  machine_code = func_item->u.func->call_addr = _MIR_publish_code (ctx, code, code_len);
+  target_rebase (gen_ctx, func_item->u.func->call_addr);
 #if MIR_GEN_CALL_TRACE
   func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
   DEBUG ({
-    print_code (gen_ctx, func_item->u.func->machine_code, code_len,
-                func_item->u.func->machine_code);
+    print_code (gen_ctx, machine_code, code_len, machine_code);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   });
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
@@ -5236,6 +5239,14 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
+#if MIR_PARALLEL_GEN
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+  func_item->u.func->machine_code = machine_code;
+#if MIR_PARALLEL_GEN
+  if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
   return func_item->addr;
 }
 
@@ -5267,10 +5278,6 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   gen_assert (gen_num >= 0 && gen_num < all_gen_ctx->gens_num);
   gen_ctx = &all_gen_ctx->gen_ctx[gen_num];
   optimize_level = level;
-}
-
-static void parallel_error (MIR_context_t ctx, const char *err_message) {
-  MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
 }
 
 #if MIR_PARALLEL_GEN
