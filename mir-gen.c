@@ -5080,9 +5080,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   gen_ctx_t gen_ctx;
   uint8_t *code;
   size_t code_len;
-#if !MIR_NO_GEN_DEBUG
-  double start_time = 0.0;
-#endif
+  double start_time = real_usec_time ();
 
 #if !MIR_PARALLEL_GEN
   gen_num = 0;
@@ -5100,7 +5098,6 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
     return func_item->addr;
   }
   DEBUG ({
-    start_time = real_usec_time ();
     fprintf (debug_file, "+++++++++++++MIR before generator:\n");
     MIR_output_item (ctx, debug_file, func_item);
   });
