@@ -1118,6 +1118,10 @@ MIR_item_t MIR_new_vararg_proto_arr (MIR_context_t ctx, const char *name, size_t
   return new_proto_arr (ctx, name, nres, res_types, nargs, TRUE, args);
 }
 
+#if defined(_MSC_VER)
+#define alloca _alloca
+#endif
+
 static MIR_item_t new_proto (MIR_context_t ctx, const char *name, size_t nres,
                              MIR_type_t *res_types, size_t nargs, int vararg_p, va_list argp) {
   MIR_var_t *args = alloca (nargs * sizeof (MIR_var_t));
