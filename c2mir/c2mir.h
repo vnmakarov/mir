@@ -10,7 +10,8 @@ struct c2mir_macro_command {
 
 struct c2mir_options {
   FILE *message_file;
-  int debug_p, verbose_p, no_prepro_p, prepro_only_p, syntax_only_p, pedantic_p, asm_p, object_p;
+  int debug_p, verbose_p, ignore_warnings_p, no_prepro_p, prepro_only_p;
+  int syntax_only_p, pedantic_p, asm_p, object_p;
   size_t module_num;
   FILE *prepro_output_file; /* non-null for prepro_only_p */
   const char *output_file_name;
