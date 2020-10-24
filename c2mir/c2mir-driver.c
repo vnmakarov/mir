@@ -44,24 +44,26 @@ static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
                            {"/lib/aarch64-linux-gnu/libm.so.6", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/aarch64-linux-gnu"};
 #elif (__PPC64__)
-static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+static lib_t std_libs[] = {
+  {"/lib64/libc.so.6", NULL},
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-                           {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libc.so.6", NULL},
 #else
-                           {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
+  {"/lib/powerpc64-linux-gnu/libc.so.6", NULL},
 #endif
-                           {"/lib64/libm.so.6", NULL},
+  {"/lib64/libm.so.6", NULL},
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-                           {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64le-linux-gnu/libm.so.6", NULL},
 #else
-                           {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
+  {"/lib/powerpc64-linux-gnu/libm.so.6", NULL},
 #endif
 };
-static const char *std_lib_dirs[] = {"/lib64",
+static const char *std_lib_dirs[] = {
+  "/lib64",
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-				     "/lib/powerpc64le-linux-gnu",
+  "/lib/powerpc64le-linux-gnu",
 #else
-				     "/lib/powerpc64-linux-gnu",
+  "/lib/powerpc64-linux-gnu",
 #endif
 };
 #elif (__s390x__)
@@ -93,9 +95,9 @@ static const char *lib_suffix = ".dylib";
 static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
 static const char *std_lib_dirs[] = {""};
 static const char *lib_suffix = ".dll";
-#define dlopen(n, f) LoadLibrary(n)
-#define dlclose(h) FreeLibrary(h)
-#define dlsym(h, s) GetProcAddress(h, s)
+#define dlopen(n, f) LoadLibrary (n)
+#define dlclose(h) FreeLibrary (h)
+#define dlsym(h, s) GetProcAddress (h, s)
 #endif
 
 static struct c2mir_options options;
