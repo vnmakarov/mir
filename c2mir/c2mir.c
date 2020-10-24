@@ -842,12 +842,14 @@ static void warning (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
 
   if ((f = c2m_options->message_file) == NULL) return;
   n_warnings++;
-  va_start (args, format);
-  print_pos (f, pos, TRUE);
-  fprintf (f, "warning -- ");
-  vfprintf (f, format, args);
-  va_end (args);
-  fprintf (f, "\n");
+  if (!c2m_options->ignore_warnings_p) {
+    va_start (args, format);
+    print_pos (f, pos, TRUE);
+    fprintf (f, "warning -- ");
+    vfprintf (f, format, args);
+    va_end (args);
+    fprintf (f, "\n");
+  }
 }
 
 #define TAB_STOP 8
