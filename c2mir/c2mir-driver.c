@@ -294,6 +294,7 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -fpreprocessed -- assume preprocessed input C\n");
       fprintf (stderr, "  -fsyntax-only -- check C code correctness only\n");
       fprintf (stderr, "  -fpedantic -- assume strict standard input C code\n");
+      fprintf (stderr, "  -w -- do not print any warnings\n");
       fprintf (stderr, "  -S, -c -- generate corresponding textual or binary MIR files\n");
       fprintf (stderr, "  -o file -- put output code into given file\n");
       fprintf (stderr, "  -On -- use given optimization level in MIR-generator\n");
