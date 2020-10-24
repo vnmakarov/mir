@@ -107,9 +107,9 @@
       warnings.  If its value is NULL, there will be no any output
     * Members `macro_commands_num` and `macro_commands` direct compiler as options `-D` and `-U` of `c2m`
     * Members `include_dirs_num` and `include_dirs` direct compiler as options `-I`
-    * Members `debug_p`, `verbose_p`, `no_prepro_p`, `prepro_only_p`,
+    * Members `debug_p`, `verbose_p`, `ignore_warnings_p`, `no_prepro_p`, `prepro_only_p`,
       `syntax_only_p`, `pedantic_p`, `asm_p`, and `object_p` direct
-      the compiler as options `-d`, `-v`, `-fpreprocessed`, `-E`,
+      the compiler as options `-d`, `-v`, `-w`, `-fpreprocessed`, `-E`,
       `-fsyntax-only`, `-pedantic`, `-S`, and `-c` of `c2m`.  If all values of `prepro_only_p`,
       `syntax_only_p`, `asm_p`, and `object_p are zero, there will be no output files, only
       the generated MIR module will be kept in memory of the context `ctx`
