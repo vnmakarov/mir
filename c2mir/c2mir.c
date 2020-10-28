@@ -599,8 +599,7 @@ static pos_t get_node_pos (c2m_ctx_t c2m_ctx, node_t n) {
 #define POS(n) get_node_pos (c2m_ctx, n)
 
 static void set_node_pos (c2m_ctx_t c2m_ctx, node_t n, pos_t pos) {
-  if (n->uid >= VARR_LENGTH (pos_t, node_positions))
-    VARR_EXPAND (pos_t, node_positions, n->uid + 1);
+  while (n->uid >= VARR_LENGTH (pos_t, node_positions)) VARR_PUSH (pos_t, node_positions, no_pos);
   VARR_SET (pos_t, node_positions, n->uid, pos);
 }
 
@@ -12807,11 +12806,11 @@ static void compile_init (c2m_ctx_t c2m_ctx, struct c2mir_options *ops, int (*ge
   c_getc_data = getc_data;
   VARR_CREATE (char, symbol_text, 128);
   VARR_CREATE (char, temp_string, 128);
+  VARR_CREATE (pos_t, node_positions, 128);
   parse_init (c2m_ctx);
   context_init (c2m_ctx);
   init_include_dirs (c2m_ctx);
   process_macro_commands (c2m_ctx);
-  VARR_CREATE (pos_t, node_positions, 128);
   VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
   VARR_CREATE (node_t, containing_anon_members, 8);
   VARR_CREATE (init_object_t, init_object_path, 8);
@@ -12820,11 +12819,11 @@ static void compile_init (c2m_ctx_t c2m_ctx, struct c2mir_options *ops, int (*ge
 static void compile_finish (c2m_ctx_t c2m_ctx) {
   if (symbol_text != NULL) VARR_DESTROY (char, symbol_text);
   if (temp_string != NULL) VARR_DESTROY (char, temp_string);
+  if (node_positions != NULL) VARR_DESTROY (pos_t, node_positions);
   parse_finish (c2m_ctx);
   context_finish (c2m_ctx);
   if (headers != NULL) VARR_DESTROY (char_ptr_t, headers);
   if (system_headers != NULL) VARR_DESTROY (char_ptr_t, system_headers);
-  if (node_positions != NULL) VARR_DESTROY (pos_t, node_positions);
   if (call_nodes != NULL) VARR_DESTROY (node_t, call_nodes);
   if (containing_anon_members != NULL) VARR_DESTROY (node_t, containing_anon_members);
   if (init_object_path != NULL) VARR_DESTROY (init_object_t, init_object_path);
