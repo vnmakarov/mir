@@ -3555,28 +3555,34 @@ struct parse_ctx {
   HTAB (tpname_t) * tpname_tab;
 };
 
-#define record_level c2m_ctx->parse_ctx->record_level
-#define next_token_index c2m_ctx->parse_ctx->next_token_index
-#define next_token_index c2m_ctx->parse_ctx->next_token_index
-#define curr_token c2m_ctx->parse_ctx->curr_token
-#define curr_scope c2m_ctx->parse_ctx->curr_scope
-#define tpname_tab c2m_ctx->parse_ctx->tpname_tab
+#define record_level parse_ctx->record_level
+#define next_token_index parse_ctx->next_token_index
+#define next_token_index parse_ctx->next_token_index
+#define curr_token parse_ctx->curr_token
+#define curr_scope parse_ctx->curr_scope
+#define tpname_tab parse_ctx->tpname_tab
 
 static struct node err_struct;
 static const node_t err_node = &err_struct;
 
 static void read_token (c2m_ctx_t c2m_ctx) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   curr_token = VARR_GET (token_t, recorded_tokens, next_token_index);
   next_token_index++;
 }
 
 static size_t record_start (c2m_ctx_t c2m_ctx) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   assert (next_token_index > 0 && record_level >= 0);
   record_level++;
   return next_token_index - 1;
 }
 
 static void record_stop (c2m_ctx_t c2m_ctx, size_t mark, int restore_p) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   assert (record_level > 0);
   record_level--;
   if (!restore_p) return;
@@ -3585,6 +3591,8 @@ static void record_stop (c2m_ctx_t c2m_ctx, size_t mark, int restore_p) {
 }
 
 static void syntax_error (c2m_ctx_t c2m_ctx, const char *expected_name) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   FILE *f;
 
   if ((f = c2m_options->message_file) == NULL) return;
@@ -3615,10 +3623,13 @@ static htab_hash_t tpname_hash (tpname_t tpname, void *arg) {
 }
 
 static void tpname_init (c2m_ctx_t c2m_ctx) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   HTAB_CREATE (tpname_t, tpname_tab, 1000, tpname_hash, tpname_eq, NULL);
 }
 
 static int tpname_find (c2m_ctx_t c2m_ctx, node_t id, node_t scope, tpname_t *res) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   int found_p;
   tpname_t el, tpname;
 
@@ -3630,6 +3641,7 @@ static int tpname_find (c2m_ctx_t c2m_ctx, node_t id, node_t scope, tpname_t *re
 }
 
 static tpname_t tpname_add (c2m_ctx_t c2m_ctx, node_t id, node_t scope) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   tpname_t el, tpname;
 
   tpname.id = id;
@@ -3640,6 +3652,8 @@ static tpname_t tpname_add (c2m_ctx_t c2m_ctx, node_t id, node_t scope) {
 }
 
 static void tpname_finish (c2m_ctx_t c2m_ctx) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   if (tpname_tab != NULL) HTAB_DESTROY (tpname_t, tpname_tab);
 }
 
@@ -3694,6 +3708,8 @@ typedef node_t (*nonterm_arg_func_t) (c2m_ctx_t c2m_ctx, int, node_t);
 #define C(c) (curr_token->code == c)
 
 static int match (c2m_ctx_t c2m_ctx, int c, pos_t *pos, node_code_t *node_code, node_t *node) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   if (curr_token->code != c) return FALSE;
   if (pos != NULL) *pos = curr_token->pos;
   if (node_code != NULL) *node_code = curr_token->node_code;
@@ -3733,6 +3749,7 @@ D (assign_expr);
 D (initializer_list);
 
 D (par_type_name) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
 
   PT ('(');
@@ -3742,6 +3759,7 @@ D (par_type_name) {
 }
 
 D (primary_expr) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r, n, op, gn, list;
   pos_t pos;
 
@@ -3777,6 +3795,7 @@ D (primary_expr) {
 }
 
 DA (post_expr_part) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r, n, op, list;
   node_code_t code;
   pos_t pos;
@@ -3957,6 +3976,7 @@ D (initializer);
 D (st_assert);
 
 D (asm_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
 
   PTN (T_ID);
@@ -3988,6 +4008,7 @@ static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
 }
 
 D (declaration) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   int typedef_p;
   node_t op, list, decl, spec, r;
   pos_t pos, last_pos;
@@ -4038,6 +4059,8 @@ D (declaration) {
 }
 
 D (attr) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   if (C (')') || C (',')) /* empty */
     return NULL;
   if (FIRST_KW <= curr_token->code && curr_token->code <= LAST_KW)
@@ -4059,6 +4082,7 @@ D (attr) {
 }
 
 D (attr_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
 
   PTN (T_ID);
@@ -4076,6 +4100,7 @@ D (attr_spec) {
 }
 
 DA (declaration_specs) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, r, prev_type_spec = NULL;
   int first_p;
   pos_t pos = curr_token->pos, spec_pos;
@@ -4108,6 +4133,7 @@ DA (declaration_specs) {
 }
 
 D (sc_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
   pos_t pos;
 
@@ -4131,6 +4157,7 @@ D (sc_spec) {
 }
 
 DA (type_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t op1, op2, op3, op4, r;
   int struct_p, id_p = FALSE;
   pos_t pos;
@@ -4221,6 +4248,7 @@ DA (type_spec) {
 }
 
 D (struct_declaration_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r, res, el, next_el;
 
   res = new_node (c2m_ctx, N_LIST);
@@ -4241,6 +4269,7 @@ D (struct_declaration_list) {
 }
 
 D (struct_declaration) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, spec, op, r;
 
   if (C (T_STATIC_ASSERT)) {
@@ -4278,6 +4307,7 @@ D (struct_declaration) {
 }
 
 D (spec_qual_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, op, r, arg = NULL;
   int first_p;
 
@@ -4299,6 +4329,7 @@ D (spec_qual_list) {
 }
 
 D (type_qual) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
   pos_t pos;
 
@@ -4318,6 +4349,7 @@ D (type_qual) {
 }
 
 D (func_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
   pos_t pos;
 
@@ -4333,6 +4365,7 @@ D (func_spec) {
 }
 
 D (align_spec) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
   pos_t pos;
 
@@ -4348,6 +4381,7 @@ D (align_spec) {
 }
 
 D (declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, p = NULL, r, el, next_el;
 
   if (C ('*')) {
@@ -4368,6 +4402,7 @@ D (declarator) {
 }
 
 D (direct_declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, tql, ae, res, r;
   pos_t pos, static_pos;
 
@@ -4428,6 +4463,7 @@ D (direct_declarator) {
 }
 
 D (pointer) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t op, r;
   pos_t pos;
 
@@ -4448,6 +4484,7 @@ D (pointer) {
 }
 
 D (type_qual_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, r;
 
   list = new_node (c2m_ctx, N_LIST);
@@ -4460,6 +4497,7 @@ D (type_qual_list) {
 }
 
 D (param_type_abstract_declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r = err_node;
 
   P (abstract_declarator);
@@ -4468,6 +4506,7 @@ D (param_type_abstract_declarator) {
 }
 
 D (param_type_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, op1, op2, r = err_node;
   int comma_p;
   pos_t pos;
@@ -4503,6 +4542,7 @@ D (param_type_list) {
 }
 
 D (id_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, r;
 
   list = new_node (c2m_ctx, N_LIST);
@@ -4516,6 +4556,7 @@ D (id_list) {
 }
 
 D (abstract_declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, p = NULL, r, el, next_el;
 
   if (C ('*')) {
@@ -4540,6 +4581,7 @@ D (abstract_declarator) {
 }
 
 D (par_abstract_declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
 
   PT ('(');
@@ -4549,6 +4591,7 @@ D (par_abstract_declarator) {
 }
 
 D (direct_abstract_declarator) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t res, list, tql, ae, r;
   pos_t pos, pos2 = no_pos;
 
@@ -4605,6 +4648,7 @@ D (direct_abstract_declarator) {
 }
 
 D (typedef_name) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t scope, r;
 
   PTN (T_ID);
@@ -4616,6 +4660,7 @@ D (typedef_name) {
 }
 
 D (initializer) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r;
 
   if (!M ('{')) {
@@ -4630,6 +4675,7 @@ D (initializer) {
 }
 
 D (initializer_list) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, list2, r;
   int first_p;
 
@@ -4664,6 +4710,7 @@ D (initializer_list) {
 }
 
 D (type_name) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t op, r;
 
   P (spec_qual_list);
@@ -4671,13 +4718,14 @@ D (type_name) {
   if (!C (')') && !C (':')) {
     P (abstract_declarator);
   } else {
-    r = new_pos_node2 (c2m_ctx, N_DECL, op->pos, new_node (c2m_ctx, N_IGNORE),
+    r = new_pos_node2 (c2m_ctx, N_DECL, get_node_pos (op), new_node (c2m_ctx, N_IGNORE),
                        new_node (c2m_ctx, N_LIST));
   }
   return new_node2 (c2m_ctx, N_TYPE, op, r);
 }
 
 D (st_assert) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t op1, r;
   pos_t pos;
 
@@ -4697,6 +4745,7 @@ D (st_assert) {
 D (compound_stmt);
 
 D (label) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t r, n;
   pos_t pos;
 
@@ -4719,6 +4768,7 @@ D (label) {
 }
 
 D (stmt) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t l, n, op1, op2, op3, r;
   pos_t pos;
 
@@ -4839,6 +4889,8 @@ D (stmt) {
 }
 
 static void error_recovery (c2m_ctx_t c2m_ctx, int par_lev, const char *expected) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   syntax_error (c2m_ctx, expected);
   if (c2m_options->debug_p) fprintf (stderr, "error recovery: skipping");
   for (;;) {
@@ -4858,6 +4910,7 @@ static void error_recovery (c2m_ctx_t c2m_ctx, int par_lev, const char *expected
 }
 
 D (compound_stmt) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t n, list, r;
   pos_t pos;
 
@@ -4885,6 +4938,7 @@ err0:
 }
 
 D (transl_unit) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t list, ds, d, dl, r;
 
   // curr_token->code = ';'; /* for error recovery */
@@ -4928,7 +4982,10 @@ static void kw_add (c2m_ctx_t c2m_ctx, const char *name, token_code_t tc, size_t
 }
 
 static void parse_init (c2m_ctx_t c2m_ctx) {
-  c2m_ctx->parse_ctx = c2mir_calloc (c2m_ctx, sizeof (struct parse_ctx));
+  parse_ctx_t parse_ctx;
+
+  c2m_ctx->parse_ctx = parse_ctx = c2mir_calloc (c2m_ctx, sizeof (struct parse_ctx));
+  curr_scope = NULL;
   error_func = fatal_error;
   record_level = 0;
   curr_uid = 0;
@@ -5005,6 +5062,8 @@ static void add_standard_includes (c2m_ctx_t c2m_ctx) {
 }
 
 static node_t parse (c2m_ctx_t c2m_ctx) {
+  parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+
   next_token_index = 0;
   return transl_unit (c2m_ctx, FALSE);
 }
