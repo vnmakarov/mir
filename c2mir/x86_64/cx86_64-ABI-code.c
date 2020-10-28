@@ -204,6 +204,7 @@ static void target_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
@@ -239,6 +240,7 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
                                            MIR_insn_t call, size_t call_ops_start) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_insn_t insn;
@@ -263,6 +265,7 @@ static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_t
 }
 
 static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
@@ -356,6 +359,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
 
 static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
@@ -394,6 +398,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
 
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   reg_var_t reg_var;
