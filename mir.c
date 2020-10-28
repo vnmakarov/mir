@@ -4344,7 +4344,7 @@ static const char *read_name (MIR_context_t ctx, MIR_module_t module, const char
 
   if (TAG_NAME1 > c || c > TAG_NAME4) (*error_func) (MIR_binary_io_error, err_msg);
   s = to_str (ctx, get_uint (ctx, c - TAG_NAME1 + 1)).s;
-  process_reserved_name (s, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
+  if (module != NULL) process_reserved_name (s, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
   return s;
 }
 
