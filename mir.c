@@ -1094,7 +1094,7 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
   proto->name
     = string_store (ctx, &strings, &string_tab, (MIR_str_t){strlen (name) + 1, name}).str.s;
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
-  memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
+  if (nres != 0) memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
   proto->nres = nres;
   proto->vararg_p = vararg_p != 0;
   VARR_CREATE (MIR_var_t, proto->args, nargs);
