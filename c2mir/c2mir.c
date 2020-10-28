@@ -1801,24 +1801,24 @@ struct pre_ctx {
   void (*pre_out_token_func) (c2m_ctx_t c2m_ctx, token_t);
 };
 
-#define temp_tokens c2m_ctx->pre_ctx->temp_tokens
-#define macro_tab c2m_ctx->pre_ctx->macro_tab
-#define macros c2m_ctx->pre_ctx->macros
-#define ifs c2m_ctx->pre_ctx->ifs
-#define no_out_p c2m_ctx->pre_ctx->no_out_p
-#define skip_if_part_p c2m_ctx->pre_ctx->skip_if_part_p
-#define if_id c2m_ctx->pre_ctx->if_id
-#define date_str c2m_ctx->pre_ctx->date_str
-#define time_str c2m_ctx->pre_ctx->time_str
-#define date_str_repr c2m_ctx->pre_ctx->date_str_repr
-#define time_str_repr c2m_ctx->pre_ctx->time_str_repr
-#define output_buffer c2m_ctx->pre_ctx->output_buffer
-#define macro_call_stack c2m_ctx->pre_ctx->macro_call_stack
-#define pre_expr c2m_ctx->pre_ctx->pre_expr
-#define pre_last_token c2m_ctx->pre_ctx->pre_last_token
-#define actual_pre_pos c2m_ctx->pre_ctx->actual_pre_pos
-#define pptokens_num c2m_ctx->pre_ctx->pptokens_num
-#define pre_out_token_func c2m_ctx->pre_ctx->pre_out_token_func
+#define temp_tokens pre_ctx->temp_tokens
+#define macro_tab pre_ctx->macro_tab
+#define macros pre_ctx->macros
+#define ifs pre_ctx->ifs
+#define no_out_p pre_ctx->no_out_p
+#define skip_if_part_p pre_ctx->skip_if_part_p
+#define if_id pre_ctx->if_id
+#define date_str pre_ctx->date_str
+#define time_str pre_ctx->time_str
+#define date_str_repr pre_ctx->date_str_repr
+#define time_str_repr pre_ctx->time_str_repr
+#define output_buffer pre_ctx->output_buffer
+#define macro_call_stack pre_ctx->macro_call_stack
+#define pre_expr pre_ctx->pre_expr
+#define pre_last_token pre_ctx->pre_last_token
+#define actual_pre_pos pre_ctx->actual_pre_pos
+#define pptokens_num pre_ctx->pptokens_num
+#define pre_out_token_func pre_ctx->pre_out_token_func
 
 /* It is a token based prerpocessor.
    It is input preprocessor tokens and output is (parser) tokens */
@@ -1851,6 +1851,7 @@ static void new_std_macro (c2m_ctx_t c2m_ctx, const char *id_str) {
 }
 
 static void init_macros (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   VARR (token_t) * params;
 
   VARR_CREATE (macro_t, macros, 2048);
@@ -1868,6 +1869,7 @@ static void init_macros (c2m_ctx_t c2m_ctx) {
 
 static macro_t new_macro (c2m_ctx_t c2m_ctx, token_t id, VARR (token_t) * params,
                           VARR (token_t) * replacement) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   macro_t tab_m, m = malloc (sizeof (struct macro));
 
   m->id = id;
@@ -1881,6 +1883,7 @@ static macro_t new_macro (c2m_ctx_t c2m_ctx, token_t id, VARR (token_t) * params
 }
 
 static void finish_macros (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   if (macros != NULL) {
     while (VARR_LENGTH (macro_t, macros) != 0) {
       macro_t m = VARR_POP (macro_t, macros);
@@ -1927,13 +1930,17 @@ static ifstate_t new_ifstate (int skip_p, int true_p, int else_p, pos_t if_pos) 
   return ifstate;
 }
 
-static void pop_ifstate (c2m_ctx_t c2m_ctx) { free (VARR_POP (ifstate_t, ifs)); }
+static void pop_ifstate (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+  free (VARR_POP (ifstate_t, ifs));
+}
 
 static void pre_init (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx;
   time_t t, time_loc;
   struct tm *tm, tm_loc;
 
-  c2m_ctx->pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
+  c2m_ctx->pre_ctx = pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
   no_out_p = skip_if_part_p = FALSE;
   t = time (&time_loc);
 #ifdef _MSC_VER
@@ -1960,7 +1967,9 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
 }
 
 static void pre_finish (c2m_ctx_t c2m_ctx) {
-  if (c2m_ctx == NULL || c2m_ctx->pre_ctx == NULL) return;
+  pre_ctx_t pre_ctx;
+
+  if (c2m_ctx == NULL || (pre_ctx = c2m_ctx->pre_ctx) == NULL) return;
   if (temp_tokens != NULL) VARR_DESTROY (token_t, temp_tokens);
   if (output_buffer != NULL) VARR_DESTROY (token_t, output_buffer);
   finish_macros (c2m_ctx);
@@ -1977,6 +1986,7 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
 }
 
 static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_pos) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   FILE *f;
 
   assert (fname != NULL);
@@ -2042,6 +2052,7 @@ static int replacement_eq_p (VARR (token_t) * r1, VARR (token_t) * r2) {
 }
 
 static void define (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   VARR (token_t) * repl, *params;
   token_t id, t;
   const char *name;
@@ -2304,6 +2315,7 @@ static void check_pragma (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * tokens)
 }
 
 static void pop_macro_call (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   macro_call_t mc;
 
   mc = VARR_POP (macro_call_t, macro_call_stack);
@@ -2581,6 +2593,7 @@ static void prepare_pragma_string (const char *repr, VARR (char) * to) {
 }
 
 static int process_pragma (c2m_ctx_t c2m_ctx, token_t t) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t1, t2;
 
   if (strcmp (t->repr, "_Pragma") != 0) return FALSE;
@@ -2625,12 +2638,16 @@ static int process_pragma (c2m_ctx_t c2m_ctx, token_t t) {
 }
 
 static void flush_buffer (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+
   for (size_t i = 0; i < VARR_LENGTH (token_t, output_buffer); i++)
     pre_out_token_func (c2m_ctx, VARR_GET (token_t, output_buffer, i));
   VARR_TRUNC (token_t, output_buffer, 0);
 }
 
 static void out_token (c2m_ctx_t c2m_ctx, token_t t) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+
   if (no_out_p || VARR_LENGTH (macro_call_t, macro_call_stack) != 0) {
     VARR_PUSH (token_t, output_buffer, t);
     return;
@@ -2713,6 +2730,7 @@ static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, 
 }
 
 static void process_directive (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t, t1;
   int true_p;
   VARR (token_t) * temp_buffer;
@@ -2895,6 +2913,7 @@ ret:
 }
 
 static int pre_match (c2m_ctx_t c2m_ctx, int c, pos_t *pos, node_code_t *node_code, node_t *node) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t;
 
   if (VARR_LENGTH (token_t, pre_expr) == 0) return FALSE;
@@ -3009,6 +3028,7 @@ static node_t pre_cond_expr (c2m_ctx_t c2m_ctx) {
 }
 
 static node_t parse_pre_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   node_t r;
   token_t t;
 
@@ -3021,6 +3041,7 @@ static node_t parse_pre_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr) {
 }
 
 static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   int i, j, k, len;
   token_t t, id;
   const char *res;
@@ -3063,6 +3084,7 @@ static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
 static struct val eval (c2m_ctx_t c2m_ctx, node_t tree);
 
 static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, token_t if_token) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   int i, j;
   token_t t, ppt;
   VARR (token_t) * temp_buffer;
@@ -3258,6 +3280,7 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
 }
 
 static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t macro_id) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   macro_call_t mc;
   token_t t1 = get_next_pptoken (c2m_ctx), t2 = NULL;
 
@@ -3282,6 +3305,7 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 }
 
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t;
   struct macro macro_struct;
   macro_t m;
@@ -3421,6 +3445,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
 }
 
 static void pre_text_out (c2m_ctx_t c2m_ctx, token_t t) { /* NULL means end of output */
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   int i;
   FILE *f = c2m_options->prepro_output_file;
 
@@ -3454,6 +3479,8 @@ static void pre_text_out (c2m_ctx_t c2m_ctx, token_t t) { /* NULL means end of o
 }
 
 static void pre_out (c2m_ctx_t c2m_ctx, token_t t) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+
   if (t == NULL) {
     t = new_token (c2m_ctx, pre_last_token == NULL ? no_pos : pre_last_token->pos, "<EOF>",
                    T_EOFILE, N_IGNORE);
@@ -3481,11 +3508,15 @@ static void pre_out (c2m_ctx_t c2m_ctx, token_t t) {
 }
 
 static void common_pre_out (c2m_ctx_t c2m_ctx, token_t t) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+
   pptokens_num++;
   (c2m_options->prepro_only_p ? pre_text_out : pre_out) (c2m_ctx, t);
 }
 
 static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+
   pre_last_token = NULL;
   actual_pre_pos.fname = NULL;
   actual_pre_pos.lno = 0;
