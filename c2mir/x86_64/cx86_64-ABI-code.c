@@ -58,7 +58,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
     }
     case TM_STRUCT:
     case TM_UNION:
-      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
+      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); el != NULL;
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;

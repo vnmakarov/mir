@@ -34,7 +34,7 @@ static MIR_type_t fp_homogeneous_type_1 (c2m_ctx_t c2m_ctx, MIR_type_t curr_type
     case TM_UNION:
       t = curr_type;
       *num = 0;
-      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
+      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); el != NULL;
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
