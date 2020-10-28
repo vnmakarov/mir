@@ -596,6 +596,8 @@ static pos_t get_node_pos (c2m_ctx_t c2m_ctx, node_t n) {
   return VARR_GET (pos_t, node_positions, n->uid);
 }
 
+#define POS(n) get_node_pos (c2m_ctx, n)
+
 static void set_node_pos (c2m_ctx_t c2m_ctx, node_t n, pos_t pos) {
   if (n->uid >= VARR_LENGTH (pos_t, node_positions))
     VARR_EXPAND (pos_t, node_positions, n->uid + 1);
@@ -614,18 +616,18 @@ struct token {
 };
 
 static node_t add_pos (c2m_ctx_t c2m_ctx, node_t n, pos_t p) {
-  if (get_node_pos (c2m_ctx, n).lno < 0) set_node_pos (c2m_ctx, n, p);
+  if (POS (n).lno < 0) set_node_pos (c2m_ctx, n, p);
   return n;
 }
 
 static node_t op_append (c2m_ctx_t c2m_ctx, node_t n, node_t op) {
   NL_APPEND (n->u.ops, op);
-  return add_pos (c2m_ctx, n, get_node_pos (c2m_ctx, op));
+  return add_pos (c2m_ctx, n, POS (op));
 }
 
 static node_t op_prepend (c2m_ctx_t c2m_ctx, node_t n, node_t op) {
   NL_PREPEND (n->u.ops, op);
-  return add_pos (c2m_ctx, n, get_node_pos (c2m_ctx, op));
+  return add_pos (c2m_ctx, n, POS (op));
 }
 
 static void op_flat_append (c2m_ctx_t c2m_ctx, node_t n, node_t op) {
@@ -660,7 +662,7 @@ static node_t copy_node_with_pos (c2m_ctx_t c2m_ctx, node_t n, pos_t pos) {
 }
 
 static node_t copy_node (c2m_ctx_t c2m_ctx, node_t n) {
-  return copy_node_with_pos (c2m_ctx, n, get_node_pos (c2m_ctx, n));
+  return copy_node_with_pos (c2m_ctx, n, POS (n));
 }
 
 static node_t new_pos_node (c2m_ctx_t c2m_ctx, node_code_t nc, pos_t p) {
@@ -2954,8 +2956,7 @@ static node_t pre_primary_expr (c2m_ctx_t c2m_ctx) {
         if (!pre_match (c2m_ctx, ',', NULL, NULL, NULL)) return NULL;
       }
     }
-    return new_pos_node (c2m_ctx, N_IGNORE,
-                         get_node_pos (c2m_ctx, n)); /* error only during evaluation */
+    return new_pos_node (c2m_ctx, N_IGNORE, POS (n)); /* error only during evaluation */
   }
   if (pre_match (c2m_ctx, '(', NULL, NULL, NULL)) {
     if ((r = pre_cond_expr (c2m_ctx)) == NULL) return NULL;
@@ -3192,7 +3193,7 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
 
   switch (tree->code) {
   case N_IGNORE:
-    error (c2m_ctx, get_node_pos (c2m_ctx, tree), "wrong preprocessor expression");
+    error (c2m_ctx, POS (tree), "wrong preprocessor expression");
     res.uns_p = FALSE;
     res.u.i_val = 0;
     break;
@@ -3264,7 +3265,7 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
                        : tree->code == N_DIV ? v1.u.i_val / v2.u.i_val : v1.u.i_val % v2.u.i_val);
     }
     if (zero_p)
-      error (c2m_ctx, get_node_pos (c2m_ctx, tree), "division (%s) by zero in preporocessor",
+      error (c2m_ctx, POS (tree), "division (%s) by zero in preporocessor",
              tree->code == N_DIV ? "/" : "%");
     break;
   }
@@ -3793,7 +3794,7 @@ D (primary_expr) {
       } else {
         P (type_name);
         op = r;
-        pos = get_node_pos (c2m_ctx, op);
+        pos = POS (op);
       }
       PT (':');
       P (assign_expr);
@@ -4036,7 +4037,7 @@ D (declaration) {
     try_attr_spec (c2m_ctx, curr_token->pos);
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
-    last_pos = get_node_pos (c2m_ctx, spec);
+    last_pos = POS (spec);
     list = new_node (c2m_ctx, N_LIST);
     if (C (';')) {
       op_append (c2m_ctx, list,
@@ -4049,7 +4050,7 @@ D (declaration) {
       for (;;) { /* init-declarator */
         P (declarator);
         decl = r;
-        last_pos = get_node_pos (c2m_ctx, decl);
+        last_pos = POS (decl);
         assert (decl->code == N_DECL);
         if (typedef_p) {
           op = NL_HEAD (decl->u.ops);
@@ -4062,7 +4063,7 @@ D (declaration) {
           r = new_node (c2m_ctx, N_IGNORE);
         }
         op_append (c2m_ctx, list,
-                   new_pos_node3 (c2m_ctx, N_SPEC_DECL, get_node_pos (c2m_ctx, decl),
+                   new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (decl),
                                   new_node1 (c2m_ctx, N_SHARE, spec), decl, r));
         if (!M (',')) break;
       }
@@ -4294,9 +4295,8 @@ D (struct_declaration) {
     spec = r;
     list = new_node (c2m_ctx, N_LIST);
     if (M (';')) {
-      op = new_pos_node3 (c2m_ctx, N_MEMBER, get_node_pos (c2m_ctx, spec),
-                          new_node1 (c2m_ctx, N_SHARE, spec), new_node (c2m_ctx, N_IGNORE),
-                          new_node (c2m_ctx, N_IGNORE));
+      op = new_pos_node3 (c2m_ctx, N_MEMBER, POS (spec), new_node1 (c2m_ctx, N_SHARE, spec),
+                          new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
       op_append (c2m_ctx, list, op);
     } else {     /* struct-declarator-list */
       for (;;) { /* struct-declarator */
@@ -4311,8 +4311,7 @@ D (struct_declaration) {
         } else {
           r = new_node (c2m_ctx, N_IGNORE);
         }
-        op = new_pos_node3 (c2m_ctx, N_MEMBER, get_node_pos (c2m_ctx, op),
-                            new_node1 (c2m_ctx, N_SHARE, spec), op, r);
+        op = new_pos_node3 (c2m_ctx, N_MEMBER, POS (op), new_node1 (c2m_ctx, N_SHARE, spec), op, r);
         op_append (c2m_ctx, list, op);
         if (!M (',')) break;
       }
@@ -4544,8 +4543,7 @@ D (param_type_list) {
       r = new_node2 (c2m_ctx, N_TYPE, op1, op2);
     } else {
       P (declarator);
-      r = new_pos_node3 (c2m_ctx, N_SPEC_DECL, get_node_pos (c2m_ctx, op2), op1, r,
-                         new_node (c2m_ctx, N_IGNORE));
+      r = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (op2), op1, r, new_node (c2m_ctx, N_IGNORE));
     }
     op_append (c2m_ctx, list, r);
     comma_p = FALSE;
@@ -4582,7 +4580,7 @@ D (abstract_declarator) {
     P (pointer);
     p = r;
     if ((r = TRY (direct_abstract_declarator)) == err_node)
-      r = new_pos_node2 (c2m_ctx, N_DECL, get_node_pos (c2m_ctx, p), new_node (c2m_ctx, N_IGNORE),
+      r = new_pos_node2 (c2m_ctx, N_DECL, POS (p), new_node (c2m_ctx, N_IGNORE),
                          new_node (c2m_ctx, N_LIST));
   } else {
     P (direct_abstract_declarator);
@@ -4662,7 +4660,7 @@ D (direct_abstract_declarator) {
     }
     if (!C ('(') && !C ('[')) break;
   }
-  add_pos (c2m_ctx, res, get_node_pos (c2m_ctx, list));
+  add_pos (c2m_ctx, res, POS (list));
   return res;
 }
 
@@ -4737,7 +4735,7 @@ D (type_name) {
   if (!C (')') && !C (':')) {
     P (abstract_declarator);
   } else {
-    r = new_pos_node2 (c2m_ctx, N_DECL, get_node_pos (c2m_ctx, op), new_node (c2m_ctx, N_IGNORE),
+    r = new_pos_node2 (c2m_ctx, N_DECL, POS (op), new_node (c2m_ctx, N_IGNORE),
                        new_node (c2m_ctx, N_LIST));
   }
   return new_node2 (c2m_ctx, N_TYPE, op, r);
@@ -4902,7 +4900,7 @@ D (stmt) {
       P (expr);
     }
     PT (';');
-    r = new_pos_node2 (c2m_ctx, N_EXPR, get_node_pos (c2m_ctx, r), l, r);
+    r = new_pos_node2 (c2m_ctx, N_EXPR, POS (r), l, r);
   }
   return r;
 }
@@ -4978,7 +4976,7 @@ D (transl_unit) {
         op_flat_append (c2m_ctx, dl, r);
       }
       P (compound_stmt);
-      r = new_pos_node4 (c2m_ctx, N_FUNC_DEF, get_node_pos (c2m_ctx, d), ds, d, dl, r);
+      r = new_pos_node4 (c2m_ctx, N_FUNC_DEF, POS (d), ds, d, dl, r);
       curr_scope = d->attr;
     }
     op_flat_append (c2m_ctx, list, r);
@@ -5998,15 +5996,15 @@ static void set_type_qual (c2m_ctx_t c2m_ctx, node_t r, struct type_qual *tq,
     case N_RESTRICT:
       tq->restrict_p = TRUE;
       if (tmode != TM_PTR && tmode != TM_UNDEF)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "restrict requires a pointer");
+        error (c2m_ctx, POS (n), "restrict requires a pointer");
       break;
     case N_VOLATILE: tq->volatile_p = TRUE; break;
     case N_ATOMIC:
       tq->atomic_p = TRUE;
       if (tmode == TM_ARR)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Atomic qualifying array");
+        error (c2m_ctx, POS (n), "_Atomic qualifying array");
       else if (tmode == TM_FUNC)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Atomic qualifying function");
+        error (c2m_ctx, POS (n), "_Atomic qualifying function");
       break;
     default: break; /* Ignore */
     }
@@ -6015,11 +6013,11 @@ static void set_type_qual (c2m_ctx_t c2m_ctx, node_t r, struct type_qual *tq,
 static void check_type_duplication (c2m_ctx_t c2m_ctx, struct type *type, node_t n,
                                     const char *name, int size, int sign) {
   if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-    error (c2m_ctx, get_node_pos (c2m_ctx, n), "%s with another type", name);
+    error (c2m_ctx, POS (n), "%s with another type", name);
   else if (type->mode != TM_BASIC && size != 0)
-    error (c2m_ctx, get_node_pos (c2m_ctx, n), "size with non-numeric type");
+    error (c2m_ctx, POS (n), "size with non-numeric type");
   else if (type->mode != TM_BASIC && sign != 0)
-    error (c2m_ctx, get_node_pos (c2m_ctx, n), "sign attribute with non-integer type");
+    error (c2m_ctx, POS (n), "sign attribute with non-integer type");
 }
 
 static node_t find_def (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, node_t scope,
@@ -6057,11 +6055,10 @@ static node_t process_tag (c2m_ctx_t c2m_ctx, node_t r, node_t id, node_t decl_l
   if (!found_p) {
     symbol_insert (c2m_ctx, S_TAG, id, scope, r, NULL);
   } else if (sym.def_node->code != r->code) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, id),
-           "kind of tag %s is unmatched with previous declaration", id->u.s.s);
+    error (c2m_ctx, POS (id), "kind of tag %s is unmatched with previous declaration", id->u.s.s);
   } else if ((tab_decl_list = NL_EL (sym.def_node->u.ops, 1))->code != N_IGNORE
              && decl_list->code != N_IGNORE) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, id), "tag %s redeclaration", id->u.s.s);
+    error (c2m_ctx, POS (id), "tag %s redeclaration", id->u.s.s);
   } else {
     if (decl_list->code != N_IGNORE) { /* swap decl lists */
       DLIST (node_t) temp;
@@ -6083,7 +6080,7 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
           || scope->code == N_UNION || scope->code == N_FUNC || scope->code == N_FOR);
   decl_spec = ((decl_t) def_node->attr)->decl_spec;
   if (decl_spec.thread_local_p && !decl_spec.static_p && !decl_spec.extern_p)
-    error (c2m_ctx, get_node_pos (c2m_ctx, id), "auto %s is declared as thread local", id->u.s.s);
+    error (c2m_ctx, POS (id), "auto %s is declared as thread local", id->u.s.s);
   if (!symbol_find (c2m_ctx, mode, id, scope, &sym)) {
     symbol_insert (c2m_ctx, mode, id, scope, def_node, NULL);
     return;
@@ -6096,18 +6093,16 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
       /* a hack to use our definition instead of macosx for non-GNU compiler */
       if (strcmp (id->u.s.s, "__darwin_va_list") != 0)
 #endif
-        error (c2m_ctx, get_node_pos (c2m_ctx, id), "repeated declaration %s", id->u.s.s);
+        error (c2m_ctx, POS (id), "repeated declaration %s", id->u.s.s);
   } else if (!compatible_types_p (decl_spec.type, tab_decl_spec.type, FALSE)) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, id), "incompatible types of %s declarations", id->u.s.s);
+    error (c2m_ctx, POS (id), "incompatible types of %s declarations", id->u.s.s);
   }
   if (tab_decl_spec.thread_local_p != decl_spec.thread_local_p) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, id),
-           "thread local and non-thread local declarations of %s", id->u.s.s);
+    error (c2m_ctx, POS (id), "thread local and non-thread local declarations of %s", id->u.s.s);
   }
   if ((decl_spec.linkage == N_EXTERN && linkage == N_STATIC)
       || (decl_spec.linkage == N_STATIC && linkage == N_EXTERN))
-    warning (c2m_ctx, get_node_pos (c2m_ctx, id), "%s defined with external and internal linkage",
-             id->u.s.s);
+    warning (c2m_ctx, POS (id), "%s defined with external and internal linkage", id->u.s.s);
   VARR_PUSH (node_t, sym.defs, def_node);
   if (!incomplete_type_p (c2m_ctx, decl_spec.type)
       && incomplete_type_p (c2m_ctx, tab_decl_spec.type))
@@ -6152,21 +6147,21 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
   for (node_t n = NL_HEAD (r->u.ops); n != NULL; n = NL_NEXT (n))
     if (n->code == N_SIGNED || n->code == N_UNSIGNED) {
       if (sign != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than one sign qualifier");
+        error (c2m_ctx, POS (n), "more than one sign qualifier");
       else
         sign = n->code == N_SIGNED ? 1 : -1;
     } else if (n->code == N_SHORT) {
       if (size != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than one type");
+        error (c2m_ctx, POS (n), "more than one type");
       else
         size = 1;
     } else if (n->code == N_LONG) {
       if (size == 2)
         size = 3;
       else if (size == 3)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than two long");
+        error (c2m_ctx, POS (n), "more than two long");
       else if (size == 1)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "short with long");
+        error (c2m_ctx, POS (n), "short with long");
       else
         size = 2;
     }
@@ -6180,13 +6175,13 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       /* Func specifiers: */
     case N_INLINE:
       if (!func_p)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "non-function declaration with inline");
+        error (c2m_ctx, POS (n), "non-function declaration with inline");
       else
         res->inline_p = TRUE;
       break;
     case N_NO_RETURN:
       if (!func_p)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "non-function declaration with _Noreturn");
+        error (c2m_ctx, POS (n), "non-function declaration with _Noreturn");
       else
         res->no_return_p = TRUE;
       break;
@@ -6195,7 +6190,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_AUTO:
     case N_REGISTER:
       if (n_sc != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than one storage specifier");
+        error (c2m_ctx, POS (n), "more than one storage specifier");
       else if (n->code == N_TYPEDEF)
         res->typedef_p = TRUE;
       else if (n->code == N_AUTO)
@@ -6207,7 +6202,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_EXTERN:
     case N_STATIC:
       if (n_sc != 0 && (n_sc != 1 || !res->thread_local_p))
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than one storage specifier");
+        error (c2m_ctx, POS (n), "more than one storage specifier");
       else if (n->code == N_EXTERN)
         res->extern_p = TRUE;
       else
@@ -6216,7 +6211,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       break;
     case N_THREAD_LOCAL:
       if (n_sc != 0 && (n_sc != 1 || (!res->extern_p && !res->static_p)))
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "more than one storage specifier");
+        error (c2m_ctx, POS (n), "more than one storage specifier");
       else
         res->thread_local_p = TRUE;
       n_sc++;
@@ -6224,11 +6219,11 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_VOID:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "void with another type");
+        error (c2m_ctx, POS (n), "void with another type");
       else if (sign != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "void with sign qualifier");
+        error (c2m_ctx, POS (n), "void with sign qualifier");
       else if (size != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "void with short or long");
+        error (c2m_ctx, POS (n), "void with short or long");
       else
         type->u.basic_type = TP_VOID;
       break;
@@ -6240,10 +6235,10 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_INT:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "char or int with another type");
+        error (c2m_ctx, POS (n), "char or int with another type");
       } else if (n->code == N_CHAR) {
         if (size != 0)
-          error (c2m_ctx, get_node_pos (c2m_ctx, n), "char with short or long");
+          error (c2m_ctx, POS (n), "char with short or long");
         else
           type->u.basic_type = sign == 0 ? TP_CHAR : sign < 0 ? TP_UCHAR : TP_SCHAR;
       } else if (size == 0)
@@ -6258,36 +6253,36 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_BOOL:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Bool with another type");
+        error (c2m_ctx, POS (n), "_Bool with another type");
       else if (sign != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Bool with sign qualifier");
+        error (c2m_ctx, POS (n), "_Bool with sign qualifier");
       else if (size != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Bool with short or long");
+        error (c2m_ctx, POS (n), "_Bool with short or long");
       type->u.basic_type = TP_BOOL;
       break;
     case N_FLOAT:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "float with another type");
+        error (c2m_ctx, POS (n), "float with another type");
       else if (sign != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "float with sign qualifier");
+        error (c2m_ctx, POS (n), "float with sign qualifier");
       else if (size != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "float with short or long");
+        error (c2m_ctx, POS (n), "float with short or long");
       else
         type->u.basic_type = TP_FLOAT;
       break;
     case N_DOUBLE:
       set_type_pos_node (type, n);
       if (type->mode != TM_BASIC || type->u.basic_type != TP_UNDEF)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "double with another type");
+        error (c2m_ctx, POS (n), "double with another type");
       else if (sign != 0)
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "double with sign qualifier");
+        error (c2m_ctx, POS (n), "double with sign qualifier");
       else if (size == 0)
         type->u.basic_type = TP_DOUBLE;
       else if (size == 2)
         type->u.basic_type = TP_LDOUBLE;
       else
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "double with short");
+        error (c2m_ctx, POS (n), "double with short");
       break;
     case N_ID: {
       node_t def = find_def (c2m_ctx, S_REGULAR, n, curr_scope, NULL);
@@ -6295,7 +6290,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
 
       set_type_pos_node (type, n);
       if (def == NULL) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "unknown type %s", n->u.s.s);
+        error (c2m_ctx, POS (n), "unknown type %s", n->u.s.s);
         init_type (type);
         type->mode = TM_BASIC;
         type->u.basic_type = TP_INT;
@@ -6345,7 +6340,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       type->u.tag_type = res;
       if (enum_list->code == N_IGNORE) {
         if (incomplete_type_p (c2m_ctx, type))
-          error (c2m_ctx, get_node_pos (c2m_ctx, n), "enum storage size is unknown");
+          error (c2m_ctx, POS (n), "enum storage size is unknown");
       } else {
         mir_int curr_val = 0;
 
@@ -6359,8 +6354,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           const_expr = NL_NEXT (id);
           check (c2m_ctx, const_expr, n);
           if (symbol_find (c2m_ctx, S_REGULAR, id, curr_scope, &sym)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, id), "enum constant %s redeclaration",
-                   id->u.s.s);
+            error (c2m_ctx, POS (id), "enum constant %s redeclaration", id->u.s.s);
           } else {
             symbol_insert (c2m_ctx, S_REGULAR, id, curr_scope, en, n);
           }
@@ -6368,15 +6362,12 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
             struct expr *cexpr = const_expr->attr;
 
             if (!cexpr->const_p)
-              error (c2m_ctx, get_node_pos (c2m_ctx, const_expr),
-                     "non-constant value in enum const expression");
+              error (c2m_ctx, POS (const_expr), "non-constant value in enum const expression");
             else if (!integer_type_p (cexpr->type))
-              error (c2m_ctx, get_node_pos (c2m_ctx, const_expr),
-                     "enum const expression is not of an integer type");
+              error (c2m_ctx, POS (const_expr), "enum const expression is not of an integer type");
             else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val > MIR_INT_MAX)
                      || (!signed_integer_type_p (cexpr->type) && cexpr->u.u_val > MIR_INT_MAX))
-              error (c2m_ctx, get_node_pos (c2m_ctx, const_expr),
-                     "enum const expression is not represented by int");
+              error (c2m_ctx, POS (const_expr), "enum const expression is not represented by int");
             else
               curr_val = cexpr->u.i_val;
           }
@@ -6392,12 +6383,12 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       int align = -1;
 
       if (decl->code == N_FUNC_DEF) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Alignas for function");
+        error (c2m_ctx, POS (n), "_Alignas for function");
       } else if (decl->code == N_MEMBER && (el = NL_EL (decl->u.ops, 3)) != NULL
                  && el->code != N_IGNORE) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Alignas for a bit-field");
+        error (c2m_ctx, POS (n), "_Alignas for a bit-field");
       } else if (decl->code == N_SPEC_DECL && in_params_p) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, n), "_Alignas for a function parameter");
+        error (c2m_ctx, POS (n), "_Alignas for a function parameter");
       } else {
         node_t op = NL_HEAD (n->u.ops);
 
@@ -6410,16 +6401,14 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           struct expr *cexpr = op->attr;
 
           if (!cexpr->const_p) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, op), "non-constant value in _Alignas");
+            error (c2m_ctx, POS (op), "non-constant value in _Alignas");
           } else if (!integer_type_p (cexpr->type)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, op),
-                   "constant value in _Alignas is not of an integer type");
+            error (c2m_ctx, POS (op), "constant value in _Alignas is not of an integer type");
           } else if (!signed_integer_type_p (cexpr->type)
                      || !supported_alignment_p (cexpr->u.i_val)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, op),
-                   "constant value in _Alignas specifies unspported alignment");
+            error (c2m_ctx, POS (op), "constant value in _Alignas specifies unspported alignment");
           } else if (invalid_alignment (cexpr->u.i_val)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, op), "unsupported alignmnent");
+            error (c2m_ctx, POS (op), "unsupported alignmnent");
           } else {
             align = cexpr->u.i_val;
           }
@@ -6435,9 +6424,8 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     }
   if (type->mode == TM_BASIC && type->u.basic_type == TP_UNDEF) {
     if (size == 0 && sign == 0) {
-      (c2m_options->pedantic_p
-         ? error (c2m_ctx, get_node_pos (c2m_ctx, r), "no any type specifier")
-         : warning (c2m_ctx, get_node_pos (c2m_ctx, r), "type defaults to int"));
+      (c2m_options->pedantic_p ? error (c2m_ctx, POS (r), "no any type specifier")
+                               : warning (c2m_ctx, POS (r), "type defaults to int"));
       type->u.basic_type = TP_INT;
     } else if (size == 0) {
       type->u.basic_type = sign >= 0 ? TP_INT : TP_UINT;
@@ -6452,9 +6440,9 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
   set_type_qual (c2m_ctx, r, &type->type_qual, type->mode);
   if (res->align_node) {
     if (res->typedef_p)
-      error (c2m_ctx, get_node_pos (c2m_ctx, res->align_node), "_Alignas in typedef");
+      error (c2m_ctx, POS (res->align_node), "_Alignas in typedef");
     else if (res->register_p)
-      error (c2m_ctx, get_node_pos (c2m_ctx, res->align_node), "_Alignas with register");
+      error (c2m_ctx, POS (res->align_node), "_Alignas with register");
   }
   return *res;
 }
@@ -6571,10 +6559,10 @@ static struct type *check_declarator (c2m_ctx_t c2m_ctx, node_t r, int func_def_
 
         if (non_reg_decl_spec_p (ds) || ds->register_p
             || !type_qual_eq_p (&ds->type->type_qual, &zero_type_qual)) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, first_param), "qualified void parameter");
+          error (c2m_ctx, POS (first_param), "qualified void parameter");
         }
         if (NL_NEXT (first_param) != NULL) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, first_param), "void must be the only parameter");
+          error (c2m_ctx, POS (first_param), "void must be the only parameter");
         }
       } else {
         for (node_t p = first_param; p != NULL; p = NL_NEXT (p)) {
@@ -6582,7 +6570,7 @@ static struct type *check_declarator (c2m_ctx_t c2m_ctx, node_t r, int func_def_
 
           if (p->code == N_ID) {
             if (!func_def_p)
-              error (c2m_ctx, get_node_pos (c2m_ctx, p),
+              error (c2m_ctx, POS (p),
                      "parameters identifier list can be only in function definition");
             break;
           } else {
@@ -6609,11 +6597,10 @@ static int check_case_expr (c2m_ctx_t c2m_ctx, node_t case_expr, struct type *ty
   check (c2m_ctx, case_expr, target);
   expr = case_expr->attr;
   if (!expr->const_p) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, case_expr), "case-expr is not a constant expression");
+    error (c2m_ctx, POS (case_expr), "case-expr is not a constant expression");
     return FALSE;
   } else if (!integer_type_p (expr->type)) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, case_expr),
-           "case-expr is not an integer type expression");
+    error (c2m_ctx, POS (case_expr), "case-expr is not an integer type expression");
     return FALSE;
   } else {
     convert_value (expr, type);
@@ -6630,12 +6617,12 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
       node_t id = NL_HEAD (l->u.ops);
 
       if (symbol_find (c2m_ctx, S_LABEL, id, func_block_scope, &sym)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, id), "label %s redeclaration", id->u.s.s);
+        error (c2m_ctx, POS (id), "label %s redeclaration", id->u.s.s);
       } else {
         symbol_insert (c2m_ctx, S_LABEL, id, func_block_scope, target, NULL);
       }
     } else if (curr_switch == NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, l), "%s not within a switch-stmt",
+      error (c2m_ctx, POS (l), "%s not within a switch-stmt",
              l->code == N_CASE ? "case label" : "default label");
     } else {
       struct switch_attr *switch_attr = curr_switch->attr;
@@ -6647,7 +6634,7 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
 
       if (case_expr == NULL) {
         if (default_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, l), "multiple default labels in one switch");
+          error (c2m_ctx, POS (l), "multiple default labels in one switch");
         } else {
           ok_p = TRUE;
         }
@@ -6655,7 +6642,7 @@ static void check_labels (c2m_ctx_t c2m_ctx, node_t labels, node_t target) {
         ok_p = check_case_expr (c2m_ctx, case_expr, type, target);
         if (case_expr2 != NULL) {
           ok_p = check_case_expr (c2m_ctx, case_expr2, type, target) && ok_p;
-          (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, l),
+          (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (l),
                                                        "range cases are not a part of C standard");
         }
       }
@@ -6704,33 +6691,30 @@ static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int fun
     struct type *el_type = arr_type->el_type;
 
     if (size_node->code == N_STAR) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, size_node), "variable size arrays are not supported");
+      error (c2m_ctx, POS (size_node), "variable size arrays are not supported");
     } else if (size_node->code != N_IGNORE) {
       struct expr *cexpr = size_node->attr;
 
       if (!integer_type_p (cexpr->type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, size_node), "non-integer array size type");
+        error (c2m_ctx, POS (size_node), "non-integer array size type");
       } else if (!cexpr->const_p) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, size_node),
-               "variable size arrays are not supported");
+        error (c2m_ctx, POS (size_node), "variable size arrays are not supported");
       } else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, size_node), "array size should be not negative");
+        error (c2m_ctx, POS (size_node), "array size should be not negative");
       } else if (cexpr->u.i_val == 0) {
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, size_node),
-                                                     "zero array size");
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (size_node), "zero array size");
       }
     }
     check_type (c2m_ctx, el_type, level + 1, FALSE);
     if (el_type->mode == TM_FUNC) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, type->pos_node), "array of functions");
+      error (c2m_ctx, POS (type->pos_node), "array of functions");
     } else if (incomplete_type_p (c2m_ctx, el_type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, type->pos_node), "incomplete array element type");
+      error (c2m_ctx, POS (type->pos_node), "incomplete array element type");
     } else if (!in_params_p || level != 0) {
       if (arr_type->static_p)
-        error (c2m_ctx, get_node_pos (c2m_ctx, type->pos_node),
-               "static should be only in parameter outermost");
+        error (c2m_ctx, POS (type->pos_node), "static should be only in parameter outermost");
       else if (!type_qual_eq_p (&arr_type->ind_type_qual, &zero_type_qual))
-        error (c2m_ctx, get_node_pos (c2m_ctx, type->pos_node),
+        error (c2m_ctx, POS (type->pos_node),
                "type qualifiers should be only in parameter outermost array");
     }
     break;
@@ -6743,9 +6727,9 @@ static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int fun
 
     check_type (c2m_ctx, ret_type, level + 1, FALSE);
     if (ret_type->mode == TM_FUNC) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, ret_type->pos_node), "function returning a function");
+      error (c2m_ctx, POS (ret_type->pos_node), "function returning a function");
     } else if (ret_type->mode == TM_ARR) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, ret_type->pos_node), "function returning an array");
+      error (c2m_ctx, POS (ret_type->pos_node), "function returning an array");
     }
     first_param = NL_HEAD (param_list->u.ops);
     if (!void_param_p (first_param)) {
@@ -6761,15 +6745,12 @@ static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int fun
           break;
         }
         if (non_reg_decl_spec_p (&decl_spec)) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, p),
-                 "prohibited specifier in a function parameter");
+          error (c2m_ctx, POS (p), "prohibited specifier in a function parameter");
         } else if (func_def_p) {
           if (p->code == N_TYPE)
-            error (c2m_ctx, get_node_pos (c2m_ctx, p),
-                   "parameter type without a name in function definition");
+            error (c2m_ctx, POS (p), "parameter type without a name in function definition");
           else if (incomplete_type_p (c2m_ctx, decl_spec.type))
-            error (c2m_ctx, get_node_pos (c2m_ctx, p),
-                   "incomplete parameter type in function definition");
+            error (c2m_ctx, POS (p), "incomplete parameter type in function definition");
         }
       }
     }
@@ -6793,15 +6774,14 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
           = (code == N_CALL ? "using pointer without cast for integer type parameter"
                             : code == N_RETURN ? "returning pointer without cast for integer result"
                                                : "assigning pointer without cast to integer");
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, assign_node),
-                                                     "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else {
         msg = (code == N_CALL
                  ? "incompatible argument type for arithemtic type parameter"
                  : code != N_RETURN
                      ? "incompatible types in assignment to an arithemtic type lvalue"
                      : "incompatible return-expr type in function returning an arithemtic value");
-        error (c2m_ctx, get_node_pos (c2m_ctx, assign_node), "%s", msg);
+        error (c2m_ctx, POS (assign_node), "%s", msg);
       }
     }
   } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
@@ -6812,7 +6792,7 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                : code != N_RETURN
                    ? "incompatible types in assignment to struct/union"
                    : "incompatible return-expr type in function returning a struct/union");
-      error (c2m_ctx, get_node_pos (c2m_ctx, assign_node), "%s", msg);
+      error (c2m_ctx, POS (assign_node), "%s", msg);
     }
   } else if (left->mode == TM_PTR) {
     if (null_const_p (expr, right)) {
@@ -6825,36 +6805,33 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                               : code == N_RETURN
                                   ? "incompatible pointer types of return-expr and function result"
                                   : "incompatible pointer types in assignment");
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, assign_node),
-                                                     "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else if (integer_type_p (right)) {
         msg
           = (code == N_CALL ? "using integer without cast for pointer type parameter"
                             : code == N_RETURN ? "returning integer without cast for pointer result"
                                                : "assigning integer without cast to pointer");
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, assign_node),
-                                                     "%s", msg);
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else {
         msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
                               : code == N_RETURN
                                   ? "incompatible return-expr type in function returning a pointer"
                                   : "incompatible types in assignment to a pointer");
-        (c2m_options->pedantic_p || right->mode != TM_PTR
-           ? error
-           : warning) (c2m_ctx, get_node_pos (c2m_ctx, assign_node), "%s", msg);
+        (c2m_options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx,
+                                                                              POS (assign_node),
+                                                                              "%s", msg);
       }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
       msg = (code == N_CALL ? "passing a pointer of an atomic type"
                             : code == N_RETURN ? "returning a pointer of an atomic type"
                                                : "assignment of pointer of an atomic type");
-      error (c2m_ctx, get_node_pos (c2m_ctx, assign_node), "%s", msg);
+      error (c2m_ctx, POS (assign_node), "%s", msg);
     } else if (!type_qual_subset_p (&right->u.ptr_type->type_qual, &left->u.ptr_type->type_qual)) {
       msg = (code == N_CALL
                ? "discarding type qualifiers in passing argument"
                : code == N_RETURN ? "return discards a type qualifier from a pointer"
                                   : "assignment discards a type qualifier from a pointer");
-      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, get_node_pos (c2m_ctx, assign_node),
-                                                   "%s", msg);
+      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
     }
   }
 }
@@ -7179,7 +7156,7 @@ check_one_value:
       if ((cexpr = initializer->attr)->const_addr_p || (literal != NULL && addr_p))
         check_assignment_types (c2m_ctx, type, NULL, cexpr, initializer);
       else
-        error (c2m_ctx, get_node_pos (c2m_ctx, initializer),
+        error (c2m_ctx, POS (initializer),
                "initializer of non-auto or thread local object"
                " should be a constant expression or address");
     }
@@ -7195,13 +7172,11 @@ check_one_value:
     len = str->u.s.len;
     if (incomplete_type_p (c2m_ctx, type)) {
       assert (len < MIR_INT_MAX);
-      type->u.arr_type->size
-        = new_i_node (c2m_ctx, len, get_node_pos (c2m_ctx, type->u.arr_type->size));
+      type->u.arr_type->size = new_i_node (c2m_ctx, len, POS (type->u.arr_type->size));
       check (c2m_ctx, type->u.arr_type->size, NULL);
       make_type_complete (c2m_ctx, type);
     } else if (len > ((struct expr *) type->u.arr_type->size->attr)->u.i_val + 1) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, initializer),
-             "string is too long for array initializer");
+      error (c2m_ctx, POS (initializer), "string is too long for array initializer");
     }
     return;
   }
@@ -7211,16 +7186,16 @@ check_one_value:
   assert (des_list->code == N_LIST);
   if (type->mode != TM_ARR && type->mode != TM_STRUCT && type->mode != TM_UNION) {
     if ((temp = NL_NEXT (init)) != NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, temp), "excess elements in scalar initializer");
+      error (c2m_ctx, POS (temp), "excess elements in scalar initializer");
       return;
     }
     if ((temp = NL_HEAD (des_list->u.ops)) != NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, temp), "designator in scalar initializer");
+      error (c2m_ctx, POS (temp), "designator in scalar initializer");
       return;
     }
     initializer = NL_NEXT (des_list);
     if (!top_p) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, init), "braces around scalar initializer");
+      error (c2m_ctx, POS (init), "braces around scalar initializer");
       return;
     }
     top_p = FALSE;
@@ -7247,14 +7222,14 @@ check_one_value:
     value = NL_NEXT (des_list);
     if ((value->code == N_LIST || value->code == N_COMPOUND_LITERAL) && type->mode != TM_ARR
         && type->mode != TM_STRUCT && type->mode != TM_UNION) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, init),
+      error (c2m_ctx, POS (init),
              value->code == N_LIST ? "braces around scalar initializer"
                                    : "compound literal for scalar initializer");
       break;
     }
     if ((curr_des = NL_HEAD (des_list->u.ops)) == NULL) {
       if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p, &max_index,
-                               get_node_pos (c2m_ctx, init), "array/struct/union"))
+                               POS (init), "array/struct/union"))
         break;
     } else {
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
@@ -7264,39 +7239,33 @@ check_one_value:
           node_t id = NL_HEAD (curr_des->u.ops);
 
           if (type->mode != TM_STRUCT && type->mode != TM_UNION) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
-                   "field name not in struct or union initializer");
+            error (c2m_ctx, POS (curr_des), "field name not in struct or union initializer");
           } else if (!symbol_find (c2m_ctx, S_REGULAR, id, type->u.tag_type, &sym)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, curr_des), "unknown field %s in initializer",
-                   id->u.s.s);
+            error (c2m_ctx, POS (curr_des), "unknown field %s in initializer", id->u.s.s);
           } else {
             process_init_field_designator (c2m_ctx, sym.def_node, init_object.container_type);
             if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p, NULL,
-                                     get_node_pos (c2m_ctx, init), "struct/union"))
+                                     POS (init), "struct/union"))
               break;
           }
         } else if (type->mode != TM_ARR) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
-                 "array index in initializer for non-array");
+          error (c2m_ctx, POS (curr_des), "array index in initializer for non-array");
         } else if (!(cexpr = curr_des->attr)->const_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
-                 "nonconstant array index in initializer");
+          error (c2m_ctx, POS (curr_des), "nonconstant array index in initializer");
         } else if (!integer_type_p (cexpr->type)) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
-                 "array index in initializer not of integer type");
+          error (c2m_ctx, POS (curr_des), "array index in initializer not of integer type");
         } else if (incomplete_type_p (c2m_ctx, type) && signed_integer_type_p (cexpr->type)
                    && cexpr->u.i_val < 0) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
+          error (c2m_ctx, POS (curr_des),
                  "negative array index in initializer for array without size");
         } else if (size_val >= 0 && size_val <= cexpr->u.u_val) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, curr_des),
-                 "array index in initializer exceeds array bounds");
+          error (c2m_ctx, POS (curr_des), "array index in initializer exceeds array bounds");
         } else {
           init_object.u.curr_index = cexpr->u.i_val - 1; /* previous el */
           init_object.designator_p = FALSE;
           VARR_PUSH (init_object_t, init_object_path, init_object);
           if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p,
-                                   &max_index, get_node_pos (c2m_ctx, init), "array"))
+                                   &max_index, POS (init), "array"))
             break;
         }
       }
@@ -7316,10 +7285,9 @@ check_one_value:
     size_node = type->u.arr_type->size;
     type->u.arr_type->size
       = (max_index < MIR_INT_MAX
-           ? new_i_node (c2m_ctx, max_index + 1, get_node_pos (c2m_ctx, size_node))
-           : max_index < MIR_LONG_MAX
-               ? new_l_node (c2m_ctx, max_index + 1, get_node_pos (c2m_ctx, size_node))
-               : new_ll_node (c2m_ctx, max_index + 1, get_node_pos (c2m_ctx, size_node)));
+           ? new_i_node (c2m_ctx, max_index + 1, POS (size_node))
+           : max_index < MIR_LONG_MAX ? new_l_node (c2m_ctx, max_index + 1, POS (size_node))
+                                      : new_ll_node (c2m_ctx, max_index + 1, POS (size_node)));
     check (c2m_ctx, type->u.arr_type->size, NULL);
     make_type_complete (c2m_ctx, type);
   }
@@ -7331,7 +7299,7 @@ check_one_value:
 static void check_decl_align (c2m_ctx_t c2m_ctx, struct decl_spec *decl_spec) {
   if (decl_spec->align < 0) return;
   if (decl_spec->align < type_align (decl_spec->type))
-    error (c2m_ctx, get_node_pos (c2m_ctx, decl_spec->align_node),
+    error (c2m_ctx, POS (decl_spec->align_node),
            "requested alignment is less than minimum alignment for the type");
 }
 
@@ -7386,7 +7354,7 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
     if (scope != top_scope && decl->decl_spec.linkage == N_EXTERN)
       def_symbol (c2m_ctx, S_REGULAR, id, top_scope, decl_node, N_EXTERN);
     if (func_p && decl->decl_spec.thread_local_p) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, id), "thread local function declaration");
+      error (c2m_ctx, POS (id), "thread local function declaration");
       if (c2m_options->message_file != NULL) {
         if (id->code != N_IGNORE) fprintf (c2m_options->message_file, " of %s", id->u.s.s);
         fprintf (c2m_options->message_file, "\n");
@@ -7405,15 +7373,13 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
           || incomplete_type_p (c2m_ctx, decl->decl_spec.type->u.arr_type->el_type))) {
     if (decl->decl_spec.type->mode == TM_ARR
         && decl->decl_spec.type->u.arr_type->el_type->mode == TM_ARR)
-      error (c2m_ctx, get_node_pos (c2m_ctx, initializer),
-             "initialization of incomplete sub-array");
+      error (c2m_ctx, POS (initializer), "initialization of incomplete sub-array");
     else
-      error (c2m_ctx, get_node_pos (c2m_ctx, initializer),
-             "initialization of incomplete type variable");
+      error (c2m_ctx, POS (initializer), "initialization of incomplete type variable");
     return;
   }
   if (decl->decl_spec.linkage != N_IGNORE && scope != top_scope) {
-    error (c2m_ctx, get_node_pos (c2m_ctx, initializer),
+    error (c2m_ctx, POS (initializer),
            "initialization of %s in block scope with external or internal linkage", id->u.s.s);
     return;
   }
@@ -7533,8 +7499,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (!integer_type_p (t1) || !integer_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "bitwise operation operands should be of an integer type");
+      error (c2m_ctx, POS (r), "bitwise operation operands should be of an integer type");
     } else {
       t = arithmetic_conversion (t1, t2);
       e->type->u.basic_type = t.u.basic_type;
@@ -7561,7 +7526,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (!integer_type_p (t1) || !integer_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "shift operands should be of an integer type");
+      error (c2m_ctx, POS (r), "shift operands should be of an integer type");
     } else {
       t = integer_promotion (t1);
       e->type->u.basic_type = t.u.basic_type;
@@ -7619,9 +7584,9 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
         SWAP (e1, e2, te);
       }
       if (t1->mode != TM_PTR || !integer_type_p (t2)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid operand types of +");
+        error (c2m_ctx, POS (r), "invalid operand types of +");
       } else if (incomplete_type_p (c2m_ctx, t1->u.ptr_type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "pointer to incomplete type as an operand of +");
+        error (c2m_ctx, POS (r), "pointer to incomplete type as an operand of +");
       } else {
         *e->type = *t1;
         if (e1->const_p && e2->const_p) {
@@ -7633,7 +7598,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
       }
     } else if (t1->mode == TM_PTR && integer_type_p (t2)) {
       if (incomplete_type_p (c2m_ctx, t1->u.ptr_type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "pointer to incomplete type as an operand of -");
+        error (c2m_ctx, POS (r), "pointer to incomplete type as an operand of -");
       } else {
         *e->type = *t1;
         if (e1->const_p && e2->const_p) {
@@ -7646,9 +7611,9 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
     } else if (t1->mode == TM_PTR && t2->mode == TM_PTR && compatible_types_p (t1, t2, TRUE)) {
       if (incomplete_type_p (c2m_ctx, t1->u.ptr_type)
           && incomplete_type_p (c2m_ctx, t2->u.ptr_type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "pointer to incomplete type as an operand of -");
+        error (c2m_ctx, POS (r), "pointer to incomplete type as an operand of -");
       } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "pointer to atomic type as an operand of -");
+        error (c2m_ctx, POS (r), "pointer to atomic type as an operand of -");
       } else {
         e->type->mode = TM_BASIC;
         e->type->u.basic_type = get_int_basic_type (sizeof (mir_ptrdiff_t));
@@ -7662,7 +7627,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
         }
       }
     } else {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid operand types of -");
+      error (c2m_ctx, POS (r), "invalid operand types of -");
     }
     break;
   }
@@ -7676,10 +7641,9 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (r->code == N_MOD && (!integer_type_p (t1) || !integer_type_p (t2))) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid operand types of %%");
+      error (c2m_ctx, POS (r), "invalid operand types of %%");
     } else if (r->code != N_MOD && (!arithmetic_type_p (t1) || !arithmetic_type_p (t2))) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid operand types of %s",
-             r->code == N_MUL ? "*" : "/");
+      error (c2m_ctx, POS (r), "invalid operand types of %s", r->code == N_MUL ? "*" : "/");
     } else {
       t = arithmetic_conversion (t1, t2);
       e->type->u.basic_type = t.u.basic_type;
@@ -7704,7 +7668,7 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
               e->u.i_val = 0;
             else
               e->u.u_val = 0;
-            error (c2m_ctx, get_node_pos (c2m_ctx, r), "Division by zero");
+            error (c2m_ctx, POS (r), "Division by zero");
           }
         } else if (r->code != N_MOD && floating_type_p (&t)) {
           e->u.d_val = e1->u.d_val / e2->u.d_val;
@@ -7792,7 +7756,7 @@ static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
    beginning of func_block if it is necessary.  */
 static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_name) {
   static const char fdecl_name[] = "__func__";
-  pos_t pos = get_node_pos (c2m_ctx, func_block);
+  pos_t pos = POS (func_block);
   node_t list, declarator, decl, decl_specs;
   tab_str_t str;
 
@@ -7962,7 +7926,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     arr_type->el_type->pos_node = r;
     arr_type->el_type->mode = TM_BASIC;
     arr_type->el_type->u.basic_type = TP_CHAR;
-    arr_type->size = new_i_node (c2m_ctx, r->u.s.len, get_node_pos (c2m_ctx, r));
+    arr_type->size = new_i_node (c2m_ctx, r->u.s.len, POS (r));
     check (c2m_ctx, arr_type->size, NULL);
     break;
   }
@@ -7974,14 +7938,14 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e = create_expr (c2m_ctx, r);
     e->def_node = op1;
     if (op1 == NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "undeclared identifier %s", r->u.s.s);
+      error (c2m_ctx, POS (r), "undeclared identifier %s", r->u.s.s);
     } else if (op1->code == N_IGNORE) {
       e->type->mode = TM_BASIC;
       e->type->u.basic_type = TP_INT;
     } else if (op1->code == N_SPEC_DECL) {
       decl = op1->attr;
       if (decl->decl_spec.typedef_p)
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "typedef name %s as an operand", r->u.s.s);
+        error (c2m_ctx, POS (r), "typedef name %s as an operand", r->u.s.s);
       decl->used_p = TRUE;
       *e->type = *decl->decl_spec.type;
       if (e->type->mode != TM_FUNC) e->lvalue_node = op1;
@@ -8012,8 +7976,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (!scalar_type_p (t1) || !scalar_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid operand types of %s",
-             r->code == N_ANDAND ? "&&" : "||");
+      error (c2m_ctx, POS (r), "invalid operand types of %s", r->code == N_ANDAND ? "&&" : "||");
     } else if (e1->const_p) {
       int v;
 
@@ -8058,10 +8021,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     else if (t1->mode == TM_PTR && t2->mode == TM_PTR) {
       if (!compatible_types_p (t1, t2, TRUE)
           && ((r->code != N_EQ && r->code != N_NE) || (!void_ptr_p (t1) && !void_ptr_p (t2)))) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "incompatible pointer types in comparison");
+        error (c2m_ctx, POS (r), "incompatible pointer types in comparison");
       } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r),
-               "pointer to atomic type as a comparison operand");
+        error (c2m_ctx, POS (r), "pointer to atomic type as a comparison operand");
       } else if (e1->const_p && e2->const_p) {
         e->const_p = TRUE;
         e->u.i_val = (r->code == N_EQ
@@ -8112,7 +8074,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
                                                                       : e1->u.u_val >= e2->u.u_val);
       }
     } else {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid types of comparison operands");
+      error (c2m_ctx, POS (r), "invalid types of comparison operands");
     }
     break;
   case N_BITWISE_NOT:
@@ -8122,10 +8084,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (r->code == N_BITWISE_NOT && !integer_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "bitwise-not operand should be of an integer type");
+      error (c2m_ctx, POS (r), "bitwise-not operand should be of an integer type");
     } else if (r->code == N_NOT && !scalar_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "not operand should be of a scalar type");
+      error (c2m_ctx, POS (r), "not operand should be of a scalar type");
     } else if (r->code == N_BITWISE_NOT) {
       t = integer_promotion (t1);
       e->type->u.basic_type = t.u.basic_type;
@@ -8175,8 +8136,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e->type->mode = TM_BASIC;
       e->type->u.basic_type = TP_INT;
       if (!arithmetic_type_p (t1)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r),
-               "unary + or - operand should be of an arithmentic type");
+        error (c2m_ctx, POS (r), "unary + or - operand should be of an arithmentic type");
       } else {
         if (e1->const_p) e->const_p = TRUE;
         if (floating_type_p (t1)) {
@@ -8240,7 +8200,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   assign:
     e = create_expr (c2m_ctx, r);
     if (!e1->lvalue_node) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "lvalue required as left operand of assignment");
+      error (c2m_ctx, POS (r), "lvalue required as left operand of assignment");
     }
     check_assignment_types (c2m_ctx, t1, t2, e2, r);
     *e->type = *t1;
@@ -8263,22 +8223,21 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (t1->mode != TM_PTR && t1->mode != TM_ARR) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "subscripted value is neither array nor pointer");
+      error (c2m_ctx, POS (r), "subscripted value is neither array nor pointer");
     } else if (t1->mode == TM_PTR) {
       *e->type = *t1->u.ptr_type;
       if (incomplete_type_p (c2m_ctx, t1->u.ptr_type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r),
-               "pointer to incomplete type in array subscription");
+        error (c2m_ctx, POS (r), "pointer to incomplete type in array subscription");
       }
     } else {
       *e->type = *t1->u.arr_type->el_type;
       e->type->type_qual = t1->u.arr_type->ind_type_qual;
       if (incomplete_type_p (c2m_ctx, e->type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "array type has incomplete element type");
+        error (c2m_ctx, POS (r), "array type has incomplete element type");
       }
     }
     if (!integer_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "array subscript is not an integer");
+      error (c2m_ctx, POS (r), "array subscript is not an integer");
     }
     break;
   case N_ADDR:
@@ -8295,7 +8254,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     } else if (!e1->lvalue_node) {
       e->type->mode = TM_BASIC;
       e->type->u.basic_type = TP_INT;
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "lvalue required as unary & operand");
+      error (c2m_ctx, POS (r), "lvalue required as unary & operand");
       break;
     }
     if (op1->code == N_IND) {
@@ -8306,8 +8265,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
       decl->addr_p = TRUE;
       if (decl->decl_spec.register_p)
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "address of register variable %s requested",
-               op1->u.s.s);
+        error (c2m_ctx, POS (r), "address of register variable %s requested", op1->u.s.s);
       t2 = create_type (c2m_ctx, decl->decl_spec.type);
     } else if (e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->u.ops, 1);
@@ -8316,7 +8274,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "cannot take address of bit-field %s",
+        error (c2m_ctx, POS (r), "cannot take address of bit-field %s",
                NL_HEAD (declarator->u.ops)->u.s.s);
       }
       t2 = create_type (c2m_ctx, decl->decl_spec.type);
@@ -8339,7 +8297,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (t1->mode != TM_PTR) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "invalid type argument of unary *");
+      error (c2m_ctx, POS (r), "invalid type argument of unary *");
     } else {
       *e->type = *t1->u.ptr_type;
       e->lvalue_node = r;
@@ -8362,11 +8320,11 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       t1 = t1->u.ptr_type;
     }
     if (t1->mode != TM_STRUCT && t1->mode != TM_UNION) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "request for member %s in something not a structure or union", op2->u.s.s);
+      error (c2m_ctx, POS (r), "request for member %s in something not a structure or union",
+             op2->u.s.s);
     } else if (!symbol_find (c2m_ctx, S_REGULAR, op2, t1->u.tag_type, &sym)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "%s has no member %s",
-             t1->mode == TM_STRUCT ? "struct" : "union", op2->u.s.s);
+      error (c2m_ctx, POS (r), "%s has no member %s", t1->mode == TM_STRUCT ? "struct" : "union",
+             op2->u.s.s);
     } else {
       assert (sym.def_node->code == N_MEMBER);
       decl = sym.def_node->attr;
@@ -8395,7 +8353,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;
     if (!scalar_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "condition should be of a scalar type");
+      error (c2m_ctx, POS (r), "condition should be of a scalar type");
       break;
     }
     if (e1->const_p) {
@@ -8432,8 +8390,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
                || (t3->mode == TM_PTR && null_const_p (e2, t2))) {
       e->type = null_const_p (e3, t2) ? t3 : t2;
     } else if (t2->mode != TM_PTR && t3->mode != TM_PTR) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "incompatible types in true and false parts of cond-expression");
+      error (c2m_ctx, POS (r), "incompatible types in true and false parts of cond-expression");
       break;
     } else if (compatible_types_p (t2, t3, TRUE)) {
       t = composite_type (c2m_ctx, t2->u.ptr_type, t3->u.ptr_type);
@@ -8444,7 +8401,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         = type_qual_union (&t2->u.ptr_type->type_qual, &t3->u.ptr_type->type_qual);
       if ((t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p)
           && !null_const_p (e2, t2) && !null_const_p (e3, t3)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r),
+        error (c2m_ctx, POS (r),
                "pointer to atomic type in true or false parts of cond-expression");
       }
     } else if (void_ptr_p (t2) || void_ptr_p (t3)) {
@@ -8458,7 +8415,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         e->type->u.ptr_type = e3->type->u.ptr_type;
       } else {
         if (t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, r),
+          error (c2m_ctx, POS (r),
                  "pointer to atomic type in true or false parts of cond-expression");
         }
         e->type->u.ptr_type->mode = TM_BASIC;
@@ -8467,7 +8424,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e->type->u.ptr_type->type_qual
         = type_qual_union (&t2->u.ptr_type->type_qual, &t3->u.ptr_type->type_qual);
     } else {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
+      error (c2m_ctx, POS (r),
              "incompatible pointer types in true and false parts of cond-expression");
       break;
     }
@@ -8491,16 +8448,16 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e = create_expr (c2m_ctx, r);
     *e->type = get_ptr_int_type (FALSE);
     if (r->code == N_ALIGNOF && op1->code == N_IGNORE) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "_Alignof of non-type");
+      error (c2m_ctx, POS (r), "_Alignof of non-type");
       break;
     }
     assert (op1->code == N_TYPE);
     decl_spec = op1->attr;
     if (incomplete_type_p (c2m_ctx, decl_spec->type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "%s of incomplete type requested",
+      error (c2m_ctx, POS (r), "%s of incomplete type requested",
              r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else if (decl_spec->type->mode == TM_FUNC) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "%s of function type requested",
+      error (c2m_ctx, POS (r), "%s of function type requested",
              r->code == N_ALIGNOF ? "_Alignof" : "sizeof");
     } else {
       e->const_p = TRUE;
@@ -8515,16 +8472,16 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->type->mode = TM_BASIC;
     e->type->u.basic_type = TP_INT;  // ???
     if (incomplete_type_p (c2m_ctx, t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "sizeof of incomplete type requested");
+      error (c2m_ctx, POS (r), "sizeof of incomplete type requested");
     } else if (t1->mode == TM_FUNC) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "sizeof of function type requested");
+      error (c2m_ctx, POS (r), "sizeof of function type requested");
     } else if (e1->lvalue_node && e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->u.ops, 1);
       node_t width = NL_NEXT (declarator);
 
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "sizeof applied to a bit-field %s",
+        error (c2m_ctx, POS (r), "sizeof applied to a bit-field %s",
                NL_HEAD (declarator->u.ops)->u.s.s);
       }
     }
@@ -8542,15 +8499,13 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     *e->type = *decl_spec->type;
     void_p = void_type_p (decl_spec->type);
     if (!void_p && !scalar_type_p (decl_spec->type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "conversion to non-scalar type requested");
+      error (c2m_ctx, POS (r), "conversion to non-scalar type requested");
     } else if (!scalar_type_p (t2) && !void_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "conversion of non-scalar value requested");
+      error (c2m_ctx, POS (r), "conversion of non-scalar value requested");
     } else if (t2->mode == TM_PTR && floating_type_p (decl_spec->type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "conversion of a pointer to floating value requested");
+      error (c2m_ctx, POS (r), "conversion of a pointer to floating value requested");
     } else if (decl_spec->type->mode == TM_PTR && floating_type_p (t2)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "conversion of floating point value to a pointer requested");
+      error (c2m_ctx, POS (r), "conversion of floating point value to a pointer requested");
     } else if (e2->const_p && !void_p) {
       e->const_p = TRUE;
       cast_value (e, e2, decl_spec->type);
@@ -8573,7 +8528,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     if (incomplete_type_p (c2m_ctx, t1)
         && (t1->mode != TM_ARR || t1->u.arr_type->size->code != N_IGNORE
             || incomplete_type_p (c2m_ctx, t1->u.arr_type->el_type))) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "compound literal of incomplete type");
+      error (c2m_ctx, POS (r), "compound literal of incomplete type");
       break;
     }
     for (n_spec_index = VARR_LENGTH (node_t, context_stack) - 1;
@@ -8617,10 +8572,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         op_append (c2m_ctx, spec_list, new_node (c2m_ctx, N_INT));
         list = new_node (c2m_ctx, N_LIST);
         op_append (c2m_ctx, list, new_node1 (c2m_ctx, N_FUNC, new_node (c2m_ctx, N_LIST)));
-        decl = new_pos_node3 (c2m_ctx, N_SPEC_DECL, get_node_pos (c2m_ctx, op1),
-                              new_node1 (c2m_ctx, N_SHARE, spec_list),
-                              new_node2 (c2m_ctx, N_DECL, copy_node (c2m_ctx, op1), list),
-                              new_node (c2m_ctx, N_IGNORE));
+        decl
+          = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (op1), new_node1 (c2m_ctx, N_SHARE, spec_list),
+                           new_node2 (c2m_ctx, N_DECL, copy_node (c2m_ctx, op1), list),
+                           new_node (c2m_ctx, N_IGNORE));
         curr_scope = top_scope;
         check (c2m_ctx, decl, NULL);
         curr_scope = saved_scope;
@@ -8646,14 +8601,11 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
       ret_type = &res_type;
       if (va_start_p && NL_LENGTH (arg_list->u.ops) != 1) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, op1), "wrong number of arguments in %s call",
-               BUILTIN_VA_START);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", BUILTIN_VA_START);
       } else if (alloca_p && NL_LENGTH (arg_list->u.ops) != 1) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, op1), "wrong number of arguments in %s call",
-               ALLOCA);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", ALLOCA);
       } else if (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, op1), "wrong number of arguments in %s call",
-               BUILTIN_VA_ARG);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", BUILTIN_VA_ARG);
       } else {
         /* first argument type ??? */
         if (va_arg_p) {
@@ -8661,8 +8613,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           e2 = arg->attr;
           t2 = e2->type;
           if (t2->mode != TM_PTR)
-            error (c2m_ctx, get_node_pos (c2m_ctx, arg), "wrong type of 2nd argument of %s call",
-                   BUILTIN_VA_ARG);
+            error (c2m_ctx, POS (arg), "wrong type of 2nd argument of %s call", BUILTIN_VA_ARG);
           else
             ret_type = t2->u.ptr_type;
         }
@@ -8672,8 +8623,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e1 = op1->attr;
       t1 = e1->type;
       if (t1->mode != TM_PTR || (t1 = t1->u.ptr_type)->mode != TM_FUNC) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, r),
-               "called object is not a function or function pointer");
+        error (c2m_ctx, POS (r), "called object is not a function or function pointer");
         break;
       }
       func_type = t1->u.func_type;
@@ -8684,7 +8634,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e->builtin_call_p = builtin_call_p;
     if ((ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)
         && incomplete_type_p (c2m_ctx, ret_type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "function return type is incomplete");
+      error (c2m_ctx, POS (r), "function return type is incomplete");
     }
     if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
       set_type_layout (c2m_ctx, ret_type);
@@ -8695,7 +8645,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     param = start_param = NL_HEAD (param_list->u.ops);
     if (void_param_p (start_param)) { /* f(void) */
       if ((arg = NL_HEAD (arg_list->u.ops)) != NULL)
-        error (c2m_ctx, get_node_pos (c2m_ctx, arg), "too many arguments");
+        error (c2m_ctx, POS (arg), "too many arguments");
       break;
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
@@ -8704,7 +8654,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e2 = arg->attr;
       if (start_param == NULL || start_param->code == N_ID) continue; /* no params or ident list */
       if (param == NULL) {
-        if (!func_type->dots_p) error (c2m_ctx, get_node_pos (c2m_ctx, arg), "too many arguments");
+        if (!func_type->dots_p) error (c2m_ctx, POS (arg), "too many arguments");
         start_param = NULL; /* ignore the rest args */
         continue;
       }
@@ -8714,7 +8664,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       param = NL_NEXT (param);
     }
     curr_call_arg_area_offset = saved_call_arg_area_offset_before_args;
-    if (param != NULL) error (c2m_ctx, get_node_pos (c2m_ctx, r), "too few arguments");
+    if (param != NULL) error (c2m_ctx, POS (r), "too few arguments");
     break;
   }
   case N_GENERIC: {
@@ -8735,18 +8685,17 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       check (c2m_ctx, type_name, r);
       check (c2m_ctx, expr, r);
       if (type_name->code == N_IGNORE) {
-        if (default_case)
-          error (c2m_ctx, get_node_pos (c2m_ctx, ga), "duplicate default case in _Generic");
+        if (default_case) error (c2m_ctx, POS (ga), "duplicate default case in _Generic");
         default_case = ga;
         continue;
       }
       assert (type_name->code == N_TYPE);
       decl_spec = type_name->attr;
       if (incomplete_type_p (c2m_ctx, decl_spec->type)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, ga), "_Generic case has incomplete type");
+        error (c2m_ctx, POS (ga), "_Generic case has incomplete type");
       } else if (compatible_types_p (&t, decl_spec->type, TRUE)) {
         if (ga_case)
-          error (c2m_ctx, get_node_pos (c2m_ctx, ga_case),
+          error (c2m_ctx, POS (ga_case),
                  "_Generic expr type is compatible with more than one generic association type");
         ga_case = ga;
       } else {
@@ -8755,8 +8704,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           if (type_name2->code != N_IGNORE
               && !(incomplete_type_p (c2m_ctx, t2 = ((struct decl_spec *) type_name2->attr)->type))
               && compatible_types_p (t2, decl_spec->type, TRUE)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, ga),
-                   "two or more compatible generic association types");
+            error (c2m_ctx, POS (ga), "two or more compatible generic association types");
             break;
           }
         }
@@ -8764,8 +8712,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     }
     e = create_expr (c2m_ctx, r);
     if (default_case == NULL && ga_case == NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "expression type is not compatible with generic association");
+      error (c2m_ctx, POS (r), "expression type is not compatible with generic association");
     } else { /* make compatible association a list head  */
       if (ga_case == NULL) ga_case = default_case;
       NL_REMOVE (list->u.ops, ga_case);
@@ -8789,9 +8736,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
                    context != NULL && context->code == N_FUNC);
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
       if (NL_HEAD (decl_spec.type->u.tag_type->u.ops)->code != N_ID)
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "unnamed struct/union with no instances");
+        error (c2m_ctx, POS (r), "unnamed struct/union with no instances");
     } else if (decl_spec.type->mode != TM_ENUM) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "useless declaration");
+      error (c2m_ctx, POS (r), "useless declaration");
     }
     /* We have at least one enum constant according to the syntax. */
     break;
@@ -8804,10 +8751,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e1 = op1->attr;
     t1 = e1->type;
     if (!e1->const_p) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "expression in static assertion is not constant");
+      error (c2m_ctx, POS (r), "expression in static assertion is not constant");
     } else if (!integer_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "expression in static assertion is not an integer");
+      error (c2m_ctx, POS (r), "expression in static assertion is not an integer");
     } else {
       if (signed_integer_type_p (t1))
         ok_p = e1->u.i_val != 0;
@@ -8815,7 +8761,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         ok_p = e1->u.u_val != 0;
       if (!ok_p) {
         assert (NL_NEXT (op1) != NULL && NL_NEXT (op1)->code == N_STR);
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "static assertion failed: \"%s\"",
+        error (c2m_ctx, POS (r), "static assertion failed: \"%s\"",
                NL_NEXT (op1)->u.s.s);  // ???
       }
     }
@@ -8837,27 +8783,25 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       check (c2m_ctx, const_expr, r);
       cexpr = const_expr->attr;
       if (cexpr != NULL) {
-        if (type->type_qual.atomic_p)
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr), "bit field with _Atomic");
+        if (type->type_qual.atomic_p) error (c2m_ctx, POS (const_expr), "bit field with _Atomic");
         if (!cexpr->const_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr), "bit field is not a constant expr");
+          error (c2m_ctx, POS (const_expr), "bit field is not a constant expr");
         } else if (!integer_type_p (type)
                    && (type->mode != TM_BASIC || type->u.basic_type != TP_BOOL)) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr),
+          error (c2m_ctx, POS (const_expr),
                  "bit field type should be _Bool, a signed integer, or an unsigned integer type");
         } else if (!integer_type_p (cexpr->type)
                    && (cexpr->type->mode != TM_BASIC || cexpr->type->u.basic_type != TP_BOOL)) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr),
-                 "bit field width is not of an integer type");
+          error (c2m_ctx, POS (const_expr), "bit field width is not of an integer type");
         } else if (signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr), "bit field width is negative");
+          error (c2m_ctx, POS (const_expr), "bit field width is negative");
         } else if (cexpr->u.i_val == 0 && declarator->code == N_DECL) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr), "zero bit field width for %s",
+          error (c2m_ctx, POS (const_expr), "zero bit field width for %s",
                  NL_HEAD (declarator->u.ops)->u.s.s);
         } else if ((!signed_integer_type_p (cexpr->type) && cexpr->u.u_val > int_bit_size (type))
                    || (signed_integer_type_p (cexpr->type)
                        && cexpr->u.i_val > int_bit_size (type))) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, const_expr), "bit field width exceeds its type");
+          error (c2m_ctx, POS (const_expr), "bit field width exceeds its type");
         }
       }
     }
@@ -8865,17 +8809,16 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       if (((decl_spec.type->mode != TM_STRUCT && decl_spec.type->mode != TM_UNION)
            || NL_HEAD (decl_spec.type->u.tag_type->u.ops)->code != N_IGNORE)
           && const_expr->code == N_IGNORE)
-        error (c2m_ctx, get_node_pos (c2m_ctx, r), "no declarator in struct or union declaration");
+        error (c2m_ctx, POS (r), "no declarator in struct or union declaration");
     } else {
       node_t id = NL_HEAD (declarator->u.ops);
 
       if (type->mode == TM_FUNC) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, id), "field %s is declared as a function",
-               id->u.s.s);
+        error (c2m_ctx, POS (id), "field %s is declared as a function", id->u.s.s);
       } else if (incomplete_type_p (c2m_ctx, type)) {
         /* el_type is checked on completness in N_ARR */
         if (type->mode != TM_ARR || type->u.arr_type->size->code != N_IGNORE)
-          error (c2m_ctx, get_node_pos (c2m_ctx, id), "field %s has incomplete type", id->u.s.s);
+          error (c2m_ctx, POS (id), "field %s has incomplete type", id->u.s.s);
       }
     }
     break;
@@ -8900,7 +8843,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
     if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
         || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, id), "%s is a builtin function", id->u.s.s);
+      error (c2m_ctx, POS (id), "%s is a builtin function", id->u.s.s);
       break;
     }
     curr_func_scope_num = 0;
@@ -8924,21 +8867,17 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       NL_REMOVE (param_list->u.ops, p);
       if (!symbol_find (c2m_ctx, S_REGULAR, p, curr_scope, &sym)) {
         if (c2m_options->pedantic_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, p), "parameter %s has no type", p->u.s.s);
+          error (c2m_ctx, POS (p), "parameter %s has no type", p->u.s.s);
         } else {
-          warning (c2m_ctx, get_node_pos (c2m_ctx, p), "type of parameter %s defaults to int",
-                   p->u.s.s);
-          decl_node
-            = new_pos_node3 (c2m_ctx, N_SPEC_DECL, get_node_pos (c2m_ctx, p),
-                             new_node1 (c2m_ctx, N_SHARE,
-                                        new_node1 (c2m_ctx, N_LIST,
-                                                   new_pos_node (c2m_ctx, N_INT,
-                                                                 get_node_pos (c2m_ctx, p)))),
-                             new_pos_node2 (c2m_ctx, N_DECL, get_node_pos (c2m_ctx, p),
-                                            new_str_node (c2m_ctx, N_ID, p->u.s,
-                                                          get_node_pos (c2m_ctx, p)),
-                                            new_node (c2m_ctx, N_LIST)),
-                             new_node (c2m_ctx, N_IGNORE));
+          warning (c2m_ctx, POS (p), "type of parameter %s defaults to int", p->u.s.s);
+          decl_node = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (p),
+                                     new_node1 (c2m_ctx, N_SHARE,
+                                                new_node1 (c2m_ctx, N_LIST,
+                                                           new_pos_node (c2m_ctx, N_INT, POS (p)))),
+                                     new_pos_node2 (c2m_ctx, N_DECL, POS (p),
+                                                    new_str_node (c2m_ctx, N_ID, p->u.s, POS (p)),
+                                                    new_node (c2m_ctx, N_LIST)),
+                                     new_node (c2m_ctx, N_IGNORE));
           NL_APPEND (param_list->u.ops, decl_node);
           check (c2m_ctx, decl_node, r);
         }
@@ -8953,15 +8892,15 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         assert (param_declarator->code == N_DECL);
         param_id = NL_HEAD (param_declarator->u.ops);
         if (NL_NEXT (param_declarator)->code != N_IGNORE) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, p), "initialized parameter %s", param_id->u.s.s);
+          error (c2m_ctx, POS (p), "initialized parameter %s", param_id->u.s.s);
         }
         decl_spec_ptr = &((decl_t) decl_node->attr)->decl_spec;
         adjust_param_type (c2m_ctx, &decl_spec_ptr->type);
         decl_spec = *decl_spec_ptr;
         if (decl_spec.typedef_p || decl_spec.extern_p || decl_spec.static_p || decl_spec.auto_p
             || decl_spec.thread_local_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, param_id),
-                 "storage specifier in a function parameter %s", param_id->u.s.s);
+          error (c2m_ctx, POS (param_id), "storage specifier in a function parameter %s",
+                 param_id->u.s.s);
         }
       }
     }
@@ -8973,8 +8912,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       assert (param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->u.ops);
       assert (param_id->code == N_ID);
-      error (c2m_ctx, get_node_pos (c2m_ctx, param_id),
-             "declaration for parameter %s but no such parameter", param_id->u.s.s);
+      error (c2m_ctx, POS (param_id), "declaration for parameter %s but no such parameter",
+             param_id->u.s.s);
     }
     add__func__def (c2m_ctx, block, id->u.s);
     check (c2m_ctx, block, r);
@@ -8985,7 +8924,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       node_t id = NL_NEXT (NL_HEAD (n->u.ops));
 
       if (!symbol_find (c2m_ctx, S_LABEL, id, func_block_scope, &sym)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, id), "undefined label %s", id->u.s.s);
+        error (c2m_ctx, POS (id), "undefined label %s", id->u.s.s);
       } else {
         n->attr = sym.def_node;
       }
@@ -9049,7 +8988,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e1 = expr->attr;
     t1 = e1->type;
     if (!scalar_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, expr), "if-expr should be of a scalar type");
+      error (c2m_ctx, POS (expr), "if-expr should be of a scalar type");
     }
     check (c2m_ctx, if_stmt, r);
     check (c2m_ctx, else_stmt, r);
@@ -9075,7 +9014,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       init_type (&t);
       t.mode = TM_BASIC;
       t.u.basic_type = TP_INT;
-      error (c2m_ctx, get_node_pos (c2m_ctx, expr), "switch-expr is of non-integer type");
+      error (c2m_ctx, POS (expr), "switch-expr is of non-integer type");
     } else {
       t = integer_promotion (type);
     }
@@ -9091,7 +9030,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
          c = DLIST_NEXT (case_t, c)) { /* process simple cases */
       if (c->case_node->code == N_DEFAULT || NL_EL (c->case_node->u.ops, 1) != NULL) continue;
       if (HTAB_DO (case_t, case_tab, c, HTAB_FIND, el)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, c->case_node), "duplicate case value");
+        error (c2m_ctx, POS (c->case_node), "duplicate case value");
         continue;
       }
       HTAB_DO (case_t, case_tab, c, HTAB_INSERT, el);
@@ -9134,8 +9073,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           if ((signed_p && e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val)
               || (!signed_p && e->u.u_val <= another_e->u.u_val
                   && another_e->u.u_val <= e2->u.u_val)) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, c->case_node),
-                   "duplicate value in a range case");
+            error (c2m_ctx, POS (c->case_node), "duplicate value in a range case");
             break;
           }
         } else {
@@ -9148,8 +9086,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
                   && ((e->u.u_val <= another_e->u.u_val && another_e->u.u_val <= e2->u.u_val)
                       || (e->u.u_val <= another_e2->u.u_val
                           && another_e2->u.u_val <= e2->u.u_val)))) {
-            error (c2m_ctx, get_node_pos (c2m_ctx, c->case_node),
-                   "duplicate value in a range case");
+            error (c2m_ctx, POS (c->case_node), "duplicate value in a range case");
             break;
           }
         }
@@ -9172,7 +9109,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     e1 = expr->attr;
     t1 = e1->type;
     if (!scalar_type_p (t1)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, expr), "while-expr should be of a scalar type");
+      error (c2m_ctx, POS (expr), "while-expr should be of a scalar type");
     }
     curr_loop = curr_loop_switch = r;
     check (c2m_ctx, stmt, r);
@@ -9201,7 +9138,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         decl = spec_decl->attr;
         if (decl->decl_spec.typedef_p || decl->decl_spec.extern_p || decl->decl_spec.static_p
             || decl->decl_spec.thread_local_p) {
-          error (c2m_ctx, get_node_pos (c2m_ctx, spec_decl),
+          error (c2m_ctx, POS (spec_decl),
                  "wrong storage specifier of for-loop initial declaration");
           break;
         }
@@ -9212,7 +9149,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e1 = cond->attr;
       t1 = e1->type;
       if (!scalar_type_p (t1)) {
-        error (c2m_ctx, get_node_pos (c2m_ctx, cond), "for-condition should be of a scalar type");
+        error (c2m_ctx, POS (cond), "for-condition should be of a scalar type");
       }
     }
     check (c2m_ctx, iter, r);
@@ -9234,9 +9171,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     node_t labels = NL_HEAD (r->u.ops);
 
     if (r->code == N_BREAK && curr_loop_switch == NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "break statement not within loop or switch");
+      error (c2m_ctx, POS (r), "break statement not within loop or switch");
     } else if (r->code == N_CONTINUE && curr_loop == NULL) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "continue statement not within a loop");
+      error (c2m_ctx, POS (r), "continue statement not within a loop");
     }
     check_labels (c2m_ctx, labels, r);
     break;
@@ -9252,11 +9189,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     check (c2m_ctx, expr, r);
     ret_type = type->u.func_type->ret_type;
     if (expr->code != N_IGNORE && void_type_p (ret_type)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r), "return with a value in function returning void");
+      error (c2m_ctx, POS (r), "return with a value in function returning void");
     } else if (expr->code == N_IGNORE
                && (ret_type->mode != TM_BASIC || ret_type->u.basic_type != TP_VOID)) {
-      error (c2m_ctx, get_node_pos (c2m_ctx, r),
-             "return with no value in function returning non-void");
+      error (c2m_ctx, POS (r), "return with no value in function returning non-void");
     } else if (expr->code != N_IGNORE) {
       check_assignment_types (c2m_ctx, ret_type, NULL, expr->attr, r);
     }
@@ -10664,7 +10600,7 @@ check_one_value:
             || type->mode == TM_STRUCT || type->mode == TM_UNION);
     if ((curr_des = NL_HEAD (des_list->u.ops)) == NULL) {
       ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
-                                 get_node_pos (c2m_ctx, init), "");
+                                 POS (init), "");
       assert (ok_p);
     } else {
       for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
@@ -10679,7 +10615,7 @@ check_one_value:
           assert (found_p); /* field should present */
           process_init_field_designator (c2m_ctx, sym.def_node, init_object.container_type);
           ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
-                                     get_node_pos (c2m_ctx, init), "");
+                                     POS (init), "");
           assert (ok_p);
         } else {
           cexpr = curr_des->attr;
@@ -10691,7 +10627,7 @@ check_one_value:
           init_object.designator_p = FALSE;
           VARR_PUSH (init_object_t, init_object_path, init_object);
           ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
-                                     get_node_pos (c2m_ctx, init), "");
+                                     POS (init), "");
           assert (ok_p);
         }
       }
@@ -12537,7 +12473,7 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
     return;
   }
   fprintf (f, "%s (", get_node_name (n->code));
-  print_pos (f, get_node_pos (c2m_ctx, n), FALSE);
+  print_pos (f, POS (n), FALSE);
   fprintf (f, ")");
   switch (n->code) {
   case N_IGNORE: fprintf (f, "\n"); break;
