@@ -9359,26 +9359,26 @@ struct gen_ctx {
   HTAB (MIR_item_t) * proto_tab;
 };
 
-#define zero_op c2m_ctx->gen_ctx->zero_op
-#define one_op c2m_ctx->gen_ctx->one_op
-#define minus_one_op c2m_ctx->gen_ctx->minus_one_op
-#define curr_func c2m_ctx->gen_ctx->curr_func
-#define reg_var_tab c2m_ctx->gen_ctx->reg_var_tab
-#define reg_free_mark c2m_ctx->gen_ctx->reg_free_mark
-#define continue_label c2m_ctx->gen_ctx->continue_label
-#define break_label c2m_ctx->gen_ctx->break_label
-#define proto_info c2m_ctx->gen_ctx->proto_info
-#define init_els c2m_ctx->gen_ctx->init_els
-#define memset_proto c2m_ctx->gen_ctx->memset_proto
-#define memset_item c2m_ctx->gen_ctx->memset_item
-#define memcpy_proto c2m_ctx->gen_ctx->memcpy_proto
-#define memcpy_item c2m_ctx->gen_ctx->memcpy_item
-#define call_ops c2m_ctx->gen_ctx->call_ops
-#define ret_ops c2m_ctx->gen_ctx->ret_ops
-#define switch_ops c2m_ctx->gen_ctx->switch_ops
-#define switch_cases c2m_ctx->gen_ctx->switch_cases
-#define curr_mir_proto_num c2m_ctx->gen_ctx->curr_mir_proto_num
-#define proto_tab c2m_ctx->gen_ctx->proto_tab
+#define zero_op gen_ctx->zero_op
+#define one_op gen_ctx->one_op
+#define minus_one_op gen_ctx->minus_one_op
+#define curr_func gen_ctx->curr_func
+#define reg_var_tab gen_ctx->reg_var_tab
+#define reg_free_mark gen_ctx->reg_free_mark
+#define continue_label gen_ctx->continue_label
+#define break_label gen_ctx->break_label
+#define proto_info gen_ctx->proto_info
+#define init_els gen_ctx->init_els
+#define memset_proto gen_ctx->memset_proto
+#define memset_item gen_ctx->memset_item
+#define memcpy_proto gen_ctx->memcpy_proto
+#define memcpy_item gen_ctx->memcpy_item
+#define call_ops gen_ctx->call_ops
+#define ret_ops gen_ctx->ret_ops
+#define switch_ops gen_ctx->switch_ops
+#define switch_cases gen_ctx->switch_cases
+#define curr_mir_proto_num gen_ctx->curr_mir_proto_num
+#define proto_tab gen_ctx->proto_tab
 
 static op_t new_op (decl_t decl, MIR_op_t mir_op) {
   op_t res;
@@ -9396,20 +9396,27 @@ static int reg_var_eq (reg_var_t r1, reg_var_t r2, void *arg) {
 }
 
 static void init_reg_vars (c2m_ctx_t c2m_ctx) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   reg_free_mark = 0;
   HTAB_CREATE (reg_var_t, reg_var_tab, 128, reg_var_hash, reg_var_eq, NULL);
 }
 
 static void finish_curr_func_reg_vars (c2m_ctx_t c2m_ctx) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   reg_free_mark = 0;
   HTAB_CLEAR (reg_var_t, reg_var_tab);
 }
 
 static void finish_reg_vars (c2m_ctx_t c2m_ctx) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   if (reg_var_tab != NULL) HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
 static reg_var_t get_reg_var (c2m_ctx_t c2m_ctx, MIR_type_t t, const char *reg_name) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   reg_var_t reg_var, el;
   char *str;
@@ -9429,12 +9436,14 @@ static reg_var_t get_reg_var (c2m_ctx_t c2m_ctx, MIR_type_t t, const char *reg_n
 }
 
 static int temp_reg_p (c2m_ctx_t c2m_ctx, MIR_op_t op) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
 
   return op.mode == MIR_OP_REG && MIR_reg_name (ctx, op.u.reg, curr_func->u.func)[1] == '_';
 }
 
 static MIR_type_t reg_type (c2m_ctx_t c2m_ctx, MIR_reg_t reg) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   const char *n = MIR_reg_name (ctx, reg, curr_func->u.func);
   MIR_type_t res;
@@ -9455,6 +9464,7 @@ static MIR_type_t reg_type (c2m_ctx_t c2m_ctx, MIR_reg_t reg) {
 }
 
 static op_t get_new_temp (c2m_ctx_t c2m_ctx, MIR_type_t t) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   char reg_name[50];
   MIR_reg_t reg;
@@ -9547,12 +9557,15 @@ static MIR_insn_code_t tp_mov (MIR_type_t t) {
 }
 
 static void emit_insn (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   MIR_append_insn (c2m_ctx->ctx, curr_func, insn);
 }
 
 /* BCOND T, L1; JMP L2; L1: => BNCOND T, L2; L1:
    JMP L; L: => L: */
 static void emit_label_insn_opt (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_insn_code_t rev_code;
   MIR_insn_t last, prev;
@@ -9575,6 +9588,7 @@ static void emit_label_insn_opt (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
 
 /* Change t1 = expr; v = t1 to v = expr */
 static void emit_insn_opt (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_insn_t tail;
   int out_p;
@@ -10128,6 +10142,7 @@ static void gen_memcpy (c2m_ctx_t c2m_ctx, MIR_disp_t disp, MIR_reg_t base, op_t
                         mir_size_t len);
 
 static void block_move (c2m_ctx_t c2m_ctx, op_t var, op_t val, mir_size_t size) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_label_t repeat_label;
   op_t index;
@@ -10175,6 +10190,8 @@ static const char *get_reg_var_name (c2m_ctx_t c2m_ctx, MIR_type_t promoted_type
 }
 
 static const char *get_func_var_name (c2m_ctx_t c2m_ctx, const char *prefix, const char *suffix) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   assert (curr_func != NULL);
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (c2m_ctx, prefix);
@@ -10208,6 +10225,7 @@ static int simple_return_by_addr_p (c2m_ctx_t c2m_ctx, struct type *ret_type) {
 static void MIR_UNUSED simple_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                              void *arg_info, VARR (MIR_type_t) * res_types,
                                              VARR (MIR_var_t) * arg_vars) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_var_t var;
 
   if (void_type_p (ret_type)) return;
@@ -10223,6 +10241,7 @@ static void MIR_UNUSED simple_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret
 
 static int MIR_UNUSED simple_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                               void *arg_info, size_t call_arg_area_offset) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   op_t temp;
@@ -10251,6 +10270,7 @@ static op_t MIR_UNUSED simple_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct 
 }
 
 static void MIR_UNUSED simple_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t val) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_reg_t ret_addr_reg;
   op_t var;
@@ -10282,6 +10302,7 @@ static void MIR_UNUSED simple_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name
 
 static void MIR_UNUSED simple_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
                                                void *arg_info, op_t arg) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_type_t type;
 
   type = (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION
@@ -10319,6 +10340,7 @@ static MIR_UNUSED const char *gen_get_indexed_name (c2m_ctx_t c2m_ctx, const cha
 /* Can be used by target functions */
 static inline void gen_multiple_load_store (c2m_ctx_t c2m_ctx, struct type *type, MIR_op_t *var_ops,
                                             MIR_op_t mem_op, int load_p) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_op_t op, var_op;
   MIR_insn_t insn;
@@ -10414,6 +10436,8 @@ static void target_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
    address offset on the stack.  */
 static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   return simple_add_call_res_op (c2m_ctx, ret_type, arg_info, call_arg_area_offset);
 }
 /* Generate code to gather returned values of CALL into RES.  Return
@@ -10421,15 +10445,21 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
    operands in call_ops for given call. */
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
                                            MIR_insn_t call, size_t call_ops_start) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   return simple_gen_post_call_res_code (c2m_ctx, ret_type, res, call, call_ops_start);
 }
 /* Generate code and add operands to ret_ops which return VAL of RET_TYPE. */
 static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t val) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   simple_add_ret_ops (c2m_ctx, ret_type, val);
 }
 /* Add one or more vars to arg_vars which pass arg NAME of ARG_TYPE. */
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   simple_add_arg_proto (c2m_ctx, name, arg_type, arg_info, arg_vars);
 }
 /* Add operands to call_ops which pass ARG of ARG_TYPE. */
@@ -10441,11 +10471,14 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
    Return true if it was the case.  */
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   return simple_gen_gather_arg (c2m_ctx, name, arg_type, param_decl, arg_info);
 }
 #endif
 
 static void collect_args_and_func_types (c2m_ctx_t c2m_ctx, struct func_type *func_type) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   node_t declarator, id, first_param, p;
   struct type *param_type;
   decl_t param_decl;
@@ -10503,6 +10536,7 @@ static mir_size_t get_object_path_offset (c2m_ctx_t c2m_ctx) {
 /* The function has the same structure as check_initializer.  Keep it this way. */
 static void collect_init_els (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type **type_ptr,
                               node_t initializer, int const_only_p, int top_p) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   struct type *type = *type_ptr;
   struct expr *cexpr;
   node_t literal, des_list, curr_des, str, init, value, size_node;
@@ -10645,6 +10679,8 @@ static void move_item_to_module_start (MIR_module_t module, MIR_item_t item) {
 }
 
 static void move_item_forward (c2m_ctx_t c2m_ctx, MIR_item_t item) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
   assert (curr_func != NULL);
   if (DLIST_TAIL (MIR_item_t, curr_func->module->items) != item) return;
   DLIST_REMOVE (MIR_item_t, curr_func->module->items, item);
@@ -10652,6 +10688,7 @@ static void move_item_forward (c2m_ctx_t c2m_ctx, MIR_item_t item) {
 }
 
 static void gen_memset (c2m_ctx_t c2m_ctx, MIR_disp_t disp, MIR_reg_t base, mir_size_t len) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t ret_type;
   MIR_var_t vars[3];
@@ -10689,6 +10726,7 @@ static void gen_memset (c2m_ctx_t c2m_ctx, MIR_disp_t disp, MIR_reg_t base, mir_
 
 static void gen_memcpy (c2m_ctx_t c2m_ctx, MIR_disp_t disp, MIR_reg_t base, op_t val,
                         mir_size_t len) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t ret_type;
   MIR_var_t vars[3];
@@ -10811,6 +10849,7 @@ static void add_bit_field (c2m_ctx_t c2m_ctx, uint64_t *u, uint64_t v, decl_t me
 
 static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
                              const char *global_name, mir_size_t size, int local_p) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   op_t val;
   size_t str_len;
@@ -11045,6 +11084,8 @@ static int unsigned_case_compare (const void *v1, const void *v2) {
 
 static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_t false_label,
                  int val_p, op_t *desirable_dest) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+  check_ctx_t check_ctx = c2m_ctx->check_ctx; /* check and gen share curr_scope */
   MIR_context_t ctx = c2m_ctx->ctx;
   op_t res, op1, op2, var, val;
   MIR_type_t t = MIR_T_UNDEF; /* to remove an uninitialized warning */
@@ -12189,6 +12230,7 @@ static int proto_eq (MIR_item_t pi1, MIR_item_t pi2, void *arg) {
 
 static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p, VARR (MIR_type_t) * ret_types,
                                  VARR (MIR_var_t) * vars) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   struct MIR_item pi, *el;
   struct MIR_proto p;
   char buff[30];
@@ -12209,6 +12251,7 @@ static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p, VARR (MIR_type
 }
 
 static void gen_mir_protos (c2m_ctx_t c2m_ctx) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   node_t call, func;
   struct type *type;
   struct func_type *func_type;
@@ -12226,14 +12269,16 @@ static void gen_mir_protos (c2m_ctx_t c2m_ctx) {
     assert (func_type->param_list->code == N_LIST);
     collect_args_and_func_types (c2m_ctx, func_type);
     func_type->proto_item
-      = get_mir_proto (c2m_ctx, func_type->dots_p || NL_HEAD (func_type->param_list->ops) == NULL,
+      = get_mir_proto (c2m_ctx, func_type->dots_p || NL_HEAD (func_type->param_list->u.ops) == NULL,
                        proto_info.ret_types, proto_info.arg_vars);
   }
   HTAB_DESTROY (MIR_item_t, proto_tab);
 }
 
 static void gen_finish (c2m_ctx_t c2m_ctx) {
-  if (c2m_ctx == NULL || c2m_ctx->gen_ctx == NULL) return;
+  gen_ctx_t gen_ctx;
+
+  if (c2m_ctx == NULL || (gen_ctx = c2m_ctx->gen_ctx) == NULL) return;
   finish_reg_vars (c2m_ctx);
   if (proto_info.arg_vars != NULL) VARR_DESTROY (MIR_var_t, proto_info.arg_vars);
   if (proto_info.ret_types != NULL) VARR_DESTROY (MIR_type_t, proto_info.ret_types);
@@ -12246,9 +12291,10 @@ static void gen_finish (c2m_ctx_t c2m_ctx) {
 }
 
 static void gen_mir (c2m_ctx_t c2m_ctx, node_t r) {
+  gen_ctx_t gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
 
-  c2m_ctx->gen_ctx = c2mir_calloc (c2m_ctx, sizeof (struct gen_ctx));
+  c2m_ctx->gen_ctx = gen_ctx = c2mir_calloc (c2m_ctx, sizeof (struct gen_ctx));
   zero_op = new_op (NULL, MIR_new_int_op (ctx, 0));
   one_op = new_op (NULL, MIR_new_int_op (ctx, 1));
   minus_one_op = new_op (NULL, MIR_new_int_op (ctx, -1));
@@ -12712,6 +12758,7 @@ static int check_id_p (c2m_ctx_t c2m_ctx, const char *str) {
 }
 
 static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *def) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   pos_t pos;
   token_t t, id;
   struct macro macro;
@@ -12743,6 +12790,7 @@ static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *d
 }
 
 static void undefine_cmd_macro (c2m_ctx_t c2m_ctx, const char *name) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   pos_t pos;
   token_t id;
   struct macro macro;
