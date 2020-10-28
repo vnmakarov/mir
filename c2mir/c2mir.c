@@ -7761,8 +7761,7 @@ static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_nam
   NL_APPEND (list->u.ops, new_pos_node3 (c2m_ctx, N_ARR, pos, new_pos_node (c2m_ctx, N_IGNORE, pos),
                                          new_pos_node (c2m_ctx, N_LIST, pos),
                                          new_pos_node (c2m_ctx, N_IGNORE, pos)));
-  declarator
-    = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str.str, pos), list);
+  declarator = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str, pos), list);
   decl = new_pos_node3 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
                         new_str_node (c2m_ctx, N_STR, func_name, pos));
   NL_PREPEND (NL_EL (func_block->u.ops, 1)->u.ops, decl);
