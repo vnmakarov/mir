@@ -5119,7 +5119,10 @@ DEF_VARR (decl_t);
 typedef struct case_attr *case_t;
 DEF_HTAB (case_t);
 
+#undef curr_scope
+
 struct check_ctx {
+  node_t curr_scope;
   VARR (node_t) * gotos;
   node_t func_block_scope;
   unsigned curr_func_scope_num;
@@ -5134,21 +5137,21 @@ struct check_ctx {
   VARR (node_t) * context_stack;
 };
 
-#define gotos c2m_ctx->check_ctx->gotos
-#define func_block_scope c2m_ctx->check_ctx->func_block_scope
-#define curr_func_scope_num c2m_ctx->check_ctx->curr_func_scope_num
-#define in_params_p c2m_ctx->check_ctx->in_params_p
-#define curr_unnamed_anon_struct_union_member \
-  c2m_ctx->check_ctx->curr_unnamed_anon_struct_union_member
-#define curr_switch c2m_ctx->check_ctx->curr_switch
-#define func_decls_for_allocation c2m_ctx->check_ctx->func_decls_for_allocation
-#define n_i1_node c2m_ctx->check_ctx->n_i1_node
-#define case_tab c2m_ctx->check_ctx->case_tab
-#define curr_func_def c2m_ctx->check_ctx->curr_func_def
-#define curr_loop c2m_ctx->check_ctx->curr_loop
-#define curr_loop_switch c2m_ctx->check_ctx->curr_loop_switch
-#define curr_call_arg_area_offset c2m_ctx->check_ctx->curr_call_arg_area_offset
-#define context_stack c2m_ctx->check_ctx->context_stack
+#define curr_scope check_ctx->curr_scope
+#define gotos check_ctx->gotos
+#define func_block_scope check_ctx->func_block_scope
+#define curr_func_scope_num check_ctx->curr_func_scope_num
+#define in_params_p check_ctx->in_params_p
+#define curr_unnamed_anon_struct_union_member check_ctx->curr_unnamed_anon_struct_union_member
+#define curr_switch check_ctx->curr_switch
+#define func_decls_for_allocation check_ctx->func_decls_for_allocation
+#define n_i1_node check_ctx->n_i1_node
+#define case_tab check_ctx->case_tab
+#define curr_func_def check_ctx->curr_func_def
+#define curr_loop check_ctx->curr_loop
+#define curr_loop_switch check_ctx->curr_loop_switch
+#define curr_call_arg_area_offset check_ctx->curr_call_arg_area_offset
+#define context_stack check_ctx->context_stack
 
 static int supported_alignment_p (mir_llong align) { return TRUE; }  // ???
 
@@ -5807,6 +5810,8 @@ static int void_ptr_p (struct type *type) {
 }
 
 static int incomplete_type_p (c2m_ctx_t c2m_ctx, struct type *type) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   switch (type->mode) {
   case TM_BASIC: return type->u.basic_type == TP_VOID;
   case TM_ENUM:
@@ -5947,6 +5952,7 @@ static int non_reg_decl_spec_p (struct decl_spec *ds) {
 }
 
 static void create_node_scope (c2m_ctx_t c2m_ctx, node_t node) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   struct node_scope *ns = reg_malloc (c2m_ctx, sizeof (struct node_scope));
 
   assert (node != curr_scope);
@@ -5959,6 +5965,8 @@ static void create_node_scope (c2m_ctx_t c2m_ctx, node_t node) {
 }
 
 static void finish_scope (c2m_ctx_t c2m_ctx) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   curr_scope = ((struct node_scope *) curr_scope->attr)->scope;
 }
 
@@ -6010,6 +6018,7 @@ static node_t find_def (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
 }
 
 static node_t process_tag (c2m_ctx_t c2m_ctx, node_t r, node_t id, node_t decl_list) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   symbol_t sym;
   int found_p;
   node_t scope, tab_decl_list;
@@ -6092,6 +6101,7 @@ static void make_type_complete (c2m_ctx_t c2m_ctx, struct type *type) {
 static void check (c2m_ctx_t c2m_ctx, node_t node, node_t context);
 
 static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t decl) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   int n_sc = 0, sign = 0, size = 0, func_p = FALSE;
   struct decl_spec *res;
   struct type *type;
@@ -6472,6 +6482,7 @@ static void adjust_param_type (c2m_ctx_t c2m_ctx, struct type **type_ptr) {
 }
 
 static struct type *check_declarator (c2m_ctx_t c2m_ctx, node_t r, int func_def_p) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   struct type *type, *res = NULL;
   node_t list = NL_EL (r->ops, 1);
 
@@ -6648,6 +6659,8 @@ static node_code_t get_id_linkage (c2m_ctx_t c2m_ctx, int func_p, node_t id, nod
 }
 
 static void check_type (c2m_ctx_t c2m_ctx, struct type *type, int level, int func_def_p) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   switch (type->mode) {
   case TM_PTR: check_type (c2m_ctx, type->u.ptr_type, level + 1, FALSE); break;
   case TM_STRUCT:
@@ -6927,6 +6940,7 @@ static int update_path_and_do (c2m_ctx_t c2m_ctx,
 
 static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_llong *offset,
                                int *deref) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   struct expr *e = r->attr;
   struct type *type;
   node_t op1, op2, temp;
@@ -7269,6 +7283,8 @@ static void check_decl_align (c2m_ctx_t c2m_ctx, struct decl_spec *decl_spec) {
 }
 
 static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   decl->addr_p = FALSE;
   decl->reg_p = decl->used_p = FALSE;
   decl->offset = 0;
@@ -7283,6 +7299,7 @@ static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
 static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
                          struct decl_spec decl_spec, node_t width, node_t initializer,
                          int param_p) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
   node_t id = NULL; /* to remove an uninitialized warning */
   node_t list_head, declarator;
@@ -7427,6 +7444,8 @@ static struct expr *create_basic_type_expr (c2m_ctx_t c2m_ctx, node_t r, enum ba
 
 static void get_int_node (c2m_ctx_t c2m_ctx, node_t *op, struct expr **e, struct type **t,
                           mir_size_t i) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   if (i == 1) {
     *op = n_i1_node;
   } else {
@@ -7748,6 +7767,7 @@ static int decl_cmp (const void *v1, const void *v2) {
 }
 
 static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   size_t i, j;
   decl_t decl;
   struct type *type;
@@ -7808,6 +7828,7 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
 #define ALLOCA "alloca"
 
 static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
   node_t op1, op2;
   struct expr *e = NULL, *e1, *e2;
   struct type t, *t1, *t2, *assign_expr_type;
@@ -9193,7 +9214,9 @@ static void do_context (c2m_ctx_t c2m_ctx, node_t r) {
 }
 
 static void context_init (c2m_ctx_t c2m_ctx) {
-  c2m_ctx->check_ctx = c2mir_calloc (c2m_ctx, sizeof (struct check_ctx));
+  check_ctx_t check_ctx;
+
+  c2m_ctx->check_ctx = check_ctx = c2mir_calloc (c2m_ctx, sizeof (struct check_ctx));
   n_i1_node = new_i_node (c2m_ctx, 1, no_pos);
   VARR_CREATE (node_t, context_stack, 64);
   check (c2m_ctx, n_i1_node, NULL);
@@ -9207,7 +9230,9 @@ static void context_init (c2m_ctx_t c2m_ctx) {
 }
 
 static void context_finish (c2m_ctx_t c2m_ctx) {
-  if (c2m_ctx == NULL || c2m_ctx->check_ctx == NULL) return;
+  check_ctx_t check_ctx;
+
+  if (c2m_ctx == NULL || (check_ctx = c2m_ctx->check_ctx) == NULL) return;
   if (context_stack != NULL) VARR_DESTROY (node_t, context_stack);
   if (gotos != NULL) VARR_DESTROY (node_t, gotos);
   symbol_finish (c2m_ctx);
