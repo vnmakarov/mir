@@ -55,6 +55,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
 
 static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   op_t temp;
 
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
@@ -75,6 +76,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
 
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_op_t param_op;
