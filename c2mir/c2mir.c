@@ -86,15 +86,10 @@ DEF_VARR (void_ptr_t);
 
 typedef struct {
   const char *s;
-  size_t len;
+  size_t len, key, flags;
 } str_t;
 
-typedef struct {
-  str_t str;
-  size_t key, flags;
-} tab_str_t;
-
-DEF_HTAB (tab_str_t);
+DEF_HTAB (str_t);
 
 typedef struct token *token_t;
 DEF_VARR (token_t);
@@ -145,8 +140,8 @@ struct c2m_ctx {
   VARR (void_ptr_t) * reg_memory;
   VARR (stream_t) * streams; /* stack of streams */
   stream_t cs, eof_s;        /* current stream and stream corresponding the last EOF */
-  HTAB (tab_str_t) * str_tab;
-  HTAB (tab_str_t) * str_key_tab;
+  HTAB (str_t) * str_tab;
+  HTAB (str_t) * str_key_tab;
   str_t empty_str;
   unsigned curr_uid;
   int (*c_getc) (void *); /* c2mir interface get function */
@@ -363,61 +358,59 @@ static int char_is_signed_p (void) { return MIR_CHAR_MAX == MIR_SCHAR_MAX; }
 
 enum str_flag { FLAG_EXT = 1, FLAG_C89, FLAG_EXT89 };
 
-static int str_eq (tab_str_t str1, tab_str_t str2, void *arg) {
-  return str1.str.len == str2.str.len && memcmp (str1.str.s, str2.str.s, str1.str.len) == 0;
+static int str_eq (str_t str1, str_t str2, void *arg) {
+  return str1.len == str2.len && memcmp (str1.s, str2.s, str1.len) == 0;
 }
-static htab_hash_t str_hash (tab_str_t str, void *arg) {
-  return mir_hash (str.str.s, str.str.len, 0x42);
-}
-static int str_key_eq (tab_str_t str1, tab_str_t str2, void *arg) { return str1.key == str2.key; }
-static htab_hash_t str_key_hash (tab_str_t str, void *arg) { return mir_hash64 (str.key, 0x24); }
+static htab_hash_t str_hash (str_t str, void *arg) { return mir_hash (str.s, str.len, 0x42); }
+static int str_key_eq (str_t str1, str_t str2, void *arg) { return str1.key == str2.key; }
+static htab_hash_t str_key_hash (str_t str, void *arg) { return mir_hash64 (str.key, 0x24); }
 
 static str_t uniq_cstr (c2m_ctx_t c2m_ctx, const char *str);
 
 static void str_init (c2m_ctx_t c2m_ctx) {
-  HTAB_CREATE (tab_str_t, str_tab, 1000, str_hash, str_eq, NULL);
-  HTAB_CREATE (tab_str_t, str_key_tab, 200, str_key_hash, str_key_eq, NULL);
+  HTAB_CREATE (str_t, str_tab, 1000, str_hash, str_eq, NULL);
+  HTAB_CREATE (str_t, str_key_tab, 200, str_key_hash, str_key_eq, NULL);
   empty_str = uniq_cstr (c2m_ctx, "");
 }
 
-static int str_exists_p (c2m_ctx_t c2m_ctx, const char *s, size_t len, tab_str_t *tab_str) {
-  tab_str_t el, str;
+static int str_exists_p (c2m_ctx_t c2m_ctx, const char *s, size_t len, str_t *tab_str) {
+  str_t el, str;
 
-  str.str.s = s;
-  str.str.len = len;
-  if (!HTAB_DO (tab_str_t, str_tab, str, HTAB_FIND, el)) return FALSE;
+  str.s = s;
+  str.len = len;
+  if (!HTAB_DO (str_t, str_tab, str, HTAB_FIND, el)) return FALSE;
   *tab_str = el;
   return TRUE;
 }
 
-static tab_str_t str_add (c2m_ctx_t c2m_ctx, const char *s, size_t len, size_t key, size_t flags,
-                          int key_p) {
+static str_t str_add (c2m_ctx_t c2m_ctx, const char *s, size_t len, size_t key, size_t flags,
+                      int key_p) {
   char *heap_s;
-  tab_str_t el, str;
+  str_t el, str;
 
   if (str_exists_p (c2m_ctx, s, len, &el)) return el;
   heap_s = reg_malloc (c2m_ctx, len);
   memcpy (heap_s, s, len);
-  str.str.s = heap_s;
-  str.str.len = len;
+  str.s = heap_s;
+  str.len = len;
   str.key = key;
   str.flags = flags;
-  HTAB_DO (tab_str_t, str_tab, str, HTAB_INSERT, el);
-  if (key_p) HTAB_DO (tab_str_t, str_key_tab, str, HTAB_INSERT, el);
+  HTAB_DO (str_t, str_tab, str, HTAB_INSERT, el);
+  if (key_p) HTAB_DO (str_t, str_key_tab, str, HTAB_INSERT, el);
   return str;
 }
 
 static const char *str_find_by_key (c2m_ctx_t c2m_ctx, size_t key) {
-  tab_str_t el, str;
+  str_t el, str;
 
   str.key = key;
-  if (!HTAB_DO (tab_str_t, str_key_tab, str, HTAB_FIND, el)) return NULL;
-  return el.str.s;
+  if (!HTAB_DO (str_t, str_key_tab, str, HTAB_FIND, el)) return NULL;
+  return el.s;
 }
 
 static void str_finish (c2m_ctx_t c2m_ctx) {
-  HTAB_DESTROY (tab_str_t, str_tab);
-  HTAB_DESTROY (tab_str_t, str_key_tab);
+  HTAB_DESTROY (str_t, str_tab);
+  HTAB_DESTROY (str_t, str_key_tab);
 }
 
 static void *c2mir_calloc (c2m_ctx_t c2m_ctx, size_t size) {
@@ -768,10 +761,10 @@ static node_t get_op (node_t n, int nop) {
 }
 
 static str_t uniq_cstr (c2m_ctx_t c2m_ctx, const char *str) {
-  return str_add (c2m_ctx, str, strlen (str) + 1, T_STR, 0, FALSE).str;
+  return str_add (c2m_ctx, str, strlen (str) + 1, T_STR, 0, FALSE);
 }
 static str_t uniq_str (c2m_ctx_t c2m_ctx, const char *str, size_t len) {
-  return str_add (c2m_ctx, str, len, T_STR, 0, FALSE).str;
+  return str_add (c2m_ctx, str, len, T_STR, 0, FALSE);
 }
 
 static token_t new_token (c2m_ctx_t c2m_ctx, pos_t pos, const char *repr, int token_code,
@@ -1661,7 +1654,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
           && t->code != T_RDBLNO);
   if (t->code == T_NO_MACRO_IDENT) t->code = T_ID;
   if (t->code == T_ID && id2kw_p) {
-    tab_str_t str = str_add (c2m_ctx, t->repr, strlen (t->repr) + 1, T_STR, 0, FALSE);
+    str_t str = str_add (c2m_ctx, t->repr, strlen (t->repr) + 1, T_STR, 0, FALSE);
 
     if (str.key != T_STR) {
       t->code = str.key;
@@ -7757,7 +7750,7 @@ static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_nam
   static const char fdecl_name[] = "__func__";
   pos_t pos = POS (func_block);
   node_t list, declarator, decl, decl_specs;
-  tab_str_t str;
+  str_t str;
 
   if (!str_exists_p (c2m_ctx, fdecl_name, strlen (fdecl_name) + 1, &str)) return;
   decl_specs = new_pos_node (c2m_ctx, N_LIST, pos);
