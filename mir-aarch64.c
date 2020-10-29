@@ -486,7 +486,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   size_t len = sizeof (save_insns) + sizeof (restore_insns); /* initial code length */
   VARR (uint8_t) * code;
 
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   pthread_mutex_lock (&code_mutex);
 #endif
   VARR_CREATE (uint8_t, code, 128);
@@ -510,7 +510,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     if (res_code != NULL) break;
   }
   VARR_DESTROY (uint8_t, code);
-#ifndef MIR_NO_PARALLEL_GEN
+#if MIR_PARALLEL_GEN
   pthread_mutex_unlock (&code_mutex);
 #endif
   return res_code;
