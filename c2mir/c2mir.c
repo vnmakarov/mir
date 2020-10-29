@@ -3388,7 +3388,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       } else if (strcmp (t->repr, "__FILE__") == 0) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
-        t = new_node_token (c2m_ctx, t->pos, uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s,
+	t = new_node_token (c2m_ctx, t->pos, VARR_ADDR (char, temp_string),
                             T_STR, new_str_node (c2m_ctx, N_STR, empty_str, t->pos));
         set_string_val (c2m_ctx, t, temp_string);
         out_token (c2m_ctx, t);
@@ -3396,7 +3396,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
         char str[50];
 
         sprintf (str, "%d", t->pos.lno);
-        out_token (c2m_ctx, new_node_token (c2m_ctx, t->pos, uniq_cstr (c2m_ctx, str).s, T_NUMBER,
+        out_token (c2m_ctx, new_node_token (c2m_ctx, t->pos, str, T_NUMBER,
                                             new_i_node (c2m_ctx, t->pos.lno, t->pos)));
       } else if (strcmp (t->repr, "__DATE__") == 0) {
         t = new_node_token (c2m_ctx, t->pos, date_str_repr, T_STR,
@@ -3428,7 +3428,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
           m->ignore_p = TRUE;
           unget_next_pptoken (c2m_ctx,
                               new_node_token (c2m_ctx, t->pos,
-                                              uniq_cstr (c2m_ctx, res ? "1" : "0").s, T_NUMBER,
+                                              res ? "1" : "0", T_NUMBER,
                                               new_i_node (c2m_ctx, res, t->pos)));
         }
       } else {
