@@ -575,7 +575,7 @@ static MIR_item_t item_tab_insert (MIR_context_t ctx, MIR_item_t item) {
   return tab_item;
 }
 
-static MIR_item_t item_tab_remove (MIR_context_t ctx, MIR_item_t item) {
+static void item_tab_remove (MIR_context_t ctx, MIR_item_t item) {
   HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_DELETE, item);
 }
 
