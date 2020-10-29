@@ -475,6 +475,14 @@ static void init_compilers (void) {
   }
 #endif
   compilers = reg_malloc (sizeof (struct compiler) * threads_num);
+#if MIR_PARALLEL_GEN
+    pthread_attr_t attr;
+    
+    pthread_attr_init (&attr);
+#ifdef __APPLE__
+    pthread_attr_setstacksize (&attr, 2048 * 1024);
+#endif
+#endif
   for (int i = 0; i < threads_num; i++) {
     compiler_t compiler = &compilers[i];
     compiler->busy_p = FALSE;
@@ -482,7 +490,7 @@ static void init_compilers (void) {
     compiler->ctx = MIR_init ();
     c2mir_init (compiler->ctx);
 #if MIR_PARALLEL_GEN
-    if (mir_thread_create (&compiler->compile_thread, NULL, compile, compiler) != 0) {
+    if (mir_thread_create (&compiler->compile_thread, &attr, compile, compiler) != 0) {
       fprintf (stderr, "can not create a c2m thread -- bye!\n");
       exit (1);
     }
