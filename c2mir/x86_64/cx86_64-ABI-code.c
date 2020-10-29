@@ -45,7 +45,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
     if (n_qwords > MAX_QWORDS) return 0; /* too big aggregate */
 
 #ifndef _WIN64
-    for (i = 0; i < n_qwords; i++) types[i] = NO_CLASS;
+    for (i = 0; i < n_qwords; i++) types[i] = (MIR_type_t) NO_CLASS;
 
     switch (type->mode) {
     case TM_ARR: { /* Arrays are handled as small records.  */
@@ -98,7 +98,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
   case MIR_T_D: types[0] = MIR_T_D; return 1;
   case MIR_T_LD:
     types[0] = MIR_T_LD;
-    types[1] = X87UP_CLASS;
+    types[1] = (MIR_type_t) X87UP_CLASS;
     return 2;
   default: types[0] = MIR_T_I64; return 1;
   }
