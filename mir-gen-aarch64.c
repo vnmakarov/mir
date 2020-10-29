@@ -1649,9 +1649,10 @@ static const struct pattern patterns[] = {
   {MIR_BSTART, "r", "91000000:fffffc00 rd0 hn1f"}, /* Rd = sp */
   {MIR_BEND, "r", "91000000:fffffc00 hd1f rn0"},   /* sp = Rn */
 
-  /* adr r9,PC-relative TableAddress; ldr r9,(r9,r,8);br r9; TableContent */
+  /* adr r10,PC-relative TableAddress; ldr r10,(r10,r,8);br r10; TableContent
+     We use r10 as r9 can be used if switch operand is memory. */
   {MIR_SWITCH, "r $",
-   "10000000:ff000000 hd9 T; f8607800:ffe0fc00 hd9 hn9 rm0; d61f0000:fffffc00 hn9;"},
+   "10000000:ff000000 hda T; f8607800:ffe0fc00 hda hna rm0; d61f0000:fffffc00 hna;"},
 
 };
 
