@@ -36,6 +36,7 @@ static void target_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   int size;
 
@@ -52,6 +53,7 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
                                            MIR_insn_t call, size_t call_ops_start) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   int size;
 
   if ((size = reg_aggregate_size (c2m_ctx, ret_type)) < 0)
@@ -63,6 +65,7 @@ static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_t
 }
 
 static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   int i, size;
 
   if ((size = reg_aggregate_size (c2m_ctx, ret_type)) < 0) {

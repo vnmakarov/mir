@@ -14,6 +14,7 @@ static MIR_type_t fp_homogeneous_type (c2m_ctx_t c2m_ctx, struct type *param_typ
 #else
 static MIR_type_t fp_homogeneous_type_1 (c2m_ctx_t c2m_ctx, MIR_type_t curr_type, struct type *type,
                                          int *num) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   int n;
   MIR_type_t t;
 
@@ -33,7 +34,7 @@ static MIR_type_t fp_homogeneous_type_1 (c2m_ctx_t c2m_ctx, MIR_type_t curr_type
     case TM_UNION:
       t = curr_type;
       *num = 0;
-      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->ops, 1)->ops); el != NULL;
+      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); el != NULL;
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
@@ -108,6 +109,7 @@ static void target_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                    target_arg_info_t *arg_info, size_t call_arg_area_offset) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   op_t temp;
@@ -149,6 +151,7 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
 
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
                                            MIR_insn_t call, size_t call_ops_start) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_insn_t insn;
@@ -177,6 +180,7 @@ static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_t
 }
 
 static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_insn_t insn;
@@ -241,6 +245,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
 
 static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_var_t var;
   MIR_type_t type;
@@ -274,6 +279,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
 
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_var_t var;
   MIR_type_t type;

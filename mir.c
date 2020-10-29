@@ -1083,7 +1083,7 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
   proto->name = get_ctx_str (ctx, name);
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
-  memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
+  if (nres != 0) memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
   proto->nres = nres;
   proto->vararg_p = vararg_p != 0;
   VARR_CREATE (MIR_var_t, proto->args, nargs);
@@ -4465,7 +4465,7 @@ static const char *read_name (MIR_context_t ctx, MIR_module_t module, const char
 
   if (TAG_NAME1 > c || c > TAG_NAME4) MIR_get_error_func (ctx) (MIR_binary_io_error, err_msg);
   s = to_str (ctx, get_uint (ctx, c - TAG_NAME1 + 1)).s;
-  process_reserved_name (s, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
+  if (module != NULL) process_reserved_name (s, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
   return s;
 }
 

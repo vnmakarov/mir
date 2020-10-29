@@ -202,9 +202,10 @@ static void init_options (int argc, char *argv[]) {
   int incl_p, ldir_p = FALSE; /* to remove an uninitialized warning */
 
   options.message_file = stderr;
-  options.debug_p = options.verbose_p = options.asm_p = options.object_p = FALSE;
   options.output_file_name = NULL;
-  options.no_prepro_p = options.prepro_only_p = options.syntax_only_p = options.pedantic_p = FALSE;
+  options.debug_p = options.verbose_p = options.ignore_warnings_p = FALSE;
+  options.asm_p = options.object_p = options.no_prepro_p = options.prepro_only_p = FALSE;
+  options.syntax_only_p = options.pedantic_p = FALSE;
   gen_debug_p = FALSE;
   VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (char_ptr_t, headers, 0);
@@ -221,6 +222,8 @@ static void init_options (int argc, char *argv[]) {
       options.asm_p = TRUE;
     } else if (strcmp (argv[i], "-c") == 0) {
       options.object_p = TRUE;
+    } else if (strcmp (argv[i], "-w") == 0) {
+      options.ignore_warnings_p = TRUE;
     } else if (strcmp (argv[i], "-v") == 0) {
       options.verbose_p = TRUE;
     } else if (strcmp (argv[i], "-E") == 0) {
@@ -303,6 +306,7 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -fpreprocessed -- assume preprocessed input C\n");
       fprintf (stderr, "  -fsyntax-only -- check C code correctness only\n");
       fprintf (stderr, "  -fpedantic -- assume strict standard input C code\n");
+      fprintf (stderr, "  -w -- do not print any warnings\n");
       fprintf (stderr, "  -S, -c -- generate corresponding textual or binary MIR files\n");
       fprintf (stderr, "  -o file -- put output code into given file\n");
       fprintf (stderr, "  -On -- use given optimization level in MIR-generator\n");
