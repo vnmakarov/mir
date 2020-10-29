@@ -251,61 +251,61 @@ c2mir-gen-test3: c2m
 
 c2mir-bootstrap-test0: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O0 '... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O0 1.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O0 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with default optimize level '... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-parallel-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Parallel Bootstrap Test with default optimize level '... '
 	$(Q) $(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o $(MIR_LIBS) $(THREAD_LIB) -o ./c2m
-	$(Q) ./c2m -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m -p4 $(C2M_BOOTSTRAP_FLAGS) 1.bmir -eg -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -p4 $(C2M_BOOTSTRAP_FLAGS) 1.bmir -eg -w -p4 $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-non-parallel-build-bootstrap-test: c2m
 	$(Q) echo -n +++++++ C2MIR Non Parallel Build Bootstrap Test with default optimize level '... '
 	$(Q) $(CC) $(CFLAGS) -UMIR_PARALLEL_GEN -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c $(MIR_LIBS) -o ./c2m
-	$(Q) ./c2m -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m 1.bmir -eg -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m 1.bmir -eg -w -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir ./c2m
 
 c2mir-bootstrap-test1: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O1 '... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O1 1.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O1 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test3: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O3 '... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 1.bmir -el $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -O3 1.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O3 -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-bootstrap-test4: c2m b2ctab
 	$(Q) echo -n +++++++ C2MIR Bootstrap Test 2 '(usually it takes about 10-20 sec) ... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
 	$(Q) ./b2ctab <1.bmir >mir-ctab
 	$(Q) $(CC) $(CFLAGS) -w -fno-tree-sra mir.c mir-gen.c mir-bin-driver.c $(MIR_LIBS) $(THREAD_LIB) -o test
-	$(Q) ./test $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./test $(C2M_BOOTSTRAP_FLAGS) -w -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir mir-ctab
 
 c2mir-bootstrap-test5: c2m
 	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test with -O3 '... '
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
-	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -ei $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
+	$(Q) ./c2m -w $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c && mv a.bmir 1.bmir
+	$(Q) ./c2m $(C2M_BOOTSTRAP_FLAGS) 1.bmir -ei -w $(C2M_BOOTSTRAP_FLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c
 	$(Q) cmp 1.bmir a.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf 1.bmir a.bmir
 
