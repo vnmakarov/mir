@@ -552,7 +552,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->insn = insn;
   bb_insn->flag = FALSE;
   bb_insn->call_hard_reg_args = NULL;
-  gen_assert (curr_cfg->curr_bb_insn_index < (1ull << 32));
+  gen_assert (curr_cfg->curr_bb_insn_index != (uint32_t) ~0ull);
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
   bb_insn->gvn_val = bb_insn->index;
   DLIST_INIT (dead_var_t, bb_insn->dead_vars);
