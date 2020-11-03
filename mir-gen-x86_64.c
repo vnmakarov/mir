@@ -978,6 +978,7 @@ struct pattern {
      X - match everything
      $ - finish successfully matching
      r - register (we don't care about bp and sp because they are fixed and used correctly)
+     t - ax, cx, dx, or bx register
      h[0-31] - hard register with given number
      z - operand is zero
      i[0-3] - immediate of size 8,16,32,64-bits
@@ -1443,6 +1444,11 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case 'X': break;
     case 'r':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
+      break;
+    case 't':
+      if (op.mode != MIR_OP_HARD_REG
+          || !(AX_HARD_REG <= op.u.hard_reg && op.u.hard_reg <= BX_HARD_REG))
+        return FALSE;
       break;
     case 'h':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
