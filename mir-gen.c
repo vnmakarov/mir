@@ -4496,7 +4496,21 @@ static int64_t int_log2 (int64_t i) {
   return i == 1 ? n : -1;
 }
 
-static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+static MIR_insn_t get_uptodate_def_insn (gen_ctx_t gen_ctx, int hr) {
+  MIR_insn_t def_insn;
+
+  if (!hreg_refs_addr[hr].def_p) return NULL;
+  gen_assert (!hreg_refs_addr[hr].del_p);
+  def_insn = hreg_refs_addr[hr].insn;
+  /* Checking hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
+  if ((def_insn->nops > 1 && obsolete_op_p (gen_ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
+      || (def_insn->nops > 2
+          && obsolete_op_p (gen_ctx, def_insn->ops[2], hreg_refs_addr[hr].insn_num)))
+    return NULL;
+  return def_insn;
+}
+
+static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_code_t code, new_code;
   MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
