@@ -1069,12 +1069,12 @@ struct pattern {
 
 /* cmp ...; setx r0; movzbl r0,r0: */
 #define CMP0(ICODE, SUFF, PREF, SETX)                                                            \
-  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},        /* cmp r1,r2;...*/ \
-    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
-    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
+  {ICODE##SUFF, "t r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},        /* cmp r1,r2;...*/ \
+    {ICODE##SUFF, "t r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
+    {ICODE##SUFF, "t r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "t r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "t m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
+    {ICODE##SUFF, "t m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
 
 #define CMP(ICODE, SET_OPCODE)  \
   CMP0 (ICODE, , X, SET_OPCODE) \
