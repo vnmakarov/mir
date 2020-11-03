@@ -4533,14 +4533,7 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
   insn_change_p = FALSE;
   while (VARR_LENGTH (MIR_reg_t, insn_hard_regs) != 0) {
     hr = VARR_POP (MIR_reg_t, insn_hard_regs);
-    if (!hreg_refs_addr[hr].def_p) continue;
-    gen_assert (!hreg_refs_addr[hr].del_p);
-    def_insn = hreg_refs_addr[hr].insn;
-    if ((def_insn->nops > 1
-         && obsolete_op_p (gen_ctx, def_insn->ops[1], hreg_refs_addr[hr].insn_num))
-        || (def_insn->nops > 2
-            && obsolete_op_p (gen_ctx, def_insn->ops[2], hreg_refs_addr[hr].insn_num)))
-      continue; /* hr0 = ... hr1 ...; ...; hr1 = ...; ...; insn */
+    if ((def_insn = get_uptodate_def_insn (gen_ctx, hr)) == NULL) continue;
     insn_hr_change_p = FALSE;
     for (i = 0; i < nops; i++) { /* Change all hr occurences: */
       op_ref = &insn->ops[i];
