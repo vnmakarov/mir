@@ -643,6 +643,16 @@ static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t 
   create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
 }
 
+static void gen_move_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_t insn) {
+  DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, insn);
+  MIR_insert_insn_before (gen_ctx->ctx, curr_func_item, before, insn);
+  if (optimize_level != 0) {
+    bb_insn_t bb_insn = insn->data, before_bb_insn = before->data;
+    DLIST_REMOVE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn);
+    DLIST_INSERT_BEFORE (bb_insn_t, before_bb_insn->bb->bb_insns, before_bb_insn, bb_insn);
+  }
+}
+
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg) {
   insn_data_t insn_data;
 
