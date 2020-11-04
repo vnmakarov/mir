@@ -4527,8 +4527,8 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
   MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
   size_t i, nops = insn->nops;
   int out_p, insn_change_p, insn_hr_change_p, op_change_p, mem_reg_change_p, success_p;
-  MIR_op_t *op_ref, *src_op_ref, *src_op2_ref;
-  MIR_reg_t hr;
+  MIR_op_t *op_ref, *src_op_ref, *src_op2_ref, saved_op;
+  MIR_reg_t hr, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int64_t scale, sh;
 
   if (nops == 0) return FALSE;
@@ -4540,6 +4540,47 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
     if (out_p && insn->ops[i].mode != MIR_OP_HARD_REG_MEM) continue;
     combine_process_op (gen_ctx, &insn->ops[i], bb_insn);
+  }
+  if (move_code_p (insn->code) && VARR_LENGTH (MIR_reg_t, insn_hard_regs) == 1) {
+    /* We processed all other regs already.  Try to change insn the following way:
+       hr0 = hr2 op hr3; ...; ... = hr0  =>  ...; ... = hr2 op hr3 */
+    hr = VARR_GET (MIR_reg_t, insn_hard_regs, 0);
+    if ((def_insn = get_uptodate_def_insn (gen_ctx, hr)) == NULL
+        || MIR_call_code_p (def_insn->code))
+      return FALSE;
+    target_get_early_clobbered_hard_regs (def_insn, &early_clobbered_hard_reg1,
+                                          &early_clobbered_hard_reg2);
+    if (!move_code_p (def_insn->code) && early_clobbered_hard_reg1 == MIR_NON_HARD_REG
+        && early_clobbered_hard_reg2 == MIR_NON_HARD_REG && insn->ops[1].mode == MIR_OP_HARD_REG
+        && insn->ops[1].u.hard_reg == hr
+        /* Check that insn->ops[0] is not mem[...hr0...]: */
+        && (insn->ops[0].mode != MIR_OP_HARD_REG_MEM
+            || (insn->ops[0].u.hard_reg_mem.base != hr
+                && insn->ops[0].u.hard_reg_mem.index != hr))) {
+      saved_op = def_insn->ops[0];
+      def_insn->ops[0] = insn->ops[0];
+      success_p = target_insn_ok_p (gen_ctx, def_insn);
+      def_insn->ops[0] = saved_op;
+      if (!success_p) return FALSE;
+      gen_move_insn_before (gen_ctx, insn, def_insn);
+      DEBUG ({
+        fprintf (debug_file, "      moving insn ");
+        print_bb_insn (gen_ctx, def_insn->data, FALSE);
+        fprintf (debug_file, "      before insn ");
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      });
+      def_insn->ops[0] = insn->ops[0];
+      DEBUG ({
+        fprintf (debug_file, "      changing it to ");
+        print_bb_insn (gen_ctx, def_insn->data, TRUE);
+        // deleted_insns_num++;
+        fprintf (debug_file, "      deleting insn ");
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      });
+      gen_delete_insn (gen_ctx, insn);
+      *bb_insn_ref = def_insn->data;
+      return TRUE;
+    }
   }
   insn_change_p = FALSE;
   while (VARR_LENGTH (MIR_reg_t, insn_hard_regs) != 0) {
