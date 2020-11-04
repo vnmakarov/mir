@@ -4679,28 +4679,6 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
       }
       if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i);
     }
-    code = insn->code;
-    if (i >= nops && (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS)
-        && insn->ops[2].mode == MIR_OP_INT && (sh = int_log2 (insn->ops[2].u.i)) >= 0) {
-      new_code = code; /* to remove an initialized warning */
-      switch (code) {
-      case MIR_MUL: new_code = MIR_LSH; break;
-      case MIR_MULS: new_code = MIR_LSHS; break;
-      case MIR_UDIV: new_code = MIR_URSH; break;
-      case MIR_UDIVS: new_code = MIR_URSHS; break;
-      default: gen_assert (FALSE);
-      }
-      new_insn = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
-      MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
-      if (target_insn_ok_p (gen_ctx, new_insn)) {
-        insn->code = new_insn->code;
-        insn->ops[0] = new_insn->ops[0];
-        insn->ops[1] = new_insn->ops[1];
-        insn->ops[2] = new_insn->ops[2];
-      }
-      MIR_remove_insn (ctx, curr_func_item, new_insn);
-      insn_hr_change_p = TRUE;
-    }
     if (insn_hr_change_p) {
       if ((success_p = i >= nops && target_insn_ok_p (gen_ctx, insn))) insn_change_p = TRUE;
       while (VARR_LENGTH (size_t, changed_op_numbers)) {
@@ -4804,6 +4782,46 @@ static MIR_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn) 
   }
 }
 
+static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t def_insn = NULL, new_insns[6], insn = bb_insn->insn;
+  MIR_insn_code_t new_code, code = insn->code;
+  int n, sh, ok_p;
+  MIR_op_t op, temp;
+
+  switch (code) {
+  case MIR_MUL: new_code = MIR_LSH; break;
+  case MIR_MULS: new_code = MIR_LSHS; break;
+  case MIR_UDIV: new_code = MIR_URSH; break;
+  case MIR_UDIVS: new_code = MIR_URSHS; break;
+  default: return NULL;
+  }
+  op = insn->ops[2];
+  if (op.mode == MIR_OP_HARD_REG && safe_hreg_substitution_p (gen_ctx, op.u.hard_reg, bb_insn)) {
+    def_insn = hreg_refs_addr[op.u.hard_reg].insn;
+    if (def_insn->code != MIR_MOV) return NULL;
+    op = def_insn->ops[1];
+  }
+  if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return NULL;
+  if ((sh = int_log2 (op.u.i)) < 0) return NULL;
+  if (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS) {
+    new_insns[0]
+      = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
+    MIR_insert_insn_after (ctx, curr_func_item, insn, new_insns[0]);
+    if ((ok_p = target_insn_ok_p (gen_ctx, new_insns[0]))) {
+      insn->code = new_insns[0]->code;
+      insn->ops[2] = new_insns[0]->ops[2];
+      DEBUG ({
+        fprintf (debug_file, "      changing to ");
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      });
+    }
+    MIR_remove_insn (ctx, curr_func_item, new_insns[0]);
+    return ok_p ? insn : NULL;
+  }
+  return NULL;
+}
+
 static void setup_hreg_ref (gen_ctx_t gen_ctx, MIR_reg_t hr, MIR_insn_t insn, size_t nop,
                             size_t insn_num, int def_p) {
   if (hr == MIR_NON_HARD_REG) return;
@@ -4861,7 +4879,9 @@ static void combine (gen_ctx_t gen_ctx) {
           last_mem_ref_insn_num = curr_insn_num; /* Potentially call can change memory */
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
-        } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL) {
+        } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL
+                   || (new_insn = combine_mul_div_substitute (gen_ctx, bb_insn)) != NULL) {
+          bb_insn = new_insn->data;
           insn = new_insn;
           nops = MIR_insn_nops (ctx, insn);
           block_change_p = TRUE;
