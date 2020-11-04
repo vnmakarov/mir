@@ -4839,7 +4839,7 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
       new_insns[3] = MIR_new_insn (ctx, MIR_ADDS, temp, temp, insn->ops[1]);
     }
     new_insns[4] = MIR_new_insn (ctx, new_code, temp, temp, MIR_new_int_op (ctx, sh));
-    new_insns[5] = MIR_new_insn (ctx, MIR_MOV, insn->ops[1], temp);
+    new_insns[5] = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], temp);
     for (n = 0; n < 6; n++) gen_add_insn_before (gen_ctx, insn, new_insns[n]);
     for (n = 0; n < 6; n++)
       if (!target_insn_ok_p (gen_ctx, new_insns[n])) break;
