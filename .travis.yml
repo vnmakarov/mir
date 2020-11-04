@@ -10,7 +10,7 @@ arch:
  - amd64
  - ppc64le
  - arm64
- - s390x
+# - s390x
 #jobs:
 #  allow_failures:
 #    - arch: s390x
