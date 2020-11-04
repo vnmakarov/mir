@@ -4794,6 +4794,8 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
   case MIR_MULS: new_code = MIR_LSHS; break;
   case MIR_UDIV: new_code = MIR_URSH; break;
   case MIR_UDIVS: new_code = MIR_URSHS; break;
+  case MIR_DIV: new_code = MIR_RSH; break;
+  case MIR_DIVS: new_code = MIR_RSHS; break;
   default: return NULL;
   }
   op = insn->ops[2];
@@ -4818,6 +4820,51 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
     }
     MIR_remove_insn (ctx, curr_func_item, new_insns[0]);
     return ok_p ? insn : NULL;
+  } else if (insn->ops[1].mode == MIR_OP_HARD_REG
+             && insn->ops[1].u.hard_reg == TEMP_INT_HARD_REG2) {
+  } else if (insn->ops[1].mode == MIR_OP_HARD_REG_MEM
+             && (insn->ops[1].u.hard_reg_mem.base == TEMP_INT_HARD_REG2
+                 || insn->ops[1].u.hard_reg_mem.index == TEMP_INT_HARD_REG2)) {
+  } else {
+    temp = _MIR_new_hard_reg_op (ctx, TEMP_INT_HARD_REG2);
+    gen_assert (code == MIR_DIV || code == MIR_DIVS);
+    new_insns[0] = MIR_new_insn (ctx, MIR_MOV, temp, insn->ops[1]);
+    if (code == MIR_DIV) {
+      new_insns[1] = MIR_new_insn (ctx, MIR_RSH, temp, temp, MIR_new_int_op (ctx, 63));
+      new_insns[2] = MIR_new_insn (ctx, MIR_AND, temp, temp, MIR_new_int_op (ctx, op.u.i - 1));
+      new_insns[3] = MIR_new_insn (ctx, MIR_ADD, temp, temp, insn->ops[1]);
+    } else {
+      new_insns[1] = MIR_new_insn (ctx, MIR_RSHS, temp, temp, MIR_new_int_op (ctx, 31));
+      new_insns[2] = MIR_new_insn (ctx, MIR_ANDS, temp, temp, MIR_new_int_op (ctx, op.u.i - 1));
+      new_insns[3] = MIR_new_insn (ctx, MIR_ADDS, temp, temp, insn->ops[1]);
+    }
+    new_insns[4] = MIR_new_insn (ctx, new_code, temp, temp, MIR_new_int_op (ctx, sh));
+    new_insns[5] = MIR_new_insn (ctx, MIR_MOV, insn->ops[1], temp);
+    for (n = 0; n < 6; n++) gen_add_insn_before (gen_ctx, insn, new_insns[n]);
+    for (n = 0; n < 6; n++)
+      if (!target_insn_ok_p (gen_ctx, new_insns[n])) break;
+    if (n < 6) {
+      for (n = 0; n < 6; n++) gen_delete_insn (gen_ctx, new_insns[n]);
+    } else {
+      move_bb_insn_dead_vars (new_insns[3]->data, bb_insn);
+      add_bb_insn_dead_var (gen_ctx, new_insns[5]->data, TEMP_INT_HARD_REG2);
+      DEBUG ({
+        fprintf (debug_file, "      changing to ");
+        for (n = 0; n < 6; n++) {
+          if (n != 0) fprintf (debug_file, "                  ");
+          print_bb_insn (gen_ctx, new_insns[n]->data, TRUE);
+        }
+      });
+      gen_delete_insn (gen_ctx, insn);
+      if (def_insn != NULL) {
+        DEBUG ({
+          fprintf (debug_file, "      deleting now dead insn ");
+          print_bb_insn (gen_ctx, def_insn->data, TRUE);
+        });
+        gen_delete_insn (gen_ctx, def_insn);
+      }
+      return new_insns[0];
+    }
   }
   return NULL;
 }
