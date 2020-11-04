@@ -4523,6 +4523,7 @@ static MIR_insn_t get_uptodate_def_insn (gen_ctx_t gen_ctx, int hr) {
 static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_code_t code, new_code;
+  bb_insn_t bb_insn = *bb_insn_ref;
   MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
   size_t i, nops = insn->nops;
   int out_p, insn_change_p, insn_hr_change_p, op_change_p, mem_reg_change_p, success_p;
@@ -4824,15 +4825,20 @@ static void combine (gen_ctx_t gen_ctx) {
           nops = MIR_insn_nops (ctx, insn);
           block_change_p = TRUE;
         } else {
-          change_p = combine_substitute (gen_ctx, bb_insn);
-          if (!change_p && (new_code = commutative_insn_code (insn->code)) != MIR_INSN_BOUND) {
+          if ((change_p = combine_substitute (gen_ctx, &bb_insn))) {
+            insn = bb_insn->insn;
+            nops = MIR_insn_nops (ctx, insn);
+          } else if (!change_p
+                     && (new_code = commutative_insn_code (insn->code)) != MIR_INSN_BOUND) {
             insn->code = new_code;
             temp_op = insn->ops[1];
             insn->ops[1] = insn->ops[2];
             insn->ops[2] = temp_op;
-            if (combine_substitute (gen_ctx, bb_insn))
+            if (combine_substitute (gen_ctx, &bb_insn)) {
+              insn = bb_insn->insn;
+              nops = MIR_insn_nops (ctx, insn);
               change_p = TRUE;
-            else {
+            } else {
               insn->code = code;
               temp_op = insn->ops[1];
               insn->ops[1] = insn->ops[2];
