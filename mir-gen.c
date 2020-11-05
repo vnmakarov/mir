@@ -4806,7 +4806,24 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
   }
   if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return NULL;
   if ((sh = int_log2 (op.u.i)) < 0) return NULL;
-  if (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS) {
+  if (sh == 0) {
+    new_insns[0] = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], insn->ops[1]);
+    gen_add_insn_before (gen_ctx, insn, new_insns[0]);
+    move_bb_insn_dead_vars (new_insns[0]->data, bb_insn);
+    DEBUG ({
+      fprintf (debug_file, "      changing to ");
+      print_bb_insn (gen_ctx, new_insns[0]->data, TRUE);
+    });
+    gen_delete_insn (gen_ctx, insn);
+    if (def_insn != NULL) {
+      DEBUG ({
+        fprintf (debug_file, "      deleting now dead insn ");
+        print_bb_insn (gen_ctx, def_insn->data, TRUE);
+      });
+      gen_delete_insn (gen_ctx, def_insn);
+    }
+    return new_insns[0];
+  } else if (code == MIR_MUL || code == MIR_MULS || code == MIR_UDIV || code == MIR_UDIVS) {
     new_insns[0]
       = MIR_new_insn (ctx, new_code, insn->ops[0], insn->ops[1], MIR_new_int_op (ctx, sh));
     MIR_insert_insn_after (ctx, curr_func_item, insn, new_insns[0]);
