@@ -1464,6 +1464,16 @@ void MIR_finish_module (MIR_context_t ctx) {
   curr_module = NULL;
 }
 
+MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name) {
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, environment_module.items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->item_type == MIR_import_item && strcmp (item->u.import_id, name) == 0) {
+      return item->ref_def;
+    }
+  }
+  return NULL;
+}
+
 static void setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_item_t def) {
   MIR_item_t item, tab_item;
   MIR_module_t saved = curr_module;
