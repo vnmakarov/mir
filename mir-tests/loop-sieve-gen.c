@@ -10,7 +10,7 @@
 #ifndef _WIN32
 #include <unistd.h>
 uint64_t get_heap () {
-  return sbrk (0);
+  return (uint64_t) sbrk (0);
 }
 #else
 #include <windows.h>
