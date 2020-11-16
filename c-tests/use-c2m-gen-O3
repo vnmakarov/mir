@@ -1,2 +1,4 @@
 # ! /bin/sh
-./c2m -O3 $* -eg
+compiler=$1
+shift
+$compiler -O3 $* -eg

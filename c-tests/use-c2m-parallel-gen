@@ -1,2 +1,4 @@
 # ! /bin/sh
-./c2m $* -epg
+compiler=$1
+shift
+$compiler $* -p4 -eg
