@@ -7,6 +7,7 @@ errf=c-tests/__temp.err
 all=0
 ok=0
 execution_program=$1
+compiler=$2
 
 ECHO=echo
 if test x$BASH_VERSION != x;then
@@ -32,7 +33,7 @@ runtest () {
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
 	$ECHO -n $t:
-	$TIMEOUT $execution_program $t $add_main 2>$errf >$outf
+	$TIMEOUT $execution_program $compiler $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! cmp $outf $expect_out;then
