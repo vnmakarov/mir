@@ -235,12 +235,11 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void *va_block_arg_builtin (void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s) {
   struct ppc64_va_list *va = p;
   void *a = va->arg_area;
-
+  memcpy (res, a, s);
   va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
-  return a;
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
