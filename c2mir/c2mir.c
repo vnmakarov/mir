@@ -11636,10 +11636,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
         op2 = mem_to_address (c2m_ctx, op2, FALSE);
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
+	assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
+        res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
         MIR_append_insn (ctx, curr_func,
-                         MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, op1.mir_op, op2.mir_op,
+                         MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, res.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
-        op2 = op1;
+	res = *desirable_dest;
       } else {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
@@ -11648,12 +11650,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
                                        MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
-      }
-      if (res.mir_op.mode == MIR_OP_REG) {
-        res = op2;
-      } else {
-        assert (res.mir_op.mode == MIR_OP_MEM);
-        res.mir_op.u.mem.base = op2.mir_op.u.reg;
+	if (res.mir_op.mode == MIR_OP_REG) {
+	  res = op2;
+	} else {
+	  assert (res.mir_op.mode == MIR_OP_MEM);
+	  res.mir_op.u.mem.base = op2.mir_op.u.reg;
+	}
       }
     } else if (va_start_p) {
       op1 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
