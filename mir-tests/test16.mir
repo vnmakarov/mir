@@ -5,6 +5,7 @@ p_f:	  proto i64, i64:el, ...
 f:	  func i64, i64:el, ...
 	  local i64:va, i64:a
 	  alloca va, 64
+	  alloca a, 16
 	  va_start va
 	  va_block_arg a, va, 16
 	  add i64:8(a), i64:8(a), 18
