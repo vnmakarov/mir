@@ -452,8 +452,8 @@ static const char *LD2I_P = "mir.ld2i.p";
 
 static const char *VA_ARG_P = "mir.va_arg.p";
 static const char *VA_ARG = "mir.va_arg";
-static const char *VA_STACK_ARG_P = "mir.va_stack_arg.p";
-static const char *VA_STACK_ARG = "mir.va_stack_arg";
+static const char *VA_BLOCK_ARG_P = "mir.va_block_arg.p";
+static const char *VA_BLOCK_ARG = "mir.va_block_arg";
 
 static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *proto_item,
                          MIR_item_t *func_import_item) {
@@ -492,12 +492,12 @@ static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pr
                                       MIR_T_I64, "va", MIR_T_I64, "type");
     *func_import_item = _MIR_builtin_func (ctx, curr_func_item->module, VA_ARG, va_arg_builtin);
     break;
-  case MIR_VA_STACK_ARG:
+  case MIR_VA_BLOCK_ARG:
     res_type = MIR_T_I64;
-    *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_STACK_ARG_P, 1, &res_type, 2,
+    *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "size");
     *func_import_item
-      = _MIR_builtin_func (ctx, curr_func_item->module, VA_STACK_ARG, va_stack_arg_builtin);
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_stack_arg_builtin);
     break;
   default: assert (FALSE);
   }
@@ -709,7 +709,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       gen_delete_insn (gen_ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (gen_ctx, insn);
-    } else if (code == MIR_VA_ARG || code == MIR_VA_STACK_ARG) {
+    } else if (code == MIR_VA_ARG || code == MIR_VA_BLOCK_ARG) {
 #ifndef _WIN64
       /* Use a builtin func call:
          mov func_reg, func ref; [mov reg3, type;] call proto, func_reg, res_reg, va_reg,

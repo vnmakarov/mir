@@ -299,8 +299,8 @@ static const struct insn_desc insn_descs[] = {
   {MIR_BSTART, "bstart", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_BOUND}},
   {MIR_BEND, "bend", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_ARG, "va_arg", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_UNDEF, MIR_OP_BOUND}},
-  {MIR_VA_STACK_ARG,
-   "va_stack_arg",
+  {MIR_VA_BLOCK_ARG,
+   "va_block_arg",
    {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_START, "va_start", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
@@ -1434,7 +1434,7 @@ void MIR_finish_func (MIR_context_t ctx) {
       insn->ops[i].value_mode = mode;
       if (mode == MIR_OP_UNDEF && insn->ops[i].mode == MIR_OP_MEM
           && ((code == MIR_VA_START && i == 0)
-              || ((code == MIR_VA_ARG || code == MIR_VA_STACK_ARG) && i == 1)
+              || ((code == MIR_VA_ARG || code == MIR_VA_BLOCK_ARG) && i == 1)
               || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
         insn->ops[i].value_mode = expected_mode;
       } else if (expected_mode != MIR_OP_UNDEF
@@ -2904,7 +2904,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     if (move_p && (nop == 1 || insn->ops[1].mode == MIR_OP_REG)) {
       *op = mem_op;
     } else if (((code == MIR_VA_START && nop == 0)
-                || ((code == MIR_VA_ARG || code == MIR_VA_STACK_ARG) && nop == 1)
+                || ((code == MIR_VA_ARG || code == MIR_VA_BLOCK_ARG) && nop == 1)
                 || (code == MIR_VA_END && nop == 0))
                && mem_op.u.mem.type == MIR_T_UNDEF) {
       *op = MIR_new_reg_op (ctx, addr_reg);

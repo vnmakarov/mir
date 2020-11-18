@@ -11637,7 +11637,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         op2 = mem_to_address (c2m_ctx, op2, FALSE);
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         MIR_append_insn (ctx, curr_func,
-                         MIR_new_insn (ctx, MIR_VA_STACK_ARG, op1.mir_op, op2.mir_op,
+                         MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, op1.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
         op2 = op1;
       } else {

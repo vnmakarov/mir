@@ -916,7 +916,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
     REP4 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_SWITCH, MIR_RET);
     REP3 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND);
-    REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_STACK_ARG, MIR_VA_START, MIR_VA_END);
+    REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_BLOCK_ARG, MIR_VA_START, MIR_VA_END);
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
     REP8 (LAB_EL, IC_LDD, IC_LDLD, IC_STI8, IC_STU8, IC_STI16, IC_STU16, IC_STI32, IC_STU32);
     REP8 (LAB_EL, IC_STI64, IC_STF, IC_STD, IC_STLD, IC_MOVI, IC_MOVP, IC_MOVF, IC_MOVD);
@@ -1305,7 +1305,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *r = (uint64_t) va_arg_builtin ((void *) va, tp);
     END_INSN;
   }
-  CASE (MIR_VA_STACK_ARG, 3) {
+  CASE (MIR_VA_BLOCK_ARG, 3) {
     int64_t *r, va, size;
 
     r = get_3iops (bp, ops, &va, &size);
