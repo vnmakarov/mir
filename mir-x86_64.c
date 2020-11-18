@@ -53,12 +53,11 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void *va_block_arg_builtin (void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s) {
   struct x86_64_va_list *va = p;
   void *a = va->overflow_arg_area;
-
+  memcpy (res, a, s);
   va->overflow_arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
-  return a;
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
@@ -68,7 +67,9 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
   *va = *(struct x86_64_va_list *) vap;
 }
+
 #else
+
 struct x86_64_va_list {
   uint64_t *arg_area;
 };
@@ -80,9 +81,10 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void *va_block_arg_builtin (void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s) {
   struct x86_64_va_list *va = p;
   void *a = va->arg_area;
+  memcpy (res, a, s);
   va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
   return a;
 }
