@@ -497,7 +497,7 @@ static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pr
     *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "size");
     *func_import_item
-      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_stack_arg_builtin);
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     break;
   default: assert (FALSE);
   }
@@ -543,7 +543,7 @@ DEF_VARR (MIR_code_reloc_t);
 #define MOVDQA_CODE 0
 
 struct target_ctx {
-  unsigned char alloca_p, stack_arg_func_p, leaf_p;
+  unsigned char alloca_p, block_arg_func_p, leaf_p;
   int start_sp_from_bp_offset;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
@@ -556,7 +556,7 @@ struct target_ctx {
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
-#define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
+#define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define start_sp_from_bp_offset gen_ctx->target_ctx->start_sp_from_bp_offset
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
@@ -580,14 +580,14 @@ static void target_machinize (gen_ctx_t gen_ctx) {
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
-  stack_arg_func_p = FALSE;
+  block_arg_func_p = FALSE;
   start_sp_from_bp_offset = 8;
   for (i = 0; i < func->nargs; i++) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
     type = VARR_GET (MIR_var_t, func->vars, i).type;
     if (type == MIR_T_BLK) {
-      stack_arg_func_p = TRUE;
+      block_arg_func_p = TRUE;
       new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
                                _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, mem_size + 8 /* ret */
@@ -604,7 +604,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       create_new_bb_insns (gen_ctx, NULL, DLIST_NEXT (MIR_insn_t, new_insn), NULL);
     } else {
       /* arg is on the stack */
-      stack_arg_func_p = TRUE;
+      block_arg_func_p = TRUE;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
       new_insn_code
         = (type == MIR_T_F ? MIR_FMOV
@@ -687,7 +687,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       gen_add_insn_before (gen_ctx, insn, new_insn);
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
 #else
-      stack_arg_func_p = TRUE;
+      block_arg_func_p = TRUE;
       /* spill reg args */
       mem_size = 8 /*ret*/ + start_sp_from_bp_offset;
       for (int i = 0; i < 4; i++) {
@@ -875,7 +875,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
       saved_hard_regs_size += 16;
 #endif
-  if (leaf_p && !alloca_p && !stack_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
+  if (leaf_p && !alloca_p && !block_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
       && stack_slots_num == 0)
     return;
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);

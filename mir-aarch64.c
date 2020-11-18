@@ -64,7 +64,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void *va_stack_arg_builtin (void *p, size_t s) {
+void *va_block_arg_builtin (void *p, size_t s) {
   struct aarch64_va_list *va = p;
   void *a;
   long size = (s + 7) / 8 * 8;

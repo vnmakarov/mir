@@ -643,7 +643,7 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
     *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "size");
     *func_import_item
-      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_stack_arg_builtin);
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     return 2;
   default: return 0;
   }

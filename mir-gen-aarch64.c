@@ -641,7 +641,7 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
     *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "size");
     *func_import_item
-      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_stack_arg_builtin);
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     return 2;
   default: return 0;
   }
@@ -670,7 +670,7 @@ DEF_VARR (label_ref_t);
 DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
-  unsigned char alloca_p, stack_arg_func_p, leaf_p;
+  unsigned char alloca_p, block_arg_func_p, leaf_p;
   size_t small_aggregate_save_area;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
@@ -681,7 +681,7 @@ struct target_ctx {
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
-#define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
+#define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define small_aggregate_save_area gen_ctx->target_ctx->small_aggregate_save_area
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
@@ -694,7 +694,7 @@ struct target_ctx {
 static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type,
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
-  size_t offset = curr_func_item->u.func->vararg_p || stack_arg_func_p ? 32 : 16;
+  size_t offset = curr_func_item->u.func->vararg_p || block_arg_func_p ? 32 : 16;
 
   return ((MIR_disp_t) slot * 8 + offset);
 }
@@ -712,7 +712,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
-  stack_arg_func_p = FALSE;
+  block_arg_func_p = FALSE;
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   small_aggregate_save_area = 0;
   for (i = int_arg_num = fp_arg_num = mem_size = 0; i < func->nargs; i++) {
@@ -738,8 +738,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
           gen_mov (gen_ctx, anchor, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 8, i + 1, 0, 1),
                    _MIR_new_hard_reg_op (ctx, int_arg_num + 1));
       } else { /* pass on stack w/o address: */
-        if (!stack_arg_func_p) {
-          stack_arg_func_p = TRUE;
+        if (!block_arg_func_p) {
+          block_arg_func_p = TRUE;
           gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R8_HARD_REG),
                    _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_HARD_REG, 1));
         }
@@ -758,8 +758,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       gen_mov (gen_ctx, anchor, new_insn_code, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
     } else {
       /* arg is on the stack */
-      if (!stack_arg_func_p) {
-        stack_arg_func_p = TRUE;
+      if (!block_arg_func_p) {
+        block_arg_func_p = TRUE;
         gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, R8_HARD_REG),
                  _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_HARD_REG, 1));
       }
@@ -942,7 +942,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         saved_fregs_num++;
     }
   if (leaf_p && !alloca_p && saved_iregs_num == 0 && saved_fregs_num == 0 && !func->vararg_p
-      && stack_slots_num == 0 && !stack_arg_func_p && small_aggregate_save_area == 0)
+      && stack_slots_num == 0 && !block_arg_func_p && small_aggregate_save_area == 0)
     return;
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
@@ -962,7 +962,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   frame_size_after_saved_regs = frame_size;
   frame_size += stack_slots_num * 8;
   if (frame_size % 16 != 0) frame_size = (frame_size + 15) / 16 * 16;
-  save_prev_stack_p = func->vararg_p || stack_arg_func_p;
+  save_prev_stack_p = func->vararg_p || block_arg_func_p;
   treg_op = _MIR_new_hard_reg_op (ctx, R9_HARD_REG);
   if (save_prev_stack_p) { /* prev stack pointer */
     gen_mov (gen_ctx, anchor, MIR_MOV, treg_op, sp_reg_op);

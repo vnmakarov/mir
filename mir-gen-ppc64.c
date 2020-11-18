@@ -138,7 +138,7 @@ DEF_VARR (label_ref_t);
 DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
-  unsigned char alloca_p, stack_arg_func_p, leaf_p, switch_p;
+  unsigned char alloca_p, block_arg_func_p, leaf_p, switch_p;
   size_t param_save_area_size;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
@@ -149,7 +149,7 @@ struct target_ctx {
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
-#define stack_arg_func_p gen_ctx->target_ctx->stack_arg_func_p
+#define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define switch_p gen_ctx->target_ctx->switch_p
 #define param_save_area_size gen_ctx->target_ctx->param_save_area_size
@@ -597,7 +597,7 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
     *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 1, &res_type, 2,
                                       MIR_T_I64, "va", MIR_T_I64, "size");
     *func_import_item
-      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_stack_arg_builtin);
+      = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     return 2;
   default: return 0;
   }
@@ -610,9 +610,9 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
 }
 
 static void set_prev_sp_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *prev_sp_op) {
-  if (!stack_arg_func_p) {
+  if (!block_arg_func_p) {
     /* don't use r11 as we can have spilled param<-mem in param set up which needs r11 as a temp */
-    stack_arg_func_p = TRUE;
+    block_arg_func_p = TRUE;
     *prev_sp_op = _MIR_new_hard_reg_op (gen_ctx->ctx, R12_HARD_REG);
     gen_mov (gen_ctx, anchor, MIR_MOV, *prev_sp_op,
              _MIR_new_hard_reg_mem_op (gen_ctx->ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG,
@@ -632,7 +632,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
-  stack_arg_func_p = FALSE;
+  block_arg_func_p = FALSE;
   param_save_area_size = 0;
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   if (func->vararg_p)
