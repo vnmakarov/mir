@@ -6,7 +6,7 @@ f:	  func i64, i64:el, ...
 	  local i64:va, i64:a
 	  alloca va, 64
 	  va_start va
-	  va_stack_arg a, va, 16
+	  va_block_arg a, va, 16
 	  add i64:8(a), i64:8(a), 18
           ret i64:8(a)
           endfunc
