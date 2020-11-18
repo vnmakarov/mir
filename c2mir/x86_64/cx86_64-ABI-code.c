@@ -58,22 +58,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
     }
     case TM_STRUCT:
     case TM_UNION:
-      for (node_t el = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); el != NULL;
-           el = NL_NEXT (el))
-        if (el->code == N_MEMBER) {
-          decl_t decl = el->attr;
-          int start_qword = decl->offset / 8;
-
-          if (decl->bit_offset >= 0) {
-            types[start_qword] = get_result_type (MIR_T_I64, types[start_qword]);
-          } else {
-            n_el_qwords
-              = classify_arg (c2m_ctx, decl->decl_spec.type, subtypes, decl->bit_offset >= 0);
-            if (n_el_qwords == 0) return 0;
-            for (i = 0; i < n_el_qwords && (i + start_qword) < n_qwords; i++)
-              types[i + start_qword] = get_result_type (subtypes[i], types[i + start_qword]);
-          }
-        }
+      return 0;
       break;
     default: assert (FALSE);
     }
