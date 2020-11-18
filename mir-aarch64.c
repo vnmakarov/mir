@@ -64,7 +64,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void *va_block_arg_builtin (void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s) {
   struct aarch64_va_list *va = p;
   void *a;
   long size = (s + 7) / 8 * 8;
@@ -73,7 +73,8 @@ void *va_block_arg_builtin (void *p, size_t s) {
     a = va->__stack;
     va->__stack = (char *) va->__stack + size;
     va->__gr_offs += size;
-    return a;
+    memcpy (res, a, s);
+    return;
   }
   if (size > 2 * 8) size = 8;
   if (va->__gr_offs < 0) {
@@ -83,8 +84,11 @@ void *va_block_arg_builtin (void *p, size_t s) {
     a = va->__stack;
     va->__stack = (char *) va->__stack + size;
   }
-  if (s > 2 * 8) return *(void **) a; /* address */
-  return a;
+  if (s > 2 * 8) {
+    *(void **) res = *(void **) a; /* address */
+    return;
+  }
+  memcpy (res, a, s);
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
