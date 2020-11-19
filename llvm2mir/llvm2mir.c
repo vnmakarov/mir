@@ -611,7 +611,7 @@ static MIR_type_t get_mir_type (LLVMTypeRef type) {
   case LLVMFunctionTypeKind:
   case LLVMLabelTypeKind: return MIR_T_P;
   case LLVMVectorTypeKind: error ("vectors are not implemented: don't use autovectorization");
-  default: error ("type unrepresentable by MIR types");
+  default: LLVMDumpType (type); error (" type unrepresentable by MIR types");
   }
 }
 
