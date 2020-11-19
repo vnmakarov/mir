@@ -228,13 +228,13 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     arg_op = call_insn->ops[i];
     gen_assert (
       arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
-      || (arg_op.mode == MIR_OP_MEM && MIR_blk_type_p (arg_op.u.mem.type))
-      || (arg_op.mode == MIR_OP_HARD_REG_MEM && MIR_blk_type_p (arg_op.u.hard_reg_mem.type)));
+      || (arg_op.mode == MIR_OP_MEM && MIR_all_blk_type_p (arg_op.u.mem.type))
+      || (arg_op.mode == MIR_OP_HARD_REG_MEM && MIR_all_blk_type_p (arg_op.u.hard_reg_mem.type)));
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else if (arg_op.mode == MIR_OP_MEM || arg_op.mode == MIR_OP_HARD_REG_MEM) {
       type = arg_op.mode == MIR_OP_MEM ? arg_op.u.mem.type : arg_op.u.hard_reg_mem.type;
-      assert (type == MIR_T_BLK || type == MIR_T_RBLK);
+      assert (MIR_all_blk_type_p (type));
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
@@ -251,7 +251,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (type == MIR_T_BLK) { /* put block arg on the stack */
+    if (MIR_blk_type_p (type)) { /* put block arg on the stack */
       MIR_insn_t load_insn;
       size_t size, disp;
       int first_p;
@@ -275,8 +275,8 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
           size -= 8;
           gen_add_insn_after (gen_ctx, load_insn, new_insn);
           if (first_p) {
-            call_insn->ops[i] = _MIR_new_hard_reg_mem_op (ctx, MIR_T_BLK, mem_size, SP_HARD_REG,
-                                                          MIR_NON_HARD_REG, 1);
+            call_insn->ops[i]
+              = _MIR_new_hard_reg_mem_op (ctx, type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
             first_p = FALSE;
           }
         }
@@ -585,7 +585,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
     type = VARR_GET (MIR_var_t, func->vars, i).type;
-    if (type == MIR_T_BLK) {
+    if (MIR_blk_type_p (type)) {
       block_arg_func_p = TRUE;
       new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
                                _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
@@ -659,7 +659,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
           if (gp_offset >= 176) mem_offset += 8;
         } else if (var.type == MIR_T_LD) {
           mem_offset += 16;
-        } else if (var.type == MIR_T_BLK) {
+        } else if (MIR_blk_type_p (var.type)) {
           mem_offset += var.size;
         } else { /* including RBLK */
           gp_offset += 8;

@@ -328,7 +328,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     } else if (type == MIR_T_LD) {
       gen_ldst80 (code, sp_offset, (i + nres) * sizeof (long double));
       sp_offset += 16;
-    } else if (type == MIR_T_BLK) {
+    } else if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
       gen_blk_mov (code, sp_offset, (i + nres) * sizeof (long double), qwords);
       sp_offset += qwords * 8;

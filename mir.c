@@ -1379,13 +1379,13 @@ void MIR_finish_func (MIR_context_t ctx) {
       case MIR_OP_MEM:
         expr_p = FALSE;
         if (wrong_type_p (insn->ops[i].u.mem.type)
-            && (!MIR_blk_type_p (insn->ops[i].u.mem.type) || !MIR_call_code_p (code))) {
+            && (!MIR_all_blk_type_p (insn->ops[i].u.mem.type) || !MIR_call_code_p (code))) {
           curr_func = NULL;
           MIR_get_error_func (ctx) (MIR_wrong_type_error,
                                     "func %s: in instruction '%s': wrong type memory", func_name,
                                     insn_descs[code].name);
         }
-        if (MIR_blk_type_p (insn->ops[i].u.mem.type) && insn->ops[i].u.mem.disp < 0) {
+        if (MIR_all_blk_type_p (insn->ops[i].u.mem.type) && insn->ops[i].u.mem.disp < 0) {
           curr_func = NULL;
           MIR_get_error_func (ctx) (MIR_wrong_type_error,
                                     "func %s: in instruction '%s': block type memory with disp < 0",
@@ -1861,7 +1861,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
               "number of %s operands or results does not correspond to prototype %s",
               code == MIR_UNSPEC ? "unspec" : "call", proto->name);
     for (i = args_start; i < nops; i++) {
-      if (ops[i].mode == MIR_OP_MEM && MIR_blk_type_p (ops[i].u.mem.type)) {
+      if (ops[i].mode == MIR_OP_MEM && MIR_all_blk_type_p (ops[i].u.mem.type)) {
         if (i - args_start < proto->nres)
           MIR_get_error_func (ctx) (MIR_wrong_type_error, "result of %s is block type memory",
                                     code == MIR_UNSPEC ? "unspec" : "call");
@@ -1885,7 +1885,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
         }
       } else if (i - args_start >= proto->nres
                  && (narg = i - args_start - proto->nres) < VARR_LENGTH (MIR_var_t, proto->args)
-                 && MIR_blk_type_p (VARR_GET (MIR_var_t, proto->args, narg).type)) {
+                 && MIR_all_blk_type_p (VARR_GET (MIR_var_t, proto->args, narg).type)) {
         MIR_get_error_func (
           ctx) (MIR_wrong_type_error,
                 "param of %s is of block type but arg is not of block type memory",
@@ -2517,7 +2517,7 @@ static void output_func_proto (FILE *f, size_t nres, MIR_type_t *types, size_t n
     var = VARR_GET (MIR_var_t, args, i);
     if (i != 0 || nres != 0) fprintf (f, ", ");
     mir_assert (var.name != NULL);
-    if (!MIR_blk_type_p (var.type))
+    if (!MIR_all_blk_type_p (var.type))
       fprintf (f, "%s:%s", MIR_type_str (NULL, var.type), var.name);
     else
       fprintf (f, "%s:%lu(%s)", MIR_type_str (NULL, var.type), (unsigned long) var.size, var.name);
@@ -2906,7 +2906,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
                 || (code == MIR_VA_END && nop == 0))
                && mem_op.u.mem.type == MIR_T_UNDEF) {
       *op = MIR_new_reg_op (ctx, addr_reg);
-    } else if (!MIR_blk_type_p (mem_op.u.mem.type) || !MIR_call_code_p (code)) {
+    } else if (!MIR_all_blk_type_p (mem_op.u.mem.type) || !MIR_call_code_p (code)) {
       type = (mem_op.u.mem.type == MIR_T_F || mem_op.u.mem.type == MIR_T_D
                   || mem_op.u.mem.type == MIR_T_LD
                 ? mem_op.u.mem.type
@@ -3372,8 +3372,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       if (i < nargs && call->nops > i + 2 + called_func->nres) { /* Parameter passing */
         MIR_op_t op = call->ops[i + 2 + called_func->nres];
 
-        mir_assert (!MIR_blk_type_p (type) || (op.mode == MIR_OP_MEM && type == MIR_T_I64));
-        if (var.type == MIR_T_BLK) { /* alloca and block move: */
+        mir_assert (!MIR_all_blk_type_p (type) || (op.mode == MIR_OP_MEM && type == MIR_T_I64));
+        if (MIR_blk_type_p (var.type)) { /* alloca and block move: */
           add_blk_move (ctx, func_item, ret_label, MIR_new_reg_op (ctx, new_reg),
                         MIR_new_reg_op (ctx, op.u.mem.base), var.size);
         } else {
@@ -4197,7 +4197,7 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
       var = VARR_GET (MIR_var_t, proto->args, i);
       len += write_type (ctx, writer, var.type);
       len += write_name (ctx, writer, var.name);
-      if (MIR_blk_type_p (var.type)) len += write_uint (ctx, writer, var.size);
+      if (MIR_all_blk_type_p (var.type)) len += write_uint (ctx, writer, var.size);
     }
     len += put_byte (ctx, writer, TAG_EOI);
     return len;
@@ -4212,7 +4212,7 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
     var = VARR_GET (MIR_var_t, func->vars, i);
     len += write_type (ctx, writer, var.type);
     len += write_name (ctx, writer, var.name);
-    if (MIR_blk_type_p (var.type)) len += write_uint (ctx, writer, var.size);
+    if (MIR_all_blk_type_p (var.type)) len += write_uint (ctx, writer, var.size);
   }
   len += put_byte (ctx, writer, TAG_EOI);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
@@ -4627,7 +4627,7 @@ static int func_proto_read (MIR_context_t ctx, MIR_module_t module, uint64_t *nr
       MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong prototype arg type tag %d", tag);
     var.type = tag_type (tag);
     var.name = read_name (ctx, module, "wrong arg name");
-    if (MIR_blk_type_p (var.type)) var.size = read_uint (ctx, "wrong block arg size");
+    if (MIR_all_blk_type_p (var.type)) var.size = read_uint (ctx, "wrong block arg size");
     VARR_PUSH (MIR_var_t, proto_vars, var);
   }
   *nres_ptr = nres;
@@ -5375,7 +5375,7 @@ static void read_func_proto (MIR_context_t ctx, size_t nops, MIR_op_t *ops) {
     var.name = (const char *) ops[i].u.mem.disp;
     if (var.name == NULL)
       scan_error (ctx, "all func/prototype args should have form type:name or (r)blk:size(name)");
-    if (MIR_blk_type_p (var.type)) var.size = ops[i].u.mem.base;
+    if (MIR_all_blk_type_p (var.type)) var.size = ops[i].u.mem.base;
     VARR_PUSH (MIR_var_t, scan_vars, var);
   }
 }
@@ -5581,7 +5581,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             scan_token (ctx, &t, get_string_char, unget_string_char);
             if (t.code == TC_NAME) {
               op.u.mem.disp = (MIR_disp_t) t.u.name;
-            } else if (local_p || t.code != TC_INT || !MIR_blk_type_p (type)) {
+            } else if (local_p || t.code != TC_INT || !MIR_all_blk_type_p (type)) {
               scan_error (ctx, local_p ? "wrong var" : "wrong arg");
             } else {
               op.u.mem.base = t.u.i;

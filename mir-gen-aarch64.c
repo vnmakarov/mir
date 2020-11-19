@@ -261,7 +261,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = arg_vars[i - start].type;
     } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
       type = call_insn->ops[i].u.mem.type;
-      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
+      gen_assert (MIR_all_blk_type_p (type));
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
@@ -271,9 +271,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
-    gen_assert (!MIR_blk_type_p (type) || call_insn->ops[i].mode == MIR_OP_MEM);
+    gen_assert (!MIR_all_blk_type_p (type) || call_insn->ops[i].mode == MIR_OP_MEM);
     if (type == MIR_T_RBLK && i == start) continue; /* hidden arg */
-    if (type == MIR_T_BLK && (qwords = (call_insn->ops[i].u.mem.disp + 7) / 8) <= 2) {
+    if (MIR_blk_type_p (type) && (qwords = (call_insn->ops[i].u.mem.disp + 7) / 8) <= 2) {
       if (int_arg_num + qwords > 8) blk_offset += qwords * 8;
       int_arg_num += qwords;
     } else if (get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code) == MIR_NON_HARD_REG) {
@@ -286,12 +286,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   for (size_t i = start; i < nops; i++) {
     arg_op = call_insn->ops[i];
     gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
-                || (arg_op.mode == MIR_OP_MEM && MIR_blk_type_p (arg_op.u.mem.type)));
+                || (arg_op.mode == MIR_OP_MEM && MIR_all_blk_type_p (arg_op.u.mem.type)));
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
       type = call_insn->ops[i].u.mem.type;
-      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
+      gen_assert (MIR_all_blk_type_p (type));
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
@@ -303,14 +303,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       call_insn->ops[i] = arg_op = temp_op;
     }
     gen_assert (
-      !MIR_blk_type_p (type)
+      !MIR_all_blk_type_p (type)
       || (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0));
     if (type == MIR_T_RBLK && i == start) { /* hidden arg */
       arg_reg_op = _MIR_new_hard_reg_op (ctx, R8_HARD_REG);
       gen_mov (gen_ctx, call_insn, MIR_MOV, arg_reg_op, MIR_new_reg_op (ctx, arg_op.u.mem.base));
       call_insn->ops[i] = arg_reg_op;
       continue;
-    } else if (type == MIR_T_BLK) {
+    } else if (MIR_blk_type_p (type)) {
       qwords = (arg_op.u.mem.disp + 7) / 8;
       if (qwords <= 2) {
         arg_reg = R0_HARD_REG + int_arg_num;
@@ -723,7 +723,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       arg_reg_op = _MIR_new_hard_reg_op (ctx, R8_HARD_REG);
       gen_mov (gen_ctx, anchor, MIR_MOV, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
       continue;
-    } else if (type == MIR_T_BLK && (qwords = (var.size + 7) / 8) <= 2) {
+    } else if (MIR_blk_type_p (type) && (qwords = (var.size + 7) / 8) <= 2) {
       if (int_arg_num + qwords <= 8) {
         small_aggregate_save_area += qwords * 8;
         new_insn = MIR_new_insn (ctx, MIR_SUB, MIR_new_reg_op (ctx, i + 1),

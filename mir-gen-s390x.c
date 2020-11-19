@@ -287,7 +287,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = arg_vars[i - start].type;
     } else if (arg_op.mode == MIR_OP_MEM) {
       type = arg_op.u.mem.type;
-      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
+      gen_assert (MIR_all_blk_type_p (type));
     } else {
       mode = arg_op.value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
@@ -300,7 +300,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     if (type != MIR_T_LD && i < start) continue;
     if (type == MIR_T_LD)
       call_blk_ld_value_area_size += 16;
-    else if (type == MIR_T_BLK) {
+    else if (MIR_blk_type_p (type)) {
       gen_assert (arg_op.mode == MIR_OP_MEM && arg_op.u.mem.disp >= 0 && arg_op.u.mem.index == 0);
       call_blk_ld_value_area_size += (arg_op.u.mem.disp + 7) / 8 * 8;
     }
@@ -321,14 +321,14 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   for (size_t i = 2; i < nops; i++) { /* process args and ???long double results: */
     arg_op = call_insn->ops[i];
     gen_assert (arg_op.mode == MIR_OP_REG || arg_op.mode == MIR_OP_HARD_REG
-                || (arg_op.mode == MIR_OP_MEM && MIR_blk_type_p (arg_op.u.mem.type)));
+                || (arg_op.mode == MIR_OP_MEM && MIR_all_blk_type_p (arg_op.u.mem.type)));
     if (i < start) {
       type = proto->res_types[i - 2];
     } else if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
       type = call_insn->ops[i].u.mem.type;
-      gen_assert (type == MIR_T_BLK || type == MIR_T_RBLK);
+      gen_assert (MIR_all_blk_type_p (type));
     } else {
       mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_DOUBLE
@@ -342,7 +342,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (type == MIR_T_LD || type == MIR_T_BLK) {
+    if (type == MIR_T_LD || MIR_blk_type_p (type)) {
       if (i >= start) { /* put arg value in saved blk/ld value area: */
         if (type == MIR_T_LD) {
           mem_op

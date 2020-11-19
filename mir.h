@@ -186,7 +186,8 @@ static inline int MIR_int_type_p (MIR_type_t t) {
 
 static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
 
-static inline int MIR_blk_type_p (MIR_type_t t) { return t == MIR_T_BLK || t == MIR_T_RBLK; }
+static inline int MIR_blk_type_p (MIR_type_t t) { return MIR_T_BLK == t; }
+static inline int MIR_all_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t <= MIR_T_RBLK; }
 
 #if UINTPTR_MAX == 0xffffffff
 #define MIR_PTR32 1

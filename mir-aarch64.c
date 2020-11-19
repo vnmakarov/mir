@@ -281,8 +281,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   mir_assert (sizeof (long double) == 16);
   for (size_t i = 0; i < nargs; i++) { /* caclulate offset for blk params */
     type = arg_descs[i].type;
-    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_blk_type_p (type)) {
-      if (type == MIR_T_BLK && (qwords = (arg_descs[i].size + 7) / 8) <= 2) {
+    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_all_blk_type_p (type)) {
+      if (MIR_blk_type_p (type) && (qwords = (arg_descs[i].size + 7) / 8) <= 2) {
         if (n_xregs + qwords > 8) blk_offset += qwords * 8;
         n_xregs += qwords;
       } else {
@@ -301,7 +301,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     type = arg_descs[i].type;
     scale = type == MIR_T_F ? 2 : type == MIR_T_LD ? 4 : 3;
     offset_imm = (((i + nres) * sizeof (long double) << 10)) >> scale;
-    if (type == MIR_T_BLK) {
+    if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
       if (qwords <= 2) {
         addr_reg = 13;
