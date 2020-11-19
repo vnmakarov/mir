@@ -4,7 +4,7 @@
 
 /* Long doubles (-mlong-double=128) are always passed by its address (for args and results) */
 
-/* BLK and RBLK args are always passed by address.  */
+/* BLK..BLK5 and RBLK args are always passed by address.  */
 
 #if 0 && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #error "s390x works only in BE mode"

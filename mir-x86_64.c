@@ -2,7 +2,11 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* BLK and RBLK args are always passed by address.  BLK first is copied on the caller stack.  */
+/* BLK and RBLK args are always passed by address.  BLK first is copied on the caller stack.
+   BLK2 is passed in general regs
+   BLK3 is passed in fp regs
+   BLK4 is passed in gpr and then fpr
+   BLK5 is passed in fpr and then gpr */
 
 #define VA_LIST_IS_ARRAY_P 1
 

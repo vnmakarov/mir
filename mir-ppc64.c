@@ -2,7 +2,7 @@
    Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* BLK is passed in int regs, and if the regs are not enough, the rest is passed on the stack.
+/* BLK..BLK5 is passed in int regs, and if the regs are not enough, the rest is passed on the stack.
    RBLK is always passed by address.  */
 
 #define VA_LIST_IS_ARRAY_P 1 /* one element which is a pointer to args */

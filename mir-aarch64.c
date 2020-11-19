@@ -4,7 +4,7 @@
 
 #define VA_LIST_IS_ARRAY_P 0
 
-/* Small BLK (less or equal to two quadwords) args are passed in
+/* Small BLK..BLK5 (less or equal to two quadwords) args are passed in
    *fully* regs or on stack (w/o address), otherwise it is put
    somehwere on stack and its address passed instead. First RBLK arg
    is passed in r8. Other RBLK independently of size is always passed
