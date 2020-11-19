@@ -408,9 +408,8 @@
   * `MIR_VA_ARG` takes va_list and any memory operand and returns
     address of the next argument in the 1st insn operand.  The memory
     operand type defines the type of the argument
-  * `MIR_VA_BLOCK_ARG` takes va_list and integer operand and returns
-    address of the next argument passed as a block argument
-    of the size given by the integer operand
+  * `MIR_VA_BLOCK_ARG` takes result address, va_list, and integer operand
+     and moves the next argument passed as block of give size to the result address
   * va_list operand can be memory with undefined type.  In this case
     address of the va_list is not in the memory but is the
     memory address
