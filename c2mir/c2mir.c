@@ -3388,8 +3388,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       } else if (strcmp (t->repr, "__FILE__") == 0) {
         stringify (t->pos.fname, temp_string);
         VARR_PUSH (char, temp_string, '\0');
-	t = new_node_token (c2m_ctx, t->pos, VARR_ADDR (char, temp_string),
-                            T_STR, new_str_node (c2m_ctx, N_STR, empty_str, t->pos));
+        t = new_node_token (c2m_ctx, t->pos, VARR_ADDR (char, temp_string), T_STR,
+                            new_str_node (c2m_ctx, N_STR, empty_str, t->pos));
         set_string_val (c2m_ctx, t, temp_string);
         out_token (c2m_ctx, t);
       } else if (strcmp (t->repr, "__LINE__") == 0) {
@@ -3426,10 +3426,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
             }
           }
           m->ignore_p = TRUE;
-          unget_next_pptoken (c2m_ctx,
-                              new_node_token (c2m_ctx, t->pos,
-                                              res ? "1" : "0", T_NUMBER,
-                                              new_i_node (c2m_ctx, res, t->pos)));
+          unget_next_pptoken (c2m_ctx, new_node_token (c2m_ctx, t->pos, res ? "1" : "0", T_NUMBER,
+                                                       new_i_node (c2m_ctx, res, t->pos)));
         }
       } else {
         assert (FALSE);
@@ -7768,7 +7766,8 @@ static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_nam
   NL_APPEND (list->u.ops, new_pos_node3 (c2m_ctx, N_ARR, pos, new_pos_node (c2m_ctx, N_IGNORE, pos),
                                          new_pos_node (c2m_ctx, N_LIST, pos),
                                          new_pos_node (c2m_ctx, N_IGNORE, pos)));
-  declarator = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str.str, pos), list);
+  declarator
+    = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str.str, pos), list);
   decl = new_pos_node3 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
                         new_str_node (c2m_ctx, N_STR, func_name, pos));
   NL_PREPEND (NL_EL (func_block->u.ops, 1)->u.ops, decl);
@@ -11636,12 +11635,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
         op2 = mem_to_address (c2m_ctx, op2, FALSE);
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
-	assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
+        assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
         res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, res.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
-	res = *desirable_dest;
+        res = *desirable_dest;
       } else {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
@@ -11650,12 +11649,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
                                        MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
-	if (res.mir_op.mode == MIR_OP_REG) {
-	  res = op2;
-	} else {
-	  assert (res.mir_op.mode == MIR_OP_MEM);
-	  res.mir_op.u.mem.base = op2.mir_op.u.reg;
-	}
+        if (res.mir_op.mode == MIR_OP_REG) {
+          res = op2;
+        } else {
+          assert (res.mir_op.mode == MIR_OP_MEM);
+          res.mir_op.u.mem.base = op2.mir_op.u.reg;
+        }
       }
     } else if (va_start_p) {
       op1 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
