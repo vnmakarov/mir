@@ -1499,6 +1499,10 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
     case MIR_T_P:
     case MIR_T_BLK:
+    case MIR_T_BLK2:
+    case MIR_T_BLK3:
+    case MIR_T_BLK4:
+    case MIR_T_BLK5:
     case MIR_T_RBLK: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
     default: mir_assert (FALSE);
     }
@@ -1675,12 +1679,16 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
     case MIR_T_P:
     case MIR_T_RBLK: arg_vals[i].a = va_arg (va, void *); break;
-    case MIR_T_BLK: {
+    case MIR_T_BLK:
+    case MIR_T_BLK2:
+    case MIR_T_BLK3:
+    case MIR_T_BLK4:
+    case MIR_T_BLK5: {
       arg_vals[i].a = alloca (arg_vars[i].size);
 #if defined(__PPC64__) || defined(__aarch64__)
       va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size);
 #else
-      va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size);
+          va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size);
 #endif
       break;
     }

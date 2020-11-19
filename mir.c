@@ -775,6 +775,10 @@ static const char *type_str (MIR_type_t tp) {
   case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
   case MIR_T_BLK: return "blk";
+  case MIR_T_BLK2: return "blk2";
+  case MIR_T_BLK3: return "blk3";
+  case MIR_T_BLK4: return "blk4";
+  case MIR_T_BLK5: return "blk5";
   case MIR_T_RBLK: return "rblk";
   case MIR_T_UNDEF: return "undef";
   default: return "";
@@ -5394,6 +5398,10 @@ static MIR_type_t str2type (const char *type_name) {
   if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
   if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
   if (strcmp (type_name, "blk") == 0) return MIR_T_BLK;
+  if (strcmp (type_name, "blk2") == 0) return MIR_T_BLK2;
+  if (strcmp (type_name, "blk3") == 0) return MIR_T_BLK3;
+  if (strcmp (type_name, "blk4") == 0) return MIR_T_BLK4;
+  if (strcmp (type_name, "blk5") == 0) return MIR_T_BLK5;
   if (strcmp (type_name, "rblk") == 0) return MIR_T_RBLK;
   return MIR_T_BOUND;
 }

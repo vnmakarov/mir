@@ -176,7 +176,7 @@ typedef enum {
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
   REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
-  REP3 (TYPE_EL, P, BLK, RBLK),                         /* Pointer, (return) memory block */
+  REP7 (TYPE_EL, P, BLK, BLK2, BLK3, BLK4, BLK5, RBLK), /* Pointer, (return) memory block */
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
@@ -186,7 +186,7 @@ static inline int MIR_int_type_p (MIR_type_t t) {
 
 static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
 
-static inline int MIR_blk_type_p (MIR_type_t t) { return MIR_T_BLK == t; }
+static inline int MIR_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t <= MIR_T_BLK5; }
 static inline int MIR_all_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t <= MIR_T_RBLK; }
 
 #if UINTPTR_MAX == 0xffffffff
@@ -296,9 +296,9 @@ struct MIR_insn {
 DEF_DLIST (MIR_insn_t, insn_link);
 
 typedef struct MIR_var {
-  MIR_type_t type; /* MIR_T_BLK and MIR_T_RBLK can be used only args */
+  MIR_type_t type; /* MIR_T_BLK .. MIR_T_RBLK can be used only args */
   const char *name;
-  size_t size; /* ignored for type != MIR_T_BLK, MIR_T_RBLK */
+  size_t size; /* ignored for type != [MIR_T_BLK .. MIR_T_RBLK] */
 } MIR_var_t;
 
 DEF_VARR (MIR_var_t);
@@ -641,7 +641,7 @@ extern void *_MIR_get_bend_builtin (MIR_context_t ctx);
 
 typedef struct {
   MIR_type_t type;
-  size_t size; /* used only for block arg (type == MIR_T_BLK, MIR_T_RBLK) */
+  size_t size; /* used only for block arg (type == [MIR_T_BLK ..  MIR_T_RBLK]) */
 } _MIR_arg_desc_t;
 
 extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
