@@ -84,10 +84,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s) {
     a = va->__stack;
     va->__stack = (char *) va->__stack + size;
   }
-  if (s > 2 * 8) {
-    *(void **) res = *(void **) a; /* address */
-    return;
-  }
+  if (s > 2 * 8) a = *(void **) a; /* address */
   memcpy (res, a, s);
 }
 
