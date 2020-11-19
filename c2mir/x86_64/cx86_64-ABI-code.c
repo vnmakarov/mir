@@ -357,14 +357,6 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
   MIR_type_t qword_types[MAX_QWORDS];
   int n, n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
 
-  if (n_qwords != 0) {
-    for (n = 0; n < n_qwords; n++) {
-      var.name = qword_name (c2m_ctx, name, n);
-      var.type = promote_mir_int_type (qword_types[n]);
-      VARR_PUSH (MIR_var_t, arg_vars, var);
-    }
-    return;
-  }
   /* pass aggregates on the stack and pass by value for others: */
   var.name = name;
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
@@ -375,7 +367,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
     else if (type != MIR_T_LD)
       arg_info->n_iregs++;
   } else {
-    var.type = MIR_T_BLK;
+    var.type = get_blk_type (n_qwords, qword_types);
     var.size = type_size (c2m_ctx, arg_type);
   }
   VARR_PUSH (MIR_var_t, arg_vars, var);
@@ -390,19 +382,6 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
   op_t temp;
   int n, n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
 
-  if (n_qwords != 0) {
-    assert (arg.mir_op.mode == MIR_OP_MEM);
-    arg = mem_to_address (c2m_ctx, arg, TRUE);
-    for (n = 0; n < n_qwords; n++) {
-      type = qword_types[n];
-      temp = get_new_temp (c2m_ctx, promote_mir_int_type (type));
-      MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn (ctx, tp_mov (type), temp.mir_op,
-                                     MIR_new_mem_op (ctx, type, 8 * n, arg.mir_op.u.reg, 0, 1)));
-      VARR_PUSH (MIR_op_t, call_ops, temp.mir_op);
-    }
-    return;
-  }
   /* pass aggregates on the stack and pass by value for others: */
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
     type = get_mir_type (c2m_ctx, arg_type);
@@ -414,40 +393,14 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
   } else {
     assert (arg.mir_op.mode == MIR_OP_MEM);
     arg = mem_to_address (c2m_ctx, arg, TRUE);
+    type = get_blk_type (n_qwords, qword_types);
     VARR_PUSH (MIR_op_t, call_ops,
-               MIR_new_mem_op (ctx, MIR_T_BLK, type_size (c2m_ctx, arg_type), arg.mir_op.u.reg, 0,
+               MIR_new_mem_op (ctx, type, type_size (c2m_ctx, arg_type), arg.mir_op.u.reg, 0,
                                1));
   }
 }
 
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   decl_t param_decl, target_arg_info_t *arg_info) {
-  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
-  MIR_context_t ctx = c2m_ctx->ctx;
-  MIR_type_t type;
-  reg_var_t reg_var;
-  MIR_type_t qword_types[MAX_QWORDS];
-  int i, n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
-
-  if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {
-    assert (n_qwords == 0);
-    type = get_mir_type (c2m_ctx, arg_type);
-    if (type == MIR_T_F || type == MIR_T_D)
-      arg_info->n_fregs++;
-    else if (type != MIR_T_LD)
-      arg_info->n_iregs++;
-    return FALSE;
-  }
-  if (n_qwords == 0) return FALSE;
-  for (i = 0; i < n_qwords; i++) {
-    assert (!param_decl->reg_p);
-    type = qword_types[i];
-    reg_var = get_reg_var (c2m_ctx, type, qword_name (c2m_ctx, name, i));
-    MIR_append_insn (ctx, curr_func,
-                     MIR_new_insn (ctx, tp_mov (type),
-                                   MIR_new_mem_op (ctx, type, param_decl->offset + 8 * i,
-                                                   MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
-                                   MIR_new_reg_op (ctx, reg_var.reg)));
-  }
-  return TRUE;
+  return FALSE;
 }
