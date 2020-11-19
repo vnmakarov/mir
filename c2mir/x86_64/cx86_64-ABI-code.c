@@ -326,6 +326,30 @@ static int process_aggregate_arg (c2m_ctx_t c2m_ctx, struct type *arg_type,
   return n_qwords;
 }
 
+static MIR_type_t get_blk_type (int n_qwords, MIR_type_t *qword_types) {
+  int n, n_iregs = 0, n_fregs = 0;
+
+  assert (n_qwords <= 2);
+  if (n_qwords == 0) return MIR_T_BLK;
+  for (n = 0; n < n_qwords; n++) { /* start from the last qword */
+    switch (qword_types[n]) {
+    case MIR_T_I8:
+    case MIR_T_I16:
+    case MIR_T_I32:
+    case MIR_T_I64: n_iregs++; break;
+    case MIR_T_F:
+    case MIR_T_D: n_fregs++; break;
+    case X87UP_CLASS:
+    case MIR_T_LD: return MIR_T_BLK;
+    default: assert (FALSE);
+    }
+  }
+  if (n_iregs == n_qwords) return MIR_T_BLK2;
+  if (n_fregs == n_qwords) return MIR_T_BLK3;
+  if (qword_types[0] == MIR_T_F || qword_types[0] == MIR_T_D) return MIR_T_BLK5;
+  return MIR_T_BLK4;
+}
+
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
   MIR_var_t var;
