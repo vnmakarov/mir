@@ -166,10 +166,10 @@ int main (int argc, char *argv[], char *env[]) {
                 (MIR_val_t){.a = (void *) env});
     res = val.i;
   } else if (gen_p) {
-    MIR_gen_init (context);
-    if (gen_debug_p) MIR_gen_set_debug_file (context, stderr);
+    MIR_gen_init (context, 1);
+    if (gen_debug_p) MIR_gen_set_debug_file (context, 1, stderr);
     MIR_link (context, MIR_set_gen_interface, import_resolver);
-    fun_addr = MIR_gen (context, main_func);
+    fun_addr = MIR_gen (context, 1, main_func);
     res = fun_addr (argc, argv, env);
     MIR_gen_finish (context);
   }

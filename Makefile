@@ -34,7 +34,7 @@ OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
 Q=@
 
 L2M-TEST=
-ifneq ($(shell test -f /usr/include/llvm-c/Core.h|echo 1), 1)
+ifneq ($(shell test -f /usr/include/llvm-c/Core.h||echo 1), 1)
 OBJS += l2m
 L2M-TEST += l2m-test
 endif
