@@ -1,6 +1,13 @@
 void printf (const char *fmt, ...);
 void abort (void);
+#ifdef _WIN32
+/* limitation for alloca */
+#define SieveSize 16384
+#define Expected 1900
+#else
 #define SieveSize 819000
+#define Expected 65333
+#endif
 #define N_ITER 1000
 int sieve (int n) {
   long i, k, count, iter, prime;
@@ -22,6 +29,6 @@ int main (void) {
   int n = sieve (N_ITER);
 
   printf ("%d iterations of sieve for %d: result = %d\n", N_ITER, SieveSize, n);
-  if (n != 65333) abort ();
+  if (n != Expected) abort ();
   return 0;
 }
