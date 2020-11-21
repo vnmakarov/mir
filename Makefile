@@ -30,7 +30,7 @@ endif
 MIR_DEPS=mir.h mir-varr.h mir-dlist.h mir-htab.h mir-hash.h mir-interp.c mir-x86_64.c
 MIR_GEN_DEPS=$(MIR_DEPS) mir-bitmap.h \
              mir-gen-x86_64.c mir-gen-aarch64.c mir-gen-ppc64.c mir-gen-s390x.c
-OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab
+OBJS=mir.o mir-gen.o c2m m2b b2m b2ctab m2libgccjit
 Q=@
 
 L2M-TEST=
@@ -57,6 +57,14 @@ mir-gen.o: mir-gen.c $(MIR_GEN_DEPS)
 
 c2m: mir.o mir-gen.o c2mir/c2mir.h c2mir/mirc.h c2mir/c2mir.c c2mir/c2mir-driver.c
 	$(CC) $(CFLAGS) -I. mir-gen.o c2mir/c2mir.c c2mir/c2mir-driver.c mir.o $(MIR_LIBS) $(THREAD_LIB) -o $@
+
+m2libgccjit: m2libgccjit.cc mir.o
+	g++ -lgccjit -Wall -g m2libgccjit.cc mir.o -o $@
+
+run-libgccjit-test: m2libgccjit c2m
+	./c2m c-tests/andrewchambers_c/0004-operators1.c
+	./m2libgccjit a.bmir -o gccjit.out
+	./gccjit.out
 
 llvm2mir.o: llvm2mir/llvm2mir.c $(MIR_DEPS) mir.c mir-gen.h mir-gen.c
 	$(CC) -I. -c $(CFLAGS) -o $@ $<

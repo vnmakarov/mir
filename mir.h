@@ -13,6 +13,10 @@
 #include "mir-varr.h"
 #include "mir-htab.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 #ifdef NDEBUG
 static inline int mir_assert (int cond) { return 0 && cond; }
 #else
@@ -98,12 +102,12 @@ typedef pthread_cond_t mir_cond_t;
 
 #define INSN_EL(i) MIR_##i
 
-/* The most MIR insns have destination operand and one or two source
-   operands.  The destination can be ony a register or memory.
+/* The majority of MIR insns have a destination operand and one or two source
+   operands.  The destination can be only be a register or memory.
 
    There are additional constraints on insn operands:
 
-   o A register in porgram can contain only one type values: integer,
+   o A register in program can contain only one type values: integer,
      float, double, or long double.
    o Operand types should be what the insn expects */
 typedef enum {
@@ -646,5 +650,9 @@ extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif /* #ifndef MIR_H */
