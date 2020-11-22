@@ -3788,7 +3788,8 @@ typedef enum {
   REP3 (TAG_EL, MEM_DISP_INDEX, MEM_BASE_INDEX, MEM_DISP_BASE_INDEX),
   /* MIR types. The same order as MIR types: */
   REP8 (TAG_EL, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64),
-  REP7 (TAG_EL, TF, TD, TP, TV, TBLOCK, TRBLOCK, EOI),
+  REP8 (TAG_EL, TF, TD, TP, TV, TBLOCK, TBLOCK2, TBLOCK3, TBLOCK4),
+  REP3 (TAG_EL, TBLOCK5, TRBLOCK, EOI),
   TAG_EL (EOFILE), /* end of insn with variable number operands (e.g. a call) or end of file */
   /* unsigned integer 0..127 is kept in one byte.  The most significant bit of the byte is 1: */
   U0_MASK = 0x7f,
@@ -4512,7 +4513,8 @@ static bin_tag_t read_token (MIR_context_t ctx, token_attr_t *attr) {
     REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOFILE)
     break;
     REP8 (TAG_CASE, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64)
-    REP6 (TAG_CASE, TF, TD, TP, TV, TBLOCK, TRBLOCK)
+    REP8 (TAG_CASE, TF, TD, TP, TV, TBLOCK, TBLOCK2, TBLOCK3, TBLOCK4)
+    REP2 (TAG_CASE, TBLOCK5, TRBLOCK)
     attr->t = (MIR_type_t) (c - TAG_TI8) + MIR_T_I8;
     break;
   default: MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong tag %d", c);
