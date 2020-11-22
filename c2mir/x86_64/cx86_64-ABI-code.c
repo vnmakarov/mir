@@ -350,6 +350,13 @@ static MIR_type_t get_blk_type (int n_qwords, MIR_type_t *qword_types) {
   return MIR_T_BLK4;
 }
 
+static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+  MIR_type_t qword_types[MAX_QWORDS];
+  int n_qwords = classify_arg (c2m_ctx, arg_type, qword_types, FALSE);
+  assert (arg_type->mode == TM_STRUCT || arg_type->mode == TM_UNION);
+  return get_blk_type (n_qwords, qword_types);
+}
+
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
   MIR_var_t var;
@@ -395,8 +402,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
     arg = mem_to_address (c2m_ctx, arg, TRUE);
     type = get_blk_type (n_qwords, qword_types);
     VARR_PUSH (MIR_op_t, call_ops,
-               MIR_new_mem_op (ctx, type, type_size (c2m_ctx, arg_type), arg.mir_op.u.reg, 0,
-                               1));
+               MIR_new_mem_op (ctx, type, type_size (c2m_ctx, arg_type), arg.mir_op.u.reg, 0, 1));
   }
 }
 
