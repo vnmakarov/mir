@@ -128,10 +128,10 @@ int _MIR_reserved_name_p (MIR_context_t ctx, const char *name) {
 struct insn_desc {
   MIR_insn_code_t code;
   const char *name;
-  unsigned op_modes[5];
+  unsigned char op_modes[5];
 };
 
-#define OUTPUT_FLAG (1 << 30)
+#define OUTPUT_FLAG (1 << 7)
 
 static const struct insn_desc insn_descs[] = {
   {MIR_MOV, "mov", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_BOUND}},
@@ -596,6 +596,7 @@ static void parallel_error (MIR_context_t ctx, const char *err_message) {
 MIR_context_t MIR_init (void) {
   MIR_context_t ctx;
 
+  mir_assert (MIR_OP_BOUND < OUTPUT_FLAG);
   if ((ctx = malloc (sizeof (struct MIR_context))) == NULL)
     default_error (MIR_alloc_error, "Not enough memory for ctx");
   ctx->string_ctx = NULL;
