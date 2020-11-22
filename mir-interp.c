@@ -1309,7 +1309,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     int64_t *r, va, size;
 
     r = get_3iops (bp, ops, &va, &size);
-    va_block_arg_builtin ((void *) *r, (void *) va, size);
+    va_block_arg_builtin ((void *) *r, (void *) va, size, MIR_T_BLK);
     END_INSN;
   }
   SCASE (MIR_VA_START, 1, va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a));
@@ -1686,9 +1686,9 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_BLK5: {
       arg_vals[i].a = alloca (arg_vars[i].size);
 #if defined(__PPC64__) || defined(__aarch64__)
-      va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size);
+      va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size, type);
 #else
-          va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size);
+          va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size, type);
 #endif
       break;
     }

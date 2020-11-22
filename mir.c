@@ -128,7 +128,7 @@ int _MIR_reserved_name_p (MIR_context_t ctx, const char *name) {
 struct insn_desc {
   MIR_insn_code_t code;
   const char *name;
-  unsigned op_modes[4];
+  unsigned op_modes[5];
 };
 
 #define OUTPUT_FLAG (1 << 30)
@@ -299,7 +299,9 @@ static const struct insn_desc insn_descs[] = {
   {MIR_BSTART, "bstart", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_BOUND}},
   {MIR_BEND, "bend", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_ARG, "va_arg", {MIR_OP_INT | OUTPUT_FLAG, MIR_OP_INT, MIR_OP_UNDEF, MIR_OP_BOUND}},
-  {MIR_VA_BLOCK_ARG, "va_block_arg", {MIR_OP_INT, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_VA_BLOCK_ARG,
+   "va_block_arg",
+   {MIR_OP_INT, MIR_OP_INT, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_START, "va_start", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LABEL, "label", {MIR_OP_BOUND}},

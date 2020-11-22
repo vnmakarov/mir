@@ -6,7 +6,8 @@
    BLK2 is passed in general regs
    BLK3 is passed in fp regs
    BLK4 is passed in gpr and then fpr
-   BLK5 is passed in fpr and then gpr */
+   BLK5 is passed in fpr and then gpr
+   If there are no enough regs, they work as BLK. */
 
 #define VA_LIST_IS_ARRAY_P 1
 
@@ -57,11 +58,54 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
   struct x86_64_va_list *va = p;
+  MIR_type_t type = t;
+  size_t size = ((s + 7) / 8) * 8;
   void *a = va->overflow_arg_area;
+  union {
+    uint64_t i;
+    double d;
+  } u[2];
+
+  switch (type) {
+  case MIR_T_BLK2:
+    if (va->gp_offset + size > 48) break;
+    u[0].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
+    va->gp_offset += 8;
+    if (size > 8) {
+      u[1].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
+      va->gp_offset += 8;
+    }
+    memcpy (res, &u, s);
+    return;
+  case MIR_T_BLK3:
+    u[0].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
+    va->fp_offset += 16;
+    if (size > 8) {
+      u[1].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
+      va->fp_offset += 16;
+    }
+    memcpy (res, &u, s);
+    return;
+  case MIR_T_BLK4:
+  case MIR_T_BLK5:
+    if (va->fp_offset > 160 || va->gp_offset > 40) break;
+    if (type == MIR_T_BLK4) {
+      u[0].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
+      u[1].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
+    } else {
+      u[0].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
+      u[1].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
+    }
+    va->fp_offset += 8;
+    va->gp_offset += 8;
+    memcpy (res, &u, s);
+    return;
+  default: break;
+  }
   memcpy (res, a, s);
-  va->overflow_arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  va->overflow_arg_area += size / 8;
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {

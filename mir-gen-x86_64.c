@@ -197,7 +197,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
-  size_t nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
+  size_t size, nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
   size_t int_arg_num = 0, fp_arg_num = 0, xmm_args = 0, mem_size = spill_space_size;
   MIR_type_t type, mem_type;
   MIR_op_mode_t mode;
@@ -251,15 +251,60 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
     }
-    if (MIR_blk_type_p (type)) { /* put block arg on the stack */
-      MIR_insn_t load_insn;
-      size_t size, disp;
-      int first_p;
-
+    size = 0;
+    if (MIR_blk_type_p (type)) {
       gen_assert (arg_op.mode == MIR_OP_MEM);
       size = (arg_op.u.mem.disp + 7) / 8 * 8;
       gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st after simplification */
-      if (size > 0 && size <= 2 * 8) {     /* upto 2 moves */
+    }
+    if ((type == MIR_T_BLK2 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+         && (size <= 8 || get_int_arg_reg (int_arg_num + 1) != MIR_NON_HARD_REG))
+        || (type == MIR_T_BLK3 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
+            && (size <= 8 || get_fp_arg_reg (fp_arg_num + 1) != MIR_NON_HARD_REG))) {
+      /* all is passed in gprs or fprs */
+      MIR_type_t mov_type = type == MIR_T_BLK2 ? MIR_T_I64 : MIR_T_D;
+      MIR_insn_code_t mov_code;
+      MIR_reg_t reg2, reg1 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code);
+
+      assert (size <= 16);
+      new_insn = MIR_new_insn (ctx, mov_code, _MIR_new_hard_reg_op (ctx, reg1),
+                               MIR_new_mem_op (ctx, mov_type, 0, arg_op.u.mem.base, 0, 1));
+      gen_add_insn_before (gen_ctx, call_insn, new_insn);
+      setup_call_hard_reg_args (gen_ctx, call_insn, reg1);
+      call_insn->ops[i].u.mem.base = 0; /* not used anymore */
+      if (size > 8) {
+        reg2 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code);
+        new_insn = MIR_new_insn (ctx, mov_code, _MIR_new_hard_reg_op (ctx, reg2),
+                                 MIR_new_mem_op (ctx, mov_type, 8, arg_op.u.mem.base, 0, 1));
+        gen_add_insn_before (gen_ctx, call_insn, new_insn);
+        setup_call_hard_reg_args (gen_ctx, call_insn, reg2);
+      }
+    } else if ((type == MIR_T_BLK4 || type == MIR_T_BLK5)
+               && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+               && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG) {
+      /* gpr and then fpr or fpr and then gpr */
+      MIR_type_t mov_type1 = type == MIR_T_BLK4 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type2 = type == MIR_T_BLK4 ? MIR_T_D : MIR_T_I64;
+      MIR_insn_code_t mov_code1, mov_code2;
+      MIR_reg_t reg1 = get_arg_reg (mov_type1, &int_arg_num, &fp_arg_num, &mov_code1);
+      MIR_reg_t reg2 = get_arg_reg (mov_type2, &int_arg_num, &fp_arg_num, &mov_code2);
+
+      assert (size > 8 && size <= 16);
+      new_insn = MIR_new_insn (ctx, mov_code1, _MIR_new_hard_reg_op (ctx, reg1),
+                               MIR_new_mem_op (ctx, mov_type1, 0, arg_op.u.mem.base, 0, 1));
+      setup_call_hard_reg_args (gen_ctx, call_insn, reg1);
+      call_insn->ops[i].u.mem.base = 0; /* not used anymore */
+      gen_add_insn_before (gen_ctx, call_insn, new_insn);
+      new_insn = MIR_new_insn (ctx, mov_code2, _MIR_new_hard_reg_op (ctx, reg2),
+                               MIR_new_mem_op (ctx, mov_type2, 8, arg_op.u.mem.base, 0, 1));
+      gen_add_insn_before (gen_ctx, call_insn, new_insn);
+      setup_call_hard_reg_args (gen_ctx, call_insn, reg2);
+    } else if (MIR_blk_type_p (type)) { /* put block arg on the stack */
+      MIR_insn_t load_insn;
+      size_t disp;
+      int first_p;
+
+      if (size > 0 && size <= 2 * 8) { /* upto 2 moves */
         disp = 0;
         first_p = TRUE;
         temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
@@ -339,7 +384,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (proto->vararg_p && type == MIR_T_D) {
         gen_assert (int_arg_num > 0 && int_arg_num <= 4);
         arg_reg = get_int_arg_reg (int_arg_num - 1);
-        setup_call_hard_reg_args (ctx, call_insn, arg_reg);
+        setup_call_hard_reg_args (gen_ctx, call_insn, arg_reg);
         /* mir does not support moving fp to int regs directly, spill and load them instead */
         mem_op = _MIR_new_hard_reg_mem_op (ctx, MIR_T_D, 8, SP_HARD_REG, MIR_NON_HARD_REG, 1);
         new_insn = MIR_new_insn (ctx, MIR_DMOV, mem_op, arg_op);
@@ -493,8 +538,9 @@ static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pr
     *func_import_item = _MIR_builtin_func (ctx, curr_func_item->module, VA_ARG, va_arg_builtin);
     break;
   case MIR_VA_BLOCK_ARG:
-    *proto_item = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 0, NULL, 3,
-                                      MIR_T_I64, "res", MIR_T_I64, "va", MIR_T_I64, "size");
+    *proto_item
+      = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 0, NULL, 4, MIR_T_I64,
+                            "res", MIR_T_I64, "va", MIR_T_I64, "size", MIR_T_I64, "t");
     *func_import_item
       = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     break;
@@ -567,6 +613,11 @@ struct target_ctx {
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
 
+static void prepend_insn (gen_ctx_t gen_ctx, MIR_insn_t new_insn) {
+  MIR_prepend_insn (gen_ctx->ctx, curr_func_item, new_insn);
+  create_new_bb_insns (gen_ctx, NULL, DLIST_NEXT (MIR_insn_t, new_insn), NULL);
+}
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
@@ -575,7 +626,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_insn_t insn, next_insn, new_insn;
   MIR_reg_t ret_reg, arg_reg;
   MIR_op_t ret_reg_op, arg_reg_op, mem_op;
-  size_t i, int_arg_num = 0, fp_arg_num = 0, mem_size = spill_space_size;
+  size_t i, blk_size, int_arg_num = 0, fp_arg_num = 0, mem_size = spill_space_size;
 
   assert (curr_func_item->item_type == MIR_func_item);
   func = curr_func_item->u.func;
@@ -585,22 +636,62 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     /* Argument extensions is already done in simplify */
     /* Prologue: generate arg_var = hard_reg|stack mem|stack addr ... */
     type = VARR_GET (MIR_var_t, func->vars, i).type;
-    if (MIR_blk_type_p (type)) {
+    blk_size = MIR_blk_type_p (type) ? (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8 * 8 : 0;
+    if ((type == MIR_T_BLK2 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+         && (blk_size <= 8 || get_int_arg_reg (int_arg_num + 1) != MIR_NON_HARD_REG))
+        || (type == MIR_T_BLK3 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
+            && (blk_size <= 8 || get_fp_arg_reg (fp_arg_num + 1) != MIR_NON_HARD_REG))) {
+      /* all is passed in gprs or fprs */
+      MIR_type_t mov_type = type == MIR_T_BLK2 ? MIR_T_I64 : MIR_T_D;
+      MIR_insn_code_t mov_code1, mov_code2;
+      MIR_reg_t reg2, reg1 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code1);
+
+      assert (blk_size <= 16);
+      if (blk_size > 8) {
+        reg2 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code2);
+        new_insn = MIR_new_insn (ctx, mov_code1, MIR_new_mem_op (ctx, mov_type, 8, i + 1, 0, 1),
+                                 _MIR_new_hard_reg_op (ctx, reg2));
+        prepend_insn (gen_ctx, new_insn);
+      }
+      new_insn = MIR_new_insn (ctx, mov_code1, MIR_new_mem_op (ctx, mov_type, 0, i + 1, 0, 1),
+                               _MIR_new_hard_reg_op (ctx, reg1));
+      prepend_insn (gen_ctx, new_insn);
+      new_insn = MIR_new_insn (ctx, MIR_ALLOCA, MIR_new_reg_op (ctx, i + 1),
+                               MIR_new_int_op (ctx, blk_size));
+      prepend_insn (gen_ctx, new_insn);
+    } else if ((type == MIR_T_BLK4 || type == MIR_T_BLK5)
+               && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+               && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG) {
+      /* gpr and then fpr or fpr and then gpr */
+      MIR_type_t mov_type1 = type == MIR_T_BLK4 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type2 = type == MIR_T_BLK4 ? MIR_T_D : MIR_T_I64;
+      MIR_insn_code_t mov_code1, mov_code2;
+      MIR_reg_t reg1 = get_arg_reg (mov_type1, &int_arg_num, &fp_arg_num, &mov_code1);
+      MIR_reg_t reg2 = get_arg_reg (mov_type2, &int_arg_num, &fp_arg_num, &mov_code2);
+
+      assert (blk_size > 8 && blk_size <= 16);
+      new_insn = MIR_new_insn (ctx, mov_code2, MIR_new_mem_op (ctx, mov_type2, 8, i + 1, 0, 1),
+                               _MIR_new_hard_reg_op (ctx, reg2));
+      prepend_insn (gen_ctx, new_insn);
+      new_insn = MIR_new_insn (ctx, mov_code1, MIR_new_mem_op (ctx, mov_type1, 0, i + 1, 0, 1),
+                               _MIR_new_hard_reg_op (ctx, reg1));
+      prepend_insn (gen_ctx, new_insn);
+      new_insn = MIR_new_insn (ctx, MIR_ALLOCA, MIR_new_reg_op (ctx, i + 1),
+                               MIR_new_int_op (ctx, blk_size));
+      prepend_insn (gen_ctx, new_insn);
+    } else if (MIR_blk_type_p (type)) {
       block_arg_func_p = TRUE;
       new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
                                _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, mem_size + 8 /* ret */
                                                       + start_sp_from_bp_offset));
-      MIR_prepend_insn (ctx, curr_func_item, new_insn);
-      next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-      create_new_bb_insns (gen_ctx, NULL, next_insn, NULL);
-      mem_size += (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8 * 8;
+      prepend_insn (gen_ctx, new_insn);
+      mem_size += blk_size;
     } else if ((arg_reg = get_arg_reg (type, &int_arg_num, &fp_arg_num, &new_insn_code))
                != MIR_NON_HARD_REG) {
       arg_reg_op = _MIR_new_hard_reg_op (ctx, arg_reg);
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), arg_reg_op);
-      MIR_prepend_insn (ctx, curr_func_item, new_insn);
-      create_new_bb_insns (gen_ctx, NULL, DLIST_NEXT (MIR_insn_t, new_insn), NULL);
+      prepend_insn (gen_ctx, new_insn);
     } else {
       /* arg is on the stack */
       block_arg_func_p = TRUE;
@@ -613,9 +704,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                            + start_sp_from_bp_offset,
                                          FP_HARD_REG, MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (ctx, new_insn_code, MIR_new_reg_op (ctx, i + 1), mem_op);
-      MIR_prepend_insn (ctx, curr_func_item, new_insn);
-      next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-      create_new_bb_insns (gen_ctx, NULL, next_insn, NULL);
+      prepend_insn (gen_ctx, new_insn);
       mem_size += type == MIR_T_LD ? 16 : 8;
     }
   }
@@ -714,7 +803,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
          mov func_reg, func ref; [mov reg3, type;] call proto, func_reg, res_reg, va_reg,
          reg3 */
       MIR_item_t proto_item, func_import_item;
-      MIR_op_t ops[5], func_reg_op, reg_op3;
+      MIR_op_t ops[6], func_reg_op, reg_op3;
       MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], op3 = insn->ops[2];
 
       get_builtin (gen_ctx, code, &proto_item, &func_import_item);
@@ -737,7 +826,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       ops[2] = res_reg_op;
       ops[3] = va_reg_op;
       ops[4] = op3;
-      new_insn = MIR_new_insn_arr (ctx, MIR_CALL, 5, ops);
+      if (code == MIR_VA_BLOCK_ARG) ops[5] = insn->ops[3];
+      new_insn = MIR_new_insn_arr (ctx, MIR_CALL, code == MIR_VA_ARG ? 5 : 6, ops);
       gen_add_insn_before (gen_ctx, insn, new_insn);
 #else
       MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], mem_op = insn->ops[2], treg_op;
