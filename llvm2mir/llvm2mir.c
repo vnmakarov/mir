@@ -257,7 +257,7 @@ static const char *get_func_name (LLVMValueRef op) {
 static int intrinsic_p (const char *name) { return strncmp (name, "llvm.", strlen ("llvm.")) == 0; }
 
 static int ignored_intrinsic_p (const char *name) {
-  static const char *ignored_prefix[] = {"llvm.lifetime."};
+  static const char *ignored_prefix[] = {"llvm.lifetime.", "llvm.dbg."};
 
   for (unsigned i = 0; i < sizeof (ignored_prefix) / sizeof (char *); i++)
     if (strncmp (name, ignored_prefix[i], strlen (ignored_prefix[i])) == 0) return TRUE;
