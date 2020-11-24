@@ -526,7 +526,7 @@ static void send_to_compile (input_t *input) {
   if (input == NULL) { /* finish compilation */
 #if MIR_PARALLEL_GEN
     signal_compilers_to_finish (FALSE);
-    for (int i = 0; i < threads_num; i++) pthread_join (compilers[i].compile_thread, NULL);
+    for (int i = 0; i < threads_num; i++) mir_thread_join (compilers[i].compile_thread, NULL);
 #endif
     return;
   }
