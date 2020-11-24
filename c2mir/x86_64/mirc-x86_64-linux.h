@@ -92,6 +92,7 @@ static char x86_64_mirc[]
     "#define __unix__ 1\n"
 #elif defined(__APPLE__)
     "#define __APPLE__ 1\n"
+    "#define __DARWIN_OS_INLINE static inline\n"
     "typedef struct {\n"
     "  unsigned int gp_offset;\n"
     "  unsigned int fp_offset;\n"
