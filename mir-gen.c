@@ -1782,7 +1782,7 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_type_t type = MIR_reg_type (ctx, reg, func);
   const char *name = MIR_reg_name (ctx, reg, func);
-  char ind_str[20];
+  char ind_str[30];
   MIR_reg_t new_reg;
 
   VARR_TRUNC (char, reg_name, 0);
