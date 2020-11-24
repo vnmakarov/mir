@@ -233,6 +233,17 @@ static void gen_mov (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t reg, 
   addr[2] |= (reg & 7) << 3;
 }
 
+static void gen_mov2 (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t reg, int ld_p) {
+  static const uint8_t ld_gp_reg[] = {0x49, 0x8b, 0x44, 0x24, 0 /* mov <offset>(%r12),%reg */};
+  static const uint8_t st_gp_reg[] = {0x49, 0x89, 0x44, 0x24, 0 /* mov %reg,<offset>(%r12) */};
+  uint8_t *addr = push_insns (insn_varr, ld_p ? ld_gp_reg : st_gp_reg,
+                              ld_p ? sizeof (ld_gp_reg) : sizeof (st_gp_reg));
+  addr[4] = offset;
+  assert (reg <= 15);
+  addr[0] |= (reg >> 1) & 4;
+  addr[2] |= (reg & 7) << 3;
+}
+
 static void gen_blk_mov (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t addr_offset,
                          uint32_t qwords) {
   static const uint8_t blk_mov_pat[] = {
@@ -264,6 +275,20 @@ static void gen_movxmm (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t re
   assert (reg <= 7);
   addr[3] |= reg << 3;
   if (b32_p) addr[0] |= 1;
+}
+
+static void gen_movxmm2 (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t reg, int ld_p) {
+  static const uint8_t ld_xmm_reg_pat[] = {
+    0xf2, 0x41, 0x0f, 0x10, 0x44, 0x24, 0 /* movsd <offset>(%r12),%xmm */
+  };
+  static const uint8_t st_xmm_reg_pat[] = {
+    0xf2, 0x41, 0x0f, 0x11, 0x44, 0x24, 0 /* movsd %xmm, <offset>(%r12) */
+  };
+  uint8_t *addr = push_insns (insn_varr, ld_p ? ld_xmm_reg_pat : st_xmm_reg_pat,
+                              ld_p ? sizeof (ld_xmm_reg_pat) : sizeof (st_xmm_reg_pat));
+  addr[6] = offset;
+  assert (reg <= 7);
+  addr[4] |= reg << 3;
 }
 
 static void gen_ldst (VARR (uint8_t) * insn_varr, uint32_t sp_offset, uint32_t src_offset,
