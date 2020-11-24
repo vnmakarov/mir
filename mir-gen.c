@@ -2071,7 +2071,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
       }
       w = get_ext_params (insn->code, &sign_p);
       if (w != 0 && insn->ops[1].mode == MIR_OP_REG && var_is_reg_p (insn->ops[1].u.reg)) {
-        se = insn->ops[op_num].data;
+        se = insn->ops[1].data;
         def_insn = se->def->insn;
         w2 = get_ext_params (def_insn->code, &sign2_p);
         if (w2 != 0 && sign_p == sign2_p && w2 <= w
