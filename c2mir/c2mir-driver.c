@@ -482,7 +482,13 @@ static void init_compilers (void) {
     compiler->ctx = MIR_init ();
     c2mir_init (compiler->ctx);
 #if MIR_PARALLEL_GEN
-    if (mir_thread_create (&compiler->compile_thread, NULL, compile, compiler) != 0) {
+    mir_thread_attr_t attr;
+    if (mir_thread_attr_init (&attr) != 0
+        || mir_thread_attr_setstacksize (&attr, 2 * 1024 * 1024) != 0) {
+      fprintf (stderr, "can not increase c2m thread stack size -- bye!\n");
+      exit (1);
+    }
+    if (mir_thread_create (&compiler->compile_thread, &attr, compile, compiler) != 0) {
       fprintf (stderr, "can not create a c2m thread -- bye!\n");
       exit (1);
     }
