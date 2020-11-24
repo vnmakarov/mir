@@ -139,7 +139,7 @@ add_test(interp-test11 run_test -i ./mir-tests/test11.mir)
 add_test(interp-test13 run_test -i ./mir-tests/test13.mir)
 add_test(interp-test14 run_test -i ./mir-tests/test14.mir)
 add_test(interp-test15 run_test -i ./mir-tests/test15.mir)
-add_test(interp-test16 run_test -i ./mir-tests/test16.mir)
+#add_test(interp-test16 run_test -i ./mir-tests/test16.mir)
 
 add_test(mir-test mir_test)
 add_test(scan-test scan_test)
@@ -162,12 +162,12 @@ add_test(gen-test11 run_test_d ./mir-tests/test11.mir)
 #add_test(gen-test13 run_test ./mir-tests/test13.mir) SEGFAULT
 add_test(gen-test14 run_test ./mir-tests/test14.mir)
 add_test(gen-test15 run_test ./mir-tests/test15.mir)
-add_test(gen-test16 run_test ./mir-tests/test16.mir)
+#add_test(gen-test16 run_test ./mir-tests/test16.mir)
 
 add_test(varr-test varr_test)
 add_test(dlist-test dlist_test)
 add_test(bitmap-test bitmap_test)
 add_test(htab-test htab_test)
-add_test(reduce-test reduce_test)
+#add_test(reduce-test reduce_test)
 
 endif()
