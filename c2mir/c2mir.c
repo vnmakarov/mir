@@ -10206,7 +10206,6 @@ static int simple_return_by_addr_p (c2m_ctx_t c2m_ctx, struct type *ret_type) {
 static void MIR_UNUSED simple_add_res_proto (c2m_ctx_t c2m_ctx, struct type *ret_type,
                                              void *arg_info, VARR (MIR_type_t) * res_types,
                                              VARR (MIR_var_t) * arg_vars) {
-  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_var_t var;
 
   if (void_type_p (ret_type)) return;

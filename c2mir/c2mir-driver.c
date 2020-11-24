@@ -526,9 +526,6 @@ static void signal_compilers_to_finish (int cancel_p) {
 }
 
 static void send_to_compile (input_t *input) {
-  const char *base_name;
-  FILE *f;
-
   if (input == NULL) { /* finish compilation */
 #if MIR_PARALLEL_GEN
     signal_compilers_to_finish (FALSE);
@@ -537,6 +534,9 @@ static void send_to_compile (input_t *input) {
     return;
   }
 #if !MIR_PARALLEL_GEN
+  const char *base_name;
+  FILE *f;
+
   f = (!options.asm_p && !options.object_p
          ? NULL
          : get_output_file (&base_name, input->input_name, options.asm_p ? ".mir" : ".bmir"));
@@ -568,7 +568,7 @@ static int module_cmp (const void *a1, const void *a2) {
 DEF_VARR (MIR_module_t);
 
 static void sort_modules (MIR_context_t ctx) {
-  MIR_module_t module, next_module;
+  MIR_module_t module;
   DLIST (MIR_module_t) *list = MIR_get_module_list (ctx);
   VARR (MIR_module_t) * modules;
 

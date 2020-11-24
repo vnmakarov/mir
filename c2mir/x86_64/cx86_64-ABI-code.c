@@ -112,16 +112,6 @@ static void target_init_arg_vars (c2m_ctx_t c2m_ctx, target_arg_info_t *arg_info
   arg_info->n_iregs = arg_info->n_fregs = 0;
 }
 
-static const char *qword_name (c2m_ctx_t c2m_ctx, const char *name, int num) {
-  char prefix[50];
-
-  sprintf (prefix, "Q%u_", num);
-  VARR_TRUNC (char, temp_string, 0);
-  add_to_temp_string (c2m_ctx, prefix);
-  add_to_temp_string (c2m_ctx, name);
-  return uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-}
-
 static void update_last_qword_type (c2m_ctx_t c2m_ctx, struct type *type,
                                     MIR_type_t qword_types[MAX_QWORDS], int n) {
   size_t last_size, size = type_size (c2m_ctx, type);
@@ -362,7 +352,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
   MIR_var_t var;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
-  int n, n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
+  int n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
 
   /* pass aggregates on the stack and pass by value for others: */
   var.name = name;
@@ -386,8 +376,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
   MIR_type_t qword_types[MAX_QWORDS];
-  op_t temp;
-  int n, n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
+  int n_qwords = process_aggregate_arg (c2m_ctx, arg_type, arg_info, qword_types);
 
   /* pass aggregates on the stack and pass by value for others: */
   if (arg_type->mode != TM_STRUCT && arg_type->mode != TM_UNION) {

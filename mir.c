@@ -523,7 +523,7 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
   case MIR_data_item: return item->u.data->name;
   case MIR_ref_data_item: return item->u.ref_data->name;
   case MIR_expr_data_item: return item->u.expr_data->name;
-  default: mir_assert (FALSE);
+  default: mir_assert (FALSE); return NULL;
   }
 }
 
@@ -2387,7 +2387,6 @@ void MIR_change_module_ctx (MIR_context_t old_ctx, MIR_module_t m, MIR_context_t
     if (item->item_type == MIR_proto_item) {
       change_var_names (new_ctx, item->u.proto->args);
     } else if (item->item_type == MIR_func_item) {
-      func_regs_t func_regs = item->u.func->internal;
       change_var_names (new_ctx, item->u.func->vars);
       for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
            insn = DLIST_NEXT (MIR_insn_t, insn))

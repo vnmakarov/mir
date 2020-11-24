@@ -2278,7 +2278,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e;
       MIR_op_t op;
-      int out_p, add_def_p;
+      int add_def_p;
       MIR_type_t type;
       MIR_insn_code_t move_code;
       MIR_insn_t new_insn, def_insn, insn = bb_insn->insn;
@@ -2310,6 +2310,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       op = MIR_new_reg_op (ctx, temp_reg);
       type = MIR_reg_type (ctx, temp_reg, curr_func_item->u.func);
 #ifndef NDEBUG
+      int out_p;
       MIR_insn_op_mode (ctx, insn, 0, &out_p); /* result here is always 0-th op */
       gen_assert (out_p);
 #endif
@@ -4522,14 +4523,13 @@ static MIR_insn_t get_uptodate_def_insn (gen_ctx_t gen_ctx, int hr) {
 
 static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_insn_code_t code, new_code;
   bb_insn_t bb_insn = *bb_insn_ref;
-  MIR_insn_t insn = bb_insn->insn, def_insn, new_insn;
+  MIR_insn_t insn = bb_insn->insn, def_insn;
   size_t i, nops = insn->nops;
   int out_p, insn_change_p, insn_hr_change_p, op_change_p, mem_reg_change_p, success_p;
   MIR_op_t *op_ref, *src_op_ref, *src_op2_ref, saved_op;
   MIR_reg_t hr, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int64_t scale, sh;
+  int64_t scale;
 
   if (nops == 0) return FALSE;
   VARR_TRUNC (MIR_op_t, last_right_ops, 0);
@@ -4941,9 +4941,9 @@ static void combine (gen_ctx_t gen_ctx) {
               setup_hreg_ref (gen_ctx, hr, insn, 0 /* whatever */, curr_insn_num, TRUE);
             }
           last_mem_ref_insn_num = curr_insn_num; /* Potentially call can change memory */
-	} else if (code == MIR_VA_BLOCK_ARG) {
-	  last_mem_ref_insn_num = curr_insn_num; /* Change memory */
-       } else if (code == MIR_RET) {
+        } else if (code == MIR_VA_BLOCK_ARG) {
+          last_mem_ref_insn_num = curr_insn_num; /* Change memory */
+        } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
         } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL
                    || (new_insn = combine_mul_div_substitute (gen_ctx, bb_insn)) != NULL) {
@@ -5483,7 +5483,6 @@ static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
 void MIR_gen_init (MIR_context_t ctx, int gens_num) {
   struct all_gen_ctx **all_gen_ctx_ptr = all_gen_ctx_loc (ctx), *all_gen_ctx;
   gen_ctx_t gen_ctx;
-  MIR_reg_t reg;
 
 #if !MIR_PARALLEL_GEN
   gens_num = 1;
