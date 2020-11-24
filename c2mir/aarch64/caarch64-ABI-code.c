@@ -78,6 +78,10 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
   gen_multiple_load_store (c2m_ctx, ret_type, VARR_ADDR (MIR_op_t, ret_ops), res.mir_op, TRUE);
 }
 
+static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+  return MIR_T_BLK; /* one BLK is enough */
+}
+
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
   simple_add_arg_proto (c2m_ctx, name, arg_type, arg_info, arg_vars);

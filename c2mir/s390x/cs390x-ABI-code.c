@@ -36,6 +36,10 @@ static int reg_aggregate_p (c2m_ctx_t c2m_ctx, struct type *arg_type) {
   return size == 1 || size == 2 || size == 4 || size == 8;
 }
 
+static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+  return MIR_T_BLK; /* one BLK is enough */
+}
+
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
                                   target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
   MIR_var_t var;
