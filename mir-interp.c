@@ -1305,11 +1305,11 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *r = (uint64_t) va_arg_builtin ((void *) va, tp);
     END_INSN;
   }
-  CASE (MIR_VA_BLOCK_ARG, 3) {
+  CASE (MIR_VA_BLOCK_ARG, 4) {
     int64_t *r, va, size;
 
     r = get_3iops (bp, ops, &va, &size);
-    va_block_arg_builtin ((void *) *r, (void *) va, size, MIR_T_BLK);
+    va_block_arg_builtin ((void *) *r, (void *) va, size, *get_iop (bp, ops + 3));
     END_INSN;
   }
   SCASE (MIR_VA_START, 1, va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a));
