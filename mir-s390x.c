@@ -230,7 +230,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
   memcpy (res, *(void **) va_arg_builtin (p, MIR_T_I64), s);
 }
 
