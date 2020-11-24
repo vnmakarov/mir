@@ -324,6 +324,9 @@ static void gen_st80 (VARR (uint8_t) * insn_varr, uint32_t src_offset) {
 /* Generation: fun (fun_addr, res_arg_addresses):
    push r12, push rbx; sp-=sp_offset; r11=fun_addr; rbx=res/arg_addrs
    r10=mem[rbx,<offset>]; (arg_reg=mem[r10] or r10=mem[r10];mem[sp,sp_offset]=r10
+                           or r12=mem[rbx,arg_offset]; arg_reg=mem[r12]
+                                                       [;(arg_reg + 1)=mem[r12 + 8]]
+                           ...
                            or r12=mem[rbx,arg_offset];rax=qwords;
                               L:rax-=1;r10=mem[r12,rax]; mem[sp,sp_offset,rax]=r10;
                                 goto L if rax > 0) ...
@@ -403,6 +406,46 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       sp_offset += 16;
     } else if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
+      if (type == MIR_T_BLK2 && n_iregs + qwords <= max_iregs) {
+        assert (qwords <= 2);
+        gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE);   /* r12 = block addr */
+        gen_mov2 (code, 0, iregs[n_iregs], TRUE);                      /* arg_reg = mem[r12] */
+        if (qwords == 2) gen_mov2 (code, 8, iregs[n_iregs + 1], TRUE); /* arg_reg = mem[r12 + 8] */
+        n_iregs += qwords;
+#ifdef _WIN64
+        n_xregs += qwords;
+#endif
+        continue;
+      } else if (type == MIR_T_BLK3 && n_xregs + qwords <= max_xregs) {
+        assert (qwords <= 2);
+        gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
+        gen_movxmm2 (code, 0, n_xregs, TRUE);                        /* xmm = mem[r12] */
+        if (qwords == 2) gen_movxmm2 (code, 8, n_xregs + 1, TRUE);   /* xmm = mem[r12 +  8] */
+        n_xregs += qwords;
+        continue;
+      } else if (type == MIR_T_BLK4 && n_iregs < max_iregs && n_xregs < max_xregs) {
+        assert (qwords == 2);
+        gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
+        gen_mov2 (code, 0, iregs[n_iregs], TRUE);                    /* arg_reg = mem[r12] */
+        n_iregs++;
+#ifdef _WIN64
+        n_xregs++;
+#endif
+        gen_movxmm2 (code, 8, n_xregs, TRUE); /* xmm = mem[r12 + 8] */
+        n_xregs++;
+        continue;
+      } else if (type == MIR_T_BLK5 && n_iregs < max_iregs && n_xregs < max_xregs) {
+        assert (qwords == 2);
+        gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
+        gen_movxmm2 (code, 0, n_xregs, TRUE);                        /* xmm = mem[r12] */
+        n_xregs++;
+        gen_mov2 (code, 8, iregs[n_iregs], TRUE); /* arg_reg = mem[r12 + 8] */
+        n_iregs++;
+#ifdef _WIN64
+        n_xregs++;
+#endif
+        continue;
+      }
       gen_blk_mov (code, sp_offset, (i + nres) * sizeof (long double), qwords);
       sp_offset += qwords * 8;
     } else {
