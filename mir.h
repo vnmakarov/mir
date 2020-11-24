@@ -78,6 +78,7 @@ typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, con
 #include <pthread.h>
 typedef pthread_mutex_t mir_mutex_t;
 typedef pthread_cond_t mir_cond_t;
+typedef pthread_attr_t mir_thread_attr_t;
 #define mir_thread_create(m, attr, f, arg) pthread_create (m, attr, f, arg)
 #define mir_thread_join(t, r) pthread_join (t, r)
 #define mir_mutex_init(m, a) pthread_mutex_init (m, a)
@@ -89,6 +90,8 @@ typedef pthread_cond_t mir_cond_t;
 #define mir_cond_wait(c, m) pthread_cond_wait (c, m)
 #define mir_cond_signal(c) pthread_cond_signal (c)
 #define mir_cond_broadcast(c) pthread_cond_broadcast (c)
+#define mir_thread_attr_init(a) pthread_attr_init (a)
+#define mir_thread_attr_setstacksize(a, s) pthread_attr_setstacksize (a, s)
 #else
 #define mir_mutex_init(m, a) 0
 #define mir_mutex_destroy(m) 0
