@@ -1,6 +1,6 @@
 void printf (const char *fmt, ...);
 void abort (void);
-#ifdef _WIN32
+#if defined(_WIN32) || !defined(SIEVE_BENCH)
 /* limitation for alloca */
 #define SieveSize 16384
 #define Expected 1900
