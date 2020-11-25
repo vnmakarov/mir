@@ -310,7 +310,7 @@ c2mir-bootstrap-test5: c2m
 	$(Q) rm -rf 1.bmir a.bmir
 
 c2mir-sieve-bench:
-	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c $(MIR_LIBS) $(THREAD_LIB) -o test && ./test -v sieve.c -eg && size ./test
+	$(CC) $(CFLAGS) -I. mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c mir.c $(MIR_LIBS) $(THREAD_LIB) -o test && ./test -DSIEVE_BENCH -v sieve.c -eg && size ./test
 
 c2mir-bench: c2m
 	c-benchmarks/run-benchmarks.sh
