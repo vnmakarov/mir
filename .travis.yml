@@ -1,13 +1,13 @@
 language: c
 os:
  - linux
- - osx
+# - osx
 #jobs:
 #  allow_failures:
 #    - os: osx
 dist: bionic
 arch:
- - amd64
+# - amd64
  - ppc64le
  - arm64
  - s390x
