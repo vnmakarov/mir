@@ -2,19 +2,20 @@
    Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-#ifndef __STDARG_H
-#define __STDARG_H
-
-typedef void *va_list[1];
-
-#define va_start(ap, param) __builtin_va_start (ap)
-#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)
-#define va_end(ap) 0
-#define va_copy(dest, src) ((dest) = (src))
-
-/* For standard headers of a GNU system: */
-#ifndef __GNUC_VA_LIST
-#define __GNUC_VA_LIST 1
-#endif
-typedef va_list __gnuc_va_list;
-#endif /* #ifndef __STDARG_H */
+static char stdarg_str[]
+  = "#ifndef __STDARG_H\n"
+    "#define __STDARG_H\n"
+    "\n"
+    "typedef void *va_list[1];\n"
+    "\n"
+    "#define va_start(ap, param) __builtin_va_start (ap)\n"
+    "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
+    "#define va_end(ap) 0\n"
+    "#define va_copy(dest, src) ((dest) = (src))\n"
+    "\n"
+    "/* For standard headers of a GNU system: */\n"
+    "#ifndef __GNUC_VA_LIST\n"
+    "#define __GNUC_VA_LIST 1\n"
+    "#endif\n"
+    "typedef va_list __gnuc_va_list;\n"
+    "#endif /* #ifndef __STDARG_H */\n";
