@@ -1,9 +1,10 @@
 /* See C11 7.18 */
-#ifndef __STDBOOL_H
-#define __STDBOOL_H
-
-#define bool _Bool
-#define true 1
-#define false 0
-#define __bool_true_false_are_defined 1
-#endif /* #ifndef __STDBOOL_H */
+static char stdbool_str[]
+  = "#ifndef __STDBOOL_H\n"
+    "#define __STDBOOL_H\n"
+    "\n"
+    "#define bool _Bool\n"
+    "#define true 1\n"
+    "#define false 0\n"
+    "#define __bool_true_false_are_defined 1\n"
+    "#endif /* #ifndef __STDBOOL_H */\n";
