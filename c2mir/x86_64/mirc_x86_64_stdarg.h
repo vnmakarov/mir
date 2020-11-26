@@ -3,28 +3,29 @@
 */
 
 /* See C11 7.16 and https://www.uclibc.org/docs/psABI-x86_64.pdf */
-#ifndef __STDARG_H
-#define __STDARG_H
-
-#ifdef __APPLE__
-typedef __darwin_va_list va_list;
-#else
-typedef struct {
-  unsigned int gp_offset;
-  unsigned int fp_offset;
-  void *overflow_arg_area;
-  void *reg_save_area;
-} va_list[1];
-#endif
-
-#define va_start(ap, param) __builtin_va_start (ap)
-#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)
-#define va_end(ap) 0
-#define va_copy(dest, src) ((dest)[0] = (src)[0])
-
-/* For standard headers of a GNU system: */
-#ifndef __GNUC_VA_LIST
-#define __GNUC_VA_LIST 1
-#endif
-typedef va_list __gnuc_va_list;
-#endif /* #ifndef __STDARG_H */
+static char stdarg_str[]
+  = "#ifndef __STDARG_H\n"
+    "#define __STDARG_H\n"
+    "\n"
+    "#ifdef __APPLE__\n"
+    "typedef __darwin_va_list va_list;\n"
+    "#else\n"
+    "typedef struct {\n"
+    "  unsigned int gp_offset;\n"
+    "  unsigned int fp_offset;\n"
+    "  void *overflow_arg_area;\n"
+    "  void *reg_save_area;\n"
+    "} va_list[1];\n"
+    "#endif\n"
+    "\n"
+    "#define va_start(ap, param) __builtin_va_start (ap)\n"
+    "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
+    "#define va_end(ap) 0\n"
+    "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
+    "\n"
+    "/* For standard headers of a GNU system: */\n"
+    "#ifndef __GNUC_VA_LIST\n"
+    "#define __GNUC_VA_LIST 1\n"
+    "#endif\n"
+    "typedef va_list __gnuc_va_list;\n"
+    "#endif /* #ifndef __STDARG_H */\n";

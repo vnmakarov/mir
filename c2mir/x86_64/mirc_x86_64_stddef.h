@@ -3,22 +3,23 @@
 */
 
 /* See C11 7.19 */
-#ifndef __STDDEF_H
-#define __STDDEF_H
-
-typedef long ptrdiff_t;
-typedef unsigned long size_t;
-typedef long double max_align_t;
-#ifdef __APPLE__
-typedef int wchar_t;
-#else
-typedef unsigned int wchar_t;
-#endif
-
-#ifndef __APPLE__
-#define NULL ((void *) 0)
-#endif
-
-#define offsetof(type, member_designator) ((size_t) & ((type *) 0)->member_designator)
-
-#endif /* #ifndef __STDDEF_H */
+static char stddef_str[]
+  = "#ifndef __STDDEF_H\n"
+    "#define __STDDEF_H\n"
+    "\n"
+    "typedef long ptrdiff_t;\n"
+    "typedef unsigned long size_t;\n"
+    "typedef long double max_align_t;\n"
+    "#ifdef __APPLE__\n"
+    "typedef int wchar_t;\n"
+    "#else\n"
+    "typedef unsigned int wchar_t;\n"
+    "#endif\n"
+    "\n"
+    "#ifndef __APPLE__\n"
+    "#define NULL ((void *) 0)\n"
+    "#endif\n"
+    "\n"
+    "#define offsetof(type, member_designator) ((size_t) & ((type *) 0)->member_designator)\n"
+    "\n"
+    "#endif /* #ifndef __STDDEF_H */\n";
