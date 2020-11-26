@@ -123,8 +123,8 @@ mostly copies of already existing ones.
       `target_init_arg_vars`, `target_return_by_addr_p`,
       `target_add_res_proto`, `target_add_call_res_op`,
       `target_gen_post_call_res_code`, `target_add_ret_ops`,
-      `target_add_arg_proto`, `target_add_call_arg_op`, and
-      `target_gen_gather_arg`
+      `target_get_blk_type`, `target_add_arg_proto`,
+      `target_add_call_arg_op`, and `target_gen_gather_arg`
 
     * file `mirc-target-linux.h` contains predefined macros of C2MIR
       compiler.  You should rename some of them.  To find what macros
