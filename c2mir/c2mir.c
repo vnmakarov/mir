@@ -10265,6 +10265,10 @@ static void MIR_UNUSED simple_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_t
   }
 }
 
+static MIR_type_t MIR_UNUSED simple_target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+  return MIR_T_BLK;
+}
+
 static void MIR_UNUSED simple_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name,
                                              struct type *arg_type, void *arg_info,
                                              VARR (MIR_var_t) * arg_vars) {
@@ -10434,6 +10438,10 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t v
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
 
   simple_add_ret_ops (c2m_ctx, ret_type, val);
+}
+/* Return BLK type should be used for VA_BLOCK_ARG for accessing aggregate type ARG_TYPE.  */
+static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+  return simple_target_get_blk_type (c2m_ctx, arg_type);
 }
 /* Add one or more vars to arg_vars which pass arg NAME of ARG_TYPE. */
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
