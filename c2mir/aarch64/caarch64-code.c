@@ -3,7 +3,7 @@
 */
 
 #include "../mirc.h"
-#include "mirc-aarch64-linux.h"
+#include "mirc_aarch64_linux.h"
 
 static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, aarch64_mirc};
 

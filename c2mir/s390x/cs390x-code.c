@@ -3,7 +3,7 @@
 */
 
 #include "../mirc.h"
-#include "mirc-s390x-linux.h"
+#include "mirc_s390x_linux.h"
 
 static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, s390x_mirc};
 

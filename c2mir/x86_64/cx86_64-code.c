@@ -5,9 +5,9 @@
 #include "../mirc.h"
 
 #ifndef _WIN32
-#include "mirc-x86_64-linux.h"
+#include "mirc_x86_64_linux.h"
 #else
-#include "mirc-x86_64-win.h"
+#include "mirc_x86_64_win.h"
 #endif
 
 static string_include_t standard_includes[] = {{NULL, mirc}, {NULL, x86_64_mirc}};
