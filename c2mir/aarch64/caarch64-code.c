@@ -5,7 +5,7 @@
 #include "../mirc.h"
 #include "mirc-aarch64-linux.h"
 
-static const char *standard_includes[] = {mirc, aarch64_mirc};
+static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, aarch64_mirc};
 
 static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/aarch64/"};
 

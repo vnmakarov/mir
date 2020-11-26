@@ -325,6 +325,10 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   return type->raw_size;
 }
 
+typedef struct {
+  const char *name, *content;
+} string_include_t;
+
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "x86_64/cx86_64-code.c"
 #elif defined(__aarch64__)
@@ -5067,11 +5071,12 @@ static void parse_init (c2m_ctx_t c2m_ctx) {
 #endif
 
 static void add_standard_includes (c2m_ctx_t c2m_ctx) {
-  const char *str;
+  const char *str, *name;
 
-  for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
-    str = standard_includes[i];
-    add_string_stream (c2m_ctx, "<environment>", str);
+  for (int i = 0; i < sizeof (standard_includes) / sizeof (string_include_t); i++) {
+    str = standard_includes[i].content;
+    name = standard_includes[i].name;
+    add_string_stream (c2m_ctx, name == NULL ? "<environment>" : name, str);
   }
 }
 
