@@ -7,7 +7,7 @@
 
 static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, s390x_mirc};
 
-static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/s390x/"};
+static const char *standard_include_dirs[] = {"c2mir/", "c2mir/s390x/"};
 
 #define MAX_ALIGNMENT 16
 
