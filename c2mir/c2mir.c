@@ -5074,9 +5074,9 @@ static void add_standard_includes (c2m_ctx_t c2m_ctx) {
   const char *str, *name;
 
   for (int i = 0; i < sizeof (standard_includes) / sizeof (string_include_t); i++) {
+    if ((name = standard_includes[i].name) != NULL) continue;
     str = standard_includes[i].content;
-    name = standard_includes[i].name;
-    add_string_stream (c2m_ctx, name == NULL ? "<environment>" : name, str);
+    add_string_stream (c2m_ctx, "<environment>", str);
   }
 }
 
