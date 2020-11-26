@@ -10,8 +10,14 @@
 #include "mirc_x86_64_win.h"
 #endif
 
-static string_include_t standard_includes[] = {{NULL, mirc}, {NULL, x86_64_mirc}};
+#include "mirc_x86_64_float.h"
+#include "mirc_x86_64_limits.h"
+#include "mirc_x86_64_stdarg.h"
+#include "mirc_x86_64_stdint.h"
+#include "mirc_x86_64_stddef.h"
 
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULL, x86_64_mirc}, TARGET_STD_INCLUDES};
 static const char *standard_include_dirs[] = {"c2mir/", "c2mir/x86_64/"};
 
 #define MAX_ALIGNMENT 16

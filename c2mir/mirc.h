@@ -21,3 +21,15 @@ static const char mirc[]
     "#define __signed__ signed\n"
     "#define __volatile volatile\n"
     "#define __volatile__ volatile\n";
+
+#include "mirc_iso646.h"
+#include "mirc_stdalign.h"
+#include "mirc_stdbool.h"
+#include "mirc_stdnoreturn.h"
+
+#define TARGET_STD_INCLUDES                                                               \
+  {"iso646.h", iso646_str}, {"stdalign.h", stdalign_str}, {"stdbool.h", stdbool_str},     \
+    {"stdnoreturn.h", stdnoreturn_str}, {"float.h", float_str}, {"limits.h", limits_str}, \
+    {"stdarg.h", stdarg_str}, {"stdint.h", stdint_str}, {                                 \
+    "stddef.h", stddef_str                                                                \
+  }

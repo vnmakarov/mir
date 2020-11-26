@@ -5,7 +5,14 @@
 #include "../mirc.h"
 #include "mirc_ppc64_linux.h"
 
-static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, ppc64_mirc};
+#include "mirc_ppc64_float.h"
+#include "mirc_ppc64_limits.h"
+#include "mirc_ppc64_stdarg.h"
+#include "mirc_ppc64_stdint.h"
+#include "mirc_ppc64_stddef.h"
+
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULLL, ppc64_mirc}, TARGET_STD_INCLUDES};
 
 static const char *standard_include_dirs[] = {"c2mir/", "c2mir/ppc64/"};
 

@@ -5,7 +5,14 @@
 #include "../mirc.h"
 #include "mirc_aarch64_linux.h"
 
-static string_include_t standard_includes[] = {{NULL, mirc}, {NULLL, aarch64_mirc};
+#include "mirc_aarch64_float.h"
+#include "mirc_aarch64_limits.h"
+#include "mirc_aarch64_stdarg.h"
+#include "mirc_aarch64_stdint.h"
+#include "mirc_aarch64_stddef.h"
+
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULLL, aarch64_mirc}, TARGET_STD_INCLUDES};
 
 static const char *standard_include_dirs[] = {"c2mir/", "c2mir/aarch64/"};
 
