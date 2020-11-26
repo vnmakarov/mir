@@ -2002,17 +2002,21 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
   free (c2m_ctx->pre_ctx);
 }
 
-static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_pos) {
+static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char *content,
+                                pos_t err_pos) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   FILE *f;
 
   assert (fname != NULL);
-  if ((f = fopen (fname, "r")) == NULL) {
+  if (content == NULL && (f = fopen (fname, "r")) == NULL) {
     if (c2m_options->message_file != NULL)
       error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
-  add_stream (c2m_ctx, f, fname, NULL);
+  if (content == NULL)
+    add_stream (c2m_ctx, f, fname, NULL);
+  else
+    add_string_stream (c2m_ctx, fname, content);
   cs->ifs_length_at_stream_start = VARR_LENGTH (ifstate_t, ifs);
 }
 
@@ -2232,9 +2236,10 @@ static const char *get_full_name (c2m_ctx_t c2m_ctx, const char *base, const cha
   return VARR_ADDR (char, temp_string);
 }
 
-static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t) {
+static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t, const char **content) {
   const char *fullname, *name;
 
+  *content = NULL;
   assert (t->code == T_STR || t->code == T_HEADER);
   if ((name = t->node->u.s.s)[0] != '/') {
     if (t->repr[0] == '"') {
@@ -2248,6 +2253,11 @@ static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t) {
         if (file_found_p (fullname)) return uniq_cstr (c2m_ctx, fullname).s;
       }
     }
+    for (size_t i = 0; i < sizeof (standard_includes) / sizeof (string_include_t); i++)
+      if (standard_includes[i].name != NULL && strcmp (name, standard_includes[i].name) == 0) {
+        *content = standard_includes[i].content;
+        return name;
+      }
     for (size_t i = 0; system_header_dirs[i] != NULL; i++) {
       fullname = get_full_name (c2m_ctx, system_header_dirs[i], name, TRUE);
       if (file_found_p (fullname)) return uniq_cstr (c2m_ctx, fullname).s;
@@ -2731,9 +2741,11 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p);
 
 static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, token_t if_token);
 
-static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, pos_t err_pos) {
+static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, pos_t err_pos,
+                                    const char **content) {
   int i;
 
+  *content = NULL;
   transform_to_header (c2m_ctx, buffer);
   i = 0;
   if (VARR_LENGTH (token_t, buffer) != 0 && VARR_GET (token_t, buffer, 0)->code == ' ') i++;
@@ -2743,7 +2755,7 @@ static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, 
     error (c2m_ctx, err_pos, "wrong #include");
     return NULL;
   }
-  return get_include_fname (c2m_ctx, VARR_GET (token_t, buffer, i));
+  return get_include_fname (c2m_ctx, VARR_GET (token_t, buffer, i), content);
 }
 
 static void process_directive (c2m_ctx_t c2m_ctx) {
@@ -2846,11 +2858,13 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
   } else if (strcmp (t->repr, "define") == 0) {
     define (c2m_ctx);
   } else if (strcmp (t->repr, "include") == 0) {
+    const char *content;
+
     t = get_next_include_pptoken (c2m_ctx);
     if (t->code == ' ') t = get_next_include_pptoken (c2m_ctx);
     t1 = get_next_pptoken (c2m_ctx);
     if ((t->code == T_STR || t->code == T_HEADER) && t1->code == '\n')
-      name = get_include_fname (c2m_ctx, t);
+      name = get_include_fname (c2m_ctx, t, &content);
     else {
       VARR_PUSH (token_t, temp_buffer, t);
       skip_nl (c2m_ctx, t1, temp_buffer);
@@ -2861,7 +2875,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       processing (c2m_ctx, TRUE);
       no_out_p = FALSE;
       move_tokens (temp_buffer, output_buffer);
-      if ((name = get_header_name (c2m_ctx, temp_buffer, t->pos)) == NULL) {
+      if ((name = get_header_name (c2m_ctx, temp_buffer, t->pos, &content)) == NULL) {
         error (c2m_ctx, t->pos, "wrong #include");
         goto ret;
       }
@@ -2870,7 +2884,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
-    add_include_stream (c2m_ctx, name, t->pos);
+    add_include_stream (c2m_ctx, name, content, t->pos);
   } else if (strcmp (t->repr, "line") == 0) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
     unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOP, N_IGNORE));
@@ -3413,7 +3427,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       } else if (strcmp (t->repr, "__has_include") == 0) {
         int res;
         VARR (token_t) * arg;
-        const char *name;
+        const char *name, *content;
         FILE *f;
 
         if ((mc = try_param_macro_call (c2m_ctx, m, t)) != NULL) {
@@ -3422,8 +3436,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
             res = 0;
           } else {
             arg = VARR_LAST (token_arr_t, mc->args);
-            if ((name = get_header_name (c2m_ctx, arg, t->pos)) != NULL) {
-              res = ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
+            if ((name = get_header_name (c2m_ctx, arg, t->pos, &content)) != NULL) {
+              res = content != NULL || ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
             } else {
               error (c2m_ctx, t->pos, "wrong arg of predefined __has_include");
               res = 0;
