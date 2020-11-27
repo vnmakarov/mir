@@ -110,7 +110,8 @@ EOF
       first=
   fi
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
-#  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
+  #  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
+  rm -f ./a.out
 }
 
 start_bench_num=$1
