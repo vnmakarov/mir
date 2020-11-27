@@ -5076,14 +5076,6 @@ static void parse_init (c2m_ctx_t c2m_ctx) {
   tpname_init (c2m_ctx);
 }
 
-#ifndef SOURCEDIR
-#define SOURCEDIR "./"
-#endif
-
-#ifndef INSTALLDIR
-#define INSTALLDIR "/usr/bin/"
-#endif
-
 static void add_standard_includes (c2m_ctx_t c2m_ctx) {
   const char *str, *name;
 
@@ -12696,19 +12688,6 @@ static void init_include_dirs (c2m_ctx_t c2m_ctx) {
     VARR_PUSH (char_ptr_t, system_headers, c2m_options->include_dirs[i]);
   }
   VARR_PUSH (char_ptr_t, headers, NULL);
-  for (size_t i = 0; i < sizeof (standard_include_dirs) / sizeof (char *); i++) {
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, SOURCEDIR);
-    add_to_temp_string (c2m_ctx, standard_include_dirs[i]);
-    str = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    VARR_PUSH (char_ptr_t, system_headers, str);
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, INSTALLDIR);
-    add_to_temp_string (c2m_ctx, "../");
-    add_to_temp_string (c2m_ctx, standard_include_dirs[i]);
-    str = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    VARR_PUSH (char_ptr_t, system_headers, str);
-  }
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/local/include");
 #endif
