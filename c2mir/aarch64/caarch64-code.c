@@ -12,9 +12,7 @@
 #include "mirc_aarch64_stddef.h"
 
 static string_include_t standard_includes[]
-  = {{NULL, mirc}, {NULLL, aarch64_mirc}, TARGET_STD_INCLUDES};
-
-static const char *standard_include_dirs[] = {"c2mir/", "c2mir/aarch64/"};
+  = {{NULL, mirc}, {NULL, aarch64_mirc}, TARGET_STD_INCLUDES};
 
 #define MAX_ALIGNMENT 16
 
