@@ -18,7 +18,6 @@
 
 static string_include_t standard_includes[]
   = {{NULL, mirc}, {NULL, x86_64_mirc}, TARGET_STD_INCLUDES};
-static const char *standard_include_dirs[] = {"c2mir/", "c2mir/x86_64/"};
 
 #define MAX_ALIGNMENT 16
 
