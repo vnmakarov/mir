@@ -47,7 +47,7 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
       code for MIR function `called_func`, redirects MIR function
       thunk to the generated machine code, and returns this code address
     
-## Interpreter machine dependent functions (file `mir-target.c`)
+## Interpreter machine dependent functions (file `mir-<target>.c`)
 
   These function are used to implement MIR interpreter.  These
   functions should be also placed in file `mir-<target>.c` and you can
@@ -103,7 +103,7 @@ mostly copies of already existing ones.
 
   * First create directory `c2mir/<target>` and files `c<target>.h`,
     `c<target>-code.c`, `c<target>-ABI-code.c`, and
-    `mirc-<target>-linux.h` in this directory.  The simplest way to do
+    `mirc_<target>_linux.h` in this directory.  The simplest way to do
     this is to copy an existing directory `x86_64` or `aarch64`,
     rename files in the new directory, and modify them
 
@@ -126,7 +126,7 @@ mostly copies of already existing ones.
       `target_add_arg_proto`, `target_add_call_arg_op`, and
       `target_gen_gather_arg`
 
-    * file `mirc-target-linux.h` contains predefined macros of C2MIR
+    * file `mirc_<target>_linux.h` contains predefined macros of C2MIR
       compiler.  You should rename some of them.  To find what macros
       to rename, you can use `cpp -dM < /dev/null` on platform to
       which you port MIR
@@ -139,11 +139,18 @@ For debuging MIR interpreter, you can switch on MIR insn excution
 tracing by adding `-DMIR_INTERP_TRACE` for compilation `mir.c` file.
 
 C programs compiled by C2MIR compiler need some compiler specific
-files.  The easiest way to do this is to copy existing target
-dependent directory (e.g. aarch64) in directory `include/mirc` and
-modify files in the new directory.  Again in most cases of 64-bit
+standard files.  They are stored in `c2m` program itself to make `c2m`
+movable.  The stringified versions of the files are placed in
+directory `c2mir/<target>` and have names `mirc_<target>_float.h`,
+`mirc_<target>_limits.h`, `mirc_<target>_stdarg.h`,
+`mirc_<target>_stddef.h`, and `mirc_<target>_stdint.h`.
+
+The easiest way to port the stringified standard include files is to
+copy them from existing target dependent directory (e.g. aarch64)
+modify files into the new directory.  Again in most cases of 64-bit
 target, you don't need to change anything probably except macros
-related long double, char signedness, wchar, and `va_list` definitions.
+related long double, char signedness, wchar, and `va_list`
+definitions.
 
 To run C tests for C2MIR with MIR intepreter you can use `make
 c2mir-interp-test`.
