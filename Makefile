@@ -1,3 +1,4 @@
+PREFIX=/usr/local
 SRC_DIR=.
 BUILD_DIR=.
 
@@ -57,13 +58,29 @@ EXECUTABLES=$(BUILD_DIR)/c2m $(BUILD_DIR)/m2b $(BUILD_DIR)/b2m $(BUILD_DIR)/b2ct
 
 Q=@
 
-.PHONY: all debug clean test bench
+# Entries should be used for building and installation
+.PHONY: all debug install uninstall clean test bench
 
 all: $(BUILD_DIR)/libmir.a $(EXECUTABLES)
 
 debug: CFLAGS:=$(subst -O3 -DNDEBUG,,$(CFLAGS))
 debug: $(BUILD_DIR)/libmir.a $(EXECUTABLES)
 
+install: $(BUILD_DIR)/libmir.a $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
+	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
+	install -m a+r $(BUILD_DIR)/libmir.a $(PREFIX)/lib
+	install -m a+rx $(EXECUTABLES) $(PREFIX)/bin
+	
+$(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
+	   mkdir -p $@
+
+uninstall: $(BUILD_DIR)/libmir.a $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
+	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-gen.h $(PREFIX)/include/c2mir.h
+	$(RM) $(PREFIX)/lib/libmir.a
+	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
+	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
+	-rmdir $(PREFIX)
+	
 clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.a
 
