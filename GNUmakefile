@@ -220,7 +220,7 @@ htab-test: $(BUILD_DIR)/adt-tests
 
 reduce-test: $(BUILD_DIR)/adt-tests
 	$(COMPILE_AND_LINK) $(SRC_DIR)/adt-tests/mir-reduce-test.c -o $(BUILD_DIR)/adt-tests/reduce-test
-	$(BUILD_DIR)/adt-tests/reduce-test < $(SRC_DIR)/c2mir/c2mir.c
+	$(BUILD_DIR)/adt-tests/reduce-test $(SRC_DIR)/c2mir/c2mir.c
 
 $(BUILD_DIR)/adt-tests:
 	mkdir -p $@
