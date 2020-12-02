@@ -7,6 +7,7 @@ static char x86_64_mirc[]
     "#define __amd64__ 1\n"
     "#define __x86_64 1\n"
     "#define __x86_64__ 1\n"
+    "#define _M_X64 1\n"
     "\n"
     "#define __SIZEOF_DOUBLE__ 8\n"
     "#define __SIZEOF_FLOAT__ 4\n"
