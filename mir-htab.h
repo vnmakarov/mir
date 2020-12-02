@@ -116,13 +116,13 @@ DEF_VARR (htab_ind_t)
     arg = htab->arg;                                                                             \
     if (htab->free_func != NULL) {                                                               \
       els_addr = VARR_ADDR (HTAB_EL (T), htab->els);                                             \
-      size = VARR_LENGTH (HTAB_EL (T), htab->els);                                               \
+      size = (htab_size_t) VARR_LENGTH (HTAB_EL (T), htab->els);                                 \
       for (i = 0; i < htab->els_bound; i++)                                                      \
         if (els_addr[i].hash != HTAB_DELETED_HASH) htab->free_func (els_addr[i].el, arg);        \
     }                                                                                            \
     htab->els_num = htab->els_start = htab->els_bound = 0;                                       \
     addr = VARR_ADDR (htab_ind_t, htab->entries);                                                \
-    size = VARR_LENGTH (htab_ind_t, htab->entries);                                              \
+    size = (htab_size_t) VARR_LENGTH (htab_ind_t, htab->entries);                                \
     for (i = 0; i < size; i++) addr[i] = HTAB_EMPTY_IND;                                         \
   }                                                                                              \
                                                                                                  \
@@ -145,8 +145,8 @@ DEF_VARR (htab_ind_t)
     void *arg;                                                                                   \
                                                                                                  \
     HTAB_ASSERT (htab != NULL, "do htab", T);                                                    \
-    size = VARR_LENGTH (htab_ind_t, htab->entries);                                              \
-    els_size = VARR_LENGTH (HTAB_EL (T), htab->els);                                             \
+    size = (htab_size_t) VARR_LENGTH (htab_ind_t, htab->entries);                                \
+    els_size = (htab_size_t) VARR_LENGTH (HTAB_EL (T), htab->els);                               \
     arg = htab->arg;                                                                             \
     HTAB_ASSERT (els_size * 2 == size, "do size", T);                                            \
     if ((action == HTAB_INSERT || action == HTAB_REPLACE) && htab->els_bound == els_size) {      \
