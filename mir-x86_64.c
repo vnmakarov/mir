@@ -370,7 +370,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #else
   static const uint8_t iregs[] = {1, 2, 8, 9}; /* rcx, rdx, r8, r9 */
   static const uint32_t max_iregs = 4, max_xregs = 4;
-  uint32_t sp_offset = 32;
+  uint32_t blk_offset = nargs < 4 ? 32 : nargs * 8, sp_offset = 32; /* spill area */
 #endif
   uint32_t n_iregs = 0, n_xregs = 0, n_fregs, qwords;
   uint8_t *addr;
@@ -407,15 +407,14 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       sp_offset += 16;
     } else if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
+#ifndef _WIN64
       if (type == MIR_T_BLK2 && n_iregs + qwords <= max_iregs) {
         assert (qwords <= 2);
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE);   /* r12 = block addr */
         gen_mov2 (code, 0, iregs[n_iregs], TRUE);                      /* arg_reg = mem[r12] */
         if (qwords == 2) gen_mov2 (code, 8, iregs[n_iregs + 1], TRUE); /* arg_reg = mem[r12 + 8] */
         n_iregs += qwords;
-#ifdef _WIN64
         n_xregs += qwords;
-#endif
         continue;
       } else if (type == MIR_T_BLK3 && n_xregs + qwords <= max_xregs) {
         assert (qwords <= 2);
@@ -429,9 +428,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
         gen_mov2 (code, 0, iregs[n_iregs], TRUE);                    /* arg_reg = mem[r12] */
         n_iregs++;
-#ifdef _WIN64
         n_xregs++;
-#endif
         gen_movxmm2 (code, 8, n_xregs, TRUE); /* xmm = mem[r12 + 8] */
         n_xregs++;
         continue;
@@ -442,17 +439,30 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         n_xregs++;
         gen_mov2 (code, 8, iregs[n_iregs], TRUE); /* arg_reg = mem[r12 + 8] */
         n_iregs++;
-#ifdef _WIN64
         n_xregs++;
-#endif
         continue;
       }
       gen_blk_mov (code, sp_offset, (i + nres) * sizeof (long double), qwords);
       sp_offset += qwords * 8;
+#else
+      gen_blk_mov (code, blk_offset, (i + nres) * sizeof (long double), qwords);
+      blk_offset += qwords * 8;
+      /* pass address as a regular arg: */
+      if (n_iregs < max_iregs) {
+        gen_mov (code, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+        n_xregs++;
+      } else {
+        gen_ldst (code, sp_offset, (i + nres) * sizeof (long double), TRUE);
+        sp_offset += 8;
+      }
+#endif
     } else {
       MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
     }
   }
+#ifdef _WIN64
+  if (blk_offset > sp_offset) sp_offset = blk_offset;
+#endif
   sp_offset = (sp_offset + 15) / 16 * 16;
   sp_offset += 8;
   addr = VARR_ADDR (uint8_t, code);
