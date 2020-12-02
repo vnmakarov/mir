@@ -2,6 +2,12 @@
 #include "../mir-gen.h"
 #include "../real-time.h"
 
+#if defined(_WIN32)
+#define SIZE "8190" /* use smaller stack */
+#else
+#define SIZE "819000"
+#endif
+
 static void create_program (MIR_context_t ctx) {
   const char *str
     = "\n\
@@ -9,18 +15,22 @@ m_sieve:  module\n\
           export sieve\n\
 sieve:    func i32, i32:N\n\
           local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:temp, i64:flags\n\
-          alloca flags, 819000\n\
+          alloca flags, " SIZE
+      "\n\
           mov iter, 0\n\
 loop:     bge fin, iter, N\n\
           mov count, 0;  mov i, 0\n\
-loop2:    bge fin2, i, 819000\n\
+loop2:    bge fin2, i, " SIZE
+      "\n\
           mov u8:(flags, i), 1;  add i, i, 1\n\
           jmp loop2\n\
 fin2:     mov i, 0\n\
-loop3:    bge fin3, i, 819000\n\
+loop3:    bge fin3, i, " SIZE
+      "\n\
           beq cont3, u8:(flags,i), 0\n\
           add temp, i, i;  add prime, temp, 3;  add k, i, prime\n\
-loop4:    bge fin4, k, 819000\n\
+loop4:    bge fin4, k, " SIZE
+      "\n\
           mov u8:(flags, k), 0;  add k, k, prime\n\
           jmp loop4\n\
 fin4:     add count, count, 1\n\
@@ -32,14 +42,15 @@ fin:      ret count\n\
           endfunc\n\
           endmodule\n\
 m_ex100:  module\n\
-format:   string \"sieve (10) = %d\\n\"\n\
+format:   string \"sieve of " SIZE
+      " 200 times = %d\\n\"\n\
 p_printf: proto p:fmt, i32:r\n\
 p_sieve:  proto i32, i32:N\n\
           export ex100\n\
           import sieve, printf\n\
 ex100:    func\n\
           local i64:r\n\
-          call p_sieve, sieve, r, 100\n\
+          call p_sieve, sieve, r, 200\n\
           call p_printf, printf, format, r\n\
           endfunc\n\
           endmodule\n\
@@ -49,7 +60,6 @@ ex100:    func\n\
 }
 
 #include <inttypes.h>
-#include <unistd.h>
 
 int main (void) {
   double start_time = real_usec_time ();
