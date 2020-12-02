@@ -7,14 +7,21 @@ static char stddef_str[]
   = "#ifndef __STDDEF_H\n"
     "#define __STDDEF_H\n"
     "\n"
+#ifdef _WIN32
+    "typedef long long int ptrdiff_t;\n"
+    "typedef unsigned long long size_t;\n"
+#else
     "typedef long ptrdiff_t;\n"
     "typedef unsigned long size_t;\n"
+#endif
     "typedef long double max_align_t;\n"
-    "#ifdef __APPLE__\n"
+#if defined(__APPLE__)
     "typedef int wchar_t;\n"
-    "#else\n"
+#elif defined(_WIN32)
+    "typedef unsigned short wchar_t;\n"
+#else
     "typedef unsigned int wchar_t;\n"
-    "#endif\n"
+#endif
     "\n"
     "#ifndef __APPLE__\n"
     "#define NULL ((void *) 0)\n"
