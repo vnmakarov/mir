@@ -7,9 +7,9 @@
 #endif
 
 #ifdef TEST_INTERP_SIEVE
-#define SIZE "100"
+#define ITER "100"
 #else
-#define SIZE "1000"
+#define ITER "1000"
 #endif
 
 MIR_item_t create_mir_func_sieve (MIR_context_t ctx, size_t *len, MIR_module_t *m_res) {
@@ -22,7 +22,7 @@ sieve:   func i64\n\
          alloca flags, " FLAGS
       "\n\
          mov iter, 0\n\
-loop:    bge fin, iter, " SIZE
+loop:    bge fin, iter, " ITER
       "\n\
          mov count, 0;  mov i, 0\n\
 loop2:   mov u8:(flags, i), 1;  add i, i, 1\n\
