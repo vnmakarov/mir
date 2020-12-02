@@ -16,7 +16,7 @@ main:		func
 		mov iter, 0
 loop:     	inline add_p, add, r, 4, 2
 		add iter, iter, 1
-		blt loop, iter, 100000000
+		blt loop, iter, 1000000
 		call printf_p, printf, "result = %ld\n", r
 		call exit_p, exit, 0
 		endfunc
