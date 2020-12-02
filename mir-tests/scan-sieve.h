@@ -3,7 +3,13 @@
 #ifndef _WIN32
 #define FLAGS "819000"
 #else
-#define FLAGS "16384"
+#define FLAGS "8190"
+#endif
+
+#ifdef TEST_INTERP_SIEVE
+#define SIZE "100"
+#else
+#define SIZE "1000"
 #endif
 
 MIR_item_t create_mir_func_sieve (MIR_context_t ctx, size_t *len, MIR_module_t *m_res) {
@@ -13,21 +19,26 @@ MIR_item_t create_mir_func_sieve (MIR_context_t ctx, size_t *len, MIR_module_t *
 m_sieve: module\n\
 sieve:   func i64\n\
          local i64:iter, i64:count, i64:i, i64:k, i64:prime, i64:flags\n\
-         alloca flags, "FLAGS"\n\
+         alloca flags, " FLAGS
+      "\n\
          mov iter, 0\n\
-loop:    bge fin, iter, 1000\n\
+loop:    bge fin, iter, " SIZE
+      "\n\
          mov count, 0;  mov i, 0\n\
 loop2:   mov u8:(flags, i), 1;  add i, i, 1\n\
-         blt loop2, i, "FLAGS"\n\
+         blt loop2, i, " FLAGS
+      "\n\
          mov i, 2\n\
 loop3:   beq cont3, u8:(flags,i), 0\n\
          add prime, i, 1; add k, i, prime\n\
-loop4:   bge fin4, k, "FLAGS"\n\
+loop4:   bge fin4, k, " FLAGS
+      "\n\
          mov u8:(flags, k), 0;  add k, k, prime\n\
          jmp loop4\n\
 fin4:    add count, count, 1\n\
 cont3:   add i, i, 1\n\
-         blt loop3, i, "FLAGS"\n\
+         blt loop3, i, " FLAGS
+      "\n\
          add iter, iter, 1\n\
          jmp loop\n\
 fin:     ret count\n\
