@@ -1,6 +1,7 @@
 #include "../mir.h"
-#include "scan-sieve.h"
 #include "../real-time.h"
+#define TEST_INTERP_SIEVE
+#include "scan-sieve.h"
 
 #include <inttypes.h>
 
