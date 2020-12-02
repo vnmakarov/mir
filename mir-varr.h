@@ -97,12 +97,12 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
     return varr->varr[varr->els_num - 1];                                                     \
   }                                                                                           \
                                                                                               \
-  static inline T VARR_OP_DEF (T, get) (const VARR (T) * varr, unsigned ix) {                 \
+  static inline T VARR_OP_DEF (T, get) (const VARR (T) * varr, size_t ix) {                   \
     VARR_ASSERT (varr && varr->varr && ix < varr->els_num, "get", T);                         \
     return varr->varr[ix];                                                                    \
   }                                                                                           \
                                                                                               \
-  static inline T VARR_OP_DEF (T, set) (const VARR (T) * varr, unsigned ix, T obj) {          \
+  static inline T VARR_OP_DEF (T, set) (const VARR (T) * varr, size_t ix, T obj) {            \
     T old_obj;                                                                                \
     VARR_ASSERT (varr && varr->varr && ix < varr->els_num, "set", T);                         \
     old_obj = varr->varr[ix];                                                                 \
