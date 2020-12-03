@@ -1420,7 +1420,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       }
       cs = VARR_LAST (stream_t, streams);
       if (cs->f == NULL && cs->fname != NULL && !string_stream_p (cs)) {
-        if ((cs->f = fopen (cs->fname, "r")) == NULL) {
+        if ((cs->f = fopen (cs->fname, "rb")) == NULL) {
           if (c2m_options->message_file != NULL)
             fprintf (c2m_options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
           longjmp (c2m_ctx->env, 1);  // ???
@@ -2008,7 +2008,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
   FILE *f;
 
   assert (fname != NULL);
-  if (content == NULL && (f = fopen (fname, "r")) == NULL) {
+  if (content == NULL && (f = fopen (fname, "rb")) == NULL) {
     if (c2m_options->message_file != NULL)
       error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
@@ -2206,7 +2206,7 @@ static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens, pos_
 static int file_found_p (const char *name) {
   FILE *f;
 
-  if ((f = fopen (name, "r")) == NULL) return FALSE;
+  if ((f = fopen (name, "rb")) == NULL) return FALSE;
   fclose (f);
   return TRUE;
 }
@@ -2884,6 +2884,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
+    cs->pos = t->pos;
     add_include_stream (c2m_ctx, name, content, t->pos);
   } else if (strcmp (t->repr, "line") == 0) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
@@ -3437,7 +3438,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
           } else {
             arg = VARR_LAST (token_arr_t, mc->args);
             if ((name = get_header_name (c2m_ctx, arg, t->pos, &content)) != NULL) {
-              res = content != NULL || ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
+              res = content != NULL || ((f = fopen (name, "rb")) != NULL && !fclose (f)) ? 1 : 0;
             } else {
               error (c2m_ctx, t->pos, "wrong arg of predefined __has_include");
               res = 0;

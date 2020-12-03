@@ -94,7 +94,7 @@ static const char *lib_suffix = ".dylib";
 static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
 static const char *std_lib_dirs[] = {""};
 static const char *lib_suffix = ".dll";
-#define dlopen(n, f) LoadLibrary (n)
+#define dlopen(n, f) LoadLibraryA (n)
 #define dlclose(h) FreeLibrary (h)
 #define dlsym(h, s) GetProcAddress (h, s)
 #endif
@@ -154,7 +154,7 @@ static void *open_lib (const char *dir, const char *name) {
 
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
-  if (last_slash[1] != '\0') VARR_PUSH (char, temp_string, slash);
+  if (last_slash && last_slash[1] != '\0') VARR_PUSH (char, temp_string, slash);
   VARR_PUSH_ARR (char, temp_string, "lib", 3);
   VARR_PUSH_ARR (char, temp_string, name, strlen (name));
   VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
