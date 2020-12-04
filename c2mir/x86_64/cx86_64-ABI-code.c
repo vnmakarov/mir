@@ -8,7 +8,7 @@
 
 enum add_arg_class { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
-#ifndef _WIN64
+#ifndef _WIN32
 #define MAX_QWORDS 2
 #else
 #define MAX_QWORDS 1
@@ -44,7 +44,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
 
     if (n_qwords > MAX_QWORDS) return 0; /* too big aggregate */
 
-#ifndef _WIN64
+#ifndef _WIN32
     for (i = 0; i < n_qwords; i++) types[i] = (MIR_type_t) NO_CLASS;
 
     switch (type->mode) {
