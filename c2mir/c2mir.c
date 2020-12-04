@@ -1962,7 +1962,7 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   c2m_ctx->pre_ctx = pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
   no_out_p = skip_if_part_p = FALSE;
   t = time (&time_loc);
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW64__)
   tm = localtime (&t);
 #else
   tm = localtime_r (&t, &tm_loc);
