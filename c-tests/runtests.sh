@@ -6,6 +6,7 @@ outf=c-tests/__temp.out
 errf=c-tests/__temp.err
 all=0
 ok=0
+ctest_dir=`dirname $0`
 execution_program=$1
 compiler=$2
 
@@ -55,12 +56,12 @@ runtest () {
 for dir in new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
 	$ECHO ++++++++++++++Running tests in $dir+++++++++++++
-	if test -f c-tests/$dir/main.c;then
-	   runtest c-tests/$dir/main.c
+	if test -f $ctest_dir/$dir/main.c;then
+	   runtest $ctest_dir/$dir/main.c
 	   continue;
 	fi
-	if test -f c-tests/$dir/add-main.c;then add_main=c-tests/$dir/add-main.c;else add_main=;fi
-	for t in c-tests/$dir/*.c;do
+	if test -f $ctest_dir/$dir/add-main.c;then add_main=$ctest_dir/$dir/add-main.c;else add_main=;fi
+	for t in $ctest_dir/$dir/*.c;do
 	    if test x$t = x$add_main;then continue;fi
 	    runtest $t $add_main
 	done
