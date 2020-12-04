@@ -26,7 +26,7 @@ ifeq ($(shell $(CC) -v 2>&1 | grep -c "clang version"), 0)
 endif
 
 ifeq ($(OS),Windows_NT)
-  MIR_LIBS=-lm -lkernel32
+  MIR_LIBS=-lm -lkernel32 -lpsapi
 else
   MIR_LIBS=-lm -ldl
 endif
