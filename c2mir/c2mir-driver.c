@@ -91,8 +91,10 @@ static const char *lib_suffix = ".dylib";
 #endif
 
 #ifdef _WIN32
-static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
-static const char *std_lib_dirs[] = {""};
+static lib_t std_libs[] = {{"C:\\Windows\\System32\\msvcrt.dll", NULL},
+                           {"C:\\Windows\\System32\\kernel32.dll", NULL},
+                           {"C:\\Windows\\System32\\ucrtbase.dll", NULL}};
+static const char *std_lib_dirs[] = {"C:\\Windows\\System32"};
 static const char *lib_suffix = ".dll";
 #define dlopen(n, f) LoadLibrary (n)
 #define dlclose(h) FreeLibrary (h)
