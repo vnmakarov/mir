@@ -36,9 +36,9 @@ runtest () {
 	$TIMEOUT $execution_program $compiler $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
-	    if test x$expect_out != x && ! cmp $outf $expect_out;then
+	    if test x$expect_out != x && ! diff --strip-trailing-cr -up $expect_out $outf >$errf;then
 	            $ECHO Output mismatch
-		    diff -up $expect_out $outf
+		    cat $errf
 		else
 		    ok=`expr $ok + 1`
 	            $ECHO -ne "OK\r"
