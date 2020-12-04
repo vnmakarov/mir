@@ -5202,9 +5202,9 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
   fclose (bf);
   sprintf (command,
            "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%lx -d %s.o; rm -f "
+           "--adjust-vma=0x%llx -d %s.o; rm -f "
            "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname,
+           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
            bfname);
 #endif
   fprintf (stderr, "%s\n", command);
@@ -5384,9 +5384,9 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   destroy_func_cfg (gen_ctx);
   DEBUG ({
     fprintf (debug_file,
-             "Generation of code for %s: %lu MIR insns (addr=%lx, len=%lu) -- time %.2f ms\n",
+             "Generation of code for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
              MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
-             (unsigned long) machine_code, (unsigned long) code_len,
+             (unsigned long long) machine_code, (unsigned long) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
