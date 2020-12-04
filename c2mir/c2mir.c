@@ -1801,6 +1801,7 @@ typedef struct macro_call {
 DEF_VARR (macro_call_t);
 
 struct pre_ctx {
+  VARR (char_ptr_t) * once_include_files;
   VARR (token_t) * temp_tokens;
   HTAB (macro_t) * macro_tab;
   VARR (macro_t) * macros;
@@ -1818,6 +1819,7 @@ struct pre_ctx {
   void (*pre_out_token_func) (c2m_ctx_t c2m_ctx, token_t);
 };
 
+#define once_include_files pre_ctx->once_include_files
 #define temp_tokens pre_ctx->temp_tokens
 #define macro_tab pre_ctx->macro_tab
 #define macros pre_ctx->macros
@@ -1976,6 +1978,7 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   date_str[strlen (date_str) - 1] = '\0';
   strcpy (time_str, time_str_repr + 1);
   time_str[strlen (time_str) - 1] = '\0';
+  VARR_CREATE (char_ptr_t, once_include_files, 64);
   VARR_CREATE (token_t, temp_tokens, 128);
   VARR_CREATE (token_t, output_buffer, 2048);
   init_macros (c2m_ctx);
@@ -1987,6 +1990,7 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
   pre_ctx_t pre_ctx;
 
   if (c2m_ctx == NULL || (pre_ctx = c2m_ctx->pre_ctx) == NULL) return;
+  if (once_include_files != NULL) VARR_DESTROY (char_ptr_t, once_include_files);
   if (temp_tokens != NULL) VARR_DESTROY (token_t, temp_tokens);
   if (output_buffer != NULL) VARR_DESTROY (token_t, output_buffer);
   finish_macros (c2m_ctx);
@@ -2007,6 +2011,8 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   FILE *f;
 
+  for (int i = 0; i < VARR_LENGTH (char_ptr_t, once_include_files); i++)
+    if (strcmp (fname, VARR_GET (char_ptr_t, once_include_files, i)) == 0) return;
   assert (fname != NULL);
   if (content == NULL && (f = fopen (fname, "r")) == NULL) {
     if (c2m_options->message_file != NULL)
@@ -2304,11 +2310,19 @@ static pos_t check_line_directive_args (c2m_ctx_t c2m_ctx, VARR (token_t) * buff
 }
 
 static void check_pragma (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * tokens) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t *tokens_arr = VARR_ADDR (token_t, tokens);
   size_t i, tokens_len = VARR_LENGTH (token_t, tokens);
 
   i = 0;
   if (i < tokens_len && tokens_arr[i]->code == ' ') i++;
+#ifdef _WIN32
+  if (i + 1 == tokens_len && tokens_arr[i]->code == T_ID
+      && strcmp (tokens_arr[i]->repr, "once") == 0) {
+    VARR_PUSH (char_ptr_t, once_include_files, cs->fname);
+    return;
+  }
+#endif
   if (i >= tokens_len || tokens_arr[i]->code != T_ID || strcmp (tokens_arr[i]->repr, "STDC") != 0) {
     warning (c2m_ctx, t->pos, "unknown pragma");
     return;
@@ -3552,6 +3566,7 @@ static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
   actual_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
+  VARR_TRUNC (char_ptr_t, once_include_files, 0);
   if (!c2m_options->no_prepro_p) {
     processing (c2m_ctx, FALSE);
   } else {
@@ -12678,7 +12693,6 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
 }
 
 static void init_include_dirs (c2m_ctx_t c2m_ctx) {
-  const char *str;
   int MIR_UNUSED added_p = FALSE;
 
   VARR_CREATE (char_ptr_t, headers, 0);
