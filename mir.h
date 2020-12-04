@@ -6,6 +6,10 @@
 
 #define MIR_H
 
+#if defined(_WIN32) && !defined(_WIN64)
+#error "MIR does not work on 32-bit Windows"
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
@@ -35,7 +39,7 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_PARALLEL_GEN 0
 #endif
 
-#if MIR_PARALLEL_GEN && defined(_WIN64) /* TODO: Win64 thread primitives ??? */
+#if MIR_PARALLEL_GEN && defined(_WIN32) /* TODO: Win thread primitives ??? */
 #undef MIR_PARALLEL_GEN
 #define MIR_PARALLEL_GEN 0
 #endif
