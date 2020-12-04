@@ -10,42 +10,68 @@ static char stdint_str[]
     "typedef signed char int8_t;\n"
     "typedef short int int16_t;\n"
     "typedef int int32_t;\n"
-    "#ifdef __APPLE__\n"
+#if defined(__APPLE__) || defined(_WIN32)
     "typedef long long int int64_t;\n"
-    "#else\n"
+#else
     "typedef long int int64_t;\n"
-    "#endif\n"
+#endif
     "\n"
     "typedef unsigned char uint8_t;\n"
     "typedef unsigned short int uint16_t;\n"
     "typedef unsigned int uint32_t;\n"
-    "#ifdef __APPLE__\n"
+#if defined(__APPLE__) || defined(_WIN32)
     "typedef unsigned long long int uint64_t;\n"
-    "#else\n"
+#else
     "typedef unsigned long int uint64_t;\n"
-    "#endif\n"
+#endif
     "\n"
     "typedef signed char int_least8_t;\n"
     "typedef short int int_least16_t;\n"
     "typedef int int_least32_t;\n"
+#if defined(_WIN32)
+    "typedef long long int int_least64_t;\n"
+#else
     "typedef long int int_least64_t;\n"
+#endif
     "\n"
     "typedef unsigned char uint_least8_t;\n"
     "typedef unsigned short int uint_least16_t;\n"
     "typedef unsigned int uint_least32_t;\n"
+#if defined(_WIN32)
+    "typedef unsigned long long int uint_least64_t;\n"
+#else
     "typedef unsigned long int uint_least64_t;\n"
+#endif
     "\n"
     "typedef signed char int_fast8_t;\n"
     "typedef long int int_fast16_t;\n"
     "typedef long int int_fast32_t;\n"
+#if defined(_WIN32)
+    "typedef long long int int_fast64_t;\n"
+#else
     "typedef long int int_fast64_t;\n"
+#endif
     "\n"
     "typedef unsigned char uint_fast8_t;\n"
     "typedef unsigned long int uint_fast16_t;\n"
     "typedef unsigned long int uint_fast32_t;\n"
+#if defined(_WIN32)
+    "typedef unsigned long long int uint_fast64_t;\n"
+#else
     "typedef unsigned long int uint_fast64_t;\n"
+#endif
     "\n"
     "#define __intptr_t_defined\n"
+#if defined(_WIN32)
+    "typedef long long int intptr_t;\n"
+    "typedef unsigned long long int uintptr_t;\n"
+    "\n"
+    "typedef long long int intmax_t;\n"
+    "typedef unsigned long long int uintmax_t;\n"
+    "\n"
+    "#define __INT64_C(c) c##LL\n"
+    "#define __UINT64_C(c) c##ULL\n"
+#else
     "typedef long int intptr_t;\n"
     "typedef unsigned long int uintptr_t;\n"
     "\n"
@@ -54,6 +80,7 @@ static char stdint_str[]
     "\n"
     "#define __INT64_C(c) c##L\n"
     "#define __UINT64_C(c) c##UL\n"
+#endif
     "\n"
     "#define INT8_MIN (-128)\n"
     "#define INT16_MIN (-32768)\n"
@@ -122,14 +149,27 @@ static char stdint_str[]
     "#define INT8_C(value) value\n"
     "#define INT16_C(value) value\n"
     "#define INT32_C(value) value\n"
+#if defined(_WIN32)
+    "#define INT64_C(value) value##LL\n"
+#else
     "#define INT64_C(value) value##L\n"
+#endif
     "\n"
     "#define UINT8_C(value) value\n"
     "#define UINT16_C(value) value\n"
     "#define UINT32_C(value) value##U\n"
+#if defined(_WIN32)
+    "#define UINT64_C(value) value##ULL\n"
+#else
     "#define UINT64_C(value) value##UL\n"
+#endif
     "\n"
+#if defined(_WIN32)
     "#define INTMAX_C(value) value##L\n"
     "#define UINTMAX_C(value) value##UL\n"
+#else
+    "#define INTMAX_C(value) value##LL\n"
+    "#define UINTMAX_C(value) value##ULL\n"
+#endif
     "\n"
     "#endif /* #ifndef _STDINT_H */\n";
