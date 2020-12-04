@@ -5355,9 +5355,12 @@ static struct type get_ptr_int_type (int signed_p) {
   if (sizeof (mir_int) == sizeof (mir_size_t)) {
     res.u.basic_type = signed_p ? TP_INT : TP_UINT;
     return res;
+  } else if (sizeof (mir_long) == sizeof (mir_size_t)) {
+    res.u.basic_type = signed_p ? TP_LONG : TP_ULONG;
+    return res;
   }
-  assert (sizeof (mir_long) == sizeof (mir_size_t));
-  res.u.basic_type = signed_p ? TP_LONG : TP_ULONG;
+  assert (sizeof (mir_llong) == sizeof (mir_size_t));
+  res.u.basic_type = signed_p ? TP_LLONG : TP_ULLONG;
   return res;
 }
 
