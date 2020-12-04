@@ -41,7 +41,7 @@ runtest () {
 		    cat $errf
 		else
 		    ok=`expr $ok + 1`
-	            $ECHO -ne "OK\r"
+	            $ECHO -ne "OK               \r"
 		fi
 	elif test $expect_code = 0; then
 	        cat $errf
