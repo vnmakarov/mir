@@ -337,11 +337,11 @@ clean-mir-interp-tests:
 gen-test: gen-loop-test gen-sieve-test gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7\
           gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
 
-gen-loop-test: $(BUILD_DIR)/mir.o $(BUILD_DIR)/mir-gen.o $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
+gen-test-loop: $(BUILD_DIR)/mir.o $(BUILD_DIR)/mir-gen.o $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 $^ $(LDLIBS) -o $(BUILD_DIR)/mir-tests/gen-loop-test
 	$(BUILD_DIR)/mir-tests/gen-loop-test
 	
-gen-sieve-test: $(BUILD_DIR)/mir.o $(BUILD_DIR)/mir-gen.o $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
+gen-test-sieve: $(BUILD_DIR)/mir.o $(BUILD_DIR)/mir-gen.o $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 $^ $(LDLIBS) -o $(BUILD_DIR)/mir-tests/gen-sieve-test
 	$(BUILD_DIR)/mir-tests/gen-sieve-test
 
