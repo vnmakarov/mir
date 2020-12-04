@@ -7,21 +7,31 @@ static char stdarg_str[]
   = "#ifndef __STDARG_H\n"
     "#define __STDARG_H\n"
     "\n"
-    "#ifdef __APPLE__\n"
+#if defined(__APPLE__)
     "typedef __darwin_va_list va_list;\n"
-    "#else\n"
+#elif defined(__WIN32)
+    "typedef char *va_list;\n"
+#else
     "typedef struct {\n"
     "  unsigned int gp_offset;\n"
     "  unsigned int fp_offset;\n"
     "  void *overflow_arg_area;\n"
     "  void *reg_save_area;\n"
     "} va_list[1];\n"
-    "#endif\n"
+#endif
     "\n"
+#if defined(__WIN32)
+    "#define va_start(ap, param) __va_start (ap, param)\n"
+#else
     "#define va_start(ap, param) __builtin_va_start (ap)\n"
+#endif
     "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
     "#define va_end(ap) 0\n"
+#if defined(__APPLE__) || defined(__WIN32)
+    "#define va_copy(dest, src) ((dest) = (src))\n"
+#else
     "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
+#endif
     "\n"
     "/* For standard headers of a GNU system: */\n"
     "#ifndef __GNUC_VA_LIST\n"
