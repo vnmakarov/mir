@@ -887,17 +887,6 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       gen_add_insn_before (gen_ctx, insn, new_insn);
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
 #else
-      block_arg_func_p = TRUE;
-      /* spill reg args */
-      mem_size = 8 /*ret*/ + start_sp_from_bp_offset;
-      for (int i = 0; i < 4; i++) {
-        arg_reg = get_int_arg_reg (i);
-        mem_op
-          = _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, mem_size, FP_HARD_REG, MIR_NON_HARD_REG, 1);
-        new_insn = MIR_new_insn (ctx, MIR_MOV, mem_op, _MIR_new_hard_reg_op (ctx, arg_reg));
-        gen_add_insn_before (gen_ctx, insn, new_insn);
-        mem_size += 8;
-      }
       /* init va_list */
       mem_size = 8 /*ret*/ + start_sp_from_bp_offset + func->nargs * 8;
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
@@ -1063,10 +1052,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   if (leaf_p && !alloca_p && !block_arg_func_p && saved_hard_regs_size == 0 && !func->vararg_p
       && stack_slots_num == 0)
     return;
+  anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
   /* Prologue: */
-  anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   new_insn
     = MIR_new_insn (ctx, MIR_MOV,
                     _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, -8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
@@ -1075,6 +1064,14 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   /* Use add for matching LEA: */
   new_insn = MIR_new_insn (ctx, MIR_ADD, fp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -8));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = sp - 8 */
+#ifdef _WIN32
+  if (func->vararg_p) { /* filling spill space */
+    for (i = 0, offset = 16 /* ret & bp */; i < 4; i++, offset += 8)
+      gen_mov (gen_ctx, anchor, MIR_MOV,
+               _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, offset, FP_HARD_REG, MIR_NON_HARD_REG, 1),
+               _MIR_new_hard_reg_op (ctx, get_int_arg_reg (i)));
+  }
+#endif
   service_area_size = func->vararg_p ? reg_save_area_size + 8 : 8;
   stack_slots_size = stack_slots_num * 8;
   /* stack slots, and saved regs as multiple of 16 bytes: */
