@@ -245,7 +245,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
 #ifdef _WIN32
-  if (nargs > 4) block_offset = nargs * 8;
+  if ((nops - start) > 4) block_offset = (nops - start) * 8;
 #endif
   for (size_t i = start; i < nops; i++) {
     arg_op = call_insn->ops[i];
