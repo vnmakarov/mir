@@ -58,7 +58,11 @@ typedef mir_schar mir_char;
 
 typedef float mir_float;
 typedef double mir_double;
+#ifdef _WIN32
+typedef double mir_ldouble;
+#else
 typedef long double mir_ldouble;
+#endif
 
 typedef uint8_t mir_bool;
 typedef int64_t mir_ptrdiff_t;
