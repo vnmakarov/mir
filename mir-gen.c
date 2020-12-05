@@ -1666,7 +1666,7 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   } while (change_p);
   DEBUG ({
     fprintf (debug_file, "Minimizing SSA phis: from %ld to %ld phis (non-phi insns %ld)\n",
-             (long) VARR_LENGTH (bb_insn_t, deleted_phis) + VARR_LENGTH (bb_insn_t, phis),
+             (long) VARR_LENGTH (bb_insn_t, deleted_phis) + (long) VARR_LENGTH (bb_insn_t, phis),
              (long) VARR_LENGTH (bb_insn_t, phis), (long) insns_num);
   });
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -3554,7 +3554,7 @@ static void print_live_ranges (gen_ctx_t gen_ctx) {
   gen_assert (get_nvars (gen_ctx) == VARR_LENGTH (live_range_t, var_live_ranges));
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     if ((lr = VARR_GET (live_range_t, var_live_ranges, i)) == NULL) continue;
-    fprintf (debug_file, "%lu", i);
+    fprintf (debug_file, "%lu", (unsigned long) i);
     if (var_is_reg_p (i))
       fprintf (debug_file, " (%s:%s)",
                MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, i), curr_func_item->u.func)),
@@ -4999,8 +4999,8 @@ static void combine (gen_ctx_t gen_ctx) {
     } while (block_change_p);
   }
   DEBUG ({
-    fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", deleted_insns_num, insns_num,
-             100.0 * deleted_insns_num / insns_num);
+    fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", (long unsigned) deleted_insns_num,
+             (long unsigned) insns_num, 100.0 * deleted_insns_num / insns_num);
   });
 }
 
@@ -5385,7 +5385,8 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   DEBUG ({
     fprintf (debug_file,
              "Generation of code for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
-             MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
+             MIR_item_name (ctx, func_item),
+             (long unsigned) DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
              (unsigned long long) machine_code, (unsigned long) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
