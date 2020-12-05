@@ -12,7 +12,7 @@ static char x86_64_mirc[]
     "#define __SIZEOF_DOUBLE__ 8\n"
     "#define __SIZEOF_FLOAT__ 4\n"
     "#define __SIZEOF_INT__ 4\n"
-#if __SIZEOF_LONG_DOUBLE__ == 16
+#if !defined(_WIN32) && __SIZEOF_LONG_DOUBLE__ == 16
     "#define __SIZEOF_LONG_DOUBLE__ 16\n"
 #else
     "#define __SIZEOF_LONG_DOUBLE__ 8\n"
