@@ -23,9 +23,9 @@ static char stddef_str[]
     "typedef unsigned int wchar_t;\n"
 #endif
     "\n"
-    "#ifndef __APPLE__\n"
+#if !defined(__APPLE__) && !defined(_WIN32)
     "#define NULL ((void *) 0)\n"
-    "#endif\n"
+#endif
     "\n"
     "#define offsetof(type, member_designator) ((size_t) & ((type *) 0)->member_designator)\n"
     "\n"
