@@ -671,7 +671,7 @@ int main (int argc, char *argv[], char *env[]) {
       curr_input.input_name = VARR_GET (char_ptr_t, source_file_names, i);
       if (strcmp (curr_input.input_name, STDIN_SOURCE_NAME) == 0) {
         f = stdin;
-      } else if ((f = fopen (curr_input.input_name, "r")) == NULL) {
+      } else if ((f = fopen (curr_input.input_name, "rb")) == NULL) {
         fprintf (stderr, "can not open %s -- goodbye\n", curr_input.input_name);
         exit (1);
       }
