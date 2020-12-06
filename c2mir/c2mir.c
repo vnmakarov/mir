@@ -2222,7 +2222,7 @@ static int file_found_p (const char *name) {
 
 static const char *get_full_name (c2m_ctx_t c2m_ctx, const char *base, const char *name,
                                   int dir_base_p) {
-  const char *str, *last, *slash;
+  const char *str, *last, *last2, *slash = "/", *slash2 = NULL;
   size_t len;
 
   VARR_TRUNC (char, temp_string, 0);
@@ -2231,21 +2231,24 @@ static const char *get_full_name (c2m_ctx_t c2m_ctx, const char *base, const cha
     return name;
   }
 #ifdef _WIN32
-  slash = "\\";
-#else
-  slash = "/";
+  slash2 = "\\";
 #endif
   if (dir_base_p) {
     len = strlen (base);
     assert (len > 0);
     add_to_temp_string (c2m_ctx, base);
     if (base[len - 1] != slash[0]) add_to_temp_string (c2m_ctx, slash);
-  } else if ((last = strrchr (base, slash[0])) == NULL) {
-    add_to_temp_string (c2m_ctx, ".");
-    add_to_temp_string (c2m_ctx, slash);
   } else {
-    for (str = base; str <= last; str++) VARR_PUSH (char, temp_string, *str);
-    VARR_PUSH (char, temp_string, '\0');
+    last = strrchr (base, slash[0]);
+    last2 = slash2 != NULL ? strrchr (base, slash2[0]) : NULL;
+    if (last2 != NULL && (last == NULL || last2 > last)) last = last2;
+    if (last != NULL) {
+      for (str = base; str <= last; str++) VARR_PUSH (char, temp_string, *str);
+      VARR_PUSH (char, temp_string, '\0');
+    } else {
+      add_to_temp_string (c2m_ctx, ".");
+      add_to_temp_string (c2m_ctx, slash);
+    }
   }
   add_to_temp_string (c2m_ctx, name);
   return VARR_ADDR (char, temp_string);
