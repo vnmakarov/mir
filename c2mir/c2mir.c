@@ -1423,7 +1423,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       }
       cs = VARR_LAST (stream_t, streams);
       if (cs->f == NULL && cs->fname != NULL && !string_stream_p (cs)) {
-        if ((cs->f = fopen (cs->fname, "r")) == NULL) {
+        if ((cs->f = fopen (cs->fname, "rb")) == NULL) {
           if (c2m_options->message_file != NULL)
             fprintf (c2m_options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
           longjmp (c2m_ctx->env, 1);  // ???
