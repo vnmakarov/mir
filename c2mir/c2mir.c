@@ -257,9 +257,6 @@ enum basic_type {
   TP_LDOUBLE,
 };
 
-#define ENUM_BASIC_INT_TYPE TP_INT
-#define ENUM_MIR_INT mir_int
-
 struct type_qual {
   unsigned int const_p : 1, restrict_p : 1, volatile_p : 1, atomic_p : 1; /* Type qualifiers */
 };
@@ -292,28 +289,24 @@ enum type_mode {
 };
 
 struct type {
-  struct type_qual type_qual;
   node_t pos_node;       /* set up and used only for checking type correctness */
   struct type *arr_type; /* NULL or array type before its adjustment */
+  struct type_qual type_qual;
+  enum type_mode mode;
+  char unnamed_anon_struct_union_member_type_p;
+  int align; /* type align, undefined if < 0  */
   /* Raw type size (w/o alignment type itself requirement but with
      element alignment requirements), undefined if mir_size_max.  */
   mir_size_t raw_size;
-  int align; /* type align, undefined if < 0  */
-  enum type_mode mode;
-  char unnamed_anon_struct_union_member_type_p;
   union {
-    enum basic_type basic_type;
-    node_t tag_type; /* struct/union/enum */
+    enum basic_type basic_type; /* also integer type */
+    node_t tag_type;            /* struct/union/enum */
     struct type *ptr_type;
     struct arr_type *arr_type;
     struct func_type *func_type;
   } u;
 };
 
-static const struct type ENUM_INT_TYPE = {.raw_size = MIR_SIZE_MAX,
-                                          .align = -1,
-                                          .mode = TM_BASIC,
-                                          .u = {.basic_type = ENUM_BASIC_INT_TYPE}};
 /*!*/ static struct type VOID_TYPE
   = {.raw_size = MIR_SIZE_MAX, .align = -1, .mode = TM_BASIC, .u = {.basic_type = TP_VOID}};
 
@@ -5160,8 +5153,9 @@ static void parse_finish (c2m_ctx_t c2m_ctx) {
  6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
  7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec",
     but as a part of N_COMPOUND_LITERAL have attribute "struct decl"
- 8. N_ENUM_CONST has attribute "struct enum_value"
- 9. N_CASE and N_DEFAULT have attribute "struct case_attr"
+ 8. N_ENUM has attribute "struct enum_type"
+ 9. N_ENUM_CONST has attribute "struct enum_value"
+10. N_CASE and N_DEFAULT have attribute "struct case_attr"
 
 */
 
@@ -5328,6 +5322,8 @@ static int integer_type_p (const struct type *type) {
   return standard_integer_type_p (type) || type->mode == TM_ENUM;
 }
 
+static enum basic_type get_enum_basic_type (const struct type *type);
+
 static int signed_integer_type_p (const struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
@@ -5335,7 +5331,10 @@ static int signed_integer_type_p (const struct type *type) {
     return ((tp == TP_CHAR && char_is_signed_p ()) || tp == TP_SCHAR || tp == TP_SHORT
             || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
-  if (type->mode == TM_ENUM) return signed_integer_type_p (&ENUM_INT_TYPE);
+  if (type->mode == TM_ENUM) {
+    enum basic_type basic_type = get_enum_basic_type (type);
+    return (basic_type == TP_INT || basic_type == TP_LONG || basic_type == TP_LLONG);
+  }
   return FALSE;
 }
 
@@ -5386,7 +5385,7 @@ static struct type integer_promotion (const struct type *type) {
           || (type->u.basic_type == TP_USHORT && MIR_USHORT_MAX > MIR_INT_MAX)))
     res.u.basic_type = TP_UINT;
   else if (type->mode == TM_ENUM)
-    res.u.basic_type = ENUM_BASIC_INT_TYPE;
+    res.u.basic_type = get_enum_basic_type (type);
   else if (type->mode == TM_BASIC && type->u.basic_type == TP_UINT)
     res.u.basic_type = TP_UINT;
   else
@@ -5460,8 +5459,15 @@ struct decl_spec {
   struct type *type;
 };
 
+struct enum_type {
+  enum basic_type enum_basic_type;
+};
+
 struct enum_value {
-  mir_int val;
+  union {
+    mir_llong i_val;
+    mir_ullong u_val;
+  } u;
 };
 
 struct node_scope {
@@ -5488,6 +5494,11 @@ struct decl {
   MIR_item_t item; /* MIR_item for some declarations */
   c2m_ctx_t c2m_ctx;
 };
+
+static enum basic_type get_enum_basic_type (const struct type *type) {
+  assert (type->mode == TM_ENUM);
+  return ((struct enum_type *) type->u.tag_type->attr)->enum_basic_type;
+}
 
 static struct decl_spec *get_param_decl_spec (node_t param) {
   node_t MIR_UNUSED declarator;
@@ -5542,9 +5553,9 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
   if (type1->mode != type2->mode) {
     if (!ignore_quals_p && !type_qual_eq_p (&type1->type_qual, &type2->type_qual)) return FALSE;
     if (type1->mode == TM_ENUM && type2->mode == TM_BASIC)
-      return type2->u.basic_type == ENUM_BASIC_INT_TYPE;
+      return type2->u.basic_type == get_enum_basic_type (type1);
     if (type2->mode == TM_ENUM && type1->mode == TM_BASIC)
-      return type1->u.basic_type == ENUM_BASIC_INT_TYPE;
+      return type1->u.basic_type == get_enum_basic_type (type2);
     return FALSE;
   }
   if (type1->mode == TM_BASIC) {
@@ -5662,7 +5673,7 @@ static void aux_set_type_align (c2m_ctx_t c2m_ctx, struct type *type) {
   } else if (type->mode == TM_PTR) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    align = basic_type_align (ENUM_BASIC_INT_TYPE);
+    align = basic_type_align (get_enum_basic_type (type));
   } else if (type->mode == TM_FUNC) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -5782,7 +5793,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
   } else if (type->mode == TM_PTR) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    overall_size = basic_type_size (ENUM_BASIC_INT_TYPE);
+    overall_size = basic_type_size (get_enum_basic_type (type));
   } else if (type->mode == TM_FUNC) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -5853,7 +5864,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
 
 static int int_bit_size (struct type *type) {
   assert (type->mode == TM_BASIC || type->mode == TM_ENUM);
-  return (basic_type_size (type->mode == TM_ENUM ? ENUM_BASIC_INT_TYPE : type->u.basic_type)
+  return (basic_type_size (type->mode == TM_ENUM ? get_enum_basic_type (type) : type->u.basic_type)
           * MIR_CHAR_BIT);
 }
 
@@ -5952,24 +5963,23 @@ static void cast_value (struct expr *to_e, struct expr *from_e, struct type *to)
   default: assert (FALSE);                                      \
   }
 
+  struct type temp, temp2;
+  if (to->mode == TM_ENUM) {
+    temp.mode = TM_BASIC;
+    temp.u.basic_type = get_enum_basic_type (to);
+    to = &temp;
+  }
+  if (from->mode == TM_ENUM) {
+    temp2.mode = TM_BASIC;
+    temp2.u.basic_type = get_enum_basic_type (from);
+    from = &temp2;
+  }
   if (to->mode == from->mode && (from->mode == TM_PTR || from->mode == TM_ENUM)) {
     to_e->u = from_e->u;
   } else if (from->mode == TM_PTR) {
-    if (to->mode == TM_ENUM) {
-      to_e->u.i_val = (ENUM_MIR_INT) from_e->u.u_val;
-    } else {
-      BASIC_FROM_CONV (u_val);
-    }
-  } else if (from->mode == TM_ENUM) {
-    if (to->mode == TM_PTR) {
-      to_e->u.u_val = (mir_size_t) from_e->u.i_val;
-    } else {
-      BASIC_FROM_CONV (i_val);
-    }
+    BASIC_FROM_CONV (u_val);
   } else if (to->mode == TM_PTR) {
     BASIC_TO_CONV (mir_size_t, u_val);
-  } else if (to->mode == TM_ENUM) {
-    BASIC_TO_CONV (ENUM_MIR_INT, i_val);
   } else {
     switch (from->u.basic_type) {
     case TP_BOOL:
@@ -6380,8 +6390,14 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         if (incomplete_type_p (c2m_ctx, type))
           error (c2m_ctx, POS (n), "enum storage size is unknown");
       } else {
-        mir_int curr_val = 0;
+        mir_llong curr_val = -1, min_val = 0;
+        mir_ullong max_val = 0;
+        enum basic_type basic_type;
+        struct enum_type *enum_type;
+        int neg_p = FALSE;
 
+        n->attr = enum_type = reg_malloc (c2m_ctx, sizeof (struct enum_type));
+        enum_type->enum_basic_type = TP_INT;
         for (node_t en = NL_HEAD (enum_list->u.ops); en != NULL; en = NL_NEXT (en)) {  // ??? id
           node_t id, const_expr;
           symbol_t sym;
@@ -6396,22 +6412,49 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           } else {
             symbol_insert (c2m_ctx, S_REGULAR, id, curr_scope, en, n);
           }
+          curr_val++;
+          if (curr_val == 0) neg_p = FALSE;
           if (const_expr->code != N_IGNORE) {
             struct expr *cexpr = const_expr->attr;
 
-            if (!cexpr->const_p)
+            if (!cexpr->const_p) {
               error (c2m_ctx, POS (const_expr), "non-constant value in enum const expression");
-            else if (!integer_type_p (cexpr->type))
+              continue;
+            } else if (!integer_type_p (cexpr->type)) {
               error (c2m_ctx, POS (const_expr), "enum const expression is not of an integer type");
-            else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val > MIR_INT_MAX)
-                     || (!signed_integer_type_p (cexpr->type) && cexpr->u.u_val > MIR_INT_MAX))
-              error (c2m_ctx, POS (const_expr), "enum const expression is not represented by int");
-            else
-              curr_val = cexpr->u.i_val;
+              continue;
+            }
+            curr_val = cexpr->u.i_val;
+            neg_p = signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0;
           }
           en->attr = enum_value = reg_malloc (c2m_ctx, sizeof (struct enum_value));
-          enum_value->val = curr_val;
-          curr_val++;
+          if (!neg_p) {
+            if (max_val < (mir_ullong) curr_val) max_val = (mir_ullong) curr_val;
+            if (min_val < 0 && (mir_ullong) curr_val >= MIR_LLONG_MAX)
+              error (c2m_ctx, POS (const_expr),
+                     "enum const expression is not represented by an int");
+            enum_value->u.u_val = (mir_ullong) curr_val;
+          } else {
+            if (min_val > curr_val) {
+              min_val = curr_val;
+              if (min_val < 0 && max_val >= MIR_LLONG_MAX)
+                error (c2m_ctx, POS (const_expr),
+                       "enum const expression is not represented by an int");
+            } else if (curr_val >= 0 && max_val < curr_val) {
+              max_val = curr_val;
+            }
+            enum_value->u.i_val = curr_val;
+          }
+          enum_type->enum_basic_type
+            = (max_val <= MIR_INT_MAX && MIR_INT_MIN <= min_val
+                 ? TP_INT
+                 : max_val <= MIR_UINT_MAX && 0 <= min_val
+                     ? TP_UINT
+                     : max_val <= MIR_LONG_MAX && MIR_LONG_MIN <= min_val
+                         ? TP_LONG
+                         : max_val <= MIR_ULONG_MAX && 0 <= min_val
+                             ? TP_ULONG
+                             : min_val < 0 || max_val <= MIR_LLONG_MAX ? TP_LLONG : TP_ULLONG);
         }
       }
       break;
@@ -7998,7 +8041,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e->type->pos_node = r;
       e->type->u.tag_type = aux_node;
       e->const_p = TRUE;
-      e->u.i_val = ((struct enum_value *) op1->attr)->val;
+      e->u.i_val = ((struct enum_value *) op1->attr)->u.i_val;
     }
     break;
   }
@@ -12398,31 +12441,32 @@ static void print_qual (FILE *f, struct type_qual type_qual) {
   if (type_qual.atomic_p) fprintf (f, ", atomic");
 }
 
+static void print_basic_type (FILE *f, enum basic_type basic_type) {
+  switch (basic_type) {
+  case TP_UNDEF: fprintf (f, "undef type"); break;
+  case TP_VOID: fprintf (f, "void"); break;
+  case TP_BOOL: fprintf (f, "bool"); break;
+  case TP_CHAR: fprintf (f, "char"); break;
+  case TP_SCHAR: fprintf (f, "signed char"); break;
+  case TP_UCHAR: fprintf (f, "unsigned char"); break;
+  case TP_SHORT: fprintf (f, "short"); break;
+  case TP_USHORT: fprintf (f, "unsigned short"); break;
+  case TP_INT: fprintf (f, "int"); break;
+  case TP_UINT: fprintf (f, "unsigned int"); break;
+  case TP_LONG: fprintf (f, "long"); break;
+  case TP_ULONG: fprintf (f, "unsigned long"); break;
+  case TP_LLONG: fprintf (f, "long long"); break;
+  case TP_ULLONG: fprintf (f, "unsigned long long"); break;
+  case TP_FLOAT: fprintf (f, "float"); break;
+  case TP_DOUBLE: fprintf (f, "double"); break;
+  case TP_LDOUBLE: fprintf (f, "long double"); break;
+  default: assert (FALSE);
+  }
+}
 static void print_type (c2m_ctx_t c2m_ctx, FILE *f, struct type *type) {
   switch (type->mode) {
   case TM_UNDEF: fprintf (f, "undef type mode"); break;
-  case TM_BASIC:
-    switch (type->u.basic_type) {
-    case TP_UNDEF: fprintf (f, "undef type"); break;
-    case TP_VOID: fprintf (f, "void"); break;
-    case TP_BOOL: fprintf (f, "bool"); break;
-    case TP_CHAR: fprintf (f, "char"); break;
-    case TP_SCHAR: fprintf (f, "signed char"); break;
-    case TP_UCHAR: fprintf (f, "unsigned char"); break;
-    case TP_SHORT: fprintf (f, "short"); break;
-    case TP_USHORT: fprintf (f, "unsigned short"); break;
-    case TP_INT: fprintf (f, "int"); break;
-    case TP_UINT: fprintf (f, "unsigned int"); break;
-    case TP_LONG: fprintf (f, "long"); break;
-    case TP_ULONG: fprintf (f, "unsigned long"); break;
-    case TP_LLONG: fprintf (f, "long long"); break;
-    case TP_ULLONG: fprintf (f, "unsigned long long"); break;
-    case TP_FLOAT: fprintf (f, "float"); break;
-    case TP_DOUBLE: fprintf (f, "double"); break;
-    case TP_LDOUBLE: fprintf (f, "long double"); break;
-    default: assert (FALSE);
-    }
-    break;
+  case TM_BASIC: print_basic_type (f, type->u.basic_type); break;
   case TM_ENUM: fprintf (f, "enum node %u", type->u.tag_type->uid); break;
   case TM_PTR:
     fprintf (f, "ptr (");
@@ -12624,7 +12668,6 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_SIGNED:
   case N_UNSIGNED:
   case N_BOOL:
-  case N_ENUM:
   case N_CONST:
   case N_RESTRICT:
   case N_VOLATILE:
@@ -12698,9 +12741,17 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
     if (attr_p && n->attr != NULL) fprintf (f, ": target node %u\n", ((node_t) n->attr)->uid);
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
+  case N_ENUM:
+    if (attr_p && n->attr != NULL) {
+      fprintf (f, ": enum_basic_type = ");
+      print_basic_type (f, ((struct enum_type *) n->attr)->enum_basic_type);
+      fprintf (f, "\n");
+    }
+    print_ops (c2m_ctx, f, n, indent, attr_p);
+    break;
   case N_ENUM_CONST:
-    if (attr_p && n->attr != NULL)
-      fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
+    if (attr_p && n->attr != NULL)  // ???!!!
+      fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->u.i_val);
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
   default: abort ();
