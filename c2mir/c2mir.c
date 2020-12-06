@@ -2014,7 +2014,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
   for (int i = 0; i < VARR_LENGTH (char_ptr_t, once_include_files); i++)
     if (strcmp (fname, VARR_GET (char_ptr_t, once_include_files, i)) == 0) return;
   assert (fname != NULL);
-  if (content == NULL && (f = fopen (fname, "r")) == NULL) {
+  if (content == NULL && (f = fopen (fname, "rb")) == NULL) {
     if (c2m_options->message_file != NULL)
       error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
