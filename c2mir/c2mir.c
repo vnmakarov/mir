@@ -5708,7 +5708,7 @@ static void aux_set_type_align (c2m_ctx_t c2m_ctx, struct type *type) {
 static mir_size_t type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   mir_size_t size = raw_type_size (c2m_ctx, type);
 
-  return round_size (size, type->align);
+  return type->align == 0 ? size : round_size (size, type->align);
 }
 
 static mir_size_t var_align (c2m_ctx_t c2m_ctx, struct type *type) {
