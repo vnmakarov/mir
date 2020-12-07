@@ -11716,8 +11716,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (va_arg_p) {
       op1 = get_new_temp (c2m_ctx, MIR_T_I64);
       op2 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
-      if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
-        op2 = mem_to_address (c2m_ctx, op2, FALSE);
+      if (op2.mir_op.mode == MIR_OP_MEM) {
+#ifndef _WIN32
+        if (op2.mir_op.u.mem.type == MIR_T_UNDEF)
+#endif
+          op2 = mem_to_address (c2m_ctx, op2, FALSE);
+      }
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
         res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
@@ -11743,8 +11747,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
     } else if (va_start_p) {
       op1 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
-      if (op1.mir_op.mode == MIR_OP_MEM && op1.mir_op.u.mem.type == MIR_T_UNDEF)
-        op1 = mem_to_address (c2m_ctx, op1, FALSE);
+      if (op1.mir_op.mode == MIR_OP_MEM) {
+#ifndef _WIN32
+        if (op1.mir_op.u.mem.type == MIR_T_UNDEF)
+#endif
+          op1 = mem_to_address (c2m_ctx, op1, FALSE);
+      }
       MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_VA_START, op1.mir_op));
     } else if (alloca_p) {
       res = get_new_temp (c2m_ctx, t);
