@@ -229,6 +229,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
   uint32_t n_iregs, n_xregs, n_fregs;
 
+  assert (prev_call_insn != NULL);
   if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
