@@ -136,8 +136,8 @@ DEF_VARR (pos_t);
 
 struct c2m_ctx {
   MIR_context_t ctx;
-  jmp_buf env;
   struct c2mir_options *options;
+  jmp_buf env; /* put it first as it might need 16-byte malloc allignment */
   VARR (char_ptr_t) * headers;
   VARR (char_ptr_t) * system_headers;
   const char **header_dirs, **system_header_dirs;
