@@ -5044,7 +5044,7 @@ typedef struct label_desc {
 DEF_HTAB (label_desc_t);
 
 struct scan_ctx {
-  jmp_buf error_jmp_buf;
+  jmp_buf error_jmp_buf; /* keep it here to provide malloc alignment */
   VARR (char) * error_msg_buf;
   VARR (MIR_var_t) * scan_vars;
   VARR (MIR_type_t) * scan_types;
