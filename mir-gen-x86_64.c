@@ -623,7 +623,7 @@ static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pr
   case MIR_VA_BLOCK_ARG:
     *proto_item
       = _MIR_builtin_proto (ctx, curr_func_item->module, VA_BLOCK_ARG_P, 0, NULL, 4, MIR_T_I64,
-                            "res", MIR_T_I64, "va", MIR_T_I64, "size", MIR_T_I64, "t");
+                            "res", MIR_T_I64, "va", MIR_T_I64, "size", MIR_T_I64, "ncase");
     *func_import_item
       = _MIR_builtin_func (ctx, curr_func_item->module, VA_BLOCK_ARG, va_block_arg_builtin);
     break;

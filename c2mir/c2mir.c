@@ -11728,7 +11728,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, res.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type)),
-                                       MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type))));
+                                       MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type)
+                                                              - MIR_T_BLK)));
         res = *desirable_dest;
       } else {
         MIR_append_insn (ctx, curr_func,

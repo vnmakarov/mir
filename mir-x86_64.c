@@ -61,9 +61,8 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct x86_64_va_list *va = p;
-  MIR_type_t type = t;
   size_t size = ((s + 7) / 8) * 8;
   void *a = va->overflow_arg_area;
   union {
@@ -71,8 +70,8 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
     double d;
   } u[2];
 
-  switch (type) {
-  case MIR_T_BLK2:
+  switch (ncase) {
+  case 1:
     if (va->gp_offset + size > 48) break;
     u[0].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
     va->gp_offset += 8;
@@ -82,7 +81,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
     }
     memcpy (res, &u, s);
     return;
-  case MIR_T_BLK3:
+  case 2:
     u[0].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
     va->fp_offset += 16;
     if (size > 8) {
@@ -91,10 +90,10 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
     }
     memcpy (res, &u, s);
     return;
-  case MIR_T_BLK4:
-  case MIR_T_BLK5:
+  case 3:
+  case 4:
     if (va->fp_offset > 160 || va->gp_offset > 40) break;
-    if (type == MIR_T_BLK4) {
+    if (ncase == 3) {
       u[0].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
       u[1].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
     } else {
@@ -132,7 +131,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t t) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct x86_64_va_list *va = p;
   void *a = s <= 8 ? va->arg_area : *(void **) va->arg_area; /* pass by pointer */
   memcpy (res, a, s);
