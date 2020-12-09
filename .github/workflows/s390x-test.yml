@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - arch: s390x
-            distro: fedora_latest
+            distro: jessie
 
     steps:
     - uses: actions/checkout@v1
