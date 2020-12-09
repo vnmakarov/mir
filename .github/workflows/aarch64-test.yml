@@ -6,7 +6,7 @@ jobs:
   test:
 
     # The host should always be linux
-    runs-on: ubuntu_latest
+    runs-on: ubuntu-latest
     name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
 
     # Run steps on a matrix of 3 arch/distro combinations
@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - arch: aarch64
-            distro: fedora_latest
+            distro: fedora-latest
 
     steps:
     - uses: actions/checkout@v1
