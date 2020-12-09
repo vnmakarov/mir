@@ -14,7 +14,7 @@ jobs:
       matrix:
         include:
           - arch: s390x
-            distro: jessie
+            distro: stretch
 
     steps:
     - uses: actions/checkout@v1
