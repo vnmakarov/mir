@@ -1,4 +1,4 @@
-name: test
+name: AMD64-Linux-OSX-Windows-test
 
 on: [push]
 
