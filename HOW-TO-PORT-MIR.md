@@ -69,8 +69,10 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
   * `void *va_arg_builtin (void *p, uint64_t t)` returns address of
     the next argument of MIR type `t`, where `p` is `va_list`
   
-  * `void *va_stack_arg_builtin (void *p, size_t s)` returns address of
-    the next argument of MIR type `MIR_T_BLK` of size `s`, where `p` is `va_list`
+  * `void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t
+    ncase)` set up memory block with address `res` by the next block
+    argment of size `s` and `ncase` (e.g. `MIR_T_BLK` has case 0,
+    `MIR_T_BLK2` has case 1 etc), where `p` is `va_list`
   
   * `void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t
     func_item, void *handler)` generates and returns a function behaving as usual
