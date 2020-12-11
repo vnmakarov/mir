@@ -672,25 +672,33 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
 #endif
     0x41, 0xff, 0xe2, /*jmpq   *%r10			   */
   };
-  static const uint8_t call_pat[] = {
+  static const uint8_t call_pat[] =
 #ifndef _WIN32
-    0x48, 0xbe, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs called_func,%rsi  	   */
-    0x48, 0xbf, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs ctx,%rdi  	   */
-    0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /*movabs <hook_address>,%r10  	   */
-    0x41, 0xff, 0xd2,                      /*callq  *%r10			   */
-    0x49, 0x89, 0xc2,                      /*mov    %rax,%r10		   */
+    {
+      0x48, 0xbe, 0,    0, 0, 0, 0, 0, 0, 0, /* movabs called_func,%rsi  	   */
+      0x48, 0xbf, 0,    0, 0, 0, 0, 0, 0, 0, /* movabs ctx,%rdi  	   */
+      0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /* movabs <hook_address>,%r10  	   */
+      0x41, 0xff, 0xd2,                      /* callq  *%r10			   */
+      0x49, 0x89, 0xc2,                      /* mov %rax,%r10		   */
+    };
+  size_t call_func_offset = 2, ctx_offset = 12, hook_offset = 22;
 #else
-    0x48, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /*movabs called_func,%rdx   */
-    0x48, 0xb9, 0,    0,    0, 0, 0, 0, 0, 0, /*movabs ctx,%rcx           */
-    0x49, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /*movabs <hook_address>,%r10*/
-    0x50,                                     /*push   %rax               */
-    0x48, 0x83, 0xec, 0x20,                   /*sub    32,%rsp            */
-    0x41, 0xff, 0xd2,                         /*callq  *%r10              */
-    0x49, 0x89, 0xc2,                         /*mov    %rax,%r10          */
-    0x48, 0x83, 0xc4, 0x20,                   /*add    32,%rsp            */
-    0x58,                                     /*pop    %rax               */
+    {
+      0x55,                                     /* push %rbp */
+      0x48, 0x89, 0xe5,                         /* mov %rsp,%rbp */
+      0x48, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs called_func,%rdx   */
+      0x48, 0xb9, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs ctx,%rcx           */
+      0x49, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs <hook_address>,%r10*/
+      0x50,                                     /* push   %rax               */
+      0x48, 0x83, 0xec, 0x28,                   /* sub    40,%rsp            */
+      0x41, 0xff, 0xd2,                         /* callq  *%r10              */
+      0x49, 0x89, 0xc2,                         /* mov    %rax,%r10          */
+      0x48, 0x83, 0xc4, 0x28,                   /* add    40,%rsp            */
+      0x58,                                     /* pop    %rax               */
+      0x5d,                                     /* pop %rbp */
+    };
+  size_t call_func_offset = 6, ctx_offset = 16, hook_offset = 26;
 #endif
-  };
   uint8_t *addr;
   VARR (uint8_t) * code;
   void *res;
@@ -701,9 +709,9 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
 #endif
   push_insns (code, save_pat, sizeof (save_pat));
   addr = push_insns (code, call_pat, sizeof (call_pat));
-  memcpy (addr + 2, &called_func, sizeof (void *));
-  memcpy (addr + 12, &ctx, sizeof (void *));
-  memcpy (addr + 22, &hook_address, sizeof (void *));
+  memcpy (addr + call_func_offset, &called_func, sizeof (void *));
+  memcpy (addr + ctx_offset, &ctx, sizeof (void *));
+  memcpy (addr + hook_offset, &hook_address, sizeof (void *));
   push_insns (code, restore_pat, sizeof (restore_pat));
   push_insns (code, wrap_end, sizeof (wrap_end));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
