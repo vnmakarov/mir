@@ -562,27 +562,32 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   static const uint32_t hndl_offset = 0x4c;
   static const uint32_t prep_stack_size = 208;
 #else
-    /*  0: */ 0x4c, 0x8d, 0x44, 0x24, 0x08,                /* lea    8(%rsp),%r8     */
-    /*  5: */ 0x53,                                        /* push   %rbx            */
-    /*  6: */ 0x48, 0x81, 0xec, 0,    0,    0, 0,          /* sub    <n>,%rsp        */
-    /*  d: */ 0x48, 0x89, 0xe3,                            /* mov    %rsp,%rbx       */
-    /* 10: */ 0x49, 0x89, 0xe1,                            /* mov    %rsp,%r9        */
-    /* 13: */ 0x48, 0x83, 0xec, 0x20,                      /* sub    32,%rsp         */
-    /* 17: */ 0x48, 0xb9, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <ctx>,%rcx      */
-    /* 21: */ 0x48, 0xba, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <func_item>,%rdx*/
-    /* 2b: */ 0x48, 0xb8, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <handler>,%rax  */
-    /* 35: */ 0xff, 0xd0,                                  /* callq  *%rax           */
+    /*  0: */ 0x53,                                        /* push   %rbx            */
+    /*  1: */ 0x55,                                        /* push %rbp */
+    /*  2: */ 0x48, 0x89, 0xe5,                            /* mov %rsp,%rbp */
+    /*  5: */ 0x4c, 0x8d, 0x44, 0x24, 0x10,                /* lea    16(%rsp),%r8     */
+    /*  a: */ 0x48, 0x81, 0xec, 0,    0,    0, 0,          /* sub    <n>,%rsp        */
+    /* 11: */ 0x48, 0x89, 0xe3,                            /* mov    %rsp,%rbx       */
+    /* 14: */ 0x49, 0x89, 0xe1,                            /* mov    %rsp,%r9        */
+    /* 17: */ 0x48, 0x83, 0xec, 0x20,                      /* sub    32,%rsp         */
+    /* 1b: */ 0x48, 0xb9, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <ctx>,%rcx      */
+    /* 25: */ 0x48, 0xba, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <func_item>,%rdx*/
+    /* 2f: */ 0x48, 0xb8, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <handler>,%rax  */
+    /* 39: */ 0xff, 0xd0,                                  /* callq  *%rax           */
   };
-  static const uint32_t nres_offset = 0x09;
-  static const uint32_t ctx_offset = 0x19;
-  static const uint32_t func_offset = 0x23;
-  static const uint32_t hndl_offset = 0x2d;
+  static const uint32_t nres_offset = 0x0d;
+  static const uint32_t ctx_offset = 0x1d;
+  static const uint32_t func_offset = 0x27;
+  static const uint32_t hndl_offset = 0x31;
   static const uint32_t prep_stack_size = 32;
 #endif
   static const uint8_t shim_end[] = {
-    /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, /*add    prep_stack_size+n,%rsp*/
-    /* 7: */ 0x5b,                         /*pop                      %rbx*/
-    /* 8: */ 0xc3,                         /*retq                         */
+    /* 0: */ 0x48,   0x81, 0xc4, 0, 0, 0, 0, /*add    prep_stack_size+n,%rsp*/
+#ifdef _WIN32
+    /* 7: */ 0x5d, /* pop %rbp */
+#endif
+    /* 7,8: */ 0x5b, /*pop                      %rbx*/
+    /* 8,9: */ 0xc3, /*retq                         */
   };
   static const uint8_t ld_pat[] = {0x48, 0x8b, 0x83, 0, 0, 0, 0}; /* mov <offset>(%rbx), %reg */
   static const uint8_t movss_pat[]
@@ -605,6 +610,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   push_insns (code, save_pat, sizeof (save_pat));
   addr = push_insns (code, prepare_pat, sizeof (prepare_pat));
   imm = nres * 16;
+#ifdef _WIN32
+  imm += 8; /*align */
+#endif
   memcpy (addr + nres_offset, &imm, sizeof (uint32_t));
   memcpy (addr + ctx_offset, &ctx, sizeof (void *));
   memcpy (addr + func_offset, &func_item, sizeof (void *));
@@ -645,6 +653,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   }
   addr = push_insns (code, shim_end, sizeof (shim_end));
   imm = prep_stack_size + nres * 16;
+#ifdef _WIN32
+  imm += 8; /*align */
+#endif
   memcpy (addr + 3, &imm, sizeof (uint32_t));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
