@@ -256,7 +256,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     call_insn->ops[1] = temp_op;
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
-  for (size_t i = start; i < nops; i++) { /* caclulate offset for blk params */
+  for (size_t i = start; i < nops; i++) { /* calculate offset for blk params */
     if (i - start < nargs) {
       type = arg_vars[i - start].type;
     } else if (call_insn->ops[i].mode == MIR_OP_MEM) {
