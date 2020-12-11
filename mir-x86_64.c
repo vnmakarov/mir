@@ -145,6 +145,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   assert (sizeof (struct x86_64_va_list) == sizeof (va_list));
   *va = (struct x86_64_va_list *) vap;
 }
+
 #endif
 
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
@@ -348,7 +349,7 @@ static void gen_st80 (VARR (uint8_t) * insn_varr, uint32_t src_offset) {
                                 goto L if rax > 0) ...
    rax=8; call *r11; sp+=offset
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
-   pop rbx; push r12; ret. */
+   pop rbx; pop r12; ret. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
                         _MIR_arg_desc_t *arg_descs, int vararg_p) {
   static const uint8_t prolog[] = {
@@ -359,11 +360,13 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x49, 0x89, 0xfb,             /* mov $rdi, $r11 -- fun addr */
     0x48, 0x89, 0xf3,             /* mov $rsi, $rbx -- result/arg addresses */
 #else
-    0x41, 0x54,                                /* pushq %r12 */
-    0x53,                                      /* pushq %rbx */
-    0x48, 0x81, 0xec, 0, 0, 0, 0,              /* subq <sp_offset>, %rsp */
-    0x49, 0x89, 0xcb,                          /* mov $rcx, $r11 -- fun addr */
-    0x48, 0x89, 0xd3,                          /* mov $rdx, $rbx -- result/arg addresses */
+    /* 0x0: */ 0x41,  0x54,                    /* pushq %r12 */
+    /* 0x2: */ 0x53,                           /* pushq %rbx */
+    /* 0x3: */ 0x55,                           /* push %rbp */
+    /* 0x4: */ 0x48,  0x89, 0xe5,              /* mov %rsp,%rbp */
+    /* 0x7: */ 0x48,  0x81, 0xec, 0, 0, 0, 0,  /* subq <sp_offset>, %rsp */
+    /* 0xe: */ 0x49,  0x89, 0xcb,              /* mov $rcx, $r11 -- fun addr */
+    /* 0x11: */ 0x48, 0x89, 0xd3,              /* mov $rdx, $rbx -- result/arg addresses */
 #endif
   };
   static const uint8_t call_end[] = {
@@ -374,6 +377,9 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x48, 0x81, 0xc4, 0,    0, 0, 0, /* addq <sp_offset>, %rsp */
   };
   static const uint8_t epilog[] = {
+#ifdef _WIN32
+    0x5d, /* pop %rbp */
+#endif
     0x5b,       /* pop %rbx */
     0x41, 0x5c, /* pop %r12 */
     0xc3,       /* ret */
@@ -492,9 +498,15 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   if (blk_offset > sp_offset) sp_offset = blk_offset;
 #endif
   sp_offset = (sp_offset + 15) / 16 * 16;
-  sp_offset += 8;
+#ifndef _WIN32
+  sp_offset += 8; /* align */
+#endif
   addr = VARR_ADDR (uint8_t, code);
+#ifndef _WIN32
   memcpy (addr + 6, &sp_offset, sizeof (uint32_t));
+#else
+  memcpy (addr + 10, &sp_offset, sizeof (uint32_t));
+#endif
   addr = push_insns (code, call_end, sizeof (call_end));
   memcpy (addr + sizeof (call_end) - 4, &sp_offset, sizeof (uint32_t));
 #ifdef _WIN32
