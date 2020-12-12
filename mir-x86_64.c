@@ -565,7 +565,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     /*  0: */ 0x53,                                        /* push   %rbx            */
     /*  1: */ 0x55,                                        /* push %rbp */
     /*  2: */ 0x48, 0x89, 0xe5,                            /* mov %rsp,%rbp */
-    /*  5: */ 0x4c, 0x8d, 0x44, 0x24, 0x10,                /* lea    16(%rsp),%r8     */
+    /*  5: */ 0x4c, 0x8d, 0x44, 0x24, 0x18,                /* lea    24(%rsp),%r8     */
     /*  a: */ 0x48, 0x81, 0xec, 0,    0,    0, 0,          /* sub    <n>,%rsp        */
     /* 11: */ 0x48, 0x89, 0xe3,                            /* mov    %rsp,%rbx       */
     /* 14: */ 0x49, 0x89, 0xe1,                            /* mov    %rsp,%r9        */
