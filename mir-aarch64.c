@@ -279,7 +279,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 
   VARR_CREATE (uint8_t, code, 128);
   mir_assert (sizeof (long double) == 16);
-  for (size_t i = 0; i < nargs; i++) { /* caclulate offset for blk params */
+  for (size_t i = 0; i < nargs; i++) { /* calculate offset for blk params */
     type = arg_descs[i].type;
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_all_blk_type_p (type)) {
       if (MIR_blk_type_p (type) && (qwords = (arg_descs[i].size + 7) / 8) <= 2) {
