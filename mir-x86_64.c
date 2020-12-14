@@ -586,12 +586,14 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   static const uint32_t prep_stack_size = 32;
 #endif
   static const uint8_t shim_end[] = {
-    /* 0: */ 0x48,   0x81, 0xc4, 0, 0, 0, 0, /*add    prep_stack_size+n,%rsp*/
-#ifdef _WIN32
-    /* 7: */ 0x5d, /* pop %rbp */
+#ifndef _WIN32
+    /* 0: */ 0x48, 0x81, 0xc4, 0, 0, 0, 0, /*add    prep_stack_size+n,%rsp*/
+#else                                      /* Strict form of windows epilogue for unwinding: */
+    /* 0 */ 0x48,  0x8d, 0x65, 0x0, /* lea  0x0(%rbp),%rsp */
+    /* 4: */ 0x5d,                  /* pop %rbp */
 #endif
-    /* 7,8: */ 0x5b, /*pop                      %rbx*/
-    /* 8,9: */ 0xc3, /*retq                         */
+    0x5b, /*pop                      %rbx*/
+    0xc3, /*retq                         */
   };
   static const uint8_t ld_pat[] = {0x48, 0x8b, 0x83, 0, 0, 0, 0}; /* mov <offset>(%rbx), %reg */
   static const uint8_t movss_pat[]
@@ -656,11 +658,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     offset += 16;
   }
   addr = push_insns (code, shim_end, sizeof (shim_end));
+#ifndef _WIN32
   imm = prep_stack_size + nres * 16;
-#ifdef _WIN32
-  imm += 8; /*align */
-#endif
   memcpy (addr + 3, &imm, sizeof (uint32_t));
+#endif
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
   return res;
