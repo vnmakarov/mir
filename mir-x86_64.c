@@ -3,11 +3,11 @@
 */
 
 /* RBLK args are always passed by address.
-   BLK first is copied on the caller stack and passed implicitly.
-   BLK2 is passed in general regs
-   BLK3 is passed in fp regs
-   BLK4 is passed in gpr and then fpr
-   BLK5 is passed in fpr and then gpr
+   BLK0 first is copied on the caller stack and passed implicitly.
+   BLK1 is passed in general regs
+   BLK2 is passed in fp regs
+   BLK3 is passed in gpr and then fpr
+   BLK4 is passed in fpr and then gpr
    If there are no enough regs, they work as BLK.
    Windows: small BLKs (<= 8 bytes) are passed by value;
             all other BLKs is always passed by pointer as regular int arg.  */
@@ -432,7 +432,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     } else if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
 #ifndef _WIN32
-      if (type == MIR_T_BLK2 && n_iregs + qwords <= max_iregs) {
+      if (type == MIR_T_BLK + 1 && n_iregs + qwords <= max_iregs) {
         assert (qwords <= 2);
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE);   /* r12 = block addr */
         gen_mov2 (code, 0, iregs[n_iregs], TRUE);                      /* arg_reg = mem[r12] */
@@ -440,14 +440,14 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         n_iregs += qwords;
         n_xregs += qwords;
         continue;
-      } else if (type == MIR_T_BLK3 && n_xregs + qwords <= max_xregs) {
+      } else if (type == MIR_T_BLK + 2 && n_xregs + qwords <= max_xregs) {
         assert (qwords <= 2);
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
         gen_movxmm2 (code, 0, n_xregs, TRUE);                        /* xmm = mem[r12] */
         if (qwords == 2) gen_movxmm2 (code, 8, n_xregs + 1, TRUE);   /* xmm = mem[r12 +  8] */
         n_xregs += qwords;
         continue;
-      } else if (type == MIR_T_BLK4 && n_iregs < max_iregs && n_xregs < max_xregs) {
+      } else if (type == MIR_T_BLK + 3 && n_iregs < max_iregs && n_xregs < max_xregs) {
         assert (qwords == 2);
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
         gen_mov2 (code, 0, iregs[n_iregs], TRUE);                    /* arg_reg = mem[r12] */
@@ -456,7 +456,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         gen_movxmm2 (code, 8, n_xregs, TRUE); /* xmm = mem[r12 + 8] */
         n_xregs++;
         continue;
-      } else if (type == MIR_T_BLK5 && n_iregs < max_iregs && n_xregs < max_xregs) {
+      } else if (type == MIR_T_BLK + 4 && n_iregs < max_iregs && n_xregs < max_xregs) {
         assert (qwords == 2);
         gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = block addr */
         gen_movxmm2 (code, 0, n_xregs, TRUE);                        /* xmm = mem[r12] */

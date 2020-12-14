@@ -282,12 +282,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st after simplification */
     }
 #ifndef _WIN32
-    if ((type == MIR_T_BLK2 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+    if ((type == MIR_T_BLK + 1 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
          && (size <= 8 || get_int_arg_reg (int_arg_num + 1) != MIR_NON_HARD_REG))
-        || (type == MIR_T_BLK3 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
+        || (type == MIR_T_BLK + 2 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
             && (size <= 8 || get_fp_arg_reg (fp_arg_num + 1) != MIR_NON_HARD_REG))) {
       /* all is passed in gprs or fprs */
-      MIR_type_t mov_type = type == MIR_T_BLK2 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type = type == MIR_T_BLK + 1 ? MIR_T_I64 : MIR_T_D;
       MIR_insn_code_t mov_code;
       MIR_reg_t reg2, reg1 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code);
 
@@ -305,12 +305,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
         setup_call_hard_reg_args (gen_ctx, call_insn, reg2);
       }
       continue;
-    } else if ((type == MIR_T_BLK4 || type == MIR_T_BLK5)
+    } else if ((type == MIR_T_BLK + 3 || type == MIR_T_BLK + 4)
                && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
                && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG) {
       /* gpr and then fpr or fpr and then gpr */
-      MIR_type_t mov_type1 = type == MIR_T_BLK4 ? MIR_T_I64 : MIR_T_D;
-      MIR_type_t mov_type2 = type == MIR_T_BLK4 ? MIR_T_D : MIR_T_I64;
+      MIR_type_t mov_type1 = type == MIR_T_BLK + 3 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type2 = type == MIR_T_BLK + 3 ? MIR_T_D : MIR_T_I64;
       MIR_insn_code_t mov_code1, mov_code2;
       MIR_reg_t reg1 = get_arg_reg (mov_type1, &int_arg_num, &fp_arg_num, &mov_code1);
       MIR_reg_t reg2 = get_arg_reg (mov_type2, &int_arg_num, &fp_arg_num, &mov_code2);
@@ -717,12 +717,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     type = VARR_GET (MIR_var_t, func->vars, i).type;
     blk_size = MIR_blk_type_p (type) ? (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8 * 8 : 0;
 #ifndef _WIN32
-    if ((type == MIR_T_BLK2 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
+    if ((type == MIR_T_BLK + 1 && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
          && (blk_size <= 8 || get_int_arg_reg (int_arg_num + 1) != MIR_NON_HARD_REG))
-        || (type == MIR_T_BLK3 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
+        || (type == MIR_T_BLK + 2 && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG
             && (blk_size <= 8 || get_fp_arg_reg (fp_arg_num + 1) != MIR_NON_HARD_REG))) {
       /* all is passed in gprs or fprs */
-      MIR_type_t mov_type = type == MIR_T_BLK2 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type = type == MIR_T_BLK + 1 ? MIR_T_I64 : MIR_T_D;
       MIR_insn_code_t mov_code1, mov_code2;
       MIR_reg_t reg2, reg1 = get_arg_reg (mov_type, &int_arg_num, &fp_arg_num, &mov_code1);
 
@@ -740,12 +740,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                MIR_new_int_op (ctx, blk_size));
       prepend_insn (gen_ctx, new_insn);
       continue;
-    } else if ((type == MIR_T_BLK4 || type == MIR_T_BLK5)
+    } else if ((type == MIR_T_BLK + 3 || type == MIR_T_BLK + 4)
                && get_int_arg_reg (int_arg_num) != MIR_NON_HARD_REG
                && get_fp_arg_reg (fp_arg_num) != MIR_NON_HARD_REG) {
       /* gpr and then fpr or fpr and then gpr */
-      MIR_type_t mov_type1 = type == MIR_T_BLK4 ? MIR_T_I64 : MIR_T_D;
-      MIR_type_t mov_type2 = type == MIR_T_BLK4 ? MIR_T_D : MIR_T_I64;
+      MIR_type_t mov_type1 = type == MIR_T_BLK + 3 ? MIR_T_I64 : MIR_T_D;
+      MIR_type_t mov_type2 = type == MIR_T_BLK + 3 ? MIR_T_D : MIR_T_I64;
       MIR_insn_code_t mov_code1, mov_code2;
       MIR_reg_t reg1 = get_arg_reg (mov_type1, &int_arg_num, &fp_arg_num, &mov_code1);
       MIR_reg_t reg2 = get_arg_reg (mov_type2, &int_arg_num, &fp_arg_num, &mov_code2);

@@ -176,11 +176,13 @@ typedef enum {
 
 #define TYPE_EL(t) MIR_T_##t
 
+#define MIR_BLK_NUM 5
 /* Data types: */
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */
   REP3 (TYPE_EL, F, D, LD),                             /* Float or (long) double type */
-  REP7 (TYPE_EL, P, BLK, BLK2, BLK3, BLK4, BLK5, RBLK), /* Pointer, (return) memory block */
+  REP2 (TYPE_EL, P, BLK),                               /* Pointer, memory blocks */
+  TYPE_EL (RBLK) = TYPE_EL (BLK) + MIR_BLK_NUM,         /* return block */
   REP2 (TYPE_EL, UNDEF, BOUND),
 } MIR_type_t;
 
@@ -190,7 +192,7 @@ static inline int MIR_int_type_p (MIR_type_t t) {
 
 static inline int MIR_fp_type_p (MIR_type_t t) { return MIR_T_F <= t && t <= MIR_T_LD; }
 
-static inline int MIR_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t <= MIR_T_BLK5; }
+static inline int MIR_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t < MIR_T_RBLK; }
 static inline int MIR_all_blk_type_p (MIR_type_t t) { return MIR_T_BLK <= t && t <= MIR_T_RBLK; }
 
 #if UINTPTR_MAX == 0xffffffff

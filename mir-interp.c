@@ -1497,14 +1497,11 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     case MIR_T_F: call_res_args[i + nres].f = arg_vals[i].f; break;
     case MIR_T_D: call_res_args[i + nres].d = arg_vals[i].d; break;
     case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
-    case MIR_T_P:
-    case MIR_T_BLK:
-    case MIR_T_BLK2:
-    case MIR_T_BLK3:
-    case MIR_T_BLK4:
-    case MIR_T_BLK5:
-    case MIR_T_RBLK: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
-    default: mir_assert (FALSE);
+    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
+    default:
+      mir_assert (MIR_all_blk_type_p (type));
+      call_res_args[i + nres].u = (uint64_t) arg_vals[i].a;
+      break;
     }
   }
   ((void (*) (void *, void *)) ff_interface_addr) (addr, call_res_args); /* call */
@@ -1679,20 +1676,13 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_LD: arg_vals[i].ld = va_arg (va, long double); break;
     case MIR_T_P:
     case MIR_T_RBLK: arg_vals[i].a = va_arg (va, void *); break;
-    case MIR_T_BLK:
-    case MIR_T_BLK2:
-    case MIR_T_BLK3:
-    case MIR_T_BLK4:
-    case MIR_T_BLK5: {
-      arg_vals[i].a = alloca (arg_vars[i].size);
+    default: mir_assert (MIR_blk_type_p (type)); arg_vals[i].a = alloca (arg_vars[i].size);
 #if defined(__PPC64__) || defined(__aarch64__) || defined(_WIN32)
       va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size, type - MIR_T_BLK);
 #else
           va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size, type - MIR_T_BLK);
 #endif
       break;
-    }
-    default: mir_assert (FALSE);
     }
   }
 #if VA_LIST_IS_ARRAY_P

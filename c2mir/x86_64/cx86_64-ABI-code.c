@@ -334,10 +334,10 @@ static MIR_type_t get_blk_type (int n_qwords, MIR_type_t *qword_types) {
     default: assert (FALSE);
     }
   }
-  if (n_iregs == n_qwords) return MIR_T_BLK2;
-  if (n_fregs == n_qwords) return MIR_T_BLK3;
-  if (qword_types[0] == MIR_T_F || qword_types[0] == MIR_T_D) return MIR_T_BLK5;
-  return MIR_T_BLK4;
+  if (n_iregs == n_qwords) return MIR_T_BLK + 1;
+  if (n_fregs == n_qwords) return MIR_T_BLK + 2;
+  if (qword_types[0] == MIR_T_F || qword_types[0] == MIR_T_D) return MIR_T_BLK + 4;
+  return MIR_T_BLK + 3;
 }
 
 static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {

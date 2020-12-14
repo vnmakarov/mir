@@ -763,7 +763,10 @@ MIR_module_t MIR_new_module (MIR_context_t ctx, const char *name) {
 
 DLIST (MIR_module_t) * MIR_get_module_list (MIR_context_t ctx) { return &all_modules; }
 
-static const char *type_str (MIR_type_t tp) {
+static const char *type_str (MIR_context_t ctx, MIR_type_t tp) {
+  int n;
+  char str[100];
+
   switch (tp) {
   case MIR_T_I8: return "i8";
   case MIR_T_U8: return "u8";
@@ -777,19 +780,19 @@ static const char *type_str (MIR_type_t tp) {
   case MIR_T_D: return "d";
   case MIR_T_LD: return "ld";
   case MIR_T_P: return "p";
-  case MIR_T_BLK: return "blk";
-  case MIR_T_BLK2: return "blk2";
-  case MIR_T_BLK3: return "blk3";
-  case MIR_T_BLK4: return "blk4";
-  case MIR_T_BLK5: return "blk5";
   case MIR_T_RBLK: return "rblk";
   case MIR_T_UNDEF: return "undef";
-  default: return "";
+  default:
+    if (MIR_blk_type_p (tp) && (n = tp - MIR_T_BLK) >= 0 && n < MIR_BLK_NUM) {
+      sprintf (str, "blk%d", n);
+      return get_ctx_str (ctx, str);
+    }
+    return "";
   }
 }
 
 const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp) {
-  const char *str = type_str (tp);
+  const char *str = type_str (ctx, tp);
 
   if (strcmp (str, "") == 0)
     MIR_get_error_func (ctx) (MIR_wrong_param_value_error, "MIR_type_str: wrong type");
@@ -1264,7 +1267,7 @@ MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type for register %s: got '%s'", name,
-                              type_str (type));
+                              type_str (ctx, type));
   mir_assert (func != NULL);
   res = create_func_reg (ctx, func, name, VARR_LENGTH (MIR_var_t, func->vars) + 1, type, FALSE,
                          &stored_name);
@@ -1998,7 +2001,7 @@ MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func
 
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type %s for temporary register",
-                              type_str (type));
+                              type_str (ctx, type));
   mir_assert (func != NULL);
   for (;;) {
     func->last_temp_num++;
@@ -4841,7 +4844,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
             default:
               MIR_get_error_func (ctx) (MIR_binary_io_error,
                                         "data type %s does not correspond value type",
-                                        type_str (type));
+                                        type_str (ctx, type));
             }
             break;
           case TAG_I1:
@@ -4872,28 +4875,28 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
             default:
               MIR_get_error_func (ctx) (MIR_binary_io_error,
                                         "data type %s does not correspond value type",
-                                        type_str (type));
+                                        type_str (ctx, type));
             }
             break;
           case TAG_F:
             if (type != MIR_T_F)
               MIR_get_error_func (ctx) (MIR_binary_io_error,
                                         "data type %s does not correspond value type",
-                                        type_str (type));
+                                        type_str (ctx, type));
             push_data (ctx, (uint8_t *) &attr.f, sizeof (float));
             break;
           case TAG_D:
             if (type != MIR_T_D)
               MIR_get_error_func (ctx) (MIR_binary_io_error,
                                         "data type %s does not correspond value type",
-                                        type_str (type));
+                                        type_str (ctx, type));
             push_data (ctx, (uint8_t *) &attr.d, sizeof (double));
             break;
           case TAG_LD:
             if (type != MIR_T_LD)
               MIR_get_error_func (ctx) (MIR_binary_io_error,
                                         "data type %s does not correspond value type",
-                                        type_str (type));
+                                        type_str (ctx, type));
             push_data (ctx, (uint8_t *) &attr.ld, sizeof (long double));
             break;
             /* ??? ptr */
@@ -5401,11 +5404,11 @@ static MIR_type_t str2type (const char *type_name) {
   if (strcmp (type_name, "u16") == 0) return MIR_T_U16;
   if (strcmp (type_name, "i8") == 0) return MIR_T_I8;
   if (strcmp (type_name, "u8") == 0) return MIR_T_U8;
-  if (strcmp (type_name, "blk") == 0) return MIR_T_BLK;
-  if (strcmp (type_name, "blk2") == 0) return MIR_T_BLK2;
-  if (strcmp (type_name, "blk3") == 0) return MIR_T_BLK3;
-  if (strcmp (type_name, "blk4") == 0) return MIR_T_BLK4;
-  if (strcmp (type_name, "blk5") == 0) return MIR_T_BLK5;
+  if (strncmp (type_name, "blk", 3) == 0) {
+    int i, n = 0;
+    for (i = 3; isdigit (type_name[i]) && n < MIR_BLK_NUM; i++) n = n * 10 + (type_name[i] - '0');
+    if (type_name[i] == 0 && n < MIR_BLK_NUM) return MIR_T_BLK + n;
+  }
   if (strcmp (type_name, "rblk") == 0) return MIR_T_RBLK;
   return MIR_T_BOUND;
 }
