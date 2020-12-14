@@ -373,12 +373,15 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #ifndef _WIN32
     0x48, 0xc7, 0xc0, 0x08, 0, 0, 0, /* mov $8, rax -- to save xmm varargs */
 #endif
-    0x41, 0xff, 0xd3,                /* callq  *%r11	   */
+    0x41, 0xff, 0xd3, /* callq  *%r11	   */
+#ifndef _WIN32
     0x48, 0x81, 0xc4, 0,    0, 0, 0, /* addq <sp_offset>, %rsp */
+#endif
   };
   static const uint8_t epilog[] = {
-#ifdef _WIN32
-    0x5d, /* pop %rbp */
+#ifdef _WIN32              /* Strict form of windows epilogue for unwinding: */
+    0x48, 0x8d, 0x65, 0x0, /* lea  0x0(%rbp),%rsp */
+    0x5d,                  /* pop %rbp */
 #endif
     0x5b,       /* pop %rbx */
     0x41, 0x5c, /* pop %r12 */
@@ -508,8 +511,9 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   memcpy (addr + 10, &sp_offset, sizeof (uint32_t));
 #endif
   addr = push_insns (code, call_end, sizeof (call_end));
+#ifndef _WIN32
   memcpy (addr + sizeof (call_end) - 4, &sp_offset, sizeof (uint32_t));
-#ifdef _WIN32
+#else
   if (nres > 1)
     MIR_get_error_func (ctx) (MIR_call_op_error,
                               "Windows x86-64 doesn't support multiple return values");
