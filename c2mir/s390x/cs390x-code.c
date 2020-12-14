@@ -3,16 +3,20 @@
 */
 
 #include "../mirc.h"
-#include "mirc-s390x-linux.h"
+#include "mirc_s390x_linux.h"
 
-static const char *standard_includes[] = {mirc, s390x_mirc};
+#include "mirc_s390x_float.h"
+#include "mirc_s390x_limits.h"
+#include "mirc_s390x_stdarg.h"
+#include "mirc_s390x_stdint.h"
+#include "mirc_s390x_stddef.h"
 
-static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/s390x/"};
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULL, s390x_mirc}, TARGET_STD_INCLUDES};
 
 #define MAX_ALIGNMENT 16
 
-#define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) \
-  s390x_adjust_var_alignment (c2m_ctx, align, type)
+#define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) s390x_adjust_var_alignment (c2m_ctx, align, type)
 
 static int s390x_adjust_var_alignment (c2m_ctx_t c2m_ctx, int align, struct type *type) {
   return align;

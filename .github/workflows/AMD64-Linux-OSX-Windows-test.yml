@@ -1,0 +1,24 @@
+name: AMD64-Linux-OSX-Windows-test
+
+on: [push]
+
+jobs:
+  test:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: make test
+      if: runner.os != 'Windows'
+      run: make test
+    - name: cmake test
+      if: runner.os == 'Windows'
+      run: |
+        cmake -G 'Visual Studio 16 2019' -A x64 -DBUILD_TESTING=ON
+        cmake --build . --config Release
+        ctest --verbose --output-on-failure

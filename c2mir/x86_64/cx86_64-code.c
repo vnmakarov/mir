@@ -5,15 +5,19 @@
 #include "../mirc.h"
 
 #ifndef _WIN32
-#include "mirc-x86_64-linux.h"
+#include "mirc_x86_64_linux.h"
 #else
-#include "mirc-x86_64-win.h"
+#include "mirc_x86_64_win.h"
 #endif
 
+#include "mirc_x86_64_float.h"
+#include "mirc_x86_64_limits.h"
+#include "mirc_x86_64_stdarg.h"
+#include "mirc_x86_64_stdint.h"
+#include "mirc_x86_64_stddef.h"
 
-static const char *standard_includes[] = {mirc, x86_64_mirc};
-
-static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/x86-64/"};
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULL, x86_64_mirc}, TARGET_STD_INCLUDES};
 
 #define MAX_ALIGNMENT 16
 

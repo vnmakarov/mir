@@ -136,8 +136,8 @@ DEF_VARR (pos_t);
 
 struct c2m_ctx {
   MIR_context_t ctx;
-  jmp_buf env;
   struct c2mir_options *options;
+  jmp_buf env; /* put it first as it might need 16-byte malloc allignment */
   VARR (char_ptr_t) * headers;
   VARR (char_ptr_t) * system_headers;
   const char **header_dirs, **system_header_dirs;
@@ -257,9 +257,6 @@ enum basic_type {
   TP_LDOUBLE,
 };
 
-#define ENUM_BASIC_INT_TYPE TP_INT
-#define ENUM_MIR_INT mir_int
-
 struct type_qual {
   unsigned int const_p : 1, restrict_p : 1, volatile_p : 1, atomic_p : 1; /* Type qualifiers */
 };
@@ -292,28 +289,24 @@ enum type_mode {
 };
 
 struct type {
-  struct type_qual type_qual;
   node_t pos_node;       /* set up and used only for checking type correctness */
   struct type *arr_type; /* NULL or array type before its adjustment */
+  struct type_qual type_qual;
+  enum type_mode mode;
+  char unnamed_anon_struct_union_member_type_p;
+  int align; /* type align, undefined if < 0  */
   /* Raw type size (w/o alignment type itself requirement but with
      element alignment requirements), undefined if mir_size_max.  */
   mir_size_t raw_size;
-  int align; /* type align, undefined if < 0  */
-  enum type_mode mode;
-  char unnamed_anon_struct_union_member_type_p;
   union {
-    enum basic_type basic_type;
-    node_t tag_type; /* struct/union/enum */
+    enum basic_type basic_type; /* also integer type */
+    node_t tag_type;            /* struct/union/enum */
     struct type *ptr_type;
     struct arr_type *arr_type;
     struct func_type *func_type;
   } u;
 };
 
-static const struct type ENUM_INT_TYPE = {.raw_size = MIR_SIZE_MAX,
-                                          .align = -1,
-                                          .mode = TM_BASIC,
-                                          .u = {.basic_type = ENUM_BASIC_INT_TYPE}};
 /*!*/ static struct type VOID_TYPE
   = {.raw_size = MIR_SIZE_MAX, .align = -1, .mode = TM_BASIC, .u = {.basic_type = TP_VOID}};
 
@@ -324,6 +317,10 @@ static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   assert (type->raw_size != MIR_SIZE_MAX);
   return type->raw_size;
 }
+
+typedef struct {
+  const char *name, *content;
+} string_include_t;
 
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "x86_64/cx86_64-code.c"
@@ -982,6 +979,9 @@ static int get_line (c2m_ctx_t c2m_ctx) { /* translation phase 1 and 2 */
   VARR_TRUNC (char, cs->ln, 0);
   for (c = ln_get (c2m_ctx); c != EOF && c != '\n'; c = ln_get (c2m_ctx))
     VARR_PUSH (char, cs->ln, c);
+#ifdef _WIN32
+  if (VARR_LENGTH (char, cs->ln) != 0 && VARR_LAST (char, cs->ln) == '\r') VARR_POP (char, cs->ln);
+#endif
   eof_p = c == EOF;
   if (eof_p) {
     if (VARR_LENGTH (char, cs->ln) == 0) return FALSE;
@@ -1416,7 +1416,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       }
       cs = VARR_LAST (stream_t, streams);
       if (cs->f == NULL && cs->fname != NULL && !string_stream_p (cs)) {
-        if ((cs->f = fopen (cs->fname, "r")) == NULL) {
+        if ((cs->f = fopen (cs->fname, "rb")) == NULL) {
           if (c2m_options->message_file != NULL)
             fprintf (c2m_options->message_file, "cannot reopen file %s -- good bye\n", cs->fname);
           longjmp (c2m_ctx->env, 1);  // ???
@@ -1797,6 +1797,7 @@ typedef struct macro_call {
 DEF_VARR (macro_call_t);
 
 struct pre_ctx {
+  VARR (char_ptr_t) * once_include_files;
   VARR (token_t) * temp_tokens;
   HTAB (macro_t) * macro_tab;
   VARR (macro_t) * macros;
@@ -1814,6 +1815,7 @@ struct pre_ctx {
   void (*pre_out_token_func) (c2m_ctx_t c2m_ctx, token_t);
 };
 
+#define once_include_files pre_ctx->once_include_files
 #define temp_tokens pre_ctx->temp_tokens
 #define macro_tab pre_ctx->macro_tab
 #define macros pre_ctx->macros
@@ -1945,7 +1947,8 @@ static ifstate_t new_ifstate (int skip_p, int true_p, int else_p, pos_t if_pos) 
 
 static void pop_ifstate (c2m_ctx_t c2m_ctx) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
-  free (VARR_POP (ifstate_t, ifs));
+  ifstate_t ifstate = VARR_POP (ifstate_t, ifs);
+  free (ifstate);
 }
 
 static void pre_init (c2m_ctx_t c2m_ctx) {
@@ -1956,7 +1959,7 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   c2m_ctx->pre_ctx = pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
   no_out_p = skip_if_part_p = FALSE;
   t = time (&time_loc);
-#ifdef _MSC_VER
+#if defined(_WIN32)
   tm = localtime (&t);
 #else
   tm = localtime_r (&t, &tm_loc);
@@ -1972,6 +1975,7 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   date_str[strlen (date_str) - 1] = '\0';
   strcpy (time_str, time_str_repr + 1);
   time_str[strlen (time_str) - 1] = '\0';
+  VARR_CREATE (char_ptr_t, once_include_files, 64);
   VARR_CREATE (token_t, temp_tokens, 128);
   VARR_CREATE (token_t, output_buffer, 2048);
   init_macros (c2m_ctx);
@@ -1983,6 +1987,7 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
   pre_ctx_t pre_ctx;
 
   if (c2m_ctx == NULL || (pre_ctx = c2m_ctx->pre_ctx) == NULL) return;
+  if (once_include_files != NULL) VARR_DESTROY (char_ptr_t, once_include_files);
   if (temp_tokens != NULL) VARR_DESTROY (token_t, temp_tokens);
   if (output_buffer != NULL) VARR_DESTROY (token_t, output_buffer);
   finish_macros (c2m_ctx);
@@ -1998,17 +2003,23 @@ static void pre_finish (c2m_ctx_t c2m_ctx) {
   free (c2m_ctx->pre_ctx);
 }
 
-static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, pos_t err_pos) {
+static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char *content,
+                                pos_t err_pos) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   FILE *f;
 
+  for (int i = 0; i < VARR_LENGTH (char_ptr_t, once_include_files); i++)
+    if (strcmp (fname, VARR_GET (char_ptr_t, once_include_files, i)) == 0) return;
   assert (fname != NULL);
-  if ((f = fopen (fname, "r")) == NULL) {
+  if (content == NULL && (f = fopen (fname, "rb")) == NULL) {
     if (c2m_options->message_file != NULL)
       error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
-  add_stream (c2m_ctx, f, fname, NULL);
+  if (content == NULL)
+    add_stream (c2m_ctx, f, fname, NULL);
+  else
+    add_string_stream (c2m_ctx, fname, content);
   cs->ifs_length_at_stream_start = VARR_LENGTH (ifstate_t, ifs);
 }
 
@@ -2205,7 +2216,7 @@ static int file_found_p (const char *name) {
 
 static const char *get_full_name (c2m_ctx_t c2m_ctx, const char *base, const char *name,
                                   int dir_base_p) {
-  const char *str, *last;
+  const char *str, *last, *last2, *slash = "/", *slash2 = NULL;
   size_t len;
 
   VARR_TRUNC (char, temp_string, 0);
@@ -2213,24 +2224,34 @@ static const char *get_full_name (c2m_ctx_t c2m_ctx, const char *base, const cha
     assert (name != NULL && name[0] != '\0');
     return name;
   }
+#ifdef _WIN32
+  slash2 = "\\";
+#endif
   if (dir_base_p) {
     len = strlen (base);
     assert (len > 0);
     add_to_temp_string (c2m_ctx, base);
-    if (base[len - 1] != '/') add_to_temp_string (c2m_ctx, "/");
-  } else if ((last = strrchr (base, '/')) == NULL) {
-    add_to_temp_string (c2m_ctx, "./");
+    if (base[len - 1] != slash[0]) add_to_temp_string (c2m_ctx, slash);
   } else {
-    for (str = base; str <= last; str++) VARR_PUSH (char, temp_string, *str);
-    VARR_PUSH (char, temp_string, '\0');
+    last = strrchr (base, slash[0]);
+    last2 = slash2 != NULL ? strrchr (base, slash2[0]) : NULL;
+    if (last2 != NULL && (last == NULL || last2 > last)) last = last2;
+    if (last != NULL) {
+      for (str = base; str <= last; str++) VARR_PUSH (char, temp_string, *str);
+      VARR_PUSH (char, temp_string, '\0');
+    } else {
+      add_to_temp_string (c2m_ctx, ".");
+      add_to_temp_string (c2m_ctx, slash);
+    }
   }
   add_to_temp_string (c2m_ctx, name);
   return VARR_ADDR (char, temp_string);
 }
 
-static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t) {
+static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t, const char **content) {
   const char *fullname, *name;
 
+  *content = NULL;
   assert (t->code == T_STR || t->code == T_HEADER);
   if ((name = t->node->u.s.s)[0] != '/') {
     if (t->repr[0] == '"') {
@@ -2244,6 +2265,11 @@ static const char *get_include_fname (c2m_ctx_t c2m_ctx, token_t t) {
         if (file_found_p (fullname)) return uniq_cstr (c2m_ctx, fullname).s;
       }
     }
+    for (size_t i = 0; i < sizeof (standard_includes) / sizeof (string_include_t); i++)
+      if (standard_includes[i].name != NULL && strcmp (name, standard_includes[i].name) == 0) {
+        *content = standard_includes[i].content;
+        return name;
+      }
     for (size_t i = 0; system_header_dirs[i] != NULL; i++) {
       fullname = get_full_name (c2m_ctx, system_header_dirs[i], name, TRUE);
       if (file_found_p (fullname)) return uniq_cstr (c2m_ctx, fullname).s;
@@ -2290,11 +2316,19 @@ static pos_t check_line_directive_args (c2m_ctx_t c2m_ctx, VARR (token_t) * buff
 }
 
 static void check_pragma (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * tokens) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t *tokens_arr = VARR_ADDR (token_t, tokens);
   size_t i, tokens_len = VARR_LENGTH (token_t, tokens);
 
   i = 0;
   if (i < tokens_len && tokens_arr[i]->code == ' ') i++;
+#ifdef _WIN32
+  if (i + 1 == tokens_len && tokens_arr[i]->code == T_ID
+      && strcmp (tokens_arr[i]->repr, "once") == 0) {
+    VARR_PUSH (char_ptr_t, once_include_files, cs->fname);
+    return;
+  }
+#endif
   if (i >= tokens_len || tokens_arr[i]->code != T_ID || strcmp (tokens_arr[i]->repr, "STDC") != 0) {
     warning (c2m_ctx, t->pos, "unknown pragma");
     return;
@@ -2727,9 +2761,11 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p);
 
 static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, token_t if_token);
 
-static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, pos_t err_pos) {
+static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, pos_t err_pos,
+                                    const char **content) {
   int i;
 
+  *content = NULL;
   transform_to_header (c2m_ctx, buffer);
   i = 0;
   if (VARR_LENGTH (token_t, buffer) != 0 && VARR_GET (token_t, buffer, 0)->code == ' ') i++;
@@ -2739,7 +2775,7 @@ static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, 
     error (c2m_ctx, err_pos, "wrong #include");
     return NULL;
   }
-  return get_include_fname (c2m_ctx, VARR_GET (token_t, buffer, i));
+  return get_include_fname (c2m_ctx, VARR_GET (token_t, buffer, i), content);
 }
 
 static void process_directive (c2m_ctx_t c2m_ctx) {
@@ -2842,11 +2878,13 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
   } else if (strcmp (t->repr, "define") == 0) {
     define (c2m_ctx);
   } else if (strcmp (t->repr, "include") == 0) {
+    const char *content;
+
     t = get_next_include_pptoken (c2m_ctx);
     if (t->code == ' ') t = get_next_include_pptoken (c2m_ctx);
     t1 = get_next_pptoken (c2m_ctx);
     if ((t->code == T_STR || t->code == T_HEADER) && t1->code == '\n')
-      name = get_include_fname (c2m_ctx, t);
+      name = get_include_fname (c2m_ctx, t, &content);
     else {
       VARR_PUSH (token_t, temp_buffer, t);
       skip_nl (c2m_ctx, t1, temp_buffer);
@@ -2857,7 +2895,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       processing (c2m_ctx, TRUE);
       no_out_p = FALSE;
       move_tokens (temp_buffer, output_buffer);
-      if ((name = get_header_name (c2m_ctx, temp_buffer, t->pos)) == NULL) {
+      if ((name = get_header_name (c2m_ctx, temp_buffer, t->pos, &content)) == NULL) {
         error (c2m_ctx, t->pos, "wrong #include");
         goto ret;
       }
@@ -2866,7 +2904,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, t->pos, "more %d include levels", VARR_LENGTH (stream_t, streams) - 1);
       goto ret;
     }
-    add_include_stream (c2m_ctx, name, t->pos);
+    add_include_stream (c2m_ctx, name, content, t->pos);
   } else if (strcmp (t->repr, "line") == 0) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
     unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOP, N_IGNORE));
@@ -3409,7 +3447,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       } else if (strcmp (t->repr, "__has_include") == 0) {
         int res;
         VARR (token_t) * arg;
-        const char *name;
+        const char *name, *content;
         FILE *f;
 
         if ((mc = try_param_macro_call (c2m_ctx, m, t)) != NULL) {
@@ -3418,8 +3456,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
             res = 0;
           } else {
             arg = VARR_LAST (token_arr_t, mc->args);
-            if ((name = get_header_name (c2m_ctx, arg, t->pos)) != NULL) {
-              res = ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
+            if ((name = get_header_name (c2m_ctx, arg, t->pos, &content)) != NULL) {
+              res = content != NULL || ((f = fopen (name, "r")) != NULL && !fclose (f)) ? 1 : 0;
             } else {
               error (c2m_ctx, t->pos, "wrong arg of predefined __has_include");
               res = 0;
@@ -3534,6 +3572,7 @@ static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
   actual_pre_pos.ln_pos = 0;
   pre_out_token_func = common_pre_out;
   pptokens_num = 0;
+  VARR_TRUNC (char_ptr_t, once_include_files, 0);
   if (!c2m_options->no_prepro_p) {
     processing (c2m_ctx, FALSE);
   } else {
@@ -5058,19 +5097,12 @@ static void parse_init (c2m_ctx_t c2m_ctx) {
   tpname_init (c2m_ctx);
 }
 
-#ifndef SOURCEDIR
-#define SOURCEDIR "./"
-#endif
-
-#ifndef INSTALLDIR
-#define INSTALLDIR "/usr/bin/"
-#endif
-
 static void add_standard_includes (c2m_ctx_t c2m_ctx) {
-  const char *str;
+  const char *str, *name;
 
-  for (int i = 0; i < sizeof (standard_includes) / sizeof (char *); i++) {
-    str = standard_includes[i];
+  for (int i = 0; i < sizeof (standard_includes) / sizeof (string_include_t); i++) {
+    if ((name = standard_includes[i].name) != NULL) continue;
+    str = standard_includes[i].content;
     add_string_stream (c2m_ctx, "<environment>", str);
   }
 }
@@ -5122,8 +5154,9 @@ static void parse_finish (c2m_ctx_t c2m_ctx) {
  6. N_MODULE, N_BLOCK, N_FOR, N_FUNC have attribute "struct node_scope"
  7. declaration_specs or spec_qual_list N_LISTs have attribute "struct decl_spec",
     but as a part of N_COMPOUND_LITERAL have attribute "struct decl"
- 8. N_ENUM_CONST has attribute "struct enum_value"
- 9. N_CASE and N_DEFAULT have attribute "struct case_attr"
+ 8. N_ENUM has attribute "struct enum_type"
+ 9. N_ENUM_CONST has attribute "struct enum_value"
+10. N_CASE and N_DEFAULT have attribute "struct case_attr"
 
 */
 
@@ -5290,6 +5323,8 @@ static int integer_type_p (const struct type *type) {
   return standard_integer_type_p (type) || type->mode == TM_ENUM;
 }
 
+static enum basic_type get_enum_basic_type (const struct type *type);
+
 static int signed_integer_type_p (const struct type *type) {
   if (standard_integer_type_p (type)) {
     enum basic_type tp = type->u.basic_type;
@@ -5297,7 +5332,10 @@ static int signed_integer_type_p (const struct type *type) {
     return ((tp == TP_CHAR && char_is_signed_p ()) || tp == TP_SCHAR || tp == TP_SHORT
             || tp == TP_INT || tp == TP_LONG || tp == TP_LLONG);
   }
-  if (type->mode == TM_ENUM) return signed_integer_type_p (&ENUM_INT_TYPE);
+  if (type->mode == TM_ENUM) {
+    enum basic_type basic_type = get_enum_basic_type (type);
+    return (basic_type == TP_INT || basic_type == TP_LONG || basic_type == TP_LLONG);
+  }
   return FALSE;
 }
 
@@ -5323,9 +5361,12 @@ static struct type get_ptr_int_type (int signed_p) {
   if (sizeof (mir_int) == sizeof (mir_size_t)) {
     res.u.basic_type = signed_p ? TP_INT : TP_UINT;
     return res;
+  } else if (sizeof (mir_long) == sizeof (mir_size_t)) {
+    res.u.basic_type = signed_p ? TP_LONG : TP_ULONG;
+    return res;
   }
-  assert (sizeof (mir_long) == sizeof (mir_size_t));
-  res.u.basic_type = signed_p ? TP_LONG : TP_ULONG;
+  assert (sizeof (mir_llong) == sizeof (mir_size_t));
+  res.u.basic_type = signed_p ? TP_LLONG : TP_ULLONG;
   return res;
 }
 
@@ -5345,7 +5386,7 @@ static struct type integer_promotion (const struct type *type) {
           || (type->u.basic_type == TP_USHORT && MIR_USHORT_MAX > MIR_INT_MAX)))
     res.u.basic_type = TP_UINT;
   else if (type->mode == TM_ENUM)
-    res.u.basic_type = ENUM_BASIC_INT_TYPE;
+    res.u.basic_type = get_enum_basic_type (type);
   else if (type->mode == TM_BASIC && type->u.basic_type == TP_UINT)
     res.u.basic_type = TP_UINT;
   else
@@ -5419,8 +5460,15 @@ struct decl_spec {
   struct type *type;
 };
 
+struct enum_type {
+  enum basic_type enum_basic_type;
+};
+
 struct enum_value {
-  mir_int val;
+  union {
+    mir_llong i_val;
+    mir_ullong u_val;
+  } u;
 };
 
 struct node_scope {
@@ -5447,6 +5495,11 @@ struct decl {
   MIR_item_t item; /* MIR_item for some declarations */
   c2m_ctx_t c2m_ctx;
 };
+
+static enum basic_type get_enum_basic_type (const struct type *type) {
+  assert (type->mode == TM_ENUM);
+  return ((struct enum_type *) type->u.tag_type->attr)->enum_basic_type;
+}
 
 static struct decl_spec *get_param_decl_spec (node_t param) {
   node_t MIR_UNUSED declarator;
@@ -5501,9 +5554,9 @@ static int compatible_types_p (struct type *type1, struct type *type2, int ignor
   if (type1->mode != type2->mode) {
     if (!ignore_quals_p && !type_qual_eq_p (&type1->type_qual, &type2->type_qual)) return FALSE;
     if (type1->mode == TM_ENUM && type2->mode == TM_BASIC)
-      return type2->u.basic_type == ENUM_BASIC_INT_TYPE;
+      return type2->u.basic_type == get_enum_basic_type (type1);
     if (type2->mode == TM_ENUM && type1->mode == TM_BASIC)
-      return type1->u.basic_type == ENUM_BASIC_INT_TYPE;
+      return type1->u.basic_type == get_enum_basic_type (type2);
     return FALSE;
   }
   if (type1->mode == TM_BASIC) {
@@ -5621,7 +5674,7 @@ static void aux_set_type_align (c2m_ctx_t c2m_ctx, struct type *type) {
   } else if (type->mode == TM_PTR) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    align = basic_type_align (ENUM_BASIC_INT_TYPE);
+    align = basic_type_align (get_enum_basic_type (type));
   } else if (type->mode == TM_FUNC) {
     align = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -5655,7 +5708,7 @@ static void aux_set_type_align (c2m_ctx_t c2m_ctx, struct type *type) {
 static mir_size_t type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   mir_size_t size = raw_type_size (c2m_ctx, type);
 
-  return round_size (size, type->align);
+  return type->align == 0 ? size : round_size (size, type->align);
 }
 
 static mir_size_t var_align (c2m_ctx_t c2m_ctx, struct type *type) {
@@ -5741,7 +5794,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
   } else if (type->mode == TM_PTR) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ENUM) {
-    overall_size = basic_type_size (ENUM_BASIC_INT_TYPE);
+    overall_size = basic_type_size (get_enum_basic_type (type));
   } else if (type->mode == TM_FUNC) {
     overall_size = sizeof (mir_size_t);
   } else if (type->mode == TM_ARR) {
@@ -5812,7 +5865,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
 
 static int int_bit_size (struct type *type) {
   assert (type->mode == TM_BASIC || type->mode == TM_ENUM);
-  return (basic_type_size (type->mode == TM_ENUM ? ENUM_BASIC_INT_TYPE : type->u.basic_type)
+  return (basic_type_size (type->mode == TM_ENUM ? get_enum_basic_type (type) : type->u.basic_type)
           * MIR_CHAR_BIT);
 }
 
@@ -5911,24 +5964,23 @@ static void cast_value (struct expr *to_e, struct expr *from_e, struct type *to)
   default: assert (FALSE);                                      \
   }
 
+  struct type temp, temp2;
+  if (to->mode == TM_ENUM) {
+    temp.mode = TM_BASIC;
+    temp.u.basic_type = get_enum_basic_type (to);
+    to = &temp;
+  }
+  if (from->mode == TM_ENUM) {
+    temp2.mode = TM_BASIC;
+    temp2.u.basic_type = get_enum_basic_type (from);
+    from = &temp2;
+  }
   if (to->mode == from->mode && (from->mode == TM_PTR || from->mode == TM_ENUM)) {
     to_e->u = from_e->u;
   } else if (from->mode == TM_PTR) {
-    if (to->mode == TM_ENUM) {
-      to_e->u.i_val = (ENUM_MIR_INT) from_e->u.u_val;
-    } else {
-      BASIC_FROM_CONV (u_val);
-    }
-  } else if (from->mode == TM_ENUM) {
-    if (to->mode == TM_PTR) {
-      to_e->u.u_val = (mir_size_t) from_e->u.i_val;
-    } else {
-      BASIC_FROM_CONV (i_val);
-    }
+    BASIC_FROM_CONV (u_val);
   } else if (to->mode == TM_PTR) {
     BASIC_TO_CONV (mir_size_t, u_val);
-  } else if (to->mode == TM_ENUM) {
-    BASIC_TO_CONV (ENUM_MIR_INT, i_val);
   } else {
     switch (from->u.basic_type) {
     case TP_BOOL:
@@ -6086,7 +6138,7 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
   if (linkage == N_IGNORE) {
     if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p
         || !type_eq_p (decl_spec.type, tab_decl_spec.type))
-#ifdef __APPLE__
+#if defined(__APPLE__)
       /* a hack to use our definition instead of macosx for non-GNU compiler */
       if (strcmp (id->u.s.s, "__darwin_va_list") != 0)
 #endif
@@ -6339,8 +6391,14 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         if (incomplete_type_p (c2m_ctx, type))
           error (c2m_ctx, POS (n), "enum storage size is unknown");
       } else {
-        mir_int curr_val = 0;
+        mir_llong curr_val = -1, min_val = 0;
+        mir_ullong max_val = 0;
+        enum basic_type basic_type;
+        struct enum_type *enum_type;
+        int neg_p = FALSE;
 
+        n->attr = enum_type = reg_malloc (c2m_ctx, sizeof (struct enum_type));
+        enum_type->enum_basic_type = TP_INT;
         for (node_t en = NL_HEAD (enum_list->u.ops); en != NULL; en = NL_NEXT (en)) {  // ??? id
           node_t id, const_expr;
           symbol_t sym;
@@ -6355,22 +6413,49 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           } else {
             symbol_insert (c2m_ctx, S_REGULAR, id, curr_scope, en, n);
           }
+          curr_val++;
+          if (curr_val == 0) neg_p = FALSE;
           if (const_expr->code != N_IGNORE) {
             struct expr *cexpr = const_expr->attr;
 
-            if (!cexpr->const_p)
+            if (!cexpr->const_p) {
               error (c2m_ctx, POS (const_expr), "non-constant value in enum const expression");
-            else if (!integer_type_p (cexpr->type))
+              continue;
+            } else if (!integer_type_p (cexpr->type)) {
               error (c2m_ctx, POS (const_expr), "enum const expression is not of an integer type");
-            else if ((signed_integer_type_p (cexpr->type) && cexpr->u.i_val > MIR_INT_MAX)
-                     || (!signed_integer_type_p (cexpr->type) && cexpr->u.u_val > MIR_INT_MAX))
-              error (c2m_ctx, POS (const_expr), "enum const expression is not represented by int");
-            else
-              curr_val = cexpr->u.i_val;
+              continue;
+            }
+            curr_val = cexpr->u.i_val;
+            neg_p = signed_integer_type_p (cexpr->type) && cexpr->u.i_val < 0;
           }
           en->attr = enum_value = reg_malloc (c2m_ctx, sizeof (struct enum_value));
-          enum_value->val = curr_val;
-          curr_val++;
+          if (!neg_p) {
+            if (max_val < (mir_ullong) curr_val) max_val = (mir_ullong) curr_val;
+            if (min_val < 0 && (mir_ullong) curr_val >= MIR_LLONG_MAX)
+              error (c2m_ctx, POS (const_expr),
+                     "enum const expression is not represented by an int");
+            enum_value->u.u_val = (mir_ullong) curr_val;
+          } else {
+            if (min_val > curr_val) {
+              min_val = curr_val;
+              if (min_val < 0 && max_val >= MIR_LLONG_MAX)
+                error (c2m_ctx, POS (const_expr),
+                       "enum const expression is not represented by an int");
+            } else if (curr_val >= 0 && max_val < curr_val) {
+              max_val = curr_val;
+            }
+            enum_value->u.i_val = curr_val;
+          }
+          enum_type->enum_basic_type
+            = (max_val <= MIR_INT_MAX && MIR_INT_MIN <= min_val
+                 ? TP_INT
+                 : max_val <= MIR_UINT_MAX && 0 <= min_val
+                     ? TP_UINT
+                     : max_val <= MIR_LONG_MAX && MIR_LONG_MIN <= min_val
+                         ? TP_LONG
+                         : max_val <= MIR_ULONG_MAX && 0 <= min_val
+                             ? TP_ULONG
+                             : min_val < 0 || max_val <= MIR_LLONG_MAX ? TP_LLONG : TP_ULLONG);
         }
       }
       break;
@@ -7957,7 +8042,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e->type->pos_node = r;
       e->type->u.tag_type = aux_node;
       e->const_p = TRUE;
-      e->u.i_val = ((struct enum_value *) op1->attr)->val;
+      e->u.i_val = ((struct enum_value *) op1->attr)->u.i_val;
     }
     break;
   }
@@ -11639,15 +11724,20 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (va_arg_p) {
       op1 = get_new_temp (c2m_ctx, MIR_T_I64);
       op2 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
-      if (op2.mir_op.mode == MIR_OP_MEM && op2.mir_op.u.mem.type == MIR_T_UNDEF)
-        op2 = mem_to_address (c2m_ctx, op2, FALSE);
+      if (op2.mir_op.mode == MIR_OP_MEM) {
+#ifndef _WIN32
+        if (op2.mir_op.u.mem.type == MIR_T_UNDEF)
+#endif
+          op2 = mem_to_address (c2m_ctx, op2, FALSE);
+      }
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
         res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, res.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type)),
-                                       MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type))));
+                                       MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type)
+                                                              - MIR_T_BLK)));
         res = *desirable_dest;
       } else {
         MIR_append_insn (ctx, curr_func,
@@ -11666,8 +11756,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
     } else if (va_start_p) {
       op1 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, TRUE, NULL);
-      if (op1.mir_op.mode == MIR_OP_MEM && op1.mir_op.u.mem.type == MIR_T_UNDEF)
-        op1 = mem_to_address (c2m_ctx, op1, FALSE);
+      if (op1.mir_op.mode == MIR_OP_MEM) {
+#ifndef _WIN32
+        if (op1.mir_op.u.mem.type == MIR_T_UNDEF)
+#endif
+          op1 = mem_to_address (c2m_ctx, op1, FALSE);
+      }
       MIR_append_insn (ctx, curr_func, MIR_new_insn (ctx, MIR_VA_START, op1.mir_op));
     } else if (alloca_p) {
       res = get_new_temp (c2m_ctx, t);
@@ -12365,31 +12459,32 @@ static void print_qual (FILE *f, struct type_qual type_qual) {
   if (type_qual.atomic_p) fprintf (f, ", atomic");
 }
 
+static void print_basic_type (FILE *f, enum basic_type basic_type) {
+  switch (basic_type) {
+  case TP_UNDEF: fprintf (f, "undef type"); break;
+  case TP_VOID: fprintf (f, "void"); break;
+  case TP_BOOL: fprintf (f, "bool"); break;
+  case TP_CHAR: fprintf (f, "char"); break;
+  case TP_SCHAR: fprintf (f, "signed char"); break;
+  case TP_UCHAR: fprintf (f, "unsigned char"); break;
+  case TP_SHORT: fprintf (f, "short"); break;
+  case TP_USHORT: fprintf (f, "unsigned short"); break;
+  case TP_INT: fprintf (f, "int"); break;
+  case TP_UINT: fprintf (f, "unsigned int"); break;
+  case TP_LONG: fprintf (f, "long"); break;
+  case TP_ULONG: fprintf (f, "unsigned long"); break;
+  case TP_LLONG: fprintf (f, "long long"); break;
+  case TP_ULLONG: fprintf (f, "unsigned long long"); break;
+  case TP_FLOAT: fprintf (f, "float"); break;
+  case TP_DOUBLE: fprintf (f, "double"); break;
+  case TP_LDOUBLE: fprintf (f, "long double"); break;
+  default: assert (FALSE);
+  }
+}
 static void print_type (c2m_ctx_t c2m_ctx, FILE *f, struct type *type) {
   switch (type->mode) {
   case TM_UNDEF: fprintf (f, "undef type mode"); break;
-  case TM_BASIC:
-    switch (type->u.basic_type) {
-    case TP_UNDEF: fprintf (f, "undef type"); break;
-    case TP_VOID: fprintf (f, "void"); break;
-    case TP_BOOL: fprintf (f, "bool"); break;
-    case TP_CHAR: fprintf (f, "char"); break;
-    case TP_SCHAR: fprintf (f, "signed char"); break;
-    case TP_UCHAR: fprintf (f, "unsigned char"); break;
-    case TP_SHORT: fprintf (f, "short"); break;
-    case TP_USHORT: fprintf (f, "unsigned short"); break;
-    case TP_INT: fprintf (f, "int"); break;
-    case TP_UINT: fprintf (f, "unsigned int"); break;
-    case TP_LONG: fprintf (f, "long"); break;
-    case TP_ULONG: fprintf (f, "unsigned long"); break;
-    case TP_LLONG: fprintf (f, "long long"); break;
-    case TP_ULLONG: fprintf (f, "unsigned long long"); break;
-    case TP_FLOAT: fprintf (f, "float"); break;
-    case TP_DOUBLE: fprintf (f, "double"); break;
-    case TP_LDOUBLE: fprintf (f, "long double"); break;
-    default: assert (FALSE);
-    }
-    break;
+  case TM_BASIC: print_basic_type (f, type->u.basic_type); break;
   case TM_ENUM: fprintf (f, "enum node %u", type->u.tag_type->uid); break;
   case TM_PTR:
     fprintf (f, "ptr (");
@@ -12591,7 +12686,6 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_SIGNED:
   case N_UNSIGNED:
   case N_BOOL:
-  case N_ENUM:
   case N_CONST:
   case N_RESTRICT:
   case N_VOLATILE:
@@ -12665,9 +12759,17 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
     if (attr_p && n->attr != NULL) fprintf (f, ": target node %u\n", ((node_t) n->attr)->uid);
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
+  case N_ENUM:
+    if (attr_p && n->attr != NULL) {
+      fprintf (f, ": enum_basic_type = ");
+      print_basic_type (f, ((struct enum_type *) n->attr)->enum_basic_type);
+      fprintf (f, "\n");
+    }
+    print_ops (c2m_ctx, f, n, indent, attr_p);
+    break;
   case N_ENUM_CONST:
-    if (attr_p && n->attr != NULL)
-      fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->val);
+    if (attr_p && n->attr != NULL)  // ???!!!
+      fprintf (f, ": val = %lld\n", (long long) ((struct enum_value *) n->attr)->u.i_val);
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
   default: abort ();
@@ -12675,7 +12777,6 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
 }
 
 static void init_include_dirs (c2m_ctx_t c2m_ctx) {
-  const char *str;
   int MIR_UNUSED added_p = FALSE;
 
   VARR_CREATE (char_ptr_t, headers, 0);
@@ -12685,19 +12786,6 @@ static void init_include_dirs (c2m_ctx_t c2m_ctx) {
     VARR_PUSH (char_ptr_t, system_headers, c2m_options->include_dirs[i]);
   }
   VARR_PUSH (char_ptr_t, headers, NULL);
-  for (size_t i = 0; i < sizeof (standard_include_dirs) / sizeof (char *); i++) {
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, SOURCEDIR);
-    add_to_temp_string (c2m_ctx, standard_include_dirs[i]);
-    str = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    VARR_PUSH (char_ptr_t, system_headers, str);
-    VARR_TRUNC (char, temp_string, 0);
-    add_to_temp_string (c2m_ctx, INSTALLDIR);
-    add_to_temp_string (c2m_ctx, "../");
-    add_to_temp_string (c2m_ctx, standard_include_dirs[i]);
-    str = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    VARR_PUSH (char_ptr_t, system_headers, str);
-  }
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/local/include");
 #endif

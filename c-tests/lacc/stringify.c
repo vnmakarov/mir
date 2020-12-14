@@ -1,7 +1,11 @@
-int printf(const char *, ...);
-int puts(const char *);
+int printf (const char *, ...);
+int puts (const char *);
 
 #define STR(x) #x
+
+#ifdef _WIN32
+#define puts(s) printf ("%s\n", s);
+#endif
 
 static char *c[] = {
 	STR(
@@ -27,24 +31,23 @@ static char *c[] = {
 	STR(' ')
 };
 
-static int foo(void) {
-	int n = 0;
-	n += puts(STR(   this   is some   string  ));
-	n += puts(STR(this -= '8' 2u '\a' "i\ns\t"
-		'\n' a "te\0st"));
-	return n;
+static int foo (void) {
+  int n = 0;
+  n += puts (STR (this is some string));
+  n += puts (STR (this -= '8' 2u '\a' "i\ns\t" '\n' a "te\0st"));
+  return n;
 }
 
-int main(void) {
-	int i;
-	long n = 0;
-	for (i = 0; i < sizeof(c) / sizeof(*c); ++i) {
-		n += puts(c[i]);
-	}
+int main (void) {
+  int i;
+  long n = 0;
+  for (i = 0; i < sizeof (c) / sizeof (*c); ++i) {
+    n += puts (c[i]);
+  }
 
-	n += foo();
-	n += '\302';
-	n += '\x98';
-	n += '\xA';
-	return printf("%ld\n", n);
+  n += foo ();
+  n += '\302';
+  n += '\x98';
+  n += '\xA';
+  return printf ("%ld\n", n);
 }

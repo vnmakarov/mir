@@ -1,8 +1,9 @@
 <p>
-<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abuild"><img alt="GitHub MIR build status" src="https://github.com/vnmakarov/mir/workflows/build/badge.svg"></a>
-<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Atest"><img alt="GitHub MIR test status" src="https://github.com/vnmakarov/mir/workflows/test/badge.svg"></a>
-<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Abenchmark"><img alt="GitHub MIR benchmark status" src="https://github.com/vnmakarov/mir/workflows/benchmark/badge.svg"></a>
-<a href="https://travis-ci.com/vnmakarov/mir"><img alt="GitHub MIR Travis testing status" src="https://img.shields.io/travis/com/vnmakarov/mir.svg?label=Travis%20tests(x86_64,%20arm64,%20ppc64le,%20s390x)"></a>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3AAMD64%2DLinux%2DOSX%2DWindows%2Dtest"><img alt="GitHub MIR test status" src="https://github.com/vnmakarov/mir/workflows/AMD64%2DLinux%2DOSX%2DWindows%2Dtest/badge.svg"></a>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Aaarch64%2Dtest"><img alt="GitHub MIR test status on aarch64" src="https://github.com/vnmakarov/mir/workflows/aarch64%2Dtest/badge.svg"></a>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3Appc64le%2Dtest"><img alt="GitHub MIR test status on ppc64le" src="https://github.com/vnmakarov/mir/workflows/ppc64le%2Dtest/badge.svg"></a>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3As390x%2Dtest"><img alt="GitHub MIR test status on s390x" src="https://github.com/vnmakarov/mir/workflows/s390x%2Dtest/badge.svg"></a>
+<a href="https://github.com/vnmakarov/mir/actions?query=workflow%3AAMD64%2DLinux%2Dbench"><img alt="GitHub MIR benchmark status" src="https://github.com/vnmakarov/mir/workflows/AMD64%2DLinux%2Dbench/badge.svg"></a>
 </p>
 
 # MIR Project

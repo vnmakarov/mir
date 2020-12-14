@@ -3,11 +3,16 @@
 */
 
 #include "../mirc.h"
-#include "mirc-aarch64-linux.h"
+#include "mirc_aarch64_linux.h"
 
-static const char *standard_includes[] = {mirc, aarch64_mirc};
+#include "mirc_aarch64_float.h"
+#include "mirc_aarch64_limits.h"
+#include "mirc_aarch64_stdarg.h"
+#include "mirc_aarch64_stdint.h"
+#include "mirc_aarch64_stddef.h"
 
-static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/aarch64/"};
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULL, aarch64_mirc}, TARGET_STD_INCLUDES};
 
 #define MAX_ALIGNMENT 16
 

@@ -1685,10 +1685,10 @@ static void interp (MIR_context_t ctx, MIR_item_t func_item, va_list va, MIR_val
     case MIR_T_BLK4:
     case MIR_T_BLK5: {
       arg_vals[i].a = alloca (arg_vars[i].size);
-#if defined(__PPC64__) || defined(__aarch64__)
-      va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size, type);
+#if defined(__PPC64__) || defined(__aarch64__) || defined(_WIN32)
+      va_block_arg_builtin (arg_vals[i].a, &va, arg_vars[i].size, type - MIR_T_BLK);
 #else
-          va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size, type);
+          va_block_arg_builtin (arg_vals[i].a, va, arg_vars[i].size, type - MIR_T_BLK);
 #endif
       break;
     }

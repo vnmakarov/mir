@@ -3,16 +3,20 @@
 */
 
 #include "../mirc.h"
-#include "mirc-ppc64-linux.h"
+#include "mirc_ppc64_linux.h"
 
-static const char *standard_includes[] = {mirc, ppc64_mirc};
+#include "mirc_ppc64_float.h"
+#include "mirc_ppc64_limits.h"
+#include "mirc_ppc64_stdarg.h"
+#include "mirc_ppc64_stdint.h"
+#include "mirc_ppc64_stddef.h"
 
-static const char *standard_include_dirs[] = {"include/mirc/", "include/mirc/ppc64/"};
+static string_include_t standard_includes[]
+  = {{NULL, mirc}, {NULL, ppc64_mirc}, TARGET_STD_INCLUDES};
 
 #define MAX_ALIGNMENT 16
 
-#define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) \
-  ppc64_adjust_var_alignment (c2m_ctx, align, type)
+#define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) ppc64_adjust_var_alignment (c2m_ctx, align, type)
 
 static int ppc64_adjust_var_alignment (c2m_ctx_t c2m_ctx, int align, struct type *type) {
   return align;

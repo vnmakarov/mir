@@ -1,3 +1,7 @@
+#ifndef C2MIR_H
+
+#define C2MIR_H
+
 #include "mir.h"
 
 #define COMMAND_LINE_SOURCE_NAME "<command-line>"
@@ -24,3 +28,5 @@ void c2mir_init (MIR_context_t ctx);
 void c2mir_finish (MIR_context_t ctx);
 int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
                    void *getc_data, const char *source_name, FILE *output_file);
+
+#endif

@@ -6,7 +6,9 @@ outf=c-tests/__temp.out
 errf=c-tests/__temp.err
 all=0
 ok=0
+ctest_dir=`dirname $0`
 execution_program=$1
+compiler=$2
 
 ECHO=echo
 if test x$BASH_VERSION != x;then
@@ -32,15 +34,15 @@ runtest () {
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
 	$ECHO -n $t:
-	$TIMEOUT $execution_program $t $add_main 2>$errf >$outf
+	$TIMEOUT $execution_program $compiler $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
-	    if test x$expect_out != x && ! cmp $outf $expect_out;then
+	    if test x$expect_out != x && ! diff --strip-trailing-cr -up $expect_out $outf >$errf;then
 	            $ECHO Output mismatch
-		    diff -up $expect_out $outf
+		    cat $errf
 		else
 		    ok=`expr $ok + 1`
-	            $ECHO -ne "OK\r"
+	            $ECHO -ne "OK               \r"
 		fi
 	elif test $expect_code = 0; then
 	        cat $errf
@@ -54,12 +56,12 @@ runtest () {
 for dir in new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
 	$ECHO ++++++++++++++Running tests in $dir+++++++++++++
-	if test -f c-tests/$dir/main.c;then
-	   runtest c-tests/$dir/main.c
+	if test -f $ctest_dir/$dir/main.c;then
+	   runtest $ctest_dir/$dir/main.c
 	   continue;
 	fi
-	if test -f c-tests/$dir/add-main.c;then add_main=c-tests/$dir/add-main.c;else add_main=;fi
-	for t in c-tests/$dir/*.c;do
+	if test -f $ctest_dir/$dir/add-main.c;then add_main=$ctest_dir/$dir/add-main.c;else add_main=;fi
+	for t in $ctest_dir/$dir/*.c;do
 	    if test x$t = x$add_main;then continue;fi
 	    runtest $t $add_main
 	done

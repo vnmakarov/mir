@@ -1,0 +1,22 @@
+name: s390x-test
+
+on: [push]
+
+jobs:
+  test:
+
+    # The host should always be linux
+    runs-on: ubuntu-latest
+    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
+
+    # Run steps on a matrix of 3 arch/distro combinations
+    strategy:
+      matrix:
+        include:
+          - arch: s390x
+            distro: stretch
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: make test
+      run: make test

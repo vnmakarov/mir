@@ -91,8 +91,10 @@ static const char *lib_suffix = ".dylib";
 #endif
 
 #ifdef _WIN32
-static lib_t std_libs[] = {{"msvcrt.dll", NULL}, {"kernel32.dll", NULL}};
-static const char *std_lib_dirs[] = {""};
+static lib_t std_libs[] = {{"C:\\Windows\\System32\\msvcrt.dll", NULL},
+                           {"C:\\Windows\\System32\\kernel32.dll", NULL},
+                           {"C:\\Windows\\System32\\ucrtbase.dll", NULL}};
+static const char *std_lib_dirs[] = {"C:\\Windows\\System32"};
 static const char *lib_suffix = ".dll";
 #define dlopen(n, f) LoadLibrary (n)
 #define dlclose(h) FreeLibrary (h)
@@ -154,8 +156,10 @@ static void *open_lib (const char *dir, const char *name) {
 
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
-  if (last_slash[1] != '\0') VARR_PUSH (char, temp_string, slash);
+  if (last_slash == NULL || last_slash[1] != '\0') VARR_PUSH (char, temp_string, slash);
+#ifndef _WIN32
   VARR_PUSH_ARR (char, temp_string, "lib", 3);
+#endif
   VARR_PUSH_ARR (char, temp_string, name, strlen (name));
   VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
   VARR_PUSH (char, temp_string, 0);
@@ -667,7 +671,7 @@ int main (int argc, char *argv[], char *env[]) {
       curr_input.input_name = VARR_GET (char_ptr_t, source_file_names, i);
       if (strcmp (curr_input.input_name, STDIN_SOURCE_NAME) == 0) {
         f = stdin;
-      } else if ((f = fopen (curr_input.input_name, "r")) == NULL) {
+      } else if ((f = fopen (curr_input.input_name, "rb")) == NULL) {
         fprintf (stderr, "can not open %s -- goodbye\n", curr_input.input_name);
         exit (1);
       }

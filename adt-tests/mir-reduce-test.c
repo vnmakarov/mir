@@ -6,9 +6,10 @@
 DEF_VARR (uint8_t);
 static VARR (uint8_t) * orig, *buf1, *buf2;
 
+static FILE *input_file;
 static size_t input_length1 = 0;
 static size_t reader1 (void *start, size_t len, void *aux_data) {
-  size_t n = fread (start, 1, len, stdin);
+  size_t n = fread (start, 1, len, input_file);
 
   for (size_t i = 0; i < n; i++) VARR_PUSH (uint8_t, orig, ((uint8_t *) start)[i]);
   input_length1 += n;
@@ -41,10 +42,14 @@ static size_t writer2 (const void *start, size_t len, void *aux_data) {
   return len;
 }
 
-int main (void) {
+int main (int argc, const char *argv[]) {
   size_t i, n;
   double start = real_usec_time ();
 
+  if (argc != 2 || (input_file = fopen (argv[1], "r")) == NULL) {
+    fprintf (stderr, "usage: %s <inputfile>\n", argv[0]);
+    return 1;
+  }
   VARR_CREATE (uint8_t, orig, 0);
   VARR_CREATE (uint8_t, buf1, 0);
   if (!reduce_encode (reader1, writer1, NULL)) {

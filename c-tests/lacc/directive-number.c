@@ -2,6 +2,4 @@
 #error Wrong
 #endif
 
-int main(void) {
-	return '\301';
-}
+int main (void) { return (unsigned char) '\301' != 193; }

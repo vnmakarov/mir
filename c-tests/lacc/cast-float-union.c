@@ -1,12 +1,12 @@
-int printf(const char *, ...);
+int printf (const char *, ...);
 
 union {
-	long i;
-	float f;
+  long long i;
+  float f;
 } wat;
 
-int main(void) {
-	wat.i = 0x7FFFEFFEEF;
-	wat.f = (float) wat.i;
-	return printf("%f\n", wat.f);
+int main (void) {
+  wat.i = 0x7FFFEFFEEF;
+  wat.f = (float) wat.i;
+  return printf ("%f\n", wat.f);
 }

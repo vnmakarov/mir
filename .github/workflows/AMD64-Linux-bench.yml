@@ -1,0 +1,19 @@
+name: AMD64-Linux-bench
+
+on:
+  schedule:
+    # Run at 18:00 UTC on Wednesday
+    - cron:  '00 18 * * 3'
+
+jobs:
+  bench:
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v1
+    - name: make bench
+      run: make bench

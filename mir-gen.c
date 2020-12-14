@@ -1273,16 +1273,14 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   exit_bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, exit_bb);
   insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
-  if (insn != NULL) {
-    bb = create_bb (gen_ctx, NULL);
-    add_bb (gen_ctx, bb);
-    if (insn->code == MIR_LABEL) { /* Create one more BB.  First BB will be empty. */
-      prev_bb = bb;
-      bb = create_bb (gen_ctx, NULL);
-      add_bb (gen_ctx, bb);
-      create_edge (gen_ctx, prev_bb, bb, TRUE);
-    }
+  if (insn == NULL || insn->code == MIR_LABEL || MIR_call_code_p (insn->code)) {
+    /* To deal with special cases like adding insns before call in
+       machinize or moving invariant out of loop: */
+    MIR_prepend_insn (ctx, curr_func_item, MIR_new_label (ctx));
+    insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
   }
+  bb = create_bb (gen_ctx, NULL);
+  add_bb (gen_ctx, bb);
   for (; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (insn->data == NULL) {
@@ -1666,7 +1664,7 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   } while (change_p);
   DEBUG ({
     fprintf (debug_file, "Minimizing SSA phis: from %ld to %ld phis (non-phi insns %ld)\n",
-             (long) VARR_LENGTH (bb_insn_t, deleted_phis) + VARR_LENGTH (bb_insn_t, phis),
+             (long) VARR_LENGTH (bb_insn_t, deleted_phis) + (long) VARR_LENGTH (bb_insn_t, phis),
              (long) VARR_LENGTH (bb_insn_t, phis), (long) insns_num);
   });
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -3554,7 +3552,7 @@ static void print_live_ranges (gen_ctx_t gen_ctx) {
   gen_assert (get_nvars (gen_ctx) == VARR_LENGTH (live_range_t, var_live_ranges));
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     if ((lr = VARR_GET (live_range_t, var_live_ranges, i)) == NULL) continue;
-    fprintf (debug_file, "%lu", i);
+    fprintf (debug_file, "%lu", (unsigned long) i);
     if (var_is_reg_p (i))
       fprintf (debug_file, " (%s:%s)",
                MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, i), curr_func_item->u.func)),
@@ -4999,8 +4997,8 @@ static void combine (gen_ctx_t gen_ctx) {
     } while (block_change_p);
   }
   DEBUG ({
-    fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", deleted_insns_num, insns_num,
-             100.0 * deleted_insns_num / insns_num);
+    fprintf (debug_file, "  %lu deleted out of %lu (%.1f%%)\n", (long unsigned) deleted_insns_num,
+             (long unsigned) insns_num, 100.0 * deleted_insns_num / insns_num);
   });
 }
 
@@ -5202,9 +5200,9 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
   fclose (bf);
   sprintf (command,
            "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%lx -d %s.o; rm -f "
+           "--adjust-vma=0x%llx -d %s.o; rm -f "
            "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long) start_addr, cfname, cfname, cfname,
+           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
            bfname);
 #endif
   fprintf (stderr, "%s\n", command);
@@ -5384,9 +5382,10 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   destroy_func_cfg (gen_ctx);
   DEBUG ({
     fprintf (debug_file,
-             "Generation of code for %s: %lu MIR insns (addr=%lx, len=%lu) -- time %.2f ms\n",
-             MIR_item_name (ctx, func_item), DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
-             (unsigned long) machine_code, (unsigned long) code_len,
+             "Generation of code for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
+             MIR_item_name (ctx, func_item),
+             (long unsigned) DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
+             (unsigned long long) machine_code, (unsigned long) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);
