@@ -4973,6 +4973,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 }
 
 static void io_init (MIR_context_t ctx) {
+  mir_assert (TAG_EOFILE < 127); /* see bin_tag_t */
   if ((ctx->io_ctx = malloc (sizeof (struct io_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (MIR_var_t, proto_vars, 0);
