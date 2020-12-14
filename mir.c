@@ -2401,7 +2401,9 @@ void MIR_change_module_ctx (MIR_context_t old_ctx, MIR_module_t m, MIR_context_t
   }
 }
 
-static void output_type (FILE *f, MIR_type_t tp) { fprintf (f, "%s", MIR_type_str (NULL, tp)); }
+static void output_type (MIR_context_t ctx, FILE *f, MIR_type_t tp) {
+  fprintf (f, "%s", MIR_type_str (ctx, tp));
+}
 
 static void output_disp (FILE *f, MIR_disp_t disp) { fprintf (f, "%" PRId64, (int64_t) disp); }
 
@@ -2454,7 +2456,7 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
   case MIR_OP_HARD_REG_MEM: {
     MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_HARD_REG;
 
-    output_type (f, op.u.mem.type);
+    output_type (ctx, f, op.u.mem.type);
     fprintf (f, ":");
     if (op.u.mem.disp != 0 || (op.u.mem.base == no_reg && op.u.mem.index == no_reg))
       output_disp (f, op.u.mem.disp);
@@ -2513,23 +2515,23 @@ void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t fu
   if (newline_p) fprintf (f, "\n");
 }
 
-static void output_func_proto (FILE *f, size_t nres, MIR_type_t *types, size_t nargs,
-                               VARR (MIR_var_t) * args, int vararg_p) {
+static void output_func_proto (MIR_context_t ctx, FILE *f, size_t nres, MIR_type_t *types,
+                               size_t nargs, VARR (MIR_var_t) * args, int vararg_p) {
   size_t i;
   MIR_var_t var;
 
   for (i = 0; i < nres; i++) {
     if (i != 0) fprintf (f, ", ");
-    fprintf (f, "%s", MIR_type_str (NULL, types[i]));
+    fprintf (f, "%s", MIR_type_str (ctx, types[i]));
   }
   for (i = 0; i < nargs; i++) {
     var = VARR_GET (MIR_var_t, args, i);
     if (i != 0 || nres != 0) fprintf (f, ", ");
     mir_assert (var.name != NULL);
     if (!MIR_all_blk_type_p (var.type))
-      fprintf (f, "%s:%s", MIR_type_str (NULL, var.type), var.name);
+      fprintf (f, "%s:%s", MIR_type_str (ctx, var.type), var.name);
     else
-      fprintf (f, "%s:%lu(%s)", MIR_type_str (NULL, var.type), (unsigned long) var.size, var.name);
+      fprintf (f, "%s:%lu(%s)", MIR_type_str (ctx, var.type), (unsigned long) var.size, var.name);
   }
   if (vararg_p) fprintf (f, nargs == 0 && nres == 0 ? "..." : ", ...");
   fprintf (f, "\n");
@@ -2578,7 +2580,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   if (item->item_type == MIR_data_item) {
     data = item->u.data;
     if (data->name != NULL) fprintf (f, "%s:", data->name);
-    fprintf (f, "\t%s\t", MIR_type_str (NULL, data->el_type));
+    fprintf (f, "\t%s\t", MIR_type_str (ctx, data->el_type));
     for (size_t i = 0; i < data->nel; i++) {
       switch (data->el_type) {
       case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
@@ -2610,13 +2612,13 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   if (item->item_type == MIR_proto_item) {
     proto = item->u.proto;
     fprintf (f, "%s:\tproto\t", proto->name);
-    output_func_proto (f, proto->nres, proto->res_types, VARR_LENGTH (MIR_var_t, proto->args),
+    output_func_proto (ctx, f, proto->nres, proto->res_types, VARR_LENGTH (MIR_var_t, proto->args),
                        proto->args, proto->vararg_p);
     return;
   }
   func = item->u.func;
   fprintf (f, "%s:\tfunc\t", func->name);
-  output_func_proto (f, func->nres, func->res_types, func->nargs, func->vars, func->vararg_p);
+  output_func_proto (ctx, f, func->nres, func->res_types, func->nargs, func->vars, func->vararg_p);
   nlocals = VARR_LENGTH (MIR_var_t, func->vars) - func->nargs;
   for (i = 0; i < nlocals; i++) {
     var = VARR_GET (MIR_var_t, func->vars, i + func->nargs);
@@ -2624,7 +2626,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
       if (i != 0) fprintf (f, "\n");
       fprintf (f, "\tlocal\t");
     }
-    fprintf (f, i % 8 == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (NULL, var.type), var.name);
+    fprintf (f, i % 8 == 0 ? "%s:%s" : ", %s:%s", MIR_type_str (ctx, var.type), var.name);
   }
   fprintf (f, "\n# %u arg%s, %u local%s\n", func->nargs, func->nargs == 1 ? "" : "s",
            (unsigned) nlocals, nlocals == 1 ? "" : "s");
