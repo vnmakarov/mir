@@ -2828,7 +2828,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       error (c2m_ctx, t1->pos, "garbage at the end of #%s", t1->repr);
       skip_nl (c2m_ctx, NULL, NULL);
     }
-    if (VARR_LENGTH (ifstate_t, ifs) < cs->ifs_length_at_stream_start)
+    if (VARR_LENGTH (ifstate_t, ifs) <= cs->ifs_length_at_stream_start)
       error (c2m_ctx, t1->pos, "unmatched #%s", t1->repr);
     else if (strcmp (t1->repr, "endif") == 0) {
       pop_ifstate (c2m_ctx);
