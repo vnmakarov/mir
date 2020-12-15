@@ -51,6 +51,7 @@ struct MIR_context {
   struct io_ctx *io_ctx;
   struct scan_ctx *scan_ctx;
   struct interp_ctx *interp_ctx;
+  void *setjmp_addr; /* used in interpreter to call setjmp directly not from a shim and FFI */
 };
 
 #define ctx_mutex ctx->ctx_mutex
@@ -66,6 +67,7 @@ struct MIR_context {
 #define curr_label_num ctx->curr_label_num
 #define all_modules ctx->all_modules
 #define modules_to_link ctx->modules_to_link
+#define setjmp_addr ctx->setjmp_addr
 
 static void util_error (MIR_context_t ctx, const char *message);
 #define MIR_VARR_ERROR util_error
@@ -1595,7 +1597,12 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
 
+#define SETJMP_NAME "setjmp"
+#define SETJMP_NAME2 "_setjmp"
+
 void MIR_load_external (MIR_context_t ctx, const char *name, void *addr) {
+  if (strcmp (name, SETJMP_NAME) == 0 || (SETJMP_NAME2 != NULL && strcmp (name, SETJMP_NAME2) == 0))
+    setjmp_addr = addr;
   setup_global (ctx, name, addr, NULL);
 }
 
