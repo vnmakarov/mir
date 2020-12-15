@@ -72,7 +72,8 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
   * `void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t
     ncase)` set up memory block with address `res` by the next block
     argment of size `s` and `ncase` (e.g. `MIR_T_BLK` has case 0,
-    `MIR_T_BLK2` has case 1 etc), where `p` is `va_list`
+    `MIR_T_BLK + 1` has case 1, and `MIR_T_BLK + MIR_BLK_NUM -1` has
+    case `MIR_BLK_NUM - 1`), where `p` is `va_list`
   
   * `void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t
     func_item, void *handler)` generates and returns a function behaving as usual
