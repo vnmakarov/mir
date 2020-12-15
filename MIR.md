@@ -46,10 +46,10 @@
        or IEEE quad precision FP values.  If it is the same as double, the double type will be used instead.
        So please don't expect machine-independence of MIR code working with long double values
      * `MIR_T_P` -- pointer values.  Depending on the target pointer value is actually 32-bit or 64-bit integer value
-     * `MIR_T_BLK<n>` -- block data with given case.  This type can be used only for argument of function.
-       Different case numbers can denote different ways to pass the block data on a particular target
-       to implement the target call ABI.  Currently there are 6 block types
-       `MIR_T_BLK`, `MIR_T_BLK1` .. `MIR_T_BLK5`
+     * `MIR_T_BLK` .. `MIR_T_BLK + MIR_BLK_NUM - 1` -- block data with given case.  This type can be used only
+       for argument of function.  Different case numbers can denote different ways to pass the block data
+       on a particular target to implement the target call ABI.  Currently there are 5 block
+       types (`MIR_BLK_NUM = 5`)
      * `MIR_T_RBLK` -- return block data.  This type can be used only for argument of function
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `ld`, `p`,
@@ -103,7 +103,7 @@
     * A variable should have an unique name in the function
     * A variable is represented by a structure of type `MIR_var_t`
       * The structure contains variable name and its type
-      * The structure contains also type size for variable of block types (`MIR_T_BLK`..`MIR_T_BLK5`)
+      * The structure contains also type size for variable of block types (`MIR_T_BLK`..`MIR_T_BLK + MIR_BLK_NUM - 1`)
         or `MIR_T_RBLK` type
   * MIR function with its arguments is created through API function `MIR_item_t MIR_new_func (MIR_context_t ctx, const
     char *name, size_t nres, MIR_type_t *res_types, size_t nargs, ...)`
