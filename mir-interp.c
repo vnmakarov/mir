@@ -1261,8 +1261,37 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_DBGE, 3, BDCMP (>=));
   SCASE (MIR_LDBGE, 3, BLDCMP (>=));
 
-  SCASE (MIR_CALL, 0, pc = call_insn_execute (ctx, pc, bp, ops, FALSE));
-  SCASE (IC_IMM_CALL, 0, pc = call_insn_execute (ctx, pc, bp, ops, TRUE));
+  CASE (MIR_CALL, 0) {
+    int (*func_addr) (void *buf) = *get_aop (bp, ops + 4);
+
+    if (func_addr != setjmp_addr) {
+      pc = call_insn_execute (ctx, pc, bp, ops, FALSE);
+    } else {
+      int64_t nops = get_i (ops); /* #args w/o nop, insn, and ff interface address */
+      MIR_item_t proto_item = get_a (ops + 3);
+      size_t start = proto_item->u.proto->nres + 5;
+
+      bp[get_i (ops + 5)].i = (*func_addr) (*get_aop (bp, ops + start));
+      pc += nops + 3; /* nops itself, the call insn, add ff interface address */
+    }
+    END_INSN;
+  }
+  CASE (IC_IMM_CALL, 0) {
+    int (*func_addr) (void *buf) = get_a (ops + 4);
+
+    if (func_addr != setjmp_addr) {
+      pc = call_insn_execute (ctx, pc, bp, ops, TRUE);
+    } else {
+      int64_t nops = get_i (ops); /* #args w/o nop, insn, and ff interface address */
+      MIR_item_t proto_item = get_a (ops + 3);
+      size_t start = proto_item->u.proto->nres + 5;
+
+      bp[get_i (ops + 5)].i = (*func_addr) (*get_aop (bp, ops + start));
+      pc += nops + 3; /* nops itself, the call insn, add ff interface address */
+    }
+    END_INSN;
+  }
+
   SCASE (MIR_INLINE, 0, mir_assert (FALSE));
 
   CASE (MIR_SWITCH, 0) {
