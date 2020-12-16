@@ -830,10 +830,12 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
              bp[ops[0].i].u, bp[ops[0].i].u);
     break;
   case MIR_OP_FLOAT: fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, bp[ops[0].i].f); break;
-  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %.*e", DBL_DECIMAL_DIG, bp[ops[0].i].d); break;
   case MIR_OP_LDOUBLE:
+#ifndef _WIN32
     fprintf (stderr, "\t# res = %.*Le", LDBL_DECIMAL_DIG, bp[ops[0].i].ld);
     break;
+#endif
+  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %.*e", DBL_DECIMAL_DIG, bp[ops[0].i].d); break;
   default: assert (op_mode == MIR_OP_UNDEF);
   }
   fprintf (stderr, "\n");
