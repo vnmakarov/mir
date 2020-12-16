@@ -11,7 +11,7 @@ ifeq ($(UNAME_S),Darwin)
     endif
 endif
 
-LDFLAGS = 
+LDFLAGS =
 ifeq ($(OS),Windows_NT)
   OBJSUFF=obj
   LIBSUFF=lib
@@ -26,7 +26,7 @@ ifeq ($(OS),Windows_NT)
     LDFLAGS=-Wl,--stack,8388608
     MIR_LIBS=-lm -lkernel32 -lpsapi
   endif
-  
+
   CPPFLAGS = -I$(SRC_DIR)
   LDLIBS   = $(MIR_LIBS)
   COMPILE = $(CC) $(CPPFLAGS) $(CFLAGS)
@@ -67,8 +67,8 @@ endif
 
 ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
   MIR_LIBS += -lpthread
-  CFLAGS += -DMIR_PARALLEL_GEN
-  C2M_BOOTSTRAP_FLAGS = -DMIR_PARALLEL_GEN
+#  CFLAGS += -DMIR_PARALLEL_GEN
+#  C2M_BOOTSTRAP_FLAGS = -DMIR_PARALLEL_GEN
 endif
 
 L2M_EXE=
@@ -94,7 +94,7 @@ install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(PRE
 	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
 	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(PREFIX)/lib
 	install -m a+rx $(EXECUTABLES) $(PREFIX)/bin
-	
+
 $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
 
@@ -104,7 +104,7 @@ uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(P
 	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
-	
+
 clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF)
 
@@ -253,7 +253,7 @@ clean-adt-tests:
 	$(RM) $(BUILD_DIR)/adt-tests/varr-test$(EXE) $(BUILD_DIR)/adt-tests/dlist-test$(EXE)
 	$(RM) $(BUILD_DIR)/adt-tests/bitmap-test$(EXE)
 	$(RM) $(BUILD_DIR)/adt-tests/htab-test$(EXE) $(BUILD_DIR)/adt-tests/reduce-test$(EXE)
-	
+
 # ------------------ Common for MIR tests ---------------------
 
 $(BUILD_DIR)/mir-tests:
@@ -265,7 +265,7 @@ $(BUILD_DIR)/run-test$(EXE): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(
 .PHONY: clean-mir-tests
 clean-mir-tests: clean-mir-utility-tests clean-mir-interp-tests clean-mir-gen-tests clean-readme-example-test
 	$(RM) $(BUILD_DIR)/run-test$(EXE)
-	
+
 # ------------------ MIR utility tests ------------------------
 
 .PHONY: simplify-test scan-test io-test clean-mir-utility-tests
@@ -340,7 +340,7 @@ ifeq ($(OS),Windows_NT)
 else
 	$(BUILD_DIR)/run-test$(EXE) -i $(SRC_DIR)/mir-tests/test12.mir
 endif
-	
+
 interp-test13: $(BUILD_DIR)/run-test$(EXE)
 	$(BUILD_DIR)/run-test$(EXE) -i $(SRC_DIR)/mir-tests/test13.mir
 
@@ -364,14 +364,14 @@ clean-mir-interp-tests:
 .PHONY: clean-mir-gen-tests
 .PHONY: gen-test gen-loop-test gen-sieve-test gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7
 .PHONY: gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
-	  
+
 gen-test: gen-loop-test gen-sieve-test gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7\
           gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
 
 gen-test-loop: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 $^ $(LDLIBS) -o $(BUILD_DIR)/mir-tests/gen-loop-test$(EXE)
 	$(BUILD_DIR)/mir-tests/gen-loop-test
-	
+
 gen-test-sieve: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DTEST_GEN_SIEVE -DTEST_GEN_DEBUG=1 $^ $(LDLIBS) -o $(BUILD_DIR)/mir-tests/gen-sieve-test$(EXE)
 	$(BUILD_DIR)/mir-tests/gen-sieve-test
@@ -579,13 +579,13 @@ l2m-test1: $(BUILD_DIR)/l2m
 	clang -O0 -fno-vectorize -w -c -emit-llvm $(SRC_DIR)/sieve.c -o $(BUILD_DIR)/sieve.bc
 	@echo +++++ Interpreter +++++++ && $(BUILD_DIR)/l2m -i $(BUILD_DIR)/sieve.bc
 	@echo +++++ Generator +++++++ && $(BUILD_DIR)/l2m -g $(BUILD_DIR)/sieve.bc
-	
+
 l2m-test2: $(BUILD_DIR)/l2m
 	@echo +++++ LLVM to MIR translator test '(-O2)' +++++++
 	clang -O2 -fno-vectorize -w -c -emit-llvm $(SRC_DIR)/sieve.c -o $(BUILD_DIR)/sieve.bc
 	@echo +++++ Interpreter +++++++ && $(BUILD_DIR)/l2m -i $(BUILD_DIR)/sieve.bc
 	@echo +++++ Generator +++++++ && $(BUILD_DIR)/l2m -g $(BUILD_DIR)/sieve.bc
-	
+
 # ------------------ benchmarks -------------------------
 
 .PHONY: clean-bench
