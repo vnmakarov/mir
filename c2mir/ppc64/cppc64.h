@@ -28,12 +28,15 @@ typedef uint16_t mir_ushort;
 typedef uint32_t mir_uint;
 typedef uint64_t mir_ulong;
 typedef uint64_t mir_ullong;
+typedef uint32_t mir_wchar;
 
 #define MIR_UCHAR_MAX UINT8_MAX
 #define MIR_USHORT_MAX UINT16_MAX
 #define MIR_UINT_MAX UINT32_MAX
 #define MIR_ULONG_MAX UINT64_MAX
 #define MIR_ULLONG_MAX UINT64_MAX
+#define MIR_WCHAR_MIN 0
+#define MIR_WCHAR_MAX UINT32_MAX
 
 typedef mir_schar mir_char;
 #define MIR_CHAR_MIN MIR_SCHAR_MIN
