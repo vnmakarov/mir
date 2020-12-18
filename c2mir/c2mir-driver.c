@@ -589,7 +589,7 @@ static void sort_modules (MIR_context_t ctx) {
 }
 
 int main (int argc, char *argv[], char *env[]) {
-  int i;
+  int i, bin_p;
   size_t len;
 
   interp_exec_p = gen_exec_p = lazy_gen_exec_p = FALSE;
@@ -684,26 +684,30 @@ int main (int argc, char *argv[], char *env[]) {
     }
     assert (curr_input.input_name != NULL);
     len = strlen (curr_input.input_name);
-    if (len >= 5 && strcmp (curr_input.input_name + len - 5, ".bmir") == 0) {
-      MIR_read_with_func (main_ctx, mir_read_func);
-      VARR_DESTROY (uint8_t, curr_input.code_container);
-    } else if (len >= 4 && strcmp (curr_input.input_name + len - 4, ".mir") == 0) {
+    if ((bin_p = len >= 5 && strcmp (curr_input.input_name + len - 5, ".bmir") == 0)
+        || (len >= 4 && strcmp (curr_input.input_name + len - 4, ".mir") == 0)) {
       DLIST (MIR_module_t) *mlist = MIR_get_module_list (main_ctx);
       MIR_module_t m, last_m = DLIST_TAIL (MIR_module_t, *mlist);
       const char *base_name;
       FILE *f;
 
-      curr_input.code_len++; /* include zero byte */
-      MIR_scan_string (main_ctx, (char *) curr_input.code);
+      if (bin_p) {
+        MIR_read_with_func (main_ctx, mir_read_func);
+      } else {
+        curr_input.code_len++; /* include zero byte */
+        MIR_scan_string (main_ctx, (char *) curr_input.code);
+      }
       VARR_DESTROY (uint8_t, curr_input.code_container);
-      if (!options.asm_p && !options.prepro_only_p && !options.syntax_only_p && options.object_p) {
-        f = get_output_file (&base_name, curr_input.input_name, ".bmir");
+      if (!options.prepro_only_p && !options.syntax_only_p
+          && ((bin_p && !options.object_p && options.asm_p)
+              || (!bin_p && !options.asm_p && options.object_p))) {
+        f = get_output_file (&base_name, curr_input.input_name, bin_p ? ".mir" : ".bmir");
         for (m = last_m == NULL ? DLIST_HEAD (MIR_module_t, *mlist)
                                 : DLIST_NEXT (MIR_module_t, last_m);
              m != NULL; m = DLIST_NEXT (MIR_module_t, m))
-          MIR_write_module (main_ctx, f, m);
+          (bin_p ? MIR_output_module : MIR_write_module) (main_ctx, f, m);
         if (ferror (f) || fclose (f)) {
-          fprintf (stderr, "error in writing file %s\n", base_name);
+          fprintf (stderr, "error in writing file %s%s\n", base_name, bin_p ? ".mir" : ".bmir");
           result_code = 1;
         }
       }
