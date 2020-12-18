@@ -29,9 +29,11 @@
       preprocessed file into standard output or into file given after
       option `-o`
     * `-S` stops the compiler after generation of MIR code and outputs
-      MIR *textual* representations of C source files
+      MIR *textual* representations of C source files and binary MIR files
+      with suffix `.bmir`
     * `-c` also stops the compiler after generation of MIR code and
-      outputs MIR *binary* representation of C source files
+      outputs MIR *binary* representation of C source files and textual
+      MIR files with suffix `.mir`
     * Output files for options `-S` and `-c` are created in the
       current directory named as the source files by using suffix
       correspondingly `.mir` and `.bmir`
