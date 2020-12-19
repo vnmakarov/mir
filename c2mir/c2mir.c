@@ -5599,7 +5599,7 @@ static struct type composite_type (c2m_ctx_t c2m_ctx, struct type *tp1, struct t
 
     t.u.arr_type = arr_type = reg_malloc (c2m_ctx, sizeof (struct arr_type));
     *arr_type = *tp1->u.arr_type;
-    if (arr_type->size == N_IGNORE) arr_type->size = tp2->u.arr_type->size;
+    if (arr_type->size->code == N_IGNORE) arr_type->size = tp2->u.arr_type->size;
     *arr_type->el_type
       = composite_type (c2m_ctx, tp1->u.arr_type->el_type, tp2->u.arr_type->el_type);
   } else if (tp1->mode == TM_FUNC) { /* ??? */
