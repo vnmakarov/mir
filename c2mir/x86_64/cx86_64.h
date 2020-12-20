@@ -35,6 +35,7 @@ typedef int64_t mir_llong;
 typedef uint8_t mir_uchar;
 typedef uint16_t mir_ushort;
 typedef uint32_t mir_uint;
+typedef uint64_t mir_ullong;
 #ifdef _WIN32
 typedef uint32_t mir_ulong;
 typedef uint16_t mir_wchar;
@@ -42,7 +43,8 @@ typedef uint16_t mir_wchar;
 typedef uint64_t mir_ulong;
 typedef uint32_t mir_wchar;
 #endif
-typedef uint64_t mir_ullong;
+typedef uint16_t mir_char16;
+typedef uint32_t mir_char32;
 
 #define MIR_UCHAR_MAX UINT8_MAX
 #define MIR_USHORT_MAX UINT16_MAX
