@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <setjmp.h>
 #include <math.h>
+#include <wchar.h>
 #include "time.h"
 
 #include "c2mir.h"
@@ -452,7 +453,8 @@ void c2mir_finish (MIR_context_t ctx) {
    '}'.  The input is parse tokens and the output is the following AST
    nodes (the AST root is transl_unit):
 
-expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD | N_CH | N_STR | N_ID
+expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD
+     | N_CH | N_CH16 | N_CH32 | N_STR | N_STR16 | N_STR32 | N_ID
      | N_ADD (expr) | N_SUB (expr) | N_ADD (expr, expr) | N_SUB (expr, expr)
      | N_MUL (expr, expr) | N_DIV (expr, expr) | N_MOD (expr, expr)
      | N_LSH (expr, expr) | N_RSH (expr, expr)
@@ -479,7 +481,7 @@ stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
 compound_stmt: N_BLOCK(N_LIST:(label)*, N_LIST:(declaration | stmt)*)
 declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
-st_assert: N_ST_ASSERT(const_expr, N_STR)
+st_assert: N_ST_ASSERT(const_expr, N_STR | N_STR16 | N_STR32)
 declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
 align_spec: N_ALIGNAS(type_name|const_expr)
 sc_spec: N_TYPEDEF|N_EXTERN|N_STATIC|N_AUTO|N_REGISTER|N_THREAD_LOCAL
@@ -549,7 +551,8 @@ static token_code_t FIRST_KW = T_BOOL, LAST_KW = T_WHILE;
 
 typedef enum {
   REP8 (NODE_EL, IGNORE, I, L, LL, U, UL, ULL, F),
-  REP8 (NODE_EL, D, LD, CH, STR, ID, COMMA, ANDAND, OROR),
+  REP8 (NODE_EL, D, LD, CH, CH16, CH32, STR, STR16, STR32),
+  REP4 (NODE_EL, ID, COMMA, ANDAND, OROR),
   REP8 (NODE_EL, EQ, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT),
   REP8 (NODE_EL, NOT, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH),
   REP8 (NODE_EL, LSH_ASSIGN, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL),
@@ -580,7 +583,7 @@ struct node {
     mir_char ch;
     mir_long l;
     mir_llong ll;
-    mir_ulong ul;
+    mir_ulong ul; /* includes CH16 and CH32 */
     mir_ullong ull;
     mir_float f;
     mir_double d;
@@ -693,67 +696,66 @@ static node_t new_pos_node4 (c2m_ctx_t c2m_ctx, node_code_t nc, pos_t p, node_t 
 }
 static node_t new_ch_node (c2m_ctx_t c2m_ctx, int ch, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_CH, p);
-
   n->u.ch = ch;
+  return n;
+}
+static node_t new_ch16_node (c2m_ctx_t c2m_ctx, mir_ulong ch, pos_t p) {
+  node_t n = new_pos_node (c2m_ctx, N_CH16, p);
+  n->u.ul = ch;
+  return n;
+}
+static node_t new_ch32_node (c2m_ctx_t c2m_ctx, mir_ulong ch, pos_t p) {
+  node_t n = new_pos_node (c2m_ctx, N_CH32, p);
+  n->u.ul = ch;
   return n;
 }
 static node_t new_i_node (c2m_ctx_t c2m_ctx, long l, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_I, p);
-
   n->u.l = l;
   return n;
 }
 static node_t new_l_node (c2m_ctx_t c2m_ctx, long l, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_L, p);
-
   n->u.l = l;
   return n;
 }
 static node_t new_ll_node (c2m_ctx_t c2m_ctx, long long ll, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_LL, p);
-
   n->u.ll = ll;
   return n;
 }
 static node_t new_u_node (c2m_ctx_t c2m_ctx, unsigned long ul, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_U, p);
-
   n->u.ul = ul;
   return n;
 }
 static node_t new_ul_node (c2m_ctx_t c2m_ctx, unsigned long ul, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_UL, p);
-
   n->u.ul = ul;
   return n;
 }
 static node_t new_ull_node (c2m_ctx_t c2m_ctx, unsigned long long ull, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_ULL, p);
-
   n->u.ull = ull;
   return n;
 }
 static node_t new_f_node (c2m_ctx_t c2m_ctx, float f, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_F, p);
-
   n->u.f = f;
   return n;
 }
 static node_t new_d_node (c2m_ctx_t c2m_ctx, double d, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_D, p);
-
   n->u.d = d;
   return n;
 }
 static node_t new_ld_node (c2m_ctx_t c2m_ctx, long double ld, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_LD, p);
-
   n->u.ld = ld;
   return n;
 }
 static node_t new_str_node (c2m_ctx_t c2m_ctx, node_code_t nc, str_t s, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, nc, p);
-
   n->u.s = s;
   return n;
 }
@@ -1036,30 +1038,87 @@ static void remove_string_stream (c2m_ctx_t c2m_ctx) {
   cs = VARR_LAST (stream_t, streams);
 }
 
-static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
-  int i, str_len, curr_c;
+#define MAX_UTF8 0x1FFFFF
+
+/* We use UTF-32 for 32-bit wchars and UTF-16 for 16-bit wchar (LE/BE
+   depending on endianess of the target), UTF-8 for anything else. */
+static void push_str_char (c2m_ctx_t c2m_ctx, VARR (char) * temp, uint64_t ch, int type) {
+  int i, len;
+
+  switch (type) {
+  case ' ':
+    if (ch <= 0xFF) {
+      VARR_PUSH (char, temp, ch);
+      return;
+    }
+    /* Fall through */
+  case '8':
+    if (ch <= 0x7F) {
+      VARR_PUSH (char, temp, ch);
+    } else if (ch <= 0x7FF) {
+      VARR_PUSH (char, temp, 0xC0 | (ch >> 6));
+      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+    } else if (ch <= 0xFFFF) {
+      VARR_PUSH (char, temp, 0xE0 | (ch >> 12));
+      VARR_PUSH (char, temp, 0x80 | (ch >> 6) & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+    } else {
+      assert (ch <= MAX_UTF8);
+      VARR_PUSH (char, temp, 0xF0 | (ch >> 18));
+      VARR_PUSH (char, temp, 0x80 | (ch >> 12) & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | (ch >> 6) & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+    }
+    return;
+  case 'L':
+    if (sizeof (mir_wchar) == 4) goto U;
+    /* Fall through */
+  case 'u': len = 2; break;
+  case 'U':
+  U:
+    len = 4;
+    break;
+  default: assert (FALSE);
+  }
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  for (i = 0; i < len; i++) VARR_PUSH (char, temp, (ch >> i * 8) & 0xff);
+#else
+  for (i = len - 1; i >= 0; i--) VARR_PUSH (char, temp, (ch >> i * 8) & 0xff);
+#endif
+}
+
+static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, int type) {
+  int i, str_len;
+  int64_t curr_c, last_c = -1;
+  int64_t max_char
+    = (type == 'u' ? UINT16_MAX
+                   : type == 'U' ? UINT32_MAX : type == 'L' ? MIR_WCHAR_MAX : MIR_UCHAR_MAX);
+  int start = type == ' ' ? 0 : type == '8' ? 2 : 1;
+  int string_p = t->repr[start] == '"';
   const char *str;
 
   assert (t->code == T_STR || t->code == T_CH);
   str = t->repr;
   VARR_TRUNC (char, temp, 0);
   str_len = strlen (str);
-  assert (str_len >= 2 && (str[0] == '"' || str[0] == '\'') && str[0] == str[str_len - 1]);
-  for (i = 1; i < str_len - 1; i++) {
-    curr_c = str[i];
+  assert (str_len >= start + 2 && (str[start] == '"' || str[start] == '\'')
+          && str[start] == str[str_len - 1]);
+  for (i = start + 1; i < str_len - 1; i++) {
+    if (!string_p && last_c >= 0) error (c2m_ctx, t->pos, "multibyte character");
+    last_c = curr_c = str[i];
     if (curr_c != '\\') {
-      VARR_PUSH (char, temp, curr_c);
+      push_str_char (c2m_ctx, temp, curr_c, type);
       continue;
     }
-    curr_c = str[++i];
+    last_c = curr_c = str[++i];
     switch (curr_c) {
-    case 'a': curr_c = '\a'; break;
-    case 'b': curr_c = '\b'; break;
-    case 'n': curr_c = '\n'; break;
-    case 'f': curr_c = '\f'; break;
-    case 'r': curr_c = '\r'; break;
-    case 't': curr_c = '\t'; break;
-    case 'v': curr_c = '\v'; break;
+    case 'a': last_c = curr_c = '\a'; break;
+    case 'b': last_c = curr_c = '\b'; break;
+    case 'n': last_c = curr_c = '\n'; break;
+    case 'f': last_c = curr_c = '\f'; break;
+    case 'r': last_c = curr_c = '\r'; break;
+    case 't': last_c = curr_c = '\t'; break;
+    case 'v': last_c = curr_c = '\v'; break;
     case '\\':
     case '\'':
     case '\?':
@@ -1067,7 +1126,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
     case 'e':
       (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
                                                    "non-standard escape sequence \\e");
-      curr_c = '\033';
+      last_c = curr_c = '\033';
       break;
     case '0':
     case '1':
@@ -1077,7 +1136,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
     case '5':
     case '6':
     case '7': {
-      unsigned long v = curr_c - '0';
+      uint64_t v = curr_c - '0';
 
       curr_c = str[++i];
       if (!isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
@@ -1090,42 +1149,77 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp) {
         else
           v = v * 8 + curr_c - '0';
       }
-      curr_c = v;
+      last_c = curr_c = v;
       break;
     }
     case 'x':
     case 'X': {
       int first_p = TRUE;
-      unsigned long v = 0;
+      uint64_t v = 0;
 
       for (i++;; i++) {
         curr_c = str[i];
         if (!isxdigit (curr_c)) break;
         first_p = FALSE;
+        if (v <= UINT32_MAX) {
+          v *= 16;
+          v += (isdigit (curr_c) ? curr_c - '0'
+                                 : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
+        }
+      }
+      if (first_p) {
+        error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
+      } else if (v > max_char) {
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                     "too big hexadecimal char 0x%x", v);
+        curr_c = max_char;
+      }
+      last_c = curr_c = v;
+      i--;
+      break;
+    }
+    case 'u':
+    case 'U': {
+      int n, start_c = curr_c, digits_num = curr_c == 'u' ? 4 : 8;
+      int64_t v = 0;
+
+      for (i++, n = 0; n < digits_num; i++, n++) {
+        curr_c = str[i];
+        if (!isxdigit (curr_c)) break;
         v *= 16;
         v += (isdigit (curr_c) ? curr_c - '0'
                                : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
       }
-      if (first_p)
-        error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
-      else if (v > MIR_UCHAR_MAX)
+      last_c = curr_c = v;
+      if (n < digits_num) {
+        error (c2m_ctx, t->pos, "unfinished \\%c<hex-digits>", start_c);
+      } else if (v > max_char && (!string_p || (type != ' ' && type != '8') || v > MAX_UTF8)) {
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
-                                                     "too big hexadecimal char 0x%x", v);
-      curr_c = v;
-      i--;
+                                                     "too big universal char 0x%lx in \\%c",
+                                                     (unsigned long) v, start_c);
+        last_c = curr_c = max_char;
+      } else if ((0xD800 <= v && v <= 0xDFFF)
+                 || (v < 0xA0 && v != 0x24 && v != 0x40 && v != 0x60)) {
+        error (c2m_ctx, t->pos, "usage of reserved value 0x%lx in \\%c", (unsigned long) v,
+               start_c);
+        curr_c = -1;
+      }
+      if (n < digits_num) i--;
       break;
     }
     default: error (c2m_ctx, t->pos, "wrong escape char 0x%x", curr_c); curr_c = -1;
     }
-    if (t->repr[0] == '\'' || curr_c >= 0) VARR_PUSH (char, temp, curr_c);
+    if (!string_p || curr_c >= 0) push_str_char (c2m_ctx, temp, curr_c, type);
   }
-  VARR_PUSH (char, temp, '\0');
-  if (t->repr[0] == '"')
+  push_str_char (c2m_ctx, temp, '\0', type);
+  if (string_p)
     t->node->u.s = uniq_str (c2m_ctx, VARR_ADDR (char, temp), VARR_LENGTH (char, temp));
-  else if (VARR_LENGTH (char, temp) == 1)
+  else if (last_c < 0)
     error (c2m_ctx, t->pos, "empty char constant");
+  else if (type == 'U' || type == 'u' || type == 'L')
+    t->node->u.ul = last_c;
   else
-    t->node->u.ch = VARR_GET (char, temp, 0);
+    t->node->u.ch = last_c;
 }
 
 static token_t new_id_token (c2m_ctx_t c2m_ctx, pos_t pos, const char *id_str) {
@@ -1138,7 +1232,7 @@ static token_t new_id_token (c2m_ctx_t c2m_ctx, pos_t pos, const char *id_str) {
 }
 
 static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
-  int start_c, curr_c, nl_p, comment_char;
+  int start_c, curr_c, nl_p, comment_char, wide_type;
   pos_t pos;
 
   if (cs->fname != NULL && VARR_LENGTH (token_t, buffered_tokens) != 0)
@@ -1495,7 +1589,9 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
                                      N_IGNORE);
     }
     case '\'':
-    case '\"': { /* ??? unicode and wchar */
+    case '\"':
+      wide_type = ' ';
+    literal : {
       token_t t;
       int stop = curr_c;
 
@@ -1518,15 +1614,45 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
         VARR_PUSH (char, symbol_text, stop);
       }
       VARR_PUSH (char, symbol_text, '\0');
-      t = (stop == '\"' ? new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_STR,
-                                          new_str_node (c2m_ctx, N_STR, empty_str, pos))
-                        : new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_CH,
-                                          new_ch_node (c2m_ctx, ' ', pos)));
-      set_string_val (c2m_ctx, t, symbol_text);
+      if (wide_type == 'U' || (sizeof (mir_wchar) == 4 && wide_type == 'L')) {
+        t = (stop == '\"' ? new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_STR,
+                                            new_str_node (c2m_ctx, N_STR32, empty_str, pos))
+                          : new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_CH,
+                                            new_ch32_node (c2m_ctx, ' ', pos)));
+      } else if (wide_type == 'u' || wide_type == 'L') {
+        t = (stop == '\"' ? new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_STR,
+                                            new_str_node (c2m_ctx, N_STR16, empty_str, pos))
+                          : new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_CH,
+                                            new_ch16_node (c2m_ctx, ' ', pos)));
+      } else {
+        t = (stop == '\"' ? new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_STR,
+                                            new_str_node (c2m_ctx, N_STR, empty_str, pos))
+                          : new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_CH,
+                                            new_ch_node (c2m_ctx, ' ', pos)));
+      }
+      set_string_val (c2m_ctx, t, symbol_text, wide_type);
       return t;
     }
     default:
       if (isalpha (curr_c) || curr_c == '_') {
+        if (curr_c == 'L' || curr_c == 'u' || curr_c == 'U') {
+          wide_type = curr_c;
+          if ((curr_c = cs_get (c2m_ctx)) == '\"' || curr_c == '\'') {
+            VARR_PUSH (char, symbol_text, wide_type);
+            goto literal;
+          } else if (wide_type == 'u' && curr_c == '8') {
+            wide_type = '8';
+            if ((curr_c = cs_get (c2m_ctx)) == '\"') {
+              VARR_PUSH (char, symbol_text, 'u');
+              VARR_PUSH (char, symbol_text, '8');
+              goto literal;
+            }
+            cs_unget (c2m_ctx, curr_c);
+            curr_c = '8';
+          }
+          cs_unget (c2m_ctx, curr_c);
+          curr_c = wide_type;
+        }
         pos = cs->pos;
         do {
           VARR_PUSH (char, symbol_text, curr_c);
@@ -1624,7 +1750,7 @@ static token_t token_stringify (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * t
   VARR_PUSH (char, temp_string, '"');
   VARR_PUSH (char, temp_string, '\0');
   t->repr = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-  set_string_val (c2m_ctx, t, temp_string);
+  set_string_val (c2m_ctx, t, temp_string, ' ');
   return t;
 }
 
@@ -3241,6 +3367,8 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
     else
       res.u.i_val = tree->u.ch;
     break;
+  case N_CH16:
+  case N_CH32: res.u.u_val = tree->u.ul; break;
   case N_I:
   case N_L:
     res.uns_p = FALSE;
@@ -3428,7 +3556,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
         VARR_PUSH (char, temp_string, '\0');
         t = new_node_token (c2m_ctx, t->pos, VARR_ADDR (char, temp_string), T_STR,
                             new_str_node (c2m_ctx, N_STR, empty_str, t->pos));
-        set_string_val (c2m_ctx, t, temp_string);
+        set_string_val (c2m_ctx, t, temp_string, ' ');
         out_token (c2m_ctx, t);
       } else if (strcmp (t->repr, "__LINE__") == 0) {
         char str[50];
@@ -3541,17 +3669,48 @@ static void pre_out (c2m_ctx_t c2m_ctx, token_t t) {
   if (t->code == T_STR && VARR_LENGTH (token_t, recorded_tokens) != 0
       && VARR_LAST (token_t, recorded_tokens)->code == T_STR) { /* concat strings */
     token_t last_t = VARR_POP (token_t, recorded_tokens);
+    int type = ' ', last_t_quot_off = 0, t_quot_off = 0, err_p = FALSE;
+    const char *s;
 
     VARR_TRUNC (char, temp_string, 0);
-    for (const char *s = last_t->repr; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
-    assert (VARR_LAST (char, temp_string) == '"' && t->repr[0] == '"');
+    if (last_t->repr[0] == 'u' && last_t->repr[1] == '8') {
+      err_p = t->repr[0] != '\"' && (t->repr[0] != 'u' || t->repr[1] != '8');
+      last_t_quot_off = 2;
+    } else if (last_t->repr[0] == 'L' || last_t->repr[0] == 'u' || last_t->repr[0] == 'U') {
+      err_p = t->repr[0] != '\"' && (t->repr[0] != last_t->repr[0] || t->repr[1] == '8');
+      last_t_quot_off = 1;
+    }
+    if (t->repr[0] == 'u' && t->repr[1] == '8') {
+      err_p = last_t->repr[0] != '\"' && (last_t->repr[0] != 'u' || last_t->repr[1] != '8');
+      t_quot_off = 2;
+    } else if (t->repr[0] == 'L' || t->repr[0] == 'u' || t->repr[0] == 'U') {
+      err_p = last_t->repr[0] != '\"' && (t->repr[0] != last_t->repr[0] || last_t->repr[1] == '8');
+      t_quot_off = 1;
+    }
+    if (err_p) error (c2m_ctx, t->pos, "concatenation of different type string literals");
+    if (sizeof (mir_wchar) == 4 && (last_t->repr[0] == 'L' || t->repr[0] == 'L')) {
+      type = 'L';
+    } else if (last_t->repr[0] == 'U' || t->repr[0] == 'U') {
+      type = 'U';
+    } else if (last_t->repr[0] == 'L' || t->repr[0] == 'L') {
+      type = 'L';
+    } else if ((last_t->repr[0] == 'u' && last_t->repr[1] == '8')
+               || (t->repr[0] == 'u' && t->repr[1] == '8')) {
+      VARR_PUSH (char, temp_string, 'u');
+      type = '8';
+    } else if ((last_t->repr[0] == 'u' || t->repr[0] == 'u')) {
+      type = 'u';
+    }
+    if (type != ' ') VARR_PUSH (char, temp_string, type);
+    for (s = last_t->repr + last_t_quot_off; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
+    assert (VARR_LAST (char, temp_string) == '"');
     VARR_POP (char, temp_string);
-    for (const char *s = &t->repr[1]; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
+    for (s = t->repr + t_quot_off + 1; *s != 0; s++) VARR_PUSH (char, temp_string, *s);
     t = last_t;
     assert (VARR_LAST (char, temp_string) == '"');
     VARR_PUSH (char, temp_string, '\0');
     t->repr = uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)).s;
-    set_string_val (c2m_ctx, t, temp_string);
+    set_string_val (c2m_ctx, t, temp_string, type);
   }
   VARR_PUSH (token_t, recorded_tokens, t);
 }
@@ -7001,6 +7160,22 @@ static int update_init_object_path (c2m_ctx_t c2m_ctx, size_t mark, struct type 
   }
 }
 
+static enum basic_type get_uint_basic_type (size_t size) {
+  if (sizeof (mir_uint) == size) return TP_UINT;
+  if (sizeof (mir_ulong) == size) return TP_ULONG;
+  if (sizeof (mir_ullong) == size) return TP_ULLONG;
+  if (sizeof (mir_ushort) == size) return TP_USHORT;
+  return TP_UCHAR;
+}
+
+static int init_compatible_string_p (node_t n, struct type *el_type) {
+  return ((n->code == N_STR && char_type_p (el_type))
+          || (n->code == N_STR16 && el_type->mode == TM_BASIC
+              && el_type->u.basic_type == get_uint_basic_type (2))
+          || (n->code == N_STR32 && el_type->mode == TM_BASIC
+              && el_type->u.basic_type == get_uint_basic_type (4)));
+}
+
 static int update_path_and_do (c2m_ctx_t c2m_ctx,
                                void (*action) (c2m_ctx_t c2m_ctx, decl_t member_decl,
                                                struct type **type_ptr, node_t initializer,
@@ -7021,7 +7196,7 @@ static int update_path_and_do (c2m_ctx_t c2m_ctx,
   if (init_object.container_type->mode == TM_ARR) {
     el_type = init_object.container_type->u.arr_type->el_type;
     action (c2m_ctx, NULL,
-            (value->code == N_STR && char_type_p (el_type)
+            (init_compatible_string_p (value, el_type)
                ? &init_object.container_type
                : &init_object.container_type->u.arr_type->el_type),
             value, const_only_p, FALSE);
@@ -7058,6 +7233,8 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
   }
   switch (r->code) {
   case N_STR:
+  case N_STR16:
+  case N_STR32:
     *base = r;
     *offset = 0;
     *deref = 0;
@@ -7196,6 +7373,8 @@ static node_t get_compound_literal (node_t n, int *addr_p) {
     case N_DEREF: addr--; break;
     case N_CAST: break;  // ???
     case N_STR:
+    case N_STR16:
+    case N_STR32:
     case N_COMPOUND_LITERAL:
       if (addr < 0) return NULL;
       *addr_p = addr > 0;
@@ -7222,16 +7401,18 @@ static void check_initializer (c2m_ctx_t c2m_ctx, decl_t member_decl, struct typ
   int addr_p = FALSE; /* to remove an uninitialized warning */
 
   literal = get_compound_literal (initializer, &addr_p);
-  if (literal != NULL && !addr_p && initializer->code != N_STR) {
+  if (literal != NULL && !addr_p && initializer->code != N_STR && initializer->code != N_STR16
+      && initializer->code != N_STR32) {
     cexpr = initializer->attr;
     check_assignment_types (c2m_ctx, type, NULL, cexpr, initializer);
     initializer = NL_EL (literal->u.ops, 1);
   }
 check_one_value:
   if (initializer->code != N_LIST
-      && !(initializer->code == N_STR && type->mode == TM_ARR
-           && char_type_p (type->u.arr_type->el_type))) {
-    if ((cexpr = initializer->attr)->const_p || initializer->code == N_STR || !const_only_p) {
+      && !(type->mode == TM_ARR
+           && init_compatible_string_p (initializer, type->u.arr_type->el_type))) {
+    if ((cexpr = initializer->attr)->const_p || initializer->code == N_STR
+        || initializer->code == N_STR16 || initializer->code == N_STR32 || !const_only_p) {
       check_assignment_types (c2m_ctx, type, NULL, cexpr, initializer);
     } else {
       setup_const_addr_p (c2m_ctx, initializer);
@@ -7245,12 +7426,14 @@ check_one_value:
     return;
   }
   init = NL_HEAD (initializer->u.ops);
-  if (((str = initializer)->code == N_STR /* string or string in parentheses  */
+  if (((str = initializer)->code == N_STR || str->code == N_STR16
+       || str->code == N_STR32 /* string or string in parentheses */
        || (init != NULL && init->code == N_INIT && NL_EL (initializer->u.ops, 1) == NULL
            && (des_list = NL_HEAD (init->u.ops))->code == N_LIST
            && NL_HEAD (des_list->u.ops) == NULL && NL_EL (init->u.ops, 1) != NULL
-           && (str = NL_EL (init->u.ops, 1))->code == N_STR))
-      && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
+           && ((str = NL_EL (init->u.ops, 1))->code == N_STR || str->code == N_STR16
+               || str->code == N_STR32)))
+      && type->mode == TM_ARR && init_compatible_string_p (str, type->u.arr_type->el_type)) {
     len = str->u.s.len;
     if (incomplete_type_p (c2m_ctx, type)) {
       assert (len < MIR_INT_MAX);
@@ -7809,14 +7992,15 @@ static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
   *expr_attr_p = *stmt_p = FALSE;
   switch (n->code) {
     REP8 (NODE_CASE, I, L, LL, U, UL, ULL, F, D)
-    REP8 (NODE_CASE, LD, CH, STR, ID, COMMA, ANDAND, OROR, EQ)
+    REP7 (NODE_CASE, LD, CH, CH16, CH32, STR, STR16, STR32)
+    REP5 (NODE_CASE, ID, COMMA, ANDAND, OROR, EQ)
     REP8 (NODE_CASE, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT, NOT)
     REP8 (NODE_CASE, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH, LSH_ASSIGN)
     REP8 (NODE_CASE, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL, MUL_ASSIGN)
     REP8 (NODE_CASE, DIV, DIV_ASSIGN, MOD, MOD_ASSIGN, IND, FIELD, ADDR, DEREF)
     REP8 (NODE_CASE, DEREF_FIELD, COND, INC, DEC, POST_INC, POST_DEC, ALIGNOF, SIZEOF)
-    REP6 (NODE_CASE, EXPR_SIZEOF, CAST, COMPOUND_LITERAL, CALL, GENERIC, GENERIC_ASSOC)
-    *expr_attr_p = TRUE;
+    REP6 (NODE_CASE, EXPR_SIZEOF, CAST, COMPOUND_LITERAL, CALL, GENERIC, GENERIC_ASSOC) *expr_attr_p
+      = TRUE;
     break;
     REP8 (NODE_CASE, IF, SWITCH, WHILE, DO, FOR, GOTO, CONTINUE, BREAK)
     REP4 (NODE_CASE, RETURN, EXPR, BLOCK, SPEC_DECL) /* SPEC DECL may have an initializer */
@@ -7994,8 +8178,17 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     else
       e->u.u_val = r->u.ch;
     break;
-  case N_STR: {
+  case N_CH16:
+  case N_CH32:
+    e = create_basic_type_expr (c2m_ctx, r, get_uint_basic_type (r->code == N_CH16 ? 2 : 4));
+    e->const_p = TRUE;
+    e->u.u_val = r->u.ul;
+    break;
+  case N_STR:
+  case N_STR16:
+  case N_STR32: {
     struct arr_type *arr_type;
+    int size = r->code == N_STR ? 1 : r->code == N_STR16 ? 2 : 4;
 
     e = create_expr (c2m_ctx, r);
     e->lvalue_node = r;
@@ -8007,7 +8200,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     arr_type->el_type = create_type (c2m_ctx, NULL);
     arr_type->el_type->pos_node = r;
     arr_type->el_type->mode = TM_BASIC;
-    arr_type->el_type->u.basic_type = TP_CHAR;
+    arr_type->el_type->u.basic_type = size == 1 ? TP_CHAR : get_uint_basic_type (size);
     arr_type->size = new_i_node (c2m_ctx, r->u.s.len, POS (r));
     check (c2m_ctx, arr_type->size, NULL);
     break;
@@ -8367,7 +8560,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     } else if (e1->lvalue_node->code == N_COMPOUND_LITERAL) {
       t2 = t1;
     } else {
-      assert (e1->lvalue_node->code == N_STR);
+      assert (e1->lvalue_node->code == N_STR || e1->lvalue_node->code == N_STR16
+              || e1->lvalue_node->code == N_STR32);
       t2 = t1;
     }
     e->type->mode = TM_PTR;
@@ -8842,7 +9036,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       else
         ok_p = e1->u.u_val != 0;
       if (!ok_p) {
-        assert (NL_NEXT (op1) != NULL && NL_NEXT (op1)->code == N_STR);
+        assert (NL_NEXT (op1) != NULL
+                && (NL_NEXT (op1)->code == N_STR || NL_NEXT (op1)->code == N_STR16
+                    || NL_NEXT (op1)->code == N_STR32));
         error (c2m_ctx, POS (r), "static assertion failed: \"%s\"",
                NL_NEXT (op1)->u.s.s);  // ???
       }
@@ -10623,16 +10819,18 @@ static void collect_init_els (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type
   init_object_t init_object;
 
   literal = get_compound_literal (initializer, &addr_p);
-  if (literal != NULL && !addr_p && initializer->code != N_STR)
+  if (literal != NULL && !addr_p && initializer->code != N_STR && initializer->code != N_STR16
+      && initializer->code != N_STR32)
     initializer = NL_EL (literal->u.ops, 1);
 check_one_value:
   if (initializer->code != N_LIST
       && !(initializer->code == N_STR && type->mode == TM_ARR
-           && char_type_p (type->u.arr_type->el_type))) {
+           && init_compatible_string_p (initializer, type->u.arr_type->el_type))) {
     cexpr = initializer->attr;
     /* static or thread local object initialization should be const expr or addr: */
-    assert (initializer->code == N_STR || !const_only_p || cexpr->const_p || cexpr->const_addr_p
-            || (literal != NULL && addr_p));
+    assert (initializer->code == N_STR || initializer->code == N_STR16
+            || initializer->code == N_STR32 || !const_only_p || cexpr->const_p
+            || cexpr->const_addr_p || (literal != NULL && addr_p));
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = member_decl;
@@ -10642,12 +10840,14 @@ check_one_value:
     return;
   }
   init = NL_HEAD (initializer->u.ops);
-  if (((str = initializer)->code == N_STR /* string or string in parentheses  */
+  if (((str = initializer)->code == N_STR || str->code == N_STR16
+       || str->code == N_STR32 /* string or string in parentheses  */
        || (init != NULL && init->code == N_INIT && NL_EL (initializer->u.ops, 1) == NULL
            && (des_list = NL_HEAD (init->u.ops))->code == N_LIST
            && NL_HEAD (des_list->u.ops) == NULL && NL_EL (init->u.ops, 1) != NULL
-           && (str = NL_EL (init->u.ops, 1))->code == N_STR))
-      && type->mode == TM_ARR && char_type_p (type->u.arr_type->el_type)) {
+           && ((str = NL_EL (init->u.ops, 1))->code == N_STR || str->code == N_STR16
+               || str->code == N_STR32)))
+      && type->mode == TM_ARR && init_compatible_string_p (str, type->u.arr_type->el_type)) {
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = NULL;
@@ -10920,6 +11120,39 @@ static void add_bit_field (c2m_ctx_t c2m_ctx, uint64_t *u, uint64_t v, decl_t me
   *u |= v;
 }
 
+static MIR_item_t get_mir_str_op_data (c2m_ctx_t c2m_ctx, MIR_str_t str) {
+  MIR_context_t ctx = c2m_ctx->ctx;
+  MIR_item_t data;
+  char buff[50];
+  MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+
+  _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
+  data = MIR_new_string_data (ctx, buff, str);
+  move_item_to_module_start (module, data);
+  return data;
+}
+
+static MIR_item_t get_string_data (c2m_ctx_t c2m_ctx, node_t n) {
+  MIR_context_t ctx = c2m_ctx->ctx;
+  MIR_item_t data;
+  char buff[50];
+  MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+
+  _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
+  if (n->code == N_STR) {
+    data = MIR_new_string_data (ctx, buff, (MIR_str_t){n->u.s.len, n->u.s.s});
+  } else {
+    assert (n->code == N_STR16 || n->code == N_STR32);
+    if (n->code == N_STR16) {
+      data = MIR_new_data (ctx, buff, MIR_T_U16, n->u.s.len / 2, n->u.s.s);
+    } else {
+      data = MIR_new_data (ctx, buff, MIR_T_U32, n->u.s.len / 4, n->u.s.s);
+    }
+  }
+  move_item_to_module_start (module, data);
+  return data;
+}
+
 static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
                              const char *global_name, mir_size_t size, int local_p) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
@@ -10931,9 +11164,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
   MIR_reg_t base;
   MIR_type_t t;
   MIR_item_t data;
-  MIR_module_t module;
   struct expr *e;
-  char buff[50];
 
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
     assert (local_p && offset == 0 && VARR_LENGTH (init_el_t, init_els) - init_start == 1);
@@ -10958,9 +11189,13 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
       val
         = gen (c2m_ctx, init_el.init, NULL, NULL, t != MIR_T_UNDEF, t != MIR_T_UNDEF ? NULL : &val);
       if (!scalar_type_p (init_el.el_type)) {
-        mir_size_t s = init_el.init->code == N_STR ? init_el.init->u.s.len
-                                                   : raw_type_size (c2m_ctx, init_el.el_type);
-
+        mir_size_t s = init_el.init->code == N_STR
+                         ? init_el.init->u.s.len
+                         : init_el.init->code == N_STR16
+                             ? init_el.init->u.s.len / 2
+                             : init_el.init->code == N_STR32
+                                 ? init_el.init->u.s.len / 4
+                                 : raw_type_size (c2m_ctx, init_el.el_type);
         gen_memcpy (c2m_ctx, offset + rel_offset, base, val, s);
         rel_offset = init_el.offset + s;
       } else {
@@ -11007,13 +11242,10 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
           data = MIR_new_data (ctx, global_name, MIR_T_P, 1, &s);
           data_size = _MIR_type_size (ctx, MIR_T_P);
         } else {
-          if (def->code != N_STR) {
+          if (def->code != N_STR && def->code != N_STR16 && def->code != N_STR32) {
             data = ((decl_t) def->attr)->item;
           } else {
-            module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-            _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
-            data = MIR_new_string_data (ctx, buff, (MIR_str_t){def->u.s.len, def->u.s.s});
-            move_item_to_module_start (module, data);
+            data = get_string_data (c2m_ctx, def);
           }
           data = MIR_new_ref_data (ctx, global_name, data, e->u.i_val);
           data_size = _MIR_type_size (ctx, t);
@@ -11076,10 +11308,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
           if (data_size > str_len) MIR_new_bss (ctx, NULL, data_size - str_len);
         }
       } else {
-        module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
-        _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
-        data = MIR_new_string_data (ctx, buff, val.mir_op.u.str);
-        move_item_to_module_start (module, data);
+        data = get_mir_str_op_data (c2m_ctx, val.mir_op.u.str);
         data = MIR_new_ref_data (ctx, global_name, data, 0);
         data_size = _MIR_type_size (ctx, t);
       }
@@ -11209,6 +11438,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                                                    : MIR_new_ldouble_op (ctx, ld)));
     break;
   case N_CH: ll = r->u.ch; goto int_val;
+  case N_CH16:
+  case N_CH32: ll = r->u.ul; goto int_val;
+  case N_STR16:
+  case N_STR32: res = new_op (NULL, MIR_new_ref_op (ctx, get_string_data (c2m_ctx, r))); break;
   case N_STR:
     res
       = new_op (NULL,
@@ -12408,7 +12641,8 @@ static const char *get_node_name (node_code_t code) {
   switch (code) {
     C (IGNORE);
     REP8 (C, I, L, LL, U, UL, ULL, F, D);
-    REP8 (C, LD, CH, STR, ID, COMMA, ANDAND, OROR, EQ);
+    REP7 (C, LD, CH, CH16, CH32, STR, STR16, STR32);
+    REP5 (C, ID, COMMA, ANDAND, OROR, EQ);
     REP8 (C, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT, NOT);
     REP8 (C, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH, LSH_ASSIGN);
     REP8 (C, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL, MUL_ASSIGN);
@@ -12428,17 +12662,29 @@ static const char *get_node_name (node_code_t code) {
 #undef REP_SEP
 }
 
-static void print_char (FILE *f, int ch) {
+static void print_char (FILE *f, mir_ulong ch) {
   assert (ch >= 0);
-  if (ch == '"' || ch == '\"' || ch == '\\') fprintf (f, "\\");
-  if (isprint (ch))
-    fprintf (f, "%c", ch);
-  else
-    fprintf (f, "\\%o", ch);
+  if (ch >= 0x100) {
+    fprintf (f, ch <= 0xFFFF ? "\\u%04x" : "\\U%08x", ch);
+  } else {
+    if (ch == '"' || ch == '\"' || ch == '\\') fprintf (f, "\\");
+    if (isprint (ch))
+      fprintf (f, "%c", ch);
+    else
+      fprintf (f, "\\%o", ch);
+  }
 }
 
 static void print_chars (FILE *f, const char *str, size_t len) {
   for (size_t i = 0; i < len; i++) print_char (f, str[i]);
+}
+
+static void print_chars16 (FILE *f, const char *str, size_t len) {
+  for (size_t i = 0; i < len; i += 2) print_char (f, ((mir_char16 *) str)[i]);
+}
+
+static void print_chars32 (FILE *f, const char *str, size_t len) {
+  for (size_t i = 0; i < len; i += 4) print_char (f, ((mir_char32 *) str)[i]);
 }
 
 static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int attr_p);
@@ -12589,13 +12835,19 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_D: fprintf (f, " %.*g", DBL_MANT_DIG, (double) n->u.d); goto expr;
   case N_LD: fprintf (f, " %.*Lg", LDBL_MANT_DIG, (long double) n->u.ld); goto expr;
   case N_CH:
-    fprintf (f, " '");
+  case N_CH16:
+  case N_CH32:
+    fprintf (f, " %s'", n->code == N_CH ? "" : n->code == N_CH16 ? "u" : "U");
     print_char (f, n->u.ch);
     fprintf (f, "'");
     goto expr;
   case N_STR:
-    fprintf (f, " \"");
-    print_chars (f, n->u.s.s, n->u.s.len);
+  case N_STR16:
+  case N_STR32:
+    fprintf (f, " %s\"", n->code == N_STR ? "" : n->code == N_STR16 ? "u" : "U");
+    (n->code == N_STR
+       ? print_chars
+       : n->code == N_STR16 ? print_chars16 : print_chars32) (f, n->u.s.s, n->u.s.len);
     fprintf (f, "\"");
     goto expr;
   case N_ID:
