@@ -293,6 +293,7 @@ static void gen_movxmm2 (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t r
   addr[4] |= reg << 3;
 }
 
+#ifdef _WIN32
 static void gen_add (VARR (uint8_t) * insn_varr, uint32_t sp_offset, int reg) {
   static const uint8_t lea_pat[] = {
     0x48, 0x8d, 0x84, 0x24, 0, 0, 0, 0, /* lea    <sp_offset>(%sp),reg */
@@ -302,6 +303,7 @@ static void gen_add (VARR (uint8_t) * insn_varr, uint32_t sp_offset, int reg) {
   addr[2] |= (reg & 7) << 3;
   if (reg > 7) addr[0] |= 4;
 }
+#endif
 
 static void gen_st (VARR (uint8_t) * insn_varr, uint32_t sp_offset, int b64_p) {
   static const uint8_t st_pat[] = {
