@@ -322,7 +322,7 @@ static MIR_type_t get_blk_type (int n_qwords, MIR_type_t *qword_types) {
   assert (n_qwords <= 2);
   if (n_qwords == 0) return MIR_T_BLK;
   for (n = 0; n < n_qwords; n++) { /* start from the last qword */
-    switch (qword_types[n]) {
+    switch ((int) qword_types[n]) {
     case MIR_T_I8:
     case MIR_T_I16:
     case MIR_T_I32:
