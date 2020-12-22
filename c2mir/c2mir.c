@@ -1057,17 +1057,17 @@ static void push_str_char (c2m_ctx_t c2m_ctx, VARR (char) * temp, uint64_t ch, i
       VARR_PUSH (char, temp, ch);
     } else if (ch <= 0x7FF) {
       VARR_PUSH (char, temp, 0xC0 | (ch >> 6));
-      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
     } else if (ch <= 0xFFFF) {
       VARR_PUSH (char, temp, 0xE0 | (ch >> 12));
-      VARR_PUSH (char, temp, 0x80 | (ch >> 6) & 0x3F);
-      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | ((ch >> 6) & 0x3F));
+      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
     } else {
       assert (ch <= MAX_UTF8);
       VARR_PUSH (char, temp, 0xF0 | (ch >> 18));
-      VARR_PUSH (char, temp, 0x80 | (ch >> 12) & 0x3F);
-      VARR_PUSH (char, temp, 0x80 | (ch >> 6) & 0x3F);
-      VARR_PUSH (char, temp, 0x80 | ch & 0x3F);
+      VARR_PUSH (char, temp, 0x80 | ((ch >> 12) & 0x3F));
+      VARR_PUSH (char, temp, 0x80 | ((ch >> 6) & 0x3F));
+      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
     }
     return;
   case 'L':
