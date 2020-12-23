@@ -6552,7 +6552,6 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       } else {
         mir_llong curr_val = -1, min_val = 0;
         mir_ullong max_val = 0;
-        enum basic_type basic_type;
         struct enum_type *enum_type;
         int neg_p = FALSE;
 
@@ -12665,13 +12664,13 @@ static const char *get_node_name (node_code_t code) {
 static void print_char (FILE *f, mir_ulong ch) {
   assert (ch >= 0);
   if (ch >= 0x100) {
-    fprintf (f, ch <= 0xFFFF ? "\\u%04x" : "\\U%08x", ch);
+    fprintf (f, ch <= 0xFFFF ? "\\u%04x" : "\\U%08x", (unsigned int) ch);
   } else {
     if (ch == '"' || ch == '\"' || ch == '\\') fprintf (f, "\\");
     if (isprint (ch))
-      fprintf (f, "%c", ch);
+      fprintf (f, "%c", (unsigned int) ch);
     else
-      fprintf (f, "\\%o", ch);
+      fprintf (f, "\\%o", (unsigned int) ch);
   }
 }
 
