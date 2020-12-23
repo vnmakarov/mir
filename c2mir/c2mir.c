@@ -1043,7 +1043,7 @@ static void remove_string_stream (c2m_ctx_t c2m_ctx) {
 /* We use UTF-32 for 32-bit wchars and UTF-16 for 16-bit wchar (LE/BE
    depending on endianess of the target), UTF-8 for anything else. */
 static void push_str_char (c2m_ctx_t c2m_ctx, VARR (char) * temp, uint64_t ch, int type) {
-  int i, len;
+  int i, len = 0;
 
   switch (type) {
   case ' ':
@@ -2442,7 +2442,6 @@ static pos_t check_line_directive_args (c2m_ctx_t c2m_ctx, VARR (token_t) * buff
 }
 
 static void check_pragma (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * tokens) {
-  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t *tokens_arr = VARR_ADDR (token_t, tokens);
   size_t i, tokens_len = VARR_LENGTH (token_t, tokens);
 
@@ -2451,6 +2450,7 @@ static void check_pragma (c2m_ctx_t c2m_ctx, token_t t, VARR (token_t) * tokens)
 #ifdef _WIN32
   if (i + 1 == tokens_len && tokens_arr[i]->code == T_ID
       && strcmp (tokens_arr[i]->repr, "once") == 0) {
+    pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
     VARR_PUSH (char_ptr_t, once_include_files, cs->fname);
     return;
   }
