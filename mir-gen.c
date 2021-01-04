@@ -2433,6 +2433,7 @@ static ccp_val_t get_ccp_val (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
 
 static void initiate_ccp_info (gen_ctx_t gen_ctx) {
   bb_insn_t bb_insn;
+  ccp_val_t ccp_val;
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) != NULL
@@ -2447,7 +2448,8 @@ static void initiate_ccp_info (gen_ctx_t gen_ctx) {
   bitmap_clear (bb_visited);
   VARR_TRUNC (bb_insn_t, ccp_insns, 0);
   VARR_TRUNC (bb_t, ccp_bbs, 0);
-  VARR_TRUNC (ccp_val_t, ccp_vals, 0);
+  while (VARR_LENGTH (ccp_val_t, ccp_vals) != 0)
+    if ((ccp_val = VARR_POP (ccp_val_t, ccp_vals)) != NULL) free (ccp_val);
   VARR_PUSH (bb_t, ccp_bbs, DLIST_HEAD (bb_t, curr_cfg->bbs)); /* entry bb */
 }
 
