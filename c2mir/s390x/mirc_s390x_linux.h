@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 static char s390x_mirc[]
@@ -11,7 +11,7 @@ static char s390x_mirc[]
     "#define __ELF__ 1\n"
     "\n"
 #if __SIZEOF_LONG_DOUBLE__ == 16
-    "#define __LONG_DOUBLE_128__ 1\n" // ???
+    "#define __LONG_DOUBLE_128__ 1\n"  // ???
     "#define __SIZEOF_LONG_DOUBLE__ 16\n"
 #else
     "#define __SIZEOF_LONG_DOUBLE__ 8\n"

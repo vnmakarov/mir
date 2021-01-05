@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2019-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* See C11 7.16 and https://www.uclibc.org/docs/psABI-x86_64.pdf */

@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 static char ppc64_mirc[]
@@ -15,7 +15,7 @@ static char ppc64_mirc[]
     "#define _CALL_ELF 2\n"
 #endif
     "\n"
-    "#define __LONG_DOUBLE_128__ 1\n" // ???
+    "#define __LONG_DOUBLE_128__ 1\n"  // ???
     "#define __SIZEOF_DOUBLE__ 8\n"
     "#define __SIZEOF_FLOAT__ 4\n"
     "#define __SIZEOF_INT__ 4\n"

@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2019-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2019-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 
    Translator of LLVM bitcode into MIR.
 */
@@ -186,8 +186,12 @@ typedef struct item item_t;
 DEF_HTAB (item_t);
 static HTAB (item_t) * item_tab;
 
-static int item_eq (item_t item1, item_t item2, void *arg) { return strcmp (item1.name, item2.name) == 0; }
-static htab_hash_t item_hash (item_t item, void *arg) { return mir_hash (item.name, strlen (item.name), 424); }
+static int item_eq (item_t item1, item_t item2, void *arg) {
+  return strcmp (item1.name, item2.name) == 0;
+}
+static htab_hash_t item_hash (item_t item, void *arg) {
+  return mir_hash (item.name, strlen (item.name), 424);
+}
 
 static MIR_item_t find_item (MIR_name_t name) {
   struct item temp_item;
