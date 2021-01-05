@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 static const char mirc[]
   = "#define __mirc__ 1\n"
     "#define __MIRC__ 1\n"

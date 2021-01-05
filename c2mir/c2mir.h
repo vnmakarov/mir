@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 #ifndef C2MIR_H
 
 #define C2MIR_H

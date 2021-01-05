@@ -1,3 +1,7 @@
+/* This file is a part of MIR project.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+*/
+
 /* See C11 7.9 */
 static char iso646_str[]
   = "#ifndef __ISO646_H\n"
