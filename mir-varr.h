@@ -17,12 +17,12 @@
 #define VARR_ASSERT(EXPR, OP, T) ((void) (EXPR))
 
 #else
-static inline void mir_var_assert_fail (const char *op, const char *var) {
+static inline void mir_varr_assert_fail (const char *op, const char *var) {
   fprintf (stderr, "wrong %s for %s", op, var);
   assert (0);
 }
 
-#define VARR_ASSERT(EXPR, OP, T) (void) ((EXPR) ? 0 : (mir_var_assert_fail (OP, #T), 0))
+#define VARR_ASSERT(EXPR, OP, T) (void) ((EXPR) ? 0 : (mir_varr_assert_fail (OP, #T), 0))
 
 #endif
 
@@ -102,12 +102,9 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
     return varr->varr[ix];                                                                    \
   }                                                                                           \
                                                                                               \
-  static inline T VARR_OP_DEF (T, set) (const VARR (T) * varr, size_t ix, T obj) {            \
-    T old_obj;                                                                                \
+  static inline void VARR_OP_DEF (T, set) (const VARR (T) * varr, size_t ix, T obj) {         \
     VARR_ASSERT (varr && varr->varr && ix < varr->els_num, "set", T);                         \
-    old_obj = varr->varr[ix];                                                                 \
     varr->varr[ix] = obj;                                                                     \
-    return old_obj;                                                                           \
   }                                                                                           \
                                                                                               \
   static inline void VARR_OP_DEF (T, trunc) (VARR (T) * varr, size_t size) {                  \

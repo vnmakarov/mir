@@ -13,7 +13,7 @@ int main (void) {
   status &= VARR_LAST (int, test) == 42;
   VARR_PUSH (int, test, 8);
   status &= VARR_LAST (int, test) == 8;
-  status &= VARR_SET (int, test, 1, 7) == 8;
+  VARR_SET (int, test, 1, 7);
   status &= VARR_GET (int, test, 1) == 7;
   VARR_EXPAND (int, test, 10);
   status &= VARR_LENGTH (int, test) == 2;
