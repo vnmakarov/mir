@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018-2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* Long doubles (-mlong-double=128) are always passed by its address (for args and results) */

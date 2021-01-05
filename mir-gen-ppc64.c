@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2020 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* We don't use TOC.  So r2 is not necessary for the generated code.  */
@@ -720,9 +720,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     }
     if ((nargs = get_builtin (gen_ctx, code, &proto_item, &func_import_item)) > 0) {
       if (code == MIR_VA_ARG || code == MIR_VA_BLOCK_ARG) {
-	/* Use a builtin func call:
-	   mov func_reg, func ref; [mov reg3, type;] call proto, func_reg, res_reg, va_reg,
-	   reg3 */
+        /* Use a builtin func call:
+           mov func_reg, func ref; [mov reg3, type;] call proto, func_reg, res_reg, va_reg,
+           reg3 */
         MIR_op_t ops[6], func_reg_op, reg_op3;
         MIR_op_t res_reg_op = insn->ops[0], va_reg_op = insn->ops[1], op3 = insn->ops[2];
 
@@ -733,18 +733,18 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         next_insn = new_insn
           = MIR_new_insn (ctx, MIR_MOV, func_reg_op, MIR_new_ref_op (ctx, func_import_item));
         gen_add_insn_before (gen_ctx, insn, new_insn);
-	if (code == MIR_VA_ARG) {
-	  new_insn = MIR_new_insn (ctx, MIR_MOV, reg_op3,
-				   MIR_new_int_op (ctx, (int64_t) op3.u.mem.type));
-	  op3 = reg_op3;
-	  gen_add_insn_before (gen_ctx, insn, new_insn);
-	}
+        if (code == MIR_VA_ARG) {
+          new_insn
+            = MIR_new_insn (ctx, MIR_MOV, reg_op3, MIR_new_int_op (ctx, (int64_t) op3.u.mem.type));
+          op3 = reg_op3;
+          gen_add_insn_before (gen_ctx, insn, new_insn);
+        }
         ops[0] = MIR_new_ref_op (ctx, proto_item);
         ops[1] = func_reg_op;
         ops[2] = res_reg_op;
         ops[3] = va_reg_op;
         ops[4] = op3;
-	if (code == MIR_VA_BLOCK_ARG) ops[5] = insn->ops[3];
+        if (code == MIR_VA_BLOCK_ARG) ops[5] = insn->ops[3];
         new_insn = MIR_new_insn_arr (ctx, MIR_CALL, code == MIR_VA_ARG ? 5 : 6, ops);
         gen_add_insn_before (gen_ctx, insn, new_insn);
         gen_delete_insn (gen_ctx, insn);
