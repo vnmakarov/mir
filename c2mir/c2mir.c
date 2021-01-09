@@ -2279,8 +2279,8 @@ static void define (c2m_ctx_t c2m_ctx) {
       } else {
         VARR (token_t) * temp;
         warning (c2m_ctx, id->pos, "different macro redefinition of %s", name);
-        temp = m->params, m->params = params, params = temp;
-        temp = m->replacement, m->replacement = repl, repl = temp;
+        SWAP (m->params, params, temp);
+        SWAP (m->replacement, repl, temp);
       }
     }
     VARR_DESTROY (token_t, repl);
