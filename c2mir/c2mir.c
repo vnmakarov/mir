@@ -2194,7 +2194,7 @@ static int replacement_eq_p (VARR (token_t) * r1, VARR (token_t) * r2) {
     el1 = VARR_GET (token_t, r1, i);
     el2 = VARR_GET (token_t, r2, i);
 
-    if (el1->code == ' ' && el2->code == ' ') return TRUE;
+    if (el1->code == ' ' && el2->code == ' ') continue;
     if (el1->node_code != el2->node_code) return FALSE;
     if (strcmp (el1->repr, el2->repr) != 0) return FALSE;
   }
