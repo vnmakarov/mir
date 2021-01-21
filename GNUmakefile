@@ -87,14 +87,7 @@ ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
   endif
 endif
 
-L2M_EXE=
-L2M_TEST=
-ifneq ($(shell test -f /usr/include/llvm-c/Core.h|echo 1), 1)
-L2M_EXE += $(BUILD_DIR)/l2m$(EXE)
-L2M_TEST += l2m-test$(EXE)
-endif
-
-EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE)
+EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 
 Q=@
 
@@ -121,11 +114,11 @@ uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(P
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
 
-clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
+clean: clean-mir clean-c2m clean-utils clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF)
 
 test: adt-test simplify-test io-test scan-test interp-test gen-test readme-example-test\
-      mir2c-test c2mir-test $(L2M-TEST)
+      mir2c-test c2mir-test
 
 bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
 	@echo ==============================Bench is done
@@ -169,25 +162,6 @@ clean-c2m:
 	$(RM) $(C2M_BUILD) $(C2M_BUILD:.$(OBJSUFF)=.d)
 
 -include $(C2M_BUILD:.$(OBJSUFF)=.d)
-
-# ------------------ L2M --------------------------
-L2M_SRC:=$(SRC_DIR)/llvm2mir/llvm2mir.c $(SRC_DIR)/llvm2mir/llvm2mir-driver.c
-L2M_BUILD:=$(L2M_SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.$(OBJSUFF))
-
-$(BUILD_DIR)/llvm2mir/%.$(OBJSUFF): $(SRC_DIR)/llvm2mir/%.c | $(BUILD_DIR)/llvm2mir
-	$(COMPILE) -c $< $(OBJO)$@
-
-$(BUILD_DIR)/l2m$(EXE): $(L2M_BUILD) $(BUILD_DIR)/libmir.$(LIBSUFF) | $(BUILD_DIR)
-	$(LINK) $^ $(LDLIBS) -lLLVM $(OBJO)$@ $(BUILD_DIR)/libmir.$(LIBSUFF)
-
-$(BUILD_DIR)/llvm2mir:
-	   mkdir -p $@
-
-.PHONY: clean-l2m
-clean-l2m:
-	$(RM) $(L2M_BUILD) $(L2M_BUILD:.$(OBJSUFF)=.d)
-
--include $(L2M_BUILD:.$(OBJSUFF)=.d)
 
 # ------------------ Common for utils -------------
 
@@ -578,33 +552,6 @@ c2mir-bootstrap-test5: $(BUILD_DIR)/c2m$(EXE)
 			    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/i2.bmir
 	$(Q) cmp $(BUILD_DIR)/i1.bmir $(BUILD_DIR)/i2.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf $(BUILD_DIR)/i1.bmir $(BUILD_DIR)/i2.bmir
-
-# ------------------ l2m tests --------------------------
-
-.PHONY:  l2m-test l2m-simple-test l2m-full-test l2m-interp-test l2m-gen-test l2m-test1 l2m-test2
-
-l2m-test: l2m-simple-test # l2m-full-test
-
-l2m-simple-test: l2m-test1 l2m-test2
-
-l2m-full-test: l2m-interp-test l2m-gen-test
-
-l2m-interp-test: $(BUILD_DIR)/l2m
-	$(SHELL) c-tests/runtests.sh c-tests/use-l2m-interp $(BUILD_DIR)/c2m
-l2m-gen-test: $(BUILD_DIR)/l2m
-	$(SHELL) c-tests/runtests.sh c-tests/use-l2m-gen $(BUILD_DIR)/c2m
-
-l2m-test1: $(BUILD_DIR)/l2m
-	@echo +++++ LLVM to MIR translator test '(-O0)' +++++++
-	clang -O0 -fno-vectorize -w -c -emit-llvm $(SRC_DIR)/sieve.c -o $(BUILD_DIR)/sieve.bc
-	@echo +++++ Interpreter +++++++ && $(BUILD_DIR)/l2m -i $(BUILD_DIR)/sieve.bc
-	@echo +++++ Generator +++++++ && $(BUILD_DIR)/l2m -g $(BUILD_DIR)/sieve.bc
-
-l2m-test2: $(BUILD_DIR)/l2m
-	@echo +++++ LLVM to MIR translator test '(-O2)' +++++++
-	clang -O2 -fno-vectorize -w -c -emit-llvm $(SRC_DIR)/sieve.c -o $(BUILD_DIR)/sieve.bc
-	@echo +++++ Interpreter +++++++ && $(BUILD_DIR)/l2m -i $(BUILD_DIR)/sieve.bc
-	@echo +++++ Generator +++++++ && $(BUILD_DIR)/l2m -g $(BUILD_DIR)/sieve.bc
 
 # ------------------ benchmarks -------------------------
 
