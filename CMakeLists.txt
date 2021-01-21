@@ -64,14 +64,6 @@ add_executable (b2ctab "mir-utils/b2ctab.c")
 target_include_directories(b2ctab PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(b2ctab mir)
 
-# ------------------ L2M --------------------------
-find_package(LLVM)
-if(LLVM_FOUND)
-  add_executable (l2m "llvm2mir/llvm2mir.c" "llvm2mir/llvm2mir-driver.c" "llvm2mir/llvm2mir.h")
-  target_include_directories(l2m PRIVATE ${PROJECT_SOURCE_DIR} ${LLVM_INCLUDE_DIRS})
-  target_link_libraries(l2m mir m ${CMAKE_DL_LIBS} LLVM)
-endif()
-
 # ------------------ ADT tests --------------------------
 add_executable (varr_test "adt-tests/mir-varr-test.c")
 target_include_directories(varr_test PRIVATE ${PROJECT_SOURCE_DIR})
