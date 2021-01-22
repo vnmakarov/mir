@@ -665,7 +665,7 @@ sloc:
 	@echo -n 'C2MIR: ' && wc -l $(SRC_DIR)/c2mir/c2mir.c | awk '{last=$$1} END {print last}'
 	@echo -n 'ADT: ' && wc -l $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-hash.h $(SRC_DIR)/mir-htab.h\
 	                          $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-reduce.h $(SRC_DIR)/mir-bitmap.h\
-				  $(SRC_DIR)/mir-mp.h | awk '{last=$$1} END {print last}'
+				  | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR API: ' && wc -l $(SRC_DIR)/mir.[ch] | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR Interpreter: ' && wc -l $(SRC_DIR)/mir-interp.c | awk '{last=$$1} END {print last}'
 	@echo -n 'MIR Generator: ' && wc -l $(SRC_DIR)/mir-gen.[ch] | awk '{last=$$1} END {print last}'
@@ -679,7 +679,7 @@ sloc:
 	| awk '{last=$$1} END {print last}'
 	@echo -n 'Overall: ' && wc -l $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-hash.h\
 	                              $(SRC_DIR)/mir-htab.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-reduce.h\
-				      $(SRC_DIR)/mir-bitmap.h $(SRC_DIR)/mir-mp.h $(SRC_DIR)/mir.[ch]\
+				      $(SRC_DIR)/mir-bitmap.h $(SRC_DIR)/mir.[ch]\
 				      $(SRC_DIR)/mir-interp.c $(SRC_DIR)/mir-gen.[ch] $(SRC_DIR)/mir-x86_64.c\
 				      $(SRC_DIR)/mir-gen-x86_64.c $(SRC_DIR)/mir-aarch64.c\
 				      $(SRC_DIR)/mir-gen-aarch64.c $(SRC_DIR)/mir-ppc64.c $(SRC_DIR)/mir-gen-ppc64.c\
