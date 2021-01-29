@@ -3752,6 +3752,7 @@ static void pre (c2m_ctx_t c2m_ctx, const char *start_source_name) {
 
 typedef struct {
   node_t id, scope;
+  int typedef_p;
 } tpname_t;
 
 DEF_HTAB (tpname_t);
@@ -3849,12 +3850,13 @@ static int tpname_find (c2m_ctx_t c2m_ctx, node_t id, node_t scope, tpname_t *re
   return found_p;
 }
 
-static tpname_t tpname_add (c2m_ctx_t c2m_ctx, node_t id, node_t scope) {
+static tpname_t tpname_add (c2m_ctx_t c2m_ctx, node_t id, node_t scope, int typedef_p) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   tpname_t el, tpname;
 
   tpname.id = id;
   tpname.scope = scope;
+  tpname.typedef_p = typedef_p;
   if (HTAB_DO (tpname_t, tpname_tab, tpname, HTAB_FIND, el)) return el;
   HTAB_DO (tpname_t, tpname_tab, tpname, HTAB_INSERT, el);
   return el;
@@ -4247,10 +4249,8 @@ D (declaration) {
         decl = r;
         last_pos = POS (decl);
         assert (decl->code == N_DECL);
-        if (typedef_p) {
-          op = NL_HEAD (decl->u.ops);
-          tpname_add (c2m_ctx, op, curr_scope);
-        }
+        op = NL_HEAD (decl->u.ops);
+        tpname_add (c2m_ctx, op, curr_scope, typedef_p);
         try_attr_spec (c2m_ctx, last_pos);
         if (M ('=')) {
           P (initializer);
@@ -4862,10 +4862,14 @@ D (direct_abstract_declarator) {
 D (typedef_name) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   node_t scope, r;
+  tpname_t tpn;
 
   PTN (T_ID);
   for (scope = curr_scope;; scope = scope->attr) {
-    if (tpname_find (c2m_ctx, r, scope, NULL)) return r;
+    if (tpname_find (c2m_ctx, r, scope, &tpn)) {
+      if (!tpn.typedef_p) break;
+      return r;
+    }
     if (scope == NULL) break;
   }
   return err_node;
@@ -5151,7 +5155,7 @@ err0:
 
 D (transl_unit) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
-  node_t list, ds, d, dl, r;
+  node_t list, ds, d, dl, r, func, param_list, p, par_declarator, id;
 
   // curr_token->code = ';'; /* for error recovery */
   read_token (c2m_ctx);
@@ -5169,6 +5173,18 @@ D (transl_unit) {
       while (!C ('{')) { /* declaration-list */
         PE (declaration, decl_err);
         op_flat_append (c2m_ctx, dl, r);
+      }
+      func = NL_HEAD (NL_EL (d->u.ops, 1)->u.ops);
+      assert (func != NULL && func->code == N_FUNC);
+      param_list = NL_HEAD (func->u.ops);
+      for (p = NL_HEAD (param_list->u.ops); p != NULL; p = NL_NEXT (p)) {
+        if (p->code == N_ID) {
+          tpname_add (c2m_ctx, p, curr_scope, FALSE);
+        } else if (p->code == N_SPEC_DECL) {
+          par_declarator = NL_EL (p->u.ops, 1);
+          id = NL_HEAD (par_declarator->u.ops);
+          tpname_add (c2m_ctx, id, curr_scope, FALSE);
+        }
       }
       P (compound_stmt);
       r = new_pos_node4 (c2m_ctx, N_FUNC_DEF, POS (d), ds, d, dl, r);
