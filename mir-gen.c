@@ -226,6 +226,8 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
 #include "mir-gen-ppc64.c"
 #elif defined(__s390x__)
 #include "mir-gen-s390x.c"
+#elif defined(__ARM_ARCH) && (__ARM_ARCH == 7)
+#include "mir-gen-armv7.c"
 #else
 #error "undefined or unsupported generation target"
 #endif

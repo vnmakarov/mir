@@ -5915,6 +5915,9 @@ static void scan_finish (MIR_context_t ctx) {
 #include "mir-ppc64.c"
 #elif defined(__s390x__)
 #include "mir-s390x.c"
+#elif defined(__ARM_ARCH) && (__ARM_ARCH == 7)
+#define MIR_ARMV7 1
+#include "mir-armv7.c"
 #else
 #error "undefined or unsupported generation target"
 #endif

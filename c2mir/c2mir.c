@@ -34,6 +34,8 @@
 #include "ppc64/cppc64.h"
 #elif defined(__s390x__)
 #include "s390x/cs390x.h"
+#elif defined(__ARM_ARCH) && (__ARM_ARCH == 7)
+#include "armv7/carmv7.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -331,6 +333,8 @@ typedef struct {
 #include "ppc64/cppc64-code.c"
 #elif defined(__s390x__)
 #include "s390x/cs390x-code.c"
+#elif defined(__ARM_ARCH) && (__ARM_ARCH == 7)
+#include "armv7/carmv7-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
