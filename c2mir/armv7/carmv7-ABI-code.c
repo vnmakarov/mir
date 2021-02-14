@@ -1,6 +1,6 @@
 /* This file is a part of MIR project.
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
-   aarch64 call ABI target specific code.
+   armv7 call ABI target specific code.
 */
 
 typedef int target_arg_info_t;
