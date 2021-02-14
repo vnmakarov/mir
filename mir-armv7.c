@@ -26,7 +26,7 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   return _MIR_publish_code (ctx, (uint8_t *) bend_code, sizeof (bend_code));
 }
 
-struct aarch64_va_list {
+struct armv7_va_list {
   /* address following the last (highest addressed) named incoming
      argument on the stack, rounded upwards to a multiple of 8 bytes,
      or if there are no named arguments on the stack, then the value
@@ -45,7 +45,7 @@ struct aarch64_va_list {
 };
 
 void *va_arg_builtin (void *p, uint64_t t) {
-  struct aarch64_va_list *va = p;
+  struct armv7_va_list *va = p;
   MIR_type_t type = t;
   int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
   void *a;
@@ -65,7 +65,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
 }
 
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
-  struct aarch64_va_list *va = p;
+  struct armv7_va_list *va = p;
   void *a;
   long size = (s + 7) / 8 * 8;
 
@@ -89,11 +89,11 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
-  struct aarch64_va_list *va = p;
+  struct armv7_va_list *va = p;
   va_list *vap = a;
 
-  assert (sizeof (struct aarch64_va_list) == sizeof (va_list));
-  *va = *(struct aarch64_va_list *) vap;
+  assert (sizeof (struct armv7_va_list) == sizeof (va_list));
+  *va = *(struct armv7_va_list *) vap;
 }
 
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
