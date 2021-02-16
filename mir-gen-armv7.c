@@ -1885,9 +1885,9 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
           v = op.u.u;
         } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
                    && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
-          v = (uint64_t) op.u.ref->u.data->u.els;
+          v = (uintptr_t) op.u.ref->u.data->u.els;
         } else {
-          v = (uint64_t) op.u.ref->addr;
+          v = (uintptr_t) op.u.ref->addr;
         }
         if (movnzk_const (v, start_ch == 'N', imms) > n + 1) return FALSE;
         gen_assert (nop == 1); /* only 2nd move operand */
@@ -2145,9 +2145,9 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           v = op.u.u;
         } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
                    && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
-          v = (uint64_t) op.u.ref->u.data->u.els;
+          v = (uintptr_t) op.u.ref->u.data->u.els;
         } else {
-          v = (uint64_t) op.u.ref->addr;
+          v = (uintptr_t) op.u.ref->addr;
         }
         n2 = movnzk_const (v, start_ch == 'N', imms);
         gen_assert (n < n2);

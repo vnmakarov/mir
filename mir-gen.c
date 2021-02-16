@@ -1527,7 +1527,7 @@ static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op) {
 
 static htab_hash_t def_tab_el_hash (def_tab_el_t el, void *arg) {
   return mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (0x33), (uint64_t) el.bb), (uint64_t) el.reg));
+    mir_hash_step (mir_hash_step (mir_hash_init (0x33), (uintptr_t) el.bb), (uintptr_t) el.reg));
 }
 
 static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
@@ -5206,7 +5206,7 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
            "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
            "--adjust-vma=0x%llx -d %s.o; rm -f "
            "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
+           cfname, cfname, bfname, cfname, (uintptr_t) start_addr, cfname, cfname, cfname,
            bfname);
 #endif
   fprintf (stderr, "%s\n", command);
@@ -5389,7 +5389,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
              "Generation of code for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
              MIR_item_name (ctx, func_item),
              (long unsigned) DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
-             (unsigned long long) machine_code, (unsigned long) code_len,
+             (uintptr_t) machine_code, (unsigned long) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);

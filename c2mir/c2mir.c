@@ -3832,8 +3832,8 @@ static int tpname_eq (tpname_t tpname1, tpname_t tpname2, void *arg) {
 
 static htab_hash_t tpname_hash (tpname_t tpname, void *arg) {
   return (mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) tpname.id->u.s.s),
-                   (uint64_t) tpname.scope)));
+    mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uintptr_t) tpname.id->u.s.s),
+                   (uintptr_t) tpname.scope)));
 }
 
 static void tpname_init (c2m_ctx_t c2m_ctx) {
@@ -5387,9 +5387,9 @@ static int symbol_eq (symbol_t s1, symbol_t s2, void *arg) {
 
 static htab_hash_t symbol_hash (symbol_t s, void *arg) {
   return (mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) s.mode),
-                                  (uint64_t) s.id->u.s.s),
-                   (uint64_t) s.scope)));
+    mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uintptr_t) s.mode),
+                                  (uintptr_t) s.id->u.s.s),
+                   (uintptr_t) s.scope)));
 }
 
 static void symbol_clear (symbol_t sym, void *arg) { VARR_DESTROY (node_t, sym.defs); }

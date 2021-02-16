@@ -57,7 +57,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->__gr_top + va->__gr_offs;
     va->__gr_offs += 8;
   } else {
-    if (type == MIR_T_LD) va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
+    if (type == MIR_T_LD) va->__stack = (void *) (((uintptr_t) va->__stack + 15) % 16);
     a = va->__stack;
     va->__stack = (char *) va->__stack + (type == MIR_T_LD ? 16 : 8);
   }
@@ -125,7 +125,7 @@ static uint8_t *push_insns (VARR (uint8_t) * insn_varr, const uint32_t *pat, siz
 
 static size_t gen_mov_addr (VARR (uint8_t) * insn_varr, int reg, void *addr) {
   uint32_t insns[4];
-  int insns_num = setup_imm64_insns (insns, reg, (uint64_t) addr);
+  int insns_num = setup_imm64_insns (insns, reg, (uintptr_t) addr);
 
   mir_assert (insns_num == 4 && sizeof (insns) == insns_num * sizeof (uint32_t));
   push_insns (insn_varr, insns, insns_num * sizeof (uint32_t));
@@ -167,12 +167,12 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   int64_t offset = (uint32_t *) to - (uint32_t *) thunk;
   uint32_t code[5];
 
-  mir_assert (((uint64_t) thunk & 0x3) == 0 && ((uint64_t) to & 0x3) == 0); /* alignment */
+  mir_assert (((uintptr_t) thunk & 0x3) == 0 && ((uintptr_t) to & 0x3) == 0); /* alignment */
   if (-(int64_t) MAX_BR_OFFSET <= offset && offset < (int64_t) MAX_BR_OFFSET) {
     code[0] = branch_pat2 | ((uint32_t) offset & BR_OFFSET_MASK);
     _MIR_change_code (ctx, thunk, (uint8_t *) &code[0], sizeof (code[0]));
   } else {
-    int n = setup_imm64_insns (code, 9, (uint64_t) to);
+    int n = setup_imm64_insns (code, 9, (uintptr_t) to);
 
     mir_assert (n == 4);
     code[4] = branch_pat1;
