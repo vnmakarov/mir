@@ -749,13 +749,13 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
 #define LD(op, val_type, mem_type)          \
   do {                                      \
     val_type *r = get_##op (bp, ops);       \
-    int64_t a = get_mem_addr (bp, ops + 1); \
+    intptr_t a = get_mem_addr (bp, ops + 1); \
     *r = *((mem_type *) a);                 \
   } while (0)
 #define ST(op, val_type, mem_type)          \
   do {                                      \
     val_type v = *get_##op (bp, ops);       \
-    int64_t a = get_mem_addr (bp, ops + 1); \
+    intptr_t a = get_mem_addr (bp, ops + 1); \
     *((mem_type *) a) = v;                  \
   } while (0)
 
