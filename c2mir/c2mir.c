@@ -6572,7 +6572,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         int neg_p = FALSE;
 
         n->attr = enum_type = reg_malloc (c2m_ctx, sizeof (struct enum_type));
-        enum_type->enum_basic_type = TP_INT;
+        enum_type->enum_basic_type = TP_INT;                                           // ???
         for (node_t en = NL_HEAD (enum_list->u.ops); en != NULL; en = NL_NEXT (en)) {  // ??? id
           node_t id, const_expr;
           symbol_t sym;
@@ -6662,7 +6662,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
             error (c2m_ctx, POS (op), "constant value in _Alignas is not of an integer type");
           } else if (!signed_integer_type_p (cexpr->type)
                      || !supported_alignment_p (cexpr->u.i_val)) {
-            error (c2m_ctx, POS (op), "constant value in _Alignas specifies unspported alignment");
+            error (c2m_ctx, POS (op), "constant value in _Alignas specifies unsupported alignment");
           } else if (invalid_alignment (cexpr->u.i_val)) {
             error (c2m_ctx, POS (op), "unsupported alignmnent");
           } else {
