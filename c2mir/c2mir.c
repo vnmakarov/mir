@@ -8700,18 +8700,14 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       e->type->pos_node = r;
       e->type->u.ptr_type = create_type (c2m_ctx, NULL);
       e->type->u.ptr_type->pos_node = r;
-      if (null_const_p (e2, t2)) {
-        e->type->u.ptr_type = e2->type->u.ptr_type;
-      } else if (null_const_p (e3, t3)) {
-        e->type->u.ptr_type = e3->type->u.ptr_type;
-      } else {
-        if (t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p) {
-          error (c2m_ctx, POS (r),
-                 "pointer to atomic type in true or false parts of cond-expression");
-        }
-        e->type->u.ptr_type->mode = TM_BASIC;
-        e->type->u.ptr_type->u.basic_type = TP_VOID;
+      assert (!null_const_p (e2, t2) && !null_const_p (e3, t3));
+      e->type->u.ptr_type = e3->type->u.ptr_type;
+      if (t2->u.ptr_type->type_qual.atomic_p || t3->u.ptr_type->type_qual.atomic_p) {
+        error (c2m_ctx, POS (r),
+               "pointer to atomic type in true or false parts of cond-expression");
       }
+      e->type->u.ptr_type->mode = TM_BASIC;
+      e->type->u.ptr_type->u.basic_type = TP_VOID;
       e->type->u.ptr_type->type_qual
         = type_qual_union (&t2->u.ptr_type->type_qual, &t3->u.ptr_type->type_qual);
     } else {
