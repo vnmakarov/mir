@@ -8684,7 +8684,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       *e->type = *t2;
     } else if ((t2->mode == TM_PTR && null_const_p (e3, t3))
                || (t3->mode == TM_PTR && null_const_p (e2, t2))) {
-      e->type = null_const_p (e3, t2) ? t3 : t2;
+      e->type = null_const_p (e2, t2) ? t3 : t2;
     } else if (t2->mode != TM_PTR || t3->mode != TM_PTR) {
       error (c2m_ctx, POS (r), "incompatible types in true and false parts of cond-expression");
       break;
