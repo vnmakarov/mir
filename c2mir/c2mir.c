@@ -7089,6 +7089,11 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                                   : "assignment discards a type qualifier from a pointer");
       (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
     }
+  } else {
+    msg = (code == N_CALL ? "passing assign incompatible value"
+                          : code == N_RETURN ? "returning assign incompatible value"
+                                             : "assignment of incompatible value");
+    error (c2m_ctx, POS (assign_node), "%s", msg);
   }
 }
 
@@ -7658,9 +7663,9 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
       error (c2m_ctx, POS (initializer), "initialization of incomplete type variable");
     return;
   }
-  if (decl->decl_spec.linkage != N_IGNORE && scope != top_scope) {
-    error (c2m_ctx, POS (initializer),
-           "initialization of %s in block scope with external or internal linkage", id->u.s.s);
+  if (decl->decl_spec.linkage == N_EXTERN && scope != top_scope) {
+    error (c2m_ctx, POS (initializer), "initialization of %s in block scope with external linkage",
+           id->u.s.s);
     return;
   }
   check (c2m_ctx, initializer, decl_node);
