@@ -315,6 +315,11 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type);
 
 static mir_size_t raw_type_size (c2m_ctx_t c2m_ctx, struct type *type) {
   if (type->raw_size == MIR_SIZE_MAX) set_type_layout (c2m_ctx, type);
+  if (n_errors != 0 && type->raw_size == MIR_SIZE_MAX) {
+    /* Use safe values for programs with errors: */
+    type->raw_size = 0;
+    type->align = 1;
+  }
   assert (type->raw_size != MIR_SIZE_MAX);
   return type->raw_size;
 }
