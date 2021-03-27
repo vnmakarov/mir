@@ -7296,8 +7296,10 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
     if (*deref != (r->code == N_FIELD ? 1 : 0)) return FALSE;
     *deref = 1;
     e = r->attr;
-    decl = e->lvalue_node->attr;
-    *offset += decl->offset;
+    if (e->lvalue_node != NULL) {
+      decl = e->lvalue_node->attr;
+      *offset += decl->offset;
+    }
     return TRUE;
   case N_IND:
     if (((struct expr *) NL_HEAD (r->u.ops)->attr)->type->mode != TM_PTR) return FALSE;
