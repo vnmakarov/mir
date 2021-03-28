@@ -5151,7 +5151,11 @@ D (compound_stmt) {
     error_recovery (c2m_ctx, 1, "<statement>");
   }
   curr_scope = n->attr;
-  if (!C (T_EOFILE)) PT ('}');
+  if (C (T_EOFILE)) {
+    error (c2m_ctx, pos, "unfinished compound statement");
+    return err_node;
+  }
+  PT ('}');
   return n;
 err0:
   error_recovery (c2m_ctx, 0, "{");
@@ -5180,15 +5184,19 @@ D (transl_unit) {
         op_flat_append (c2m_ctx, dl, r);
       }
       func = NL_HEAD (NL_EL (d->u.ops, 1)->u.ops);
-      assert (func != NULL && func->code == N_FUNC);
-      param_list = NL_HEAD (func->u.ops);
-      for (p = NL_HEAD (param_list->u.ops); p != NULL; p = NL_NEXT (p)) {
-        if (p->code == N_ID) {
-          tpname_add (c2m_ctx, p, curr_scope, FALSE);
-        } else if (p->code == N_SPEC_DECL) {
-          par_declarator = NL_EL (p->u.ops, 1);
-          id = NL_HEAD (par_declarator->u.ops);
-          tpname_add (c2m_ctx, id, curr_scope, FALSE);
+      if (func == NULL || func->code == N_FUNC) {
+        id = NL_HEAD (d->u.ops);
+        error (c2m_ctx, POS (id), "non-function declaration %s before '{'", id->u.s.s);
+      } else {
+        param_list = NL_HEAD (func->u.ops);
+        for (p = NL_HEAD (param_list->u.ops); p != NULL; p = NL_NEXT (p)) {
+          if (p->code == N_ID) {
+            tpname_add (c2m_ctx, p, curr_scope, FALSE);
+          } else if (p->code == N_SPEC_DECL) {
+            par_declarator = NL_EL (p->u.ops, 1);
+            id = NL_HEAD (par_declarator->u.ops);
+            tpname_add (c2m_ctx, id, curr_scope, FALSE);
+          }
         }
       }
       P (compound_stmt);
