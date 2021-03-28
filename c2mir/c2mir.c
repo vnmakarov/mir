@@ -5184,7 +5184,7 @@ D (transl_unit) {
         op_flat_append (c2m_ctx, dl, r);
       }
       func = NL_HEAD (NL_EL (d->u.ops, 1)->u.ops);
-      if (func == NULL || func->code == N_FUNC) {
+      if (func == NULL || func->code != N_FUNC) {
         id = NL_HEAD (d->u.ops);
         error (c2m_ctx, POS (id), "non-function declaration %s before '{'", id->u.s.s);
       } else {
