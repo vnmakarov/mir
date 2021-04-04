@@ -6341,9 +6341,7 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
       || (decl_spec.linkage == N_STATIC && linkage == N_EXTERN))
     warning (c2m_ctx, POS (id), "%s defined with external and internal linkage", id->u.s.s);
   VARR_PUSH (node_t, sym.defs, def_node);
-  if (!incomplete_type_p (c2m_ctx, decl_spec.type)
-      && incomplete_type_p (c2m_ctx, tab_decl_spec.type))
-    symbol_def_replace (c2m_ctx, sym, def_node);
+  if (incomplete_type_p (c2m_ctx, tab_decl_spec.type)) symbol_def_replace (c2m_ctx, sym, def_node);
 }
 
 static void make_type_complete (c2m_ctx_t c2m_ctx, struct type *type) {
