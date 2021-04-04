@@ -6602,10 +6602,10 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           id = NL_HEAD (en->u.ops);
           const_expr = NL_NEXT (id);
           check (c2m_ctx, const_expr, n);
-          if (symbol_find (c2m_ctx, S_REGULAR, id, curr_scope, &sym)) {
+          if (symbol_find (c2m_ctx, S_REGULAR, id, enum_const_scope, &sym)) {
             error (c2m_ctx, POS (id), "enum constant %s redeclaration", id->u.s.s);
           } else {
-            symbol_insert (c2m_ctx, S_REGULAR, id, curr_scope, en, n);
+            symbol_insert (c2m_ctx, S_REGULAR, id, enum_const_scope, en, n);
           }
           curr_val++;
           if (curr_val == 0) neg_p = FALSE;
