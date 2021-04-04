@@ -7303,10 +7303,13 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
     struct expr *e = op->attr;
 
     if (!check_const_addr_p (c2m_ctx, op, base, offset, deref)) return FALSE;
-    if (op->code != N_ID
-        || (e->def_node->code != N_FUNC_DEF
-            && (e->def_node->code != N_SPEC_DECL
-                || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC)))
+    if (r->code == N_ADDR
+        && (e->type->mode == TM_ARR || (e->type->mode == TM_PTR && e->type->arr_type != NULL)))
+      ;
+    else if (op->code != N_ID
+             || (e->def_node->code != N_FUNC_DEF
+                 && (e->def_node->code != N_SPEC_DECL
+                     || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC)))
       r->code == N_DEREF ? (*deref)++ : (*deref)--;
     return TRUE;
   }
@@ -8606,8 +8609,12 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
               || e1->lvalue_node->code == N_STR32);
       t2 = t1;
     }
-    e->type->mode = TM_PTR;
-    e->type->u.ptr_type = t2;
+    if (t2->mode == TM_ARR) {
+      e->type = t2;
+    } else {
+      e->type->mode = TM_PTR;
+      e->type->u.ptr_type = t2;
+    }
     break;
   case N_DEREF:
     process_unop (c2m_ctx, r, &op1, &e1, &t1, r);
