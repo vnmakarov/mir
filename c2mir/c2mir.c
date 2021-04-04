@@ -4334,7 +4334,7 @@ DA (declaration_specs) {
       prev_type_spec = r;
     } else if ((r = TRY_A (type_spec, prev_type_spec)) != err_node) {
       prev_type_spec = r;
-    } else if ((r = try_attr_spec (c2m_ctx, spec_pos)) != err_node) {
+    } else if ((r = try_attr_spec (c2m_ctx, spec_pos)) != err_node && r != NULL) {
       continue;
     } else
       break;
