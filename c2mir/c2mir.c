@@ -6353,6 +6353,12 @@ static void make_type_complete (c2m_ctx_t c2m_ctx, struct type *type) {
   set_type_layout (c2m_ctx, type);
 }
 
+static node_t skip_struct_scopes (node_t scope) {
+  for (; scope != NULL && (scope->code == N_STRUCT || scope->code == N_UNION);
+       scope = ((struct node_scope *) scope->attr)->scope)
+    ;
+  return scope;
+}
 static void check (c2m_ctx_t c2m_ctx, node_t node, node_t context);
 
 static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t decl) {
@@ -6522,7 +6528,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         error (c2m_ctx, POS (n), "double with short");
       break;
     case N_ID: {
-      node_t def = find_def (c2m_ctx, S_REGULAR, n, curr_scope, NULL);
+      node_t def = find_def (c2m_ctx, S_REGULAR, n, skip_struct_scopes (curr_scope), NULL);
       decl_t decl;
 
       set_type_pos_node (type, n);
@@ -6569,6 +6575,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_ENUM: {
       node_t res, id = NL_HEAD (n->u.ops);
       node_t enum_list = NL_NEXT (id);
+      node_t enum_const_scope = skip_struct_scopes (curr_scope);
 
       set_type_pos_node (type, n);
       res = process_tag (c2m_ctx, n, id, enum_list);
