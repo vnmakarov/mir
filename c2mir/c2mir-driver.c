@@ -367,6 +367,8 @@ static void *import_resolver (const char *name) {
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
     if (strcmp (name, "stat") == 0) return stat;
+    if (strcmp (name, "lstat") == 0) return lstat;
+    if (strcmp (name, "fstat") == 0) return fstat;
 #endif
     fprintf (stderr, "can not load symbol %s\n", name);
     close_std_libs ();
