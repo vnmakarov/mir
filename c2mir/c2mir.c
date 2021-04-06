@@ -2294,7 +2294,8 @@ static void define (c2m_ctx_t c2m_ctx) {
 }
 
 #ifdef C2MIR_PREPRO_DEBUG
-static void print_output_buffer (void) {
+static void print_output_buffer (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   fprintf (stderr, "output buffer:");
   for (size_t i = 0; i < (int) VARR_LENGTH (token_t, output_buffer); i++) {
     fprintf (stderr, " <%s>", get_token_str (VARR_GET (token_t, output_buffer, i)));
@@ -2305,6 +2306,7 @@ static void print_output_buffer (void) {
 
 static void push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
 #ifdef C2MIR_PREPRO_DEBUG
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   fprintf (stderr,
            "# push back (macro call depth %d):", VARR_LENGTH (macro_call_t, macro_call_stack));
 #endif
@@ -2315,13 +2317,14 @@ static void push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
     unget_next_pptoken (c2m_ctx, VARR_GET (token_t, tokens, i));
   }
 #ifdef C2MIR_PREPRO_DEBUG
-  fprintf (stderr, "\no");
-  print_output_buffer ();
+  fprintf (stderr, "\n");
+  print_output_buffer (c2m_ctx);
 #endif
 }
 
 static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens, pos_t pos) {
 #ifdef C2MIR_PREPRO_DEBUG
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   fprintf (stderr, "# copy & push back (macro call depth %d):",
            VARR_LENGTH (macro_call_t, macro_call_stack));
 #endif
@@ -2333,7 +2336,7 @@ static void copy_and_push_back (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens, pos_
   }
 #ifdef C2MIR_PREPRO_DEBUG
   fprintf (stderr, "\n");
-  print_output_buffer ();
+  print_output_buffer (c2m_ctx);
 #endif
 }
 
@@ -2498,7 +2501,7 @@ static void pop_macro_call (c2m_ctx_t c2m_ctx) {
 
   mc = VARR_POP (macro_call_t, macro_call_stack);
 #ifdef C2MIR_PREPRO_DEBUG
-  fprintf (stderr, "finish macro %s\n", mc->macro->id->repr);
+  fprintf (stderr, "finish call of macro %s\n", mc->macro->id->repr);
 #endif
   mc->macro->ignore_p = FALSE;
   free_macro_call (mc);
