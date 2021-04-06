@@ -3373,7 +3373,10 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
       res.u.i_val = tree->u.ch;
     break;
   case N_CH16:
-  case N_CH32: res.u.u_val = tree->u.ul; break;
+  case N_CH32:
+    res.uns_p = TRUE;
+    res.u.u_val = tree->u.ul;
+    break;
   case N_I:
   case N_L:
     res.uns_p = FALSE;
