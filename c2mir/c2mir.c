@@ -11495,7 +11495,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   case N_COMMA:
     gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL);
-    res = gen (c2m_ctx, NL_EL (r->u.ops, 1), true_label, false_label, TRUE, NULL);
+    res = gen (c2m_ctx, NL_EL (r->u.ops, 1), true_label, false_label,
+               true_label == NULL && !void_type_p (((struct expr *) r->attr)->type), NULL);
+    if (true_label != NULL) {
+      true_label = false_label = NULL;
+      val_p = FALSE;
+    }
     break;
   case N_ANDAND:
   case N_OROR:
