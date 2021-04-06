@@ -7077,8 +7077,11 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
   } else if (left->mode == TM_PTR) {
     if (null_const_p (expr, right)) {
     } else if (right->mode != TM_PTR
-               || (!compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
-                   && !void_ptr_p (left) && !void_ptr_p (right))) {
+               || !(compatible_types_p (left->u.ptr_type, right->u.ptr_type, TRUE)
+                    || (void_ptr_p (left) || void_ptr_p (right))
+                    || (left->u.ptr_type->mode == TM_ARR
+                        && compatible_types_p (left->u.ptr_type->u.arr_type->el_type,
+                                               right->u.ptr_type, TRUE)))) {
       if (right->mode == TM_PTR && left->u.ptr_type->mode == TM_BASIC
           && right->u.ptr_type->mode == TM_BASIC) {
         msg = (code == N_CALL ? "incompatible pointer types of argument and parameter"
@@ -8566,6 +8569,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     break;
   case N_ADDR:
     process_unop (c2m_ctx, r, &op1, &e1, &t1, r);
+    assert (t1->mode != TM_ARR);
     e = create_expr (c2m_ctx, r);
     if (op1->code == N_DEREF) {
       node_t deref_op = NL_HEAD (op1->u.ops);
