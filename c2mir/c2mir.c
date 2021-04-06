@@ -8576,7 +8576,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
       *e->type = *((struct expr *) deref_op->attr)->type;
       break;
-    } else if (e1->type->mode == TM_PTR && e1->type->u.ptr_type->mode == TM_FUNC) {
+    } else if (e1->type->mode == TM_PTR
+               && (e1->type->u.ptr_type->mode == TM_FUNC || e1->type->arr_type != NULL)) {
       *e->type = *e1->type;
       break;
     } else if (!e1->lvalue_node) {
