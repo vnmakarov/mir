@@ -3474,7 +3474,7 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
   macro_call_t mc;
   token_t t1 = get_next_pptoken (c2m_ctx), t2 = NULL;
 
-  if (t1->code == T_EOR) {
+  while (t1->code == T_EOR) {
     pop_macro_call (c2m_ctx);
     t1 = get_next_pptoken (c2m_ctx);
   }
