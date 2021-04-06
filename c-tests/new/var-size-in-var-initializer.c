@@ -1,6 +1,6 @@
-void *xmalloc (int size);
+void *malloc (int size);
 static int *f (void) {
-  int *new_pair = xmalloc (sizeof (*new_pair));
+  int *new_pair = malloc (sizeof (*new_pair));
   return new_pair;
 }
 int main (void) { return 0; }
