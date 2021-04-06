@@ -7660,6 +7660,12 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
     func_p = !param_p && list_head && list_head->code == N_FUNC;
     decl->decl_spec.linkage = get_id_linkage (c2m_ctx, func_p, id, scope, decl->decl_spec);
   }
+  if (decl_node->code != N_MEMBER) {
+    set_type_layout (c2m_ctx, decl->decl_spec.type);
+    check_decl_align (c2m_ctx, &decl->decl_spec);
+    if (!decl->decl_spec.typedef_p && decl->scope != top_scope && decl->scope->code != N_FUNC)
+      VARR_PUSH (decl_t, func_decls_for_allocation, decl);
+  }
   if (declarator->code == N_DECL) {
     def_symbol (c2m_ctx, S_REGULAR, id, scope, decl_node, decl->decl_spec.linkage);
     if (scope != top_scope && decl->decl_spec.linkage == N_EXTERN)
@@ -7671,12 +7677,6 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
         fprintf (c2m_options->message_file, "\n");
       }
     }
-  }
-  if (decl_node->code != N_MEMBER) {
-    set_type_layout (c2m_ctx, decl->decl_spec.type);
-    check_decl_align (c2m_ctx, &decl->decl_spec);
-    if (!decl->decl_spec.typedef_p && decl->scope != top_scope && decl->scope->code != N_FUNC)
-      VARR_PUSH (decl_t, func_decls_for_allocation, decl);
   }
   if (initializer == NULL || initializer->code == N_IGNORE) return;
   if (incomplete_type_p (c2m_ctx, decl->decl_spec.type)
@@ -7699,10 +7699,6 @@ static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
                      decl->decl_spec.linkage == N_STATIC || decl->decl_spec.linkage == N_EXTERN
                        || decl->decl_spec.thread_local_p || decl->decl_spec.static_p,
                      TRUE);
-  if (decl_node->code != N_MEMBER && !decl->decl_spec.typedef_p && decl->scope != top_scope
-      && decl->scope->code != N_FUNC)
-    /* Process after initilizer because we can make type complete by it. */
-    VARR_PUSH (decl_t, func_decls_for_allocation, decl);
 }
 
 static struct type *adjust_type (c2m_ctx_t c2m_ctx, struct type *type) {
