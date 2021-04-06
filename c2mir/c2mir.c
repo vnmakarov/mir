@@ -7305,13 +7305,14 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
 
     if (!check_const_addr_p (c2m_ctx, op, base, offset, deref)) return FALSE;
     if (r->code == N_ADDR
-        && (e->type->mode == TM_ARR || (e->type->mode == TM_PTR && e->type->arr_type != NULL)))
-      ;
-    else if (op->code != N_ID
-             || (e->def_node->code != N_FUNC_DEF
-                 && (e->def_node->code != N_SPEC_DECL
-                     || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC)))
+        && (e->type->mode == TM_ARR || (e->type->mode == TM_PTR && e->type->arr_type != NULL))) {
+      if (*deref > 0) (*deref)--;
+    } else if (op->code != N_ID
+               || (e->def_node->code != N_FUNC_DEF
+                   && (e->def_node->code != N_SPEC_DECL
+                       || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC))) {
       r->code == N_DEREF ? (*deref)++ : (*deref)--;
+    }
     return TRUE;
   }
   case N_FIELD:
