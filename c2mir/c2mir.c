@@ -11212,7 +11212,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
   MIR_context_t ctx = c2m_ctx->ctx;
   op_t val;
   size_t str_len;
-  mir_size_t data_size, offset = 0, rel_offset = 0;
+  mir_size_t data_size, el_size, offset = 0, rel_offset = 0, start_offset;
   init_el_t init_el, next_init_el;
   MIR_reg_t base;
   MIR_type_t t;
@@ -11266,7 +11266,8 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
     assert (var.mir_op.mode == MIR_OP_REF);
     for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
       init_el = VARR_GET (init_el_t, init_els, i);
-      if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset)
+      if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset
+          && (init_el.member_decl == NULL || init_el.member_decl->bit_offset < 0))
         continue;
       e = init_el.init->attr;
       if (!e->const_addr_p) {
@@ -11319,11 +11320,16 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
           float f;
           double d;
           long double ld;
+          uint8_t data[8];
         } u;
+        start_offset = 0;
+        el_size = data_size = _MIR_type_size (ctx, t);
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
           uint64_t u = 0;
 
           assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
+          assert (init_el.member_decl->bit_offset % 8 == 0); /* first in the group of bitfields */
+          start_offset = init_el.member_decl->bit_offset / 8;
           add_bit_field (c2m_ctx, &u, val.mir_op.u.u, init_el.member_decl);
           for (; i + 1 < VARR_LENGTH (init_el_t, init_els); i++, init_el = next_init_el) {
             next_init_el = VARR_GET (init_el_t, init_els, i + 1);
@@ -11334,6 +11340,9 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
             add_bit_field (c2m_ctx, &u, val.mir_op.u.u, next_init_el.member_decl);
           }
           val.mir_op.u.u = u;
+          if (i + 1 < VARR_LENGTH (init_el_t, init_els)
+              && next_init_el.offset - init_el.offset < data_size)
+            data_size = next_init_el.offset - init_el.offset;
         }
         switch (t) {
         case MIR_T_I8: u.i8 = val.mir_op.u.i; break;
@@ -11349,8 +11358,16 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         case MIR_T_LD: u.ld = val.mir_op.u.ld; break;
         default: assert (FALSE);
         }
-        data = MIR_new_data (ctx, global_name, t, 1, &u);
-        data_size = _MIR_type_size (ctx, t);
+        if (start_offset == 0 && data_size == el_size) {
+          data = MIR_new_data (ctx, global_name, t, 1, &u);
+        } else {
+          for (mir_size_t byte_num = start_offset; byte_num < data_size; byte_num++) {
+            if (byte_num == start_offset)
+              data = MIR_new_data (ctx, global_name, MIR_T_U8, 1, &u.data[byte_num]);
+            else
+              MIR_new_data (ctx, NULL, MIR_T_U8, 1, &u.data[byte_num]);
+          }
+        }
       } else if (init_el.el_type->mode == TM_ARR) {
         data_size = raw_type_size (c2m_ctx, init_el.el_type);
         str_len = val.mir_op.u.str.len;
