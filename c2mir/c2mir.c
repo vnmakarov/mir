@@ -8348,7 +8348,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     else if (t1->mode == TM_PTR && t2->mode == TM_PTR) {
       if (!compatible_types_p (t1, t2, TRUE)
           && ((r->code != N_EQ && r->code != N_NE) || (!void_ptr_p (t1) && !void_ptr_p (t2)))) {
-        error (c2m_ctx, POS (r), "incompatible pointer types in comparison");
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (r),
+                                                     "incompatible pointer types in comparison");
       } else if (t1->u.ptr_type->type_qual.atomic_p || t2->u.ptr_type->type_qual.atomic_p) {
         error (c2m_ctx, POS (r), "pointer to atomic type as a comparison operand");
       } else if (e1->const_p && e2->const_p) {
