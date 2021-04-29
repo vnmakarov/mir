@@ -5923,43 +5923,46 @@ static mir_size_t var_size (c2m_ctx_t c2m_ctx, struct type *type) {
   return round_size (size, var_align (c2m_ctx, type));
 }
 
-/* BOUND_BIT is used only if BF_P.  */
+/* BOUND_BIT is used only if BF_P and updated only if BITS >= 0  */
 static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t *offset,
-                                 int *bound_bit, mir_size_t prev_size, mir_size_t size, int align,
-                                 int bits) {
-  mir_size_t prev_field_offset = *offset, bytes = 0;
-  int start_bit, diff;
+                                 int *bound_bit, mir_size_t prev_field_type_size,
+                                 mir_size_t field_type_size, int field_type_align, int bits) {
+  mir_size_t start_offset, curr_offset, prev_field_offset = *offset;
 
-  assert (size > 0);
-  if (!*bf_p) { /* transition from field to bit field or field */
-    if (bits >= 0 && size > prev_size) {
-      *bound_bit = prev_size * MIR_CHAR_BIT;
-    } else {
-      prev_field_offset += prev_size;
-      *offset = prev_field_offset / align * align;
-      *bound_bit = (prev_field_offset - *offset) * MIR_CHAR_BIT;
-      prev_field_offset = *offset;
+  assert (field_type_size > 0 && field_type_align > 0);
+  start_offset = curr_offset
+    = (*overall_size + field_type_align - 1) / field_type_align * field_type_align;
+  if (start_offset < field_type_align && bits >= 0) *bound_bit = 0;
+  for (;; start_offset = curr_offset) {
+    if (curr_offset < field_type_align) {
+      if (bits >= 0) *bound_bit += bits;
+      break;
+    }
+    curr_offset -= field_type_align;
+    if (!*bf_p) { /* previous is a regular field: */
+      if (curr_offset < prev_field_offset + prev_field_type_size) {
+        if (bits >= 0) *bound_bit = bits;
+        break;
+      }
+    } else if (bits < 0) { /* bitfield then regular field: */
+      if (curr_offset < prev_field_offset + (*bound_bit + MIR_CHAR_BIT - 1) / MIR_CHAR_BIT) break;
+    } else { /* bitfield then another bitfield: */
+      if ((curr_offset + field_type_size) * MIR_CHAR_BIT
+          < prev_field_offset * MIR_CHAR_BIT + *bound_bit + bits) {
+        if (start_offset * MIR_CHAR_BIT >= prev_field_offset * MIR_CHAR_BIT + *bound_bit) {
+          *bound_bit = bits;
+        } else {
+          *bound_bit
+            = prev_field_offset * MIR_CHAR_BIT + *bound_bit + bits - start_offset * MIR_CHAR_BIT;
+        }
+        break;
+      }
     }
   }
   *bf_p = bits >= 0;
-  if (bits < 0) {
-    bytes = size - 1;
-    bits = MIR_CHAR_BIT;
-  }
-  *offset = prev_field_offset / align * align;
-  diff = prev_field_offset - *offset;
-  for (;;) {
-    start_bit = *bound_bit + diff * MIR_CHAR_BIT;
-    if (start_bit < 0) start_bit = 0;
-    if ((start_bit + bits - 1) / MIR_CHAR_BIT + 1 + bytes <= size) {
-      *bound_bit = start_bit + bits;
-      break;
-    }
-    *offset += align;
-    diff -= align;
-    if (bytes >= align) bytes -= align;
-  }
-  if (*overall_size < *offset + size) *overall_size = *offset + size;
+  *offset = start_offset;
+  if (*overall_size < start_offset + field_type_size)
+    *overall_size = start_offset + field_type_size;
 }
 
 /* Update offsets inside unnamed anonymous struct/union member. */
@@ -6038,6 +6041,8 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
                bit_offset less member_size in bits */
             decl->offset = offset + bound_bit / (member_size * MIR_CHAR_BIT);
             decl->bit_offset = bound_bit % (member_size * MIR_CHAR_BIT);
+            bits = -1;
+            bound_bit = 0;
           }
           decl->width = bits;
           if (type->mode == TM_UNION) {
