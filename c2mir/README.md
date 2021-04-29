@@ -19,6 +19,9 @@
 
   To recognize compilation by C-to-MIR compiler, compiler specific
   macros `__mirc__` and `__MIRC__` defined as 1 can be used.
+
+  An additional information about C-to-MIR compiler can be found in
+  [this blog post](https://developers.redhat.com/blog/2021/04/27/the-mir-c-interpreter-and-just-in-time-jit-compiler)
   
 ## C to MIR compiler as usual C compiler
   The project makefile builds program `c2m` which can compile C and
