@@ -691,3 +691,12 @@ gcc-test:
 
 clang-test:
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-clang
+
+# Very long testing (hours and hours):
+csmith: csmith-c2m-gcc csmit-c2m
+
+csmith-c2m-gcc:
+	$(SHELL) csmith-c2m-gcc.sh
+
+csmith-c2m:
+	$(SHELL) csmith-c2m.sh
