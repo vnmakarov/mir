@@ -1829,12 +1829,51 @@ static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_n
   }
 }
 
-static void rename_regs (gen_ctx_t gen_ctx) {
+static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   int op_num, out_p, mem_p;
   size_t passed_mem_num, reg_index;
   MIR_reg_t var, reg, new_reg;
   MIR_insn_t insn, def_insn, use_insn;
+  ssa_edge_t ssa_edge;
+  insn_var_iterator_t iter;
+
+  insn = bb_insn->insn;
+  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    if (!out_p || !var_is_reg_p (var)) continue;
+    ssa_edge = insn->ops[op_num].data;
+    if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
+    DEBUG ({
+      fprintf (debug_file, "  Start def insn %-5lu", (long unsigned) bb_insn->index);
+      print_bb_insn (gen_ctx, bb_insn, FALSE);
+    });
+    reg = var2reg (gen_ctx, var);
+    while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg) VARR_PUSH (size_t, curr_reg_indexes, 0);
+    reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
+    VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
+    new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
+    if (ssa_edge == NULL) { /* special case: unused output */
+      if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+      continue;
+    }
+    VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
+    process_insn_to_rename (gen_ctx, insn, op_num);
+    if (new_reg != 0) {
+      while (pop_to_rename (gen_ctx, &ssa_edge)) {
+        def_insn = ssa_edge->def->insn;
+        use_insn = ssa_edge->use->insn;
+        rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
+        rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
+      }
+    }
+  }
+}
+
+static void rename_regs (gen_ctx_t gen_ctx) {
   bb_insn_t bb_insn;
+  int op_num, out_p, mem_p;
+  size_t passed_mem_num;
+  MIR_reg_t var;
+  MIR_insn_t insn;
   ssa_edge_t ssa_edge;
   insn_var_iterator_t iter;
 
@@ -1849,40 +1888,15 @@ static void rename_regs (gen_ctx_t gen_ctx) {
       }
     }
   VARR_TRUNC (size_t, curr_reg_indexes, 0);
+  /* Process arg insns first to have first use of reg in the program with zero index.
+     We need this because machinize for args will use reg with zero index: */
+  for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, arg_bb_insns); i++)
+    if ((bb_insn = VARR_GET (bb_insn_t, arg_bb_insns, i)) != NULL)
+      rename_bb_insn (gen_ctx, bb_insn);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      insn = bb_insn->insn;
-      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p || !var_is_reg_p (var)) continue;
-        ssa_edge = insn->ops[op_num].data;
-        if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
-        DEBUG ({
-          fprintf (debug_file, "  Start def insn %-5lu", (long unsigned) bb_insn->index);
-          print_bb_insn (gen_ctx, bb_insn, FALSE);
-        });
-        reg = var2reg (gen_ctx, var);
-        while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg)
-          VARR_PUSH (size_t, curr_reg_indexes, 0);
-        reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
-        VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
-        new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
-        if (ssa_edge == NULL) { /* special case: unused output */
-          if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
-          continue;
-        }
-        VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
-        process_insn_to_rename (gen_ctx, insn, op_num);
-        if (new_reg != 0) {
-          while (pop_to_rename (gen_ctx, &ssa_edge)) {
-            def_insn = ssa_edge->def->insn;
-            use_insn = ssa_edge->use->insn;
-            rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
-            rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
-          }
-        }
-      }
-    }
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+      rename_bb_insn (gen_ctx, bb_insn);
 }
 
 static void build_ssa (gen_ctx_t gen_ctx) {
