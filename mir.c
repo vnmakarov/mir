@@ -634,6 +634,7 @@ MIR_context_t MIR_init (void) {
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
   init_module (ctx, &environment_module, ".environment");
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq, NULL);
+  setjmp_addr = NULL;
   code_init (ctx);
   interp_init (ctx);
   return ctx;
