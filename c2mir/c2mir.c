@@ -5941,7 +5941,11 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
     curr_offset -= field_type_align;
     if (!*bf_p) { /* previous is a regular field: */
       if (curr_offset < prev_field_offset + prev_field_type_size) {
-        if (bits >= 0) *bound_bit = bits;
+        if (bits >= 0) {
+          *bound_bit = (prev_field_offset + prev_field_type_size - curr_offset) * MIR_CHAR_BIT;
+          if (*bound_bit + bits <= field_type_size * MIR_CHAR_BIT) continue;
+          *bound_bit = bits;
+        }
         break;
       }
     } else if (bits < 0) { /* bitfield then regular field: */
