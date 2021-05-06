@@ -6034,22 +6034,12 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
           if ((member_size = type_size (c2m_ctx, decl->decl_spec.type)) == 0) continue;
           member_align = type_align (decl->decl_spec.type);
           bits = width->code == N_IGNORE || !(expr = width->attr)->const_p ? -1 : expr->u.u_val;
-          if (bits != 0) {
-            update_field_layout (&bf_p, &overall_size, &offset, &bound_bit, prev_size, member_size,
-                                 member_align, bits);
-            prev_size = member_size;
-            decl->offset = offset;
-            decl->bit_offset = bits < 0 ? -1 : bound_bit - bits;
-          } else { /* Finish the last unit */
-            bf_p = FALSE;
-            offset = (offset + member_align - 1) / member_align * member_align;
-            /* The offset and bit_offset do not matter, but make
-               bit_offset less member_size in bits */
-            decl->offset = offset + bound_bit / (member_size * MIR_CHAR_BIT);
-            decl->bit_offset = bound_bit % (member_size * MIR_CHAR_BIT);
-            bits = -1;
-            bound_bit = 0;
-          }
+          update_field_layout (&bf_p, &overall_size, &offset, &bound_bit, prev_size, member_size,
+                               member_align, bits);
+          prev_size = member_size;
+          decl->offset = offset;
+          decl->bit_offset = bits < 0 ? -1 : bound_bit - bits;
+          if (bits == 0) bf_p = FALSE;
           decl->width = bits;
           if (type->mode == TM_UNION) {
             offset = prev_size = 0;
