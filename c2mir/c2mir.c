@@ -5945,6 +5945,8 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
           *bound_bit = (prev_field_offset + prev_field_type_size - curr_offset) * MIR_CHAR_BIT;
           if (*bound_bit + bits <= field_type_size * MIR_CHAR_BIT) continue;
           *bound_bit = bits;
+          if (prev_field_offset + prev_field_type_size > start_offset)
+            *bound_bit += (prev_field_offset + prev_field_type_size - start_offset) * MIR_CHAR_BIT;
         }
         break;
       }
