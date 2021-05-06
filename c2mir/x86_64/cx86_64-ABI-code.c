@@ -63,6 +63,8 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
           int start_qword = decl->offset / 8;
+          int end_qword = (decl->offset + type_size (c2m_ctx, decl->decl_spec.type) - 1) / 8;
+          int span_qwords = end_qword - start_qword + 1;
 
           if (decl->bit_offset >= 0) {
             types[start_qword] = get_result_type (MIR_T_I64, types[start_qword]);
@@ -70,8 +72,12 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
             n_el_qwords
               = classify_arg (c2m_ctx, decl->decl_spec.type, subtypes, decl->bit_offset >= 0);
             if (n_el_qwords == 0) return 0;
-            for (i = 0; i < n_el_qwords && (i + start_qword) < n_qwords; i++)
+            for (i = 0; i < n_el_qwords && (i + start_qword) < n_qwords; i++) {
               types[i + start_qword] = get_result_type (subtypes[i], types[i + start_qword]);
+              if (span_qwords > n_el_qwords)
+                types[i + start_qword + 1]
+                  = get_result_type (subtypes[i], types[i + start_qword + 1]);
+            }
           }
         }
       break;
