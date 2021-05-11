@@ -1,3 +1,4 @@
+extern int printf (const char *, ...);
 int a, c;
 int *b = &a;
 void d (int e, ...) {

@@ -1,4 +1,5 @@
 #include <stdint.h>
+int printf (const char *, ...);
 static int64_t safe_mul_func_int64_t_s_s (int64_t si1, int64_t si2) {
   return (((si1 > 0) && (si2 > 0) && (si1 > (INT64_MAX / si2)))
           || ((si1 > 0) && (si2 <= 0) && (si2 < (INT64_MIN / si1)))

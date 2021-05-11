@@ -1,3 +1,4 @@
+extern void exit (int);
 f()
 {
   unsigned b = 0;

@@ -1,3 +1,4 @@
+extern void exit (int);
 fp (double a, int b)
 {
   if (a != 33 || b != 11)

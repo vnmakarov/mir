@@ -1,6 +1,7 @@
 /* { dg-additional-options "-Wl,-u,_printf_float" { target newlib_nano_io } } */
 
 #include <stdio.h>
+extern void exit (int);
 char buf[2];
 
 f (fp)

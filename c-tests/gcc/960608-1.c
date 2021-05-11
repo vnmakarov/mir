@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct
 {
   unsigned char a  : 2;

@@ -1,3 +1,4 @@
+extern void exit (int);
 unsigned long
 gcd_ll (unsigned long long x, unsigned long long y)
 {

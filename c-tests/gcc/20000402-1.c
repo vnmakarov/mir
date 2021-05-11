@@ -1,4 +1,5 @@
 #include <limits.h>
+extern void exit (int);
 
 #if ULONG_LONG_MAX != 18446744073709551615ull && ULONG_MAX != 18446744073709551615ull
 int main(void) { exit (0); }

@@ -1,3 +1,4 @@
+extern void exit (int);
 int
 test (arg)
      int arg;

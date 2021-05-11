@@ -1,3 +1,4 @@
+#include <stdio.h>
 /* --- Struct/Union Declarations --- */
 struct S0 {
   signed f0 : 25;

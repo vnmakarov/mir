@@ -1,3 +1,4 @@
+extern void exit (int);
 int g1, g2;
 
 void foo (int x)

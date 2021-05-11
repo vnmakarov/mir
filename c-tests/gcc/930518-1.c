@@ -1,3 +1,4 @@
+extern void exit (int);
 int bar = 0;
 
 f (p)

@@ -1,3 +1,4 @@
+extern void exit (int);
 struct a
 {
   unsigned int bitfield : 3;

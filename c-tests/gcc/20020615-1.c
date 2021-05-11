@@ -4,6 +4,7 @@
    epilogue delay-slot set the return-value register with the testcase
    below.  Derived from ghostscript-6.52 (GPL) by hp@axis.com.  */
 
+extern void exit (int);
 typedef struct font_hints_s {
   int axes_swapped;
   int x_inverted, y_inverted;

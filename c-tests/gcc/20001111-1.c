@@ -1,3 +1,4 @@
+extern void exit (int);
 
 static int next_buffer = 0;
 void bar (void);

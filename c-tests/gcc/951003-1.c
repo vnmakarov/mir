@@ -1,3 +1,4 @@
+extern void exit (int);
 int f (i) { return 12; }
 int g () { return 0; }
 

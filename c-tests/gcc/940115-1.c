@@ -1,3 +1,4 @@
+extern void exit (int);
 f (cp, end)
      char *cp;
      char *end;

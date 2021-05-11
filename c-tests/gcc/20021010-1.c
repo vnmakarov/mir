@@ -1,5 +1,6 @@
 #include <limits.h>
 
+extern void exit (int);
 int
 sub ()
 {

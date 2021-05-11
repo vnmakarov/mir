@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct {
   long int p_x, p_y;
 } Point;

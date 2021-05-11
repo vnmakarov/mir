@@ -1,3 +1,4 @@
+extern void exit (int);
 
 void dummy (x, y)
      int *x;

@@ -1,3 +1,4 @@
+extern void exit (int);
 f(int *x)
 {
   *x = 0;

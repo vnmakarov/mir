@@ -1,3 +1,4 @@
+extern void exit (int);
 char a[] = "12345";
 char b[] = "12345";
 

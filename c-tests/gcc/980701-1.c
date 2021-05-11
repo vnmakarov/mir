@@ -1,3 +1,4 @@
+extern void exit (int);
 ns_name_skip (unsigned char **x, unsigned char *y)
 {
   *x = 0;

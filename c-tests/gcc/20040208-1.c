@@ -1,3 +1,4 @@
+extern void exit (int);
 int main () {
 #ifndef _WIN32 /* long double > 64 bits */
   long double x;

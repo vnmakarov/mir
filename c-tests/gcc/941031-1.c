@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef long mpt;
 
 int

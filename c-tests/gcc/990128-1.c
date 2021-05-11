@@ -1,3 +1,4 @@
+extern void exit (int);
 extern int printf (const char *,...);
 
 struct s { struct s *n; } *p;

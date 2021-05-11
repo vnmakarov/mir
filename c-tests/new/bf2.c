@@ -1,3 +1,4 @@
+#include <stdio.h>
 typedef unsigned long uint64_t;
 struct S1 {
   volatile signed f0 : 26;

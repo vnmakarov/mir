@@ -1,4 +1,5 @@
-int
+extern void exit (int);
+
 blah (int zzz)
 {
   int foo;

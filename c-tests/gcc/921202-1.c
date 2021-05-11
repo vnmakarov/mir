@@ -1,6 +1,7 @@
 /* { dg-require-effective-target untyped_assembly } */
 /* { dg-add-options stack_size } */
 
+extern void exit (int);
 #ifndef STACK_SIZE
 #define	VLEN	2055
 #else

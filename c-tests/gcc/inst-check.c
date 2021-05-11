@@ -1,5 +1,6 @@
 #include <stdarg.h>
 
+extern void exit (int);
 f(m)
 {
   int i,s=0;

@@ -1,3 +1,4 @@
+extern void exit (int);
 struct tmp
 {
   long long int pad : 12;

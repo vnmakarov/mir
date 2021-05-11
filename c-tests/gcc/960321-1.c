@@ -1,3 +1,4 @@
+extern void exit (int);
 char a[10] = "deadbeef";
 
 char

@@ -1,3 +1,4 @@
+extern void exit (int);
 main ()
 {
   unsigned char z = 0;

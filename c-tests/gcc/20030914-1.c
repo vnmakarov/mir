@@ -2,6 +2,7 @@
    stack, with an odd number of words in the register part.  Check that
    the long double stack argument (PC) is still accessed properly.  */
 
+extern void exit (int);
 struct s { int val[16]; };
 
 long double f (int pa, struct s pb, long double pc)

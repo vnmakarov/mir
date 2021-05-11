@@ -1,3 +1,4 @@
+extern void exit (int);
 #include <stdio.h>
 
 #ifdef DEBUG

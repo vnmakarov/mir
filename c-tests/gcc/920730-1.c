@@ -1,5 +1,6 @@
 /* 920730-1.c */
 #include <limits.h>
+extern void exit (int);
 f1()
 {
 	int b=INT_MIN;

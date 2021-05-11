@@ -1,3 +1,4 @@
+extern void exit (int);
 div1 (signed char x)
 {
   return x / -1;

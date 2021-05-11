@@ -1,3 +1,4 @@
+extern void exit (int);
 struct inode {
 	long long		i_size;
 	struct super_block	*i_sb;

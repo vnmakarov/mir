@@ -1,3 +1,4 @@
+extern void exit (int);
 int compare(x, y)
 unsigned int x;
 unsigned int y;

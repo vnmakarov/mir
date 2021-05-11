@@ -1,4 +1,5 @@
 /* { dg-require-effective-target untyped_assembly } */
+extern void exit (int);
 extern void abort(void);
 			 
 typedef struct

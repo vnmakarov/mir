@@ -8,6 +8,7 @@
    Note that this code is NOT intended for testing of accuracy of fp
    conversions.  */
 
+extern void exit (int);
 float
 u2f(u)
      unsigned int u;

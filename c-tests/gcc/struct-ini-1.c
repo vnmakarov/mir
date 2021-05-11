@@ -1,3 +1,4 @@
+extern void exit (int);
 struct S
 {
   char f1;

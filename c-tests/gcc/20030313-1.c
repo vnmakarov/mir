@@ -1,3 +1,4 @@
+extern void exit (int);
 struct A
 {
   unsigned long p, q, r, s;

@@ -1,3 +1,4 @@
+extern void exit (int);
 #include <limits.h>
 
 void * a[255];

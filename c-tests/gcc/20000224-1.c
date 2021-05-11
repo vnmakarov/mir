@@ -2,6 +2,7 @@ int loop_1 = 100;
 int loop_2 = 7;
 int flag = 0;
 
+extern void exit (int);
 int test (void)
 {
     int i;

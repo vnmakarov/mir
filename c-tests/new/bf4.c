@@ -1,3 +1,4 @@
+int printf (const char *, ...);
 struct S0 {
   short f0;
   volatile unsigned f1 : 3;

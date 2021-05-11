@@ -1,3 +1,4 @@
+extern void exit (int);
 int
 foo1 (value)
      long long value;

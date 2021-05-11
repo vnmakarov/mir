@@ -1,3 +1,4 @@
+extern void exit (int);
 main ()
 {
   unsigned long val = 1;

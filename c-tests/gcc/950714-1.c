@@ -1,3 +1,4 @@
+extern void exit (int);
 int array[10] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 main ()

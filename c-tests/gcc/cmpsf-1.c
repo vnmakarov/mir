@@ -1,3 +1,4 @@
+extern void exit (int);
 #include <limits.h>
 
 #define F 140

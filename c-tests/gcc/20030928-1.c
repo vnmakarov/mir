@@ -1,5 +1,6 @@
 #include <limits.h>
 
+extern void exit (int);
 #if INT_MAX <= 32767
 int main () { exit (0); }
 #else

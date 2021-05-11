@@ -1,3 +1,4 @@
+extern void exit (int);
 int i, a[99];
 
 void f (int one)

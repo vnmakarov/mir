@@ -1,5 +1,5 @@
 #include <limits.h>
-
+extern void exit (int);
 gt (a, b)
 {
   return a > b;

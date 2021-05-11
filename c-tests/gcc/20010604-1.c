@@ -1,4 +1,5 @@
 #include <stdbool.h>
+extern void exit (int);
 
 int f (int a, int b, int c, _Bool d, _Bool e, _Bool f, char g)
 {

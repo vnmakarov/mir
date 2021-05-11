@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+extern void exit (int);
 /* Convert a decimal string to a long long unsigned.  No error check is
    performed.  */
 

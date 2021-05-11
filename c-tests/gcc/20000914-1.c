@@ -1,3 +1,4 @@
+extern void exit (int);
 extern void *malloc(__SIZE_TYPE__);
 
 enum tree_code {

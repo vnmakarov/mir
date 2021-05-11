@@ -1,3 +1,4 @@
+extern void exit (int);
 long a = 1;
 
 foo ()

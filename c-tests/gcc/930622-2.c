@@ -1,3 +1,4 @@
+extern void exit (int);
 long double
 ll_to_ld (long long n)
 {

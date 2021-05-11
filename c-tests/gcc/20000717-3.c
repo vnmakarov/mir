@@ -1,3 +1,4 @@
+extern void exit (int);
 int c = -1;
 
 foo (p)

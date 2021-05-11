@@ -1,3 +1,4 @@
+extern void exit (int);
 static void *self(void *p){ return p; }
 
 int

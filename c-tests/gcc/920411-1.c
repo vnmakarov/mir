@@ -1,3 +1,4 @@
+extern void exit (int);
 long f (w)
      char *w;
 {

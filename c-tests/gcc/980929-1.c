@@ -1,3 +1,4 @@
+extern void exit (int);
 void f(int i)
 {
   if (i != 1000)

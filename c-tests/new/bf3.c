@@ -1,3 +1,4 @@
+#include <stdio.h>
 struct S1 {
   unsigned f0 : 20;
   volatile unsigned f1 : 5;

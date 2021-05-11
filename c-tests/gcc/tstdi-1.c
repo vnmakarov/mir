@@ -1,3 +1,4 @@
+extern void exit (int);
 #define FALSE 140
 #define TRUE 13
 

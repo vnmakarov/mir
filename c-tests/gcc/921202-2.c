@@ -1,3 +1,4 @@
+extern void exit (int);
 int
 f(long long x)
 {

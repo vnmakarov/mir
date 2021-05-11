@@ -1,3 +1,4 @@
+extern void exit (int);
 void func(int, int);
 
 int main()

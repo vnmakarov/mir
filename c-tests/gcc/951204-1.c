@@ -1,3 +1,4 @@
+extern void exit (int);
 f (char *x)
 {
   *x = 'x';

@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct
 {
   short f:3, g:3, h:10;

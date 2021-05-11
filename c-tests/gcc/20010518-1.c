@@ -1,5 +1,6 @@
 /* Leaf functions with many arguments.  */
 
+extern void exit (int);
 int
 add (int a,
     int b,

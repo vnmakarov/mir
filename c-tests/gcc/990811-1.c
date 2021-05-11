@@ -1,3 +1,4 @@
+extern void exit (int);
 struct s {long a; int b;};
 
 int foo(int x, void *y)

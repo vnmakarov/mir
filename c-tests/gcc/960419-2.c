@@ -1,3 +1,4 @@
+extern void exit (int);
 #define SIZE 8
 
 main()

@@ -1,3 +1,4 @@
+extern void exit (int);
 static inline fu (unsigned short data)
 {
   return data;

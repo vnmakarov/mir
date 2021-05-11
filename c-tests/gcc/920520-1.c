@@ -1,3 +1,4 @@
+extern void exit (int);
 foo(int *bar)
 {
   *bar = 8;

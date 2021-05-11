@@ -1,3 +1,4 @@
+extern void exit (int);
 static int f (int a)
 {
   if (a == 0)

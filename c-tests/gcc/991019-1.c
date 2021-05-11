@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct {
      double epsilon;
 } material_type;

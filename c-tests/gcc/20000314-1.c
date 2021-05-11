@@ -1,3 +1,4 @@
+extern void exit (int);
 int main ()
 {
   long winds = 0;

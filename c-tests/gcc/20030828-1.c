@@ -1,3 +1,4 @@
+extern void exit (int);
 const int *p;
 
 int bar (void)

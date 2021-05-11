@@ -1,6 +1,7 @@
 /* Assignments via pointers pointing to global variables were being killed
    by SSA-DCE.  Test contributed by Paul Brook <paul@nowt.org>  */
 
+extern void exit (int);
 int glob; 
  
 void 

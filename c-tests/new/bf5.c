@@ -1,3 +1,4 @@
+int printf (const char *, ...);
 struct S0 {
   int f0;
   unsigned char f1;

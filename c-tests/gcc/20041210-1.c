@@ -2,6 +2,7 @@
    wrongly claimed to set the C and V flags.  */
 #include <limits.h>
 
+extern void exit (int);
 int x[4] = { INT_MIN / 2, INT_MAX, 2, 4 };
 
 int

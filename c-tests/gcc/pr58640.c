@@ -1,3 +1,4 @@
+extern void exit (int);
 int a, b, c, d = 1, e;
 
 static signed char

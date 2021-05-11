@@ -2,6 +2,7 @@
 
    by Manfred Hollstein <manfredh@redhat.com>  */
 
+extern void exit (int);
 void *temporary_obstack;
 
 static int input (void);
