@@ -53,7 +53,7 @@ static char stdint_str[]
     "#define INT8_MIN (-128)\n"
     "#define INT16_MIN (-32768)\n"
     "#define INT32_MIN (-2147483647 - 1)\n"
-    "#define INT64_MIN (-9223372036854775808l)\n"
+    "#define INT64_MIN (-9223372036854775807l - 1)\n"
     "\n"
     "#define INT8_MAX (127)\n"
     "#define INT16_MAX (32767)\n"
