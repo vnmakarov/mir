@@ -10982,10 +10982,16 @@ check_one_value:
 
 static int cmp_init_el (const void *p1, const void *p2) {
   const init_el_t *el1 = p1, *el2 = p2;
+  int bit_offset1 = el1->member_decl == NULL || el1->member_decl->bit_offset < 0
+                      ? 0
+                      : el1->member_decl->bit_offset;
+  int bit_offset2 = el2->member_decl == NULL || el2->member_decl->bit_offset < 0
+                      ? 0
+                      : el2->member_decl->bit_offset;
 
-  if (el1->offset < el2->offset)
+  if (el1->offset + bit_offset1 / MIR_CHAR_BIT < el2->offset + bit_offset2 / MIR_CHAR_BIT)
     return -1;
-  else if (el1->offset > el2->offset)
+  else if (el1->offset + bit_offset1 / MIR_CHAR_BIT > el2->offset + bit_offset2 / MIR_CHAR_BIT)
     return 1;
   else if (el1->member_decl != NULL && el2->member_decl != NULL
            && el1->member_decl->bit_offset < el2->member_decl->bit_offset)
