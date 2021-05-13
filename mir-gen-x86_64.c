@@ -1124,6 +1124,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     }
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
+  /* It might be infinite loop after CCP with dead code elimination: */
+  if (anchor->code == MIR_JMP) return;
   /* Restoring hard registers: */
   offset = -bp_saved_reg_offset;
 #ifdef _WIN32
