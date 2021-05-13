@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdarg.h>
 
 /* Passed on stack. */
