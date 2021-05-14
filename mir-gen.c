@@ -3115,6 +3115,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
   const_t val;
   MIR_op_t op;
   MIR_insn_t insn, prev_insn, first_insn;
+  ssa_edge_t se, next_se;
   int res, change_p = FALSE;
 
 #ifndef NDEBUG
@@ -3162,8 +3163,12 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
           gen_assert (out_p);
         }
 #endif
+        /* remove edges whose def and use is the insn, e.g. for case "5: phi a,a #index 5,5" */
+        for (se = bb_insn->insn->ops[0].data; se != NULL; se = next_se) {
+          next_se = se->next_use;
+          if (se->use == bb_insn) remove_ssa_edge (gen_ctx, se);
+        }
         insn = MIR_new_insn (ctx, MIR_MOV, bb_insn->insn->ops[0], op); /* copy ops[0].data too! */
-        // changing def in ssa_edges ????
         MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
         bb_insn->insn->ops[0].data = NULL;
         ccp_remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
