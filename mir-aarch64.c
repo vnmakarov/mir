@@ -82,6 +82,12 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   return _MIR_publish_code (ctx, (uint8_t *) bend_code, sizeof (bend_code));
 }
 
+#define VA_LIST_IS_ARRAY_P 0
+#if defined(__APPLE__)
+struct aarch64_va_list {
+  uint64_t *arg_area;
+};
+#else
 struct aarch64_va_list {
   /* address following the last (highest addressed) named incoming
      argument on the stack, rounded upwards to a multiple of 8 bytes,
@@ -99,11 +105,24 @@ struct aarch64_va_list {
   int __gr_offs; /* set to 0 – ((8 – named_gr) * 8) */
   int __vr_offs; /* set to 0 – ((8 – named_vr) * 16) */
 };
+#endif
 
 void *va_arg_builtin (void *p, uint64_t t) {
   struct aarch64_va_list *va = p;
   MIR_type_t type = t;
   int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
+#if defined(__APPLE__)
+  void *a = va->arg_area;
+
+  if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16) {
+    va->arg_area += 2;
+  } else {
+    va->arg_area++;
+  }
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  if (type == MIR_T_F || type == MIR_T_I32) a = (char *) a + 4; /* 2nd word of doubleword */
+#endif
+#else
   void *a;
 
   if (fp_p && va->__vr_offs < 0) {
@@ -113,15 +132,28 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->__gr_top + va->__gr_offs;
     va->__gr_offs += 8;
   } else {
-    if (type == MIR_T_LD) va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
+    if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16)
+      va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
     a = va->__stack;
-    va->__stack = (char *) va->__stack + (type == MIR_T_LD ? 16 : 8);
+    va->__stack
+      = (char *) va->__stack + (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8);
   }
+#endif
   return a;
 }
 
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct aarch64_va_list *va = p;
+#if defined(__APPLE__)
+  void *a = (void *) va->arg_area;
+  if (s <= 2 * 8) {
+    va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  } else {
+    a = *(void **) a;
+    va->arg_area++;
+  }
+  memcpy (res, a, s);
+#else
   void *a;
   long size = (s + 7) / 8 * 8;
 
@@ -142,6 +174,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   }
   if (s > 2 * 8) a = *(void **) a; /* address */
   memcpy (res, a, s);
+#endif
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
