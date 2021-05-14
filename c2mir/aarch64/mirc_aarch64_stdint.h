@@ -13,12 +13,20 @@ static char stdint_str[]
     "#endif\n"
     "typedef short int int16_t;\n"
     "typedef int int32_t;\n"
+#if defined(__APPLE__)
+    "typedef long long int64_t;\n"
+#else
     "typedef long int int64_t;\n"
+#endif
     "\n"
     "typedef unsigned char uint8_t;\n"
     "typedef unsigned short int uint16_t;\n"
     "typedef unsigned int uint32_t;\n"
+#if defined(__APPLE__)
+    "typedef unsigned long long uint64_t;\n"
+#else
     "typedef unsigned long int uint64_t;\n"
+#endif
     "\n"
     "typedef signed char int_least8_t;\n"
     "typedef short int int_least16_t;\n"
