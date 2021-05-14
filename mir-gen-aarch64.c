@@ -989,7 +989,11 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
   /* Prologue: */
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
+#if defined(__APPLE__)
+  frame_size = 0;
+#else
   frame_size = func->vararg_p ? reg_save_area_size : 0;
+#endif
   for (i = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
       if (i < V0_HARD_REG) {
@@ -1030,6 +1034,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_HARD_REG, 1),
            _MIR_new_hard_reg_op (ctx, FP_HARD_REG));        /* mem[sp] = fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op); /* fp = sp */
+#if !defined(__APPLE__)
   if (func->vararg_p) {  // ??? saving only regs corresponding to ...
     MIR_reg_t base = SP_HARD_REG;
 
@@ -1057,6 +1062,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     isave (gen_ctx, anchor, start + 176, base, R6_HARD_REG);
     isave (gen_ctx, anchor, start + 184, base, R7_HARD_REG);
   }
+#endif
   /* Saving callee saved hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
   for (i = 0; i <= MAX_HARD_REG; i++)
@@ -1069,9 +1075,15 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         offset += 8;
       } else {
         if (offset % 16 != 0) offset = (offset + 15) / 16 * 16;
-        gen_mov (gen_ctx, anchor, MIR_LDMOV,
-                 _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, offset, FP_HARD_REG, MIR_NON_HARD_REG, 1),
-                 _MIR_new_hard_reg_op (ctx, i));
+        new_insn = gen_mov (gen_ctx, anchor, MIR_LDMOV,
+                            _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, offset, FP_HARD_REG,
+                                                      MIR_NON_HARD_REG, 1),
+                            _MIR_new_hard_reg_op (ctx, i));
+#if defined(__APPLE__)
+        /* MIR API can change insn code - change it back as we need to generate code to save all
+         * vreg. */
+        if (new_insn->code == MIR_DMOV) new_insn->code = MIR_LDMOV;
+#endif
         offset += 16;
       }
     }
@@ -1098,9 +1110,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
         offset += 8;
       } else {
         if (offset % 16 != 0) offset = (offset + 15) / 16 * 16;
-        gen_mov (gen_ctx, anchor, MIR_LDMOV, _MIR_new_hard_reg_op (ctx, i),
-                 _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, offset, FP_HARD_REG, MIR_NON_HARD_REG,
-                                           1));
+        new_insn = gen_mov (gen_ctx, anchor, MIR_LDMOV, _MIR_new_hard_reg_op (ctx, i),
+                            _MIR_new_hard_reg_mem_op (ctx, MIR_T_LD, offset, FP_HARD_REG,
+                                                      MIR_NON_HARD_REG, 1));
+#if defined(__APPLE__)
+        if (new_insn->code == MIR_DMOV) new_insn->code = MIR_LDMOV;
+#endif
         offset += 16;
       }
     }
@@ -1994,9 +2009,10 @@ static void patterns_finish (gen_ctx_t gen_ctx) {
 }
 
 static int hex_value (int ch) {
-  return ('0' <= ch && ch <= '9'
-            ? ch - '0'
-            : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10 : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10 : -1);
+  return ('0' <= ch && ch <= '9'   ? ch - '0'
+          : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10
+          : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10
+                                   : -1);
 }
 
 static uint64_t read_hex (const char **ptr) {
@@ -2289,10 +2305,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       opcode |= imm12_shift << 22;
       opcode_mask = check_and_set_mask (opcode_mask, 0x3 << 22);
     }
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_adr_insn_start = VARR_LENGTH (uint8_t, result_code);
     put_uint64 (gen_ctx, opcode, 4); /* output the machine insn */
