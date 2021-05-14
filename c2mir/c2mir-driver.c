@@ -347,6 +347,16 @@ static void fancy_abort (void) {
   abort ();
 }
 
+#if defined(__APPLE__) && defined(__aarch64__)
+float __nan (void) {
+  union {
+    uint32_t i;
+    float f;
+  } u = {0x7fc00000};
+  return u.f;
+}
+#endif
+
 static void *import_resolver (const char *name) {
   void *handler, *sym = NULL;
 
@@ -369,6 +379,10 @@ static void *import_resolver (const char *name) {
     if (strcmp (name, "stat") == 0) return stat;
     if (strcmp (name, "lstat") == 0) return lstat;
     if (strcmp (name, "fstat") == 0) return fstat;
+#if defined(__APPLE__) && defined(__aarch64__)
+    if (strcmp (name, "__nan") == 0) return __nan;
+    if (strcmp (name, "_MIR_set_code") == 0) return _MIR_set_code;
+#endif
 #endif
     fprintf (stderr, "can not load symbol %s\n", name);
     close_std_libs ();
