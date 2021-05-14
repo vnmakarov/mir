@@ -79,11 +79,13 @@ else
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 endif
 
+C2M_BOOTSTRAP_FLAGS = -DMIR_BOOTSTRAP
+C2M_BOOTSTRAP_FLAGS0 := $(C2M_BOOTSTRAP_FLAGS)
 ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
   ifneq ($(CC),cl)
     MIR_LIBS += -lpthread
     CFLAGS += -DMIR_PARALLEL_GEN
-    C2M_BOOTSTRAP_FLAGS = -DMIR_PARALLEL_GEN
+    C2M_BOOTSTRAP_FLAGS += -DMIR_PARALLEL_GEN
   endif
 endif
 
@@ -569,11 +571,11 @@ c2mir-bootstrap-test4: $(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 	$(Q) rm -rf $(BUILD_DIR)/t1.bmir $(BUILD_DIR)/t2.bmir $(BUILD_DIR)/mir-ctab
 
 c2mir-bootstrap-test5: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test with -O3 '... '
-	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
+	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test '... '
+	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS0) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
 	                    $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/c2mir/c2mir-driver.c\
 			    $(SRC_DIR)/mir.c -o $(BUILD_DIR)/i1.bmir
-	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) $(BUILD_DIR)/i1.bmir -ei -w $(C2M_BOOTSTRAP_FLAGS)\
+	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS0) $(BUILD_DIR)/i1.bmir -ei -w $(C2M_BOOTSTRAP_FLAGS0)\
 	                    -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 			    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/i2.bmir
 	$(Q) cmp $(BUILD_DIR)/i1.bmir $(BUILD_DIR)/i2.bmir && echo Passed || echo FAIL
