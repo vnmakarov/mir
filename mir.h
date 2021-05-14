@@ -626,11 +626,13 @@ extern uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const 
                                            size_t code_len);
 struct MIR_code_reloc {
   size_t offset;
-  void *value;
+  const void *value;
 };
 
 typedef struct MIR_code_reloc MIR_code_reloc_t;
 
+extern void _MIR_set_code (size_t prot_start, size_t prot_len, uint8_t *base, size_t nloc,
+                           const MIR_code_reloc_t *relocs, size_t reloc_size);
 extern void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
                               size_t code_len);
 extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
