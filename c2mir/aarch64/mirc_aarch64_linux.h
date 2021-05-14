@@ -91,6 +91,16 @@ static char aarch64_mirc[]
     "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
+#elif defined(__APPLE__)
+    "#define __APPLE__ 1\n"
+    "#define __arm64__\n"
+    "#define __DARWIN_OS_INLINE static inline\n"
+    "typedef struct {void *a;} __darwin_va_list;\n"
+    "#define __ARM64_ARCH_8__ 1\n"
+    "#define __ARM_ALIGN_MAX_STACK_PWR 4\n"
+    "#define __ARM_ARCH_8_3__ 1\n"
+    "typedef struct {unsigned long hi, lo;} __uint128_t;\n"
+    "extern float __nan (void);\n"
 #endif
     "\n"
     "void *alloca (unsigned long);\n";
