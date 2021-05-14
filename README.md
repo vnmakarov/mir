@@ -18,7 +18,7 @@
      only for familiarization with the project.  There is absolutely
      no warranty that MIR will not be changed in the future and the
      code will work for any tests except ones given here and on platforms
-     other than x86_64 Linux/OSX and aarch64/ppc64be/ppc64le/s390x Linux**
+     other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64be/ppc64le/s390x Linux**
   
 ## MIR
   * MIR is strongly typed
@@ -343,5 +343,5 @@ ex100:    func v, 0
       Mozilla Public License
 
 ## Porting MIR
-  * Currently MIR works on x86_64, aarch64, ppc64be, ppc64le, s390x Linux and x86_64 MacOS
+  * Currently MIR works on x86_64, aarch64, ppc64be, ppc64le, s390x Linux and x86_64/aarch64 (Apple M1) MacOS
   * [HOW-TO-PORT-MIR.md](https://github.com/vnmakarov/mir/blob/master/HOW-TO-PORT-MIR.md) outlines process of porting MIR
