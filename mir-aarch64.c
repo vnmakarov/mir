@@ -324,10 +324,16 @@ static const uint32_t restore_insns[] = {
   0xa8c11fe6, /* ldp R6, R7, SP, #16 */
 };
 
-static const uint32_t ld_pat = 0xf9400260;   /* ldr x, [x19], offset */
-static const uint32_t lds_pat = 0xbd400260;  /* ldr s, [x19], offset */
-static const uint32_t ldd_pat = 0xfd400260;  /* ldr d, [x19], offset */
-static const uint32_t ldld_pat = 0x3dc00260; /* ldr q, [x19], offset */
+static const uint32_t ld_pat = 0xf9400260;     /* ldr x, [x19], offset */
+static const uint32_t lds_pat = 0xbd400260;    /* ldr s, [x19], offset */
+static const uint32_t ldd_pat = 0xfd400260;    /* ldr d, [x19], offset */
+static const uint32_t ldld_pat = 0x3dc00260;   /* ldr q, [x19], offset */
+static const uint32_t gen_ld_pat = 0xf9400000; /* ldr x, [xn|sp], offset */
+
+static const uint32_t st_pat = 0xf9000000;   /* str x, [xn|sp], offset */
+static const uint32_t sts_pat = 0xbd000000;  /* str s, [xn|sp], offset */
+static const uint32_t std_pat = 0xfd000000;  /* str d, [xn|sp], offset */
+static const uint32_t stld_pat = 0x3d800000; /* str q, [xn|sp], offset */
 
 /* Generation: fun (fun_addr, res_arg_addresses):
    push x19, x30; sp-=sp_offset; x9=fun_addr; x19=res/arg_addrs
