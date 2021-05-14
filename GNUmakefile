@@ -562,7 +562,7 @@ c2mir-bootstrap-test4: $(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/t1.bmir
 	$(Q) $(BUILD_DIR)/b2ctab$(EXE) < $(BUILD_DIR)/t1.bmir > $(BUILD_DIR)/mir-ctab
-	$(Q) $(COMPILE_AND_LINK) -w -fno-tree-sra $(SRC_DIR)/mir.c $(SRC_DIR)/mir-gen.c $(SRC_DIR)/mir-bin-driver.c\
+	$(Q) $(COMPILE_AND_LINK) -w $(SRC_DIR)/mir.c $(SRC_DIR)/mir-gen.c $(SRC_DIR)/mir-bin-driver.c\
 	                         $(LDLIBS) -o $(BUILD_DIR)/c2m-test$(EXE)
 	$(Q) $(BUILD_DIR)/c2m-test$(EXE) $(C2M_BOOTSTRAP_FLAGS) -w -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
 	                         $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/c2mir/c2mir-driver.c\
