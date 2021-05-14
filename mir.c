@@ -3571,11 +3571,46 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
 
 #define PROT_WRITE_EXEC (PROT_WRITE | PROT_EXEC)
 #define PROT_READ_EXEC (PROT_READ | PROT_EXEC)
-#define mem_protect mprotect
+
+#if defined(__APPLE__) && defined(__aarch64__)
+#include <libkern/OSCacheControl.h>
+#include <pthread.h>
+#endif
+
+static int mem_protect (void *addr, size_t len, int prot) {
+#if !defined(__APPLE__) || !defined(__aarch64__)
+  return mprotect (addr, len, prot);
+#else
+  int res;
+
+  if (!pthread_jit_write_protect_supported_np ()) {
+    fprintf (stderr, "unsupported pthread_jit_write_protect_np -- good bye!\n");
+    exit (1);
+  }
+  if (prot & PROT_WRITE) pthread_jit_write_protect_np (FALSE);
+  if (prot & PROT_READ) {
+    pthread_jit_write_protect_np (TRUE);
+    sys_icache_invalidate (addr, len);
+  } else if (0) {
+    if ((res = mprotect (addr, len, prot)) != 0) {
+      perror ("mem_protect");
+      fprintf (stderr, "good bye!\n");
+      exit (1);
+    }
+  }
+  return res;
+#endif
+}
+
 #define mem_unmap munmap
 
 static void *mem_map (size_t len) {
+#if defined(__APPLE__) && defined(__aarch64__)
+  return mmap (NULL, len, PROT_EXEC | PROT_WRITE | PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT,
+               -1, 0);
+#else
   return mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
 }
 
 static size_t mem_page_size () { return sysconf (_SC_PAGE_SIZE); }
