@@ -1533,8 +1533,10 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
 }
 
 static MIR_insn_code_t get_move_code (MIR_type_t type) {
-  return (type == MIR_T_F ? MIR_FMOV
-                          : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+  return (type == MIR_T_F    ? MIR_FMOV
+          : type == MIR_T_D  ? MIR_DMOV
+          : type == MIR_T_LD ? MIR_LDMOV
+                             : MIR_MOV);
 }
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t reg) {
@@ -2234,13 +2236,12 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
 
   if (e->temp_reg == 0) {
     mode = MIR_insn_op_mode (gen_ctx->ctx, e->insn, 0, &out_p);
-    e->temp_reg
-      = gen_new_temp_reg (gen_ctx,
-                          mode == MIR_OP_FLOAT
-                            ? MIR_T_F
-                            : mode == MIR_OP_DOUBLE ? MIR_T_D
-                                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64,
-                          curr_func_item->u.func);
+    e->temp_reg = gen_new_temp_reg (gen_ctx,
+                                    mode == MIR_OP_FLOAT     ? MIR_T_F
+                                    : mode == MIR_OP_DOUBLE  ? MIR_T_D
+                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD
+                                                             : MIR_T_I64,
+                                    curr_func_item->u.func);
   }
   return e->temp_reg;
 }
@@ -5210,8 +5211,13 @@ static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void 
   }
   fprintf (f, "};\n");
   fclose (f);
+#if defined(__aarch64__)
+  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
+           cfname, cfname, cfname, cfname, cfname);
+#else
   sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
            cfname, cfname, cfname, cfname, cfname);
+#endif
 #else
   sprintf (bfname, "_mir_%d_%lu.bin", gen_ctx->gen_num, (unsigned long) getpid ());
   if ((bf = fopen (bfname, "w")) == NULL) return;
