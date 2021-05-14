@@ -49,6 +49,9 @@ static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type
 
 static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
   assert (hard_reg <= MAX_HARD_REG);
+#if defined(__APPLE__)
+  if (hard_reg == R18_HARD_REG) return TRUE;
+#endif
   return (hard_reg == FP_HARD_REG || hard_reg == SP_HARD_REG || hard_reg == TEMP_INT_HARD_REG1
           || hard_reg == TEMP_INT_HARD_REG2 || hard_reg == TEMP_FLOAT_HARD_REG1
           || hard_reg == TEMP_FLOAT_HARD_REG2 || hard_reg == TEMP_DOUBLE_HARD_REG1
