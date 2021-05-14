@@ -3708,9 +3708,10 @@ static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_
 
   ch_ptr->free += code_len;
   mir_assert (ch_ptr->free <= ch_ptr->bound);
-  mem_protect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_WRITE_EXEC);
-  memcpy (mem, code, code_len);
-  mem_protect (ch_ptr->start, ch_ptr->bound - ch_ptr->start, PROT_READ_EXEC);
+  MIR_code_reloc_t reloc;
+  reloc.offset = 0;
+  reloc.value = code;
+  _MIR_set_code ((size_t) ch_ptr->start, ch_ptr->bound - ch_ptr->start, mem, 1, &reloc, code_len);
   _MIR_flush_code_cache (mem, ch_ptr->free);
   return mem;
 }
@@ -3727,12 +3728,6 @@ uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code,
   return res;
 }
 
-uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size) {
-  code_holder_t *ch_ptr = get_last_code_holder (ctx, size);
-
-  return ch_ptr == NULL ? NULL : ch_ptr->free;
-}
-
 uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t *code,
                                     size_t code_len) {
   code_holder_t *ch_ptr = get_last_code_holder (ctx, 0);
@@ -3745,14 +3740,15 @@ uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t
 
 void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
                        size_t code_len) { /* thread safe */
+  MIR_code_reloc_t reloc;
   size_t len, start;
 
   start = (size_t) addr / page_size * page_size;
   len = (size_t) addr + code_len - start;
   if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
-  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
-  memcpy (addr, code, code_len);
-  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
+  reloc.offset = 0;
+  reloc.value = code;
+  _MIR_set_code (start, len, addr, 1, &reloc, code_len);
   _MIR_flush_code_cache (addr, addr + code_len);
   if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
@@ -3767,39 +3763,29 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
   if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
-  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
-  for (i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
-  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
+  _MIR_set_code (start, len, base, nloc, relocs, 0);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
   if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 
 void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* thread safe */
-  size_t start, len, offset, max_offset = 0;
-  void *value;
   va_list args;
+  MIR_code_reloc_t relocs[20];
+  if (nloc >= 20)
+    MIR_get_error_func (ctx) (MIR_wrong_param_value_error, "_MIR_update_code: too many locations");
+  va_start (args, nloc);
+  for (size_t i = 0; i < nloc; i++) {
+    relocs[i].offset = va_arg (args, size_t);
+    relocs[i].value = va_arg (args, void *);
+  }
+  va_end (args);
+  _MIR_update_code_arr (ctx, base, nloc, relocs);
+}
 
-  va_start (args, nloc);
-  for (size_t i = 0; i < nloc; i++) {
-    offset = va_arg (args, size_t);
-    value = va_arg (args, void *);
-    if (max_offset < offset) max_offset = offset;
-  }
-  va_end (args);
-  start = (size_t) base / page_size * page_size;
-  len = (size_t) base + max_offset + sizeof (void *) - start;
-  va_start (args, nloc);
-  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
-  mem_protect ((uint8_t *) start, len, PROT_WRITE_EXEC);
-  for (size_t i = 0; i < nloc; i++) {
-    offset = va_arg (args, size_t);
-    value = va_arg (args, void *);
-    memcpy (base + offset, &value, sizeof (void *));
-  }
-  mem_protect ((uint8_t *) start, len, PROT_READ_EXEC);
-  _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
-  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
-  va_end (args);
+uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size) {
+  code_holder_t *ch_ptr = get_last_code_holder (ctx, size);
+
+  return ch_ptr == NULL ? NULL : ch_ptr->free;
 }
 
 static void code_init (MIR_context_t ctx) {
