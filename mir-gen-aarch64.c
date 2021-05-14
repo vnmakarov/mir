@@ -872,7 +872,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         gen_delete_insn (gen_ctx, insn);
       }
     } else if (code == MIR_VA_START) {
+#if !defined(__APPLE__)
       MIR_op_t treg_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
+#endif
       MIR_op_t prev_sp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
@@ -883,14 +885,21 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       fp_offset = (fp_arg_num >= 8 ? 0 : 16 * fp_arg_num - 128);
       va_reg = va_op.u.reg;
       /* Insns can be not simplified as soon as they match a machine insn.  */
+#if !defined(__APPLE__)
       /* mem32[va_reg].__gr_offset = gp_offset; mem32[va_reg].__vr_offset = fp_offset */
       gen_mov (gen_ctx, insn, MIR_MOV, treg_op, MIR_new_int_op (ctx, gp_offset));
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_U32, 24, va_reg, 0, 1), treg_op);
       gen_mov (gen_ctx, insn, MIR_MOV, treg_op, MIR_new_int_op (ctx, fp_offset));
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_U32, 28, va_reg, 0, 1), treg_op);
-      /* __stack: prev_sp = mem64[fp + 16]; mem64[va_reg].__stack = prev_sp + mem_size */
+#endif
+      /* __stack: prev_sp = mem64[fp + 16] */
       gen_mov (gen_ctx, insn, MIR_MOV, prev_sp_op,
                _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 16, FP_HARD_REG, MIR_NON_HARD_REG, 1));
+#if defined(__APPLE__)
+      gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg, 0, 1),
+               prev_sp_op);
+#else
+      /* mem64[va_reg].__stack = prev_sp + mem_size */
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, prev_sp_op, MIR_new_int_op (ctx, mem_size));
       gen_add_insn_before (gen_ctx, insn, new_insn);
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 0, va_reg, 0, 1), treg_op);
@@ -902,6 +911,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                MIR_new_int_op (ctx, int_reg_save_area_size));
       gen_add_insn_before (gen_ctx, insn, new_insn);
       gen_mov (gen_ctx, insn, MIR_MOV, MIR_new_mem_op (ctx, MIR_T_I64, 16, va_reg, 0, 1), treg_op);
+#endif
       gen_delete_insn (gen_ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (gen_ctx, insn);
@@ -920,8 +930,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         assert (insn->ops[i].mode == MIR_OP_REG);
         res_type = func->res_types[i];
         if ((res_type == MIR_T_F || res_type == MIR_T_D || res_type == MIR_T_LD) && n_vregs < 8) {
-          new_insn_code
-            = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
+          new_insn_code = res_type == MIR_T_F   ? MIR_FMOV
+                          : res_type == MIR_T_D ? MIR_DMOV
+                                                : MIR_LDMOV;
           ret_reg = V0_HARD_REG + n_vregs++;
         } else if (n_iregs < 8) {
           new_insn_code = MIR_MOV;
