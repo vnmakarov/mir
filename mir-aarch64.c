@@ -2,7 +2,63 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-#define VA_LIST_IS_ARRAY_P 0
+/* x31 - sp; x30 - link reg; x29 - fp; x0-x7, v0-v7 - arg/result regs;
+   x19-x29, v8-v15 - callee-saved (only bottom 64-bits are saved for v8-v15);
+   x9-x15, v0-v7, v16-v31 - temp regs
+   x8 - indirect result location address
+   stack is 16-byte aligned
+
+   Apple M1 ABI specific:
+   o long double is double (64-bit)
+   o va_list is a pointer
+   o all varargs are passed only on stack
+   o reg x18 is reserved
+   o empty struct args are ignored
+*/
+
+void dump_code (const char *name, uint8_t *code, size_t code_len) {
+  size_t i;
+  int ch;
+  char cfname[50];
+  char command[500];
+  FILE *f;
+#if !defined(__APPLE__)
+  char bfname[30];
+  FILE *bf;
+#endif
+
+  fprintf (stderr, "%s:", name);
+  sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
+  if ((f = fopen (cfname, "w")) == NULL) return;
+#if defined(__APPLE__)
+  fprintf (f, "unsigned char code[] = {");
+  for (i = 0; i < code_len; i++) {
+    if (i != 0) fprintf (f, ", ");
+    fprintf (f, "0x%x", code[i]);
+  }
+  fprintf (f, "};\n");
+  fclose (f);
+  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
+           cfname, cfname, cfname, cfname, cfname);
+#else
+  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
+  if ((bf = fopen (bfname, "w")) == NULL) return;
+  fprintf (f, "void code (void) {}\n");
+  for (i = 0; i < code_len; i++) fputc (code[i], bf);
+  fclose (f);
+  fclose (bf);
+  sprintf (command,
+           "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
+           "--adjust-vma=0x%llx -d %s.o; rm -f "
+           "%s.o %s %s",
+           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
+           bfname);
+#endif
+  fprintf (stderr, "%s\n", command);
+  if ((f = popen (command, "r")) == NULL) return;
+  while ((ch = fgetc (f)) != EOF) fprintf (stderr, "%c", ch);
+  pclose (f);
+}
 
 /* Any small BLK type (less or equal to two quadwords) args are passed in
    *fully* regs or on stack (w/o address), otherwise it is put
