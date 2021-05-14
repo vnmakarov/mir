@@ -353,7 +353,7 @@ static void gen_st80 (VARR (uint8_t) * insn_varr, uint32_t src_offset) {
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
    pop rbx; pop r12; ret. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
   static const uint8_t prolog[] = {
 #ifndef _WIN32
     0x41, 0x54,                   /* pushq %r12 */
