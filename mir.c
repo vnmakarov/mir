@@ -3647,11 +3647,23 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   return VARR_ADDR (code_holder_t, code_holders) + len - 1;
 }
 
-#ifndef __MIRC__
 void _MIR_flush_code_cache (void *start, void *bound) {
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__MIRC__)
   __builtin___clear_cache (start, bound);
 #endif
+}
+
+#if !defined(MIR_BOOTSTRAP) || !defined(__APPLE__) || !defined(__aarch64__)
+void _MIR_set_code (size_t prot_start, size_t prot_len, uint8_t *base, size_t nloc,
+                    const MIR_code_reloc_t *relocs, size_t reloc_size) {
+  mem_protect ((uint8_t *) prot_start, prot_len, PROT_WRITE_EXEC);
+  if (reloc_size == 0) {
+    for (size_t i = 0; i < nloc; i++)
+      memcpy (base + relocs[i].offset, &relocs[i].value, sizeof (void *));
+  } else {
+    for (size_t i = 0; i < nloc; i++) memcpy (base + relocs[i].offset, relocs[i].value, reloc_size);
+  }
+  mem_protect ((uint8_t *) prot_start, prot_len, PROT_READ_EXEC);
 }
 #endif
 
