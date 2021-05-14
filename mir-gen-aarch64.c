@@ -70,9 +70,10 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t ty
 
    | ...           |  prev func stack (start aligned to 16 bytes)
    |---------------|
-   | gr save area  |  64 bytes optional area for vararg func integer reg save area
+   | gr save area  |  64 bytes optional area for vararg func integer reg save area (absent for
+   APPLE)
    |---------------|
-   | vr save area  |  128 bytes optional area for vararg func fp reg save area
+   | vr save area  |  128 bytes optional area for vararg func fp reg save area (absent for APPLE)
    |---------------|
    | saved regs    |  callee saved regs used in the func (known only after RA), rounded 16 bytes
    |---------------|
@@ -99,8 +100,10 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t ty
 
  */
 
+#if !defined(__APPLE__)
 static const int int_reg_save_area_size = 8 * 8;
 static const int reg_save_area_size = 8 * 8 + 8 * 16;
+#endif
 
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
