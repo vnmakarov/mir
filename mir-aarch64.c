@@ -223,7 +223,7 @@ static size_t gen_mov_addr (VARR (uint8_t) * insn_varr, int reg, void *addr) {
 
 #define BR_OFFSET_BITS 26
 #define MAX_BR_OFFSET (1 << (BR_OFFSET_BITS - 1)) /* 1 for sign */
-#define BR_OFFSET_MASK (~(-1 << BR_OFFSET_BITS))
+#define BR_OFFSET_MASK (~(-1u << BR_OFFSET_BITS))
 
 static void gen_call_addr (VARR (uint8_t) * insn_varr, void *base_addr, int temp_reg,
                            void *call_addr) {
