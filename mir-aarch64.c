@@ -654,7 +654,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, code) + VARR_LENGTH (uint8_t, code)))[-4] |= imm << 5;
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
-#if 1
+#if 0
   if (getenv ("MIR_code_dump") != NULL)
     _MIR_dump_code (func->name, 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #endif
