@@ -5938,6 +5938,68 @@ static void scan_finish (MIR_context_t ctx) {
 
 /* New Page */
 
+#ifndef _WIN32
+#include <sys/types.h>
+#include <unistd.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#define getpid GetCurrentProcessId
+#define popen _popen
+#define pclose _pclose
+#endif
+
+void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len) {
+  size_t i;
+  int ch;
+  char cfname[50];
+  char command[500];
+  FILE *f;
+#if !defined(__APPLE__)
+  char bfname[30];
+  FILE *bf;
+#endif
+
+  if (name != NULL) fprintf (stderr, "%s:", name);
+  sprintf (cfname, "_mir_%d_%lu.c", index, (unsigned long) getpid ());
+  if ((f = fopen (cfname, "w")) == NULL) return;
+#if defined(__APPLE__)
+  fprintf (f, "unsigned char code[] = {");
+  for (i = 0; i < code_len; i++) {
+    if (i != 0) fprintf (f, ", ");
+    fprintf (f, "0x%x", code[i]);
+  }
+  fprintf (f, "};\n");
+  fclose (f);
+#if defined(__aarch64__)
+  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
+           cfname, cfname, cfname, cfname, cfname);
+#else
+  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
+           cfname, cfname, cfname, cfname, cfname);
+#endif
+#else
+  sprintf (bfname, "_mir_%d_%lu.bin", index, (unsigned long) getpid ());
+  if ((bf = fopen (bfname, "w")) == NULL) return;
+  fprintf (f, "void code (void) {}\n");
+  for (i = 0; i < code_len; i++) fputc (code[i], bf);
+  fclose (f);
+  fclose (bf);
+  sprintf (command,
+           "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
+           "--adjust-vma=0x%llx -d %s.o; rm -f "
+           "%s.o %s %s",
+           cfname, cfname, bfname, cfname, (unsigned long long) code, cfname, cfname, cfname,
+           bfname);
+#endif
+  fprintf (stderr, "%s\n", command);
+  if ((f = popen (command, "r")) == NULL) return;
+  while ((ch = fgetc (f)) != EOF) fprintf (stderr, "%c", ch);
+  pclose (f);
+}
+
+/* New Page */
+
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-x86_64.c"
 #elif defined(__aarch64__)

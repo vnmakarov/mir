@@ -659,4 +659,6 @@ extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
 
+extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
+
 #endif /* #ifndef MIR_H */

@@ -16,50 +16,6 @@
    o empty struct args are ignored
 */
 
-void dump_code (const char *name, uint8_t *code, size_t code_len) {
-  size_t i;
-  int ch;
-  char cfname[50];
-  char command[500];
-  FILE *f;
-#if !defined(__APPLE__)
-  char bfname[30];
-  FILE *bf;
-#endif
-
-  fprintf (stderr, "%s:", name);
-  sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
-  if ((f = fopen (cfname, "w")) == NULL) return;
-#if defined(__APPLE__)
-  fprintf (f, "unsigned char code[] = {");
-  for (i = 0; i < code_len; i++) {
-    if (i != 0) fprintf (f, ", ");
-    fprintf (f, "0x%x", code[i]);
-  }
-  fprintf (f, "};\n");
-  fclose (f);
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
-           cfname, cfname, cfname, cfname, cfname);
-#else
-  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
-  if ((bf = fopen (bfname, "w")) == NULL) return;
-  fprintf (f, "void code (void) {}\n");
-  for (i = 0; i < code_len; i++) fputc (code[i], bf);
-  fclose (f);
-  fclose (bf);
-  sprintf (command,
-           "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%llx -d %s.o; rm -f "
-           "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
-           bfname);
-#endif
-  fprintf (stderr, "%s\n", command);
-  if ((f = popen (command, "r")) == NULL) return;
-  while ((ch = fgetc (f)) != EOF) fprintf (stderr, "%c", ch);
-  pclose (f);
-}
-
 /* Any small BLK type (less or equal to two quadwords) args are passed in
    *fully* regs or on stack (w/o address), otherwise it is put
    somehwere on stack and its address passed instead. First RBLK arg
@@ -495,7 +451,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    dump_code ("ffi:", VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("ffi:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;
@@ -698,9 +654,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, code) + VARR_LENGTH (uint8_t, code)))[-4] |= imm << 5;
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
-#if 0
+#if 1
   if (getenv ("MIR_code_dump") != NULL)
-    dump_code (func->name, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code (func->name, 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;

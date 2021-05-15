@@ -5178,68 +5178,6 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
 /* New Page */
 
 #if !MIR_NO_GEN_DEBUG
-
-#ifndef _WIN32
-#include <sys/types.h>
-#include <unistd.h>
-#else
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#define getpid GetCurrentProcessId
-#define popen _popen
-#define pclose _pclose
-#endif
-
-static void print_code (gen_ctx_t gen_ctx, uint8_t *code, size_t code_len, void *start_addr) {
-  size_t i;
-  int ch;
-  char cfname[50];
-  char command[500];
-  FILE *f;
-#if !defined(__APPLE__)
-  char bfname[30];
-  FILE *bf;
-#endif
-
-  sprintf (cfname, "_mir_%d_%lu.c", gen_ctx->gen_num, (unsigned long) getpid ());
-  if ((f = fopen (cfname, "w")) == NULL) return;
-#if defined(__APPLE__)
-  fprintf (f, "unsigned char code[] = {");
-  for (i = 0; i < code_len; i++) {
-    if (i != 0) fprintf (f, ", ");
-    fprintf (f, "0x%x", code[i]);
-  }
-  fprintf (f, "};\n");
-  fclose (f);
-#if defined(__aarch64__)
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=__data -D %s.o; rm -f %s.o %s",
-           cfname, cfname, cfname, cfname, cfname);
-#else
-  sprintf (command, "gcc -c -o %s.o %s 2>&1 && objdump --section=.data -D %s.o; rm -f %s.o %s",
-           cfname, cfname, cfname, cfname, cfname);
-#endif
-#else
-  sprintf (bfname, "_mir_%d_%lu.bin", gen_ctx->gen_num, (unsigned long) getpid ());
-  if ((bf = fopen (bfname, "w")) == NULL) return;
-  fprintf (f, "void code (void) {}\n");
-  for (i = 0; i < code_len; i++) fputc (code[i], bf);
-  fclose (f);
-  fclose (bf);
-  sprintf (command,
-           "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%llx -d %s.o; rm -f "
-           "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long long) start_addr, cfname, cfname, cfname,
-           bfname);
-#endif
-  fprintf (stderr, "%s\n", command);
-  if ((f = popen (command, "r")) == NULL) return;
-  while ((ch = fgetc (f)) != EOF) fprintf (debug_file, "%c", ch);
-  pclose (f);
-}
-#endif
-
-#if !MIR_NO_GEN_DEBUG
 #include "real-time.h"
 #endif
 
@@ -5400,7 +5338,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
   DEBUG ({
-    print_code (gen_ctx, machine_code, code_len, machine_code);
+    _MIR_dump_code (NULL, gen_ctx->gen_num, machine_code, code_len);
     fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
   });
   _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
