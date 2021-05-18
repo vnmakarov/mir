@@ -109,6 +109,12 @@ EOF
       run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
+  if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
+      run "emcc/wasmer" "emcc -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
+  fi
+  if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
+      run "emcc -O2/wasmer" "emcc -O2 -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
+  fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=singlepass ./a.out >/dev/null 2>&1; then
       run "wasi -O2/wasmer singlepass" "wasi-clang -O2 $bench.c" "wasmer run --backend=singlepass ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
