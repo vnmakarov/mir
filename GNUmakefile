@@ -15,11 +15,13 @@ LDFLAGS =
 OBJO=-o #trailing space is important
 EXEO=-o #trailing space is important
 ifeq ($(OS),Windows_NT)
-  OBJSUFF=obj
-  LIBSUFF=lib
   EXE=.exe
   ifeq ($(CC),cc)
-    CC=cl
+    ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+      CC=gcc
+    else
+      CC=cl
+    endif
   endif
   ifeq ($(CC),gcc)
     CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
@@ -49,8 +51,6 @@ ifeq ($(OS),Windows_NT)
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 else
-  OBJSUFF=o
-  LIBSUFF=a
   EXE=
   CC=gcc
   CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
@@ -77,6 +77,14 @@ else
   COMPILE = $(CC) $(CPPFLAGS) -MMD -MP $(CFLAGS)
   LINK = $(CC) $(LDFLAGS)
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
+endif
+
+ifeq ($(CC),cl)
+  OBJSUFF=obj
+  LIBSUFF=lib
+else
+  OBJSUFF=o
+  LIBSUFF=a
 endif
 
 C2M_BOOTSTRAP_FLAGS = -DMIR_BOOTSTRAP
@@ -147,7 +155,7 @@ clean-mir:
 
 # ------------------ LIBMIR -----------------------
 $(BUILD_DIR)/libmir.$(LIBSUFF): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(BUILD_DIR)/c2mir/c2mir.$(OBJSUFF)
-ifeq ($(OS),Windows_NT)
+ifeq ($(CC),cl)
 	lib -nologo $^ -OUT:$@
 else
 	$(AR) rcs $@ $^
