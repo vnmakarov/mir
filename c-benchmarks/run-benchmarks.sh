@@ -110,19 +110,19 @@ EOF
       first=
   fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=singlepass ./a.out >/dev/null 2>&1; then
-      run "wasmer -O2 singlepass" "wasi-clang -O2 $bench.c" "wasmer run --backend=singlepass ./a.out -- $arg" "$expect_out" "$inputf" $first
+      run "wasi -O2/wasmer singlepass" "wasi-clang -O2 $bench.c" "wasmer run --backend=singlepass ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=cranelift ./a.out >/dev/null 2>&1; then
-      run "wasmer -O2 cranelift" "wasi-clang -O2 $bench.c" "wasmer run --backend=cranelift ./a.out -- $arg" "$expect_out" "$inputf" $first
+      run "wasi -O2/wasmer cranelift" "wasi-clang -O2 $bench.c" "wasmer run --backend=cranelift ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=llvm ./a.out >/dev/null 2>&1; then
-      run "wasmer -O2 LLVM" "wasi-clang -O2 $bench.c" "wasmer run --backend=llvm ./a.out -- $arg" "$expect_out" "$inputf" $first
+      run "wasi -O2/wasmer LLVM" "wasi-clang -O2 $bench.c" "wasmer run --backend=llvm ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmtime --help >/dev/null 2>&1; then
-      run "wasmtime -O0" "wasi-clang -O0 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
+      run "wasi -O0/wasmtime" "wasi-clang -O0 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
   if wasi-clang $tempc >/dev/null 2>&1 && wasmtime --help >/dev/null 2>&1; then
-      run "wasmtime -O2" "wasi-clang -O2 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
+      run "wasi -O2/wasmtime" "wasi-clang -O2 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
   fi
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
   #  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
