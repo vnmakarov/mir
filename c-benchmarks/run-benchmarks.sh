@@ -171,4 +171,4 @@ for i in `awk -F: '{print $1}' $temp3|sort|uniq`; do
     awk -F: -v name="$i" "BEGIN {f = 1.0} name==\$1 {f = f * \$2; n++} END {printf \"%0.2fx\n\", f ^  (1.0/n);}" < $temp3
 done
 
-rm -f $tempc $temp $temp2 $temp3 $errf
+rm -f $tempc $temp $temp2 $temp3 $errf ./a.out.wasm ./a.out.js
