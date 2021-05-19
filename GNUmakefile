@@ -702,6 +702,10 @@ gcc-test:
 clang-test:
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-clang
 
+# Comparison of gcc, c2m, wasmer, wasmtime on ogg encoding.  You need wasi-clang script calling clang from wasi-sdk.
+oggenc-bench:
+	$(SHELL) $(SRC_DIR)/c-benchmarks/run-oggenc.sh
+
 # Very long testing (hours and hours):
 csmith: csmith-c2m-gcc csmit-c2m
 
