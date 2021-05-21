@@ -1968,7 +1968,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
     insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
-    char ch, start_ch, d1, d2;
+    char ch, start_ch;
+    int d1, d2;
     int opcode0 = -1, opcode1 = -1, opcode2 = -1;
     int rex_w = -1, rex_r = -1, rex_x = -1, rex_b = -1, rex_0 = -1;
     int mod = -1, reg = -1, rm = -1;
