@@ -218,9 +218,6 @@ static void gen_blk_mov (VARR (uint8_t) * insn_varr, size_t offset, size_t addr_
     /* 38: */ 0xfe0e94e3, /* bne	t4,zero,20 <L> */
     /* 3c: */ 0x0000006f, /* jal	zero,0 */
   };
-#if 0
-  addr_offset >>= 3;
-#endif
   if (offset < (1 << 11) && addr_offset < (1 << 11) && qwords < (1 < 11)) {
     uint32_t *addr = (uint32_t *) push_insns (insn_varr, blk_mov_pat, sizeof (blk_mov_pat));
     addr[0] |= get_i_format_imm (offset);
