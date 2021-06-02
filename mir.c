@@ -3565,7 +3565,11 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
 #include <sys/mman.h>
 #include <unistd.h>
 
+#if defined(__riscv)
+#define PROT_WRITE_EXEC (PROT_WRITE | PROT_READ | PROT_EXEC)
+#else
 #define PROT_WRITE_EXEC (PROT_WRITE | PROT_EXEC)
+#endif
 #define PROT_READ_EXEC (PROT_READ | PROT_EXEC)
 
 #if defined(__APPLE__) && defined(__aarch64__)
