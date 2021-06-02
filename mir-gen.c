@@ -220,12 +220,18 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
 
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
-#elif defined(__aarch64__)
+#elif 1 || defined(__aarch64__)
 #include "mir-gen-aarch64.c"
 #elif defined(__PPC64__)
 #include "mir-gen-ppc64.c"
 #elif defined(__s390x__)
 #include "mir-gen-s390x.c"
+#elif defined(__riscv)
+#if __riscv_xlen != 64 || !__riscv_float_abi_double || !__riscv_mul || !__riscv_div \
+  || !__riscv_compressed
+#error "only 64-bit RISCV supported (at least rv64imafdc)"
+#endif
+#include "mir-gen-riscv64.c"
 #else
 #error "undefined or unsupported generation target"
 #endif
