@@ -511,33 +511,6 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   return res;
 }
 
-///-----
-
-/* save x10(a0)-x17(a7): */
-#if __riscv_compressed
-static const uint16_t save_arg_insns[] = {
-  0xe02a, /* c.sdsp a0,0(sp) */
-  0xe42e, /* c.sdsp a1,8(sp) */
-  0xe832, /* c.sdsp a2,16(sp) */
-  0xec36, /* c.sdsp a3,24(sp) */
-  0xf03a, /* c.sdsp a4,32(sp) */
-  0xf43e, /* c.sdsp a5,40(sp) */
-  0xf842, /* c.sdsp a6,48(sp) */
-  0xfc46, /* c.sdsp a7,56(sp) */
-};
-#else
-static const uint32_t save_arg_insns[] = {
-  0x00a13023, /* sd a0,0(sp) */
-  0x00b13423, /* sd a1,8(sp) */
-  0x00c13823, /* sd a2,16(sp) */
-  0x00d13c23, /* sd a3,24(sp) */
-  0x02e13023, /* sd a4,32(sp) */
-  0x02f13423, /* sd a5,40(sp) */
-  0x03013823, /* sd a6,48(sp) */
-  0x03113c23, /* sd a7,56(sp) */
-};
-#endif
-
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
