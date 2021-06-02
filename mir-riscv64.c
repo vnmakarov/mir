@@ -76,7 +76,6 @@ struct riscv64_va_list {
 void *va_arg_builtin (void *p, uint64_t t) {
   struct riscv64_va_list *va = p;
   MIR_type_t type = t;
-  int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
   void *a = va->arg_area;
 
   if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16) {
@@ -307,10 +306,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #endif
   size_t len, offset;
   MIR_type_t type;
-  uint32_t n_xregs = 0, n_fregs = 0, sp_offset = 0, blk_offset = 0, pat, offset_imm, scale;
-  uint32_t sp = 31, addr_reg, qwords;
-  uint32_t *addr;
-  const uint32_t temp_reg = 10; /* x10 */
+  uint32_t n_xregs = 0, n_fregs = 0, sp_offset = 0, blk_offset = 0, pat;
+  uint32_t qwords;
   VARR (uint8_t) * code;
   void *res;
 
