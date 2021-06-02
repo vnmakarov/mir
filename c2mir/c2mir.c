@@ -34,6 +34,8 @@
 #include "ppc64/cppc64.h"
 #elif defined(__s390x__)
 #include "s390x/cs390x.h"
+#elif defined(__riscv)
+#include "riscv64/criscv64.h"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -336,6 +338,8 @@ typedef struct {
 #include "ppc64/cppc64-code.c"
 #elif defined(__s390x__)
 #include "s390x/cs390x-code.c"
+#elif defined(__riscv)
+#include "riscv64/criscv64-code.c"
 #else
 #error "undefined or unsupported generation target for C"
 #endif
@@ -10732,6 +10736,8 @@ static inline void gen_multiple_load_store (c2m_ctx_t c2m_ctx, struct type *type
 #include "ppc64/cppc64-ABI-code.c"
 #elif defined(__s390x__)
 #include "s390x/cs390x-ABI-code.c"
+#elif defined(__riscv)
+#include "riscv64/criscv64-ABI-code.c"
 #else
 typedef int target_arg_info_t; /* whatever */
 /* Initiate ARG_INFO for generating call, prototype, or prologue. */
@@ -13151,6 +13157,8 @@ static void init_include_dirs (c2m_ctx_t c2m_ctx) {
 #endif
 #elif defined(__linux__) && defined(__s390x__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include/s390x-linux-gnu");
+#elif defined(__linux__) && defined(__riscv)
+  VARR_PUSH (char_ptr_t, system_headers, "/usr/include/riscv64-linux-gnu");
 #endif
 #if defined(__APPLE__) || defined(__unix__)
   VARR_PUSH (char_ptr_t, system_headers, "/usr/include");
