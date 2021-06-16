@@ -289,9 +289,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = arg_op.u.mem.type;
       gen_assert (MIR_all_blk_type_p (type));
     } else {
-      mode = arg_op.value_mode;  // ??? smaller ints
-      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
-                  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
+      mode = arg_op.value_mode;
+      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_INTS
+                  || mode == MIR_OP_UINTS || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE
+                  || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
         (*MIR_get_error_func (ctx)) (MIR_call_op_error,
                                      "passing float variadic arg (should be passed as double)");
@@ -330,9 +331,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = call_insn->ops[i].u.mem.type;
       gen_assert (MIR_all_blk_type_p (type));
     } else {
-      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
-      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_DOUBLE
-                  || mode == MIR_OP_LDOUBLE);
+      mode = call_insn->ops[i].value_mode;
+      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_INTS
+                  || mode == MIR_OP_UINTS || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     if (type != MIR_T_LD && i < start) continue;
@@ -1602,13 +1603,20 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       break;
     }
     case 'i':
-      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || !int16_p (op.u.i)) return FALSE;
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
+           && op.mode != MIR_OP_UINTS)
+          || !int16_p (op.u.i))
+        return FALSE;
       break;
     case 'I':
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
+          && op.mode != MIR_OP_UINTS && op.mode != MIR_OP_REF)
+        return FALSE;
       break;
     case 'u':
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
+          && op.mode != MIR_OP_UINTS)
+        return FALSE;
       ch = *++p;
       if (ch == 'a') {
         if (!uint16_p ((op.u.u + 7) / 8 * 8)) return FALSE;
@@ -1624,10 +1632,16 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       }
       break;
     case 'd':
-      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || !uint12_p (op.u.u)) return FALSE;
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
+           && op.mode != MIR_OP_UINTS)
+          || !uint12_p (op.u.u))
+        return FALSE;
       break;
     case 'D':
-      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || !int20_p (op.u.i)) return FALSE;
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
+           && op.mode != MIR_OP_UINTS)
+          || !int20_p (op.u.i))
+        return FALSE;
       break;
     case 'z':
       if (op.mode != MIR_OP_FLOAT || op.u.f == 0.0f) return FALSE;
@@ -1653,14 +1667,16 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       original = insn->ops[n];
       mode = op.mode;
       if (mode == MIR_OP_UINT) mode = MIR_OP_INT;
-      if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT))
+      if (mode == MIR_OP_UINTS) mode = MIR_OP_INTS;
+      if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT)
+          && (original.mode != MIR_OP_UINTS || mode != MIR_OP_INTS))
         return FALSE;
-      gen_assert (mode == MIR_OP_HARD_REG || mode == MIR_OP_INT || mode == MIR_OP_FLOAT
-                  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE || mode == MIR_OP_HARD_REG_MEM
-                  || mode == MIR_OP_LABEL);
+      gen_assert (mode == MIR_OP_HARD_REG || mode == MIR_OP_INT || mode == MIR_OP_INTS
+                  || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE
+                  || mode == MIR_OP_HARD_REG_MEM || mode == MIR_OP_LABEL);
       if (mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg)
         return FALSE;
-      else if (mode == MIR_OP_INT && op.u.i != original.u.i)
+      else if ((mode == MIR_OP_INT || mode == MIR_OP_INTS) && op.u.i != original.u.i)
         return FALSE;
       else if (mode == MIR_OP_FLOAT && op.u.f != original.u.f)
         return FALSE;
@@ -1770,7 +1786,9 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v) {
 }
 
 static uint64_t get_op_imm (gen_ctx_t gen_ctx, MIR_op_t op) {
-  if (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT) return op.u.u;
+  if (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_INTS
+      || op.mode == MIR_OP_UINTS)
+    return op.u.u;
   gen_assert (op.mode == MIR_OP_REF);
   if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
       && _MIR_reserved_ref_name_p (gen_ctx->ctx, op.u.ref->u.data->name))
@@ -1781,10 +1799,12 @@ static uint64_t get_op_imm (gen_ctx_t gen_ctx, MIR_op_t op) {
 static uint64_t get_imm (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   MIR_op_t *ops = insn->ops;
   if (insn->nops >= 2
-      && (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT || ops[1].mode == MIR_OP_REF))
+      && (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT || ops[1].mode == MIR_OP_INTS
+          || ops[1].mode == MIR_OP_UINTS || ops[1].mode == MIR_OP_REF))
     return get_op_imm (gen_ctx, ops[1]);
   if (insn->nops >= 3
-      && (ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT || ops[2].mode == MIR_OP_REF))
+      && (ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT || ops[2].mode == MIR_OP_INTS
+          || ops[2].mode == MIR_OP_UINTS || ops[2].mode == MIR_OP_REF))
     return get_op_imm (gen_ctx, ops[2]);
   gen_assert (FALSE);
   return 0;
@@ -1815,7 +1835,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   uint16_t nop_binsn = 0x18 << 8; /* lr 0,0 */
 
   if (insn->code == MIR_ALLOCA
-      && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
+      && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
+          || insn->ops[1].mode == MIR_OP_INTS || insn->ops[1].mode == MIR_OP_UINTS))
     insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
     MIR_op_t op;
@@ -2185,14 +2206,16 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
 
     if ((code == MIR_RSH || code == MIR_LSH || code == MIR_URSH || code == MIR_RSHS
          || code == MIR_LSHS || code == MIR_URSHS)
-        && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_UINT)) {
+        && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_UINT
+            || insn->ops[2].mode == MIR_OP_INTS || insn->ops[2].mode == MIR_OP_UINTS)) {
       if (insn->ops[2].u.i == 0) {
         gen_mov (gen_ctx, insn, MIR_MOV, insn->ops[0], insn->ops[1]);
         old_insn = insn;
         insn = DLIST_NEXT (MIR_insn_t, insn);
         gen_delete_insn (gen_ctx, old_insn);
       } else {
-        if (insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i < 0) {
+        if ((insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_INTS)
+            && insn->ops[2].u.i < 0) {
           switch (code) {
           case MIR_RSH: insn->code = MIR_LSH; break;
           case MIR_URSH: insn->code = MIR_LSH; break;
