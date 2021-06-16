@@ -249,8 +249,8 @@ typedef const char *MIR_name_t;
 
 /* Operand mode */
 typedef enum {
-  REP8 (OP_EL, UNDEF, REG, HARD_REG, INT, UINT, FLOAT, DOUBLE, LDOUBLE),
-  REP6 (OP_EL, REF, STR, MEM, HARD_REG_MEM, LABEL, BOUND),
+  REP8 (OP_EL, UNDEF, REG, HARD_REG, INT, UINT, INTS, UINTS, FLOAT),
+  REP8 (OP_EL, DOUBLE, LDOUBLE, REF, STR, MEM, HARD_REG_MEM, LABEL, BOUND),
 } MIR_op_mode_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -266,8 +266,8 @@ typedef struct MIR_str MIR_str_t;
 typedef struct {
   void *data; /* Aux data  */
   MIR_op_mode_t mode;
-  /* Defined after MIR_func_finish.  Only MIR_OP_INT, MIR_OP_UINT,
-     MIR_OP_FLOAT, MIR_OP_DOUBLE, MIR_OP_LDOUBLE: */
+  /* Defined after MIR_func_finish.  Only MIR_OP_INT, MIR_OP_UINT, MIR_OP_INTS,
+     MIR_OP_UINTS, MIR_OP_FLOAT, MIR_OP_DOUBLE, MIR_OP_LDOUBLE: */
   MIR_op_mode_t value_mode;
   union {
     MIR_reg_t reg;
@@ -505,7 +505,8 @@ extern MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn);
 
 extern const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code);
 extern size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn);
-extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int *out_p);
+extern MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int *out_p,
+                                       int *short_p);
 
 extern MIR_insn_t MIR_new_label (MIR_context_t ctx);
 
@@ -516,6 +517,8 @@ extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t fu
 extern MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg);
 extern MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v);
 extern MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v);
+extern MIR_op_t MIR_new_ints_op (MIR_context_t ctx, int32_t v);
+extern MIR_op_t MIR_new_uints_op (MIR_context_t ctx, uint32_t v);
 extern MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v);
 extern MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v);
 extern MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v);
@@ -596,7 +599,7 @@ extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
-                                             int *out_p);
+                                             int *out_p, int *short_p);
 extern MIR_insn_t _MIR_new_unspec_insn (MIR_context_t ctx, size_t nops, ...);
 extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const char *name,
                                        size_t nres, MIR_type_t *res_types, size_t nargs,
