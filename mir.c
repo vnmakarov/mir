@@ -5212,8 +5212,8 @@ static htab_hash_t insn_name_hash (insn_name_t in, void *arg) {
 #define TC_EL(t) TC_##t
 #define REP_SEP ,
 enum token_code {
-  REP8 (TC_EL, INT, FLOAT, DOUBLE, LDOUBLE, NAME, STR, NL, EOFILE),
-  REP5 (TC_EL, LEFT_PAR, RIGHT_PAR, COMMA, SEMICOL, COL),
+  REP8 (TC_EL, INT, UINT, INTS, UINTS, FLOAT, DOUBLE, LDOUBLE, NAME),
+  REP8 (TC_EL, STR, NL, EOFILE, LEFT_PAR, RIGHT_PAR, COMMA, SEMICOL, COL),
 };
 #undef REP_SEP
 
@@ -5283,7 +5283,7 @@ static void scan_error (MIR_context_t ctx, const char *format, ...) {
 }
 
 /* Read number using GET_CHAR and UNGET_CHAR and already read
-   character CH.  It should be guaranted that the input has a righ
+   character CH.  It should be guaranted that the input has a right
    prefix (+|-)?[0-9].  Return base, float and double flag through
    BASE, FLOAT_P, DOUBLE_P.  Put number representation (0x or 0X
    prefix is removed) into TEMP_STRING.  */
@@ -5491,7 +5491,8 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
       } else if (ch == '+' || ch == '-' || isdigit (ch)) {
         const char *repr;
         char *end;
-        int next_ch, base, float_p, double_p, ldouble_p;
+        int next_ch, base, float_p, double_p, ldouble_p, neg_p;
+        uint64_t u;
 
         if (ch == '+' || ch == '-') {
           next_ch = get_char (ctx);
@@ -5511,13 +5512,34 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
           token->code = TC_LDOUBLE;
           token->u.ld = strtold (repr, &end);
         } else {
-          token->code = TC_INT;
-          token->u.i = (sizeof (long) == sizeof (int64_t) ? strtoul (repr, &end, base)
-                                                          : strtoull (repr, &end, base));
+          neg_p = FALSE;
+          if (ch == '+') {
+            repr++;
+          } else if (ch == '-') {
+            repr++;
+            neg_p = TRUE;
+          }
+          u = (sizeof (long) == sizeof (int64_t) ? strtoul (repr, &end, base)
+                                                 : strtoull (repr, &end, base));
+          if (errno == ERANGE) scan_error (ctx, "integer number is out of range %s", repr);
+          next_ch = get_char (ctx);
+          if (next_ch == 's' || next_ch == 'S') { /* we support only binary complimentary repr */
+            token->code = ch == '-' || u <= INT32_MAX ? TC_INTS : TC_UINTS;
+            if ((token->code == TC_UINT && u > UINT32_MAX)
+                || (ch == '-' && u > (uint64_t) INT32_MAX + 1))
+              scan_error (ctx, "32-bit (s) integer number is out of range %s",
+                          ch != '-' ? repr : repr - 1);
+          } else {
+            if (ch == '-' && u > (uint64_t) INT64_MAX + 1)
+              scan_error (ctx, "64-bit integer number is out of range %s", repr - 1);
+            token->code = ch == '-' || u <= INT64_MAX ? TC_INT : TC_UINT;
+            unget_char (ctx, next_ch);
+          }
+          token->u.i = neg_p ? -u : u;
         }
         mir_assert (*end == '\0');
         if (errno != 0)
-          ;
+          ; /* ??? */
         return;
       } else {
         VARR_PUSH (char, temp_string, '\0');
@@ -5790,7 +5812,10 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             scan_token (ctx, &t, get_string_char, unget_string_char);
             if (t.code == TC_NAME) {
               op.u.mem.disp = (MIR_disp_t) t.u.name;
-            } else if (local_p || t.code != TC_INT || !MIR_all_blk_type_p (type)) {
+            } else if (local_p
+                       || (t.code != TC_INT && t.code != TC_INTS && t.code != TC_UINT
+                           && t.code != TC_UINTS)
+                       || !MIR_all_blk_type_p (type)) {
               scan_error (ctx, local_p ? "wrong var" : "wrong arg");
             } else {
               op.u.mem.base = t.u.i;
@@ -5809,7 +5834,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         } else {
           scan_token (ctx, &t, get_string_char, unget_string_char);
           disp_p = FALSE;
-          if (t.code == TC_INT) {
+          if (t.code == TC_INT || t.code == TC_INTS || t.code == TC_UINT || t.code == TC_UINTS) {
             op.u.mem.disp = t.u.i;
             scan_token (ctx, &t, get_string_char, unget_string_char);
             disp_p = TRUE;
@@ -5831,7 +5856,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
               scan_token (ctx, &t, get_string_char, unget_string_char);
               if (t.code == TC_COMMA) {
                 scan_token (ctx, &t, get_string_char, unget_string_char);
-                if (t.code != TC_INT) scan_error (ctx, "wrong scale");
+                if (t.code != TC_INT && t.code != TC_INTS) scan_error (ctx, "wrong scale");
                 op.u.mem.scale = t.u.i;
                 scan_token (ctx, &t, get_string_char, unget_string_char);
               }
@@ -5844,8 +5869,14 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         break;
       }
       case TC_INT:
-        op.mode = MIR_OP_INT;
+      case TC_INTS:
+        op.mode = t.code == TC_INT ? MIR_OP_INT : MIR_OP_INTS;
         op.u.i = t.u.i;
+        break;
+      case TC_UINT:
+      case TC_UINTS:
+        op.mode = t.code == TC_UINT ? MIR_OP_UINT : MIR_OP_UINTS;
+        op.u.u = t.u.i;
         break;
       case TC_FLOAT:
         op.mode = MIR_OP_FLOAT;
