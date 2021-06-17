@@ -153,14 +153,6 @@
     * Signed or unsigned **64-bit integer value operands** created through API functions
       `MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v)` and `MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v)`
       * In MIR text they are represented the same way as C integer numbers (e.g. octal, decimal, hexadecimal ones)
-    * Signed or unsigned **32-bit integer value operands** created through API functions
-      `MIR_op_t MIR_new_ints_op (MIR_context_t ctx, int32_t v)` and
-      `MIR_op_t MIR_new_uints_op (MIR_context_t ctx, uint32_t v)`
-      * In MIR text they are represented the same way as the 64-bit numbers but with suffix `s` or `S`
-      * For the most targets the internal representation for 32-bit and 64-bit integer with the same value is the same,
-        but there are exclusions.  For example, on 64-bit RISC-V a 32-bit integer in 64-bit register has always
-	the most significant bit duplicated in a higher part of the register independently on signedness
-	of the 32-bit integer
     * **Float, double or long double value operands** created through API functions `MIR_op_t MIR_new_float_op (MIR_context_t ctx, float v)`,
       `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`,
       and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`.
@@ -242,7 +234,6 @@
 ### MIR integer insns
   * If insn has suffix `S` in insn name, the insn works with lower 32-bit part of 64-bit integer value
   * The higher part of 32-bit insn result is undefined
-  * Only 32-bit integer immediates can be an operand of insns with the suffix `S`
   * If insn has prefix `U` in insn name, the insn treats integer as unsigned integers
   * Some insns has no unsigned variant as MIR is oriented to CPUs with two complement integer arithmetic
     (the huge majority of all CPUs)
