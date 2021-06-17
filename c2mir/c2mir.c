@@ -12346,7 +12346,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       } else {
         VARR_TRUNC (MIR_op_t, ret_ops, 0);
         for (size_t i = 0; i < VARR_LENGTH (MIR_type_t, proto_info.ret_types); i++)
-          VARR_PUSH (MIR_op_t, ret_ops, MIR_new_int_op (ctx, 0));  // ???
+          VARR_PUSH (MIR_op_t, ret_ops, zero_op.mir_op);
         emit_insn (c2m_ctx, MIR_new_insn_arr (ctx, MIR_RET, VARR_LENGTH (MIR_op_t, ret_ops),
                                               VARR_ADDR (MIR_op_t, ret_ops)));
       }
