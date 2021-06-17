@@ -802,8 +802,6 @@ static const char *mode_str (MIR_op_mode_t mode) {
   case MIR_OP_HARD_REG: return "hard_reg";
   case MIR_OP_INT: return "int";
   case MIR_OP_UINT: return "uint";
-  case MIR_OP_INTS: return "ints";
-  case MIR_OP_UINTS: return "uints";
   case MIR_OP_FLOAT: return "float";
   case MIR_OP_DOUBLE: return "double";
   case MIR_OP_LDOUBLE: return "ldouble";
@@ -1328,7 +1326,7 @@ void MIR_finish_func (MIR_context_t ctx) {
     size_t i, actual_nops = MIR_insn_nops (ctx, insn);
     MIR_op_mode_t mode, expected_mode;
     reg_desc_t *rd;
-    int out_p, short_p, can_be_out_p;
+    int out_p, can_be_out_p;
 
     code = insn->code;
     if (code == MIR_PHI) {
@@ -1373,7 +1371,7 @@ void MIR_finish_func (MIR_context_t ctx) {
         out_p = FALSE;
         expected_mode = i == 0 ? MIR_OP_INT : MIR_OP_LABEL;
       } else if (code != MIR_RET) {
-        expected_mode = MIR_insn_op_mode (ctx, insn, i, &out_p, &short_p);
+        expected_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
       } else {
         out_p = FALSE;
         expected_mode = type2mode (curr_func->res_types[i]);
@@ -1445,9 +1443,7 @@ void MIR_finish_func (MIR_context_t ctx) {
               || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
         insn->ops[i].value_mode = expected_mode;
       } else if (expected_mode != MIR_OP_UNDEF
-                 && (mode == MIR_OP_UINT || mode == MIR_OP_INTS || mode == MIR_OP_UINTS ? MIR_OP_INT
-                                                                                        : mode)
-                      != expected_mode) {
+                 && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
         curr_func = NULL;
         MIR_get_error_func (
           ctx) (MIR_op_mode_error,
@@ -1736,7 +1732,7 @@ size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn) {
 }
 
 MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
-                                      int *out_p, int *short_p) {
+                                      int *out_p) {
   unsigned mode;
   mir_assert (out_p != NULL);
 
@@ -1744,14 +1740,10 @@ MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, s
   mode = insn_descs[code].op_modes[nop];
   mir_assert (out_p != NULL);
   *out_p = (mode & OUT_FLAG) != 0;
-  *short_p = (mode & SHORT_FLAG) != 0;
-  if (*out_p) mode ^= OUT_FLAG;
-  if (*short_p) mode ^= SHORT_FLAG;
-  return mode;
+  return *out_p ? mode ^ OUT_FLAG : mode;
 }
 
-MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int *out_p,
-                                int *short_p) {
+MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, int *out_p) {
   MIR_insn_code_t code = insn->code;
   size_t nargs, nops = MIR_insn_nops (ctx, insn);
   unsigned mode;
@@ -1795,10 +1787,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   }
   mode = insn_descs[code].op_modes[nop];
   *out_p = (mode & OUT_FLAG) != 0;
-  *short_p = (mode & SHORT_FLAG) != 0;
-  if (*out_p) mode ^= OUT_FLAG;
-  if (*short_p) mode ^= SHORT_FLAG;
-  return mode;
+  return *out_p ? mode ^ OUT_FLAG : mode;
 }
 
 static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t code) {
@@ -2094,22 +2083,6 @@ MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t u) {
   return op;
 }
 
-MIR_op_t MIR_new_ints_op (MIR_context_t ctx, int32_t i) {
-  MIR_op_t op;
-
-  init_op (&op, MIR_OP_INTS);
-  op.u.i = i;
-  return op;
-}
-
-MIR_op_t MIR_new_uints_op (MIR_context_t ctx, uint32_t u) {
-  MIR_op_t op;
-
-  init_op (&op, MIR_OP_UINTS);
-  op.u.u = u;
-  return op;
-}
-
 MIR_op_t MIR_new_float_op (MIR_context_t ctx, float f) {
   MIR_op_t op;
 
@@ -2195,11 +2168,7 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
   switch (op1.mode) {
   case MIR_OP_REG: return op1.u.reg == op2.u.reg;
   case MIR_OP_HARD_REG: return op1.u.hard_reg == op2.u.hard_reg;
-  case MIR_OP_INTS:
-    assert (INT32_MIN <= op1.u.i && op1.u.i <= INT32_MAX && INT32_MIN <= op2.u.i
-            && op2.u.i <= INT32_MAX); /* fall through */
   case MIR_OP_INT: return op1.u.i == op2.u.i;
-  case MIR_OP_UINTS: assert (op1.u.u <= UINT32_MAX && op2.u.u <= UINT32_MAX); /* fall through */
   case MIR_OP_UINT: return op1.u.u == op2.u.u;
   case MIR_OP_FLOAT: return op1.u.f == op2.u.f;
   case MIR_OP_DOUBLE: return op1.u.d == op2.u.d;
@@ -2230,9 +2199,7 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
   switch (op.mode) {
   case MIR_OP_REG: return mir_hash_step (h, (uint64_t) op.u.reg);
   case MIR_OP_HARD_REG: return mir_hash_step (h, (uint64_t) op.u.hard_reg);
-  case MIR_OP_INTS: assert (INT32_MIN <= op.u.i && op.u.i <= INT32_MAX); /* fall through */
   case MIR_OP_INT: return mir_hash_step (h, (uint64_t) op.u.i);
-  case MIR_OP_UINTS: assert (op.u.u <= UINT32_MAX); /* fall through */
   case MIR_OP_UINT: return mir_hash_step (h, (uint64_t) op.u.u);
   case MIR_OP_FLOAT: {
     union {
@@ -2485,14 +2452,6 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
   case MIR_OP_HARD_REG: output_hard_reg (f, op.u.hard_reg); break;
   case MIR_OP_INT: fprintf (f, "%" PRId64, op.u.i); break;
   case MIR_OP_UINT: fprintf (f, "%" PRIu64, op.u.u); break;
-  case MIR_OP_INTS:
-    assert (INT32_MIN <= op.u.i && op.u.i <= INT32_MAX); /* fall through */
-    fprintf (f, "%" PRId32 "s", (int32_t) op.u.i);
-    break;
-  case MIR_OP_UINTS:
-    assert (op.u.u <= UINT32_MAX);
-    fprintf (f, "%" PRIu32 "s", (uint32_t) op.u.u);
-    break;
   case MIR_OP_FLOAT: fprintf (f, "%.*ef", FLT_MANT_DIG, op.u.f); break;
   case MIR_OP_DOUBLE: fprintf (f, "%.*e", DBL_MANT_DIG, op.u.d); break;
   case MIR_OP_LDOUBLE: fprintf (f, "%.*LeL", LDBL_MANT_DIG, op.u.ld); break;
@@ -2822,8 +2781,6 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     if (keep_ref_p) break;
   case MIR_OP_INT:
   case MIR_OP_UINT:
-  case MIR_OP_INTS:
-  case MIR_OP_UINTS:
   case MIR_OP_FLOAT:
   case MIR_OP_DOUBLE:
   case MIR_OP_LDOUBLE:
@@ -2990,13 +2947,13 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
 
 void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int keep_ref_p,
                          int mem_float_p) {
-  int out_p, short_p;
+  int out_p;
   mir_assert (insn != NULL);
   MIR_insn_code_t code = insn->code;
   size_t i, nops = MIR_insn_nops (ctx, insn);
 
   for (i = 0; i < nops; i++) {
-    MIR_insn_op_mode (ctx, insn, i, &out_p, &short_p);
+    MIR_insn_op_mode (ctx, insn, i, &out_p);
     MIR_simplify_op (ctx, func_item, insn, i, out_p, code,
                      (insn->code == MIR_INLINE || insn->code == MIR_CALL) && i == 1 && keep_ref_p,
                      mem_float_p);
@@ -3185,8 +3142,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
     if (code == MIR_LABEL) VARR_PUSH (MIR_insn_t, labels, insn);
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (code == MIR_ALLOCA
-        && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
-            || insn->ops[1].mode == MIR_OP_INTS || insn->ops[1].mode == MIR_OP_UINTS)) {
+        && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT)) {
       /* Consolidate allocas */
       int64_t size, overall_size, align, max_align;
 
@@ -3195,8 +3151,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       max_align = align = natural_alignment (overall_size);
       overall_size = (overall_size + align - 1) / align * align;
       while (next_insn != NULL && next_insn->code == MIR_ALLOCA
-             && (next_insn->ops[1].mode == MIR_OP_INT || next_insn->ops[1].mode == MIR_OP_UINT
-                 || next_insn->ops[1].mode == MIR_OP_INTS || next_insn->ops[1].mode == MIR_OP_UINTS)
+             && (next_insn->ops[1].mode == MIR_OP_INT || next_insn->ops[1].mode == MIR_OP_UINT)
              && !MIR_op_eq_p (ctx, insn->ops[0], next_insn->ops[0])) {
         size = next_insn->ops[1].u.i;
         size = size <= 0 ? 1 : size;
@@ -3206,10 +3161,8 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
           max_align = align;
           overall_size = (overall_size + align - 1) / align * align;
         }
-        new_insn
-          = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, next_insn->ops[0], insn->ops[0],
-                          MIR_PTR32 ? MIR_new_ints_op (ctx, overall_size)
-                                    : MIR_new_int_op (ctx, overall_size));
+        new_insn = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, next_insn->ops[0],
+                                 insn->ops[0], MIR_new_int_op (ctx, overall_size));
         overall_size += size;
         MIR_insert_insn_before (ctx, func_item, next_insn, new_insn);
         MIR_remove_insn (ctx, func_item, next_insn);
@@ -3224,14 +3177,12 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       /* BR L|JMP L; <labels>L: => <labels>L: Also Remember signaling NAN*/
       MIR_remove_insn (ctx, func_item, insn);
     } else if (((code == MIR_MUL || code == MIR_MULS || code == MIR_DIV || code == MIR_DIVS)
-                && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_INTS)
-                && insn->ops[2].u.i == 1)
+                && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 1)
                || ((code == MIR_ADD || code == MIR_ADDS || code == MIR_SUB || code == MIR_SUBS
                     || code == MIR_OR || code == MIR_ORS || code == MIR_XOR || code == MIR_XORS
                     || code == MIR_LSH || code == MIR_LSHS || code == MIR_RSH || code == MIR_RSHS
                     || code == MIR_URSH || code == MIR_URSHS)
-                   && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_INTS)
-                   && insn->ops[2].u.i == 0)) {
+                   && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 0)) {
       if (!MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1])) {
         next_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], insn->ops[1]);
         MIR_insert_insn_before (ctx, func_item, insn, next_insn);
@@ -3246,7 +3197,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       /* BR L1;JMP L2; L2:<labels>L1: or L1:<labels>L2: =>  JMP L2*/
       MIR_remove_insn (ctx, func_item, insn);
     } else if ((code == MIR_BT || code == MIR_BTS || code == MIR_BF || code == MIR_BFS)
-               && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_INTS)
+               && insn->ops[1].mode == MIR_OP_INT
                && (insn->ops[1].u.i == 0 || insn->ops[1].u.i == 1)) {
       if ((code == MIR_BT || code == MIR_BTS) == (insn->ops[1].u.i == 1)) {
         new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]);
