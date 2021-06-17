@@ -1933,14 +1933,10 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
     insn = create_insn (ctx, nops, code);
     insn->nops = nops;
     for (i = 0; i < nops; i++) {
-      if (ops[i].mode == MIR_OP_INT || ops[i].mode == MIR_OP_UINT) {
-        if ((i < expected_nops && (insn_descs[code].op_modes[i] & SHORT_FLAG) != 0)
-            || (code == MIR_RET && i < curr_func->nres && MIR_int_type_p (curr_func->res_types[i])
-                && curr_func->res_types[i] != MIR_T_I64 && curr_func->res_types[i] != MIR_T_U64
-                && curr_func->res_types[i] != MIR_T_P))
-          message ("warning: operand %d of insn %s should not be 64-bit integer", (int) i,
-                   MIR_insn_name (ctx, code));
-      }
+      if (i < expected_nops && (ops[i].mode == MIR_OP_INT || ops[i].mode == MIR_OP_UINT)
+          && (insn_descs[code].op_modes[i] & SHORT_FLAG) != 0)
+        message ("warning: operand %d of insn %s should not be 64-bit integer", (int) i,
+                 MIR_insn_name (ctx, code));
       insn->ops[i] = ops[i];
     }
     return insn;
