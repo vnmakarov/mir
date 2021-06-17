@@ -3870,7 +3870,6 @@ typedef enum {
   TAG_EL (U0),
   REP8 (TAG_EL, U1, U2, U3, U4, U5, U6, U7, U8),
   REP8 (TAG_EL, I1, I2, I3, I4, I5, I6, I7, I8),
-  REP8 (TAG_EL, US1, US2, US3, US4, IS1, IS2, IS3, IS4),
   REP3 (TAG_EL, F, D, LD),                   /* 4, 8, 16 bytes for floating point numbers */
   REP4 (TAG_EL, REG1, REG2, REG3, REG4),     /* Reg string number in 1, 2, 3, 4 bytes */
   REP4 (TAG_EL, NAME1, NAME2, NAME3, NAME4), /* Name string number in 1, 2, 3, 4 bytes */
@@ -3969,13 +3968,6 @@ static size_t uint_length (uint64_t u) {
   return n;
 }
 
-static size_t uint_length32 (uint32_t u) {
-  size_t n;
-
-  for (n = 0; u != 0; n++) u >>= CHAR_BIT;
-  return n == 0 ? 1 : n;
-}
-
 static size_t put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int nb) {
   if (writer == NULL) return 0;
   for (int n = 0; n < nb; n++) {
@@ -3987,14 +3979,6 @@ static size_t put_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u, int
 
 static size_t int_length (int64_t i) {
   uint64_t u = i;
-  size_t n = 0;
-
-  for (n = 0; u != 0; n++) u >>= CHAR_BIT;
-  return n == 0 ? 1 : n;
-}
-
-static size_t int_length32 (int32_t i) {
-  uint32_t u = i;
   size_t n = 0;
 
   for (n = 0; u != 0; n++) u >>= CHAR_BIT;
@@ -4063,30 +4047,6 @@ static size_t write_uint (MIR_context_t ctx, writer_func_t writer, uint64_t u) {
     return 1;
   }
   put_byte (ctx, writer, TAG_U1 + nb - 1);
-  len = put_uint (ctx, writer, u, nb) + 1;
-  output_int_len += len;
-  return len;
-}
-
-static size_t write_ints (MIR_context_t ctx, writer_func_t writer, int32_t i) {
-  size_t nb, len;
-
-  if (writer == NULL) return 0;
-  nb = int_length32 (i);
-  assert (nb > 0 && nb <= 4);
-  put_byte (ctx, writer, TAG_IS1 + nb - 1);
-  len = put_int (ctx, writer, i, nb) + 1;
-  output_int_len += len;
-  return len;
-}
-
-static size_t write_uints (MIR_context_t ctx, writer_func_t writer, uint32_t u) {
-  size_t nb, len;
-
-  if (writer == NULL) return 0;
-  nb = uint_length32 (u);
-  assert (nb > 0 && nb <= 4);
-  put_byte (ctx, writer, TAG_US1 + nb - 1);
   len = put_uint (ctx, writer, u, nb) + 1;
   output_int_len += len;
   return len;
@@ -4179,12 +4139,6 @@ static size_t write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func
   case MIR_OP_REG: return write_reg (ctx, writer, MIR_reg_name (ctx, op.u.reg, func));
   case MIR_OP_INT: return write_int (ctx, writer, op.u.i);
   case MIR_OP_UINT: return write_uint (ctx, writer, op.u.u);
-  case MIR_OP_INTS:
-    assert (INT32_MIN <= op.u.i && op.u.i <= INT32_MAX);
-    return write_ints (ctx, writer, (int32_t) op.u.i);
-  case MIR_OP_UINTS:
-    assert (op.u.u <= UINT32_MAX);
-    return write_uints (ctx, writer, (uint32_t) op.u.u);
   case MIR_OP_FLOAT: return write_float (ctx, writer, op.u.f);
   case MIR_OP_DOUBLE: return write_double (ctx, writer, op.u.d);
   case MIR_OP_LDOUBLE: return write_ldouble (ctx, writer, op.u.ld);
@@ -4627,12 +4581,6 @@ static bin_tag_t read_token (MIR_context_t ctx, token_attr_t *attr) {
     REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8)
     attr->i = get_int (ctx, c - TAG_I1 + 1);
     break;
-    REP4 (TAG_CASE, US1, US2, US3, US4)
-    attr->u = get_uint (ctx, c - TAG_US1 + 1);
-    break;
-    REP4 (TAG_CASE, IS1, IS2, IS3, IS4)
-    attr->i = get_int (ctx, c - TAG_IS1 + 1);
-    break;
     TAG_CASE (F)
     attr->f = get_float (ctx);
     break;
@@ -4704,11 +4652,8 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
     TAG_CASE (U0)
     REP8 (TAG_CASE, U1, U2, U3, U4, U5, U6, U7, U8) *op = MIR_new_uint_op (ctx, attr.u);
     break;
-    REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8) *op = MIR_new_int_op (ctx, attr.i);
-    break;
-    REP4 (TAG_CASE, US1, US2, US3, US4) *op = MIR_new_uints_op (ctx, attr.u);
-    break;
-    REP4 (TAG_CASE, IS1, IS2, IS3, IS4) *op = MIR_new_ints_op (ctx, attr.i);
+    REP8 (TAG_CASE, I1, I2, I3, I4, I5, I6, I7, I8)
+    *op = MIR_new_int_op (ctx, attr.i);
     break;
     TAG_CASE (F)
     *op = MIR_new_float_op (ctx, attr.f);
@@ -5018,52 +4963,6 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
             case MIR_T_I64:
               v.i64 = attr.i;
               push_data (ctx, (uint8_t *) &v.i64, sizeof (int64_t));
-              break;
-            default:
-              MIR_get_error_func (ctx) (MIR_binary_io_error,
-                                        "data type %s does not correspond value type",
-                                        type_str (ctx, type));
-            }
-            break;
-          case TAG_US1:
-          case TAG_US2:
-          case TAG_US3:
-          case TAG_US4:
-            switch (type) {
-            case MIR_T_U8:
-              v.u8 = attr.u;
-              push_data (ctx, &v.u8, sizeof (uint8_t));
-              break;
-            case MIR_T_U16:
-              v.u16 = attr.u;
-              push_data (ctx, (uint8_t *) &v.u16, sizeof (uint16_t));
-              break;
-            case MIR_T_U32:
-              v.u32 = attr.u;
-              push_data (ctx, (uint8_t *) &v.u32, sizeof (uint32_t));
-              break;
-            default:
-              MIR_get_error_func (ctx) (MIR_binary_io_error,
-                                        "data type %s does not correspond value type",
-                                        type_str (ctx, type));
-            }
-            break;
-          case TAG_IS1:
-          case TAG_IS2:
-          case TAG_IS3:
-          case TAG_IS4:
-            switch (type) {
-            case MIR_T_I8:
-              v.i8 = attr.i;
-              push_data (ctx, (uint8_t *) &v.i8, sizeof (int8_t));
-              break;
-            case MIR_T_I16:
-              v.i16 = attr.i;
-              push_data (ctx, (uint8_t *) &v.i16, sizeof (int16_t));
-              break;
-            case MIR_T_I32:
-              v.i32 = attr.i;
-              push_data (ctx, (uint8_t *) &v.i32, sizeof (int32_t));
               break;
             default:
               MIR_get_error_func (ctx) (MIR_binary_io_error,
