@@ -87,6 +87,15 @@ static void interp_init (MIR_context_t ctx);
 static void finish_func_interpretation (MIR_item_t func_item);
 static void interp_finish (MIR_context_t ctx);
 
+static void message (const char *format, ...) {
+  va_list ap;
+
+  va_start (ap, format);
+  vfprintf (stderr, format, ap);
+  fprintf (stderr, "\n");
+  va_end (ap);
+}
+
 static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
   va_list ap;
 
@@ -1920,6 +1929,17 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
     if (ops[2].mode != MIR_OP_MEM)
       MIR_get_error_func (ctx) (MIR_op_mode_error,
                                 "3rd operand of va_arg should be any memory with given type");
+  } else {
+    insn = create_insn (ctx, nops, code);
+    insn->nops = nops;
+    for (i = 0; i < nops; i++) {
+      if (i < expected_nops && (ops[i].mode == MIR_OP_INT || ops[i].mode == MIR_OP_UINT)
+          && (insn_descs[code].op_modes[i] & SHORT_FLAG) != 0)
+        message ("warning: operand %d of insn %s should not be 64-bit integer", (int) i,
+                 MIR_insn_name (ctx, code));
+      insn->ops[i] = ops[i];
+    }
+    return insn;
   }
   insn = create_insn (ctx, nops, code);
   insn->nops = nops;
