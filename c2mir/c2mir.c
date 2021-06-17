@@ -9838,8 +9838,6 @@ static MIR_type_t get_op_type (c2m_ctx_t c2m_ctx, op_t op) {
   case MIR_OP_REG: return reg_type (c2m_ctx, op.mir_op.u.reg);
   case MIR_OP_INT: return MIR_T_I64;
   case MIR_OP_UINT: return MIR_T_U64;
-  case MIR_OP_INTS: return MIR_T_I32;
-  case MIR_OP_UINTS: return MIR_T_U32;
   case MIR_OP_FLOAT: return MIR_T_F;
   case MIR_OP_DOUBLE: return MIR_T_D;
   case MIR_OP_LDOUBLE: return MIR_T_LD;
@@ -9865,12 +9863,8 @@ static int push_const_val (c2m_ctx_t c2m_ctx, node_t r, op_t *res) {
                                                   : MIR_new_ldouble_op (ctx, e->u.d_val)));
   } else {
     assert (integer_type_p (e->type) || e->type->mode == TM_PTR);
-    mir_type = get_mir_type (c2m_ctx, e->type);
-    *res = new_op (NULL, (signed_integer_type_p (e->type)
-                            ? (mir_type == MIR_T_I64 ? MIR_new_int_op (ctx, e->u.i_val)
-                                                     : MIR_new_ints_op (ctx, e->u.i_val))
-                            : (mir_type == MIR_T_U64 ? MIR_new_uint_op (ctx, e->u.u_val)
-                                                     : MIR_new_uints_op (ctx, e->u.u_val))));
+    *res = new_op (NULL, (signed_integer_type_p (e->type) ? MIR_new_int_op (ctx, e->u.i_val)
+                                                          : MIR_new_uint_op (ctx, e->u.u_val)));
   }
   return TRUE;
 }
@@ -9914,7 +9908,7 @@ static void emit_insn_opt (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_insn_t tail;
-  int out_p, short_p;
+  int out_p;
 
   if ((insn->code == MIR_MOV || insn->code == MIR_FMOV || insn->code == MIR_DMOV
        || insn->code == MIR_LDMOV)
@@ -9922,7 +9916,7 @@ static void emit_insn_opt (c2m_ctx_t c2m_ctx, MIR_insn_t insn) {
       && MIR_insn_nops (ctx, tail) > 0 && temp_reg_p (c2m_ctx, insn->ops[1])
       && !temp_reg_p (c2m_ctx, insn->ops[0]) && temp_reg_p (c2m_ctx, tail->ops[0])
       && insn->ops[1].u.reg == tail->ops[0].u.reg) {
-    MIR_insn_op_mode (ctx, tail, 0, &out_p, &short_p);
+    MIR_insn_op_mode (ctx, tail, 0, &out_p);
     if (out_p) {
       tail->ops[0] = insn->ops[0];
       MIR_append_insn (ctx, curr_func, insn);
@@ -10046,7 +10040,6 @@ static op_t cast (c2m_ctx_t c2m_ctx, op_t op, MIR_type_t t, int new_op_p) {
     }
     break;
   case MIR_OP_INT:
-  case MIR_OP_INTS:
     insn_code
       = (t == MIR_T_I8
            ? MIR_EXT8
@@ -10061,7 +10054,6 @@ static op_t cast (c2m_ctx_t c2m_ctx, op_t op, MIR_type_t t, int new_op_p) {
                            : t == MIR_T_D ? MIR_I2D : t == MIR_T_LD ? MIR_I2LD : MIR_INSN_BOUND);
     break;
   case MIR_OP_UINT:
-  case MIR_OP_UINTS:
     insn_code
       = (t == MIR_T_I8
            ? MIR_EXT8
@@ -11293,7 +11285,6 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         }
         val = gen (c2m_ctx, init_el.init, NULL, NULL, TRUE, NULL);
         assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
-                || val.mir_op.mode == MIR_OP_INTS || val.mir_op.mode == MIR_OP_UINTS
                 || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
                 || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR
                 || val.mir_op.mode == MIR_OP_REF);
@@ -11344,8 +11335,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
           uint64_t u = 0;
 
-          assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
-                  || val.mir_op.mode == MIR_OP_INTS || val.mir_op.mode == MIR_OP_UINTS);
+          assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
           assert (init_el.member_decl->bit_offset % 8 == 0); /* first in the group of bitfields */
           start_offset = init_el.member_decl->bit_offset / 8;
           add_bit_field (c2m_ctx, &u, val.mir_op.u.u, init_el.member_decl);
@@ -11354,8 +11344,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
             if (next_init_el.offset != init_el.offset) break;
             if (next_init_el.member_decl->bit_offset == init_el.member_decl->bit_offset) continue;
             val = gen (c2m_ctx, next_init_el.init, NULL, NULL, TRUE, NULL);
-            assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
-                    || val.mir_op.mode == MIR_OP_INTS || val.mir_op.mode == MIR_OP_UINTS);
+            assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
             add_bit_field (c2m_ctx, &u, val.mir_op.u.u, next_init_el.member_decl);
           }
           val.mir_op.u.u = u;
@@ -11435,19 +11424,13 @@ static void emit_bin_op (c2m_ctx_t c2m_ctx, node_t r, struct type *type, op_t re
             || r->code == N_SUB_ASSIGN);
     if (((struct expr *) NL_HEAD (r->u.ops)->attr)->type->mode != TM_PTR) /* int + ptr */
       SWAP (op1, op2, temp);
-    if (op2.mir_op.mode == MIR_OP_INT || op2.mir_op.mode == MIR_OP_UINT
-        || op2.mir_op.mode == MIR_OP_INTS || op2.mir_op.mode == MIR_OP_UINTS) {
+    if (op2.mir_op.mode == MIR_OP_INT || op2.mir_op.mode == MIR_OP_UINT) {
       op2 = new_op (NULL,
-                    op2.mir_op.mode == MIR_OP_INT || op2.mir_op.mode == MIR_OP_UINT
-                      ? MIR_new_int_op (ctx, op2.mir_op.u.i * type_size (c2m_ctx, type->u.ptr_type))
-                      : MIR_new_ints_op (ctx,
-                                         op2.mir_op.u.i * type_size (c2m_ctx, type->u.ptr_type)));
+                    MIR_new_int_op (ctx, op2.mir_op.u.i * type_size (c2m_ctx, type->u.ptr_type)));
     } else {
       temp = get_new_temp (c2m_ctx, get_mir_type (c2m_ctx, type));
       emit3 (c2m_ctx, sizeof (mir_size_t) == 8 ? MIR_MUL : MIR_MULS, temp.mir_op, op2.mir_op,
-             sizeof (mir_size_t) == 8
-               ? MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type))
-               : MIR_new_ints_op (ctx, type_size (c2m_ctx, type->u.ptr_type)));
+             MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type)));
       op2 = temp;
     }
   }
@@ -11457,8 +11440,7 @@ static void emit_bin_op (c2m_ctx_t c2m_ctx, node_t r, struct type *type, op_t re
            == TM_PTR) { /* ptr - ptr */
     assert (r->code == N_SUB || r->code == N_SUB_ASSIGN);
     emit3 (c2m_ctx, sizeof (mir_size_t) == 8 ? MIR_DIV : MIR_DIVS, res.mir_op, res.mir_op,
-           sizeof (mir_size_t) == 8 ? MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type))
-                                    : MIR_new_ints_op (ctx, type_size (c2m_ctx, type->u.ptr_type)));
+           MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type)));
   }
 }
 
@@ -11495,7 +11477,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   long double ld;
   long long ll;
   unsigned long long ull;
-  int expr_attr_p, stmt_p, i_size;
+  int expr_attr_p, stmt_p;
 
   classify_node (r, &expr_attr_p, &stmt_p);
   assert ((true_label == NULL && false_label == NULL)
@@ -11510,32 +11492,18 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   case N_IGNORE: break; /* do nothing */
   case N_I:
-    i_size = basic_type_size (TP_INT);
-    ll = r->u.l;
-    goto int_val;
-  case N_L:
-    i_size = basic_type_size (TP_LONG);
-    ll = r->u.l;
-    goto int_val;
+  case N_L: ll = r->u.l; goto int_val;
   case N_LL:
-    i_size = basic_type_size (TP_LLONG);
     ll = r->u.ll;
   int_val:
-    res = new_op (NULL, i_size <= 4 ? MIR_new_ints_op (ctx, ll) : MIR_new_int_op (ctx, ll));
+    res = new_op (NULL, MIR_new_int_op (ctx, ll));
     break;
   case N_U:
-    i_size = basic_type_size (TP_UINT);
-    ull = r->u.ul;
-    goto uint_val;
-  case N_UL:
-    i_size = basic_type_size (TP_ULONG);
-    ull = r->u.ul;
-    goto uint_val;
+  case N_UL: ull = r->u.ul; goto uint_val;
   case N_ULL:
-    i_size = basic_type_size (TP_ULLONG);
     ull = r->u.ull;
   uint_val:
-    res = new_op (NULL, i_size <= 4 ? MIR_new_uints_op (ctx, ull) : MIR_new_uint_op (ctx, ull));
+    res = new_op (NULL, MIR_new_uint_op (ctx, ull));
     break;
   case N_F: ld = r->u.f; goto float_val;
   case N_D: ld = r->u.d; goto float_val;
@@ -11599,12 +11567,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       int true_p;
 
       assert (res.mir_op.mode == MIR_OP_INT || res.mir_op.mode == MIR_OP_UINT
-              || res.mir_op.mode == MIR_OP_INTS || res.mir_op.mode == MIR_OP_UINTS
               || res.mir_op.mode == MIR_OP_FLOAT || res.mir_op.mode == MIR_OP_DOUBLE);
-      true_p = (((res.mir_op.mode == MIR_OP_INT || res.mir_op.mode == MIR_OP_INTS)
-                 && res.mir_op.u.i != 0)
-                || ((res.mir_op.mode == MIR_OP_UINT || res.mir_op.mode == MIR_OP_UINTS)
-                    && res.mir_op.u.u != 0)
+      true_p = ((res.mir_op.mode == MIR_OP_INT && res.mir_op.u.i != 0)
+                || (res.mir_op.mode == MIR_OP_UINT && res.mir_op.u.u != 0)
                 || (res.mir_op.mode == MIR_OP_FLOAT && res.mir_op.u.f != 0.0f)
                 || (res.mir_op.mode == MIR_OP_DOUBLE && res.mir_op.u.d != 0.0));
       emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, true_p ? true_label : false_label));
@@ -12344,7 +12309,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       } else {
         VARR_TRUNC (MIR_op_t, ret_ops, 0);
         for (size_t i = 0; i < VARR_LENGTH (MIR_type_t, proto_info.ret_types); i++)
-          VARR_PUSH (MIR_op_t, ret_ops, MIR_new_int_op (ctx, 0));  // ???
+          VARR_PUSH (MIR_op_t, ret_ops, MIR_new_int_op (ctx, 0));
         emit_insn (c2m_ctx, MIR_new_insn_arr (ctx, MIR_RET, VARR_LENGTH (MIR_op_t, ret_ops),
                                               VARR_ADDR (MIR_op_t, ret_ops)));
       }
@@ -12416,12 +12381,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         label = get_label (c2m_ctx, c->case_target_node);
       }
       emit3 (c2m_ctx, short_p ? MIR_SUBS : MIR_SUB, index.mir_op, case_reg_op.mir_op,
-             signed_p
-               ? (short_p ? MIR_new_ints_op (ctx, e->u.i_val) : MIR_new_int_op (ctx, e->u.i_val))
-               : (short_p ? MIR_new_uints_op (ctx, e->u.u_val)
-                          : MIR_new_uint_op (ctx, e->u.u_val)));
+             signed_p ? MIR_new_int_op (ctx, e->u.i_val) : MIR_new_uint_op (ctx, e->u.u_val));
       emit3 (c2m_ctx, short_p ? MIR_UBGTS : MIR_UBGT, MIR_new_label_op (ctx, label), index.mir_op,
-             short_p ? MIR_new_uints_op (ctx, range) : MIR_new_uint_op (ctx, range));
+             MIR_new_uint_op (ctx, range));
       if (short_p) emit2 (c2m_ctx, MIR_UEXT32, index.mir_op, index.mir_op);
       VARR_TRUNC (case_t, switch_cases, 0);
       for (c = DLIST_HEAD (case_t, switch_attr->case_labels);
@@ -12462,28 +12424,21 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         assert (e->const_p && integer_type_p (e->type));
         if (case_expr2 == NULL) {
           emit3 (c2m_ctx, short_p ? MIR_BEQS : MIR_BEQ, MIR_new_label_op (ctx, label),
-                 case_reg_op.mir_op,
-                 short_p ? MIR_new_ints_op (ctx, e->u.i_val) : MIR_new_int_op (ctx, e->u.i_val));
+                 case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
         } else {
           e2 = case_expr2->attr;
           assert (e2->const_p && integer_type_p (e2->type));
           cont_label = MIR_new_label (ctx);
           if (signed_p) {
             emit3 (c2m_ctx, short_p ? MIR_BLTS : MIR_BLT, MIR_new_label_op (ctx, cont_label),
-                   case_reg_op.mir_op,
-                   short_p ? MIR_new_ints_op (ctx, e->u.i_val) : MIR_new_int_op (ctx, e->u.i_val));
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
             emit3 (c2m_ctx, short_p ? MIR_BLES : MIR_BLE, MIR_new_label_op (ctx, label),
-                   case_reg_op.mir_op,
-                   short_p ? MIR_new_ints_op (ctx, e2->u.i_val)
-                           : MIR_new_int_op (ctx, e2->u.i_val));
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e2->u.i_val));
           } else {
             emit3 (c2m_ctx, short_p ? MIR_UBLTS : MIR_UBLT, MIR_new_label_op (ctx, cont_label),
-                   case_reg_op.mir_op,
-                   short_p ? MIR_new_ints_op (ctx, e->u.i_val) : MIR_new_int_op (ctx, e->u.i_val));
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e->u.i_val));
             emit3 (c2m_ctx, short_p ? MIR_UBLES : MIR_UBLE, MIR_new_label_op (ctx, label),
-                   case_reg_op.mir_op,
-                   short_p ? MIR_new_ints_op (ctx, e2->u.i_val)
-                           : MIR_new_int_op (ctx, e2->u.i_val));
+                   case_reg_op.mir_op, MIR_new_int_op (ctx, e2->u.i_val));
           }
           emit_label_insn_opt (c2m_ctx, cont_label);
         }
