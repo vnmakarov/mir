@@ -196,12 +196,11 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
         push_mem (interp_ctx, ops[1]);
-      } else if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT
-                 || ops[1].mode == MIR_OP_INTS || ops[1].mode == MIR_OP_UINTS) {
+      } else if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_UINT) {
         push_insn_start (interp_ctx, IC_MOVI, insn);
         v.i = get_reg (ops[0], &max_nreg);
         VARR_PUSH (MIR_val_t, code_varr, v);
-        if (ops[1].mode == MIR_OP_INT || ops[1].mode == MIR_OP_INTS)
+        if (ops[1].mode == MIR_OP_INT)
           v.i = ops[1].u.i;
         else
           v.u = ops[1].u.u;
@@ -379,7 +378,10 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_export_item
                           || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
-      push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
+      push_insn_start (interp_ctx,
+                       imm_call_p           ? IC_IMM_CALL
+                       : code == MIR_INLINE ? MIR_CALL
+                                            : code,
                        insn);
       if (code == MIR_SWITCH) {
         VARR_PUSH (MIR_insn_t, branches, insn);
@@ -1508,14 +1510,14 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
         call_arg_descs[i].size = insn_arg_ops[i].u.mem.disp;
       } else {
         mode = insn_arg_ops[i].value_mode;
-        mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_INTS
-                    || mode == MIR_OP_UINTS || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE
-                    || mode == MIR_OP_LDOUBLE);
+        mir_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
+                    || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
         if (mode == MIR_OP_FLOAT)
           (*MIR_get_error_func (ctx)) (MIR_call_op_error,
                                        "passing float variadic arg (should be passed as double)");
-        call_arg_descs[i].type
-          = (mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
+        call_arg_descs[i].type = (mode == MIR_OP_DOUBLE    ? MIR_T_D
+                                  : mode == MIR_OP_LDOUBLE ? MIR_T_LD
+                                                           : MIR_T_I64);
       }
     }
     ff_interface_addr = ffi_address_ptr->a
