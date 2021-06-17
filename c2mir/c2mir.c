@@ -10145,7 +10145,6 @@ static op_t mem_to_address (c2m_ctx_t c2m_ctx, op_t mem, int reg_p) {
     if (!reg_p) return mem;
     temp = get_new_temp (c2m_ctx, MIR_T_I64);
     emit2 (c2m_ctx, MIR_MOV, temp.mir_op, mem.mir_op);
-    temp.mir_op.value_mode = MIR_OP_INT;
     return temp;
   }
   assert (mem.mir_op.mode == MIR_OP_MEM);
@@ -10181,7 +10180,6 @@ static op_t mem_to_address (c2m_ctx_t c2m_ctx, op_t mem, int reg_p) {
              MIR_new_int_op (ctx, mem.mir_op.u.mem.disp));
     mem = temp;
   }
-  mem.mir_op.value_mode = MIR_OP_INT;
   return mem;
 }
 
@@ -11707,7 +11705,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     op2 = promote (c2m_ctx,
                    type->mode != TM_PTR
                      ? one_op
-                     : new_op (NULL, MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type))),
+                     : new_op (NULL,
+                               t != MIR_T_I64 && t != MIR_T_U64
+                                 ? MIR_new_ints_op (ctx, (uint32_t) type_size (c2m_ctx,
+                                                                               type->u.ptr_type))
+                                 : MIR_new_int_op (ctx, type_size (c2m_ctx, type->u.ptr_type))),
                    t, FALSE);
     emit3 (c2m_ctx, get_mir_insn_code (c2m_ctx, r), val.mir_op, val.mir_op, op2.mir_op);
     t = promote_mir_int_type (t);
@@ -12745,9 +12747,9 @@ static void gen_mir (c2m_ctx_t c2m_ctx, node_t r) {
   MIR_context_t ctx = c2m_ctx->ctx;
 
   c2m_ctx->gen_ctx = gen_ctx = c2mir_calloc (c2m_ctx, sizeof (struct gen_ctx));
-  zero_op = new_op (NULL, MIR_new_int_op (ctx, 0));
-  one_op = new_op (NULL, MIR_new_int_op (ctx, 1));
-  minus_one_op = new_op (NULL, MIR_new_int_op (ctx, -1));
+  zero_op = new_op (NULL, MIR_new_ints_op (ctx, 0));
+  one_op = new_op (NULL, MIR_new_ints_op (ctx, 1));
+  minus_one_op = new_op (NULL, MIR_new_ints_op (ctx, -1));
   init_reg_vars (c2m_ctx);
   VARR_CREATE (MIR_var_t, proto_info.arg_vars, 32);
   VARR_CREATE (MIR_type_t, proto_info.ret_types, 16);
