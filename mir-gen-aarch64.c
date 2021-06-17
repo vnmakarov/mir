@@ -272,10 +272,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = call_insn->ops[i].u.mem.type;
       gen_assert (MIR_all_blk_type_p (type));
     } else {
-      mode = call_insn->ops[i].value_mode;
-      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_INTS
-                  || mode == MIR_OP_UINTS || mode == MIR_OP_FLOAT || mode == MIR_OP_DOUBLE
-                  || mode == MIR_OP_LDOUBLE);
+      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
+      gen_assert (mode == MIR_OP_INT || mode == MIR_OP_UINT || mode == MIR_OP_FLOAT
+                  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE);
       if (mode == MIR_OP_FLOAT)
         (*MIR_get_error_func (ctx)) (MIR_call_op_error,
                                      "passing float variadic arg (should be passed as double)");
@@ -311,7 +310,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = call_insn->ops[i].u.mem.type;
       gen_assert (MIR_all_blk_type_p (type));
     } else {
-      mode = call_insn->ops[i].value_mode;
+      mode = call_insn->ops[i].value_mode;  // ??? smaller ints
       if (mode == MIR_OP_LDOUBLE && __SIZEOF_LONG_DOUBLE__ == 8) mode = MIR_OP_DOUBLE;
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
@@ -391,9 +390,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 && mem_size % 16 != 0)
         mem_size = (mem_size + 15) / 16 * 16;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size, SP_HARD_REG, MIR_NON_HARD_REG, 1);
       if (type != MIR_T_RBLK) {
         new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
@@ -424,9 +424,11 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     type = proto->res_types[i];
     float_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
     if (float_p && n_vregs < 8) {
-      new_insn
-        = MIR_new_insn (ctx, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
-                        ret_reg_op, _MIR_new_hard_reg_op (ctx, V0_HARD_REG + n_vregs));
+      new_insn = MIR_new_insn (ctx,
+                               type == MIR_T_F   ? MIR_FMOV
+                               : type == MIR_T_D ? MIR_DMOV
+                                                 : MIR_LDMOV,
+                               ret_reg_op, _MIR_new_hard_reg_op (ctx, V0_HARD_REG + n_vregs));
       n_vregs++;
     } else if (!float_p && n_iregs < 8) {
       new_insn = MIR_new_insn (ctx, MIR_MOV, ret_reg_op,
@@ -789,9 +791,10 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
       if (type == MIR_T_LD) mem_size = (mem_size + 15) / 16 * 16;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size, R8_HARD_REG, MIR_NON_HARD_REG, 1);
       gen_mov (gen_ctx, anchor, new_insn_code, MIR_new_reg_op (ctx, i + 1), mem_op);
       mem_size += type == MIR_T_LD ? 16 : 8;
@@ -808,13 +811,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) {
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ
-                ? MIR_LDEQ
-                : code == MIR_LDBNE
-                    ? MIR_LDNE
-                    : code == MIR_LDBLT
-                        ? MIR_LDLT
-                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
+      code = (code == MIR_LDBEQ   ? MIR_LDEQ
+              : code == MIR_LDBNE ? MIR_LDNE
+              : code == MIR_LDBLT ? MIR_LDLT
+              : code == MIR_LDBGE ? MIR_LDGE
+              : code == MIR_LDBGT ? MIR_LDGT
+                                  : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -928,8 +930,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         assert (insn->ops[i].mode == MIR_OP_REG);
         res_type = func->res_types[i];
         if ((res_type == MIR_T_F || res_type == MIR_T_D || res_type == MIR_T_LD) && n_vregs < 8) {
-          new_insn_code
-            = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
+          new_insn_code = res_type == MIR_T_F   ? MIR_FMOV
+                          : res_type == MIR_T_D ? MIR_DMOV
+                                                : MIR_LDMOV;
           ret_reg = V0_HARD_REG + n_vregs++;
         } else if (n_iregs < 8) {
           new_insn_code = MIR_MOV;
@@ -1929,9 +1932,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       } else if (ch == 'd' && op.mode == MIR_OP_DOUBLE) {
         if (op.u.d != 0.0) return FALSE;
       } else {
-        if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
-            && op.mode != MIR_OP_UINTS && op.mode != MIR_OP_REF)
-          return FALSE;
+        if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
         gen_assert (('0' <= ch && ch <= '2') || (start_ch == 'Z' && ch == '3'));
         n = ch - '0';
         if (op.mode != MIR_OP_REF) {
@@ -1950,9 +1951,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case 'I': {
       int imm;
 
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
-          && op.mode != MIR_OP_UINTS)
-        return FALSE;
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
       ch = *++p;
       if (ch == 'u') {
         if (arithm_roundup_const (op.u.u, &imm) < 0) return FALSE;
@@ -1965,10 +1964,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case 'S': {
       int immr, imms;
 
-      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_INTS
-          && op.mode != MIR_OP_UINTS)
-        return FALSE;
-      gen_assert ((op.mode != MIR_OP_INT && op.mode != MIR_OP_INTS) || op.u.i >= 0);
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
+      gen_assert (op.mode != MIR_OP_INT || op.u.i >= 0);
       ch = *++p;
       if (ch == 'r' || ch == 'R') {
         if ((op.mode == MIR_OP_UINT && op.u.i < 0) || rshift_const (op.u.i, ch == 'r') < 0)
@@ -2012,9 +2009,10 @@ static void patterns_finish (gen_ctx_t gen_ctx) {
 }
 
 static int hex_value (int ch) {
-  return ('0' <= ch && ch <= '9'
-            ? ch - '0'
-            : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10 : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10 : -1);
+  return ('0' <= ch && ch <= '9'   ? ch - '0'
+          : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10
+          : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10
+                                   : -1);
 }
 
 static uint64_t read_hex (const char **ptr) {
@@ -2069,8 +2067,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   int switch_table_adr_insn_start = -1;
 
   if (insn->code == MIR_ALLOCA
-      && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT
-          || insn->ops[1].mode == MIR_OP_INTS || insn->ops[1].mode == MIR_OP_UINTS))
+      && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
     insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, ch2, start_ch, d;
@@ -2177,8 +2174,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         int flag;
 
         op = insn->ops[2];
-        gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_INTS
-                    || op.mode == MIR_OP_UINTS);
+        gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
         ch = *++p;
         if (ch == 'L' || ch == 'l') {
           flag = lshift_const_p (op.u.i, ch == 'l', &immr, &imms);
@@ -2218,14 +2214,12 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         ch = *++p;
         if (ch != 'u') { /* I */
           op = insn->ops[2];
-          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_INTS
-                      || op.mode == MIR_OP_UINTS);
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           imm12_shift = arithm_const (op.u.u, &imm12);
           p--;
         } else {
           op = insn->ops[1];
-          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_INTS
-                      || op.mode == MIR_OP_UINTS);
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           imm12_shift = arithm_roundup_const (op.u.u, &imm12);
         }
         break;
@@ -2311,10 +2305,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       opcode |= imm12_shift << 22;
       opcode_mask = check_and_set_mask (opcode_mask, 0x3 << 22);
     }
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_adr_insn_start = VARR_LENGTH (uint8_t, result_code);
     put_uint64 (gen_ctx, opcode, 4); /* output the machine insn */
