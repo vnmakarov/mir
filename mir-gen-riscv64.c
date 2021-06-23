@@ -1083,6 +1083,24 @@ static void isave (gen_ctx_t gen_ctx, MIR_insn_t anchor, int disp, MIR_reg_t bas
            _MIR_new_hard_reg_op (gen_ctx->ctx, hard_reg));
 }
 
+static MIR_reg_t get_base_reg_offset_for_saved_regs (gen_ctx_t gen_ctx, MIR_insn_t anchor,
+                                                     size_t *offset) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t new_insn;
+  MIR_reg_t base_reg;
+
+  if (*offset + MAX_HARD_REG * 8 < (1 << 11)) return FP_HARD_REG;
+  base_reg = T2_HARD_REG;
+  gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
+           MIR_new_int_op (ctx, *offset));
+  new_insn
+    = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
+                    _MIR_new_hard_reg_op (ctx, base_reg), _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+  gen_add_insn_before (gen_ctx, anchor, new_insn);
+  *offset = 0;
+  return base_reg;
+}
+
 static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_regs,
                                        size_t stack_slots_num) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -1165,18 +1183,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   }
   /* Saving callee saved hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
-  if (offset + MAX_HARD_REG * 8 < (1 << 11)) {
-    base_reg = FP_HARD_REG;
-  } else {
-    base_reg = T2_HARD_REG;
-    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
-             MIR_new_int_op (ctx, offset));
-    new_insn = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
-                             _MIR_new_hard_reg_op (ctx, base_reg),
-                             _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
-    gen_add_insn_before (gen_ctx, anchor, new_insn);
-    offset = 0;
-  }
+  base_reg = get_base_reg_offset_for_saved_regs (gen_ctx, anchor, &offset);
   for (i = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)
         && i != FP_HARD_REG) {
@@ -1210,18 +1217,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   assert (anchor->code == MIR_RET);
   /* Restoring hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
-  if (offset + MAX_HARD_REG * 8 < (1 << 11)) {
-    base_reg = FP_HARD_REG;
-  } else {
-    base_reg = T2_HARD_REG;
-    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
-             MIR_new_int_op (ctx, offset));
-    new_insn = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
-                             _MIR_new_hard_reg_op (ctx, base_reg),
-                             _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
-    gen_add_insn_before (gen_ctx, anchor, new_insn);
-    offset = 0;
-  }
+  base_reg = get_base_reg_offset_for_saved_regs (gen_ctx, anchor, &offset);
   for (i = 0; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)
         && i != FP_HARD_REG) {
