@@ -725,6 +725,10 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
   return ((MIR_disp_t) slot * 8 + offset);
 }
 
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+  return TRUE;
+}
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
