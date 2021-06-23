@@ -1707,21 +1707,6 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case 'r':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
       break;
-#if 0
-    case 'h':
-      if (op.mode != MIR_OP_HARD_REG) return FALSE;
-      ch = *++p;
-      gen_assert ('0' <= ch && ch <= '9');
-      hr = ch - '0';
-      ch = *++p;
-      if ('0' <= ch && ch <= '9')
-        hr = hr * 10 + ch - '0';
-      else
-        --p;
-      gen_assert (hr <= MAX_HARD_REG);
-      if (op.u.hard_reg != hr) return FALSE;
-      break;
-#endif
     case 'c': {
       uint64_t n;
       p++;
