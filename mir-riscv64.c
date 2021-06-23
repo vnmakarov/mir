@@ -3,10 +3,10 @@
 */
 
 /* x0 (zero) - always zero; x1 (ra) - link reg; x2 (sp) - sp, x3 (gp) - global pointer, x4 (tp) -
-   thread pointer x8 (s0/fp) - fp; x10-x11 (a0-a1), f10-f11 (fa0-fa1) - ret values, x10-x17 (a0-a7),
-   f10-f17 (fa0-fa17) - arg regs; x8-x9 (s0-s1), x18-x27 (s2-s11) - callee-saved; x1 (ra), x5-x7
-   (t0-t2), x10-x17 (a0-a7), x28-x31 (t3-t6) - temp regs f0-f7 (ft0-ft7), f10-f17 (fa0-fa7), f28-f31
-   (ft8-ft11) - temp regs f8-f9 (fs0-fs1), f18-f27 (fs2-fs11) - callee-saved
+   thread pointer; x8 (s0/fp) - fp; x10-x11 (a0-a1), f10-f11 (fa0-fa1) - ret values, x10-x17
+   (a0-a7), f10-f17 (fa0-fa7) - arg regs; x8-x9 (s0-s1), x18-x27 (s2-s11) - callee-saved; x1 (ra),
+   x5-x7 (t0-t2), x10-x17 (a0-a7), x28-x31 (t3-t6) - temp regs f0-f7 (ft0-ft7), f10-f17 (fa0-fa7),
+   f28-f31 (ft8-ft11) - temp regs f8-f9 (fs0-fs1), f18-f27 (fs2-fs11) - callee-saved
 
    o pc holds address of the current insn
    o stack is 16-byte aligned
@@ -23,7 +23,8 @@
      struct/union containing only float/double (in this case they are returned through f10-f11)
    o 17 or more bytes values are returned on stack (allocated by caller)
      whose address is passed by x10 (a0)
-   o long doubles for passing returning purposes are integer o empty struct args are ignored
+   o long doubles for passing and returning purposes are integer
+   o empty struct args are ignored
 */
 
 static const int a0_num = 10;
@@ -752,111 +753,134 @@ static uint32_t restore_fp = 0x00013403; /* ld s0,0(sp) */
 ;
 #endif
 
-/* save x9(s1), x18-x27(s2-s11), f8(fs0), f9(fs1), f18(fs2)-f27(fs27): */
-static const uint32_t save_insns[] = {
-  0xfe913c23, /* sd	s1,-8(sp) */
-  0xff213823, /* sd	s2,-16(sp) */
-  0xff313423, /* sd	s3,-24(sp) */
-  0xff413023, /* sd	s4,-32(sp) */
-  0xfd513c23, /* sd	s5,-40(sp) */
-  0xfd613823, /* sd	s6,-48(sp) */
-  0xfd713423, /* sd	s7,-56(sp) */
-  0xfd813023, /* sd	s8,-64(sp) */
-  0xfb913c23, /* sd	s9,-72(sp) */
-  0xfba13823, /* sd	s10,-80(sp) */
-  0xfbb13423, /* sd	s11,-88(sp) */
-  0xfa813027, /* fsd	fs0,-96(sp) */
-  0xf8913c27, /* fsd	fs1,-104(sp) */
-  0xf9213827, /* fsd	fs2,-112(sp) */
-  0xf9313427, /* fsd	fs3,-120(sp) */
-  0xf9413027, /* fsd	fs4,-128(sp) */
-  0xf7513c27, /* fsd	fs5,-136(sp) */
-  0xf7613827, /* fsd	fs6,-144(sp) */
-  0xf7713427, /* fsd	fs7,-152(sp) */
-  0xf7813027, /* fsd	fs8,-160(sp) */
-  0xf5913c27, /* fsd	fs9,-168(sp) */
-  0xf5a13827, /* fsd	fs10,-176(sp) */
-  0xf5b13427, /* fsd	fs11,-184(sp) */
-};
-/* restore x9(s1), x18-x27(s2-s11), f8(fs0), f9(fs1), f18(fs2)-f27(fs27): */
-static const uint32_t restore_insns[] = {
-  0xff813483, /* ld	s1,-8(sp) */
-  0xff013903, /* ld	s2,-16(sp) */
-  0xfe813983, /* ld	s3,-24(sp) */
-  0xfe013a03, /* ld	s4,-32(sp) */
-  0xfd813a83, /* ld	s5,-40(sp) */
-  0xfd013b03, /* ld	s6,-48(sp) */
-  0xfc813b83, /* ld	s7,-56(sp) */
-  0xfc013c03, /* ld	s8,-64(sp) */
-  0xfb813c83, /* ld	s9,-72(sp) */
-  0xfb013d03, /* ld	s10,-80(sp) */
-  0xfa813d83, /* ld	s11,-88(sp) */
-  0xfa013407, /* fld	fs0,-96(sp) */
-  0xf9813487, /* fld	fs1,-104(sp) */
-  0xf9013907, /* fld	fs2,-112(sp) */
-  0xf8813987, /* fld	fs3,-120(sp) */
-  0xf8013a07, /* fld	fs4,-128(sp) */
-  0xf7813a87, /* fld	fs5,-136(sp) */
-  0xf7013b07, /* fld	fs6,-144(sp) */
-  0xf6813b87, /* fld	fs7,-152(sp) */
-  0xf6013c07, /* fld	fs8,-160(sp) */
-  0xf5813c87, /* fld	fs9,-168(sp) */
-  0xf5013d07, /* fld	fs10,-176(sp) */
-  0xf4813d87, /* fld	fs11,-184(sp) */
-};
-
-/* Save regs x8(s0/fp), x9(s1), x18-x27(s2-s11), f8(fs0), f9(fs1), f18(fs2)-f27(fs27);
-   x10(a0) = call hook_address (ctx, called_func); restore regs; br x10(a0) */
-void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
+/* save a0-a7,fa0-fa7: */
 #if __riscv_compressed
-  static const uint16_t jmp_insn = 0x8502; /* c.jr a0 */
-  static const uint16_t sub_sp = 0x7131;   /* c.addi16sp sp,-192 */
-  static const uint16_t add_sp = 0x6129;   /* c.addi16sp sp,192 */
+static const uint16_t save_insns[] = {
+  0xe42a, /* sd a0,8(sp) */
+  0xe82e, /* sd a1,16(sp) */
+  0xec32, /* sd a2,24(sp) */
+  0xf036, /* sd a3,32(sp) */
+  0xf43a, /* sd a4,40(sp) */
+  0xf83e, /* sd a5,48(sp) */
+  0xfc42, /* sd a6,56(sp) */
+  0xe0c6, /* sd a7,64(sp) */
+  0xa4aa, /* fsd fa0,72(sp) */
+  0xa8ae, /* fsd fa1,80(sp) */
+  0xacb2, /* fsd fa2,88(sp) */
+  0xb0b6, /* fsd fa3,96(sp) */
+  0xb4ba, /* fsd fa4,104(sp) */
+  0xb8be, /* fsd fa5,112(sp) */
+  0xbcc2, /* fsd fa6,120(sp) */
+  0xa146, /* fsd fa7,128(sp) */
+};
 #else
-  static const uint32_t jmp_insn = 0x00050067; /* jalr zero,0(a0) */
-  static const uint32_t sub_sp = 0xf4010113;   /* addi sp,sp,-192 */
-  static const uint32_t add_sp = 0x0c010113;   /* addi sp,sp,192 */
+static const uint32_t save_insns[] = {
+  0x00a13423, /* sd a0,8(sp) */
+  0x00b13823, /* sd a1,16(sp) */
+  0x00c13c23, /* sd a2,24(sp) */
+  0x02d13023, /* sd a3,32(sp) */
+  0x02e13423, /* sd a4,40(sp) */
+  0x02f13823, /* sd a5,48(sp) */
+  0x03013c23, /* sd a6,56(sp) */
+  0x05113023, /* sd a7,64(sp) */
+  0x04a13427, /* fsd fa0,72(sp) */
+  0x04b13827, /* fsd fa1,80(sp) */
+  0x04c13c27, /* fsd fa2,88(sp) */
+  0x06d13027, /* fsd fa3,96(sp) */
+  0x06e13427, /* fsd fa4,104(sp) */
+  0x06f13827, /* fsd fa5,112(sp) */
+  0x07013c27, /* fsd fa6,120(sp) */
+  0x09113027, /* fsd fa7,128(sp) */
+};
+#endif
+/* restore a0-a7,fa0-fa7: */
+#if __riscv_compressed
+static const uint16_t restore_insns[] = {
+  0x6522, /* ld a0,8(sp) */
+  0x65c2, /* ld a1,16(sp) */
+  0x6662, /* ld a2,24(sp) */
+  0x7682, /* ld a3,32(sp) */
+  0x7722, /* ld a4,40(sp) */
+  0x77c2, /* ld a5,48(sp) */
+  0x7862, /* ld a6,56(sp) */
+  0x6886, /* ld a7,64(sp) */
+  0x2526, /* fld fa0,72(sp) */
+  0x25c6, /* fld fa1,80(sp) */
+  0x2666, /* fld fa2,88(sp) */
+  0x3686, /* fld fa3,96(sp) */
+  0x3726, /* fld fa4,104(sp) */
+  0x37c6, /* fld fa5,112(sp) */
+  0x3866, /* fld fa6,120(sp) */
+  0x288a, /* fld fa7,128(sp) */
+};
+#else
+static const uint32_t restore_insns[] = {
+  0x00813503, /* ld a0,8(sp) */
+  0x01013583, /* ld a1,16(sp) */
+  0x01813603, /* ld a2,24(sp) */
+  0x02013683, /* ld a3,32(sp) */
+  0x02813703, /* ld a4,40(sp) */
+  0x03013783, /* ld a5,48(sp) */
+  0x03813803, /* ld a6,56(sp) */
+  0x04013883, /* ld a7,64(sp) */
+  0x04813507, /* fld fa0,72(sp) */
+  0x05013587, /* fld fa1,80(sp) */
+  0x05813607, /* fld fa2,88(sp) */
+  0x06013687, /* fld fa3,96(sp) */
+  0x06813707, /* fld fa4,104(sp) */
+  0x07013787, /* fld fa5,112(sp) */
+  0x07813807, /* fld fa6,120(sp) */
+  0x08013887, /* fld fa7,128(sp) */
+};
+#endif
+
+/* Save regs ra,a0-a7,fa0-fa7;
+   a0 = call hook_address (ctx, called_func); t0=a0; restore regs; br t0 */
+void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
+  static const uint32_t jmp_insn = 0x00028067; /* jalr zero,0(t0) */
+#if __riscv_compressed
+  static const uint16_t sub_sp = 0x7175;     /* c.addi16sp sp,-144 */
+  static const uint16_t add_sp = 0x6149;     /* c.addi16sp sp,144 */
+  static const uint16_t save_ra = 0xe006;    /* sd ra,0(sp) */
+  static const uint16_t restore_ra = 0x6082; /* ld ra,0(sp) */
+#else
+  static const uint32_t sub_sp = 0xf7010113;     /* addi sp,sp,-144 */
+  static const uint32_t add_sp = 0x09010113;     /* addi sp,sp,144 */
+  static const uint32_t save_ra = 0x00113023;    /* sd ra,0(sp) */
+  static const uint32_t restore_ra = 0x00013083; /* ld ra,0(sp) */
 #endif
   static const uint32_t call_pat[] = {
     0x00000297, /* auipc t0,0x0 */
     0x0002b503, /* ld a0,0(t0) */
     0x0002b583, /* ld a1,0(t0) */
     0x0002b603, /* ld a2,0(t0) */
-    0x000600e7, /* jalr	ra,0(a2) */
+    0x000600e7, /* jalr ra,0(a2) */
+    0x00050293, /* mv t0,a0 */
   };
-  uint8_t *base_addr, *res_code = NULL;
+  uint8_t *res_code;
   size_t args_start, offset;
-  size_t len = sizeof (save_insns) + sizeof (restore_insns); /* initial code length */
   VARR (uint8_t) * code;
 
-  mir_mutex_lock (&code_mutex);
   VARR_CREATE (uint8_t, code, 128);
-  for (;;) { /* dealing with moving code to another page */
-    base_addr = _MIR_get_new_code_addr (ctx, len);
-    if (base_addr == NULL) break;
-    VARR_TRUNC (uint8_t, code, 0);
-    push_insns (code, &sub_sp, sizeof (sub_sp));
-    push_insns (code, &save_fp, sizeof (save_fp));
-    push_insns (code, save_insns, sizeof (save_insns));
-    args_start = VARR_LENGTH (uint8_t, code);
-    push_insns (code, call_pat, sizeof (call_pat));
-    push_insns (code, &restore_fp, sizeof (restore_fp));
-    push_insns (code, restore_insns, sizeof (restore_insns));
-    push_insns (code, &add_sp, sizeof (add_sp));
-    push_insns (code, &jmp_insn, sizeof (jmp_insn));
-    while (VARR_LENGTH (uint8_t, code) % 8 != 0) VARR_PUSH (uint8_t, code, 0); /* align */
-    offset = VARR_LENGTH (uint8_t, code) - args_start;
-    push_insns (code, &ctx, sizeof (ctx));
-    push_insns (code, &called_func, sizeof (called_func));
-    push_insns (code, &hook_address, sizeof (hook_address));
-    ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[1] |= get_i_format_imm (offset);
-    ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[2] |= get_i_format_imm (offset + 8);
-    ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[3] |= get_i_format_imm (offset + 16);
-    len = VARR_LENGTH (uint8_t, code);
-    res_code = _MIR_publish_code_by_addr (ctx, base_addr, VARR_ADDR (uint8_t, code), len);
-    if (res_code != NULL) break;
-  }
+  VARR_TRUNC (uint8_t, code, 0);
+  push_insns (code, &sub_sp, sizeof (sub_sp));
+  push_insns (code, &save_ra, sizeof (save_ra));
+  push_insns (code, save_insns, sizeof (save_insns));
+  args_start = VARR_LENGTH (uint8_t, code);
+  push_insns (code, call_pat, sizeof (call_pat));
+  push_insns (code, &restore_ra, sizeof (restore_ra));
+  push_insns (code, restore_insns, sizeof (restore_insns));
+  push_insns (code, &add_sp, sizeof (add_sp));
+  push_insns (code, &jmp_insn, sizeof (jmp_insn));
+  while (VARR_LENGTH (uint8_t, code) % 8 != 0) VARR_PUSH (uint8_t, code, 0); /* align */
+  offset = VARR_LENGTH (uint8_t, code) - args_start;
+  push_insns (code, &ctx, sizeof (ctx));
+  push_insns (code, &called_func, sizeof (called_func));
+  push_insns (code, &hook_address, sizeof (hook_address));
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[1] |= get_i_format_imm (offset);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[2] |= get_i_format_imm (offset + 8);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[3] |= get_i_format_imm (offset + 16);
+  res_code = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
-  mir_mutex_unlock (&code_mutex);
   return res_code;
 }
