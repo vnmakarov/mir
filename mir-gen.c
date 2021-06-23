@@ -220,7 +220,7 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
 
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
-#elif 1 || defined(__aarch64__)
+#elif defined(__aarch64__)
 #include "mir-gen-aarch64.c"
 #elif defined(__PPC64__)
 #include "mir-gen-ppc64.c"
