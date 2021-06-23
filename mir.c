@@ -3733,7 +3733,7 @@ uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const uint8_t
   code_holder_t *ch_ptr = get_last_code_holder (ctx, 0);
   uint8_t *res = NULL;
 
-  if (ch_ptr != NULL && ch_ptr->free == addr && ch_ptr->free + code_len < ch_ptr->bound)
+  if (ch_ptr != NULL && ch_ptr->free == addr && ch_ptr->free + code_len <= ch_ptr->bound)
     res = add_code (ctx, ch_ptr, code, code_len);
   return res;
 }
