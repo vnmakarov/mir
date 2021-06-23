@@ -1169,10 +1169,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     base_reg = FP_HARD_REG;
   } else {
     base_reg = T2_HARD_REG;
-    new_insn = gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
-                        MIR_new_int_op (ctx, offset));
-    new_insn = gen_mov (gen_ctx, anchor, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
-                        _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
+             MIR_new_int_op (ctx, offset));
+    new_insn = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
+                             _MIR_new_hard_reg_op (ctx, base_reg),
+                             _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+    gen_add_insn_before (gen_ctx, anchor, new_insn);
     offset = 0;
   }
   for (i = 0; i <= MAX_HARD_REG; i++)
@@ -1212,10 +1214,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     base_reg = FP_HARD_REG;
   } else {
     base_reg = T2_HARD_REG;
-    new_insn = gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
-                        MIR_new_int_op (ctx, offset));
-    new_insn = gen_mov (gen_ctx, anchor, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
-                        _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, base_reg),
+             MIR_new_int_op (ctx, offset));
+    new_insn = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, base_reg),
+                             _MIR_new_hard_reg_op (ctx, base_reg),
+                             _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+    gen_add_insn_before (gen_ctx, anchor, new_insn);
     offset = 0;
   }
   for (i = 0; i <= MAX_HARD_REG; i++)
