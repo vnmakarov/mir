@@ -4145,10 +4145,11 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   MIR_reg_t hard_reg;
   MIR_disp_t offset;
   MIR_insn_code_t code;
-  MIR_insn_t new_insn;
+  MIR_insn_t new_insn, new_insns[3];
   MIR_type_t type;
   bb_insn_t bb_insn, new_bb_insn;
   MIR_op_t hard_reg_op;
+  size_t n;
 
   gen_assert (loc != MIR_NON_HARD_REG);
   if (loc <= MAX_HARD_REG) return loc;
@@ -4170,25 +4171,48 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   hard_reg = get_temp_hard_reg (type, first_p);
   setup_used_hard_regs (gen_ctx, type, hard_reg);
   offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
-  *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
+  n = 0;
+  if (target_valid_mem_offset_p (gen_ctx, type, offset)) {
+    *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
+  } else {
+    MIR_reg_t temp_hard_reg
+      = (first_p && !out_p) || (out_p && !first_p) ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
+    new_insns[0] = MIR_new_insn (ctx, MIR_MOV, _MIR_new_hard_reg_op (ctx, temp_hard_reg),
+                                 MIR_new_int_op (ctx, offset));
+    new_insns[1] = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, temp_hard_reg),
+                                 _MIR_new_hard_reg_op (ctx, temp_hard_reg),
+                                 _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+    n = 2;
+    *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, 0, temp_hard_reg, MIR_NON_HARD_REG, 0);
+  }
   if (hard_reg == MIR_NON_HARD_REG) return hard_reg;
   hard_reg_op = _MIR_new_hard_reg_op (ctx, hard_reg);
-  if (out_p) {
-    new_insn = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
-    MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
+  if (!out_p) {
+    new_insns[n++] = MIR_new_insn (ctx, code, hard_reg_op, *mem_op);
   } else {
-    new_insn = MIR_new_insn (ctx, code, hard_reg_op, *mem_op);
-    MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+    new_insns[n++] = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
+    for (size_t i = 0, j = n - 1; i < j; i++, j--) { /* reverse for subsequent correct insertion: */
+      new_insn = new_insns[i];
+      new_insns[i] = new_insns[j];
+      new_insns[j] = new_insn;
+    }
   }
-  if (optimize_level == 0) {
-    new_insn->data = get_insn_data_bb (insn);
-  } else {
-    bb_insn = insn->data;
-    new_bb_insn = create_bb_insn (gen_ctx, new_insn, bb_insn->bb);
+  for (size_t i = 0; i < n; i++) {
+    new_insn = new_insns[i];
     if (out_p)
-      DLIST_INSERT_AFTER (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+      MIR_insert_insn_after (ctx, curr_func_item, insn, new_insn);
     else
-      DLIST_INSERT_BEFORE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+      MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+    if (optimize_level == 0) {
+      new_insn->data = get_insn_data_bb (insn);
+    } else {
+      bb_insn = insn->data;
+      new_bb_insn = create_bb_insn (gen_ctx, new_insn, bb_insn->bb);
+      if (out_p)
+        DLIST_INSERT_AFTER (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+      else
+        DLIST_INSERT_BEFORE (bb_insn_t, bb_insn->bb->bb_insns, bb_insn, new_bb_insn);
+    }
   }
   return hard_reg;
 }
