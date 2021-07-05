@@ -30,13 +30,15 @@
 static const int a0_num = 10;
 static const int fa0_num = 10;
 
-/* Small BLK2 type (less or equal to two quadwords) args are passed in
-   fp regs (no even-odd reg constraint) and/or on stack (w/o address).
-   Small BLK1 type (less or equal to two quadwords) args are passed in
-   int regs (even-odd for 9-16 bytes) and/or on stack (w/o address).
-   Any other small BLK type (less or equal to two quadwords) args are passed in
-   int regs (no even-odd reg constraint) and/or on stack (w/o address), otherwise
-   any BLK is put somehwere on the stack and its address passed instead.
+/* Small block types (less or equal to two quadwords) args are passed in
+   BLK: int regs and/or on stack (w/o address)
+   BLK1: int regs (even-odd for 9-16 bytes) and/or on stack (w/o address)
+   BLK2: float regs as floats and/or on stack (w/o address)
+   BLK3: float regs as double and/or on stack (w/o address)
+   BLK4: float regs as float then double and/or on stack (w/o address)
+   BLK5: float regs as double then float and/or on stack (w/o address)
+
+   Otherwise any BLK is put somehwere on the stack and its address passed instead.
    All RBLK independently of size is always passed by address as an usual argument.  */
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
@@ -184,6 +186,12 @@ static uint32_t get_opfp_format_rs1 (int reg) {
   return reg << 15;
 }
 
+static int blk_fp_arg_float_p (MIR_type_t blk_type, int n) {
+  assert (MIR_T_BLK + 2 <= blk_type && blk_type <= MIR_T_BLK + 5);
+  return (blk_type == MIR_T_BLK + 2 || (n == 0 && blk_type == MIR_T_BLK + 4)
+          || (n == 1 && blk_type == MIR_T_BLK + 5));
+}
+
 /* Move qwords from addr_offset(s1) to offset(sp). offset(sp) will be in t1.  */
 static void gen_blk_mov (VARR (uint8_t) * insn_varr, size_t offset, size_t addr_offset,
                          size_t qwords) {
@@ -268,7 +276,9 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #endif
   static const uint32_t ld_word_pat = 0x0003b003;       /* ld zero,0(t2) */
   static const uint32_t ld_word_temp_pat = 0x0003b303;  /* ld t1,0(t2) */
+  static const uint32_t flw_word_pat = 0x0003a007;      /* flw f0,0(t2) */
   static const uint32_t fld_word_pat = 0x0003b007;      /* fld f0,0(t2) */
+  static const uint32_t flw_word_temp_pat = 0x0003a087; /* flw ft1,0(t2) */
   static const uint32_t fld_word_temp_pat = 0x0003b087; /* fld ft1,0(t2) */
   static const uint32_t ld_temp_pat = 0x0004b303;       /* ld t1,0(s1) */
   static const uint32_t st_temp_pat = 0x00613023;       /* sd t1,0(sp) */
@@ -308,7 +318,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   size_t len, offset;
   MIR_type_t type;
   uint32_t n_xregs = 0, n_fregs = 0, sp_offset = 0, blk_offset = 0, pat;
-  uint32_t qwords;
+  uint32_t parts;
   VARR (uint8_t) * code;
   void *res;
 
@@ -318,13 +328,14 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     type = arg_descs[i].type;
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_LD
         || MIR_all_blk_type_p (type)) {
-      if ((qwords = (arg_descs[i].size + 7) / 8) <= 2 && type == MIR_T_BLK + 2) {
-        if (n_fregs + qwords > 8) blk_offset += (qwords - (n_fregs + qwords == 9 ? 1 : 0)) * 8;
-        n_fregs += qwords;
-      } else if (MIR_blk_type_p (type) && qwords <= 2) {
+      if ((parts = (arg_descs[i].size + 7) / 8) <= 2 && MIR_T_BLK + 2 <= type
+          && type <= MIR_T_BLK + 5 && i < arg_vars_num) {
+        if (n_fregs + parts > 8) blk_offset += (parts - (n_fregs + parts == 9 ? 1 : 0)) * 8;
+        n_fregs += parts;
+      } else if (MIR_blk_type_p (type) && parts <= 2) {
         if (type == MIR_T_BLK + 1) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
-        if (n_xregs + qwords > 8) blk_offset += (qwords - (n_xregs + qwords == 9 ? 1 : 0)) * 8;
-        n_xregs += qwords;
+        if (n_xregs + parts > 8) blk_offset += (parts - (n_xregs + parts == 9 ? 1 : 0)) * 8;
+        n_xregs += parts;
       } else { /* blocks here are passed by address */
         if (type == MIR_T_LD) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
         if (n_xregs >= 8) blk_offset += 8 + (type == MIR_T_LD ? 8 : 0);
@@ -352,19 +363,22 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     type = arg_descs[i].type;
     offset = (i + nres) * sizeof (MIR_val_t);
     if (MIR_blk_type_p (type)) {
-      qwords = (arg_descs[i].size + 7) / 8;
-      if (qwords <= 2) {
+      parts = (arg_descs[i].size + 7) / 8;
+      if (parts <= 2) {
         pat = ld_arg_pat | get_i_format_imm (offset) | get_i_format_rd (7); /* ld t2,offset(s1) */
         push_insns (code, &pat, sizeof (pat));
         if (type == MIR_T_BLK + 1) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
-        for (int n = 0; n < qwords; n++) {
-          if (type == MIR_T_BLK + 2) {
+        for (int n = 0; n < parts; n++) {
+          if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && i < arg_vars_num) {
             if (n_fregs < 8) {
-              pat = fld_word_pat | get_i_format_imm (n * 8) | get_i_format_rd (n_fregs + fa0_num);
+              pat = blk_fp_arg_float_p (type, n) ? flw_word_pat : fld_word_pat;
+              pat |= get_i_format_imm (n * 8) | get_i_format_rd (n_fregs + fa0_num);
             } else {
-              pat = fld_word_temp_pat | get_i_format_imm (n * 8);
+              pat = blk_fp_arg_float_p (type, n) ? flw_word_temp_pat : fld_word_temp_pat;
+              pat |= get_i_format_imm (n * 8);
               push_insns (code, &pat, sizeof (pat));
-              pat = fsd_temp_pat | get_s_format_imm (sp_offset);
+              pat = blk_fp_arg_float_p (type, n) ? fsw_temp_pat : fsd_temp_pat;
+              pat |= get_s_format_imm (sp_offset);
               sp_offset += 8;
             }
             push_insns (code, &pat, sizeof (pat));
@@ -384,8 +398,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
           offset += sizeof (MIR_val_t);
         }
       } else {
-        gen_blk_mov (code, blk_offset, (i + nres) * sizeof (MIR_val_t), qwords);
-        blk_offset += qwords * 8;
+        gen_blk_mov (code, blk_offset, (i + nres) * sizeof (MIR_val_t), parts);
+        blk_offset += parts * 8;
         if (n_xregs < 8) {
           pat = mv_t1_pat | get_i_format_rd (n_xregs + a0_num);
         } else {
@@ -556,7 +570,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t type, *results = func->res_types;
   VARR (uint8_t) * code, *code2;
   void *res;
-  uint32_t pat, n_xregs, n_fregs, qwords;
+  uint32_t pat, n_xregs, n_fregs, parts;
 
   assert (__SIZEOF_LONG_DOUBLE__ == 16);
   VARR_CREATE (uint8_t, code, 128);
@@ -567,15 +581,15 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   n_xregs = n_fregs = 0;
   for (size_t i = 0; i < nargs; i++) { /* args */
     type = args[i].type;
-    if (MIR_blk_type_p (type) && (qwords = (args[i].size + 7) / 8) <= 2) {
+    if (MIR_blk_type_p (type) && (parts = (args[i].size + 7) / 8) <= 2) {
       if (type == MIR_T_BLK + 1 && n_xregs % 2 != 0) { /* Make even */
         sp_offset += 8;
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
-      for (int n = 0; n < qwords; n++) {
-        if (type == MIR_T_BLK + 2 && n_fregs < 8) {
+      for (int n = 0; n < parts; n++) {
+        if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && n_fregs < 8) {
           n_fregs++;
-        } else if (type != MIR_T_BLK + 2 && n_xregs < 8) {
+        } else if (!(MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5) && n_xregs < 8) {
           n_xregs++;
         }
         sp_offset += 8;
@@ -614,18 +628,18 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   n_xregs = n_fregs = 0;
   for (size_t i = 0; i < nargs; i++) { /* args */
     type = args[i].type;
-    if (MIR_blk_type_p (type) && (qwords = (args[i].size + 7) / 8) <= 2) {
+    if (MIR_blk_type_p (type) && (parts = (args[i].size + 7) / 8) <= 2) {
       if (type == MIR_T_BLK + 1 && n_xregs % 2 != 0) { /* Make even */
         sp_offset += 8;
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
-      for (int n = 0; n < qwords; n++) {
-        if (type == MIR_T_BLK + 2 && n_fregs < 8) {
-          pat = type == MIR_T_F ? fsw_arg_pat : fsd_arg_pat;
+      for (int n = 0; n < parts; n++) {
+        if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && n_fregs < 8) {
+          pat = blk_fp_arg_float_p (type, n) ? fsw_arg_pat : fsd_arg_pat;
           pat |= get_s_format_imm (sp_offset) | get_s_format_rs2 (n_fregs + fa0_num);
           push_insns (code2, &pat, sizeof (pat));
           n_fregs++;
-        } else if (type != MIR_T_BLK + 2 && n_xregs < 8) {
+        } else if (!(MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5) && n_xregs < 8) {
           pat = sd_arg_pat | get_s_format_imm (sp_offset) | get_s_format_rs2 (n_xregs + a0_num);
           push_insns (code2, &pat, sizeof (pat));
           n_xregs++;
