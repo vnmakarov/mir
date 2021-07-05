@@ -11784,7 +11784,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     op1 = gen (c2m_ctx, arr, NULL, NULL, TRUE, NULL);
     op2 = gen (c2m_ctx, NL_EL (r->u.ops, 1), NULL, NULL, TRUE, NULL);
     ind_t = get_mir_type (c2m_ctx, ((struct expr *) NL_EL (r->u.ops, 1)->attr)->type);
+#if MIR_PTR32
     op2 = force_reg (c2m_ctx, op2, ind_t);
+#else
+    if (op2.mir_op.mode != MIR_OP_REG) {
+      op2 = force_reg (c2m_ctx, op2, ind_t);
+    } else if (ind_t != MIR_T_I64 && ind_t != MIR_T_U64) {
+      op2 = cast (c2m_ctx, op2, ind_t == MIR_T_I32 ? MIR_T_I64 : MIR_T_U64, FALSE);
+    }
+#endif
     if (type->mode == TM_PTR && type->arr_type != NULL) { /* it was an array */
       size = type_size (c2m_ctx, type->arr_type);
       op1 = force_reg_or_mem (c2m_ctx, op1, MIR_T_I64);
