@@ -1226,18 +1226,27 @@ struct pattern {
 // but not for FP (NAN) (simplify)
 // for FP cmp first operand should be always reg (machinize)
 
-#define IOP0(ICODE, SUFF, PREF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)  \
-  {ICODE##SUFF, "r 0 r", #PREF " " RRM_CODE " r0 R2"},       /* op r0,r2*/ \
-    {ICODE##SUFF, "r 0 m3", #PREF " " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
-    {ICODE##SUFF, "m3 0 r", #PREF " " MR_CODE " r2 m0"},     /* op m0,r2*/ \
-    {ICODE##SUFF, "r 0 i0", #PREF " " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
-    {ICODE##SUFF, "m3 0 i0", #PREF " " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
-    {ICODE##SUFF, "r 0 i2", #PREF " " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
-    {ICODE##SUFF, "m3 0 i2", #PREF " " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+#define IOP0(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)   \
+  {ICODE##SUFF, "r 0 r", "X " RRM_CODE " r0 R2"},       /* op r0,r2*/ \
+    {ICODE##SUFF, "r 0 m3", "X " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
+    {ICODE##SUFF, "m3 0 r", "X " MR_CODE " r2 m0"},     /* op m0,r2*/ \
+    {ICODE##SUFF, "r 0 i0", "X " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
+    {ICODE##SUFF, "m3 0 i0", "X " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
+    {ICODE##SUFF, "r 0 i2", "X " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
+    {ICODE##SUFF, "m3 0 i2", "X " RMI32_CODE " m0 I2"}, /* op m0,i2*/
 
-#define IOP(ICODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)  \
-  IOP0 (ICODE, , X, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
-  IOP0 (ICODE, S, Y, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)
+#define IOP0S(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)  \
+  {ICODE##SUFF, "r 0 r", "Y " RRM_CODE " r0 R2"},       /* op r0,r2*/ \
+    {ICODE##SUFF, "r 0 m2", "Y " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
+    {ICODE##SUFF, "m2 0 r", "Y " MR_CODE " r2 m0"},     /* op m0,r2*/ \
+    {ICODE##SUFF, "r 0 i0", "Y " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
+    {ICODE##SUFF, "m2 0 i0", "Y " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
+    {ICODE##SUFF, "r 0 i2", "Y " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
+    {ICODE##SUFF, "m2 0 i2", "Y " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+
+#define IOP(ICODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
+  IOP0 (ICODE, , RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)   \
+  IOP0S (ICODE, S, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)
 
 #define FOP(ICODE, OP_CODE) {ICODE, "r 0 r", OP_CODE " r0 R2"}, {ICODE, "r 0 mf", OP_CODE " r0 m2"},
 
