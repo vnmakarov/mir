@@ -33,10 +33,6 @@ static const int fa0_num = 10;
 /* Small block types (less or equal to two quadwords) args are passed in
    BLK: int regs and/or on stack (w/o address)
    BLK1: int regs (even-odd for 9-16 bytes) and/or on stack (w/o address)
-   BLK2: float regs as floats and/or on stack (w/o address)
-   BLK3: float regs as double and/or on stack (w/o address)
-   BLK4: float regs as float then double and/or on stack (w/o address)
-   BLK5: float regs as double then float and/or on stack (w/o address)
 
    Otherwise any BLK is put somehwere on the stack and its address passed instead.
    All RBLK independently of size is always passed by address as an usual argument.  */
@@ -186,12 +182,6 @@ static uint32_t get_opfp_format_rs1 (int reg) {
   return reg << 15;
 }
 
-static int blk_fp_arg_float_p (MIR_type_t blk_type, int n) {
-  assert (MIR_T_BLK + 2 <= blk_type && blk_type <= MIR_T_BLK + 5);
-  return (blk_type == MIR_T_BLK + 2 || (n == 0 && blk_type == MIR_T_BLK + 4)
-          || (n == 1 && blk_type == MIR_T_BLK + 5));
-}
-
 /* Move qwords from addr_offset(s1) to offset(sp). offset(sp) will be in t1.  */
 static void gen_blk_mov (VARR (uint8_t) * insn_varr, size_t offset, size_t addr_offset,
                          size_t qwords) {
@@ -328,11 +318,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     type = arg_descs[i].type;
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_LD
         || MIR_all_blk_type_p (type)) {
-      if ((parts = (arg_descs[i].size + 7) / 8) <= 2 && MIR_T_BLK + 2 <= type
-          && type <= MIR_T_BLK + 5 && i < arg_vars_num) {
-        if (n_fregs + parts > 8) blk_offset += (parts - (n_fregs + parts == 9 ? 1 : 0)) * 8;
-        n_fregs += parts;
-      } else if (MIR_blk_type_p (type) && parts <= 2) {
+      if ((parts = (arg_descs[i].size + 7) / 8) <= 2 && MIR_blk_type_p (type)) {
         if (type == MIR_T_BLK + 1) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
         if (n_xregs + parts > 8) blk_offset += (parts - (n_xregs + parts == 9 ? 1 : 0)) * 8;
         n_xregs += parts;
@@ -369,21 +355,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         push_insns (code, &pat, sizeof (pat));
         if (type == MIR_T_BLK + 1) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
         for (int n = 0; n < parts; n++) {
-          if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && i < arg_vars_num) {
-            if (n_fregs < 8) {
-              pat = blk_fp_arg_float_p (type, n) ? flw_word_pat : fld_word_pat;
-              pat |= get_i_format_imm (n * 8) | get_i_format_rd (n_fregs + fa0_num);
-            } else {
-              pat = blk_fp_arg_float_p (type, n) ? flw_word_temp_pat : fld_word_temp_pat;
-              pat |= get_i_format_imm (n * 8);
-              push_insns (code, &pat, sizeof (pat));
-              pat = blk_fp_arg_float_p (type, n) ? fsw_temp_pat : fsd_temp_pat;
-              pat |= get_s_format_imm (sp_offset);
-              sp_offset += 8;
-            }
-            push_insns (code, &pat, sizeof (pat));
-            n_fregs++;
-          } else if (n_xregs < 8) {
+          if (n_xregs < 8) {
             pat = ld_word_pat | get_i_format_imm (n * 8) | get_i_format_rd (n_xregs + a0_num);
             push_insns (code, &pat, sizeof (pat));
             n_xregs++;
@@ -587,9 +559,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
       for (int n = 0; n < parts; n++) {
-        if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && n_fregs < 8) {
-          n_fregs++;
-        } else if (!(MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5) && n_xregs < 8) {
+        if (n_xregs < 8) {
           n_xregs++;
         }
         sp_offset += 8;
@@ -634,12 +604,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
       for (int n = 0; n < parts; n++) {
-        if (MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5 && n_fregs < 8) {
-          pat = blk_fp_arg_float_p (type, n) ? fsw_arg_pat : fsd_arg_pat;
-          pat |= get_s_format_imm (sp_offset) | get_s_format_rs2 (n_fregs + fa0_num);
-          push_insns (code2, &pat, sizeof (pat));
-          n_fregs++;
-        } else if (!(MIR_T_BLK + 2 <= type && type <= MIR_T_BLK + 5) && n_xregs < 8) {
+        if (n_xregs < 8) {
           pat = sd_arg_pat | get_s_format_imm (sp_offset) | get_s_format_rs2 (n_xregs + a0_num);
           push_insns (code2, &pat, sizeof (pat));
           n_xregs++;
