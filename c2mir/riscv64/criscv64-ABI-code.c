@@ -27,7 +27,9 @@ static int reg_aggregate_size (c2m_ctx_t c2m_ctx, struct type *type) {
 
 struct type_offset {
   uint64_t offset;
-  MIR_type_t type; /* int type is promoted to 32- or 64-bit */
+  MIR_type_t type; /* gcc uses unsigned to pass integer members of
+                      mixed int/float type.  so it is unsigned for
+                      any 32-bit or less int type */
 };
 
 static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only_p,
@@ -39,7 +41,10 @@ static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only
 
   if (!struct_only_p && scalar_type_p (type)) {
     mir_type = get_mir_type (c2m_ctx, type);
-    members[0].type = promote_mir_int_type (mir_type);
+    members[0].type = mir_type == MIR_T_I8    ? MIR_T_U8
+                      : mir_type == MIR_T_I16 ? MIR_T_U16
+                      : mir_type == MIR_T_I32 ? MIR_T_U32
+                                              : mir_type;
     members[0].offset = start_offset;
     *members_n = 1;
   } else if (!struct_only_p && type->mode == TM_ARR) {
@@ -71,6 +76,13 @@ static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only
           return FALSE;
         if (sub_n + *members_n > 2) return FALSE;
         for (int i = 0; i < sub_n; i++) members[*members_n + i] = sub_members[i];
+        if (decl->width > 0) {
+          assert (sub_n == 1);
+          members[*members_n].type = (decl->width <= 8    ? MIR_T_U8
+                                      : decl->width <= 16 ? MIR_T_U16
+                                      : decl->width <= 32 ? MIR_T_U32
+                                                          : MIR_T_U64);
+        }
         *members_n += sub_n;
       }
   }
@@ -149,10 +161,12 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
   if (size == 0) return -1;
   if (small_fp_struct_p (c2m_ctx, ret_type, &n, members)) {
     VARR_PUSH (MIR_op_t, call_ops,
-               MIR_new_reg_op (ctx, get_new_temp (c2m_ctx, members[0].type).mir_op.u.reg));
+               MIR_new_reg_op (ctx, get_new_temp (c2m_ctx, promote_mir_int_type (members[0].type))
+                                      .mir_op.u.reg));
     if (n > 1)
       VARR_PUSH (MIR_op_t, call_ops,
-                 MIR_new_reg_op (ctx, get_new_temp (c2m_ctx, members[1].type).mir_op.u.reg));
+                 MIR_new_reg_op (ctx, get_new_temp (c2m_ctx, promote_mir_int_type (members[1].type))
+                                        .mir_op.u.reg));
     return n;
   } else {
     VARR_PUSH (MIR_op_t, call_ops,
@@ -226,7 +240,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
   assert (res.mir_op.mode == MIR_OP_MEM && VARR_LENGTH (MIR_op_t, ret_ops) == 0 && size <= 2 * 8);
   if (small_fp_struct_p (c2m_ctx, ret_type, &n, members)) {
     assert (n == 1 || n == 2);
-    temp = get_new_temp (c2m_ctx, members[0].type);
+    temp = get_new_temp (c2m_ctx, promote_mir_int_type (members[0].type));
     insn = MIR_new_insn (ctx, tp_mov (members[0].type), temp.mir_op,
                          MIR_new_mem_op (ctx, members[0].type,
                                          res.mir_op.u.mem.disp + (MIR_disp_t) members[0].offset,
@@ -235,7 +249,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
     MIR_append_insn (ctx, curr_func, insn);
     VARR_PUSH (MIR_op_t, ret_ops, temp.mir_op);
     if (n > 1) {
-      temp = get_new_temp (c2m_ctx, members[1].type);
+      temp = get_new_temp (c2m_ctx, promote_mir_int_type (members[1].type));
       insn = MIR_new_insn (ctx, tp_mov (members[1].type), temp.mir_op,
                            MIR_new_mem_op (ctx, members[1].type,
                                            res.mir_op.u.mem.disp + (MIR_disp_t) members[1].offset,
@@ -416,7 +430,8 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
       arg_info->n_fregs += n_fp;
       assert (!param_decl->reg_p);
       type = members[0].type;
-      reg_var = get_reg_var (c2m_ctx, type, gen_get_indexed_name (c2m_ctx, name, 0));
+      reg_var = get_reg_var (c2m_ctx, promote_mir_int_type (type),
+                             gen_get_indexed_name (c2m_ctx, name, 0));
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type),
                                      MIR_new_mem_op (ctx, type,
@@ -426,7 +441,8 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
                                      MIR_new_reg_op (ctx, reg_var.reg)));
       if (n == 2) {
         type = members[1].type;
-        reg_var = get_reg_var (c2m_ctx, type, gen_get_indexed_name (c2m_ctx, name, 1));
+        reg_var = get_reg_var (c2m_ctx, promote_mir_int_type (type),
+                               gen_get_indexed_name (c2m_ctx, name, 1));
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, tp_mov (type),
                                        MIR_new_mem_op (ctx, type,
