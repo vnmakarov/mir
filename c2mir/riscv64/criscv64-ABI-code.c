@@ -272,6 +272,8 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
       arg_info->n_fregs++;
     else if (type != MIR_T_LD)
       arg_info->n_iregs++;
+    else
+      arg_info->n_iregs += 2;
     VARR_PUSH (MIR_var_t, arg_vars, var);
   } else if ((size = reg_aggregate_size (c2m_ctx, arg_type)) < 0) { /* big struct -- pass address */
     var.type = target_get_blk_type (c2m_ctx, arg_type);
@@ -325,8 +327,10 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
     type = get_mir_type (c2m_ctx, arg_type);
     if (type == MIR_T_F || type == MIR_T_D)
       arg_info->n_fregs++;
-    else if (type != MIR_T_LD)  /// ??? LD
+    else if (type != MIR_T_LD)
       arg_info->n_iregs++;
+    else
+      arg_info->n_iregs += 2;
     VARR_PUSH (MIR_op_t, call_ops, arg.mir_op);
     return;
   }
@@ -384,8 +388,10 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
     type = get_mir_type (c2m_ctx, arg_type);
     if (type == MIR_T_F || type == MIR_T_D)
       arg_info->n_fregs++;
-    else if (type != MIR_T_LD)  /// ????
+    else if (type != MIR_T_LD)
       arg_info->n_iregs++;
+    else
+      arg_info->n_iregs += 2;
     return FALSE;
   }
   if ((size = reg_aggregate_size (c2m_ctx, arg_type))
