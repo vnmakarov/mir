@@ -2241,7 +2241,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
       int64_t offset = (int64_t) get_label_disp (gen_ctx, lr.label) - (int64_t) lr.label_val_disp;
       uint32_t bin_insn;
       gen_assert ((offset & 0x1) == 0);
-      if (lr.short_p && (offset < -(1 << 12) || offset > (1 << 12))) {
+      if (lr.short_p && (offset < -(1 << 12) || offset >= (1 << 12))) {
         /* BL:br L => BL:jmp NBL; ... NBL: br TL;jmp BL+4;TL:jmp L: */
         bin_insn = *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp);
         offset = (int64_t) VARR_LENGTH (uint8_t, result_code) - (int64_t) lr.label_val_disp;
