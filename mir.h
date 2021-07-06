@@ -176,7 +176,7 @@ typedef enum {
 
 #define TYPE_EL(t) MIR_T_##t
 
-#define MIR_BLK_NUM 6
+#define MIR_BLK_NUM 5
 /* Data types: */
 typedef enum {
   REP8 (TYPE_EL, I8, U8, I16, U16, I32, U32, I64, U64), /* Integer types of different size: */

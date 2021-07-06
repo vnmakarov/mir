@@ -49,7 +49,7 @@
      * `MIR_T_BLK` .. `MIR_T_BLK + MIR_BLK_NUM - 1` -- block data with given case.  This type can be used only
        for argument of function.  Different case numbers can denote different ways to pass the block data
        on a particular target to implement the target call ABI.  Currently there are 6 block
-       types (`MIR_BLK_NUM = 6`)
+       types (`MIR_BLK_NUM = 5`)
      * `MIR_T_RBLK` -- return block data.  This type can be used only for argument of function
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `ld`, `p`,
