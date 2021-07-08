@@ -1099,10 +1099,9 @@ static void push_str_char (c2m_ctx_t c2m_ctx, VARR (char) * temp, uint64_t ch, i
 static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, int type) {
   int i, str_len;
   int64_t curr_c, last_c = -1;
-  int64_t max_char = (type == 'u'   ? UINT16_MAX
-                      : type == 'U' ? UINT32_MAX
-                      : type == 'L' ? MIR_WCHAR_MAX
-                                    : MIR_UCHAR_MAX);
+  int64_t max_char
+    = (type == 'u' ? UINT16_MAX
+                   : type == 'U' ? UINT32_MAX : type == 'L' ? MIR_WCHAR_MAX : MIR_UCHAR_MAX);
   int start = type == ' ' ? 0 : type == '8' ? 2 : 1;
   int string_p = t->repr[start] == '"';
   const char *str;
@@ -1173,9 +1172,8 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
         first_p = FALSE;
         if (v <= UINT32_MAX) {
           v *= 16;
-          v += (isdigit (curr_c)   ? curr_c - '0'
-                : islower (curr_c) ? curr_c - 'a' + 10
-                                   : curr_c - 'A' + 10);
+          v += (isdigit (curr_c) ? curr_c - '0'
+                                 : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
         }
       }
       if (first_p) {
@@ -1198,9 +1196,8 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
         curr_c = str[i];
         if (!isxdigit (curr_c)) break;
         v *= 16;
-        v += (isdigit (curr_c)   ? curr_c - '0'
-              : islower (curr_c) ? curr_c - 'a' + 10
-                                 : curr_c - 'A' + 10);
+        v += (isdigit (curr_c) ? curr_c - '0'
+                               : islower (curr_c) ? curr_c - 'a' + 10 : curr_c - 'A' + 10);
       }
       last_c = curr_c = v;
       if (n < digits_num) {
@@ -3439,13 +3436,13 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
 
     res.uns_p = eval_binop_operands (c2m_ctx, tree, &v1, &v2);
     if (res.uns_p) {
-      res.u.u_val = ((zero_p = v2.u.u_val == 0) ? 1
-                     : tree->code == N_DIV      ? v1.u.u_val / v2.u.u_val
-                                                : v1.u.u_val % v2.u.u_val);
+      res.u.u_val = ((zero_p = v2.u.u_val == 0)
+                       ? 1
+                       : tree->code == N_DIV ? v1.u.u_val / v2.u.u_val : v1.u.u_val % v2.u.u_val);
     } else {
-      res.u.i_val = ((zero_p = v2.u.i_val == 0) ? 1
-                     : tree->code == N_DIV      ? v1.u.i_val / v2.u.i_val
-                                                : v1.u.i_val % v2.u.i_val);
+      res.u.i_val = ((zero_p = v2.u.i_val == 0)
+                       ? 1
+                       : tree->code == N_DIV ? v1.u.i_val / v2.u.i_val : v1.u.i_val % v2.u.i_val);
     }
     if (zero_p)
       error (c2m_ctx, POS (tree), "division (%s) by zero in preporocessor",
@@ -5378,6 +5375,7 @@ struct check_ctx {
   node_t curr_unnamed_anon_struct_union_member;
   node_t curr_switch;
   VARR (decl_t) * func_decls_for_allocation;
+  VARR (node_t) * possible_incomplete_decls;
   node_t n_i1_node;
   HTAB (case_t) * case_tab;
   node_t curr_func_def, curr_loop, curr_loop_switch;
@@ -5393,6 +5391,7 @@ struct check_ctx {
 #define curr_unnamed_anon_struct_union_member check_ctx->curr_unnamed_anon_struct_union_member
 #define curr_switch check_ctx->curr_switch
 #define func_decls_for_allocation check_ctx->func_decls_for_allocation
+#define possible_incomplete_decls check_ctx->possible_incomplete_decls
 #define n_i1_node check_ctx->n_i1_node
 #define case_tab check_ctx->case_tab
 #define curr_func_def check_ctx->curr_func_def
@@ -5465,11 +5464,11 @@ static void symbol_finish (c2m_ctx_t c2m_ctx) {
 }
 
 enum basic_type get_int_basic_type (size_t s) {
-  return (s == sizeof (mir_int)     ? TP_INT
-          : s == sizeof (mir_short) ? TP_SHORT
-          : s == sizeof (mir_long)  ? TP_LONG
-          : s == sizeof (mir_schar) ? TP_SCHAR
-                                    : TP_LLONG);
+  return (s == sizeof (mir_int)
+            ? TP_INT
+            : s == sizeof (mir_short)
+                ? TP_SHORT
+                : s == sizeof (mir_long) ? TP_LONG : s == sizeof (mir_schar) ? TP_SCHAR : TP_LLONG);
 }
 
 static int type_qual_eq_p (const struct type_qual *tq1, const struct type_qual *tq2) {
@@ -6653,12 +6652,15 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
             enum_value->u.i_val = curr_val;
           }
           enum_type->enum_basic_type
-            = (max_val <= MIR_INT_MAX && MIR_INT_MIN <= min_val     ? TP_INT
-               : max_val <= MIR_UINT_MAX && 0 <= min_val            ? TP_UINT
-               : max_val <= MIR_LONG_MAX && MIR_LONG_MIN <= min_val ? TP_LONG
-               : max_val <= MIR_ULONG_MAX && 0 <= min_val           ? TP_ULONG
-               : min_val < 0 || max_val <= MIR_LLONG_MAX            ? TP_LLONG
-                                                                    : TP_ULLONG);
+            = (max_val <= MIR_INT_MAX && MIR_INT_MIN <= min_val
+                 ? TP_INT
+                 : max_val <= MIR_UINT_MAX && 0 <= min_val
+                     ? TP_UINT
+                     : max_val <= MIR_LONG_MAX && MIR_LONG_MIN <= min_val
+                         ? TP_LONG
+                         : max_val <= MIR_ULONG_MAX && 0 <= min_val
+                             ? TP_ULONG
+                             : min_val < 0 || max_val <= MIR_LLONG_MAX ? TP_LLONG : TP_ULLONG);
         }
       }
       break;
@@ -7055,25 +7057,28 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
     if (!arithmetic_type_p (right)
         && !(left->mode == TM_BASIC && left->u.basic_type == TP_BOOL && right->mode == TM_PTR)) {
       if (integer_type_p (left) && right->mode == TM_PTR) {
-        msg = (code == N_CALL     ? "using pointer without cast for integer type parameter"
-               : code == N_RETURN ? "returning pointer without cast for integer result"
-                                  : "assigning pointer without cast to integer");
+        msg
+          = (code == N_CALL ? "using pointer without cast for integer type parameter"
+                            : code == N_RETURN ? "returning pointer without cast for integer result"
+                                               : "assigning pointer without cast to integer");
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else {
-        msg = (code == N_CALL ? "incompatible argument type for arithemtic type parameter"
-               : code != N_RETURN
-                 ? "incompatible types in assignment to an arithemtic type lvalue"
-                 : "incompatible return-expr type in function returning an arithemtic value");
+        msg = (code == N_CALL
+                 ? "incompatible argument type for arithemtic type parameter"
+                 : code != N_RETURN
+                     ? "incompatible types in assignment to an arithemtic type lvalue"
+                     : "incompatible return-expr type in function returning an arithemtic value");
         error (c2m_ctx, POS (assign_node), "%s", msg);
       }
     }
   } else if (left->mode == TM_STRUCT || left->mode == TM_UNION) {
     if ((right->mode != TM_STRUCT && right->mode != TM_UNION)
         || !compatible_types_p (left, right, TRUE)) {
-      msg = (code == N_CALL ? "incompatible argument type for struct/union type parameter"
-             : code != N_RETURN
-               ? "incompatible types in assignment to struct/union"
-               : "incompatible return-expr type in function returning a struct/union");
+      msg = (code == N_CALL
+               ? "incompatible argument type for struct/union type parameter"
+               : code != N_RETURN
+                   ? "incompatible types in assignment to struct/union"
+                   : "incompatible return-expr type in function returning a struct/union");
       error (c2m_ctx, POS (assign_node), "%s", msg);
     }
   } else if (left->mode == TM_PTR) {
@@ -7086,41 +7091,45 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
                                                right->u.ptr_type, TRUE)))) {
       if (right->mode == TM_PTR && left->u.ptr_type->mode == TM_BASIC
           && right->u.ptr_type->mode == TM_BASIC) {
-        msg = (code == N_CALL     ? "incompatible pointer types of argument and parameter"
-               : code == N_RETURN ? "incompatible pointer types of return-expr and function result"
+        msg = (code == N_CALL ? "incompatible pointer types of argument and parameter"
+                              : code == N_RETURN
+                                  ? "incompatible pointer types of return-expr and function result"
                                   : "incompatible pointer types in assignment");
         int sign_diff_p = char_type_p (left->u.ptr_type) && char_type_p (right->u.ptr_type);
         if (!sign_diff_p || c2m_options->pedantic_p)
           (c2m_options->pedantic_p && !sign_diff_p ? error : warning) (c2m_ctx, POS (assign_node),
                                                                        "%s", msg);
       } else if (integer_type_p (right)) {
-        msg = (code == N_CALL     ? "using integer without cast for pointer type parameter"
-               : code == N_RETURN ? "returning integer without cast for pointer result"
-                                  : "assigning integer without cast to pointer");
+        msg
+          = (code == N_CALL ? "using integer without cast for pointer type parameter"
+                            : code == N_RETURN ? "returning integer without cast for pointer result"
+                                               : "assigning integer without cast to pointer");
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else {
-        msg = (code == N_CALL     ? "incompatible argument type for pointer type parameter"
-               : code == N_RETURN ? "incompatible return-expr type in function returning a pointer"
+        msg = (code == N_CALL ? "incompatible argument type for pointer type parameter"
+                              : code == N_RETURN
+                                  ? "incompatible return-expr type in function returning a pointer"
                                   : "incompatible types in assignment to a pointer");
         (c2m_options->pedantic_p || right->mode != TM_PTR ? error : warning) (c2m_ctx,
                                                                               POS (assign_node),
                                                                               "%s", msg);
       }
     } else if (right->u.ptr_type->type_qual.atomic_p) {
-      msg = (code == N_CALL     ? "passing a pointer of an atomic type"
-             : code == N_RETURN ? "returning a pointer of an atomic type"
-                                : "assignment of pointer of an atomic type");
+      msg = (code == N_CALL ? "passing a pointer of an atomic type"
+                            : code == N_RETURN ? "returning a pointer of an atomic type"
+                                               : "assignment of pointer of an atomic type");
       error (c2m_ctx, POS (assign_node), "%s", msg);
     } else if (!type_qual_subset_p (&right->u.ptr_type->type_qual, &left->u.ptr_type->type_qual)) {
-      msg = (code == N_CALL     ? "discarding type qualifiers in passing argument"
-             : code == N_RETURN ? "return discards a type qualifier from a pointer"
-                                : "assignment discards a type qualifier from a pointer");
+      msg = (code == N_CALL
+               ? "discarding type qualifiers in passing argument"
+               : code == N_RETURN ? "return discards a type qualifier from a pointer"
+                                  : "assignment discards a type qualifier from a pointer");
       (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
     }
   } else {
-    msg = (code == N_CALL     ? "passing assign incompatible value"
-           : code == N_RETURN ? "returning assign incompatible value"
-                              : "assignment of incompatible value");
+    msg = (code == N_CALL ? "passing assign incompatible value"
+                          : code == N_RETURN ? "returning assign incompatible value"
+                                             : "assignment of incompatible value");
     error (c2m_ctx, POS (assign_node), "%s", msg);
   }
 }
@@ -7603,9 +7612,10 @@ check_one_value:
     type->u.arr_type = arr_type;
     size_node = type->u.arr_type->size;
     type->u.arr_type->size
-      = (max_index < MIR_INT_MAX    ? new_i_node (c2m_ctx, max_index + 1, POS (size_node))
-         : max_index < MIR_LONG_MAX ? new_l_node (c2m_ctx, max_index + 1, POS (size_node))
-                                    : new_ll_node (c2m_ctx, max_index + 1, POS (size_node)));
+      = (max_index < MIR_INT_MAX
+           ? new_i_node (c2m_ctx, max_index + 1, POS (size_node))
+           : max_index < MIR_LONG_MAX ? new_l_node (c2m_ctx, max_index + 1, POS (size_node))
+                                      : new_ll_node (c2m_ctx, max_index + 1, POS (size_node)));
     check (c2m_ctx, type->u.arr_type->size, NULL);
     make_type_complete (c2m_ctx, type);
   }
@@ -7822,13 +7832,13 @@ static struct expr *check_assign_op (c2m_ctx_t c2m_ctx, node_t r, node_t op1, no
         convert_value (e2, &t);
         e->const_p = TRUE;
         if (signed_integer_type_p (&t))
-          e->u.i_val = (r->code == N_AND  ? e1->u.i_val & e2->u.i_val
-                        : r->code == N_OR ? e1->u.i_val | e2->u.i_val
-                                          : e1->u.i_val ^ e2->u.i_val);
+          e->u.i_val = (r->code == N_AND ? e1->u.i_val & e2->u.i_val
+                                         : r->code == N_OR ? e1->u.i_val | e2->u.i_val
+                                                           : e1->u.i_val ^ e2->u.i_val);
         else
-          e->u.u_val = (r->code == N_AND  ? e1->u.u_val & e2->u.u_val
-                        : r->code == N_OR ? e1->u.u_val | e2->u.u_val
-                                          : e1->u.u_val ^ e2->u.u_val);
+          e->u.u_val = (r->code == N_AND ? e1->u.u_val & e2->u.u_val
+                                         : r->code == N_OR ? e1->u.u_val | e2->u.u_val
+                                                           : e1->u.u_val ^ e2->u.u_val);
       }
     }
     break;
@@ -8351,12 +8361,15 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         error (c2m_ctx, POS (r), "pointer to atomic type as a comparison operand");
       } else if (e1->const_p && e2->const_p) {
         e->const_p = TRUE;
-        e->u.i_val = (r->code == N_EQ   ? e1->u.u_val == e2->u.u_val
-                      : r->code == N_NE ? e1->u.u_val != e2->u.u_val
-                      : r->code == N_LT ? e1->u.u_val < e2->u.u_val
-                      : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
-                      : r->code == N_GT ? e1->u.u_val > e2->u.u_val
-                                        : e1->u.u_val >= e2->u.u_val);
+        e->u.i_val = (r->code == N_EQ
+                        ? e1->u.u_val == e2->u.u_val
+                        : r->code == N_NE
+                            ? e1->u.u_val != e2->u.u_val
+                            : r->code == N_LT
+                                ? e1->u.u_val < e2->u.u_val
+                                : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
+                                                  : r->code == N_GT ? e1->u.u_val > e2->u.u_val
+                                                                    : e1->u.u_val >= e2->u.u_val);
       }
     } else if (arithmetic_type_p (t1) && arithmetic_type_p (t2)) {
       if (e1->const_p && e2->const_p) {
@@ -8365,26 +8378,35 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         convert_value (e2, &t);
         e->const_p = TRUE;
         if (floating_type_p (&t))
-          e->u.i_val = (r->code == N_EQ   ? e1->u.d_val == e2->u.d_val
-                        : r->code == N_NE ? e1->u.d_val != e2->u.d_val
-                        : r->code == N_LT ? e1->u.d_val < e2->u.d_val
-                        : r->code == N_LE ? e1->u.d_val <= e2->u.d_val
-                        : r->code == N_GT ? e1->u.d_val > e2->u.d_val
-                                          : e1->u.d_val >= e2->u.d_val);
+          e->u.i_val = (r->code == N_EQ
+                          ? e1->u.d_val == e2->u.d_val
+                          : r->code == N_NE
+                              ? e1->u.d_val != e2->u.d_val
+                              : r->code == N_LT
+                                  ? e1->u.d_val < e2->u.d_val
+                                  : r->code == N_LE ? e1->u.d_val <= e2->u.d_val
+                                                    : r->code == N_GT ? e1->u.d_val > e2->u.d_val
+                                                                      : e1->u.d_val >= e2->u.d_val);
         else if (signed_integer_type_p (&t))
-          e->u.i_val = (r->code == N_EQ   ? e1->u.i_val == e2->u.i_val
-                        : r->code == N_NE ? e1->u.i_val != e2->u.i_val
-                        : r->code == N_LT ? e1->u.i_val < e2->u.i_val
-                        : r->code == N_LE ? e1->u.i_val <= e2->u.i_val
-                        : r->code == N_GT ? e1->u.i_val > e2->u.i_val
-                                          : e1->u.i_val >= e2->u.i_val);
+          e->u.i_val = (r->code == N_EQ
+                          ? e1->u.i_val == e2->u.i_val
+                          : r->code == N_NE
+                              ? e1->u.i_val != e2->u.i_val
+                              : r->code == N_LT
+                                  ? e1->u.i_val < e2->u.i_val
+                                  : r->code == N_LE ? e1->u.i_val <= e2->u.i_val
+                                                    : r->code == N_GT ? e1->u.i_val > e2->u.i_val
+                                                                      : e1->u.i_val >= e2->u.i_val);
         else
-          e->u.i_val = (r->code == N_EQ   ? e1->u.u_val == e2->u.u_val
-                        : r->code == N_NE ? e1->u.u_val != e2->u.u_val
-                        : r->code == N_LT ? e1->u.u_val < e2->u.u_val
-                        : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
-                        : r->code == N_GT ? e1->u.u_val > e2->u.u_val
-                                          : e1->u.u_val >= e2->u.u_val);
+          e->u.i_val = (r->code == N_EQ
+                          ? e1->u.u_val == e2->u.u_val
+                          : r->code == N_NE
+                              ? e1->u.u_val != e2->u.u_val
+                              : r->code == N_LT
+                                  ? e1->u.u_val < e2->u.u_val
+                                  : r->code == N_LE ? e1->u.u_val <= e2->u.u_val
+                                                    : r->code == N_GT ? e1->u.u_val > e2->u.u_val
+                                                                      : e1->u.u_val >= e2->u.u_val);
       }
     } else {
       error (c2m_ctx, POS (r), "invalid types of comparison operands");
@@ -9049,6 +9071,12 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     if (declarator->code != N_IGNORE) {
       create_decl (c2m_ctx, curr_scope, r, decl_spec, NULL, initializer,
                    context != NULL && context->code == N_FUNC);
+      decl_t decl = r->attr;
+      if ((initializer == NULL || initializer->code == N_IGNORE) && !decl->decl_spec.typedef_p
+          && !decl->decl_spec.extern_p
+          && (decl->decl_spec.type->mode == TM_STRUCT || decl->decl_spec.type->mode == TM_UNION)) {
+        VARR_PUSH (node_t, possible_incomplete_decls, r);
+      }
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
       if (NL_HEAD (decl_spec.type->u.tag_type->u.ops)->code != N_ID)
         error (c2m_ctx, POS (r), "unnamed struct/union with no instances");
@@ -9553,8 +9581,17 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 }
 
 static void do_context (c2m_ctx_t c2m_ctx, node_t r) {
+  check_ctx_t check_ctx = c2m_ctx->check_ctx;
+
   VARR_TRUNC (node_t, call_nodes, 0);
+  VARR_TRUNC (node_t, possible_incomplete_decls, 0);
   check (c2m_ctx, r, NULL);
+  for (size_t i = 0; i < VARR_LENGTH (node_t, possible_incomplete_decls); i++) {
+    node_t spec_decl = VARR_GET (node_t, possible_incomplete_decls, i);
+    decl_t decl = spec_decl->attr;
+    if (incomplete_type_p (c2m_ctx, decl->decl_spec.type))
+      error (c2m_ctx, POS (spec_decl), "incomplete struct or union");
+  }
 }
 
 static void context_init (c2m_ctx_t c2m_ctx) {
@@ -9571,6 +9608,7 @@ static void context_init (c2m_ctx_t c2m_ctx) {
   curr_unnamed_anon_struct_union_member = NULL;
   HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq, NULL);
   VARR_CREATE (decl_t, func_decls_for_allocation, 1024);
+  VARR_CREATE (node_t, possible_incomplete_decls, 512);
 }
 
 static void context_finish (c2m_ctx_t c2m_ctx) {
@@ -9582,6 +9620,7 @@ static void context_finish (c2m_ctx_t c2m_ctx) {
   symbol_finish (c2m_ctx);
   if (case_tab != NULL) HTAB_DESTROY (case_t, case_tab);
   if (func_decls_for_allocation != NULL) VARR_DESTROY (decl_t, func_decls_for_allocation);
+  if (possible_incomplete_decls != NULL) VARR_DESTROY (node_t, possible_incomplete_decls);
   free (c2m_ctx->check_ctx);
 }
 
@@ -9750,14 +9789,16 @@ static MIR_type_t reg_type (c2m_ctx_t c2m_ctx, MIR_reg_t reg) {
   MIR_type_t res;
 
   if (strcmp (n, FP_NAME) == 0 || strcmp (n, RET_ADDR_NAME) == 0) return MIR_POINTER_TYPE;
-  res = (n[0] == 'I'   ? MIR_T_I64
-         : n[0] == 'U' ? MIR_T_U64
-         : n[0] == 'i' ? MIR_T_I32
-         : n[0] == 'u' ? MIR_T_U32
-         : n[0] == 'f' ? MIR_T_F
-         : n[0] == 'd' ? MIR_T_D
-         : n[0] == 'D' ? MIR_T_LD
-                       : MIR_T_BOUND);
+  res = (n[0] == 'I'
+           ? MIR_T_I64
+           : n[0] == 'U'
+               ? MIR_T_U64
+               : n[0] == 'i' ? MIR_T_I32
+                             : n[0] == 'u' ? MIR_T_U32
+                                           : n[0] == 'f' ? MIR_T_F
+                                                         : n[0] == 'd' ? MIR_T_D
+                                                                       : n[0] == 'D' ? MIR_T_LD
+                                                                                     : MIR_T_BOUND);
   assert (res != MIR_T_BOUND);
   return res;
 }
@@ -9771,13 +9812,14 @@ static op_t get_new_temp (c2m_ctx_t c2m_ctx, MIR_type_t t) {
   assert (t == MIR_T_I64 || t == MIR_T_U64 || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_F
           || t == MIR_T_D || t == MIR_T_LD);
   sprintf (reg_name,
-           t == MIR_T_I64   ? "I_%u"
-           : t == MIR_T_U64 ? "U_%u"
-           : t == MIR_T_I32 ? "i_%u"
-           : t == MIR_T_U32 ? "u_%u"
-           : t == MIR_T_F   ? "f_%u"
-           : t == MIR_T_D   ? "d_%u"
-                            : "D_%u",
+           t == MIR_T_I64
+             ? "I_%u"
+             : t == MIR_T_U64
+                 ? "U_%u"
+                 : t == MIR_T_I32
+                     ? "i_%u"
+                     : t == MIR_T_U32 ? "u_%u"
+                                      : t == MIR_T_F ? "f_%u" : t == MIR_T_D ? "d_%u" : "D_%u",
            reg_free_mark++);
   reg = get_reg_var (c2m_ctx, t, reg_name).reg;
   return new_op (NULL, MIR_new_reg_op (ctx, reg));
@@ -9788,10 +9830,9 @@ static MIR_type_t get_int_mir_type (size_t size) {
 }
 
 static int MIR_UNUSED get_int_mir_type_size (MIR_type_t t) {
-  return (t == MIR_T_I8 || t == MIR_T_U8     ? 1
-          : t == MIR_T_I16 || t == MIR_T_U16 ? 2
-          : t == MIR_T_I32 || t == MIR_T_U32 ? 4
-                                             : 8);
+  return (t == MIR_T_I8 || t == MIR_T_U8
+            ? 1
+            : t == MIR_T_I16 || t == MIR_T_U16 ? 2 : t == MIR_T_I32 || t == MIR_T_U32 ? 4 : 8);
 }
 
 static MIR_type_t get_mir_type (c2m_ctx_t c2m_ctx, struct type *type) {
@@ -9810,9 +9851,8 @@ static MIR_type_t get_mir_type (c2m_ctx_t c2m_ctx, struct type *type) {
 }
 
 static MIR_type_t promote_mir_int_type (MIR_type_t t) {
-  return (t == MIR_T_I8 || t == MIR_T_I16   ? MIR_T_I32
-          : t == MIR_T_U8 || t == MIR_T_U16 ? MIR_T_U32
-                                            : t);
+  return (t == MIR_T_I8 || t == MIR_T_I16 ? MIR_T_I32
+                                          : t == MIR_T_U8 || t == MIR_T_U16 ? MIR_T_U32 : t);
 }
 
 static MIR_type_t get_op_type (c2m_ctx_t c2m_ctx, op_t op) {
@@ -9840,9 +9880,10 @@ static int push_const_val (c2m_ctx_t c2m_ctx, node_t r, op_t *res) {
   if (floating_type_p (e->type)) {
     /* MIR support only IEEE float and double */
     mir_type = get_mir_type (c2m_ctx, e->type);
-    *res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, e->u.d_val)
-                          : mir_type == MIR_T_D ? MIR_new_double_op (ctx, e->u.d_val)
-                                                : MIR_new_ldouble_op (ctx, e->u.d_val)));
+    *res = new_op (NULL, (mir_type == MIR_T_F
+                            ? MIR_new_float_op (ctx, e->u.d_val)
+                            : mir_type == MIR_T_D ? MIR_new_double_op (ctx, e->u.d_val)
+                                                  : MIR_new_ldouble_op (ctx, e->u.d_val)));
   } else {
     assert (integer_type_p (e->type) || e->type->mode == TM_PTR);
     *res = new_op (NULL, (signed_integer_type_p (e->type) ? MIR_new_int_op (ctx, e->u.i_val)
@@ -9948,137 +9989,142 @@ static op_t cast (c2m_ctx_t c2m_ctx, op_t op, MIR_type_t t, int new_op_p) {
     if (op_type == MIR_T_D) goto double_val;
     if (op_type == MIR_T_LD) goto ldouble_val;
     if (t == MIR_T_I64) {
-      insn_code = (op_type == MIR_T_I32   ? MIR_EXT32
-                   : op_type == MIR_T_U32 ? MIR_UEXT32
-                   : op_type == MIR_T_F   ? MIR_F2I
-                   : op_type == MIR_T_D   ? MIR_D2I
-                   : op_type == MIR_T_LD  ? MIR_LD2I
-                                          : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_I32
+             ? MIR_EXT32
+             : op_type == MIR_T_U32
+                 ? MIR_UEXT32
+                 : op_type == MIR_T_F
+                     ? MIR_F2I
+                     : op_type == MIR_T_D ? MIR_D2I
+                                          : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
     } else if (t == MIR_T_U64) {
-      insn_code = (op_type == MIR_T_I32   ? MIR_EXT32
-                   : op_type == MIR_T_U32 ? MIR_UEXT32
-                   : op_type == MIR_T_F   ? MIR_F2I
-                   : op_type == MIR_T_D   ? MIR_D2I
-                   : op_type == MIR_T_LD  ? MIR_LD2I
-                                          : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_I32
+             ? MIR_EXT32
+             : op_type == MIR_T_U32
+                 ? MIR_UEXT32
+                 : op_type == MIR_T_F
+                     ? MIR_F2I
+                     : op_type == MIR_T_D ? MIR_D2I
+                                          : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
     } else if (t == MIR_T_I32) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
     } else if (t == MIR_T_U32) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
     } else if (t == MIR_T_I16) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
       insn_code2 = MIR_EXT16;
     } else if (t == MIR_T_U16) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
       insn_code2 = MIR_UEXT16;
     } else if (t == MIR_T_I8) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
       insn_code2 = MIR_EXT8;
     } else if (t == MIR_T_U8) {
-      insn_code = (op_type == MIR_T_F    ? MIR_F2I
-                   : op_type == MIR_T_D  ? MIR_D2I
-                   : op_type == MIR_T_LD ? MIR_LD2I
-                                         : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_F
+             ? MIR_F2I
+             : op_type == MIR_T_D ? MIR_D2I : op_type == MIR_T_LD ? MIR_LD2I : MIR_INSN_BOUND);
       insn_code2 = MIR_UEXT8;
     } else if (t == MIR_T_F) {
-      insn_code = (op_type == MIR_T_I32   ? MIR_EXT32
-                   : op_type == MIR_T_U32 ? MIR_UEXT32
-                                          : MIR_INSN_BOUND);
-      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32   ? MIR_I2F
-                    : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2F
-                                                                   : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_I32 ? MIR_EXT32 : op_type == MIR_T_U32 ? MIR_UEXT32 : MIR_INSN_BOUND);
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32
+                      ? MIR_I2F
+                      : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2F : MIR_INSN_BOUND);
     } else if (t == MIR_T_D) {
-      insn_code = (op_type == MIR_T_I32   ? MIR_EXT32
-                   : op_type == MIR_T_U32 ? MIR_UEXT32
-                                          : MIR_INSN_BOUND);
-      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32   ? MIR_I2D
-                    : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2D
-                                                                   : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_I32 ? MIR_EXT32 : op_type == MIR_T_U32 ? MIR_UEXT32 : MIR_INSN_BOUND);
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32
+                      ? MIR_I2D
+                      : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2D : MIR_INSN_BOUND);
     } else if (t == MIR_T_LD) {
-      insn_code = (op_type == MIR_T_I32   ? MIR_EXT32
-                   : op_type == MIR_T_U32 ? MIR_UEXT32
-                                          : MIR_INSN_BOUND);
-      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32   ? MIR_I2LD
-                    : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2LD
-                                                                   : MIR_INSN_BOUND);
+      insn_code
+        = (op_type == MIR_T_I32 ? MIR_EXT32 : op_type == MIR_T_U32 ? MIR_UEXT32 : MIR_INSN_BOUND);
+      insn_code2 = (op_type == MIR_T_I64 || op_type == MIR_T_I32
+                      ? MIR_I2LD
+                      : op_type == MIR_T_U64 || op_type == MIR_T_U32 ? MIR_UI2LD : MIR_INSN_BOUND);
     }
     break;
   case MIR_OP_INT:
-    insn_code = (t == MIR_T_I8    ? MIR_EXT8
-                 : t == MIR_T_U8  ? MIR_UEXT8
-                 : t == MIR_T_I16 ? MIR_EXT16
-                 : t == MIR_T_U16 ? MIR_UEXT16
-                 : t == MIR_T_F   ? MIR_I2F
-                 : t == MIR_T_D   ? MIR_I2D
-                 : t == MIR_T_LD  ? MIR_I2LD
-                                  : MIR_INSN_BOUND);
+    insn_code
+      = (t == MIR_T_I8
+           ? MIR_EXT8
+           : t == MIR_T_U8
+               ? MIR_UEXT8
+               : t == MIR_T_I16
+                   ? MIR_EXT16
+                   : t == MIR_T_U16
+                       ? MIR_UEXT16
+                       : t == MIR_T_F
+                           ? MIR_I2F
+                           : t == MIR_T_D ? MIR_I2D : t == MIR_T_LD ? MIR_I2LD : MIR_INSN_BOUND);
     break;
   case MIR_OP_UINT:
-    insn_code = (t == MIR_T_I8    ? MIR_EXT8
-                 : t == MIR_T_U8  ? MIR_UEXT8
-                 : t == MIR_T_I16 ? MIR_EXT16
-                 : t == MIR_T_U16 ? MIR_UEXT16
-                 : t == MIR_T_F   ? MIR_UI2F
-                 : t == MIR_T_D   ? MIR_UI2D
-                 : t == MIR_T_LD  ? MIR_UI2LD
-                                  : MIR_INSN_BOUND);
+    insn_code
+      = (t == MIR_T_I8
+           ? MIR_EXT8
+           : t == MIR_T_U8
+               ? MIR_UEXT8
+               : t == MIR_T_I16
+                   ? MIR_EXT16
+                   : t == MIR_T_U16
+                       ? MIR_UEXT16
+                       : t == MIR_T_F
+                           ? MIR_UI2F
+                           : t == MIR_T_D ? MIR_UI2D : t == MIR_T_LD ? MIR_UI2LD : MIR_INSN_BOUND);
     break;
   case MIR_OP_FLOAT:
   float_val:
     insn_code = (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16
                      || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_I64 || t == MIR_T_U64
                    ? MIR_F2I
-                 : t == MIR_T_D  ? MIR_F2D
-                 : t == MIR_T_LD ? MIR_F2LD
-                                 : MIR_INSN_BOUND);
-    insn_code2 = (t == MIR_T_I8    ? MIR_EXT8
-                  : t == MIR_T_U8  ? MIR_UEXT8
-                  : t == MIR_T_I16 ? MIR_EXT16
-                  : t == MIR_T_U16 ? MIR_UEXT16
-                                   : MIR_INSN_BOUND);
+                   : t == MIR_T_D ? MIR_F2D : t == MIR_T_LD ? MIR_F2LD : MIR_INSN_BOUND);
+    insn_code2 = (t == MIR_T_I8 ? MIR_EXT8
+                                : t == MIR_T_U8 ? MIR_UEXT8
+                                                : t == MIR_T_I16
+                                                    ? MIR_EXT16
+                                                    : t == MIR_T_U16 ? MIR_UEXT16 : MIR_INSN_BOUND);
     break;
   case MIR_OP_DOUBLE:
   double_val:
     insn_code = (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16
                      || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_I64 || t == MIR_T_U64
                    ? MIR_D2I
-                 : t == MIR_T_F  ? MIR_D2F
-                 : t == MIR_T_LD ? MIR_D2LD
-                                 : MIR_INSN_BOUND);
-    insn_code2 = (t == MIR_T_I8    ? MIR_EXT8
-                  : t == MIR_T_U8  ? MIR_UEXT8
-                  : t == MIR_T_I16 ? MIR_EXT16
-                  : t == MIR_T_U16 ? MIR_UEXT16
-                                   : MIR_INSN_BOUND);
+                   : t == MIR_T_F ? MIR_D2F : t == MIR_T_LD ? MIR_D2LD : MIR_INSN_BOUND);
+    insn_code2 = (t == MIR_T_I8 ? MIR_EXT8
+                                : t == MIR_T_U8 ? MIR_UEXT8
+                                                : t == MIR_T_I16
+                                                    ? MIR_EXT16
+                                                    : t == MIR_T_U16 ? MIR_UEXT16 : MIR_INSN_BOUND);
     break;
   case MIR_OP_LDOUBLE:
   ldouble_val:
     insn_code = (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16
                      || t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_I64 || t == MIR_T_U64
                    ? MIR_LD2I
-                 : t == MIR_T_F ? MIR_LD2F
-                 : t == MIR_T_D ? MIR_LD2D
-                                : MIR_INSN_BOUND);
-    insn_code2 = (t == MIR_T_I8    ? MIR_EXT8
-                  : t == MIR_T_U8  ? MIR_UEXT8
-                  : t == MIR_T_I16 ? MIR_EXT16
-                  : t == MIR_T_U16 ? MIR_UEXT16
-                                   : MIR_INSN_BOUND);
+                   : t == MIR_T_F ? MIR_LD2F : t == MIR_T_D ? MIR_LD2D : MIR_INSN_BOUND);
+    insn_code2 = (t == MIR_T_I8 ? MIR_EXT8
+                                : t == MIR_T_U8 ? MIR_UEXT8
+                                                : t == MIR_T_I16
+                                                    ? MIR_EXT16
+                                                    : t == MIR_T_U16 ? MIR_UEXT16 : MIR_INSN_BOUND);
     break;
   default: break;
   }
@@ -10240,42 +10286,45 @@ static MIR_insn_code_t get_mir_type_insn_code (c2m_ctx_t c2m_ctx, struct type *t
   case N_POST_INC:
   case N_ADD:
   case N_ADD_ASSIGN:
-    return (t == MIR_T_F                       ? MIR_FADD
-            : t == MIR_T_D                     ? MIR_DADD
-            : t == MIR_T_LD                    ? MIR_LDADD
-            : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_ADD
-                                               : MIR_ADDS);
+    return (t == MIR_T_F
+              ? MIR_FADD
+              : t == MIR_T_D
+                  ? MIR_DADD
+                  : t == MIR_T_LD ? MIR_LDADD
+                                  : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_ADD : MIR_ADDS);
   case N_DEC:
   case N_POST_DEC:
   case N_SUB:
   case N_SUB_ASSIGN:
-    return (t == MIR_T_F                       ? MIR_FSUB
-            : t == MIR_T_D                     ? MIR_DSUB
-            : t == MIR_T_LD                    ? MIR_LDSUB
-            : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_SUB
-                                               : MIR_SUBS);
+    return (t == MIR_T_F
+              ? MIR_FSUB
+              : t == MIR_T_D
+                  ? MIR_DSUB
+                  : t == MIR_T_LD ? MIR_LDSUB
+                                  : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_SUB : MIR_SUBS);
   case N_MUL:
   case N_MUL_ASSIGN:
-    return (t == MIR_T_F                       ? MIR_FMUL
-            : t == MIR_T_D                     ? MIR_DMUL
-            : t == MIR_T_LD                    ? MIR_LDMUL
-            : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_MUL
-                                               : MIR_MULS);
+    return (t == MIR_T_F
+              ? MIR_FMUL
+              : t == MIR_T_D
+                  ? MIR_DMUL
+                  : t == MIR_T_LD ? MIR_LDMUL
+                                  : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_MUL : MIR_MULS);
   case N_DIV:
   case N_DIV_ASSIGN:
-    return (t == MIR_T_F     ? MIR_FDIV
-            : t == MIR_T_D   ? MIR_DDIV
-            : t == MIR_T_LD  ? MIR_LDDIV
-            : t == MIR_T_I64 ? MIR_DIV
-            : t == MIR_T_U64 ? MIR_UDIV
-            : t == MIR_T_I32 ? MIR_DIVS
-                             : MIR_UDIVS);
+    return (t == MIR_T_F
+              ? MIR_FDIV
+              : t == MIR_T_D
+                  ? MIR_DDIV
+                  : t == MIR_T_LD
+                      ? MIR_LDDIV
+                      : t == MIR_T_I64
+                          ? MIR_DIV
+                          : t == MIR_T_U64 ? MIR_UDIV : t == MIR_T_I32 ? MIR_DIVS : MIR_UDIVS);
   case N_MOD:
   case N_MOD_ASSIGN:
-    return (t == MIR_T_I64   ? MIR_MOD
-            : t == MIR_T_U64 ? MIR_UMOD
-            : t == MIR_T_I32 ? MIR_MODS
-                             : MIR_UMODS);
+    return (t == MIR_T_I64 ? MIR_MOD
+                           : t == MIR_T_U64 ? MIR_UMOD : t == MIR_T_I32 ? MIR_MODS : MIR_UMODS);
   case N_AND:
   case N_AND_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_AND : MIR_ANDS);
   case N_OR:
@@ -10286,54 +10335,60 @@ static MIR_insn_code_t get_mir_type_insn_code (c2m_ctx_t c2m_ctx, struct type *t
   case N_LSH_ASSIGN: return (t == MIR_T_I64 || t == MIR_T_U64 ? MIR_LSH : MIR_LSHS);
   case N_RSH:
   case N_RSH_ASSIGN:
-    return (t == MIR_T_I64   ? MIR_RSH
-            : t == MIR_T_U64 ? MIR_URSH
-            : t == MIR_T_I32 ? MIR_RSHS
-                             : MIR_URSHS);
+    return (t == MIR_T_I64 ? MIR_RSH
+                           : t == MIR_T_U64 ? MIR_URSH : t == MIR_T_I32 ? MIR_RSHS : MIR_URSHS);
   case N_EQ:
-    return (t == MIR_T_F                       ? MIR_FEQ
-            : t == MIR_T_D                     ? MIR_DEQ
-            : t == MIR_T_LD                    ? MIR_LDEQ
-            : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_EQ
-                                               : MIR_EQS);
+    return (t == MIR_T_F
+              ? MIR_FEQ
+              : t == MIR_T_D
+                  ? MIR_DEQ
+                  : t == MIR_T_LD ? MIR_LDEQ : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_EQ : MIR_EQS);
   case N_NE:
-    return (t == MIR_T_F                       ? MIR_FNE
-            : t == MIR_T_D                     ? MIR_DNE
-            : t == MIR_T_LD                    ? MIR_LDNE
-            : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_NE
-                                               : MIR_NES);
+    return (t == MIR_T_F
+              ? MIR_FNE
+              : t == MIR_T_D
+                  ? MIR_DNE
+                  : t == MIR_T_LD ? MIR_LDNE : t == MIR_T_I64 || t == MIR_T_U64 ? MIR_NE : MIR_NES);
   case N_LT:
-    return (t == MIR_T_F     ? MIR_FLT
-            : t == MIR_T_D   ? MIR_DLT
-            : t == MIR_T_LD  ? MIR_LDLT
-            : t == MIR_T_I64 ? MIR_LT
-            : t == MIR_T_U64 ? MIR_ULT
-            : t == MIR_T_I32 ? MIR_LTS
-                             : MIR_ULTS);
+    return (t == MIR_T_F
+              ? MIR_FLT
+              : t == MIR_T_D
+                  ? MIR_DLT
+                  : t == MIR_T_LD
+                      ? MIR_LDLT
+                      : t == MIR_T_I64
+                          ? MIR_LT
+                          : t == MIR_T_U64 ? MIR_ULT : t == MIR_T_I32 ? MIR_LTS : MIR_ULTS);
   case N_LE:
-    return (t == MIR_T_F     ? MIR_FLE
-            : t == MIR_T_D   ? MIR_DLE
-            : t == MIR_T_LD  ? MIR_LDLE
-            : t == MIR_T_I64 ? MIR_LE
-            : t == MIR_T_U64 ? MIR_ULE
-            : t == MIR_T_I32 ? MIR_LES
-                             : MIR_ULES);
+    return (t == MIR_T_F
+              ? MIR_FLE
+              : t == MIR_T_D
+                  ? MIR_DLE
+                  : t == MIR_T_LD
+                      ? MIR_LDLE
+                      : t == MIR_T_I64
+                          ? MIR_LE
+                          : t == MIR_T_U64 ? MIR_ULE : t == MIR_T_I32 ? MIR_LES : MIR_ULES);
   case N_GT:
-    return (t == MIR_T_F     ? MIR_FGT
-            : t == MIR_T_D   ? MIR_DGT
-            : t == MIR_T_LD  ? MIR_LDGT
-            : t == MIR_T_I64 ? MIR_GT
-            : t == MIR_T_U64 ? MIR_UGT
-            : t == MIR_T_I32 ? MIR_GTS
-                             : MIR_UGTS);
+    return (t == MIR_T_F
+              ? MIR_FGT
+              : t == MIR_T_D
+                  ? MIR_DGT
+                  : t == MIR_T_LD
+                      ? MIR_LDGT
+                      : t == MIR_T_I64
+                          ? MIR_GT
+                          : t == MIR_T_U64 ? MIR_UGT : t == MIR_T_I32 ? MIR_GTS : MIR_UGTS);
   case N_GE:
-    return (t == MIR_T_F     ? MIR_FGE
-            : t == MIR_T_D   ? MIR_DGE
-            : t == MIR_T_LD  ? MIR_LDGE
-            : t == MIR_T_I64 ? MIR_GE
-            : t == MIR_T_U64 ? MIR_UGE
-            : t == MIR_T_I32 ? MIR_GES
-                             : MIR_UGES);
+    return (t == MIR_T_F
+              ? MIR_FGE
+              : t == MIR_T_D
+                  ? MIR_DGE
+                  : t == MIR_T_LD
+                      ? MIR_LDGE
+                      : t == MIR_T_I64
+                          ? MIR_GE
+                          : t == MIR_T_U64 ? MIR_UGE : t == MIR_T_I32 ? MIR_GES : MIR_UGES);
   default: assert (FALSE); return MIR_INSN_BOUND;
   }
 }
@@ -10457,13 +10512,16 @@ static const char *get_reg_var_name (c2m_ctx_t c2m_ctx, MIR_type_t promoted_type
   char prefix[50];
 
   sprintf (prefix,
-           promoted_type == MIR_T_I64   ? "I%u_"
-           : promoted_type == MIR_T_U64 ? "U%u_"
-           : promoted_type == MIR_T_I32 ? "i%u_"
-           : promoted_type == MIR_T_U32 ? "u%u_"
-           : promoted_type == MIR_T_F   ? "f%u_"
-           : promoted_type == MIR_T_D   ? "d%u_"
-                                        : "D%u_",
+           promoted_type == MIR_T_I64
+             ? "I%u_"
+             : promoted_type == MIR_T_U64
+                 ? "U%u_"
+                 : promoted_type == MIR_T_I32
+                     ? "i%u_"
+                     : promoted_type == MIR_T_U32
+                         ? "u%u_"
+                         : promoted_type == MIR_T_F ? "f%u_"
+                                                    : promoted_type == MIR_T_D ? "d%u_" : "D%u_",
            func_scope_num);
   VARR_TRUNC (char, temp_string, 0);
   add_to_temp_string (c2m_ctx, prefix);
@@ -11217,10 +11275,13 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
       val
         = gen (c2m_ctx, init_el.init, NULL, NULL, t != MIR_T_UNDEF, t != MIR_T_UNDEF ? NULL : &val);
       if (!scalar_type_p (init_el.el_type)) {
-        mir_size_t s = init_el.init->code == N_STR     ? init_el.init->u.s.len
-                       : init_el.init->code == N_STR16 ? init_el.init->u.s.len / 2
-                       : init_el.init->code == N_STR32 ? init_el.init->u.s.len / 4
-                                                       : raw_type_size (c2m_ctx, init_el.el_type);
+        mir_size_t s = init_el.init->code == N_STR
+                         ? init_el.init->u.s.len
+                         : init_el.init->code == N_STR16
+                             ? init_el.init->u.s.len / 2
+                             : init_el.init->code == N_STR32
+                                 ? init_el.init->u.s.len / 4
+                                 : raw_type_size (c2m_ctx, init_el.el_type);
         gen_memcpy (c2m_ctx, offset + rel_offset, base, val, s);
         rel_offset = init_el.offset + s;
       } else {
@@ -11475,9 +11536,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     ld = r->u.ld;
   float_val:
     mir_type = get_mir_type (c2m_ctx, ((struct expr *) r->attr)->type);
-    res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, ld)
-                         : mir_type == MIR_T_D ? MIR_new_double_op (ctx, ld)
-                                               : MIR_new_ldouble_op (ctx, ld)));
+    res = new_op (NULL, (mir_type == MIR_T_F ? MIR_new_float_op (ctx, ld)
+                                             : mir_type == MIR_T_D ? MIR_new_double_op (ctx, ld)
+                                                                   : MIR_new_ldouble_op (ctx, ld)));
     break;
   case N_CH: ll = r->u.ch; goto int_val;
   case N_CH16:
@@ -11571,17 +11632,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
 
       gen_unary_op (c2m_ctx, r, &op1, &res);
       if (r->code == N_ADD) {
-        ic = (ic == MIR_FADD    ? MIR_FMOV
-              : ic == MIR_DADD  ? MIR_DMOV
-              : ic == MIR_LDADD ? MIR_LDMOV
-                                : MIR_MOV);
+        ic = (ic == MIR_FADD ? MIR_FMOV
+                             : ic == MIR_DADD ? MIR_DMOV : ic == MIR_LDADD ? MIR_LDMOV : MIR_MOV);
         emit2 (c2m_ctx, ic, res.mir_op, op1.mir_op);
       } else {
-        ic = (ic == MIR_FSUB    ? MIR_FNEG
-              : ic == MIR_DSUB  ? MIR_DNEG
-              : ic == MIR_LDSUB ? MIR_LDNEG
-              : ic == MIR_SUB   ? MIR_NEG
-                                : MIR_NEGS);
+        ic
+          = (ic == MIR_FSUB
+               ? MIR_FNEG
+               : ic == MIR_DSUB ? MIR_DNEG
+                                : ic == MIR_LDSUB ? MIR_LDNEG : ic == MIR_SUB ? MIR_NEG : MIR_NEGS);
         emit2 (c2m_ctx, ic, res.mir_op, op1.mir_op);
       }
       break;
@@ -12909,9 +12968,9 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_STR16:
   case N_STR32:
     fprintf (f, " %s\"", n->code == N_STR ? "" : n->code == N_STR16 ? "u" : "U");
-    (n->code == N_STR     ? print_chars
-     : n->code == N_STR16 ? print_chars16
-                          : print_chars32) (f, n->u.s.s, n->u.s.len);
+    (n->code == N_STR
+       ? print_chars
+       : n->code == N_STR16 ? print_chars16 : print_chars32) (f, n->u.s.s, n->u.s.len);
     fprintf (f, "\"");
     goto expr;
   case N_ID:
