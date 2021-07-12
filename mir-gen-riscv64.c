@@ -120,14 +120,17 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t ty
 
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
-static MIR_insn_code_t get_ext_code (MIR_type_t type) {
+/* Return extension insn for passing args and returns.  */
+static MIR_insn_code_t get_ext_code (MIR_type_t type, int arg_pass_p) {
   switch (type) {
   case MIR_T_I8: return MIR_EXT8;
   case MIR_T_U8: return MIR_UEXT8;
   case MIR_T_I16: return MIR_EXT16;
   case MIR_T_U16: return MIR_UEXT16;
   case MIR_T_I32: return MIR_EXT32;
-  case MIR_T_U32: return MIR_UEXT32;
+  case MIR_T_U32:
+    /* even unsigned 32-bit is extended by sign according to ABI -- pass it the right way: */
+    return (arg_pass_p ? MIR_EXT32 : MIR_UEXT32);
   default: return MIR_INVALID_INSN;
   }
 }
@@ -351,7 +354,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
     ext_insn = NULL;
-    if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
+    if ((ext_code = get_ext_code (type, TRUE)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       ext_insn = MIR_new_insn (ctx, ext_code, temp_op, arg_op);
       call_insn->ops[i] = arg_op = temp_op;
@@ -475,7 +478,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     }
     MIR_insert_insn_after (ctx, curr_func_item, call_insn, new_insn);
     call_insn->ops[i + 2] = new_insn->ops[1];
-    if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) {
+    if ((ext_code = get_ext_code (type, FALSE)) != MIR_INVALID_INSN) {
       MIR_insert_insn_after (ctx, curr_func_item, new_insn,
                              MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
       new_insn = DLIST_NEXT (MIR_insn_t, new_insn);
@@ -1039,10 +1042,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
           if (res_type == MIR_T_LD) n_xregs++;
         } else {
           (*MIR_get_error_func (ctx)) (MIR_ret_error,
-                                       "aarch64 can not handle this combination of return values");
+                                       "riscv can not handle this combination of return values");
         }
         ret_reg_op = _MIR_new_hard_reg_op (ctx, ret_reg);
-        gen_mov (gen_ctx, insn, new_insn_code, ret_reg_op, insn->ops[i]);
+        /* We should return unsigned 32-bit integer with sign extension according to ABI: */
+        gen_mov (gen_ctx, insn, res_type == MIR_T_U32 ? MIR_EXT32 : new_insn_code, ret_reg_op,
+                 insn->ops[i]);
         insn->ops[i] = ret_reg_op;
       }
     }
