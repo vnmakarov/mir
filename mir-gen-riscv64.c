@@ -2,6 +2,15 @@
    Copyright (C) 2020-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+/* In MIR generated code unsigned 32-bit values are zero extended but
+   passing/returning such value is signed extended (which is their
+   riscv ABI representation).
+
+   In theory we should pass vararg unsigned as sign extended according
+   to ABI but gcc/clang va_arg code do the correct sign extension
+   anyway.  So we can ignore sign extension for integer vararg
+   arguments.  */
+
 /* ??? TODO: o compressed riscv
              o register allocation order for more compressed code
              o implement generation for FLEN=128
