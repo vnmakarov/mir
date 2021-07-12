@@ -4835,6 +4835,78 @@ static MIR_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn) 
   }
 }
 
+static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t def_insn, new_insn, insn = bb_insn->insn;
+  MIR_insn_code_t code = insn->code;
+  MIR_op_t op, saved_op;
+  int size, size2, sign_p = FALSE, sign2_p = FALSE, ok_p;
+
+  switch (code) {
+  case MIR_EXT8: sign2_p = TRUE;
+  case MIR_UEXT8: size2 = 1; break;
+  case MIR_EXT16: sign2_p = TRUE;
+  case MIR_UEXT16: size2 = 2; break;
+  case MIR_EXT32: sign2_p = TRUE;
+  case MIR_UEXT32: size2 = 3; break;
+  default: return NULL;
+  }
+  op = insn->ops[1];
+  if (op.mode != MIR_OP_HARD_REG || !safe_hreg_substitution_p (gen_ctx, op.u.hard_reg, bb_insn))
+    return NULL;
+  def_insn = hreg_refs_addr[op.u.hard_reg].insn;
+  switch (def_insn->code) {
+  case MIR_EXT8: sign_p = TRUE;
+  case MIR_UEXT8: size = 1; break;
+  case MIR_EXT16: sign_p = TRUE;
+  case MIR_UEXT16: size = 2; break;
+  case MIR_EXT32: sign_p = TRUE;
+  case MIR_UEXT32: size = 3; break;
+  default: return NULL;
+  }
+  if (obsolete_op_p (gen_ctx, def_insn->ops[1], hreg_refs_addr[op.u.hard_reg].insn_num))
+    return NULL;
+  if (size2 <= size) {
+    /* [u]ext<n> b,a; ... [u]ext<m> c,b -> [u]ext<m> c,a when <m> <= <n>: */
+    saved_op = insn->ops[1];
+    insn->ops[1] = def_insn->ops[1];
+    if (!target_insn_ok_p (gen_ctx, insn)) {
+      insn->ops[1] = saved_op;
+      return NULL;
+    }
+    DEBUG ({
+      fprintf (debug_file, "      changing to ");
+      print_bb_insn (gen_ctx, bb_insn, TRUE);
+    });
+    combine_delete_insn (gen_ctx, def_insn, bb_insn);
+    return insn;
+  } else if (sign_p == sign2_p && size < size2) {
+    saved_op = def_insn->ops[0];
+    def_insn->ops[0] = insn->ops[0];
+    ok_p = target_insn_ok_p (gen_ctx, insn);
+    def_insn->ops[0] = saved_op;
+    if (!ok_p) return NULL;
+    gen_move_insn_before (gen_ctx, insn, def_insn);
+    DEBUG ({
+      fprintf (debug_file, "      moving insn ");
+      print_bb_insn (gen_ctx, def_insn->data, FALSE);
+      fprintf (debug_file, "      before insn ");
+      print_bb_insn (gen_ctx, bb_insn, TRUE);
+    });
+    def_insn->ops[0] = insn->ops[0];
+    DEBUG ({
+      fprintf (debug_file, "      changing it to ");
+      print_bb_insn (gen_ctx, def_insn->data, TRUE);
+      // deleted_insns_num++;
+      fprintf (debug_file, "      deleting insn ");
+      print_bb_insn (gen_ctx, bb_insn, TRUE);
+    });
+    gen_delete_insn (gen_ctx, insn);
+    return def_insn;
+  }
+  return NULL;
+}
+
 static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t def_insn = NULL, new_insns[6], insn = bb_insn->insn;
@@ -4999,6 +5071,7 @@ static void combine (gen_ctx_t gen_ctx) {
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
         } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL
+                   || (new_insn = combine_exts (gen_ctx, bb_insn)) != NULL
                    || (new_insn = combine_mul_div_substitute (gen_ctx, bb_insn)) != NULL) {
           bb_insn = new_insn->data;
           insn = new_insn;
