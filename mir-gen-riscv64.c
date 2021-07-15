@@ -50,10 +50,39 @@ enum {
   REP8 (HREG_EL, FA6, FA7, FS2, FS3, FS4, FS5, FS6, FS7),
   REP8 (HREG_EL, FS8, FS9, FS10, FS11, FT8, FT9, FT10, FT11),
 };
+
+static const MIR_reg_t hard_reg_alloc_order[] = {
+  REP8 (HREG_EL, R8, R9, R10, R11, R12, R13, R14, R15),
+  REP8 (HREG_EL, F8, F9, F10, F11, F12, F13, F14, F15),
+
+  REP8 (HREG_EL, R0, R1, R2, R3, R4, R5, R6, R7),
+  REP8 (HREG_EL, R16, R17, R18, R19, R20, R21, R22, R23),
+  REP8 (HREG_EL, R24, R25, R26, R27, R28, R29, R30, R31),
+
+  REP8 (HREG_EL, F0, F1, F2, F3, F4, F5, F6, F7),
+  REP8 (HREG_EL, F16, F17, F18, F19, F20, F21, F22, F23),
+  REP8 (HREG_EL, F24, F25, F26, F27, F28, F29, F30, F31),
+};
 #undef REP_SEP
 
 static const MIR_reg_t MAX_HARD_REG = F31_HARD_REG;
 static const MIR_reg_t LINK_HARD_REG = RA_HARD_REG;
+
+#define TARGET_HARD_REG_ALLOC_ORDER(n) hard_reg_alloc_order[n]
+
+static void check_hard_reg_alloc_order (void) {
+  int i;
+  char check_p[F31_HARD_REG + 1];
+
+  gen_assert (MAX_HARD_REG == F31_HARD_REG
+              && sizeof (hard_reg_alloc_order) / sizeof (MIR_reg_t) == MAX_HARD_REG + 1);
+  for (i = 0; i <= MAX_HARD_REG; i++) check_p[i] = FALSE;
+  for (i = 0; i <= MAX_HARD_REG; i++) {
+    gen_assert (!check_p[hard_reg_alloc_order[i]]);
+    check_p[hard_reg_alloc_order[i]] = TRUE;
+  }
+  for (i = 0; i <= MAX_HARD_REG; i++) gen_assert (check_p[i]);
+}
 
 static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
   return loc > MAX_HARD_REG && type == MIR_T_LD ? 2 : 1;
@@ -2316,6 +2345,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
 }
 
 static void target_init (gen_ctx_t gen_ctx) {
+  check_hard_reg_alloc_order ();
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (label_ref_t, label_refs, 0);
