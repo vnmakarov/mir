@@ -1300,6 +1300,8 @@ struct pattern {
      X - match everything
      $ - finish successfully matching
      r - register
+     rp - register but sp
+     C - compressed register
      h[0-63] - hard register with given number
      c<number> - immediate integer <number>
 
@@ -1309,11 +1311,18 @@ struct pattern {
      mu[0-3] - unsigned int type memory of size 8,16,32,64-bits
        sign extended 12-bit offset
 
+     mc[s]2[s],mc3[s] - (signed) int memory of size 32 or 64-bits with compressed
+         based register and 5-bit unsigned displacement scaled by 4 or 8
+         or stack reg as base and 6-bit unsigned displacement scaled by 4 or 8
+
        memory with immediate offset:
      mf - memory of float
      md - memory of double
      mld - memory of long double (whose disp can be increased by 8)
        sign extended 12-bit offset
+
+     mcd[s] - double memory with compressed based register (or stack register)
+              and 6-bit unsigned displacement scaled by 8
 
      i -- 2nd or 3rd immediate op for arithemtic insn (12-bit signed)
      j -- as i but -j should be also i (it means excluding minimal 12-bit signed) and only 3rd op
@@ -1323,29 +1332,55 @@ struct pattern {
      I --  any 64-bit immediate
      s --  immediate shift (5 bits) as 3th op
      S --  immediate shift (6 bits) as 3th op
+     Sp --  nonzero immediate shift (6 bits) as 3th op
      l --  label as the 1st or 2nd op which can be present by signed 13-bit pc offset
+
+     k -- 2nd or 3rd immediate op for arithemtic insn (6-bit signed)
+     kp -- nonzero 2nd or 3rd immediate op for arithemtic insn (6-bit signed)
+     ks -- nonzero 2nd or 3rd immediate op for arithemtic insn (9-bit signed) multiple of 16
+     ku -- 18-bit signed immediate for arithemtic insn with zero low 12-bits as 2nd op
+     kw -- nonzero scaled by 4 8-bit unsigned immediate
+     jus -- imm rounded to 16 first and considered as ks
 
      Remember we have no float or (long) double immediate at this stage. They are represented
      by a reference to data item.  */
 
   const char *pattern;
-  /* Replacement elements:
+  /* Replacement elements (if insn size is not mentioned it is a 32-bit insn):
      blank - ignore
      ; - insn separation
+
      Ohex - opcode [6..0]
      Fhex - funct3 (or round mode rm) [14..12]
      fhex - funct7 [31..25]
      ghex - funct7 w/o 1 bit [31..26]
 
-     rd[0-2] - put n-th operand register into rd field [11..7]
+     ohex - 16-bit insn opcode [1..0] (opcodec)
+     ahex - 16-bit insn funct3 [15..13] (funct3c)
+     bhex - 16-bit insn funct4 [15..12] (funct4c)
+     chex - 16-bit insn funct6 [15..10] (funct6c)
+     dhex - 16-bit insn funct2 [6..5] (funct2c)
+     ehex - 16-bit insn functb2 [11..10] (funct2bc)
+
+     rd[0-2] - put n-th operand register into rd field [11..7] (16- and 32-bit insns)
      rs[0-2] - put n-th operand register into rs1 field [19..15]
      rS[0-2] - put n-th operand register into rs2 field [24..20]
 
-     h(d,s,S)<one or two hex digits> - hardware register with given number in rd,rs1,rs2 field
-     m = 1st or 2nd operand is (8-,16-,32-,64-bit) mem with base and signed disp
+     rt[0-2] - put n-th operand register into rs2 field [6..2] 16-bit insns
+     ru[0-2] - put n-th operand register into rd'/rs1' field [9..7] 16-bit insns
+     rv[0-2] - put n-th operand register into rs2' field [4..2] 16-bit insns
+
+     h(d,s,S,t,u,v)<one or two hex digits> - hardware register with given number in
+     rd,rs1,rs2,rd',rs1',rs2' field m = 1st or 2nd operand is (8-,16-,32-,64-bit) mem with base and
+     signed disp
 
      ml = 1st or 2nd operand for load is mem with base (rs1), signed imm12 disp [31..20]
      ms = 1st or 2nd operand for store is mem with base (rs1), signed imm12 disp [31..25,11..7]
+
+     mc[2-3],mcd = 1st or 2nd operand is mem of given type with base (rs1[9..7])
+                   and scaled unsigned imm5 disp [12..10,6..5]
+     mc[2-3]s[s],mcds[s] = 1st or 2nd operand is mem with stack reg as base and
+                   scaled unsigned imm6 disp [12,6..2], last `s` means store disp [12..7]
 
      i -- 2nd or 3rd arithmetic op 12-bit immediate [31..20]
      j -- 3rd arithmetic op 12-bit immediate [31..20] with opposite sign
@@ -1357,15 +1392,25 @@ struct pattern {
           constant (2nd op) in the 1st word and 12-bit lower part [31..20] in the 2nd word
      s --  immediate shift [24-20]
      S --  immediate shift [25-20]
+     Sp --  immediate shift [12,6:2], 16-bit insn
      shex --  immediate shift value [24-20]
      Shex --  immediate shift value [25-20]
      i[-]hex -- i with given value
      iuhex -- 20-bit immediate [31..12]
      T - 12-bit immediate which is 16 + alignment of the insn addr + 8 to 8 == (0,2,4,6)
 
+     k - immediate in field [12, 6-2], 16-bit insn
+     k[-]hex -- k with given value
+     ku - [16:12] of immediate value in [12, 6-2], 16-bit insn
+     ks - [9,4,6,8-7,5] of immediate value in [12, 6-2], 16-bit insn
+
      l -- operand-label as signed 13-bit offset ([12|10:5] as [31:25] and [4:1|11] as [11:7]),
           remember address of any insn is even
      L -- operand-label as signed 21-bit offset ([20|10:1|11|19:12] as [31:12])
+
+     lc -- operand-label as signed 9-bit offset ([12..10,6-2]), 16-bit insn
+     Lc -- operand-label as signed 12-bit offset ([12-2]), 16-bit insn
+     [0-3] - an operand matching n-th operand (n should be less than given operand number)
   */
   const char *replacement;
 };
@@ -1703,13 +1748,20 @@ static uint64_t read_dec (const char **ptr) {
   return res;
 }
 
+static int compressed_reg_p (MIR_reg_t reg, int int_only_p) {
+  if (R8_HARD_REG <= reg && reg <= R15_HARD_REG) return TRUE;
+  if (!int_only_p && F8_HARD_REG <= reg && reg <= F15_HARD_REG) return TRUE;
+  return FALSE;
+}
+
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop;
+  int n, nop;
   size_t nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
-  MIR_op_t op;
+  MIR_op_t op, original;
+  MIR_op_mode_t mode;
   MIR_reg_t hr;
 
   for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
@@ -1721,7 +1773,25 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     switch (start_ch = *p) {
     case 'X': break;
     case 'r':
-      if (op.mode != MIR_OP_HARD_REG) return FALSE;
+      ch = *++p;
+      if (ch != 'p') {
+        p--;
+        if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == R0_HARD_REG) return FALSE;
+      } else {
+        if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == R0_HARD_REG
+            || op.u.hard_reg == SP_HARD_REG)
+          return FALSE;
+      }
+      break;
+    case 'h': {
+      uint64_t n;
+      p++;
+      n = read_dec (&p);
+      if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg != n) return FALSE;
+      break;
+    }
+    case 'C':
+      if (op.mode != MIR_OP_HARD_REG || !compressed_reg_p (op.u.hard_reg, FALSE)) return FALSE;
       break;
     case 'c': {
       uint64_t n;
@@ -1732,13 +1802,18 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     }
     case 'm': {
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
-      int scale, u_p, s_p;
+      int scale, u_p, s_p, compressed_p = FALSE;
 
       if (op.mode != MIR_OP_HARD_REG_MEM) return FALSE;
       u_p = s_p = TRUE;
       ch = *++p;
+      if (ch == 'c') {
+        compressed_p = TRUE;
+        ch = *++p;
+      }
       switch (ch) {
       case 'f':
+        gen_assert (!compressed_p);
         type = MIR_T_F;
         type2 = MIR_T_BOUND;
         scale = 4;
@@ -1750,12 +1825,12 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         break;
       case 'l':
         ch = *++p;
-        gen_assert (ch == 'd');
+        gen_assert (ch == 'd' && !compressed_p);
         type = MIR_T_LD;
         type2 = MIR_T_BOUND;
         scale = 16;
         break;
-      case 'u':
+      case 'u': gen_assert (!compressed_p);
       case 's':
         u_p = ch == 'u';
         s_p = ch == 's';
@@ -1763,6 +1838,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         /* Fall through: */
       default:
         gen_assert ('0' <= ch && ch <= '3');
+        gen_assert (!compressed_p || '2' <= ch);
         scale = 1 << (ch - '0');
         if (ch == '0') {
           type = u_p ? MIR_T_U8 : MIR_T_I8;
@@ -1791,6 +1867,18 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
           || op.u.hard_reg_mem.disp >= (1 << 11)
           || (type == MIR_T_LD && op.u.hard_reg_mem.disp + 8 >= (1 << 11)))
         return FALSE;
+      if (compressed_p) {
+        if (op.u.hard_reg_mem.disp < 0 || op.u.hard_reg_mem.disp % scale != 0) return FALSE;
+        ch = *++p;
+        if (ch == 's') {
+          if (op.u.hard_reg_mem.base != SP_HARD_REG) return FALSE;
+          if (op.u.hard_reg_mem.disp / scale >= (1 << 6)) return FALSE;
+        } else {
+          p--;
+          if (!compressed_reg_p (op.u.hard_reg_mem.base, TRUE)) return FALSE;
+          if (op.u.hard_reg_mem.disp / scale >= (1 << 5)) return FALSE;
+        }
+      }
       break;
     }
     case 'i': {
@@ -1825,11 +1913,18 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (ch == 'u') {
         assert (nop == 1);
         i = (i + 15) / 16 * 16;
+        ch = *++p;
+        if (ch != 's') {
+          p--;
+          if (i <= -(1 << 11) || i >= (1 << 11)) return FALSE;
+        } else {
+          if (i == 0 || i <= -(1 << 9) || i >= (1 << 9)) return FALSE;
+        }
       } else {
         p--;
         assert (nop == 2);
+        if (i <= -(1 << 11) || i >= (1 << 11)) return FALSE;
       }
-      if (i <= -(1 << 11) || i >= (1 << 11)) return FALSE;
       break;
     case 'I': {
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
@@ -1841,11 +1936,70 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
       if (op.u.i < 0 || (start_ch == 's' && op.u.i > 31) || (start_ch == 'S' && op.u.i > 63))
         return FALSE;
+      if (start_ch == 'S') {
+        ch = *++p;
+        if (ch != 'p') {
+          p--;
+        } else {
+          if (op.u.i == 0) return FALSE;
+        }
+      }
       break;
     }
+    case 'k':
+      if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) return FALSE;
+      assert (nop == 1 || nop == 2);
+      ch = *++p;
+      if (ch == 'p') {
+        if (op.u.i == 0 || op.u.i < -(1 << 5) || op.u.i >= (1 << 5)) return FALSE;
+      } else if (ch == 's') {
+        if (op.u.i == 0 || op.u.i % 16 != 0 || op.u.i < -(1 << 9) || op.u.i >= (1 << 9))
+          return FALSE;
+      } else if (ch == 'w') {
+        if (op.u.i <= 0 || op.u.i % 4 != 0 || op.u.i / 4 >= (1 << 8)) return FALSE;
+      } else if (ch != 'u') {
+        p--;
+        if (op.u.i < -(1 << 5) || op.u.i >= (1 << 5)) return FALSE;
+      } else {
+        if (op.u.i == 0 || (op.u.i & 0xfff) != 0 || (((int64_t) op.u.i << 46) >> 46) != op.u.i)
+          return FALSE;
+      }
+      break;
     case 'l':
     case 'L':
       if (op.mode != MIR_OP_LABEL) return FALSE;
+      break;
+    case '0':
+    case '1':
+    case '2':
+      n = start_ch - '0';
+      gen_assert (n < nop);
+      original = insn->ops[n];
+      mode = op.mode;
+      if (mode == MIR_OP_UINT) mode = MIR_OP_INT;
+      if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT))
+        return FALSE;
+      gen_assert (mode == MIR_OP_HARD_REG || mode == MIR_OP_INT || mode == MIR_OP_FLOAT
+                  || mode == MIR_OP_DOUBLE || mode == MIR_OP_LDOUBLE || mode == MIR_OP_HARD_REG_MEM
+                  || mode == MIR_OP_LABEL);
+      if (mode == MIR_OP_HARD_REG && op.u.hard_reg != original.u.hard_reg)
+        return FALSE;
+      else if (mode == MIR_OP_INT && op.u.i != original.u.i)
+        return FALSE;
+      else if (mode == MIR_OP_FLOAT && op.u.f != original.u.f)
+        return FALSE;
+      else if (mode == MIR_OP_DOUBLE && op.u.d != original.u.d)
+        return FALSE;
+      else if (mode == MIR_OP_LDOUBLE && op.u.ld != original.u.ld)
+        return FALSE;
+      else if (mode == MIR_OP_LABEL && op.u.label != original.u.label)
+        return FALSE;
+      else if (mode == MIR_OP_HARD_REG_MEM && op.u.hard_reg_mem.type != original.u.hard_reg_mem.type
+               && op.u.hard_reg_mem.scale != original.u.hard_reg_mem.scale
+               && op.u.hard_reg_mem.base != original.u.hard_reg_mem.base
+               && op.u.hard_reg_mem.index != original.u.hard_reg_mem.index
+               && op.u.hard_reg_mem.disp != original.u.hard_reg_mem.disp)
+        return FALSE;
       break;
     default: gen_assert (FALSE);
     }
@@ -1937,9 +2091,13 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, ch2, start_ch, d;
     uint32_t insn32 = 0, insn_mask = 0, el_mask;
-    int opcode = -1, funct3 = -1, funct7 = -1, rd = -1, rs1 = -1, rs2 = -1;
-    int shamt = -1, imm12, imm20, st_disp;
-    int imm12_p = FALSE, imm20_p = FALSE, st_disp_p = FALSE;
+    int n, opcode = -1, funct3 = -1, funct7 = -1, rd = -1, rs1 = -1, rs2 = -1;
+    int opcodec = -1, funct3c = -1, funct4c = -1, funct6c = -1, funct2c = -1, funct2bc = -1;
+    int rs2m = -1, rdc = -1, rs2c = -1, uimm8c = -1;
+    int shamt = -1, shamtc = -1, imm12, imm20, imm6c, st_disp, unsign_disp4 = -1, unsign_disp8 = -1;
+    int unsign_sp_disp4 = -1, unsign_sp_disp8 = -1;
+    int unsign_sp_store_disp4 = -1, unsign_sp_store_disp8 = -1;
+    int imm12_p = FALSE, imm20_p = FALSE, imm6c_p = FALSE, st_disp_p = FALSE;
     MIR_op_t op;
     int label_ref_num = -1;
 
@@ -1951,7 +2109,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case '\t': break;
       case 'O':
         p++;
-        gen_assert (hex_value (*p) >= 0 && opcode < 0);
+        gen_assert (hex_value (*p) >= 0 && opcode < 0 && opcodec < 0);
         opcode = read_hex (&p);
         assert (opcode < (1 << 7));
         el_mask = 0x3f;
@@ -1977,11 +2135,58 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         assert (funct7 < (1 << 6));
         el_mask = 0xfc000000;
         break;
+      case 'o':
+        p++;
+        gen_assert (hex_value (*p) >= 0 && opcode < 0 && opcodec < 0);
+        opcodec = read_hex (&p);
+        assert (opcode < 4);
+        el_mask = 0x3;
+        break;
+      case 'a':
+        gen_assert (opcodec >= 0);
+        p++;
+        gen_assert (hex_value (*p) >= 0 && opcode < 0);
+        funct3c = read_hex (&p);
+        assert (funct3c < 8);
+        el_mask = 0xe000;
+        break;
+      case 'b':
+        gen_assert (opcodec >= 0);
+        p++;
+        gen_assert (hex_value (*p) >= 0 && opcode < 0);
+        funct4c = read_hex (&p);
+        assert (funct4c < 16);
+        el_mask = 0xf000;
+        break;
+      case 'c':
+        gen_assert (opcodec >= 0);
+        p++;
+        gen_assert (hex_value (*p) >= 0 && opcode < 0);
+        funct6c = read_hex (&p);
+        assert (funct6c < 64);
+        el_mask = 0xfc00;
+        break;
+      case 'd':
+      case 'e':
+        gen_assert (opcodec >= 0);
+        p++;
+        gen_assert (hex_value (*p) >= 0 && opcode < 0);
+        n = read_hex (&p);
+        assert (n < 4);
+        if (start_ch == 'd') {
+          funct2c = n;
+          el_mask = 0x60;
+        } else {
+          funct2bc = n;
+          el_mask = 0xc00;
+        }
+        break;
       case 'r':
       case 'h': {
         int reg;
         ch2 = *++p;
-        gen_assert (ch2 == 'd' || ch2 == 's' || ch2 == 'S');
+        gen_assert (ch2 == 'd' || ch2 == 's' || ch2 == 'S' || ch2 == 't' || ch2 == 'u'
+                    || ch2 == 'v');
         ch = *++p;
         if (start_ch == 'h') {
           reg = read_hex (&p);
@@ -1999,29 +2204,86 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         } else if (ch2 == 's') {
           rs1 = reg;
           el_mask = 0xf8000;
-        } else {
+        } else if (ch2 == 'S') {
           rs2 = reg;
           el_mask = 0x1f00000;
+        } else if (ch2 == 't') {
+          rs2m = reg;
+          el_mask = 0x7c;
+        } else if (ch2 == 'u') {
+          gen_assert (compressed_reg_p (reg, FALSE));
+          rdc = reg - (reg <= R15_HARD_REG ? R8_HARD_REG : F8_HARD_REG);
+          el_mask = 0x380;
+        } else if (ch2 == 'v') {
+          gen_assert (compressed_reg_p (reg, FALSE));
+          rs2c = reg - (reg <= R15_HARD_REG ? R8_HARD_REG : F8_HARD_REG);
+          el_mask = 0x1c;
+        } else {
+          gen_assert (FALSE);
         }
         break;
       }
       case 'm':
         ch = *++p;
-        if (ch == 's') { /* store */
-          gen_assert (insn->ops[0].mode == MIR_OP_HARD_REG_MEM);
+        if (ch == 'c') {
           op = insn->ops[0];
-          st_disp = ((op.u.hard_reg_mem.disp << 13) & 0x01fc0000) | (op.u.hard_reg_mem.disp & 0x1f);
-          el_mask = 0xfe000f80;
-          st_disp_p = TRUE;
-        } else { /* load */
-          gen_assert (ch == 'l' && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
-          op = insn->ops[1];
-          imm12 = op.u.hard_reg_mem.disp;
-          imm12_p = TRUE;
-          el_mask = 0xfff00000;
+          if (op.mode == MIR_OP_HARD_REG_MEM) { /* store */
+            gen_assert (insn->ops[1].mode == MIR_OP_HARD_REG);
+          } else {
+            op = insn->ops[1];
+            gen_assert (op.mode == MIR_OP_HARD_REG_MEM && insn->ops[0].mode == MIR_OP_HARD_REG);
+          }
+          ch = *++p;
+          gen_assert (ch == '2' || ch == '3' || ch == 'd');
+          d = op.u.hard_reg_mem.disp >> (ch == '2' ? 2 : 3);
+          if (*++p == 's') {
+            gen_assert (d < (1 << 6) && op.u.hard_reg_mem.base == SP_HARD_REG);
+            if (*++p == 's') {
+              if (ch == '2') {
+                unsign_sp_store_disp4 = d;
+              } else {
+                unsign_sp_store_disp8 = d;
+              }
+              el_mask = 0x1f80;
+            } else {
+              p--;
+              if (ch == '2') {
+                unsign_sp_disp4 = d;
+              } else {
+                unsign_sp_disp8 = d;
+              }
+              el_mask = 0x107c;
+            }
+          } else {
+            gen_assert (compressed_reg_p (op.u.hard_reg_mem.base, TRUE));
+            rdc = op.u.hard_reg_mem.base - R8_HARD_REG;
+            p--;
+            gen_assert (d < (1 << 5));
+            if (ch == '2') {
+              unsign_disp4 = d;
+            } else {
+              unsign_disp8 = d;
+            }
+            el_mask = 0x1fe0;
+          }
+        } else {
+          if (ch == 's') { /* store */
+            gen_assert (insn->ops[0].mode == MIR_OP_HARD_REG_MEM);
+            op = insn->ops[0];
+            st_disp
+              = ((op.u.hard_reg_mem.disp << 13) & 0x01fc0000) | (op.u.hard_reg_mem.disp & 0x1f);
+            el_mask = 0xfe000f80;
+            st_disp_p = TRUE;
+          } else { /* load */
+            gen_assert (ch == 'l' && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
+            op = insn->ops[1];
+            imm12 = op.u.hard_reg_mem.disp;
+            imm12_p = TRUE;
+            el_mask = 0xfff00000;
+          }
+          el_mask |= 0xf8000;
+          rs1 = op.u.hard_reg_mem.base;
         }
-        el_mask |= 0xf8000;
-        rs1 = op.u.hard_reg_mem.base;
         break;
       case 's':
       case 'S':
@@ -2029,6 +2291,12 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         ch = *++p;
         if (hex_value (ch) >= 0) {
           shamt = read_hex (&p);
+        } else if (start_ch == 'S' && ch == 'p') {
+          op = insn->ops[2];
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
+          shamtc = op.u.i;
+          el_mask = 0x107c;
+          gen_assert (shamtc > 0);
         } else {
           p--;
           op = insn->ops[2];
@@ -2091,6 +2359,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
                      ? insn->ops[2].u.i
                      : insn->ops[1].u.i);
           imm12_p = TRUE;
+          el_mask = 0xfff00000;
         }
         break;
       case 'j':
@@ -2098,16 +2367,27 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (ch == 'u') { /* ju */
           op = insn->ops[1];
           gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
-          imm12 = -(op.u.i + 15) / 16 * 16;
-          el_mask = 0xfff00000;
+          ch = *++p;
+          if (ch != 's') {
+            p--;
+            imm12 = -(op.u.i + 15) / 16 * 16;
+            el_mask = 0xfff00000;
+            imm12_p = TRUE;
+          } else {
+            imm6c = -(op.u.i + 15) / 16;
+            imm6c = (imm6c & 0x20) | ((imm6c & 0x1) << 4) | ((imm6c & 0x4) << 1)
+                    | ((imm6c & 0x18) >> 2) | ((imm6c & 0x2) >> 1);
+            imm6c_p = TRUE;
+            el_mask = 0x107c;
+          }
         } else { /* j */
           p--;
           op = insn->ops[2];
           gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           imm12 = -op.u.i;
           el_mask = 0xfff00000;
+          imm12_p = TRUE;
         }
-        imm12_p = TRUE;
         break;
       case 'I': {
         op = insn->ops[1];
@@ -2134,6 +2414,41 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         switch_table_addr_p = TRUE;
         break;
       }
+      case 'k':
+        ch = *++p;
+        imm6c_p = TRUE;
+        el_mask = 0x107c;
+        if (ch == '-' || hex_value (ch) >= 0) { /* i[-]<hex> */
+          int neg_p = FALSE;
+          if (ch == '-') {
+            ch = *++p;
+            neg_p = TRUE;
+          }
+          gen_assert (hex_value (ch) >= 0);
+          imm6c = read_hex (&p);
+          gen_assert (imm6c != 0 && -32 < imm6c && imm6c < 32);
+          if (neg_p) imm6c = -imm6c;
+        } else {
+          imm6c = (nops > 2 && (insn->ops[2].mode == MIR_OP_INT || insn->ops[2].mode == MIR_OP_UINT)
+                     ? insn->ops[2].u.i
+                     : insn->ops[1].u.i);
+          if (ch == 'u') { /* ku */
+            imm6c >>= 12;
+          } else if (ch == 's') { /* ks */
+            imm6c >>= 4;
+            imm6c = (imm6c & 0x20) | ((imm6c & 0x1) << 4) | ((imm6c & 0x4) << 1)
+                    | ((imm6c & 0x18) >> 2) | ((imm6c & 0x2) >> 1);
+          } else if (ch == 'w') { /* kw */
+            uimm8c = imm6c >> 2;
+            uimm8c = ((uimm8c & 0xc) << 4) | ((uimm8c & 0xf0) >> 2) | ((uimm8c & 0x1) << 1)
+                     | ((uimm8c & 0x2) >> 1);
+            el_mask = 0x1fe0;
+            imm6c_p = FALSE;
+          } else {
+            p--;
+          }
+        }
+        break;
       case 'l':
       case 'L': {
         op = insn->ops[start_ch == 'l' || (insn->code != MIR_CALL && insn->code != MIR_INLINE) ? 0
@@ -2154,6 +2469,12 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     if (opcode >= 0) insn32 |= opcode;
     if (funct3 >= 0) insn32 |= (funct3 << 12);
     if (funct7 >= 0) insn32 |= (funct7 << 25);
+    if (opcodec >= 0) insn32 |= opcodec;
+    if (funct3c >= 0) insn32 |= (funct3c << 13);
+    if (funct4c >= 0) insn32 |= (funct4c << 12);
+    if (funct6c >= 0) insn32 |= (funct6c << 10);
+    if (funct2c >= 0) insn32 |= (funct2c << 5);
+    if (funct2bc >= 0) insn32 |= (funct2bc << 10);
     if (rd >= 0) {
       gen_assert (rd <= 31);
       insn32 |= rd << 7;
@@ -2166,16 +2487,49 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       gen_assert (rs2 <= 31);
       insn32 |= rs2 << 20;
     }
+    if (rs2m >= 0) {
+      gen_assert (rs2m <= 31);
+      insn32 |= rs2m << 2;
+    }
+    if (rdc >= 0) {
+      gen_assert (rdc <= 15);
+      insn32 |= rdc << 7;
+    }
+    if (rs2c >= 0) {
+      gen_assert (rs2c <= 15);
+      insn32 |= rs2c << 2;
+    }
     if (shamt >= 0) insn32 |= shamt << 20;
+    if (shamtc >= 0) insn32 |= ((shamtc & 0x20) << 7) | ((shamtc & 0x1f) << 2);
     if (imm12_p) insn32 |= imm12 << 20;
     if (imm20_p) insn32 |= imm20 << 12;
+    if (imm6c_p) insn32 |= ((imm6c & 0x20) << 7) | ((imm6c & 0x1f) << 2);
+    if (uimm8c >= 0) insn32 |= uimm8c << 5;
     if (st_disp_p) insn32 |= st_disp << 7;
+    if (unsign_disp4 >= 0)
+      insn32
+        |= ((unsign_disp4 & 0xe) << 9) | ((unsign_disp4 & 0x1) << 6) | ((unsign_disp4 & 0x10) << 1);
+    if (unsign_disp8 >= 0) insn32 |= ((unsign_disp8 & 0x7) << 10) | ((unsign_disp8 & 0x18) << 2);
+    if (unsign_sp_disp4 >= 0)
+      insn32 |= ((unsign_sp_disp4 & 0x8) << 9) | ((unsign_sp_disp4 & 0x7) << 4)
+                | ((unsign_sp_disp4 & 0x30) >> 2);
+    if (unsign_sp_disp8 >= 0)
+      insn32 |= ((unsign_sp_disp8 & 0x4) << 10) | ((unsign_sp_disp8 & 0x3) << 5)
+                | ((unsign_sp_disp8 & 0x38) >> 1);
+    if (unsign_sp_store_disp4 >= 0)
+      insn32 |= ((unsign_sp_store_disp4 & 0xf) << 9) | ((unsign_sp_store_disp4 & 0x30) << 3);
+    if (unsign_sp_store_disp8 >= 0)
+      insn32 |= ((unsign_sp_store_disp8 & 0x7) << 10) | ((unsign_sp_store_disp8 & 0x38) << 4);
     insn_mask = check_and_set_mask (insn_mask, el_mask);
     if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
     [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
 
-    put_uint64 (gen_ctx, insn32, 4); /* output the machine insn */
-
+    if (opcode >= 0) {
+      put_uint64 (gen_ctx, insn32, 4); /* output the machine insn */
+    } else {
+      gen_assert ((insn32 & 0xffff0000) == 0 && (insn_mask & 0xffff0000) == 0);
+      put_uint64 (gen_ctx, insn32, 2); /* output the machine insn */
+    }
     if (*p == 0) break;
   }
   if (!switch_table_addr_p) return;
