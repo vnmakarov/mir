@@ -3982,7 +3982,7 @@ static void setup_loc_profits (gen_ctx_t gen_ctx, MIR_reg_t breg) {
 static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
-  int slots_num;
+  int n, slots_num;
   int j, k;
   live_range_t lr;
   bitmap_t bm;
@@ -4048,7 +4048,12 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
     if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
-    for (loc = 0; loc <= MAX_HARD_REG; loc++) {
+    for (n = 0; n <= MAX_HARD_REG; n++) {
+#ifdef TARGET_HARD_REG_ALLOC_ORDER
+      loc = TARGET_HARD_REG_ALLOC_ORDER (n);
+#else
+      loc = n;
+#endif
       if (bitmap_bit_p (conflict_locs, loc)) continue;
       if (!target_hard_reg_type_ok_p (loc, type) || target_fixed_hard_reg_p (loc)) continue;
       if ((slots_num = target_locs_num (loc, type)) > 1) {
