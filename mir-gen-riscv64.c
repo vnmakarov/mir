@@ -1282,6 +1282,7 @@ CSS    Stack-relative Store   | funct3 |    imm       |    rs2  | op|
 CIW    Wide Immediate	      | funct3 |    imm           | rd' | op|
 CL     Load		      | funct3 |   imm  | rs1'|imm| rd' | op|
 CS     Store		      | funct3 |   imm  | rs1'|imm| rs2'| op|
+CS     Reg insn		      | funct6          | rs1'|fn2| rs2'| op|
 CB     Branch		      | funct3 | offset | rs1'| offset  | op|
 CJ     Jump                   | funct3 |    jump target         | op|
 
@@ -1415,13 +1416,34 @@ struct pattern {
   const char *replacement;
 };
 
-static const struct pattern patterns[] = {
-  {MIR_MOV, "r r", "O13 F0 rd0 rs1 i0"}, /* addi rd,rs1,0 */
-  {MIR_MOV, "r m3", "O3 F3 rd0 ml"},     /* ld rd,m */
-  {MIR_MOV, "m3 r", "O23 F3 rS1 ms"},    /* sd rs2,m */
+#define COMPRESS_INSNS __riscv_compressed
 
+static const struct pattern patterns[] = {
+#if COMPRESS_INSNS
+  {MIR_MOV, "r r", "o2 b8 rd0 rt1"}, /* c.mv rd,rs2 */
+#endif
+  {MIR_MOV, "r r", "O13 F0 rd0 rs1 i0"}, /* addi rd,rs1,0 */
+#if COMPRESS_INSNS
+  {MIR_MOV, "C mc3", "o0 a3 rv0 mc3"},   /* c.ld rd',mc3 */
+  {MIR_MOV, "r mc3s", "o2 a3 rd0 mc3s"}, /* c.ldsp rd,mc3s */
+#endif
+  {MIR_MOV, "r m3", "O3 F3 rd0 ml"}, /* ld rd,m */
+#if COMPRESS_INSNS
+  {MIR_MOV, "mc3 C", "o0 a7 rv1 mc3"},    /* c.sd rd',mc3 */
+  {MIR_MOV, "mc3s r", "o2 a7 rt1 mc3ss"}, /* c.sdsp rd,mc3s */
+#endif
+  {MIR_MOV, "m3 r", "O23 F3 rS1 ms"}, /* sd rs2,m */
+
+#if COMPRESS_INSNS
+  {MIR_MOV, "C mcs2", "o0 a2 rv0 mc2"},   /* c.lw rd',mc2 */
+  {MIR_MOV, "r mcs2s", "o2 a2 rd0 mc2s"}, /* c.lwsp rd,mc2s */
+#endif
   {MIR_MOV, "r ms2", "O3 F2 rd0 ml"}, /* lw rd,m */
   {MIR_MOV, "r mu2", "O3 F6 rd0 ml"}, /* lwu rd,m */
+#if COMPRESS_INSNS
+  {MIR_MOV, "mc2 C", "o0 a6 rv1 mc2"},    /* c.sw mc2,rd' */
+  {MIR_MOV, "mc2s r", "o2 a6 rt1 mc2ss"}, /* c.swsp rd,mc2s */
+#endif
   {MIR_MOV, "m2 r", "O23 F2 rS1 ms"}, /* sw rs2,m */
 
   {MIR_MOV, "r ms1", "O3 F1 rd0 ml"}, /* lh rd,m */
@@ -1432,8 +1454,14 @@ static const struct pattern patterns[] = {
   {MIR_MOV, "r mu0", "O3 F4 rd0 ml"}, /* lbu rd,m */
   {MIR_MOV, "m0 r", "O23 F0 rS1 ms"}, /* sb rs2,m */
 
+#if COMPRESS_INSNS
+  {MIR_MOV, "r k", "o1 a2 rd0 k"}, /* c.li rd,k */
+#endif
   {MIR_MOV, "r i", "O13 F0 rd0 hs0 i"}, /* addi r,zero,i */
-  {MIR_MOV, "r iu", "O37 rd0 iu"},      /* lui r,i */
+#if COMPRESS_INSNS
+  {MIR_MOV, "rp ku", "o1 a3 rd0 ku"}, /* c.lui rd,k */
+#endif
+  {MIR_MOV, "r iu", "O37 rd0 iu"}, /* lui r,i */
   //  {MIR_MOV, "r ia", "O37 rd0 ih; O13 F0 rd0 rs0 il"}, /* lui r,i; addi r,r,i */
   {MIR_MOV, "r I", "O17 rd0 I; O3 F3 rd0 rs0"}, /* auipc r,rel-caddr; ld r,rel-caddr(r) */
 
@@ -1442,8 +1470,16 @@ static const struct pattern patterns[] = {
   {MIR_FMOV, "mf r", "O27 F2 rS1 ms"},         /* fsw rd,m */
 
   {MIR_DMOV, "r r", "O53 F0 f11 rd0 rs1 rS1"}, /* fsgnj.d rd,rs1,rs2 */
-  {MIR_DMOV, "r md", "O7 F3 rd0 ml"},          /* fld rd,m */
-  {MIR_DMOV, "md r", "O27 F3 rS1 ms"},         /* fsd rd,m */
+#if COMPRESS_INSNS
+  {MIR_DMOV, "C mcd", "o0 a1 rv0 mcd"},   /* c.fld rd',mcd */
+  {MIR_DMOV, "r mcds", "o2 a1 rd0 mcds"}, /* c.fldsp rd,mcds */
+#endif
+  {MIR_DMOV, "r md", "O7 F3 rd0 ml"}, /* fld rd,m */
+#if COMPRESS_INSNS
+  {MIR_DMOV, "mcd C", "o0 a5 rv1 mcd"},    /* c.fsd rd',mcd */
+  {MIR_DMOV, "mcds r", "o2 a5 rt1 mcdss"}, /* c.fsdsp rd,mcdss */
+#endif
+  {MIR_DMOV, "md r", "O27 F3 rS1 ms"}, /* fsd rd,m */
 
   /* LD values are always kept in memory.  We place them into int hard regs for passing
      args/returning values (see machinize).  We don't need insn replacement as we split
@@ -1472,16 +1508,36 @@ static const struct pattern patterns[] = {
   {MIR_UEXT32, "r r",
    "O13 F1 rd0 rs1 S20; O13 F5 f0 rd0 rs0 S20"}, /* slli rd,rs1,32;srli rd,rs1,32 */
 
-  {MIR_ADD, "r r r", "O33 F0 rd0 rs1 rS2"},     /* add rd,rs1,rs2 */
-  {MIR_ADD, "r r i", "O13 F0 rd0 rs1 i"},       /* addi rd,rs1,i */
-  {MIR_ADDS, "r r r", "O3b F0 rd0 rs1 rS2"},    /* addw rd,rs1,rs2 */
+#if COMPRESS_INSNS
+  {MIR_ADD, "r 0 r", "o2 b9 rd0 rt2"}, /* c.add rd,rd,rs2 */
+#endif
+  {MIR_ADD, "r r r", "O33 F0 rd0 rs1 rS2"}, /* add rd,rs1,rs2 */
+#if COMPRESS_INSNS
+  {MIR_ADD, "h2 0 ks", "o1 a3 rd0 ks"}, /* c.addi16sp sp,sp,i */
+  {MIR_ADD, "r 0 kp", "o1 a0 rd0 k"},   /* c.addi rd,rd,i */
+  {MIR_ADD, "C h2 kw", "o0 a0 rv0 kw"}, /* c.addi4spn rd',i */
+#endif
+  {MIR_ADD, "r r i", "O13 F0 rd0 rs1 i"}, /* addi rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_ADDS, "C 0 C", "o1 c27 d1 ru0 rv2"}, /* c.addw rd',rd',rs2' */
+#endif
+  {MIR_ADDS, "r r r", "O3b F0 rd0 rs1 rS2"}, /* addw rd,rs1,rs2 */
+#if COMPRESS_INSNS
+  {MIR_ADDS, "r 0 k", "o1 a1 rd0 k"}, /* c.addiw rd,rd,i */
+#endif
   {MIR_ADDS, "r r i", "O1b F0 rd0 rs1 i"},      /* addiw rd,rs1,i */
   {MIR_FADD, "r r r", "O53 F7 f0 rd0 rs1 rS2"}, /* fadd.s rd,rs1,rs2 */
   {MIR_DADD, "r r r", "O53 F7 f1 rd0 rs1 rS2"}, /* fadd.d rd,rs1,rs2 */
-  // ldadd is implemented through builtin
+// ldadd is implemented through builtin
 
-  {MIR_SUB, "r r r", "O33 F0 f20 rd0 rs1 rS2"},  /* sub rd,rs1,rs2 */
-  {MIR_SUB, "r r j", "O13 F0 rd0 rs1 j"},        /* addi rd,rs1,-j */
+#if COMPRESS_INSNS
+  {MIR_SUB, "C 0 C", "o1 c23 d0 ru0 rv2"}, /* c.sub rd',rd',rs2' */
+#endif
+  {MIR_SUB, "r r r", "O33 F0 f20 rd0 rs1 rS2"}, /* sub rd,rs1,rs2 */
+  {MIR_SUB, "r r j", "O13 F0 rd0 rs1 j"},       /* addi rd,rs1,-j */
+#if COMPRESS_INSNS
+  {MIR_SUBS, "C 0 C", "o1 c27 d0 ru0 rv2"}, /* c.subw rd',rd',rs2' */
+#endif
   {MIR_SUBS, "r r r", "O3b F0 f20 rd0 rs1 rS2"}, /* subw rd,rs1,rs2 */
   {MIR_SUBS, "r r j", "O1b F0 rd0 rs1 j"},       /* addiw rd,rs1,-j */
   {MIR_FSUB, "r r r", "O53 F7 f4 rd0 rs1 rS2"},  /* fsub.s rd,rs1,rs2 */
@@ -1632,31 +1688,64 @@ static const struct pattern patterns[] = {
 
   {MIR_LSH, "r r r", "O33 F1 f0 rd0 rs1 rS2"},  /* sll rd,rs1,rs2 */
   {MIR_LSHS, "r r r", "O3b F1 f0 rd0 rs1 rS2"}, /* sllw rd,rs1,rs2 */
-  {MIR_LSH, "r r S", "O13 F1 f0 rd0 rs1 S"},    /* slli rd,rs1,sh */
-  {MIR_LSHS, "r r s", "O1b F1 f0 rd0 rs1 s"},   /* slliw rd,rs1,sh */
+#if COMPRESS_INSNS
+  {MIR_LSH, "r 0 Sp", "o2 a0 rd0 Sp"}, /* c.slli rd,rd,sh */
+#endif
+  {MIR_LSH, "r r S", "O13 F1 f0 rd0 rs1 S"},  /* slli rd,rs1,sh */
+  {MIR_LSHS, "r r s", "O1b F1 f0 rd0 rs1 s"}, /* slliw rd,rs1,sh */
 
   {MIR_RSH, "r r r", "O33 F5 f20 rd0 rs1 rS2"},  /* sra rd,rs1,rs2 */
   {MIR_RSHS, "r r r", "O3b F5 f20 rd0 rs1 rS2"}, /* sraw rd,rs1,rs2 */
-  {MIR_RSH, "r r S", "O13 F5 f20 rd0 rs1 S"},    /* srai rd,rs1,sh */
-  {MIR_RSHS, "r r s", "O1b F5 f20 rd0 rs1 s"},   /* sraiw rd,rs1,sh */
+#if COMPRESS_INSNS
+  {MIR_RSH, "C 0 Sp", "o1 a4 e1 ru0 Sp"}, /* c.srai rd',rd',sh */
+#endif
+  {MIR_RSH, "r r S", "O13 F5 f20 rd0 rs1 S"},  /* srai rd,rs1,sh */
+  {MIR_RSHS, "r r s", "O1b F5 f20 rd0 rs1 s"}, /* sraiw rd,rs1,sh */
 
   {MIR_URSH, "r r r", "O33 F5 f0 rd0 rs1 rS2"},  /* srl rd,rs1,rs2 */
   {MIR_URSHS, "r r r", "O3b F5 f0 rd0 rs1 rS2"}, /* srlw rd,rs1,rs2 */
-  {MIR_URSH, "r r S", "O13 F5 f0 rd0 rs1 S"},    /* srli rd,rs1,rs2 */
-  {MIR_URSHS, "r r s", "O1b F5 f0 rd0 rs1 s"},   /* srliw rd,rs1,sh */
+#if COMPRESS_INSNS
+  {MIR_URSH, "C 0 Sp", "o1 a4 e0 ru0 Sp"}, /* c.srli rd',rd',sh */
+#endif
+  {MIR_URSH, "r r S", "O13 F5 f0 rd0 rs1 S"},  /* srli rd,rs1,rs2 */
+  {MIR_URSHS, "r r s", "O1b F5 f0 rd0 rs1 s"}, /* srliw rd,rs1,sh */
 
-  {MIR_AND, "r r r", "O33 F7 f0 rd0 rs1 rS2"},  /* and rd,rs1,rs2 */
-  {MIR_AND, "r r i", "O13 F7 f0 rd0 rs1 i"},    /* andi rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_AND, "C 0 C", "o1 c23 d3 ru0 rv2"}, /* c.and rd',rd',rs2' */
+#endif
+  {MIR_AND, "r r r", "O33 F7 f0 rd0 rs1 rS2"}, /* and rd,rs1,rs2 */
+#if COMPRESS_INSNS
+  {MIR_AND, "C 0 k", "o1 a4 e2 ru0 k"}, /* c.andi rd',rd',i */
+#endif
+  {MIR_AND, "r r i", "O13 F7 f0 rd0 rs1 i"}, /* andi rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_ANDS, "C 0 C", "o1 c23 d3 ru0 rv2"}, /* c.and rd',rd',rs2' */
+#endif
   {MIR_ANDS, "r r r", "O33 F7 f0 rd0 rs1 rS2"}, /* and rd,rs1,rs2 */
-  {MIR_ANDS, "r r i", "O13 F7 f0 rd0 rs1 i"},   /* andi rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_ANDS, "C 0 k", "o1 a4 e2 ru0 k"}, /* c.andi rd',rd',i */
+#endif
+  {MIR_ANDS, "r r i", "O13 F7 f0 rd0 rs1 i"}, /* andi rd,rs1,i */
 
-  {MIR_OR, "r r r", "O33 F6 f0 rd0 rs1 rS2"},  /* or rd,rs1,rs2 */
-  {MIR_OR, "r r i", "O13 F6 f0 rd0 rs1 i"},    /* ori rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_OR, "C 0 C", "o1 c23 d2 ru0 rv2"}, /* c.or rd',rd',rs2' */
+#endif
+  {MIR_OR, "r r r", "O33 F6 f0 rd0 rs1 rS2"}, /* or rd,rs1,rs2 */
+  {MIR_OR, "r r i", "O13 F6 f0 rd0 rs1 i"},   /* ori rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_ORS, "C 0 C", "o1 c23 d2 ru0 rv2"}, /* c.or rd',rd',rs2' */
+#endif
   {MIR_ORS, "r r r", "O33 F6 f0 rd0 rs1 rS2"}, /* or rd,rs1,rs2 */
   {MIR_ORS, "r r i", "O13 F6 f0 rd0 rs1 i"},   /* ori rd,rs1,i */
 
-  {MIR_XOR, "r r r", "O33 F4 f0 rd0 rs1 rS2"},  /* xor rd,rs1,rs2 */
-  {MIR_XOR, "r r i", "O13 F4 f0 rd0 rs1 i"},    /* xori rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_XOR, "C 0 C", "o1 c23 d1 ru0 rv2"}, /* c.xor rd',rd',rs2' */
+#endif
+  {MIR_XOR, "r r r", "O33 F4 f0 rd0 rs1 rS2"}, /* xor rd,rs1,rs2 */
+  {MIR_XOR, "r r i", "O13 F4 f0 rd0 rs1 i"},   /* xori rd,rs1,i */
+#if COMPRESS_INSNS
+  {MIR_XORS, "C 0 C", "o1 c23 d1 ru0 rv2"}, /* c.xor rd',rd',rs2' */
+#endif
   {MIR_XORS, "r r r", "O33 F4 f0 rd0 rs1 rS2"}, /* xor rd,rs1,rs2 */
   {MIR_XORS, "r r i", "O13 F4 f0 rd0 rs1 i"},   /* xori rd,rs1,i */
 
@@ -1669,23 +1758,50 @@ static const struct pattern patterns[] = {
   {MIR_D2I, "r r", "O53 F1 f61 hS2 rd0 rs1"}, /* fcvt.l.d rd,rs1,rtz */
   {MIR_F2D, "r r", "O53 F0 f21 hS0 rd0 rs1"}, /* fcvt.d.s rd,rs1 -- never round */
   {MIR_D2F, "r r", "O53 F7 f20 hS1 rd0 rs1"}, /* fcvt.s.d rd,rs1 */
-  // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
+// i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
+#if COMPRESS_INSNS
+  {MIR_CALL, "X r $", "o2 b9 rd1"},   /* c.jalr rd */
+  {MIR_INLINE, "X r $", "o2 b9 rd1"}, /* c.jalr rd */
+  {MIR_RET, "$", "o2 b8 hd1"},        /* c.jr ra  */
+#endif
   {MIR_CALL, "X r $", "O67 F0 hd1 rs1 i0"},   /* jalr rd,rs1 */
   {MIR_INLINE, "X r $", "O67 F0 hd1 rs1 i0"}, /* jalr rd,rs1 */
   {MIR_RET, "$", "O67 F0 hd0 hs1 i0"},        /* jalr hr0,hr1,0  */
 
+#if COMPRESS_INSNS
+  /* addi r0,r0,15; andi r0,r0,-16; c.sub sp,sp,r0; c.mov r0,sp: */
+  {MIR_ALLOCA, "C 0",
+   "o1 a0 rd0 kf; o1 a4 e2 ru0 k-10;"        /* c.addi r0,r0,15; c.andi r0,r0,-16 */
+   "O33 F0 f20 hd2 hs2 rS0; o2 b8 rd0 ht2"}, /* sub sp,sp,r0; c.mv r0,sp */
+  /* addi r0,r1,15; c.andi r0,r0,-16; c.sub sp,sp,r0; c.mov r0,sp: */
+  {MIR_ALLOCA, "C r",
+   "O13 F0 rd0 rs1 if; o1 a4 e2 ru0 k-10;"   /* addi r0,r1,15; c.andi r0,r0,-16 */
+   "O33 F0 f20 hd2 hs2 rS0; o2 b8 rd0 ht2"}, /* sub sp,sp,r0; c.mv r0,sp */
+  /* addi r0,r1,15; andi r0,r0,-16; sub sp,sp,r0; c.mov r0,sp: */
+  {MIR_ALLOCA, "r r",
+   "O13 F0 rd0 rs1 if; O13 F7 f0 rd0 rs0 i-10;" /* addi r0,r1,15; andi r0,r0,-16 */
+   "O33 F0 f20 hd2 hs2 rS0; o2 b8 rd0 ht2"},    /* sub sp,sp,r0; c.mv r0,sp */
+  /* c.addi16sp sp,sp,-roundup(imm,16); c.mv r0,sp: */
+  {MIR_ALLOCA, "r jus", "o1 a3 hd2 jus; o2 b8 rd0 ht2"},
+  /* addi sp,sp,-roundup(imm,16); c.mv r0,sp: */
+  {MIR_ALLOCA, "r ju", "O13 F0 hd2 hs2 ju; o2 b8 rd0 ht2"},
+#else
   /* addi r0,r1,15; andi r0,r0,-16; sub sp,sp,r0; mov r0,sp: */
   {MIR_ALLOCA, "r r",
    "O13 F0 rd0 rs1 if; O13 F7 f0 rd0 rs0 i-10;"  /* addi r0,r1,15; andi r0,r0,-16 */
    "O33 F0 f20 hd2 hs2 rS0; O13 F0 rd0 hs2 i0"}, /* sub sp,sp,r0; addi r0,sp,0 */
-
-  /* addi sp,sp,-roundup(imm,16); addi r0,sp,0: */
+  /* addi sp,sp,-roundup(imm,16); c.mv r0,sp: */
   {MIR_ALLOCA, "r ju", "O13 F0 hd2 hs2 ju; O13 F0 rd0 hs2 i0"},
+#endif
 
+#if COMPRESS_INSNS
+  {MIR_BSTART, "r", "o2 b8 rd0 ht2"}, /* r = sp: c.mv rd,rs2 */
+  {MIR_BEND, "r", "o2 b8 hd2 rt0"},   /* sp = r: c.mv rd,rs2 */
+#else
   {MIR_BSTART, "r", "O13 F0 rd0 hs2 i0"}, /* r = sp: addi rd,rs1,0 */
   {MIR_BEND, "r", "O13 F0 hd2 rs0 i0"},   /* sp = r: addi rd,rs1,0 */
-
+#endif
   /* slli t5,r,3; auipc t6,16; add t6,t6,t5;ld t6,T(t6);jalr zero,t6,0;
      8-byte aligned TableContent.  Remember r can be t5 can be if switch operand is memory. */
   {MIR_SWITCH, "r $",
