@@ -526,11 +526,11 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   if (mem_size != 0) { /* allocate/deallocate stack for args passed on stack */
     temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
     mem_size = (mem_size + 15) / 16 * 16; /* make it of several 16 bytes */
-    new_insn = MIR_new_insn (ctx, MIR_SUB, _MIR_new_hard_reg_op (ctx, SP_HARD_REG),
+    new_insn = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, SP_HARD_REG),
                              _MIR_new_hard_reg_op (ctx, SP_HARD_REG), temp_op);
     MIR_insert_insn_after (ctx, curr_func_item, prev_call_insn, new_insn);
     next_insn = DLIST_NEXT (MIR_insn_t, new_insn);
-    new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op, MIR_new_int_op (ctx, mem_size));
+    new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op, MIR_new_int_op (ctx, -(int64_t) mem_size));
     MIR_insert_insn_after (ctx, curr_func_item, prev_call_insn, new_insn);
     create_new_bb_insns (gen_ctx, prev_call_insn, next_insn, call_insn);
     temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
@@ -853,9 +853,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
 
         small_aggregate_save_area += qwords * 8;
         gen_assert (small_aggregate_save_area < (1 << 11));
-        new_insn = MIR_new_insn (ctx, MIR_SUB, MIR_new_reg_op (ctx, i + 1),
+        new_insn = MIR_new_insn (ctx, MIR_ADD, MIR_new_reg_op (ctx, i + 1),
                                  _MIR_new_hard_reg_op (ctx, FP_HARD_REG),
-                                 MIR_new_int_op (ctx, small_aggregate_save_area));
+                                 MIR_new_int_op (ctx, -(int64_t) small_aggregate_save_area));
         gen_add_insn_before (gen_ctx, anchor, new_insn);
         if (qwords == 0) continue;
         gen_mov (gen_ctx, anchor, mov_code1, MIR_new_mem_op (ctx, mem_type1, 0, i + 1, 0, 1),
@@ -1164,12 +1164,13 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   }
   frame_size += 16; /* ra/fp */
   if (frame_size < (1 << 11)) {
-    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, sp_reg_op,
+                             MIR_new_int_op (ctx, -(int64_t) frame_size));
   } else {
     treg_op2 = _MIR_new_hard_reg_op (ctx, T2_HARD_REG);
-    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, frame_size));
-    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = frame_size */
-    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, treg_op2);
+    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, -(int64_t) frame_size));
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = -frame_size */
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, sp_reg_op, treg_op2);
   }
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = sp - (frame_size|t) */
   if (save_prev_stack_p)                           /* save prev sp value which is in T1: */
@@ -1222,8 +1223,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   if (small_aggregate_save_area != 0) {
     if (small_aggregate_save_area % 16 != 0)
       small_aggregate_save_area = (small_aggregate_save_area + 15) / 16 * 16;
-    new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op,
-                             MIR_new_int_op (ctx, small_aggregate_save_area));
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, sp_reg_op,
+                             MIR_new_int_op (ctx, -(int64_t) small_aggregate_save_area));
     gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= <small aggr save area size> */
   }
   /* Epilogue: */
