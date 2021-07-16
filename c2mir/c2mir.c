@@ -11419,7 +11419,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
       global_name = NULL;
       rel_offset = init_el.offset + data_size;
     }
-    if (rel_offset < size) { /* fill the tail: */
+    if (rel_offset < size || size == 0) { /* fill the tail: */
       data = MIR_new_bss (ctx, global_name, size - rel_offset);
       if (global_name != NULL) var.decl->item = data;
     }
