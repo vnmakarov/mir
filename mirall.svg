@@ -1,386 +1,386 @@
 <?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1020.0" height="520.0" viewBox="130.0 70.0 1020.0 520.0" version="1.1">
 <rect x="130.0" y="70.0" width="1020.0" height="520.0" fill="rgb(255,255,255)"/>
-<g id="s131903519">
-<polygon id="s131903519" points="240.0,260.0 999.99976,260.0 1000.00006,339.99982 240.0,340.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t131903519">
+<g id="s247468512">
+<polygon id="s247468512" points="240.0,260.0 999.99976,260.0 1000.00006,339.99982 240.0,340.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t247468512">
 <text xml:space="preserve" x="590.0" y="313.34766" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="34">MIR</text>
 </g>
 </g>
-<g id="s228237164">
-<polygon id="s228237164" points="160.0,280.0 200.0,280.0 199.99998,320.0 160.0,319.99997 " fill="none" stroke-width="0.0" stroke="rgb(102,51,102)"/>
-<g id="t228237164">
+<g id="s7998617">
+<polygon id="s7998617" points="160.0,280.0 200.0,280.0 199.99998,320.0 160.0,319.99997 " fill="none" stroke-width="0.0" stroke="rgb(102,51,102)"/>
+<g id="t7998617">
 <text xml:space="preserve" x="164.5" y="307.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">API</text>
 </g>
 </g>
-<g id="s15792437">
-<polygon id="s15792437" points="500.0,120.0 540.0,120.0 539.99976,160.0 500.0,159.99995 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t15792437">
+<g id="s186919774">
+<polygon id="s186919774" points="500.0,120.0 540.0,120.0 539.99976,160.0 500.0,159.99995 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t186919774">
 <text xml:space="preserve" x="513.5" y="147.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">C</text>
 </g>
 </g>
-<g id="s109474250">
-<polygon id="s109474250" points="760.0,120.0 860.0,120.0 859.9984,159.99997 760.0,160.0 " fill="rgb(192,202,51)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t109474250">
+<g id="s206654271">
+<polygon id="s206654271" points="760.0,120.0 860.0,120.0 859.9984,159.99997 760.0,160.0 " fill="rgb(192,202,51)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t206654271">
 <text xml:space="preserve" x="773.0" y="147.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">LLVM IR</text>
 </g>
 </g>
-<g id="s170274619">
-<polygon id="s170274619" points="380.0,180.0 459.99936,180.0 460.0,219.99994 380.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t170274619">
+<g id="s88370188">
+<polygon id="s88370188" points="380.0,180.0 459.99936,180.0 460.0,219.99994 380.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t88370188">
 <text xml:space="preserve" x="392.5" y="207.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">WASM</text>
 </g>
 </g>
-<g id="s122177112">
-<polygon id="s122177112" points="700.0,180.0 739.999,180.0 740.0,219.99997 700.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t122177112">
+<g id="s72735061">
+<polygon id="s72735061" points="700.0,180.0 739.999,180.0 740.0,219.99997 700.0,220.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t72735061">
 <text xml:space="preserve" x="704.0" y="207.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">C++</text>
 </g>
 </g>
-<g id="s256177073">
-<polygon id="s256177073" points="920.00006,120.0 979.9999,120.0 980.0,159.99995 920.00006,160.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t256177073">
+<g id="s226729834">
+<polygon id="s226729834" points="920.00006,120.0 979.9999,120.0 980.0,159.99995 920.00006,160.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t226729834">
 <text xml:space="preserve" x="932.0" y="147.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">Rust</text>
 </g>
 </g>
-<g id="s243392662">
-<polygon id="s243392662" points="160.0,380.0 240.00003,380.0 239.99991,440.0 160.0,439.9999 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t243392662">
+<g id="s26827867">
+<polygon id="s26827867" points="160.0,380.0 240.00003,380.0 239.99991,440.0 160.0,439.9999 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t26827867">
 <text xml:space="preserve" x="183.00002" y="404.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">MIR</text>
 <text xml:space="preserve" x="173.00002" y="431.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">binary</text>
 </g>
 </g>
-<g id="s163480599">
-<polygon id="s163480599" points="260.0,380.0 320.0,380.0 319.99994,439.9993 260.0,440.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t163480599">
+<g id="s30555384">
+<polygon id="s30555384" points="260.0,380.0 320.0,380.0 319.99994,439.9993 260.0,440.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t30555384">
 <text xml:space="preserve" x="273.0" y="404.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">MIR</text>
 <text xml:space="preserve" x="272.5" y="431.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">text</text>
 </g>
 </g>
-<g id="s52916228">
-<polygon id="s52916228" points="560.0,500.0 640.0,500.0 639.9999,560.0 560.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t52916228">
+<g id="s82294225">
+<polygon id="s82294225" points="560.0,500.0 640.0,500.0 639.9999,560.0 560.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t82294225">
 <text xml:space="preserve" x="573.0" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">x86-64</text>
 </g>
 </g>
-<g id="s50600429">
-<polygon id="s50600429" points="660.0,500.0 739.9999,500.0 740.0,560.0 660.0,559.9997 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t50600429">
+<g id="s11814966">
+<polygon id="s11814966" points="660.0,500.0 739.9999,500.0 740.0,560.0 660.0,559.9997 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t11814966">
 <text xml:space="preserve" x="667.5" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">aarch64</text>
 </g>
 </g>
-<g id="s49508386">
-<polygon id="s49508386" points="460.0,500.0 540.0,500.0 540.0,560.0 460.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t49508386">
+<g id="s176644919">
+<polygon id="s176644919" points="460.0,500.0 540.0,500.0 540.0,560.0 460.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t176644919">
 <text xml:space="preserve" x="473.0" y="525.1221" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">PPC64</text>
 <text xml:space="preserve" x="475.5" y="549.01074" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">BE/LE</text>
 </g>
 </g>
-<g id="s169691827">
-<polygon id="s169691827" points="860.0,500.0 940.0,500.0 939.9992,560.0 860.0,560.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t169691827">
-<text xml:space="preserve" x="868.5" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">MIPS64</text>
+<g id="s258617508">
+<polygon id="s258617508" points="860.0,500.0 940.0,500.0 939.99927,560.0 860.0,559.99994 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t258617508">
+<text xml:space="preserve" x="875.0" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">RISCV</text>
 </g>
 </g>
-<g id="s78481520">
-<polygon id="s78481520" points="160.0,160.0 239.99998,160.0 240.00005,220.0 160.0,219.99998 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t78481520">
+<g id="s232840717">
+<polygon id="s232840717" points="160.0,160.0 239.99998,160.0 240.00005,220.0 160.0,219.99998 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t232840717">
 <text xml:space="preserve" x="183.00003" y="184.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">MIR</text>
 <text xml:space="preserve" x="173.00003" y="211.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">binary</text>
 </g>
 </g>
-<g id="s68511721">
-<polygon id="s68511721" points="280.0,160.0 340.0,160.0 340.0,219.99998 280.0,220.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t68511721">
+<g id="s125088194">
+<polygon id="s125088194" points="280.0,160.0 340.0,160.0 340.0,219.99998 280.0,220.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t125088194">
 <text xml:space="preserve" x="293.0" y="184.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">MIR</text>
 <text xml:space="preserve" x="292.5" y="211.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">text</text>
 </g>
 </g>
-<g id="s167537774">
-<ellipse id="s167537774" cx="920.0" cy="390.0" rx="60.0" ry="30.0" fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t167537774">
+<g id="s149224403">
+<ellipse id="s149224403" cx="920.0" cy="390.0" rx="60.0" ry="30.0" fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t149224403">
 <text xml:space="preserve" x="877.5" y="397.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">Interpreter</text>
 </g>
 </g>
-<g id="s77061903">
-<ellipse id="s77061903" cx="750.0" cy="430.0" rx="70.0" ry="30.0" fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t77061903">
+<g id="s107721488">
+<ellipse id="s107721488" cx="750.0" cy="430.0" rx="70.0" ry="30.0" fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t107721488">
 <text xml:space="preserve" x="705.0" y="437.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">Generator</text>
 </g>
 </g>
-<g id="s255507356">
-<polygon id="s255507356" points="1020.0001,140.0 1119.9988,140.0 1120.0,200.0 1020.0001,199.99927 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t255507356">
+<g id="s181030409">
+<polygon id="s181030409" points="1020.0001,140.0 1119.9988,140.0 1120.0,200.0 1020.0001,199.99927 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t181030409">
 <text xml:space="preserve" x="1048.5" y="164.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">Java</text>
 <text xml:space="preserve" x="1029.5" y="191.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">bytecode</text>
 </g>
 </g>
-<g id="s131307941">
-<polygon id="s131307941" points="1020.0,400.0 1120.0005,400.0 1119.999,460.0 1020.0,459.99966 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t131307941">
+<g id="s266348558">
+<polygon id="s266348558" points="1020.0,400.0 1120.0005,400.0 1119.999,460.0 1020.0,459.99966 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t266348558">
 <text xml:space="preserve" x="1048.5002" y="424.58008" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">Java</text>
 <text xml:space="preserve" x="1029.5002" y="451.12305" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">bytecode</text>
 </g>
 </g>
-<g id="s143057274">
-<polygon id="s143057274" points="1040.0,100.0 1100.0,100.0 1099.9983,119.99997 1040.0,120.0 " fill="none" stroke-width="0.0" stroke="rgb(102,51,102)"/>
-<g id="t143057274"/>
+<g id="s125403695">
+<polygon id="s125403695" points="1040.0,100.0 1100.0,100.0 1099.9983,119.99997 1040.0,120.0 " fill="none" stroke-width="0.0" stroke="rgb(102,51,102)"/>
+<g id="t125403695"/>
 </g>
-<g id="s142433579">
-<polygon id="s142433579" points="1060.0,240.0 1119.9995,240.0 1119.9995,280.0 1060.0,280.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t142433579">
+<g id="s62976060">
+<polygon id="s62976060" points="1060.0,240.0 1119.9995,240.0 1119.9995,280.0 1060.0,280.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t62976060">
 <text xml:space="preserve" x="1075.4998" y="267.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">CIL</text>
 </g>
 </g>
-<g id="s168162696">
-<polygon id="s168162696" points="1060.0,320.0 1120.0,320.0 1120.0,360.0 1060.0,360.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t168162696">
+<g id="s213959109">
+<polygon id="s213959109" points="1060.0,320.0 1120.0,320.0 1120.0,360.0 1060.0,360.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t213959109">
 <text xml:space="preserve" x="1075.5" y="347.85156" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="20">CIL</text>
 </g>
 </g>
-<g id="s76098337">
-<polygon id="s76098337" points="760.0,500.0 840.0,500.0 839.99994,559.9999 760.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t76098337">
+<g id="s209368858">
+<polygon id="s209368858" points="760.0,500.0 840.0,500.0 839.99994,559.9999 760.0,560.0 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t209368858">
 <text xml:space="preserve" x="776.0" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">s390x</text>
 </g>
 </g>
-<g id="s101817158">
-<polygon id="s101817158" points="959.99994,500.0 1040.0,500.0 1039.9995,559.9999 959.99994,560.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t101817158">
-<text xml:space="preserve" x="975.0" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">RISCV</text>
+<g id="s203821643">
+<polygon id="s203821643" points="959.9999,500.0 1040.0,500.0 1039.9995,559.9999 959.9999,560.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t203821643">
+<text xml:space="preserve" x="968.49994" y="537.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">MIPS64</text>
 </g>
 </g>
-<g id="s15900935">
-<polygon id="s15900935" points="340.0,380.0 420.0,380.0 420.0,420.0 340.0,419.99997 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t15900935">
+<g id="s113955880">
+<polygon id="s113955880" points="340.0,380.0 420.0,380.0 420.0,420.0 340.0,419.99997 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t113955880">
 <text xml:space="preserve" x="352.5" y="407.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">WASM</text>
 </g>
 </g>
-<g id="s113828404">
-<polygon id="s113828404" points="440.0,380.0 480.0,380.0 480.0,420.0 440.0,419.99994 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t113828404">
+<g id="s267433281">
+<polygon id="s267433281" points="440.0,380.0 480.0,380.0 480.0,420.0 440.0,419.99994 " fill="rgb(217,204,140)" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t267433281">
 <text xml:space="preserve" x="454.0" y="407.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">C</text>
 </g>
 </g>
-<g id="s11294813">
-<ellipse id="s11294813" cx="599.99994" cy="200.0" rx="40.0" ry="20.0" fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t11294813">
+<g id="s33368806">
+<ellipse id="s33368806" cx="599.99994" cy="200.0" rx="40.0" ry="20.0" fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t33368806">
 <text xml:space="preserve" x="581.99994" y="207.0664" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">GCC</text>
 </g>
 </g>
-<g id="s20719058">
-<ellipse id="s20719058" cx="580.0" cy="410.0" rx="80.0" ry="30.0" fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t20719058">
+<g id="s264341543">
+<ellipse id="s264341543" cx="580.0" cy="410.0" rx="80.0" ry="30.0" fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t264341543">
 <text xml:space="preserve" x="562.0" y="405.12207" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">GCC</text>
 <text xml:space="preserve" x="537.0" y="429.01074" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="18">LibGCCJIT</text>
 </g>
 </g>
-<g id="la210650787">
-<path id="s210650787" d="M 200.0,300.0 240.0,299.99957 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s186282042" d="M 230.82198,307.7303 240.0,299.99957 230.82181,292.26904 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t210650787">
+<g id="la34409172">
+<path id="s34409172" d="M 200.0,300.0 240.0,299.99957 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s215114877" d="M 230.82198,307.7303 240.0,299.99957 230.82181,292.26904 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t34409172">
 <text xml:space="preserve" x="220.0" y="292.20584" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la120319392">
-<path id="s120319392" d="M 200.00002,380.0 285.59943,339.99933 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s32178760" d="M 205.04224,369.11075 200.00002,380.0 211.58784,383.11804 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t120319392">
+<g id="la98635634">
+<path id="s98635634" d="M 200.00002,380.0 285.59943,339.99933 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s129269699" d="M 205.04224,369.11075 200.00002,380.0 211.58784,383.11804 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t98635634">
 <text xml:space="preserve" x="246.79971" y="365.49576" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la165354841">
-<path id="s165354841" d="M 346.39987,339.99936 290.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s124917985" d="M 293.0142,368.3847 290.0,380.0 301.9586,380.9961 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t165354841">
+<g id="la177864768">
+<path id="s177864768" d="M 346.39987,339.99936 290.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s19254137" d="M 293.0142,368.3847 290.0,380.0 301.9586,380.9961 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t177864768">
 <text xml:space="preserve" x="322.19995" y="365.4958" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la18009374">
-<path id="s18009374" d="M 809.9992,159.99998 799.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s237983238" d="M 793.2208,250.09827 799.9999,260.0 808.60535,251.63661 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t18009374">
+<g id="la162312382">
+<path id="s162312382" d="M 809.9992,159.99998 799.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s223696159" d="M 793.2208,250.09827 799.9999,260.0 808.60535,251.63661 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t162312382">
 <text xml:space="preserve" x="808.9996" y="215.4961" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la45394431">
-<path id="s45394431" d="M 519.9999,159.99997 519.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s83993799" d="M 512.2693,250.8219 519.9999,260.0 527.73047,250.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t45394431">
+<g id="la37675116">
+<path id="s37675116" d="M 519.9999,159.99997 519.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s212772405" d="M 512.2693,250.8219 519.9999,260.0 527.73047,250.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t37675116">
 <text xml:space="preserve" x="523.9999" y="215.49608" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la217203660">
-<path id="s217203660" d="M 420.0,219.99997 439.99988,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s181533428" d="M 428.98083,255.24806 439.99988,260.0 442.8098,248.33362 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t217203660">
+<g id="la251929659">
+<path id="s251929659" d="M 420.0,219.99997 439.99988,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s141530968" d="M 428.98083,255.24806 439.99988,260.0 442.8098,248.33362 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t251929659">
 <text xml:space="preserve" x="433.99994" y="245.49608" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la261568021">
-<path id="s261568021" d="M 539.9999,140.0 760.0,140.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s43409949" d="M 750.8219,147.7306 760.0,140.0 750.8219,132.26938 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t261568021">
+<g id="la6035862">
+<path id="s6035862" d="M 539.9999,140.0 760.0,140.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s153773805" d="M 750.8219,147.7306 760.0,140.0 750.8219,132.26938 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t6035862">
 <text xml:space="preserve" x="649.99994" y="132.20604" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la253402410">
-<path id="s253402410" d="M 310.0,220.0 358.74963,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s190499986" d="M 346.75064,260.15445 358.74963,260.0 356.55798,248.20184 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t253402410">
+<g id="la150719098">
+<path id="s150719098" d="M 310.0,220.0 358.74963,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s256021035" d="M 346.75064,260.15445 358.74963,260.0 356.55798,248.20184 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t150719098">
 <text xml:space="preserve" x="338.37482" y="245.4961" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la45344539">
-<path id="s45344539" d="M 200.00003,220.0 263.74976,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s183092835" d="M 251.86656,261.67023 263.74976,260.0 260.08408,248.5736 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t45344539">
+<g id="la2328200">
+<path id="s2328200" d="M 200.00003,220.0 263.74976,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s122546209" d="M 251.86656,261.67023 263.74976,260.0 260.08408,248.5736 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t2328200">
 <text xml:space="preserve" x="235.8749" y="245.4961" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la15061176">
-<path id="s15061176" d="M 899.99994,339.99985 920.0,360.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s59626080" d="M 908.04376,358.97644 920.0,360.0 918.9765,348.04373 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t15061176">
+<g id="la57414726">
+<path id="s57414726" d="M 899.99994,339.99985 920.0,360.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s123086343" d="M 908.04376,358.97644 920.0,360.0 918.9765,348.04373 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t57414726">
 <text xml:space="preserve" x="914.0" y="355.49603" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la230825617">
-<path id="s230825617" d="M 500.0,500.0 685.3284,441.4805 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s263979801" d="M 506.4244,489.86456 500.0,500.0 511.0799,504.60825 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t230825617">
+<g id="la263095092">
+<path id="s263095092" d="M 500.0,500.0 685.3284,441.4805 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s125822301" d="M 506.4244,489.86456 500.0,500.0 511.0799,504.60825 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t263095092">
 <text xml:space="preserve" x="592.6642" y="462.94632" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la102588918">
-<path id="s102588918" d="M 600.0,500.0 700.5025,451.2132 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s173350878" d="M 604.8808,489.0374 600.0,500.0 611.6326,502.94647 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t102588918">
+<g id="la205860562">
+<path id="s205860562" d="M 600.0,500.0 700.5025,451.2132 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s103095203" d="M 604.8808,489.0374 600.0,500.0 611.6326,502.94647 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t205860562">
 <text xml:space="preserve" x="654.2512" y="481.1027" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la144693751">
-<path id="s144693751" d="M 723.21216,457.71637 699.99994,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s162031039" d="M 697.64,488.23434 699.99994,500.0 711.1933,495.67462 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t144693751">
+<g id="la256548512">
+<path id="s256548512" d="M 723.21216,457.71637 699.99994,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s249199193" d="M 697.64,488.23434 699.99994,500.0 711.1933,495.67462 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t256548512">
 <text xml:space="preserve" x="715.606" y="484.35428" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la209928292">
-<path id="s209928292" d="M 799.4975,451.2132 900.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s208516236" d="M 888.3674,502.94647 900.0,500.0 895.1192,489.0374 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t209928292">
+<g id="la237200926">
+<path id="s237200926" d="M 799.4975,451.2132 900.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s123981567" d="M 888.3674,502.94647 900.0,500.0 895.1192,489.0374 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t237200926">
 <text xml:space="preserve" x="853.7488" y="481.1027" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la47780557">
-<path id="s47780557" d="M 979.99994,339.99982 1070.0002,400.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s134264789" d="M 1058.0754,401.34116 1070.0002,400.0 1066.6517,388.47665 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t47780557">
+<g id="la113968332">
+<path id="s113968332" d="M 979.99994,339.99982 1070.0002,400.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s28271381" d="M 1058.0754,401.34116 1070.0002,400.0 1066.6517,388.47665 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t113968332">
 <text xml:space="preserve" x="1029.0001" y="375.496" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la28682114">
-<path id="s28682114" d="M 1050.0,199.99948 979.99994,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s68115434" d="M 981.93744,248.15744 979.99994,260.0 991.9995,259.89645 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t28682114">
+<g id="la253478442">
+<path id="s253478442" d="M 1050.0,199.99948 979.99994,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s61889563" d="M 981.93744,248.15744 979.99994,260.0 991.9995,259.89645 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t253478442">
 <text xml:space="preserve" x="1019.0" y="235.49583" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la65937043">
-<path id="s65937043" d="M 739.999,180.0 760.0,160.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s159882971" d="M 758.9762,171.95624 760.0,160.0 748.0437,161.02324 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t65937043">
+<g id="la101294520">
+<path id="s101294520" d="M 739.999,180.0 760.0,160.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s229645201" d="M 758.9762,171.95624 760.0,160.0 748.0437,161.02324 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t101294520">
 <text xml:space="preserve" x="753.9995" y="175.4961" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la40238800">
-<path id="s40238800" d="M 920.00006,140.0 859.9992,139.99998 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s159878520" d="M 869.1773,132.26938 859.9992,139.99998 869.1773,147.7306 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t40238800">
+<g id="la260578038">
+<path id="s260578038" d="M 920.00006,140.0 859.9992,139.99998 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s91135735" d="M 869.1773,132.26938 859.9992,139.99998 869.1773,147.7306 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t260578038">
 <text xml:space="preserve" x="889.99963" y="132.20605" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la233901769">
-<path id="s233901769" d="M 1069.9991,119.999985 1069.9995,140.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s245496913" d="M 1062.2687,130.82204 1069.9995,140.0 1077.73,130.82175 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t233901769">
+<g id="la244523364">
+<path id="s244523364" d="M 1069.9991,119.999985 1069.9995,140.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s2744269" d="M 1062.2687,130.82204 1069.9995,140.0 1077.73,130.82175 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t244523364">
 <text xml:space="preserve" x="1073.9994" y="135.4961" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la177912270">
-<path id="s177912270" d="M 1000.0,319.9999 1060.0,340.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s226446518" d="M 1048.8483,344.43152 1060.0,340.0 1053.7375,329.7637 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t177912270">
+<g id="la160624770">
+<path id="s160624770" d="M 1000.0,319.9999 1060.0,340.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s258225043" d="M 1048.8483,344.43152 1060.0,340.0 1053.7375,329.7637 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t160624770">
 <text xml:space="preserve" x="1030.0" y="322.206" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la198316271">
-<path id="s198316271" d="M 999.9998,279.9999 1060.0,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s56053175" d="M 1006.2623,269.76364 999.9998,279.9999 1011.15155,284.43146 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t198316271">
+<g id="la202567632">
+<path id="s202567632" d="M 999.9998,279.9999 1060.0,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s67218377" d="M 1006.2623,269.76364 999.9998,279.9999 1011.15155,284.43146 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t202567632">
 <text xml:space="preserve" x="1029.9999" y="262.206" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="14"/>
 </g>
 </g>
-<g id="la24393724">
-<path id="s24393724" d="M 750.0,400.0 740.0,339.99988 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s140773668" d="M 740.8657,392.21768 750.0,400.0 756.1166,389.67587 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t24393724">
+<g id="la226726606">
+<path id="s226726606" d="M 750.0,400.0 740.0,339.99988 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s18118127" d="M 740.8657,392.21768 750.0,400.0 756.1166,389.67587 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t226726606">
 <text xml:space="preserve" x="749.0" y="375.10345" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la7523973">
-<path id="s7523973" d="M 776.78784,457.71637 800.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s54070413" d="M 788.80664,495.67462 800.0,500.0 802.3599,488.23434 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t7523973">
+<g id="la125778172">
+<path id="s125778172" d="M 776.78784,457.71637 800.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s57686917" d="M 788.80664,495.67462 800.0,500.0 802.3599,488.23434 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t125778172">
 <text xml:space="preserve" x="792.3939" y="483.9617" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la195863770">
-<path id="s195863770" d="M 814.6716,441.4805 1000.0,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s53182018" d="M 988.9201,504.60825 1000.0,500.0 993.57556,489.86456 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t195863770">
-<text xml:space="preserve" x="907.3358" y="463.2173" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
+<g id="la113905114">
+<path id="s113905114" d="M 814.6716,441.4805 999.99994,500.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s81560075" d="M 988.92004,504.60825 999.99994,500.0 993.5755,489.86456 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t113905114">
+<text xml:space="preserve" x="907.33575" y="463.21732" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la223923467">
-<path id="s223923467" d="M 429.9995,339.9995 380.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s50925139" d="M 382.3375,368.22986 380.0,380.0 391.9962,380.30295 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t223923467">
+<g id="la17098984">
+<path id="s17098984" d="M 429.9995,339.9995 380.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s159255297" d="M 382.3375,368.22986 380.0,380.0 391.9962,380.30295 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t17098984">
 <text xml:space="preserve" x="408.99976" y="365.10327" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la248174568">
-<path id="s248174568" d="M 480.00003,339.99994 460.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s74093456" d="M 457.1901,368.33362 460.0,380.0 471.01904,375.24808 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t248174568">
+<g id="la97201574">
+<path id="s97201574" d="M 480.00003,339.99994 460.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s63910887" d="M 457.1901,368.33362 460.0,380.0 471.01904,375.24808 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t97201574">
 <text xml:space="preserve" x="474.0" y="365.1035" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la261541377">
-<path id="s261541377" d="M 639.99994,200.0 700.0,200.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s196535433" d="M 649.17804,192.2694 639.99994,200.0 649.17804,207.7306 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t261541377">
+<g id="la213101460">
+<path id="s213101460" d="M 639.99994,200.0 700.0,200.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s255809085" d="M 649.17804,192.2694 639.99994,200.0 649.17804,207.7306 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t213101460">
 <text xml:space="preserve" x="670.0" y="192.47705" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la197145766">
-<path id="s197145766" d="M 539.99976,160.0 584.6926,181.52242 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s24591502" d="M 573.0693,184.50534 584.6926,181.52242 579.7775,170.5752 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t197145766">
+<g id="la174882354">
+<path id="s174882354" d="M 539.99976,160.0 584.6926,181.52242 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s189867907" d="M 573.0693,184.50534 584.6926,181.52242 579.7775,170.5752 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t174882354">
 <text xml:space="preserve" x="566.3462" y="175.86472" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la256192231">
-<path id="s256192231" d="M 599.99994,220.0 599.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s135019695" d="M 592.2693,250.82188 599.9999,260.0 607.7305,250.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t256192231">
+<g id="la233434368">
+<path id="s233434368" d="M 599.99994,220.0 599.9999,260.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s13637945" d="M 592.2693,250.82188 599.9999,260.0 607.7305,250.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t233434368">
 <text xml:space="preserve" x="603.9999" y="245.10352" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
-<g id="la40471188">
-<path id="s40471188" d="M 580.0,339.9999 580.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<path id="s101537980" d="M 572.2694,370.8219 580.0,380.0 587.7306,370.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
-<g id="t40471188">
+<g id="la190860158">
+<path id="s190860158" d="M 580.0,339.9999 580.0,380.0 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<path id="s7649503" d="M 572.2694,370.8219 580.0,380.0 587.7306,370.8219 " fill="none" stroke-width="2.0" stroke="rgb(102,51,102)"/>
+<g id="t190860158">
 <text xml:space="preserve" x="584.0" y="365.10345" font-family="Sans,Helvetica" fill="rgb(102,51,102)" font-size="13"/>
 </g>
 </g>
