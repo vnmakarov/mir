@@ -1096,6 +1096,8 @@ static void push_str_char (c2m_ctx_t c2m_ctx, VARR (char) * temp, uint64_t ch, i
 #endif
 }
 
+static int pre_skip_if_part_p (c2m_ctx_t c2m_ctx);
+
 static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, int type) {
   int i, str_len;
   int64_t curr_c, last_c = -1;
@@ -1113,7 +1115,8 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
   assert (str_len >= start + 2 && (str[start] == '"' || str[start] == '\'')
           && str[start] == str[str_len - 1]);
   for (i = start + 1; i < str_len - 1; i++) {
-    if (!string_p && last_c >= 0) error (c2m_ctx, t->pos, "multibyte character");
+    if (!string_p && last_c >= 0 && !pre_skip_if_part_p (c2m_ctx))
+      error (c2m_ctx, t->pos, "multibyte character");
     last_c = curr_c = str[i];
     if (curr_c != '\\') {
       push_str_char (c2m_ctx, temp, curr_c, type);
@@ -1133,8 +1136,9 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
     case '\?':
     case '\"': break;
     case 'e':
-      (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
-                                                   "non-standard escape sequence \\e");
+      if (!pre_skip_if_part_p (c2m_ctx))
+        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                     "non-standard escape sequence \\e");
       last_c = curr_c = '\033';
       break;
     case '0':
@@ -1177,10 +1181,12 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
         }
       }
       if (first_p) {
-        error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
+        if (!pre_skip_if_part_p (c2m_ctx))
+          error (c2m_ctx, t->pos, "wrong hexadecimal char %c", curr_c);
       } else if (v > max_char) {
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
-                                                     "too big hexadecimal char 0x%x", v);
+        if (!pre_skip_if_part_p (c2m_ctx))
+          (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                       "too big hexadecimal char 0x%x", v);
         curr_c = max_char;
       }
       last_c = curr_c = v;
@@ -1201,34 +1207,43 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
       }
       last_c = curr_c = v;
       if (n < digits_num) {
-        error (c2m_ctx, t->pos, "unfinished \\%c<hex-digits>", start_c);
+        if (!pre_skip_if_part_p (c2m_ctx))
+          error (c2m_ctx, t->pos, "unfinished \\%c<hex-digits>", start_c);
       } else if (v > max_char && (!string_p || (type != ' ' && type != '8') || v > MAX_UTF8)) {
-        (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
-                                                     "too big universal char 0x%lx in \\%c",
-                                                     (unsigned long) v, start_c);
+        if (!pre_skip_if_part_p (c2m_ctx))
+          (c2m_options->pedantic_p ? error : warning) (c2m_ctx, t->pos,
+                                                       "too big universal char 0x%lx in \\%c",
+                                                       (unsigned long) v, start_c);
         last_c = curr_c = max_char;
       } else if ((0xD800 <= v && v <= 0xDFFF)
                  || (v < 0xA0 && v != 0x24 && v != 0x40 && v != 0x60)) {
-        error (c2m_ctx, t->pos, "usage of reserved value 0x%lx in \\%c", (unsigned long) v,
-               start_c);
-        curr_c = -1;
+        if (!pre_skip_if_part_p (c2m_ctx)) {
+          error (c2m_ctx, t->pos, "usage of reserved value 0x%lx in \\%c", (unsigned long) v,
+                 start_c);
+          curr_c = -1;
+        }
       }
       if (n < digits_num) i--;
       break;
     }
-    default: error (c2m_ctx, t->pos, "wrong escape char 0x%x", curr_c); curr_c = -1;
+    default:
+      if (!pre_skip_if_part_p (c2m_ctx)) {
+        error (c2m_ctx, t->pos, "wrong escape char 0x%x", curr_c);
+        curr_c = -1;
+      }
     }
     if (!string_p || curr_c >= 0) push_str_char (c2m_ctx, temp, curr_c, type);
   }
   push_str_char (c2m_ctx, temp, '\0', type);
   if (string_p)
     t->node->u.s = uniq_str (c2m_ctx, VARR_ADDR (char, temp), VARR_LENGTH (char, temp));
-  else if (last_c < 0)
-    error (c2m_ctx, t->pos, "empty char constant");
-  else if (type == 'U' || type == 'u' || type == 'L')
+  else if (last_c < 0) {
+    if (!pre_skip_if_part_p (c2m_ctx)) error (c2m_ctx, t->pos, "empty char constant");
+  } else if (type == 'U' || type == 'u' || type == 'L') {
     t->node->u.ul = last_c;
-  else
+  } else {
     t->node->u.ch = last_c;
+  }
 }
 
 static token_t new_id_token (c2m_ctx_t c2m_ctx, pos_t pos, const char *id_str) {
@@ -1970,6 +1985,11 @@ struct pre_ctx {
 #define actual_pre_pos pre_ctx->actual_pre_pos
 #define pptokens_num pre_ctx->pptokens_num
 #define pre_out_token_func pre_ctx->pre_out_token_func
+
+static int pre_skip_if_part_p (c2m_ctx_t c2m_ctx) {
+  pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
+  return pre_ctx != NULL && skip_if_part_p;
+}
 
 /* It is a token based prerpocessor.
    It is input preprocessor tokens and output is (parser) tokens */
