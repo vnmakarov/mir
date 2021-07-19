@@ -5400,7 +5400,7 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   target_machinize (gen_ctx);
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after machinize:\n");
-    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (optimize_level != 0) build_loop_tree (gen_ctx);
   calculate_func_cfg_live_info (gen_ctx, optimize_level != 0);
