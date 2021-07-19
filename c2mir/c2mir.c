@@ -7422,7 +7422,7 @@ static void process_init_field_designator (c2m_ctx_t c2m_ctx, node_t designator_
   /* We can have *partial* path of containing anon members: pop them */
   while (VARR_LENGTH (init_object_t, init_object_path) != 0) {
     init_object = VARR_LAST (init_object_t, init_object_path);
-    if ((decl = init_object.u.curr_member->attr) == NULL
+    if (!init_object.designator_p || (decl = init_object.u.curr_member->attr) == NULL
         || !decl->decl_spec.type->unnamed_anon_struct_union_member_type_p) {
       break;
     }
