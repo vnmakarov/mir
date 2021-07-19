@@ -388,6 +388,7 @@ static void *import_resolver (const char *name) {
     if (strcmp (name, "GetProcAddress") == 0) return GetProcAddress;
 #else
     if (strcmp (name, "dlopen") == 0) return dlopen;
+    if (strcmp (name, "dlerror") == 0) return dlerror;
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
     if (strcmp (name, "stat") == 0) return stat;
