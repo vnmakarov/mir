@@ -163,6 +163,8 @@ static VARR (char_ptr_t) * lib_dirs;
 
 static void *open_lib (const char *dir, const char *name) {
   const char *last_slash = strrchr (dir, slash);
+  void *res;
+  FILE *f;
 
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
@@ -173,7 +175,13 @@ static void *open_lib (const char *dir, const char *name) {
   VARR_PUSH_ARR (char, temp_string, name, strlen (name));
   VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
   VARR_PUSH (char, temp_string, 0);
-  return dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY);
+  if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
+    if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
+      fclose (f);
+      fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
+    }
+  }
+  return res;
 }
 
 static void process_cmdline_lib (char *lib_name) {
