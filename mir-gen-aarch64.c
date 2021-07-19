@@ -1145,7 +1145,6 @@ struct pattern {
      X - match everything
      $ - finish successfully matching
      r - register
-     rn - register but temp2 (hr10)
      h[0-63] - hard register with given number
 
         memory with indexed reg offset:
@@ -1178,10 +1177,6 @@ struct pattern {
      Mf - memory of float
      Md - memory of double
      Mld - memory of long double
-
-     M[3|f|d|ld]o - 64-bit int (signed or unsigned),float,double,long double type memory
-           with unsigned 32-bit offset and base reg different from temp2 (hr10)
-
      I -- immediate as 3th op for arithemtic insn (12-bit unsigned with possible 12-bit LSL)
      Iu -- immediate for arithemtic insn roundup to 16
      SR -- any immediate for right 64-bit shift (0-63)
@@ -1211,11 +1206,8 @@ struct pattern {
      S - immr[16..21]  for right shift SR/Sr
      SL, Sl - immr[16..21] and imms[10..15] for left shift SL/Sl
 
-     Mo = 1st or 2nd operand is 64-bit, float, double, or long double mem with base, and hr10 as
-          index
-
-     Z[0-3] -- n-th 16-bit immediate[5..20] and its shift [21..22] from immediate or memory disp
-     N[0-3] -- n-th 16-bit immediate[5..20] and its shift [21..22] from immediate or memory disp
+     Z[0-3] -- n-th 16-bit immediate[5..20] from Z[0-3] and its shift [21..22]
+     N[0-3] -- n-th 16-bit immediate[5..20] from N[0-3] and its shift [21..22]
      I -- arithmetic op 12-bit immediate [10..21] and its shift [22..23]
      Iu -- arithmetic op immediate [10..21] got from roundup value to 16 and its shift [22..23]
      L -- operand-label as 26-bit offset
@@ -1235,18 +1227,6 @@ static const struct pattern patterns[] = {
   {MIR_MOV, "m3 r", "f8200800:ffe00c00 rd1 m"}, /* str Rd,[Rn,Rm{,#3}] */
   {MIR_MOV, "r M3", "f9400000:ffc00000 rd0 M"}, /* ldr Rd,[Rn,{,#imm12}] */
   {MIR_MOV, "M3 r", "f9000000:ffc00000 rd1 M"}, /* str Rd,[Rn,Rm{,#imm12}] */
-
-  /* movz h10...;ldr Rd,[Rn,h10]: */
-  {MIR_MOV, "r M31", "d2800000:ff800000 hda Z0; f8600800:ffe00c00 rd0 Mo"},
-  /* movz h10...;str Rd,[Rn,hr10] */
-  {MIR_MOV, "M31 rn", "d2800000:ff800000 hda Z0; f8200800:ffe00c00 rd1 Mo"},
-
-  /* movz h10...;movk h10,...;ldr Rd,[Rn,h10]: */
-  {MIR_MOV, "r M32",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1; f8600800:ffe00c00 rd0 Mo"},
-  /* movz h10...;movk h10,...;str Rd,[Rn,hr10] */
-  {MIR_MOV, "M32 rn",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;f8200800:ffe00c00 rd1 Mo"},
 
   {MIR_MOV, "r mu2", "b8600800:ffe00c00 rd0 m"}, /* ldr Wd,[Rn,Rm{,#2}] */
   {MIR_MOV, "m2 r", "b8200800:ffe00c00 rd1 m"},  /* str Wd,[Rn,Rm{,#2}] */
@@ -1293,53 +1273,17 @@ static const struct pattern patterns[] = {
   {MIR_FMOV, "r Mf", "bd400000:ffc00000 vd0 M"},  /* ldr Sd,[Rn,{,#imm12}] */
   {MIR_FMOV, "Mf r", "bd000000:ffc00000 vd1 M"},  /* str Sd,[Rn,Rm{,#imm12}] */
 
-  /* movz h10...;ldr Sd,[Rn,hr10] */
-  {MIR_FMOV, "r Mf1", "d2800000:ff800000 hda Z0; bc600800:ff600c00 vd0 Mo"},
-  /* movz h10...;str Sd,[Rn,hr10] */
-  {MIR_FMOV, "Mf1 r", "d2800000:ff800000 hda Z0; bc200800:ff600c00 vd1 Mo"},
-
-  /* movz h10...;movk h10,...;ldr Sd,[Rn,hr10] */
-  {MIR_FMOV, "r Mf2",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;bc600800:ff600c00 vd0 Mo"},
-  /* movz h10...;movk h10,...;str Sd,[Rn,hr10] */
-  {MIR_FMOV, "Mf2 r",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;bc200800:ff600c00 vd1 Mo"},
-
   {MIR_DMOV, "r r", "1e604000:fffffc00 vd0 vn1"}, /* fmov Dd,Dn */
   {MIR_DMOV, "r md", "fc600800:ff600c00 vd0 m"},  /* ldr Dd,[Rn,Rm{,#3}] */
   {MIR_DMOV, "md r", "fc200800:ff600c00 vd1 m"},  /* str Dd,[Rn,Rm{,#3}] */
   {MIR_DMOV, "r Md", "fd400000:ffc00000 vd0 M"},  /* ldr Dd,[Rn,{,#imm12}] */
   {MIR_DMOV, "Md r", "fd000000:ffc00000 vd1 M"},  /* str Dd,[Rn,Rm{,#imm12}] */
 
-  /* movz h10...;ldr Dd,[Rn,hr10] */
-  {MIR_DMOV, "r Md1", "d2800000:ff800000 hda Z0; fc600800:ff600c00 vd0 Mo"},
-  /* movz h10...;str Dd,[Rn,hr10] */
-  {MIR_DMOV, "Md1 r", "d2800000:ff800000 hda Z0; fc200800:ff600c00 vd1 Mo"},
-
-  /* movz h10...;movk h10,...;ldr Dd,[Rn,hr10] */
-  {MIR_DMOV, "r Md2",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;fc600800:ff600c00 vd0 Mo"},
-  /* movz h10...;movk h10,...;str Dd,[Rn,hr10] */
-  {MIR_DMOV, "Md2 r",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;fc200800:ff600c00 vd1 Mo"},
-
   {MIR_LDMOV, "r r", "4ea01c00:ffe0fc00 vd0 vm1 vn1"}, /* orr Qd.16b,Qm.16b,Qn.16b */
   {MIR_LDMOV, "r mld", "3ce00800:ffe00c00 vd0 m"},     /* ldr Qd,[Rn,Rm{,#4}] */
   {MIR_LDMOV, "mld r", "3ca00800:ffe00c00 vd1 m"},     /* str Qd,[Rn,Rm{,#4}] */
   {MIR_LDMOV, "r Mld", "3dc00000:ffc00000 vd0 M"},     /* ldr Qd,[Rn,{,#imm12}] */
   {MIR_LDMOV, "Mld r", "3d800000:ffc00000 vd1 M"},     /* str Qd,[Rn,Rm{,#imm12}] */
-
-  /* movz h10...;ldr Qd,[Rn,hr10] */
-  {MIR_LDMOV, "r Mld1", "d2800000:ff800000 hda Z0; 3ce00800:ffe00c00 vd0 Mo"},
-  /* movz h10...;str Qd,[Rn,hr10] */
-  {MIR_LDMOV, "Mld1 r", "d2800000:ff800000 hda Z0; 3ca00800:ffe00c00 vd1 Mo"},
-
-  /* movz h10...;movk h10,...;ldr Qd,[Rn,hr10] */
-  {MIR_LDMOV, "r Mld2",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;3ce00800:ffe00c00 vd0 Mo"},
-  /* movz h10...;movk h10,...;str Qd,[Rn,hr10] */
-  {MIR_LDMOV, "Mld2 r",
-   "d2800000:ff800000 hda Z0; f2800000:ff800000 hda Z1;3ca00800:ffe00c00 vd1 Mo"},
 
   {MIR_EXT8, "r r", "93401c00:fffffc00 rd0 rn1"},  /* sxtb rd, wn */
   {MIR_EXT16, "r r", "93403c00:fffffc00 rd0 rn1"}, /* sxth rd, wn */
@@ -1885,7 +1829,6 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
   char ch, start_ch;
   MIR_op_t op;
   MIR_reg_t hr;
-  struct imm imms[4];
 
   for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
     while (*p == ' ' || *p == '\t') p++;
@@ -1896,14 +1839,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     switch (start_ch = *p) {
     case 'X': break;
     case 'r':
-      ch = *++p;
-      if (ch == 'n') {
-        gen_assert (TEMP_INT_HARD_REG2 == R10_HARD_REG);
-        if (op.mode != MIR_OP_HARD_REG || op.u.hard_reg == R10_HARD_REG) return FALSE;
-      } else {
-        p--;
-        if (op.mode != MIR_OP_HARD_REG) return FALSE;
-      }
+      if (op.mode != MIR_OP_HARD_REG) return FALSE;
       break;
     case 'h':
       if (op.mode != MIR_OP_HARD_REG) return FALSE;
@@ -1981,31 +1917,18 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
               || (op.u.hard_reg_mem.index != MIR_NON_HARD_REG && op.u.hard_reg_mem.scale != 1
                   && op.u.hard_reg_mem.scale != scale)))
         return FALSE;
-      if (start_ch == 'M') {
-        if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG || op.u.hard_reg_mem.disp < 0
-            || op.u.hard_reg_mem.disp % scale != 0)
-          return FALSE;
-        if (type == MIR_T_I64 || type == MIR_T_U64 || type == MIR_T_F || type == MIR_T_D
-            || type == MIR_T_LD) {
-          ch = *++p;
-          if (ch == '1') {
-            if (movnzk_const (op.u.hard_reg_mem.disp, FALSE, imms) != 1) return FALSE;
-            break;
-          } else if (ch == '2') {
-            if (movnzk_const (op.u.hard_reg_mem.disp, FALSE, imms) != 2) return FALSE;
-            break;
-          } else {
-            p--;
-          }
-        }
-        if (op.u.hard_reg_mem.disp / scale >= (1 << 12)) return FALSE;
-      }
+      if (start_ch == 'M'
+          && (op.u.hard_reg_mem.index != MIR_NON_HARD_REG || op.u.hard_reg_mem.disp < 0
+              || op.u.hard_reg_mem.disp % scale != 0
+              || op.u.hard_reg_mem.disp / scale >= (1 << 12)))
+        return FALSE;
       break;
     }
     case 'Z':
     case 'N': {
       int n;
       uint64_t v;
+      struct imm imms[4];
 
       ch = *++p;
       if (ch == 'f' && op.mode == MIR_OP_FLOAT) {
@@ -2221,43 +2144,36 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         rm = op.u.hard_reg_mem.index == MIR_NON_HARD_REG ? ZR_HARD_REG : op.u.hard_reg_mem.index;
         scale = op.u.hard_reg_mem.scale;
         break;
-      case 'M':
-        op = insn->ops[0].mode == MIR_OP_HARD_REG_MEM ? insn->ops[0] : insn->ops[1];
-        ch = *++p;
-        if (ch == 'o') {
-          rn = op.u.hard_reg_mem.base;
-          rm = R10_HARD_REG;
-          scale = 1;
-        } else {
-          int type_scale = 1;
+      case 'M': {
+        int scale = 1;
 
-          p--;
-          switch (op.u.hard_reg_mem.type) {
-          case MIR_T_I8:
-          case MIR_T_U8: type_scale = 1; break;
-          case MIR_T_I16:
-          case MIR_T_U16: type_scale = 2; break;
+        op = insn->ops[0].mode == MIR_OP_HARD_REG_MEM ? insn->ops[0] : insn->ops[1];
+        switch (op.u.hard_reg_mem.type) {
+        case MIR_T_I8:
+        case MIR_T_U8: scale = 1; break;
+        case MIR_T_I16:
+        case MIR_T_U16: scale = 2; break;
 #if MIR_PTR32
-          case MIR_T_P:
+        case MIR_T_P:
 #endif
-          case MIR_T_I32:
-          case MIR_T_U32:
-          case MIR_T_F: type_scale = 4; break;
+        case MIR_T_I32:
+        case MIR_T_U32:
+        case MIR_T_F: scale = 4; break;
 #if MIR_PTR64
-          case MIR_T_P:
+        case MIR_T_P:
 #endif
-          case MIR_T_I64:
-          case MIR_T_U64:
-          case MIR_T_D: type_scale = 8; break;
-          case MIR_T_LD: type_scale = 16; break;
-          default: assert (FALSE);
-          }
-          gen_assert (op.u.hard_reg_mem.disp % type_scale == 0);
-          rn = op.u.hard_reg_mem.base;
-          disp = op.u.hard_reg_mem.disp / type_scale;
-          gen_assert (disp < (1 << 12));
+        case MIR_T_I64:
+        case MIR_T_U64:
+        case MIR_T_D: scale = 8; break;
+        case MIR_T_LD: scale = 16; break;
+        default: assert (FALSE);
         }
+        gen_assert (op.u.hard_reg_mem.disp % scale == 0);
+        rn = op.u.hard_reg_mem.base;
+        disp = op.u.hard_reg_mem.disp / scale;
+        gen_assert (disp < (1 << 12));
         break;
+      }
       case 'S': { /* S, SL, Sl */
         int flag;
 
@@ -2284,11 +2200,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert ('0' <= ch && ch <= '3');
         op = insn->ops[1];
         n = ch - '0';
-        if (op.mode == MIR_OP_HARD_REG_MEM || insn->ops[0].mode == MIR_OP_HARD_REG_MEM) {
-          if (op.mode != MIR_OP_HARD_REG_MEM) op = insn->ops[0];
-          gen_assert (op.u.hard_reg_mem.disp >= 0 && op.u.hard_reg_mem.disp < (1l << 32));
-          v = op.u.hard_reg_mem.disp;
-        } else if (op.mode != MIR_OP_REF) {
+        if (op.mode != MIR_OP_REF) {
           v = op.u.u;
         } else if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
                    && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name)) {
