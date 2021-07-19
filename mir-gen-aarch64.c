@@ -782,6 +782,7 @@ static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_di
   case MIR_T_P:
 #endif
   case MIR_T_F: scale = 4; break;
+  case MIR_T_LD: scale = 16; break;
   default: scale = 8; break;
   }
   return offset >= 0 && offset % scale == 0 && offset / scale < (1 << 12);
