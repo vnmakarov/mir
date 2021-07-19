@@ -1619,6 +1619,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
         if (stop == '\'' && VARR_LENGTH (char, symbol_text) == 1)
           error (c2m_ctx, pos, "empty character");
       } else {
+        if (curr_c == '\n') cs_unget (c2m_ctx, '\n');
         error (c2m_ctx, pos, "unterminated %s", stop == '"' ? "string" : "char");
         VARR_PUSH (char, symbol_text, stop);
       }
