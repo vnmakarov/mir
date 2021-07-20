@@ -8858,7 +8858,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     void_p = void_type_p (decl_spec->type);
     if (!void_p && !scalar_type_p (decl_spec->type)) {
       error (c2m_ctx, POS (r), "conversion to non-scalar type requested");
-    } else if (!scalar_type_p (t2) && !void_type_p (t2)) {
+    } else if (!void_p && !scalar_type_p (t2) && !void_type_p (t2)) {
       error (c2m_ctx, POS (r), "conversion of non-scalar value requested");
     } else if (t2->mode == TM_PTR && floating_type_p (decl_spec->type)) {
       error (c2m_ctx, POS (r), "conversion of a pointer to floating value requested");
