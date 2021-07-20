@@ -12301,9 +12301,6 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
     collect_args_and_func_types (c2m_ctx, decl_type->u.func_type);
-    res_type = (VARR_LENGTH (MIR_type_t, proto_info.ret_types) == 0
-                  ? MIR_T_UNDEF
-                  : VARR_GET (MIR_type_t, proto_info.ret_types, 0));
     curr_func = ((decl_type->u.func_type->dots_p
                     ? MIR_new_vararg_func_arr
                     : MIR_new_func_arr) (ctx, NL_HEAD (declarator->u.ops)->u.s.s,
@@ -12355,18 +12352,22 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     gen (c2m_ctx, stmt, NULL, NULL, FALSE, NULL);
     if ((insn = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) == NULL
         || (insn->code != MIR_RET && insn->code != MIR_JMP)) {
-      if (res_type == MIR_T_UNDEF) {
+      if (VARR_LENGTH (MIR_type_t, proto_info.ret_types) == 0) {
         emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 0));
-      } else if (res_type == MIR_T_D) {
-        emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 1, MIR_new_double_op (ctx, 0.0)));
-      } else if (res_type == MIR_T_LD) {
-        emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 1, MIR_new_ldouble_op (ctx, 0.0)));
-      } else if (res_type == MIR_T_F) {
-        emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 1, MIR_new_float_op (ctx, 0.0)));
       } else {
         VARR_TRUNC (MIR_op_t, ret_ops, 0);
-        for (size_t i = 0; i < VARR_LENGTH (MIR_type_t, proto_info.ret_types); i++)
-          VARR_PUSH (MIR_op_t, ret_ops, MIR_new_int_op (ctx, 0));
+        for (size_t i = 0; i < VARR_LENGTH (MIR_type_t, proto_info.ret_types); i++) {
+          res_type = VARR_GET (MIR_type_t, proto_info.ret_types, i);
+          if (res_type == MIR_T_D) {
+            VARR_PUSH (MIR_op_t, ret_ops, MIR_new_double_op (ctx, 0.0));
+          } else if (res_type == MIR_T_LD) {
+            VARR_PUSH (MIR_op_t, ret_ops, MIR_new_ldouble_op (ctx, 0.0));
+          } else if (res_type == MIR_T_F) {
+            VARR_PUSH (MIR_op_t, ret_ops, MIR_new_float_op (ctx, 0.0));
+          } else {
+            VARR_PUSH (MIR_op_t, ret_ops, MIR_new_int_op (ctx, 0));
+          }
+        }
         emit_insn (c2m_ctx, MIR_new_insn_arr (ctx, MIR_RET, VARR_LENGTH (MIR_op_t, ret_ops),
                                               VARR_ADDR (MIR_op_t, ret_ops)));
       }
