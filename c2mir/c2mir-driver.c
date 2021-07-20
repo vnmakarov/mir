@@ -176,10 +176,12 @@ static void *open_lib (const char *dir, const char *name) {
   VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
   VARR_PUSH (char, temp_string, 0);
   if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
+#ifndef _WIN32
     if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
       fclose (f);
       fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
     }
+#endif
   }
   return res;
 }
