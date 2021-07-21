@@ -109,6 +109,10 @@ EOF
       run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
+  if ccomp $tempc >/dev/null 2>&1; then
+      run "ccomp -O3" "ccomp -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
+  fi
   if ! fgrep setjmp.h $bench.c >/dev/null 2>&1; then
     if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
       run "emcc/wasmer" "emcc -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
