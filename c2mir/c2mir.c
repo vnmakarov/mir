@@ -12065,10 +12065,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                         || decl->decl_spec.linkage == N_EXTERN || decl->decl_spec.static_p
                         || decl->decl_spec.thread_local_p,
                       TRUE);
-    if (decl->scope == top_scope)
-      qsort (VARR_ADDR (init_el_t, init_els) + init_start,
-             VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
-    if (decl->scope == top_scope || decl->decl_spec.static_p) {
+    qsort (VARR_ADDR (init_el_t, init_els) + init_start,
+           VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
+    if (decl->scope == top_scope || decl->decl_spec.static_p || decl->decl_spec.thread_local_p) {
       var = new_op (decl, MIR_new_ref_op (ctx, NULL));
     } else {
       t = get_mir_type (c2m_ctx, expr->type);
