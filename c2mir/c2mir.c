@@ -296,6 +296,7 @@ struct type {
   struct type *arr_type; /* NULL or array type before its adjustment */
   struct type_qual type_qual;
   enum type_mode mode;
+  char func_type_before_adjustment_p;
   char unnamed_anon_struct_union_member_type_p;
   int align; /* type align, undefined if < 0  */
   /* Raw type size (w/o alignment type itself requirement but with
@@ -5520,6 +5521,7 @@ static void init_type (struct type *type) {
   type->arr_type = NULL;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
+  type->func_type_before_adjustment_p = FALSE;
   type->unnamed_anon_struct_union_member_type_p = FALSE;
 }
 
@@ -6799,6 +6801,7 @@ static void adjust_param_type (c2m_ctx_t c2m_ctx, struct type **type_ptr) {
     par_type = create_type (c2m_ctx, NULL);
     par_type->mode = TM_PTR;
     par_type->pos_node = type->pos_node;
+    par_type->func_type_before_adjustment_p = TRUE;
     par_type->u.ptr_type = type;
     *type_ptr = type = par_type;
     make_type_complete (c2m_ctx, type);
@@ -7773,6 +7776,7 @@ static struct type *adjust_type (c2m_ctx_t c2m_ctx, struct type *type) {
   res->mode = TM_PTR;
   res->pos_node = type->pos_node;
   if (type->mode == TM_FUNC) {
+    res->func_type_before_adjustment_p = TRUE;
     res->u.ptr_type = type;
   } else {
     res->arr_type = type;
@@ -8631,8 +8635,11 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
       *e->type = *((struct expr *) deref_op->attr)->type;
       break;
-    } else if (e1->type->mode == TM_PTR
-               && (e1->type->u.ptr_type->mode == TM_FUNC || e1->type->arr_type != NULL)) {
+    } else if (e1->type->mode == TM_PTR && e1->type->arr_type != NULL) {
+      *e->type = *e1->type;
+      break;
+    } else if (e1->type->mode == TM_PTR && e1->type->u.ptr_type->mode == TM_FUNC
+               && e1->type->func_type_before_adjustment_p) {
       *e->type = *e1->type;
       break;
     } else if (!e1->lvalue_node) {
@@ -11944,7 +11951,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     op1 = force_reg (c2m_ctx, op1, MIR_T_I64);
     assert (op1.mir_op.mode == MIR_OP_REG);
     if ((type = ((struct expr *) r->attr)->type)->mode == TM_PTR
-        && type->u.ptr_type->mode == TM_FUNC) {
+        && type->u.ptr_type->mode == TM_FUNC && type->func_type_before_adjustment_p) {
       res = op1;
     } else {
       t = get_mir_type (c2m_ctx, type);
