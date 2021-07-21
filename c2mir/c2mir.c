@@ -12077,7 +12077,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     }
     gen_initializer (c2m_ctx, init_start, var, global_name,
                      raw_type_size (c2m_ctx, decl->decl_spec.type),
-                     decl->scope != top_scope && !decl->decl_spec.static_p);
+                     decl->scope != top_scope && !decl->decl_spec.static_p
+                       && !decl->decl_spec.thread_local_p);
     VARR_TRUNC (init_el_t, init_els, init_start);
     if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->item;
     res = var;
@@ -12290,9 +12291,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                               || decl->decl_spec.linkage == N_EXTERN || decl->decl_spec.static_p
                               || decl->decl_spec.thread_local_p,
                             TRUE);
-          if (decl->scope == top_scope)
-            qsort (VARR_ADDR (init_el_t, init_els) + init_start,
-                   VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
+          qsort (VARR_ADDR (init_el_t, init_els) + init_start,
+                 VARR_LENGTH (init_el_t, init_els) - init_start, sizeof (init_el_t), cmp_init_el);
           if (id->attr == NULL) {
             node_t saved_scope = curr_scope;
 
@@ -12300,7 +12300,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
             check (c2m_ctx, id, NULL);
             curr_scope = saved_scope;
           }
-          if (decl->scope == top_scope || decl->decl_spec.static_p) {
+          if (decl->scope == top_scope || decl->decl_spec.static_p
+              || decl->decl_spec.thread_local_p) {
             var = new_op (decl, MIR_new_ref_op (ctx, NULL));
           } else {
             var = gen (c2m_ctx, id, NULL, NULL, FALSE, NULL);
@@ -12310,7 +12311,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
           }
           gen_initializer (c2m_ctx, init_start, var, name,
                            raw_type_size (c2m_ctx, decl->decl_spec.type),
-                           decl->scope != top_scope && !decl->decl_spec.static_p);
+                           decl->scope != top_scope && !decl->decl_spec.static_p
+                             && !decl->decl_spec.thread_local_p);
           VARR_TRUNC (init_el_t, init_els, init_start);
         }
         if (decl->item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p) {
