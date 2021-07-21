@@ -120,7 +120,7 @@ DEF_HTAB (symbol_t);
 
 struct init_object {
   struct type *container_type;
-  int designator_p;
+  int field_designator_p;
   union {
     mir_llong curr_index;
     node_t curr_member;
@@ -7205,13 +7205,13 @@ static int update_init_object_path (c2m_ctx_t c2m_ctx, size_t mark, struct type 
                init_object.u.curr_member = NL_NEXT (init_object.u.curr_member))
             ;
         } else if (init_object.container_type->mode == TM_UNION
-                   && !init_object.designator_p) { /* no next union member: */
+                   && !init_object.field_designator_p) { /* no next union member: */
           init_object.u.curr_member = NULL;
         } else { /* finding the next named struct member: */
           init_object.u.curr_member = get_adjacent_member (init_object.u.curr_member, TRUE);
         }
         if (init_object.u.curr_member != NULL) {
-          init_object.designator_p = FALSE;
+          init_object.field_designator_p = FALSE;
           el_type = ((decl_t) init_object.u.curr_member->attr)->decl_spec.type;
           break;
         }
@@ -7226,7 +7226,7 @@ static int update_init_object_path (c2m_ctx_t c2m_ctx, size_t mark, struct type 
         && el_type->u.tag_type == value_type->u.tag_type)
       return TRUE;
     init_object.container_type = el_type;
-    init_object.designator_p = FALSE;
+    init_object.field_designator_p = FALSE;
     if (el_type->mode == TM_ARR) {
       init_object.u.curr_index = -1;
     } else {
@@ -7252,7 +7252,7 @@ static int init_compatible_string_p (node_t n, struct type *el_type) {
               && el_type->u.basic_type == get_uint_basic_type (4)));
 }
 
-static int update_path_and_do (c2m_ctx_t c2m_ctx,
+static int update_path_and_do (c2m_ctx_t c2m_ctx, int go_inside_p,
                                void (*action) (c2m_ctx_t c2m_ctx, decl_t member_decl,
                                                struct type **type_ptr, node_t initializer,
                                                int const_only_p, int top_p),
@@ -7264,10 +7264,12 @@ static int update_path_and_do (c2m_ctx_t c2m_ctx,
   struct expr *value_expr = value->attr;
 
   if (!update_init_object_path (c2m_ctx, mark, value_expr == NULL ? NULL : value_expr->type,
-                                value->code == N_LIST || value->code == N_COMPOUND_LITERAL)) {
+                                !go_inside_p || value->code == N_LIST
+                                  || value->code == N_COMPOUND_LITERAL)) {
     error (c2m_ctx, pos, "excess elements in %s initializer", detail);
     return FALSE;
   }
+  if (!go_inside_p) return TRUE;
   init_object = VARR_LAST (init_object_t, init_object_path);
   if (init_object.container_type->mode == TM_ARR) {
     el_type = init_object.container_type->u.arr_type->el_type;
@@ -7420,7 +7422,7 @@ static void process_init_field_designator (c2m_ctx_t c2m_ctx, node_t designator_
   /* We can have *partial* path of containing anon members: pop them */
   while (VARR_LENGTH (init_object_t, init_object_path) != 0) {
     init_object = VARR_LAST (init_object_t, init_object_path);
-    if (!init_object.designator_p || (decl = init_object.u.curr_member->attr) == NULL
+    if (!init_object.field_designator_p || (decl = init_object.u.curr_member->attr) == NULL
         || !decl->decl_spec.type->unnamed_anon_struct_union_member_type_p) {
       break;
     }
@@ -7438,13 +7440,13 @@ static void process_init_field_designator (c2m_ctx_t c2m_ctx, node_t designator_
   while (VARR_LENGTH (node_t, containing_anon_members) != 0) {
     init_object.u.curr_member = VARR_POP (node_t, containing_anon_members);
     init_object.container_type = container_type;
-    init_object.designator_p = FALSE;
+    init_object.field_designator_p = FALSE;
     VARR_PUSH (init_object_t, init_object_path, init_object);
     container_type = (decl = init_object.u.curr_member->attr)->decl_spec.type;
   }
   init_object.u.curr_member = get_adjacent_member (designator_member, FALSE);
   init_object.container_type = container_type;
-  init_object.designator_p = TRUE;
+  init_object.field_designator_p = TRUE;
   VARR_PUSH (init_object_t, init_object_path, init_object);
 }
 
@@ -7469,6 +7471,18 @@ static node_t get_compound_literal (node_t n, int *addr_p) {
   return NULL;
 }
 
+static mir_llong get_arr_type_size (c2m_ctx_t c2m_ctx, struct type *arr_type) {
+  node_t size_node;
+  struct expr *sexpr;
+
+  assert (arr_type->mode == TM_ARR);
+  size_node = arr_type->u.arr_type->size;
+  sexpr = size_node->attr;
+  return (size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type)
+            ? sexpr->u.i_val
+            : -1);
+}
+
 static void check_initializer (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type **type_ptr,
                                node_t initializer, int const_only_p, int top_p) {
   struct type *type = *type_ptr;
@@ -7478,7 +7492,6 @@ static void check_initializer (c2m_ctx_t c2m_ctx, decl_t member_decl, struct typ
   mir_llong size_val = 0; /* to remove an uninitialized warning */
   size_t mark, len;
   symbol_t sym;
-  struct expr *sexpr;
   init_object_t init_object;
   int addr_p = FALSE; /* to remove an uninitialized warning */
 
@@ -7550,13 +7563,9 @@ check_one_value:
   }
   mark = VARR_LENGTH (init_object_t, init_object_path);
   init_object.container_type = type;
-  init_object.designator_p = FALSE;
+  init_object.field_designator_p = FALSE;
   if (type->mode == TM_ARR) {
-    size_node = type->u.arr_type->size;
-    sexpr = size_node->attr;
-    size_val = (size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type)
-                  ? sexpr->u.i_val
-                  : -1);
+    size_val = get_arr_type_size (c2m_ctx, type);
     init_object.u.curr_index = -1;
   } else {
     init_object.u.curr_member = NULL;
@@ -7575,44 +7584,63 @@ check_one_value:
       break;
     }
     if ((curr_des = NL_HEAD (des_list->u.ops)) == NULL) {
-      if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p, &max_index,
-                               POS (init), "array/struct/union"))
+      if (!update_path_and_do (c2m_ctx, TRUE, check_initializer, mark, value, const_only_p,
+                               &max_index, POS (init), "array/struct/union"))
         break;
     } else {
-      for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
-        VARR_TRUNC (init_object_t, init_object_path, mark + 1);
-        init_object = VARR_POP (init_object_t, init_object_path);
+      struct type *curr_type = type;
+      mir_llong arr_size_val;
+      int first_p = TRUE;
+
+      VARR_TRUNC (init_object_t, init_object_path, mark + 1);
+      for (; curr_des != NULL; curr_des = NL_NEXT (curr_des), first_p = FALSE) {
+        init_object = VARR_LAST (init_object_t, init_object_path);
+        if (first_p) {
+          VARR_POP (init_object_t, init_object_path);
+        } else {
+          if (init_object.container_type->mode == TM_ARR) {
+            curr_type = init_object.container_type->u.arr_type->el_type;
+          } else {
+            assert (init_object.container_type->mode == TM_STRUCT
+                    || init_object.container_type->mode == TM_UNION);
+            decl_t el_decl = init_object.u.curr_member->attr;
+            curr_type = el_decl->decl_spec.type;
+          }
+        }
         if (curr_des->code == N_FIELD_ID) {
           node_t id = NL_HEAD (curr_des->u.ops);
 
-          if (type->mode != TM_STRUCT && type->mode != TM_UNION) {
+          if (curr_type->mode != TM_STRUCT && curr_type->mode != TM_UNION) {
             error (c2m_ctx, POS (curr_des), "field name not in struct or union initializer");
-          } else if (!symbol_find (c2m_ctx, S_REGULAR, id, type->u.tag_type, &sym)) {
+          } else if (!symbol_find (c2m_ctx, S_REGULAR, id, curr_type->u.tag_type, &sym)) {
             error (c2m_ctx, POS (curr_des), "unknown field %s in initializer", id->u.s.s);
           } else {
-            process_init_field_designator (c2m_ctx, sym.def_node, init_object.container_type);
-            if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p, NULL,
-                                     POS (init), "struct/union"))
+            process_init_field_designator (c2m_ctx, sym.def_node, curr_type);
+            if (!update_path_and_do (c2m_ctx, NL_NEXT (curr_des) == NULL, check_initializer, mark,
+                                     value, const_only_p, NULL, POS (init), "struct/union"))
               break;
           }
-        } else if (type->mode != TM_ARR) {
+        } else if (curr_type->mode != TM_ARR) {
           error (c2m_ctx, POS (curr_des), "array index in initializer for non-array");
         } else if (!(cexpr = curr_des->attr)->const_p) {
           error (c2m_ctx, POS (curr_des), "nonconstant array index in initializer");
         } else if (!integer_type_p (cexpr->type)) {
           error (c2m_ctx, POS (curr_des), "array index in initializer not of integer type");
-        } else if (incomplete_type_p (c2m_ctx, type) && signed_integer_type_p (cexpr->type)
+        } else if (incomplete_type_p (c2m_ctx, curr_type) && signed_integer_type_p (cexpr->type)
                    && cexpr->u.i_val < 0) {
           error (c2m_ctx, POS (curr_des),
                  "negative array index in initializer for array without size");
-        } else if (size_val >= 0 && size_val <= cexpr->u.u_val) {
+        } else if ((arr_size_val = get_arr_type_size (c2m_ctx, curr_type)) >= 0
+                   && arr_size_val <= cexpr->u.u_val) {
           error (c2m_ctx, POS (curr_des), "array index in initializer exceeds array bounds");
         } else {
           init_object.u.curr_index = cexpr->u.i_val - 1; /* previous el */
-          init_object.designator_p = FALSE;
+          init_object.field_designator_p = FALSE;
+          init_object.container_type = curr_type;
           VARR_PUSH (init_object_t, init_object_path, init_object);
-          if (!update_path_and_do (c2m_ctx, check_initializer, mark, value, const_only_p,
-                                   &max_index, POS (init), "array"))
+          if (!update_path_and_do (c2m_ctx, NL_NEXT (curr_des) == NULL, check_initializer, mark,
+                                   value, const_only_p, first_p ? &max_index : NULL, POS (init),
+                                   "array"))
             break;
         }
       }
@@ -10907,11 +10935,10 @@ static void collect_init_els (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   struct type *type = *type_ptr;
   struct expr *cexpr;
-  node_t literal, des_list, curr_des, str, init, value, size_node;
+  node_t literal, des_list, curr_des, str, init, value;
   mir_llong MIR_UNUSED size_val = 0; /* to remove an uninitialized warning */
   size_t mark;
   symbol_t sym;
-  struct expr *sexpr;
   init_el_t init_el;
   int addr_p = FALSE; /* to remove an uninitialized warning */
   int MIR_UNUSED found_p, MIR_UNUSED ok_p;
@@ -10968,13 +10995,11 @@ check_one_value:
   }
   mark = VARR_LENGTH (init_object_t, init_object_path);
   init_object.container_type = type;
-  init_object.designator_p = FALSE;
+  init_object.field_designator_p = FALSE;
   if (type->mode == TM_ARR) {
-    size_node = type->u.arr_type->size;
-    sexpr = size_node->attr;
+    size_val = get_arr_type_size (c2m_ctx, type);
     /* we already figured out the array size during check: */
-    assert (size_node->code != N_IGNORE && sexpr->const_p && integer_type_p (sexpr->type));
-    size_val = sexpr->u.i_val;
+    assert (size_val >= 0);
     init_object.u.curr_index = -1;
   } else {
     init_object.u.curr_member = NULL;
@@ -10987,35 +11012,53 @@ check_one_value:
     assert ((value->code != N_LIST && value->code != N_COMPOUND_LITERAL) || type->mode == TM_ARR
             || type->mode == TM_STRUCT || type->mode == TM_UNION);
     if ((curr_des = NL_HEAD (des_list->u.ops)) == NULL) {
-      ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
+      ok_p = update_path_and_do (c2m_ctx, TRUE, collect_init_els, mark, value, const_only_p, NULL,
                                  POS (init), "");
       assert (ok_p);
     } else {
-      for (; curr_des != NULL; curr_des = NL_NEXT (curr_des)) {
-        VARR_TRUNC (init_object_t, init_object_path, mark + 1);
-        init_object = VARR_POP (init_object_t, init_object_path);
+      struct type *curr_type = type;
+      mir_llong arr_size_val;
+      int first_p = TRUE;
+
+      VARR_TRUNC (init_object_t, init_object_path, mark + 1);
+      for (; curr_des != NULL; curr_des = NL_NEXT (curr_des), first_p = FALSE) {
+        init_object = VARR_LAST (init_object_t, init_object_path);
+        if (first_p) {
+          VARR_POP (init_object_t, init_object_path);
+        } else {
+          if (init_object.container_type->mode == TM_ARR) {
+            curr_type = init_object.container_type->u.arr_type->el_type;
+          } else {
+            assert (init_object.container_type->mode == TM_STRUCT
+                    || init_object.container_type->mode == TM_UNION);
+            decl_t el_decl = init_object.u.curr_member->attr;
+            curr_type = el_decl->decl_spec.type;
+          }
+        }
         if (curr_des->code == N_FIELD_ID) {
           node_t id = NL_HEAD (curr_des->u.ops);
 
           /* field should be only in struct/union initializer */
-          assert (type->mode == TM_STRUCT || type->mode == TM_UNION);
-          found_p = symbol_find (c2m_ctx, S_REGULAR, id, type->u.tag_type, &sym);
+          assert (curr_type->mode == TM_STRUCT || curr_type->mode == TM_UNION);
+          found_p = symbol_find (c2m_ctx, S_REGULAR, id, curr_type->u.tag_type, &sym);
           assert (found_p); /* field should present */
-          process_init_field_designator (c2m_ctx, sym.def_node, init_object.container_type);
-          ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
-                                     POS (init), "");
+          process_init_field_designator (c2m_ctx, sym.def_node, curr_type);
+          ok_p = update_path_and_do (c2m_ctx, NL_NEXT (curr_des) == NULL, collect_init_els, mark,
+                                     value, const_only_p, NULL, POS (init), "");
           assert (ok_p);
         } else {
           cexpr = curr_des->attr;
           /* index should be in array initializer and const expr of right type and value: */
-          assert (type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
-                  && !incomplete_type_p (c2m_ctx, type) && size_val >= 0
-                  && size_val > cexpr->u.u_val);
+          assert (curr_type->mode == TM_ARR && cexpr->const_p && integer_type_p (cexpr->type)
+                  && !incomplete_type_p (c2m_ctx, curr_type)
+                  && (arr_size_val = get_arr_type_size (c2m_ctx, curr_type)) >= 0
+                  && arr_size_val > cexpr->u.u_val);
           init_object.u.curr_index = cexpr->u.i_val - 1;
-          init_object.designator_p = FALSE;
+          init_object.field_designator_p = FALSE;
+          init_object.container_type = curr_type;
           VARR_PUSH (init_object_t, init_object_path, init_object);
-          ok_p = update_path_and_do (c2m_ctx, collect_init_els, mark, value, const_only_p, NULL,
-                                     POS (init), "");
+          ok_p = update_path_and_do (c2m_ctx, NL_NEXT (curr_des) == NULL, collect_init_els, mark,
+                                     value, const_only_p, NULL, POS (init), "");
           assert (ok_p);
         }
       }
