@@ -11866,6 +11866,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     MIR_type_t ind_t;
     node_t arr = NL_HEAD (r->u.ops);
     struct type *type = ((struct expr *) r->attr)->type;
+    struct type *arr_type = ((struct expr *) arr->attr)->type;
     mir_size_t size = type_size (c2m_ctx, type);
 
     t = get_mir_type (c2m_ctx, type);
@@ -11881,8 +11882,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       op2 = cast (c2m_ctx, op2, ind_t == MIR_T_I32 ? MIR_T_I64 : MIR_T_U64, FALSE);
     }
 #endif
-    if (type->mode == TM_PTR && type->arr_type != NULL) { /* it was an array */
+    if (type->mode == TM_PTR && type->arr_type != NULL) { /* elem is an array */
       size = type_size (c2m_ctx, type->arr_type);
+    }
+    if (arr_type->mode == TM_PTR && arr_type->arr_type != NULL) { /* indexing an array */
       op1 = force_reg_or_mem (c2m_ctx, op1, MIR_T_I64);
       assert (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM);
     } else {
