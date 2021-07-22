@@ -12930,6 +12930,11 @@ static void print_type (c2m_ctx_t c2m_ctx, FILE *f, struct type *type) {
     fprintf (f, "ptr (");
     print_type (c2m_ctx, f, type->u.ptr_type);
     fprintf (f, ")");
+    if (type->arr_type != NULL) {
+      fprintf (f, ", former ");
+      print_type (c2m_ctx, f, type->arr_type);
+    }
+    if (type->func_type_before_adjustment_p) fprintf (f, ", former func");
     break;
   case TM_STRUCT: fprintf (f, "struct node %u", type->u.tag_type->uid); break;
   case TM_UNION: fprintf (f, "union node %u", type->u.tag_type->uid); break;
