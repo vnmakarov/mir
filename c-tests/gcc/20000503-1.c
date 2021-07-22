@@ -1,3 +1,4 @@
+extern void exit (int);
 unsigned long
 sub (int a)
 {

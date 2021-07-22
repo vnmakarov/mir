@@ -74,8 +74,11 @@ static void ppc64_gen_ld (VARR (uint8_t) * insn_varr, unsigned to, unsigned base
   int double_p = type == MIR_T_D || type == MIR_T_LD;
   /* (ld | lf[sd]) to, disp(base): */
   assert (base != 0 && base < 32 && to < 32 && (single_p || double_p || (disp & 0x3) == 0));
-  push_insn (insn_varr, ((single_p ? 48 : double_p ? 50 : 58) << 26) | (to << 21) | (base << 16)
-                          | (disp & 0xffff));
+  push_insn (insn_varr, ((single_p   ? 48
+                          : double_p ? 50
+                                     : 58)
+                         << 26)
+                          | (to << 21) | (base << 16) | (disp & 0xffff));
 }
 
 static void ppc64_gen_st (VARR (uint8_t) * insn_varr, unsigned from, unsigned base, int disp,
@@ -84,8 +87,11 @@ static void ppc64_gen_st (VARR (uint8_t) * insn_varr, unsigned from, unsigned ba
   int double_p = type == MIR_T_D || type == MIR_T_LD;
   /* std|stf[sd] from, disp(base): */
   assert (base != 0 && base < 32 && from < 32 && (single_p || double_p || (disp & 0x3) == 0));
-  push_insn (insn_varr, ((single_p ? 52 : double_p ? 54 : 62) << 26) | (from << 21) | (base << 16)
-                          | (disp & 0xffff));
+  push_insn (insn_varr, ((single_p   ? 52
+                          : double_p ? 54
+                                     : 62)
+                         << 26)
+                          | (from << 21) | (base << 16) | (disp & 0xffff));
 }
 
 static void ppc64_gen_stdu (VARR (uint8_t) * insn_varr, int disp) {
@@ -259,7 +265,7 @@ void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
    gp regs call *r12; r0=mem[r14,<offset>]; res_reg=mem[r0]; ... restore r15, r14, r1, lr; return.
  */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
   static uint32_t start_pattern[] = {
     0x7c0802a6, /* mflr r0 */
     0xf8010010, /* std  r0,16(r1) */
@@ -269,6 +275,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x7c0803a6, /* mtlr r0 */
     0x4e800020, /* blr */
   };
+  int vararg_p = nargs > arg_vars_num;
   MIR_type_t type;
   int n_gpregs = 0, n_fpregs = 0, res_reg = 14, qwords, frame_size;
   int disp, blk_disp, param_offset, param_size = 0;

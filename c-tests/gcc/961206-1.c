@@ -1,3 +1,4 @@
+extern void exit (int);
 int
 sub1 (unsigned long long i)
 {

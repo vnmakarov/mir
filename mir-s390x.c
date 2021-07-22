@@ -38,17 +38,13 @@ static void s390x_gen_ld_st (VARR (uint8_t) * insn_varr, unsigned reg, unsigned 
   int double_p = type == MIR_T_D;
   uint64_t dl = disp & 0xfff, dh = (disp >> 12) & 0xff;
   uint64_t common = ((uint64_t) reg << 36) | ((uint64_t) base << 28) | (dl << 16) | (dh << 8);
-  uint64_t lgopcode
-    = (type == MIR_T_I8
-         ? (ld_p ? 0x77 : 0x72)
-         : type == MIR_T_U8 ? (ld_p ? 0x90 : 0x72)
-                            : type == MIR_T_I16
-                                ? (ld_p ? 0x78 : 0x70)
-                                : type == MIR_T_U16
-                                    ? (ld_p ? 0x91 : 0x70)
-                                    : type == MIR_T_I32 ? (ld_p ? 0x14 : 0x50)
-                                                        : type == MIR_T_U32 ? (ld_p ? 0x16 : 0x50)
-                                                                            : (ld_p ? 0x04 : 0x24));
+  uint64_t lgopcode = (type == MIR_T_I8    ? (ld_p ? 0x77 : 0x72)
+                       : type == MIR_T_U8  ? (ld_p ? 0x90 : 0x72)
+                       : type == MIR_T_I16 ? (ld_p ? 0x78 : 0x70)
+                       : type == MIR_T_U16 ? (ld_p ? 0x91 : 0x70)
+                       : type == MIR_T_I32 ? (ld_p ? 0x14 : 0x50)
+                       : type == MIR_T_U32 ? (ld_p ? 0x16 : 0x50)
+                                           : (ld_p ? 0x04 : 0x24));
   uint64_t g = ((0xe3l << 40) | common | lgopcode) << 16;
   uint64_t ey = ((0xedl << 40) | common | (ld_p ? 0x64 : 0x66)) << 16;
   uint64_t dy = ((0xedl << 40) | common | (ld_p ? 0x65 : 0x67)) << 16;
@@ -254,7 +250,7 @@ void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
    r0=mem[r7,<res_offset>]; res_reg=mem[r0]; ...
    restore r15; restore r6, r7, r14; return. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
   MIR_type_t type;
   int n_gpregs = 0, n_fpregs = 0, res_reg = 7, frame_size, disp, param_offset, blk_offset;
   uint32_t qwords, addr_reg;

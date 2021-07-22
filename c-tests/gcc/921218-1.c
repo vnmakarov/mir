@@ -1,3 +1,4 @@
+extern void exit (int);
 f()
 {
   return (unsigned char)("\377"[0]);

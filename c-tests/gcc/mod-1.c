@@ -1,3 +1,4 @@
+extern void exit (int);
 f (x, y)
 {
   if (x % y != 0)

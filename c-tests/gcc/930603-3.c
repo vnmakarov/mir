@@ -1,3 +1,4 @@
+extern void exit (int);
 f (b, c)
      unsigned char *b;
      int c;

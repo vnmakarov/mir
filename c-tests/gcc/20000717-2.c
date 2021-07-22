@@ -1,3 +1,4 @@
+extern void exit (int);
 static void
 compare (long long foo)
 {

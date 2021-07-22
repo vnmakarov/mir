@@ -75,6 +75,12 @@ static lib_t std_libs[]
      {"/lib64/libm.so.6", NULL},       {"/lib/s390x-linux-gnu/libm.so.6", NULL},
      {"/lib64/libpthread.so.0", NULL}, {"/lib/s390x-linux-gnu/libpthread.so.0", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/s390x-linux-gnu"};
+#elif (__riscv)
+static lib_t std_libs[]
+  = {{"/lib64/libc.so.6", NULL},       {"/lib/riscv64-linux-gnu/libc.so.6", NULL},
+     {"/lib64/libm.so.6", NULL},       {"/lib/riscv64-linux-gnu/libm.so.6", NULL},
+     {"/lib64/libpthread.so.0", NULL}, {"/lib/riscv64-linux-gnu/libpthread.so.0", NULL}};
+static const char *std_lib_dirs[] = {"/lib64", "/lib/riscv64-linux-gnu"};
 #else
 #error cannot recognize 32- or 64-bit target
 #endif
@@ -157,6 +163,8 @@ static VARR (char_ptr_t) * lib_dirs;
 
 static void *open_lib (const char *dir, const char *name) {
   const char *last_slash = strrchr (dir, slash);
+  void *res;
+  FILE *f;
 
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
@@ -167,7 +175,15 @@ static void *open_lib (const char *dir, const char *name) {
   VARR_PUSH_ARR (char, temp_string, name, strlen (name));
   VARR_PUSH_ARR (char, temp_string, lib_suffix, strlen (lib_suffix));
   VARR_PUSH (char, temp_string, 0);
-  return dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY);
+  if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
+#ifndef _WIN32
+    if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
+      fclose (f);
+      fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
+    }
+#endif
+  }
+  return res;
 }
 
 static void process_cmdline_lib (char *lib_name) {
@@ -347,6 +363,16 @@ static void fancy_abort (void) {
   abort ();
 }
 
+#if defined(__APPLE__) && defined(__aarch64__)
+float __nan (void) {
+  union {
+    uint32_t i;
+    float f;
+  } u = {0x7fc00000};
+  return u.f;
+}
+#endif
+
 static void *import_resolver (const char *name) {
   void *handler, *sym = NULL;
 
@@ -364,9 +390,16 @@ static void *import_resolver (const char *name) {
     if (strcmp (name, "GetProcAddress") == 0) return GetProcAddress;
 #else
     if (strcmp (name, "dlopen") == 0) return dlopen;
+    if (strcmp (name, "dlerror") == 0) return dlerror;
     if (strcmp (name, "dlclose") == 0) return dlclose;
     if (strcmp (name, "dlsym") == 0) return dlsym;
     if (strcmp (name, "stat") == 0) return stat;
+    if (strcmp (name, "lstat") == 0) return lstat;
+    if (strcmp (name, "fstat") == 0) return fstat;
+#if defined(__APPLE__) && defined(__aarch64__)
+    if (strcmp (name, "__nan") == 0) return __nan;
+    if (strcmp (name, "_MIR_set_code") == 0) return _MIR_set_code;
+#endif
 #endif
     fprintf (stderr, "can not load symbol %s\n", name);
     close_std_libs ();

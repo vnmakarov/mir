@@ -1,15 +1,16 @@
-   unsigned long bad(int reg, unsigned long inWord)
-   {
-       union {
-           unsigned long word;
-           unsigned char byte[4];
-       } data;
+extern void exit (int);
+unsigned long bad(int reg, unsigned long inWord)
+{
+    union {
+        unsigned long word;
+        unsigned char byte[4];
+    } data;
 
-       data.word = inWord;
-       data.byte[reg] = 0;
+    data.word = inWord;
+    data.byte[reg] = 0;
 
-       return data.word;
-   }
+    return data.word;
+}
 
 main()
 {

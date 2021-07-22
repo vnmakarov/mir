@@ -1,3 +1,4 @@
+extern void exit (int);
 
 unsigned int f (unsigned int a)
 {

@@ -1,3 +1,4 @@
+extern void exit (int);
 int main( void )
 {
    unsigned long totalsize = 80;

@@ -1,3 +1,4 @@
+extern void exit (int);
 static int ap(int i);
 static void testit(void){
   int ir[4] = {0,1,2,3};

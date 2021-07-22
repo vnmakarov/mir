@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef unsigned long long ULL;
 ULL back;
 ULL hpart, lpart;

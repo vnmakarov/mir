@@ -669,6 +669,10 @@ static void set_prev_sp_reg (gen_ctx_t gen_ctx, MIR_insn_t anchor, int *prev_sp_
   }
 }
 
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+  return TRUE;
+}
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
@@ -750,13 +754,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) { /* split to cmp and branch */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ
-                ? MIR_LDEQ
-                : code == MIR_LDBNE
-                    ? MIR_LDNE
-                    : code == MIR_LDBLT
-                        ? MIR_LDLT
-                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
+      code = (code == MIR_LDBEQ   ? MIR_LDEQ
+              : code == MIR_LDBNE ? MIR_LDNE
+              : code == MIR_LDBLT ? MIR_LDLT
+              : code == MIR_LDBGE ? MIR_LDGE
+              : code == MIR_LDBGT ? MIR_LDGT
+                                  : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -971,7 +974,9 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_mov (gen_ctx, anchor, MIR_MOV, r11_reg_op, r15_reg_op); /* r11 = r15 */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  gen_assert (anchor->code == MIR_RET || anchor->code == MIR_JMP);
+  /* It might be infinite loop after CCP with dead code elimination: */
+  if (anchor->code == MIR_JMP) return;
+  gen_assert (anchor->code == MIR_RET);
   /* Restoring fp hard registers: */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))
@@ -2124,21 +2129,15 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       set_insn_field (&binsn, label_off, 16, 16);
       check_and_set_mask (&binsn_mask, 0xffff, 16, 16);
     }
-    if (const_ref_num >= 0)
-      VARR_ADDR (const_ref_t, const_refs)
-      [const_ref_num].insn_pc
-        = VARR_LENGTH (uint8_t, result_code);
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
+    [const_ref_num].insn_pc = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_addr_insn_start = VARR_LENGTH (uint8_t, result_code);
     VARR_PUSH_ARR (uint8_t, result_code, (uint8_t *) &binsn, len); /* output the machine insn */
-    if (const_ref_num >= 0)
-      VARR_ADDR (const_ref_t, const_refs)
-      [const_ref_num].next_insn_pc
-        = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
+    [const_ref_num].next_insn_pc = VARR_LENGTH (uint8_t, result_code);
 
     if (*p == 0) break;
   }

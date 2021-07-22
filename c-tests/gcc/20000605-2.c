@@ -1,3 +1,4 @@
+extern void exit (int);
 struct F { int i; };
 
 void f1(struct F *x, struct F *y)

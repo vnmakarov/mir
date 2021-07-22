@@ -11,6 +11,7 @@
    find_dummy_reload would return (reg:SI 1) for the subreg reload,
    despite that not being a valid register.  */
 
+extern void exit (int);
 struct s
 {
   short i1;

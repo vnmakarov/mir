@@ -1,5 +1,5 @@
 #include <string.h>
-
+extern void exit(int);
 static int
 special_format (fmt)
      const char *fmt;

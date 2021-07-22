@@ -1,3 +1,5 @@
+#include <string.h>
+extern void exit (int);
 
 int * foo (int *x, int b)
 {

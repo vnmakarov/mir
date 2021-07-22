@@ -1,3 +1,4 @@
+extern void exit (int);
 sub3 (i)
      const int *i;
 {

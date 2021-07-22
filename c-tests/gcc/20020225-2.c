@@ -1,3 +1,4 @@
+extern void exit (int);
 static int 
 test(int x)
 {

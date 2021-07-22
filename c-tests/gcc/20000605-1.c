@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct _RenderInfo RenderInfo;
 struct _RenderInfo
 {

@@ -15,11 +15,13 @@ LDFLAGS =
 OBJO=-o #trailing space is important
 EXEO=-o #trailing space is important
 ifeq ($(OS),Windows_NT)
-  OBJSUFF=obj
-  LIBSUFF=lib
   EXE=.exe
   ifeq ($(CC),cc)
-    CC=cl
+    ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+      CC=gcc
+    else
+      CC=cl
+    endif
   endif
   ifeq ($(CC),gcc)
     CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
@@ -49,8 +51,6 @@ ifeq ($(OS),Windows_NT)
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 
 else
-  OBJSUFF=o
-  LIBSUFF=a
   EXE=
   CC=gcc
   CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
@@ -79,11 +79,21 @@ else
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 endif
 
+ifeq ($(CC),cl)
+  OBJSUFF=obj
+  LIBSUFF=lib
+else
+  OBJSUFF=o
+  LIBSUFF=a
+endif
+
+C2M_BOOTSTRAP_FLAGS = -DMIR_BOOTSTRAP
+C2M_BOOTSTRAP_FLAGS0 := $(C2M_BOOTSTRAP_FLAGS)
 ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
   ifneq ($(CC),cl)
     MIR_LIBS += -lpthread
     CFLAGS += -DMIR_PARALLEL_GEN
-    C2M_BOOTSTRAP_FLAGS = -DMIR_PARALLEL_GEN
+    C2M_BOOTSTRAP_FLAGS += -DMIR_PARALLEL_GEN
   endif
 endif
 
@@ -138,7 +148,7 @@ clean-mir:
 
 # ------------------ LIBMIR -----------------------
 $(BUILD_DIR)/libmir.$(LIBSUFF): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(BUILD_DIR)/c2mir/c2mir.$(OBJSUFF)
-ifeq ($(OS),Windows_NT)
+ifeq ($(CC),cl)
 	lib -nologo $^ -OUT:$@
 else
 	$(AR) rcs $@ $^
@@ -534,7 +544,7 @@ c2mir-bootstrap-test4: $(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/t1.bmir
 	$(Q) $(BUILD_DIR)/b2ctab$(EXE) < $(BUILD_DIR)/t1.bmir > $(BUILD_DIR)/mir-ctab
-	$(Q) $(COMPILE_AND_LINK) -w -fno-tree-sra $(SRC_DIR)/mir.c $(SRC_DIR)/mir-gen.c $(SRC_DIR)/mir-bin-driver.c\
+	$(Q) $(COMPILE_AND_LINK) -w $(SRC_DIR)/mir.c $(SRC_DIR)/mir-gen.c $(SRC_DIR)/mir-bin-driver.c\
 	                         $(LDLIBS) -o $(BUILD_DIR)/c2m-test$(EXE)
 	$(Q) $(BUILD_DIR)/c2m-test$(EXE) $(C2M_BOOTSTRAP_FLAGS) -w -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
 	                         $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/c2mir/c2mir-driver.c\
@@ -543,11 +553,11 @@ c2mir-bootstrap-test4: $(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 	$(Q) rm -rf $(BUILD_DIR)/t1.bmir $(BUILD_DIR)/t2.bmir $(BUILD_DIR)/mir-ctab
 
 c2mir-bootstrap-test5: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test with -O3 '... '
-	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
+	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test '... '
+	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS0) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c\
 	                    $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/c2mir/c2mir-driver.c\
 			    $(SRC_DIR)/mir.c -o $(BUILD_DIR)/i1.bmir
-	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) $(BUILD_DIR)/i1.bmir -ei -w $(C2M_BOOTSTRAP_FLAGS)\
+	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS0) $(BUILD_DIR)/i1.bmir -ei -w $(C2M_BOOTSTRAP_FLAGS0)\
 	                    -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 			    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/i2.bmir
 	$(Q) cmp $(BUILD_DIR)/i1.bmir $(BUILD_DIR)/i2.bmir && echo Passed || echo FAIL
@@ -638,3 +648,16 @@ gcc-test:
 
 clang-test:
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-clang
+
+# Comparison of gcc, c2m, wasmer, wasmtime on ogg encoding.  You need wasi-clang script calling clang from wasi-sdk.
+oggenc-bench:
+	$(SHELL) $(SRC_DIR)/c-benchmarks/run-oggenc.sh
+
+# Very long testing (hours and hours):
+csmith: csmith-c2m-gcc csmit-c2m
+
+csmith-c2m-gcc:
+	$(SHELL) csmith-c2m-gcc.sh
+
+csmith-c2m:
+	$(SHELL) csmith-c2m.sh

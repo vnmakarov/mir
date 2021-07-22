@@ -1,6 +1,8 @@
 /* Bug in reorg.c, deleting the "++" in the last loop in main.
    Origin: <hp@axis.com>.  */
 
+#include <string.h>
+extern void exit (int);
 extern void f (void);
 extern int x (int, char **);
 extern int r (const char *);

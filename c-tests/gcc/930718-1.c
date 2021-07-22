@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct rtx_def
 {
   int f1 :1;

@@ -1,3 +1,4 @@
+extern void exit (int);
 long double C = 2;
 long double U = 1;
 long double Y2 = 3;

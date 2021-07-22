@@ -1,3 +1,4 @@
+extern void exit (int);
 static char *
 begfield (int tab, char *ptr, char *lim, int sword, int schar)
 {

@@ -1,3 +1,4 @@
+extern void exit (int);
 typedef struct trio { int a, b, c; } trio;
 
 int

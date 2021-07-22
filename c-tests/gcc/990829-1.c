@@ -1,3 +1,4 @@
+extern void exit (int);
 double test (const double le, const double ri)
 {
 	double val = ( ri - le ) / ( ri * ( le + 1.0 ) );

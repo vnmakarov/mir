@@ -1,4 +1,5 @@
 /* Macros to emit "L Nxx R" for each octal number xx between 000 and 037.  */
+extern void exit (int);
 #define OP1(L, N, R, I, J) L N##I##J R
 #define OP2(L, N, R, I) \
     OP1(L, N, R, 0, I), OP1(L, N, R, 1, I), \

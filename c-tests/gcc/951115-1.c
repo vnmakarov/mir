@@ -1,3 +1,4 @@
+extern void exit (int);
 int var = 0;
 
 g ()

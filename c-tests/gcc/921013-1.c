@@ -1,3 +1,4 @@
+extern void exit (int);
 f(d,x,y,n)
 int*d;
 float*x,*y;

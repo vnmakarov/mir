@@ -1,5 +1,6 @@
 /* Verify unaligned address aliasing on Alpha EV[45].  */
 
+extern void exit (int);
 static unsigned short x, y;
 
 void foo()

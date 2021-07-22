@@ -1,4 +1,5 @@
 /* Test against a problem with loop reversal.  */
+extern void exit (int);
 static void bug(int size, int tries)
 {
     int i;

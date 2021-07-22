@@ -1,3 +1,4 @@
+extern void exit (int);
 int b = 0;
 
 func () { }

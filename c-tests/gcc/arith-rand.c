@@ -1,3 +1,4 @@
+extern void exit (int);
 long
 simple_rand ()
 {

@@ -1,3 +1,4 @@
+extern void exit (int);
 struct rtx_def
 {
   int code;

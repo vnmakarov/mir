@@ -1,3 +1,4 @@
+extern void exit (int);
 int
 ts(a)
      int a;

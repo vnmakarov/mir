@@ -1,3 +1,4 @@
+extern void exit (int);
 f()
 {
   long l2;

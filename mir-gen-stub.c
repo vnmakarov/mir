@@ -74,6 +74,10 @@ static MIR_disp_t target_get_stack_slot_offset (MIR_context_t ctx, MIR_type_t ty
 
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+  return TRUE;
+}
+
 static void target_machinize (MIR_context_t ctx) {}
 
 static void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t used_hard_regs,

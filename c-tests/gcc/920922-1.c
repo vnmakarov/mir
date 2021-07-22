@@ -1,3 +1,4 @@
+extern void exit (int);
 unsigned long*
 f(p)unsigned long*p;
 {

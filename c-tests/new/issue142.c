@@ -1,6 +1,6 @@
-int prinft (char*, ...);
 #include <stdarg.h>
 
+int printf (char *, ...);
 struct car {
   char a, b, c;
   long d;

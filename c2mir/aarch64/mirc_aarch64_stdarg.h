@@ -6,6 +6,9 @@ static char stdarg_str[]
   = "#ifndef __STDARG_H\n"
     "#define __STDARG_H\n"
     "\n"
+#if defined(__APPLE__)
+    "typedef __darwin_va_list va_list;\n"
+#else
     "typedef struct {\n"
     "  void *__stack;\n"
     "  void *__gr_top;\n"
@@ -13,6 +16,7 @@ static char stdarg_str[]
     "  int __gr_offs;\n"
     "  int __vr_offs;\n"
     "} va_list;\n"
+#endif
     "\n"
     "#define va_start(ap, param) __builtin_va_start (ap)\n"
     "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"

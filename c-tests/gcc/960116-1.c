@@ -1,3 +1,4 @@
+extern void exit (int);
 static inline
 p (int *p)
 {

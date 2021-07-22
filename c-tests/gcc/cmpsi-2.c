@@ -1,4 +1,5 @@
 /* { dg-require-effective-target int32plus } */
+extern void exit (int);
 #define F 140
 #define T 13
 

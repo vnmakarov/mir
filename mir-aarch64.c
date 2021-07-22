@@ -2,7 +2,19 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-#define VA_LIST_IS_ARRAY_P 0
+/* x31 - sp; x30 - link reg; x29 - fp; x0-x7, v0-v7 - arg/result regs;
+   x19-x29, v8-v15 - callee-saved (only bottom 64-bits are saved for v8-v15);
+   x9-x15, v0-v7, v16-v31 - temp regs
+   x8 - indirect result location address
+   stack is 16-byte aligned
+
+   Apple M1 ABI specific:
+   o long double is double (64-bit)
+   o va_list is a pointer
+   o all varargs are passed only on stack
+   o reg x18 is reserved
+   o empty struct args are ignored
+*/
 
 /* Any small BLK type (less or equal to two quadwords) args are passed in
    *fully* regs or on stack (w/o address), otherwise it is put
@@ -26,6 +38,12 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   return _MIR_publish_code (ctx, (uint8_t *) bend_code, sizeof (bend_code));
 }
 
+#define VA_LIST_IS_ARRAY_P 0
+#if defined(__APPLE__)
+struct aarch64_va_list {
+  uint64_t *arg_area;
+};
+#else
 struct aarch64_va_list {
   /* address following the last (highest addressed) named incoming
      argument on the stack, rounded upwards to a multiple of 8 bytes,
@@ -43,11 +61,24 @@ struct aarch64_va_list {
   int __gr_offs; /* set to 0 – ((8 – named_gr) * 8) */
   int __vr_offs; /* set to 0 – ((8 – named_vr) * 16) */
 };
+#endif
 
 void *va_arg_builtin (void *p, uint64_t t) {
   struct aarch64_va_list *va = p;
   MIR_type_t type = t;
   int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
+#if defined(__APPLE__)
+  void *a = va->arg_area;
+
+  if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16) {
+    va->arg_area += 2;
+  } else {
+    va->arg_area++;
+  }
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  if (type == MIR_T_F || type == MIR_T_I32) a = (char *) a + 4; /* 2nd word of doubleword */
+#endif
+#else
   void *a;
 
   if (fp_p && va->__vr_offs < 0) {
@@ -57,15 +88,28 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->__gr_top + va->__gr_offs;
     va->__gr_offs += 8;
   } else {
-    if (type == MIR_T_LD) va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
+    if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16)
+      va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
     a = va->__stack;
-    va->__stack = (char *) va->__stack + (type == MIR_T_LD ? 16 : 8);
+    va->__stack
+      = (char *) va->__stack + (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8);
   }
+#endif
   return a;
 }
 
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct aarch64_va_list *va = p;
+#if defined(__APPLE__)
+  void *a = (void *) va->arg_area;
+  if (s <= 2 * 8) {
+    va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  } else {
+    a = *(void **) a;
+    va->arg_area++;
+  }
+  memcpy (res, a, s);
+#else
   void *a;
   long size = (s + 7) / 8 * 8;
 
@@ -86,6 +130,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   }
   if (s > 2 * 8) a = *(void **) a; /* address */
   memcpy (res, a, s);
+#endif
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
@@ -134,7 +179,7 @@ static size_t gen_mov_addr (VARR (uint8_t) * insn_varr, int reg, void *addr) {
 
 #define BR_OFFSET_BITS 26
 #define MAX_BR_OFFSET (1 << (BR_OFFSET_BITS - 1)) /* 1 for sign */
-#define BR_OFFSET_MASK (~(-1 << BR_OFFSET_BITS))
+#define BR_OFFSET_MASK (~(-1u << BR_OFFSET_BITS))
 
 static void gen_call_addr (VARR (uint8_t) * insn_varr, void *base_addr, int temp_reg,
                            void *call_addr) {
@@ -235,10 +280,16 @@ static const uint32_t restore_insns[] = {
   0xa8c11fe6, /* ldp R6, R7, SP, #16 */
 };
 
-static const uint32_t ld_pat = 0xf9400260;   /* ldr x, [x19], offset */
-static const uint32_t lds_pat = 0xbd400260;  /* ldr s, [x19], offset */
-static const uint32_t ldd_pat = 0xfd400260;  /* ldr d, [x19], offset */
-static const uint32_t ldld_pat = 0x3dc00260; /* ldr q, [x19], offset */
+static const uint32_t ld_pat = 0xf9400260;     /* ldr x, [x19], offset */
+static const uint32_t lds_pat = 0xbd400260;    /* ldr s, [x19], offset */
+static const uint32_t ldd_pat = 0xfd400260;    /* ldr d, [x19], offset */
+static const uint32_t ldld_pat = 0x3dc00260;   /* ldr q, [x19], offset */
+static const uint32_t gen_ld_pat = 0xf9400000; /* ldr x, [xn|sp], offset */
+
+static const uint32_t st_pat = 0xf9000000;   /* str x, [xn|sp], offset */
+static const uint32_t sts_pat = 0xbd000000;  /* str s, [xn|sp], offset */
+static const uint32_t std_pat = 0xfd000000;  /* str d, [xn|sp], offset */
+static const uint32_t stld_pat = 0x3d800000; /* str q, [xn|sp], offset */
 
 /* Generation: fun (fun_addr, res_arg_addresses):
    push x19, x30; sp-=sp_offset; x9=fun_addr; x19=res/arg_addrs
@@ -249,7 +300,7 @@ static const uint32_t ldld_pat = 0x3dc00260; /* ldr q, [x19], offset */
    x10=mem[x19,<offset>]; res_reg=mem[x10]; ...
    pop x19, x30; ret x30. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, int vararg_p) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
   static const uint32_t prolog[] = {
     0xa9bf7bf3, /* stp x19,x30,[sp, -16]! */
     0xd10003ff, /* sub sp,sp,<sp_offset> */
@@ -264,11 +315,6 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0xa8c17bf3, /* ldp x19,x30,[sp],16 */
     0xd65f03c0, /* ret x30 */
   };
-  static const uint32_t gen_ld_pat = 0xf9400000; /* ldr x, [xn|sp], offset */
-  static const uint32_t st_pat = 0xf9000000;     /* str x, [xn|sp], offset */
-  static const uint32_t sts_pat = 0xbd000000;    /* str s, [xn|sp], offset */
-  static const uint32_t std_pat = 0xfd000000;    /* str d, [xn|sp], offset */
-  static const uint32_t stld_pat = 0x3d800000;   /* str q, [xn|sp], offset */
   MIR_type_t type;
   uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, blk_offset = 0, pat, offset_imm, scale;
   uint32_t sp = 31, addr_reg, qwords;
@@ -278,8 +324,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   void *res;
 
   VARR_CREATE (uint8_t, code, 128);
-  mir_assert (sizeof (long double) == 16);
+  mir_assert (__SIZEOF_LONG_DOUBLE__ == 8 || __SIZEOF_LONG_DOUBLE__ == 16);
   for (size_t i = 0; i < nargs; i++) { /* calculate offset for blk params */
+#if defined(__APPLE__)                 /* all varargs are passed on stack */
+    if (i == arg_vars_num) n_xregs = n_vregs = 8;
+#endif
     type = arg_descs[i].type;
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || MIR_all_blk_type_p (type)) {
       if (MIR_blk_type_p (type) && (qwords = (arg_descs[i].size + 7) / 8) <= 2) {
@@ -289,7 +338,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         if (n_xregs++ >= 8) blk_offset += 8;
       }
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
-      if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD ? 16 : 8;
+      if (n_vregs++ >= 8) blk_offset += type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8;
     } else {
       MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
     }
@@ -298,8 +347,11 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   push_insns (code, prolog, sizeof (prolog));
   n_xregs = n_vregs = 0;
   for (size_t i = 0; i < nargs; i++) { /* args */
+#if defined(__APPLE__)                 /* all varargs are passed on stack */
+    if (i == arg_vars_num) n_xregs = n_vregs = 8;
+#endif
     type = arg_descs[i].type;
-    scale = type == MIR_T_F ? 2 : type == MIR_T_LD ? 4 : 3;
+    scale = type == MIR_T_F ? 2 : type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 4 : 3;
     offset_imm = (((i + nres) * sizeof (long double) << 10)) >> scale;
     if (MIR_blk_type_p (type)) {
       qwords = (arg_descs[i].size + 7) / 8;
@@ -345,16 +397,20 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       }
       push_insns (code, &pat, sizeof (pat));
     } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
-      pat = type == MIR_T_F ? lds_pat : type == MIR_T_D ? ldd_pat : ldld_pat;
+      pat = type == MIR_T_F                                  ? lds_pat
+            : type == MIR_T_D || __SIZEOF_LONG_DOUBLE__ == 8 ? ldd_pat
+                                                             : ldld_pat;
       if (n_vregs < 8) {
         pat |= offset_imm | n_vregs++;
       } else {
-        if (type == MIR_T_LD) sp_offset = (sp_offset + 15) % 16;
+        if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16) sp_offset = (sp_offset + 15) % 16;
         pat |= offset_imm | temp_reg;
         push_insns (code, &pat, sizeof (pat));
-        pat = type == MIR_T_F ? sts_pat : type == MIR_T_D ? std_pat : stld_pat;
+        pat = type == MIR_T_F                                  ? sts_pat
+              : type == MIR_T_D || __SIZEOF_LONG_DOUBLE__ == 8 ? std_pat
+                                                               : stld_pat;
         pat |= ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
-        sp_offset += type == MIR_T_LD ? 16 : 8;
+        sp_offset += type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8;
       }
       push_insns (code, &pat, sizeof (pat));
     } else {
@@ -378,8 +434,12 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       push_insns (code, &pat, sizeof (pat));
     } else if ((res_types[i] == MIR_T_F || res_types[i] == MIR_T_D || res_types[i] == MIR_T_LD)
                && n_vregs < 8) {
-      offset_imm >>= res_types[i] == MIR_T_F ? 2 : res_types[i] == MIR_T_D ? 3 : 4;
-      pat = res_types[i] == MIR_T_F ? sts_pat : res_types[i] == MIR_T_D ? std_pat : stld_pat;
+      offset_imm >>= res_types[i] == MIR_T_F                                  ? 2
+                     : res_types[i] == MIR_T_D || __SIZEOF_LONG_DOUBLE__ == 8 ? 3
+                                                                              : 4;
+      pat = res_types[i] == MIR_T_F                                  ? sts_pat
+            : res_types[i] == MIR_T_D || __SIZEOF_LONG_DOUBLE__ == 8 ? std_pat
+                                                                     : stld_pat;
       pat |= offset_imm | n_vregs++ | (19 << 5);
       push_insns (code, &pat, sizeof (pat));
     } else {
@@ -389,6 +449,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   }
   push_insns (code, epilog, sizeof (epilog));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("ffi:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res;
 }
@@ -396,10 +460,17 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
+  static const uint32_t temp_reg = 10;               /* x10 */
   static const uint32_t save_x19_pat = 0xf81f0ff3;   /* str x19, [sp,-16]! */
+  static const uint32_t add_x2_sp = 0x910003e2;      /* add x2, sp, X*/
   static const uint32_t set_gr_offs = 0x128007e9;    /* mov w9, #-64 # gr_offs */
   static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
+  static const uint32_t arg_mov_start_pat[] = {
+    0x910003e9, /* mov x9,sp */
+    0xd10003ff, /* sub sp, sp, <frame size:10-21> # non-varg */
+  };
   static const uint32_t prepare_pat[] = {
+#if !defined(__APPLE__)
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
     0x910003ea, /* mov x10, sp # va_list addr         */
     0xb9001949, /* str w9,[x10, 24] # va_list.gr_offs */
@@ -412,19 +483,29 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
     0x910283e9, /* add x9, sp, #160 # vr_top*/
     0xf9000949, /* str x9,[x10, 16] # va_list.vr_top */
     0xaa0a03e2, /* mov x2, x10 # va arg  */
+#endif
     0xd2800009, /* mov x9, <(nres+1)*16> */
-    0xcb2963ff, /* sub sp, sp, x9 */
+    0xcb2963ff, /* sub sp, sp, x9 # reserve results and place for saved lr */
+#if defined(__APPLE__)
+    0x910023e3, /* add x3, sp, 8 # results arg */
+#else
     0x910043e3, /* add x3, sp, 16 # results arg */
+#endif
     0xaa0303f3, /* mov x19, x3 # results */
     0xf90003fe, /* str x30, [sp] # save lr */
   };
-  static const uint32_t shim_end[] = {
-    0xf94003fe, /* ldr x30, [sp] */
-    0xd2800009, /* mov x9, 240+(nres+1)*16 */
-    0x8b2963ff, /* add sp, sp, x9 */
-    0xf84107f3, /* ldr x19, sp, 16 */
-    0xd65f03c0, /* ret x30 */
-  };
+  static const uint32_t shim_end[]
+    = { 0xf94003fe, /* ldr x30, [sp] */
+        0xd2800009, /* mov x9, 240+(nres+1)*16 or APPLE: (nres * 8 + 8 + 15)/16*16 + sp_offset */
+#if defined(__APPLE__)
+        0xf94003f3, /* ldr x19, [sp, <(nres * 8 + 8 + 15)/16*16>] */
+#endif
+        0x8b2963ff, /* add sp, sp, x9 */
+#if !defined(__APPLE__)
+        0xf84107f3, /* ldr x19, sp, 16 */
+#endif
+        0xd65f03c0, /* ret x30 */
+      };
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
   MIR_func_t func = func_item->u.func;
   uint32_t nres = func->nres;
@@ -432,16 +513,107 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t *results = func->res_types;
   VARR (uint8_t) * code;
   void *res;
+  uint32_t base_reg_mask = ~(uint32_t) (0x3f << 5);
 
   VARR_CREATE (uint8_t, code, 128);
+#if defined(__APPLE__)
+  int stack_arg_sp_offset, sp_offset, scale;
+  uint32_t qwords, sp = 31;
+  MIR_type_t type;
+
+  assert (__SIZEOF_LONG_DOUBLE__ == 8);
+  push_insns (code, arg_mov_start_pat, sizeof (arg_mov_start_pat));
+  sp_offset = 0;
+  for (size_t i = 0; i < func->nargs; i++) { /* args */
+    type = VARR_GET (MIR_var_t, func->vars, i).type;
+    if (MIR_blk_type_p (type)
+        && (qwords = (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8) <= 2) {
+      /* passing by one or two qwords */
+      sp_offset += 8 * qwords;
+      continue;
+    }
+    sp_offset += 8;
+  }
+  imm = sp_offset % 16;
+  sp_offset = imm == 0 ? 0 : 8;
+  stack_arg_sp_offset = 0;
+  n_xregs = n_vregs = 0;
+  for (size_t i = 0; i < func->nargs; i++) { /* args */
+    type = VARR_GET (MIR_var_t, func->vars, i).type;
+    scale = type == MIR_T_F ? 2 : 3;
+    if (MIR_blk_type_p (type)
+        && (qwords = (VARR_GET (MIR_var_t, func->vars, i).size + 7) / 8) <= 2) {
+      /* passing by one or two qwords */
+      if (n_xregs + qwords
+          <= 8) { /* passed by hard regs: str xreg, offset[sp]; str xreg, offset+8[sp] */
+        for (int n = 0; n < qwords; n++) {
+          pat = st_pat | ((sp_offset >> scale) << 10) | n_xregs++ | (sp << 5);
+          sp_offset += 8;
+          push_insns (code, &pat, sizeof (pat));
+        }
+      } else {
+        /* passed on stack: ldr t, stack_arg_offset[x9]; st t, offset[sp];
+                            ldr t, stack_arg_offset+8[x9]; st t, offset+8[sp]: */
+        for (int n = 0; n < qwords; n++) {
+          pat
+            = (ld_pat & base_reg_mask) | (stack_arg_sp_offset >> scale) << 10 | temp_reg | (9 << 5);
+          push_insns (code, &pat, sizeof (pat));
+          pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
+          push_insns (code, &pat, sizeof (pat));
+          stack_arg_sp_offset += 8;
+          sp_offset += 8;
+        }
+      }
+      continue;
+    }
+    if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_RBLK
+        || MIR_blk_type_p (type)) {       /* including address for long blocks */
+      if (type == MIR_T_RBLK && i == 0) { /* x8 - hidden result address */
+        pat = st_pat | ((sp_offset >> scale) << 10) | 8 | (sp << 5);
+      } else if (n_xregs < 8) { /* str xreg, sp_offset[sp]  */
+        pat = st_pat | ((sp_offset >> scale) << 10) | n_xregs++ | (sp << 5);
+      } else { /* ldr t, stack_arg_offset[x9]; st t, sp_offset[sp]: */
+        pat = (ld_pat & base_reg_mask) | stack_arg_sp_offset | temp_reg | (9 << 5);
+        push_insns (code, &pat, sizeof (pat));
+        pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
+        stack_arg_sp_offset += 8;
+      }
+      sp_offset += 8;
+      push_insns (code, &pat, sizeof (pat));
+    } else if (type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD) {
+      if (n_vregs < 8) { /* st[s|d] vreg, sp_offset[sp]  */
+        pat = (type == MIR_T_F ? sts_pat : std_pat) | ((sp_offset >> scale) << 10) | n_vregs++
+              | (sp << 5);
+        sp_offset += 8;
+      } else {
+        pat = ((type == MIR_T_F ? lds_pat : ldd_pat) & base_reg_mask) | (9 << 5);
+        pat |= stack_arg_sp_offset | temp_reg;
+        push_insns (code, &pat, sizeof (pat));
+        pat = (type == MIR_T_F ? sts_pat : std_pat) | ((sp_offset >> scale) << 10) | temp_reg
+              | (sp << 5);
+        stack_arg_sp_offset += 8;
+        sp_offset += 8;
+      }
+      push_insns (code, &pat, sizeof (pat));
+    } else {
+      MIR_get_error_func (ctx) (MIR_call_op_error, "wrong type of arg value");
+    }
+  }
+  pat = add_x2_sp | (imm << 10);
+  push_insns (code, &pat, sizeof (pat));
+  sp_offset = (sp_offset + 15) / 16 * 16;
+  ((uint32_t *) VARR_ADDR (uint8_t, code))[1] |= sp_offset << 10;
+  push_insns (code, &save_x19_pat, sizeof (save_x19_pat));
+#else
   push_insns (code, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (code, save_insns, sizeof (save_insns));
   if (x8_res_p)
     push_insns (code, &set_x8_gr_offs, sizeof (set_x8_gr_offs));
   else
     push_insns (code, &set_gr_offs, sizeof (set_gr_offs));
+#endif
   push_insns (code, prepare_pat, sizeof (prepare_pat));
-  imm = (nres + 1) * 16;
+  imm = (nres * sizeof (MIR_val_t) + 8 + 15) / 16 * 16; /* results + saved x30 aligned to 16 */
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, code) + VARR_LENGTH (uint8_t, code)))[-5] |= imm << 5;
   gen_mov_addr (code, 0, ctx);       /* mov x0, ctx */
@@ -449,10 +621,11 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   gen_call_addr (code, NULL, 9, handler);
   /* move results: */
   n_xregs = n_vregs = offset = 0;
-  mir_assert (sizeof (long double) == 16);
   for (uint32_t i = 0; i < nres; i++) {
     if ((results[i] == MIR_T_F || results[i] == MIR_T_D || results[i] == MIR_T_LD) && n_vregs < 8) {
-      pat = results[i] == MIR_T_F ? lds_pat : results[i] == MIR_T_D ? ldd_pat : ldld_pat;
+      pat = results[i] == MIR_T_F                                  ? lds_pat
+            : results[i] == MIR_T_D || __SIZEOF_LONG_DOUBLE__ == 8 ? ldd_pat
+                                                                   : ldld_pat;
       pat |= n_vregs;
       n_vregs++;
     } else if (n_xregs < 8) {  // ??? ltp use
@@ -462,17 +635,29 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       MIR_get_error_func (ctx) (MIR_ret_error,
                                 "aarch64 can not handle this combination of return values");
     }
-    offset_imm = offset >> (results[i] == MIR_T_F ? 2 : results[i] == MIR_T_LD ? 4 : 3);
+    offset_imm = offset >> (results[i] == MIR_T_F                                    ? 2
+                            : results[i] == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 4
+                                                                                     : 3);
     mir_assert (offset_imm < (1 << 12));
     pat |= offset_imm << 10;
     push_insns (code, &pat, sizeof (pat));
-    offset += 16;
+    offset += sizeof (MIR_val_t);
   }
   push_insns (code, shim_end, sizeof (shim_end));
+#if defined(__APPLE__)
+  assert (imm % 8 == 0);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + VARR_LENGTH (uint8_t, code)))[-3] |= imm << 7;
+  imm += sp_offset + 16;
+#else
   imm = 240 + (nres + 1) * 16;
+#endif
   mir_assert (imm < (1 << 16));
   ((uint32_t *) (VARR_ADDR (uint8_t, code) + VARR_LENGTH (uint8_t, code)))[-4] |= imm << 5;
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code (func->name, 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res;
 }

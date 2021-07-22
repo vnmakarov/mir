@@ -1,3 +1,4 @@
+extern void exit (int);
 f (x)
 {
   if (x != 0 || x == 0)

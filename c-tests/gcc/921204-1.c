@@ -1,5 +1,6 @@
 /* The bit-field below would have a problem if __INT_MAX__ is too
    small.  */
+extern void exit (int);
 #if __INT_MAX__ < 2147483647
 int
 main (void)

@@ -1,3 +1,4 @@
+extern void exit (int);
 double
 f(double x)
 {

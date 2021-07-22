@@ -626,11 +626,13 @@ extern uint8_t *_MIR_publish_code_by_addr (MIR_context_t ctx, void *addr, const 
                                            size_t code_len);
 struct MIR_code_reloc {
   size_t offset;
-  void *value;
+  const void *value;
 };
 
 typedef struct MIR_code_reloc MIR_code_reloc_t;
 
+extern void _MIR_set_code (size_t prot_start, size_t prot_len, uint8_t *base, size_t nloc,
+                           const MIR_code_reloc_t *relocs, size_t reloc_size);
 extern void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
                               size_t code_len);
 extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
@@ -651,10 +653,12 @@ typedef struct {
 } _MIR_arg_desc_t;
 
 extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                               _MIR_arg_desc_t *arg_descs, int vararg_p);
+                               _MIR_arg_desc_t *arg_descs, size_t arg_vars_num);
 extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
+
+extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
 
 #endif /* #ifndef MIR_H */

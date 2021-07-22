@@ -1,3 +1,4 @@
+extern void exit (int);
 void f(long i)
 {
   if ((signed char)i < 0 || (signed char)i == 0) 

@@ -4,6 +4,7 @@ int seqgt (unsigned long a, unsigned short win, unsigned long b);
 
 int seqgt2 (unsigned long a, unsigned short win, unsigned long b);
 
+extern void exit (int);
 main()
 {
   if (! seqgt (*aa, 0x1000, *bb) || ! seqgt2 (*aa, 0x1000, *bb))

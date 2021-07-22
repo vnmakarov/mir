@@ -1,7 +1,7 @@
-extern void printf (const char *str, ...);
-extern void exit (int);
 #include <setjmp.h>
 
+extern void printf (const char *str, ...);
+extern void exit (int);
 static jmp_buf env;
 
 static void foo (void) {

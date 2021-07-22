@@ -1,3 +1,4 @@
+extern void exit (int);
 char *a = 0;
 char *b = 0;
 

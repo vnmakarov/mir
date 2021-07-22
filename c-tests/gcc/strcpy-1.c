@@ -5,6 +5,7 @@
 
 #include <string.h>
 
+extern void exit (int);
 #ifndef MAX_OFFSET
 #define MAX_OFFSET (sizeof (long long))
 #endif

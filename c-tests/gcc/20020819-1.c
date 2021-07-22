@@ -1,3 +1,4 @@
+extern void exit (int);
 foo ()
 {
   return 0;

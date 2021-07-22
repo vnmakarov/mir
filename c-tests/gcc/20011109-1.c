@@ -1,3 +1,4 @@
+extern void exit (int);
 void fail1(void)
 {
   abort ();

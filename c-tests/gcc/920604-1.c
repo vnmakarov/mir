@@ -1,3 +1,4 @@
+extern void exit (int);
 long long
 mod (a, b)
      long long a, b;

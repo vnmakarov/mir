@@ -1,3 +1,4 @@
+extern void exit (int);
 f (const int x)
 {
   int y = 0;

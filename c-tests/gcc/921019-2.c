@@ -1,3 +1,4 @@
+extern void exit (int);
 main()
 {
   double x,y=0.5;

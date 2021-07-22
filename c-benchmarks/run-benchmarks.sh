@@ -109,6 +109,33 @@ EOF
       run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
+  if ccomp $tempc >/dev/null 2>&1; then
+      run "ccomp -O3" "ccomp -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      first=
+  fi
+  if ! fgrep setjmp.h $bench.c >/dev/null 2>&1; then
+    if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
+      run "emcc/wasmer" "emcc -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
+      run "emcc -O2/wasmer" "emcc -O2 -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=singlepass ./a.out >/dev/null 2>&1; then
+      run "wasi -O2/wasmer singlepass" "wasi-clang -O2 $bench.c" "wasmer run --backend=singlepass ./a.out -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=cranelift ./a.out >/dev/null 2>&1; then
+      run "wasi -O2/wasmer cranelift" "wasi-clang -O2 $bench.c" "wasmer run --backend=cranelift ./a.out -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if wasi-clang $tempc >/dev/null 2>&1 && wasmer run --backend=llvm ./a.out >/dev/null 2>&1; then
+      run "wasi -O2/wasmer LLVM" "wasi-clang -O2 $bench.c" "wasmer run --backend=llvm ./a.out -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if wasi-clang $tempc >/dev/null 2>&1 && wasmtime --help >/dev/null 2>&1; then
+      run "wasi -O0/wasmtime" "wasi-clang -O0 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
+    fi
+    if wasi-clang $tempc >/dev/null 2>&1 && wasmtime --help >/dev/null 2>&1; then
+      run "wasi -O2/wasmtime" "wasi-clang -O2 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
+    fi
+  fi
   run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
   #  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
   rm -f ./a.out
@@ -150,4 +177,4 @@ for i in `awk -F: '{print $1}' $temp3|sort|uniq`; do
     awk -F: -v name="$i" "BEGIN {f = 1.0} name==\$1 {f = f * \$2; n++} END {printf \"%0.2fx\n\", f ^  (1.0/n);}" < $temp3
 done
 
-rm -f $tempc $temp $temp2 $temp3 $errf
+rm -f $tempc $temp $temp2 $temp3 $errf ./a.out.wasm ./a.out.js

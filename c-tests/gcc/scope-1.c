@@ -1,3 +1,4 @@
+extern void exit (int);
 int v = 3;
 
 f ()

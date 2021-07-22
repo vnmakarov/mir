@@ -1,3 +1,4 @@
+extern void exit (int);
 void foo (int *a) {}
 
 int main ()

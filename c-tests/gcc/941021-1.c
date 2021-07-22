@@ -1,3 +1,4 @@
+extern void exit (int);
 double glob_dbl;
 
 f (pdbl, value)

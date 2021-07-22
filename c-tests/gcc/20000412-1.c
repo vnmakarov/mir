@@ -1,6 +1,7 @@
 short int i = -1;
 const char * const wordlist[207];
 
+extern void exit (int);
 const char * const *
 foo(void)
 {

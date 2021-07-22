@@ -1,3 +1,4 @@
+extern void exit (int);
 f(x, d1, d2, d3)
    double d1, d2, d3;
 {

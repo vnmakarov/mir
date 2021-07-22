@@ -1,3 +1,4 @@
+extern void exit (int);
 int k = 0;
 
 main()

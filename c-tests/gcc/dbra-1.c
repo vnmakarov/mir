@@ -1,3 +1,4 @@
+extern void exit (int);
 f1 (a)
      long a;
 {

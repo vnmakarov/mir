@@ -1,3 +1,4 @@
+extern void exit (int);
 unsigned test(unsigned one , unsigned  bit)
 {
     unsigned val=  bit & 1;

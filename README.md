@@ -2,7 +2,7 @@
   * MIR means **M**edium **I**nternal **R**epresentation
   * MIR project goal is to provide a basis to implement fast and lightweight JITs
   * Motivations for the project can be found in [this blog post](https://developers.redhat.com/blog/2020/01/20/mir-a-lightweight-jit-compiler-project)
-  * MIR code currently works only for x86_64 Linux/OSX and aarch64/ppc64be/ppc64le/s390x Linux
+  * MIR code currently works only for x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64be/ppc64le/s390x/riscv64 Linux
   * MIR code installation is described in file INSTALL.md
   * MIR and its API is described in file MIR.md
   * The code contains also C-to-MIR compiler and standalone C interpreter/JIT `c2m` based on it
@@ -227,16 +227,17 @@ ex100:    func v, 0
    by hashtables
  * File `mir-interp.c` contains code for interpretation of MIR code.  It is included in `mir.c`
    and never compiled separately
- * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`,
-   and `mir-gen-s390x.c` contain code for MIR JIT compiler
-   * Files `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`,
-   and `mir-gen-s390x.c` is machine dependent code of JIT compiler
+ * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`, `mir-gen-s390x.c`,
+   and `mir-gen-riscv.c` contain code for MIR JIT compiler
+   * Files `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`, `mir-gen-s390x.c`,
+   and `mir-gen-riscv.c` is machine dependent code of JIT compiler
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
-   C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64` and `c2mir/s390x`
-   contain correspondingly x86_64, aarch64, ppc64, and s390x machine-dependent code for C to MIR compiler
+   C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64`, `c2mir/s390x`,
+   and `c2mir/riscv` contain correspondingly x86_64, aarch64, ppc64, s390x, and riscv machine-dependent
+   code for C to MIR compiler
    
 ## Playing with MIR project code
   * You can run some benchmarks and tests by `make bench` and `make test`
@@ -296,5 +297,5 @@ ex100:    func v, 0
       Mozilla Public License
 
 ## Porting MIR
-  * Currently MIR code works on x86_64, aarch64, ppc64be, ppc64le, s390x Linux and x86_64 MacOS
+  * Currently MIR code works on x86_64, aarch64, ppc64be, ppc64le, s390x, riscv-64 Linux and x86_64/aarch64 (Apple M1) MacOS
   * File HOW-TO-PORT-MIR.md outlines process of porting MIR

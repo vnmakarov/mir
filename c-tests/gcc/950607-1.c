@@ -1,3 +1,4 @@
+extern void exit (int);
 main ()
 {
   struct { long status; } h;

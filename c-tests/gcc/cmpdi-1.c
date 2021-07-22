@@ -1,3 +1,4 @@
+extern void exit (int);
 #define F 140
 #define T 13
 

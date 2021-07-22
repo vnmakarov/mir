@@ -53,6 +53,14 @@ runtest () {
 	fi
 }
 
+for dir in mir
+do
+	$ECHO ++++++++++++++Running tests in $dir+++++++++++++
+	for t in $ctest_dir/$dir/*.mir;do
+	    runtest $t
+	done
+done
+
 for dir in new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
 	$ECHO ++++++++++++++Running tests in $dir+++++++++++++

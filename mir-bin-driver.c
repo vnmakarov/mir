@@ -26,6 +26,8 @@ static struct lib {
 } libs[] = {
 #if !defined(__APPLE__)
   {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}, {"/lib64/libpthread.so.0", NULL}
+#else
+  {"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib", NULL}
 #endif
 };
 
@@ -51,6 +53,9 @@ static void *import_resolver (const char *name) {
   if (strcmp (name, "dlclose") == 0) return dlclose;
 #if defined(__unix__) || defined(__APPLE__)
   if (strcmp (name, "stat") == 0) return stat;
+#if defined(__APPLE__) && defined(__aarch64__)
+  if (strcmp (name, "_MIR_set_code") == 0) return _MIR_set_code;
+#endif
 #endif
   for (int i = 0; i < sizeof (libs) / sizeof (struct lib); i++) {
     if ((sym = dlsym (libs[i].handler, name)) != NULL) break;

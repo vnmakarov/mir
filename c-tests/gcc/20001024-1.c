@@ -1,3 +1,4 @@
+extern void exit (int);
 struct a;
 
 extern int baz (struct a *__restrict x);

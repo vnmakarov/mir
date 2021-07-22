@@ -289,7 +289,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + n_fregs);
       gen_mov (gen_ctx, call_insn,
-               type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,  // ???
+               type == MIR_T_F   ? MIR_FMOV
+               : type == MIR_T_D ? MIR_DMOV
+                                 : MIR_LDMOV,  // ???
                arg_reg_op, arg_op);
       call_insn->ops[i] = arg_reg_op;
       if (vararg_p) {                                             // ??? dead insns
@@ -344,9 +346,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size + PPC64_STACK_HEADER_SIZE,
                                          SP_HARD_REG, MIR_NON_HARD_REG, 1);
       if (type != MIR_T_RBLK) {
@@ -621,6 +624,10 @@ static void set_prev_sp_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *prev
   }
 }
 
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+  return TRUE;
+}
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
@@ -653,13 +660,19 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                            1));
       }
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + fp_arg_num);
-      gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
+      gen_mov (gen_ctx, anchor,
+               type == MIR_T_F   ? MIR_FMOV
+               : type == MIR_T_D ? MIR_DMOV
+                                 : MIR_LDMOV,
                arg_var_op, arg_reg_op); /* (f|d|ld|)mov arg, arg_hard_reg */
       fp_arg_num += type == MIR_T_LD ? 2 : 1;
     } else if (type == MIR_T_F || type == MIR_T_D
                || type == MIR_T_LD) { /* (f|d|ld|)mov arg, arg_memory */
       set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
-      gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
+      gen_mov (gen_ctx, anchor,
+               type == MIR_T_F   ? MIR_FMOV
+               : type == MIR_T_D ? MIR_DMOV
+                                 : MIR_LDMOV,
                arg_var_op,
                _MIR_new_hard_reg_mem_op (ctx, type, disp, R12_HARD_REG, MIR_NON_HARD_REG, 1));
     } else if (MIR_blk_type_p (type)) {
@@ -704,13 +717,12 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) { /* split to cmp and branch */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ
-                ? MIR_LDEQ
-                : code == MIR_LDBNE
-                    ? MIR_LDNE
-                    : code == MIR_LDBLT
-                        ? MIR_LDLT
-                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
+      code = (code == MIR_LDBEQ   ? MIR_LDEQ
+              : code == MIR_LDBNE ? MIR_LDNE
+              : code == MIR_LDBLT ? MIR_LDLT
+              : code == MIR_LDBGE ? MIR_LDGE
+              : code == MIR_LDBGT ? MIR_LDGT
+                                  : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -803,8 +815,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         res_type = func->res_types[i];
         if (((res_type == MIR_T_F || res_type == MIR_T_D) && n_fregs < 4)
             || (res_type == MIR_T_LD && n_fregs < 3)) {
-          new_insn_code
-            = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
+          new_insn_code = res_type == MIR_T_F   ? MIR_FMOV
+                          : res_type == MIR_T_D ? MIR_DMOV
+                                                : MIR_LDMOV;
           ret_reg = F1_HARD_REG + n_fregs++;
         } else if (n_gpregs < 8) {
           new_insn_code = MIR_MOV;
@@ -895,6 +908,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op, sp_reg_op);              /* r31 = r1 */
   /* Epilogue: */
   anchor = DLIST_TAIL (MIR_insn_t, func->insns);
+  /* It might be infinite loop after CCP with dead code elimination: */
+  if (anchor->code == MIR_JMP) return;
   assert (anchor->code == MIR_RET);
   /* Restoring hard registers: */
   for (i = n = 0; i <= MAX_HARD_REG; i++)
@@ -2290,10 +2305,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       binsn |= lb << (32 - 11);
       binsn_mask = check_and_set_mask (binsn_mask, 1 << (32 - 11));
     }
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_addr_insn_start = VARR_LENGTH (uint8_t, result_code);
     put_uint32 (gen_ctx, binsn); /* output the machine insn */

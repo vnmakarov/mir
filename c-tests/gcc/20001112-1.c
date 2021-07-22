@@ -1,3 +1,4 @@
+extern void exit (int);
 int main ()
 {
   long long i = 1;

@@ -1,3 +1,4 @@
+extern void exit (int);
 void adjust_xy (short *, short *);
 
 struct adjust_template

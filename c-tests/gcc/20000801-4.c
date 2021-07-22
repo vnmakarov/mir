@@ -5,6 +5,7 @@
    uninitialized elements zeroed.  This isn't clear in the 1990
    standard, but was fixed in TC2 and C99; see DRs #060, #092.
 */
+extern void exit (int);
 extern void abort (void);
 
 int

@@ -1,3 +1,4 @@
+extern void exit (int);
 long x = -1L;
 
 int main()
