@@ -788,6 +788,13 @@ static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_di
   return offset >= 0 && offset % scale == 0 && offset / scale < (1 << 12);
 }
 
+#define SWAP(v1, v2, t) \
+  do {                  \
+    t = v1;             \
+    v1 = v2;            \
+    v2 = t;             \
+  } while (0)
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
@@ -983,6 +990,18 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       leaf_p = FALSE;
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
+    } else if (code == MIR_FBLT) { /* don't use blt/ble for correct nan processing: */
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_FBGT;
+    } else if (code == MIR_FBLE) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_FBGE;
+    } else if (code == MIR_DBLT) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_DBGT;
+    } else if (code == MIR_DBLE) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_DBGE;
     } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn
          and added extension insn (if any).  */
@@ -1613,18 +1632,9 @@ static const struct pattern patterns[] = {
   {MIR_UBLTS, "l r r", SCMPR "; " UBLT},
   /* cmp Wn,I,shift; bcc l */
   {MIR_UBLTS, "l r I", SCMPI "; " UBLT},
-  /* fcmpe Sn,Sm; blt l */
-  {MIR_FBLT, "l r r", FCMP "; " BLT},
-  /* fcmpe Dn,Dm; blt l */
-  {MIR_DBLT, "l r r", DCMP "; " BLT},
-  /* fcmpe Sn,0.0; blt l */
-  {MIR_FBLT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BLT},
-  /* fcmpe Dn,0.0; blt l */
-  {MIR_DBLT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BLT},
 
 #define BGE "5400000a:ff00001f l"
 #define UBGE "54000002:ff00001f l"
-#define FBGE "54000005:ff00001f l"
   /* cmp Rn,Rm; bge l */
   {MIR_BGE, "l r r", CMPR "; " BGE},
   /* cmp Rn,I,shift ; bge l */
@@ -1642,13 +1652,13 @@ static const struct pattern patterns[] = {
   /* cmp Wn,I,shift; bcs l */
   {MIR_UBGES, "l r I", SCMPI "; " UBGE},
   /* fcmpe Sn,Sm; bpl l */
-  {MIR_FBGE, "l r r", FCMP "; " FBGE},
+  {MIR_FBGE, "l r r", FCMP "; " BGE},
   /* fcmpe Dn,Dm; bpl l */
-  {MIR_DBGE, "l r r", DCMP "; " FBGE},
+  {MIR_DBGE, "l r r", DCMP "; " BGE},
   /* fcmpe Sn,0.0; bpl l */
-  {MIR_FBGE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " FBGE},
+  {MIR_FBGE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BGE},
   /* fcmpe Dn,0.0; bpl l */
-  {MIR_DBGE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " FBGE},
+  {MIR_DBGE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BGE},
 
 #define BGT "5400000c:ff00001f l"
 #define UBGT "54000008:ff00001f l"
@@ -1669,13 +1679,13 @@ static const struct pattern patterns[] = {
   /* cmp Wn,I,shift; bhi l */
   {MIR_UBGTS, "l r I", SCMPI "; " UBGT},
   /* fcmpe Sn,Sm; bhi l */
-  {MIR_FBGT, "l r r", FCMP "; " UBGT},
+  {MIR_FBGT, "l r r", FCMP "; " BGT},
   /* fcmpe Dn,Dm; bhi l */
-  {MIR_DBGT, "l r r", DCMP "; " UBGT},
+  {MIR_DBGT, "l r r", DCMP "; " BGT},
   /* fcmpe Sn,0.0; bhi l */
-  {MIR_FBGT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " UBGT},
+  {MIR_FBGT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BGT},
   /* fcmpe Dn,0.0; bhi l */
-  {MIR_DBGT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " UBGT},
+  {MIR_DBGT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BGT},
 
 #define BLE "5400000d:ff00001f l"
 #define UBLE "54000009:ff00001f l"
@@ -1695,14 +1705,6 @@ static const struct pattern patterns[] = {
   {MIR_UBLES, "l r r", SCMPR "; " UBLE},
   /* cmp Wn,I,shift; bls l */
   {MIR_UBLES, "l r I", SCMPI "; " UBLE},
-  /* fcmpe Sn,Sm; ble l */
-  {MIR_FBLE, "l r r", FCMP "; " BLE},
-  /* fcmpe Dn,Dm; ble l */
-  {MIR_DBLE, "l r r", DCMP "; " BLE},
-  /* fcmpe Sn,0.0; ble l */
-  {MIR_FBLE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BLE},
-  /* fcmpe Dn,0.0; ble l */
-  {MIR_DBLE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BLE},
 
   // ??? with shift
   {MIR_NEG, "r r", "cb0003e0:ff2003e0 rd0 rm1"},  /* neg Rd,Rm */
