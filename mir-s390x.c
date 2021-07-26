@@ -262,7 +262,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   if (nres > 0 && res_types[0] == MIR_T_LD) n_gpregs++; /* ld address */
   for (uint32_t i = 0; i < nargs; i++) {                /* calculate param area size: */
     type = arg_descs[i].type;
-    if (MIR_blk_type_p (type)) frame_size += (arg_descs[i].size + 7) / 8; /* blk value space */
+    if (MIR_blk_type_p (type)) frame_size += (arg_descs[i].size + 7) / 8 * 8; /* blk value space */
     if ((type == MIR_T_F || type == MIR_T_D) && n_fpregs < 4) {
       n_fpregs++;
     } else if (type != MIR_T_F && type != MIR_T_D && n_gpregs < 5) { /* RBLK too */
