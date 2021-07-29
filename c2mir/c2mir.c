@@ -9761,6 +9761,7 @@ struct gen_ctx {
   HTAB (reg_var_t) * reg_var_tab;
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
+  op_t top_gen_last_op;
   struct {
     int res_ref_p; /* flag of returning an aggregate by reference */
     VARR (MIR_type_t) * ret_types;
@@ -9783,6 +9784,7 @@ struct gen_ctx {
 #define reg_free_mark gen_ctx->reg_free_mark
 #define continue_label gen_ctx->continue_label
 #define break_label gen_ctx->break_label
+#define top_gen_last_op gen_ctx->top_gen_last_op
 #define proto_info gen_ctx->proto_info
 #define init_els gen_ctx->init_els
 #define memset_proto gen_ctx->memset_proto
@@ -10526,9 +10528,8 @@ static MIR_label_t get_label (c2m_ctx_t c2m_ctx, node_t target) {
   return labels->attr = MIR_new_label (c2m_ctx->ctx);
 }
 
-static op_t top_gen_last_op;
-
 static void top_gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_t false_label) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   top_gen_last_op = gen (c2m_ctx, r, true_label, false_label, FALSE, NULL);
 }
 
