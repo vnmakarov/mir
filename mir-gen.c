@@ -1542,10 +1542,8 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
 }
 
 static MIR_insn_code_t get_move_code (MIR_type_t type) {
-  return (type == MIR_T_F    ? MIR_FMOV
-          : type == MIR_T_D  ? MIR_DMOV
-          : type == MIR_T_LD ? MIR_LDMOV
-                             : MIR_MOV);
+  return (type == MIR_T_F ? MIR_FMOV
+                          : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
 }
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t reg) {
@@ -2245,12 +2243,13 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
 
   if (e->temp_reg == 0) {
     mode = MIR_insn_op_mode (gen_ctx->ctx, e->insn, 0, &out_p);
-    e->temp_reg = gen_new_temp_reg (gen_ctx,
-                                    mode == MIR_OP_FLOAT     ? MIR_T_F
-                                    : mode == MIR_OP_DOUBLE  ? MIR_T_D
-                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD
-                                                             : MIR_T_I64,
-                                    curr_func_item->u.func);
+    e->temp_reg
+      = gen_new_temp_reg (gen_ctx,
+                          mode == MIR_OP_FLOAT
+                            ? MIR_T_F
+                            : mode == MIR_OP_DOUBLE ? MIR_T_D
+                                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64,
+                          curr_func_item->u.func);
   }
   return e->temp_reg;
 }
@@ -3974,7 +3973,7 @@ static void setup_loc_profits (gen_ctx_t gen_ctx, MIR_reg_t breg) {
   reg_info_t *info = &curr_breg_infos[breg];
 
   for (mv = DLIST_HEAD (dst_mv_t, info->dst_moves); mv != NULL; mv = DLIST_NEXT (dst_mv_t, mv))
-    setup_loc_profit_from_op (gen_ctx, mv->bb_insn->insn->ops[1], mv->freq);
+    setup_loc_profit_from_op (gen_ctx, mv->bb_insn->insn->ops[0], mv->freq);
   for (mv = DLIST_HEAD (src_mv_t, info->src_moves); mv != NULL; mv = DLIST_NEXT (src_mv_t, mv))
     setup_loc_profit_from_op (gen_ctx, mv->bb_insn->insn->ops[1], mv->freq);
 }
@@ -4385,6 +4384,7 @@ struct selection_ctx {
 
 static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   switch (insn_code) {
+    /* we can not change fp comparison and branches because NaNs */
   case MIR_ADD:
   case MIR_ADDS:
   case MIR_FADD:
@@ -4453,30 +4453,6 @@ static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   case MIR_BGES: return MIR_BLES;
   case MIR_UBGE: return MIR_UBLE;
   case MIR_UBGES: return MIR_UBLES;
-  case MIR_FLT: return MIR_FGT;
-  case MIR_DLT: return MIR_DGT;
-  case MIR_LDLT: return MIR_LDGT;
-  case MIR_FLE: return MIR_FGE;
-  case MIR_DLE: return MIR_DGE;
-  case MIR_LDLE: return MIR_LDGE;
-  case MIR_FGT: return MIR_FLT;
-  case MIR_DGT: return MIR_DLT;
-  case MIR_LDGT: return MIR_LDLT;
-  case MIR_FGE: return MIR_FLE;
-  case MIR_DGE: return MIR_DLE;
-  case MIR_LDGE: return MIR_LDLE;
-  case MIR_FBLT: return MIR_FBGT;
-  case MIR_DBLT: return MIR_DBGT;
-  case MIR_LDBLT: return MIR_LDBGT;
-  case MIR_FBLE: return MIR_FBGE;
-  case MIR_DBLE: return MIR_DBGE;
-  case MIR_LDBLE: return MIR_LDBGE;
-  case MIR_FBGT: return MIR_FBLT;
-  case MIR_DBGT: return MIR_DBLT;
-  case MIR_LDBGT: return MIR_LDBLT;
-  case MIR_FBGE: return MIR_FBLE;
-  case MIR_DBGE: return MIR_DBLE;
-  case MIR_LDBGE: return MIR_LDBLE;
   default: return MIR_INSN_BOUND;
   }
 }
