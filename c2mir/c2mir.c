@@ -9742,6 +9742,7 @@ DEF_VARR (int);
 DEF_VARR (MIR_type_t);
 
 struct init_el {
+  c2m_ctx_t c2m_ctx; /* for sorting */
   mir_size_t num, offset;
   decl_t member_decl; /* NULL for non-member initialization  */
   struct type *el_type;
@@ -10989,6 +10990,7 @@ check_one_value:
     assert (initializer->code == N_STR || initializer->code == N_STR16
             || initializer->code == N_STR32 || !const_only_p || cexpr->const_p
             || cexpr->const_addr_p || (literal != NULL && addr_p));
+    init_el.c2m_ctx = c2m_ctx;
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = member_decl;
@@ -11006,6 +11008,7 @@ check_one_value:
            && ((str = NL_EL (init->u.ops, 1))->code == N_STR || str->code == N_STR16
                || str->code == N_STR32)))
       && type->mode == TM_ARR && init_compatible_string_p (str, type->u.arr_type->el_type)) {
+    init_el.c2m_ctx = c2m_ctx;
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = NULL;
@@ -11118,10 +11121,16 @@ static int cmp_init_el (const void *p1, const void *p2) {
   else if (el1->member_decl != NULL && el2->member_decl != NULL
            && el1->member_decl->bit_offset > el2->member_decl->bit_offset)
     return 1;
-  else if (el1->num < el2->num)
-    return 1;
-  else if (el1->num > el2->num)
+  else if (el1->member_decl != NULL
+           && type_size (el1->c2m_ctx, el1->member_decl->decl_spec.type) == 0)
     return -1;
+  else if (el2->member_decl != NULL
+           && type_size (el2->c2m_ctx, el2->member_decl->decl_spec.type) == 0)
+    return 1;
+  else if (el1->num < el2->num)
+    return -1;
+  else if (el1->num > el2->num)
+    return 1;
   else
     return 0;
 }
