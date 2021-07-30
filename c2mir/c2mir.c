@@ -9372,6 +9372,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   }
   case N_STMTEXPR: {
     node_t block = NL_HEAD (r->u.ops);
+    if (c2m_options->pedantic_p) {
+      error (c2m_ctx, POS (r), "statement expression is not a part of C11 standard");
+      break;
+    }
     check (c2m_ctx, block, r);
     node_t last_stmt = NL_TAIL (NL_EL (block->u.ops, 1)->u.ops);
     if (!last_stmt || last_stmt->code != N_EXPR) {
