@@ -4817,8 +4817,7 @@ static MIR_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn) 
 }
 
 static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  MIR_insn_t def_insn, new_insn, insn = bb_insn->insn;
+  MIR_insn_t def_insn, insn = bb_insn->insn;
   MIR_insn_code_t code = insn->code;
   MIR_op_t op, saved_op;
   int size, size2, sign_p = FALSE, sign2_p = FALSE, ok_p;

@@ -7599,7 +7599,7 @@ check_one_value:
         break;
     } else {
       struct type *curr_type = type;
-      mir_llong arr_size_val;
+      mir_llong arr_size_val MIR_UNUSED;
       int first_p = TRUE;
 
       VARR_TRUNC (init_object_t, init_object_path, mark + 1);
@@ -10765,8 +10765,9 @@ static MIR_UNUSED const char *gen_get_indexed_name (c2m_ctx_t c2m_ctx, const cha
 }
 
 /* Can be used by target functions */
-static inline void gen_multiple_load_store (c2m_ctx_t c2m_ctx, struct type *type, MIR_op_t *var_ops,
-                                            MIR_op_t mem_op, int load_p) {
+static inline void MIR_UNUSED gen_multiple_load_store (c2m_ctx_t c2m_ctx, struct type *type,
+                                                       MIR_op_t *var_ops, MIR_op_t mem_op,
+                                                       int load_p) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_op_t op, var_op;
@@ -11056,7 +11057,7 @@ check_one_value:
       assert (ok_p);
     } else {
       struct type *curr_type = type;
-      mir_llong arr_size_val;
+      mir_llong arr_size_val MIR_UNUSED;
       int first_p = TRUE;
 
       VARR_TRUNC (init_object_t, init_object_path, mark + 1);
@@ -11356,7 +11357,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
   init_el_t init_el, next_init_el;
   MIR_reg_t base;
   MIR_type_t t;
-  MIR_item_t data;
+  MIR_item_t data = NULL; /* to remove a warning */
   struct expr *e;
 
   if (var.mir_op.mode == MIR_OP_REG) { /* scalar initialization: */
