@@ -1087,6 +1087,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         SWAP (insn->ops[1], insn->ops[2], temp_op);
         insn->code = MIR_DGE;
         break;
+      default: break; /* do nothing */
       }
       break;
     }
