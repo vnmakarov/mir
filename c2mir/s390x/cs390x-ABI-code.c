@@ -82,7 +82,6 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
                                   decl_t param_decl, target_arg_info_t *arg_info) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
-  MIR_type_t type;
   MIR_op_t param_op;
   reg_var_t reg_var;
 
