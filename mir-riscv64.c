@@ -264,26 +264,22 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x00058493, /* addi s1,a1,0 */
   };
 #endif
-  static const uint32_t ld_word_pat = 0x0003b003;       /* ld zero,0(t2) */
-  static const uint32_t ld_word_temp_pat = 0x0003b303;  /* ld t1,0(t2) */
-  static const uint32_t flw_word_pat = 0x0003a007;      /* flw f0,0(t2) */
-  static const uint32_t fld_word_pat = 0x0003b007;      /* fld f0,0(t2) */
-  static const uint32_t flw_word_temp_pat = 0x0003a087; /* flw ft1,0(t2) */
-  static const uint32_t fld_word_temp_pat = 0x0003b087; /* fld ft1,0(t2) */
-  static const uint32_t ld_temp_pat = 0x0004b303;       /* ld t1,0(s1) */
-  static const uint32_t st_temp_pat = 0x00613023;       /* sd t1,0(sp) */
-  static const uint32_t st_arg_pat = 0x0004b023;        /* sd x0,0(s1) */
-  static const uint32_t fsw_arg_pat = 0x0004a027;       /* fsw f0,0(s1) */
-  static const uint32_t fsd_arg_pat = 0x0004b027;       /* fsd f0,0(s1) */
-  static const uint32_t flw_temp_pat = 0x0004a087;      /* flw ft1,0(s1) */
-  static const uint32_t fld_temp_pat = 0x0004b087;      /* fld ft1,0(s1) */
-  static const uint32_t fsw_temp_pat = 0x00112027;      /* fsw ft1,0(sp) */
-  static const uint32_t fsd_temp_pat = 0x00113027;      /* fsd ft1,0(sp) */
-  static const uint32_t fmvs_arg_pat = 0xe0000053;      /* fmv.x.w x0,f0 */
-  static const uint32_t fmvd_arg_pat = 0xe2000053;      /* fmv.x.d x0,f0 */
-  static const uint32_t fmvs_temp_pat = 0xe0008353;     /* fmv.x.w t1,ft1 */
-  static const uint32_t fmvd_temp_pat = 0xe2008353;     /* fmv.x.d t1,ft1 */
-  static const uint32_t mv_t1_pat = 0x00030013;         /* addi zero,t1,0 */
+  static const uint32_t ld_word_pat = 0x0003b003;      /* ld zero,0(t2) */
+  static const uint32_t ld_word_temp_pat = 0x0003b303; /* ld t1,0(t2) */
+  static const uint32_t ld_temp_pat = 0x0004b303;      /* ld t1,0(s1) */
+  static const uint32_t st_temp_pat = 0x00613023;      /* sd t1,0(sp) */
+  static const uint32_t st_arg_pat = 0x0004b023;       /* sd x0,0(s1) */
+  static const uint32_t fsw_arg_pat = 0x0004a027;      /* fsw f0,0(s1) */
+  static const uint32_t fsd_arg_pat = 0x0004b027;      /* fsd f0,0(s1) */
+  static const uint32_t flw_temp_pat = 0x0004a087;     /* flw ft1,0(s1) */
+  static const uint32_t fld_temp_pat = 0x0004b087;     /* fld ft1,0(s1) */
+  static const uint32_t fsw_temp_pat = 0x00112027;     /* fsw ft1,0(sp) */
+  static const uint32_t fsd_temp_pat = 0x00113027;     /* fsd ft1,0(sp) */
+  static const uint32_t fmvs_arg_pat = 0xe0000053;     /* fmv.x.w x0,f0 */
+  static const uint32_t fmvd_arg_pat = 0xe2000053;     /* fmv.x.d x0,f0 */
+  static const uint32_t fmvs_temp_pat = 0xe0008353;    /* fmv.x.w t1,ft1 */
+  static const uint32_t fmvd_temp_pat = 0xe2008353;    /* fmv.x.d t1,ft1 */
+  static const uint32_t mv_t1_pat = 0x00030013;        /* addi zero,t1,0 */
   static const uint32_t long_sp_add_pat[] = {
     0x00000337, /* lui t1,0 */
     0x00030313, /* addi t1,t1,0 */
@@ -722,15 +718,6 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   VARR_DESTROY (uint8_t, code2);
   return res;
 }
-
-#if __riscv_compressed
-static uint16_t save_fp = 0xe022; /* c.sdsp s0,0(sp) */
-static uint16_t restore_fp = 0x6402 /* c.ldsp s0,0(sp) */;
-#else
-static uint32_t save_fp = 0x00813023;    /* sd s0,0(sp) */
-static uint32_t restore_fp = 0x00013403; /* ld s0,0(sp) */
-;
-#endif
 
 /* save a0-a7,fa0-fa7: */
 #if __riscv_compressed
