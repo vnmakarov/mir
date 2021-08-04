@@ -318,7 +318,6 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   MIR_type_t type;
   uint32_t n_xregs = 0, n_vregs = 0, sp_offset = 0, blk_offset = 0, pat, offset_imm, scale;
   uint32_t sp = 31, addr_reg, qwords;
-  uint32_t *addr;
   const uint32_t temp_reg = 10; /* x10 */
   VARR (uint8_t) * code;
   void *res;

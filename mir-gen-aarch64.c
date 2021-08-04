@@ -196,7 +196,6 @@ static MIR_op_t get_new_hard_reg_mem_op (gen_ctx_t gen_ctx, MIR_type_t type, MIR
 
 static MIR_op_t new_hard_reg_mem_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_type_t type,
                                      MIR_disp_t disp, MIR_reg_t base) {
-  MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn1, insn2;
   MIR_op_t op = get_new_hard_reg_mem_op (gen_ctx, type, disp, base, &insn1, &insn2);
   if (insn1 != NULL) gen_add_insn_before (gen_ctx, anchor, insn1);
