@@ -186,7 +186,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
   MIR_insn_t insn;
   MIR_reg_t ret_addr_reg;
   op_t temp, var;
-  int i, n, size;
+  int n, size;
 
   if (void_type_p (ret_type)) return;
   if (((type = fp_homogeneous_type (c2m_ctx, ret_type, &n)) == MIR_T_F || type == MIR_T_D)
@@ -251,7 +251,6 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
                                     target_arg_info_t *arg_info, op_t arg) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
-  MIR_var_t var;
   MIR_type_t type;
   op_t temp;
   int n;
@@ -285,7 +284,6 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
                                   decl_t param_decl, target_arg_info_t *arg_info) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
-  MIR_var_t var;
   MIR_type_t type;
   reg_var_t reg_var;
   int i, n;
