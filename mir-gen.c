@@ -662,7 +662,8 @@ static void gen_move_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn
   }
 }
 
-static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg) {
+static void MIR_UNUSED setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn,
+                                                 MIR_reg_t hard_reg) {
   insn_data_t insn_data;
 
   gen_assert (MIR_call_code_p (call_insn->code) && hard_reg <= MAX_HARD_REG);
