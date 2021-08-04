@@ -1069,9 +1069,36 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], areg_op);
       gen_add_insn_after (gen_ctx, insn, new_insn);
       insn->ops[0] = areg_op;
+      /* Following conditional branches are changed to correctly process unordered numbers: */
+      switch (code) {
+      case MIR_FLT:
+        SWAP (insn->ops[1], insn->ops[2], temp_op);
+        insn->code = MIR_FGT;
+        break;
+      case MIR_FLE:
+        SWAP (insn->ops[1], insn->ops[2], temp_op);
+        insn->code = MIR_FGE;
+        break;
+      case MIR_DLT:
+        SWAP (insn->ops[1], insn->ops[2], temp_op);
+        insn->code = MIR_DGT;
+        break;
+      case MIR_DLE:
+        SWAP (insn->ops[1], insn->ops[2], temp_op);
+        insn->code = MIR_DGE;
+        break;
+      }
       break;
     }
-      /* Following conditional branches are changed to correctly process unordered numbers: */
+    /* Following conditional branches are changed to correctly process unordered numbers: */
+    case MIR_LDLT:
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_LDGT;
+      break;
+    case MIR_LDLE:
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_LDGE;
+      break;
     case MIR_FBLT:
       SWAP (insn->ops[1], insn->ops[2], temp_op);
       insn->code = MIR_FBGT;

@@ -483,6 +483,7 @@ expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD
      | N_DEREF_FIELD (expr, N_ID) | N_COND (expr, expr, expr)
      | N_COMPOUND_LITERAL (type_name, initializer) | N_CALL (expr, N_LIST:(expr)*)
      | N_GENERIC (expr, N_LIST:(N_GENERIC_ASSOC (type_name?, expr))+ )
+     | N_STMTEXPR (compound_stmt)
 label: N_CASE(expr) | N_CASE(expr,expr) | N_DEFAULT | N_LABEL(N_ID)
 stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_SWITCH(N_LIST:(label)*, expr, stmt) | (N_WHILE|N_DO) (N_LIST:(label)*, expr, stmt)
@@ -562,7 +563,7 @@ static token_code_t FIRST_KW = T_BOOL, LAST_KW = T_WHILE;
 typedef enum {
   REP8 (NODE_EL, IGNORE, I, L, LL, U, UL, ULL, F),
   REP8 (NODE_EL, D, LD, CH, CH16, CH32, STR, STR16, STR32),
-  REP4 (NODE_EL, ID, COMMA, ANDAND, OROR),
+  REP5 (NODE_EL, ID, COMMA, ANDAND, OROR, STMTEXPR),
   REP8 (NODE_EL, EQ, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT),
   REP8 (NODE_EL, NOT, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH),
   REP8 (NODE_EL, LSH_ASSIGN, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL),
@@ -3988,6 +3989,8 @@ static node_t try_arg_f (c2m_ctx_t c2m_ctx, nonterm_arg_func_t f, node_t arg) {
 #define TRY(f) try_f (c2m_ctx, f)
 #define TRY_A(f, arg) try_arg_f (c2m_ctx, f, arg)
 
+D (compound_stmt);
+
 /* Expressions: */
 D (type_name);
 D (expr);
@@ -4012,7 +4015,12 @@ D (primary_expr) {
   if (MN (T_ID, r) || MN (T_NUMBER, r) || MN (T_CH, r) || MN (T_STR, r)) {
     return r;
   } else if (M ('(')) {
-    P (expr);
+    if (C ('{')) {
+      P (compound_stmt);
+      r = new_node1 (c2m_ctx, N_STMTEXPR, r);
+    } else {
+      P (expr);
+    }
     if (M (')')) return r;
   } else if (MP (T_GENERIC, pos)) {
     PT ('(');
@@ -4993,7 +5001,6 @@ D (st_assert) {
 }
 
 /* Statements: */
-D (compound_stmt);
 
 D (label) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
@@ -8103,7 +8110,7 @@ static void classify_node (node_t n, int *expr_attr_p, int *stmt_p) {
   switch (n->code) {
     REP8 (NODE_CASE, I, L, LL, U, UL, ULL, F, D)
     REP7 (NODE_CASE, LD, CH, CH16, CH32, STR, STR16, STR32)
-    REP5 (NODE_CASE, ID, COMMA, ANDAND, OROR, EQ)
+    REP6 (NODE_CASE, ID, COMMA, ANDAND, OROR, EQ, STMTEXPR)
     REP8 (NODE_CASE, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT, NOT)
     REP8 (NODE_CASE, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH, LSH_ASSIGN)
     REP8 (NODE_CASE, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL, MUL_ASSIGN)
@@ -9363,6 +9370,25 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     }
     break;
   }
+  case N_STMTEXPR: {
+    node_t block = NL_HEAD (r->u.ops);
+    if (c2m_options->pedantic_p) {
+      error (c2m_ctx, POS (r), "statement expression is not a part of C11 standard");
+      break;
+    }
+    check (c2m_ctx, block, r);
+    node_t last_stmt = NL_TAIL (NL_EL (block->u.ops, 1)->u.ops);
+    if (!last_stmt || last_stmt->code != N_EXPR) {
+      error (c2m_ctx, POS (r), "last statement in statement expression is not an expression");
+      break;
+    }
+    node_t expr = NL_EL (last_stmt->u.ops, 1);
+    e1 = expr->attr;
+    t1 = e1->type;
+    e = create_expr (c2m_ctx, r);
+    *e->type = *t1;
+    break;
+  }
   case N_BLOCK:
     check_labels (c2m_ctx, NL_HEAD (r->u.ops), r);
     if (curr_scope != r)
@@ -9720,6 +9746,7 @@ DEF_VARR (int);
 DEF_VARR (MIR_type_t);
 
 struct init_el {
+  c2m_ctx_t c2m_ctx; /* for sorting */
   mir_size_t num, offset;
   decl_t member_decl; /* NULL for non-member initialization  */
   struct type *el_type;
@@ -9739,6 +9766,7 @@ struct gen_ctx {
   HTAB (reg_var_t) * reg_var_tab;
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
+  op_t top_gen_last_op;
   struct {
     int res_ref_p; /* flag of returning an aggregate by reference */
     VARR (MIR_type_t) * ret_types;
@@ -9761,6 +9789,7 @@ struct gen_ctx {
 #define reg_free_mark gen_ctx->reg_free_mark
 #define continue_label gen_ctx->continue_label
 #define break_label gen_ctx->break_label
+#define top_gen_last_op gen_ctx->top_gen_last_op
 #define proto_info gen_ctx->proto_info
 #define init_els gen_ctx->init_els
 #define memset_proto gen_ctx->memset_proto
@@ -10505,7 +10534,8 @@ static MIR_label_t get_label (c2m_ctx_t c2m_ctx, node_t target) {
 }
 
 static void top_gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_t false_label) {
-  gen (c2m_ctx, r, true_label, false_label, FALSE, NULL);
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+  top_gen_last_op = gen (c2m_ctx, r, true_label, false_label, FALSE, NULL);
 }
 
 static op_t modify_for_block_move (c2m_ctx_t c2m_ctx, op_t mem, op_t index) {
@@ -10964,6 +10994,7 @@ check_one_value:
     assert (initializer->code == N_STR || initializer->code == N_STR16
             || initializer->code == N_STR32 || !const_only_p || cexpr->const_p
             || cexpr->const_addr_p || (literal != NULL && addr_p));
+    init_el.c2m_ctx = c2m_ctx;
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = member_decl;
@@ -10981,6 +11012,7 @@ check_one_value:
            && ((str = NL_EL (init->u.ops, 1))->code == N_STR || str->code == N_STR16
                || str->code == N_STR32)))
       && type->mode == TM_ARR && init_compatible_string_p (str, type->u.arr_type->el_type)) {
+    init_el.c2m_ctx = c2m_ctx;
     init_el.num = VARR_LENGTH (init_el_t, init_els);
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = NULL;
@@ -11093,10 +11125,16 @@ static int cmp_init_el (const void *p1, const void *p2) {
   else if (el1->member_decl != NULL && el2->member_decl != NULL
            && el1->member_decl->bit_offset > el2->member_decl->bit_offset)
     return 1;
-  else if (el1->num < el2->num)
-    return 1;
-  else if (el1->num > el2->num)
+  else if (el1->member_decl != NULL
+           && type_size (el1->c2m_ctx, el1->member_decl->decl_spec.type) == 0)
     return -1;
+  else if (el2->member_decl != NULL
+           && type_size (el2->c2m_ctx, el2->member_decl->decl_spec.type) == 0)
+    return 1;
+  else if (el1->num < el2->num)
+    return -1;
+  else if (el1->num > el2->num)
+    return 1;
   else
     return 0;
 }
@@ -12430,6 +12468,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     finish_curr_func_reg_vars (c2m_ctx);
     break;
   }
+  case N_STMTEXPR: {
+    gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL);
+    res = top_gen_last_op;
+    break;
+  }
   case N_BLOCK:
     emit_label (c2m_ctx, r);
     gen (c2m_ctx, NL_EL (r->u.ops, 1), NULL, NULL, FALSE, NULL);
@@ -12839,7 +12882,7 @@ static const char *get_node_name (node_code_t code) {
     C (IGNORE);
     REP8 (C, I, L, LL, U, UL, ULL, F, D);
     REP7 (C, LD, CH, CH16, CH32, STR, STR16, STR32);
-    REP5 (C, ID, COMMA, ANDAND, OROR, EQ);
+    REP6 (C, ID, COMMA, ANDAND, OROR, EQ, STMTEXPR);
     REP8 (C, NE, LT, LE, GT, GE, ASSIGN, BITWISE_NOT, NOT);
     REP8 (C, AND, AND_ASSIGN, OR, OR_ASSIGN, XOR, XOR_ASSIGN, LSH, LSH_ASSIGN);
     REP8 (C, RSH, RSH_ASSIGN, ADD, ADD_ASSIGN, SUB, SUB_ASSIGN, MUL, MUL_ASSIGN);
@@ -13107,6 +13150,7 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_COMPOUND_LITERAL:
   case N_CALL:
   case N_GENERIC:
+  case N_STMTEXPR:
     if (attr_p && n->attr != NULL) print_expr (c2m_ctx, f, n->attr);
     fprintf (f, "\n");
     print_ops (c2m_ctx, f, n, indent, attr_p);

@@ -262,7 +262,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   if (nres > 0 && res_types[0] == MIR_T_LD) n_gpregs++; /* ld address */
   for (uint32_t i = 0; i < nargs; i++) {                /* calculate param area size: */
     type = arg_descs[i].type;
-    if (MIR_blk_type_p (type)) frame_size += (arg_descs[i].size + 7) / 8; /* blk value space */
+    if (MIR_blk_type_p (type)) frame_size += (arg_descs[i].size + 7) / 8 * 8; /* blk value space */
     if ((type == MIR_T_F || type == MIR_T_D) && n_fpregs < 4) {
       n_fpregs++;
     } else if (type != MIR_T_F && type != MIR_T_D && n_gpregs < 5) { /* RBLK too */
@@ -350,6 +350,10 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   s390x_gen_ld (code, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (code, 14, FALSE);            /* bcr m15,r14 */
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("ffi:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res;
 }
@@ -423,6 +427,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   s390x_gen_ld (code, 14, 15, 112, MIR_T_I64); /* lg 14,112(r15) */
   s390x_gen_jump (code, 14, FALSE);            /* bcr m15,r14 */
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code (func->name, 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res;
 }

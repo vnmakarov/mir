@@ -289,9 +289,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + n_fregs);
       gen_mov (gen_ctx, call_insn,
-               type == MIR_T_F   ? MIR_FMOV
-               : type == MIR_T_D ? MIR_DMOV
-                                 : MIR_LDMOV,  // ???
+               type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,  // ???
                arg_reg_op, arg_op);
       call_insn->ops[i] = arg_reg_op;
       if (vararg_p) {                                             // ??? dead insns
@@ -346,10 +344,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       call_insn->ops[i] = arg_reg_op;
     } else { /* put arguments on the stack */
       if (ext_insn != NULL) gen_add_insn_before (gen_ctx, call_insn, ext_insn);
-      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
-                       : type == MIR_T_D  ? MIR_DMOV
-                       : type == MIR_T_LD ? MIR_LDMOV
-                                          : MIR_MOV);
+      new_insn_code
+        = (type == MIR_T_F ? MIR_FMOV
+                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, mem_size + PPC64_STACK_HEADER_SIZE,
                                          SP_HARD_REG, MIR_NON_HARD_REG, 1);
       if (type != MIR_T_RBLK) {
@@ -660,19 +657,13 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                            1));
       }
       arg_reg_op = _MIR_new_hard_reg_op (ctx, F1_HARD_REG + fp_arg_num);
-      gen_mov (gen_ctx, anchor,
-               type == MIR_T_F   ? MIR_FMOV
-               : type == MIR_T_D ? MIR_DMOV
-                                 : MIR_LDMOV,
+      gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
                arg_var_op, arg_reg_op); /* (f|d|ld|)mov arg, arg_hard_reg */
       fp_arg_num += type == MIR_T_LD ? 2 : 1;
     } else if (type == MIR_T_F || type == MIR_T_D
                || type == MIR_T_LD) { /* (f|d|ld|)mov arg, arg_memory */
       set_prev_sp_op (gen_ctx, anchor, &prev_sp_op);
-      gen_mov (gen_ctx, anchor,
-               type == MIR_T_F   ? MIR_FMOV
-               : type == MIR_T_D ? MIR_DMOV
-                                 : MIR_LDMOV,
+      gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
                arg_var_op,
                _MIR_new_hard_reg_mem_op (ctx, type, disp, R12_HARD_REG, MIR_NON_HARD_REG, 1));
     } else if (MIR_blk_type_p (type)) {
@@ -717,12 +708,13 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) { /* split to cmp and branch */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ   ? MIR_LDEQ
-              : code == MIR_LDBNE ? MIR_LDNE
-              : code == MIR_LDBLT ? MIR_LDLT
-              : code == MIR_LDBGE ? MIR_LDGE
-              : code == MIR_LDBGT ? MIR_LDGT
-                                  : MIR_LDLE);
+      code = (code == MIR_LDBEQ
+                ? MIR_LDEQ
+                : code == MIR_LDBNE
+                    ? MIR_LDNE
+                    : code == MIR_LDBLT
+                        ? MIR_LDLT
+                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -815,9 +807,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         res_type = func->res_types[i];
         if (((res_type == MIR_T_F || res_type == MIR_T_D) && n_fregs < 4)
             || (res_type == MIR_T_LD && n_fregs < 3)) {
-          new_insn_code = res_type == MIR_T_F   ? MIR_FMOV
-                          : res_type == MIR_T_D ? MIR_DMOV
-                                                : MIR_LDMOV;
+          new_insn_code
+            = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
           ret_reg = F1_HARD_REG + n_fregs++;
         } else if (n_gpregs < 8) {
           new_insn_code = MIR_MOV;
@@ -1177,6 +1168,11 @@ static const struct pattern patterns[] = {
 #define CMPW "o31 O0 bf7 L0 ra1 rb2"
 #define CMPWI(i) "o11 bf7 L0 ra1 " #i
 #define FCMPU "o63 O0 bf7 ra1 rb2"
+#define CRNOT(s, f) "o19 O33 ht" #s " ha" #f " hb" #f ";"
+#define CROR(t, a, b) "o19 O449 ht" #t " ha" #a " hb" #b ";"
+#define CRORC(t, a, b) "o19 O417 ht" #t " ha" #a " hb" #b ";"
+#define CRNOR(t, a, b) "o19 O33 ht" #t " ha" #a " hb" #b ";"
+#define CRANDC(t, a, b) "o19 O129 ht" #t " ha" #a " hb" #b ";"
   // all ld insn are changed to builtins
   /* cmpd 7,ra,rb; mfcr rt; rlwinm rt,rt,31,31,31;*/
   {MIR_EQ, "r r r", CMPD "; " EQEND},
@@ -1186,13 +1182,12 @@ static const struct pattern patterns[] = {
   {MIR_EQS, "r r r", CMPW "; " EQEND},
   /* cmpwi 7,ra,i; mfcr rt; rlwinm rt,rt,31,31,31*/
   {MIR_EQS, "r r i", CMPWI (i) "; " EQEND},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,31,31,31;*/
-  {MIR_FEQ, "r r r", FCMPU "; " EQEND},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,31,31,31;*/
-  {MIR_DEQ, "r r r", FCMPU "; " EQEND},
+  /* fcmpu 7,ra,rb; mfcr rt; crandc 30,30,31; rlwinm rt,rt,31,31,31;*/
+  {MIR_FEQ, "r r r", FCMPU ";" CRANDC (30, 30, 31) EQEND},
+  /* fcmpu 7,ra,rb; mfcr rt; crandc 30,30,31; rlwinm rt,rt,31,31,31;*/
+  {MIR_DEQ, "r r r", FCMPU ";" CRANDC (30, 30, 31) EQEND},
 
 #define NEEND EQEND "; o26 rs0 ra0 i1"
-#define CRNOT(s, f) "o19 O33 ht" #s " ha" #f " hb" #f
   /* cmpd 7,ra,rb; mfcr rt; rlwinm rt,rt,31,31,31; xori rt,rt,1*/
   {MIR_NE, "r r r", CMPD "; " NEEND},
   /* cmpdi 7,ra,i; mfcr rt; rlwinm rt,rt,31,31,31; xori rt,rt,1*/
@@ -1201,10 +1196,10 @@ static const struct pattern patterns[] = {
   {MIR_NES, "r r r", CMPW "; " NEEND},
   /* cmpwi 7,ra,i; mfcr rt; rlwinm rt,rt,31,31,31; xori rt,rt,1*/
   {MIR_NES, "r r i", CMPWI (i) "; " NEEND},
-  /* fcmpu 7,ra,rb; crnot 30,30; mfcr rt; rlwinm rt,rt,31,31,31;*/
-  {MIR_FNE, "r r r", FCMPU "; " CRNOT (30, 30) "; " NEEND},
-  /* fcmpu 7,ra,rb; crnot 30,30; mfcr rt; rlwinm rt,rt,31,31,31;*/
-  {MIR_DNE, "r r r", FCMPU "; " CRNOT (30, 30) "; " NEEND},
+  /* fcmpu 7,ra,rb; crorc 30,31,30; mfcr rt; rlwinm rt,rt,31,31,31;*/
+  {MIR_FNE, "r r r", FCMPU "; " CRORC (30, 31, 30) EQEND},
+  /* fcmpu 7,ra,rb; crorc 30,31,30; mfcr rt; rlwinm rt,rt,31,31,31;*/
+  {MIR_DNE, "r r r", FCMPU "; " CRORC (30, 31, 30) EQEND},
 
 #define RLWINM(n) "o21 rs0 ra0 sh" #n " mb31 me31"
   /* cmpd 7,ra,rb; mfcr rt; rlwinm rt,rt,29,31,31;*/
@@ -1215,10 +1210,10 @@ static const struct pattern patterns[] = {
   {MIR_LTS, "r r r", CMPW "; " MFCR ";  " RLWINM (29)},
   /* cmpwi 7,ra,i; mfcr rt; rlwinm rt,rt,29,31,31*/
   {MIR_LTS, "r r i", CMPWI (i) "; " MFCR ";  " RLWINM (29)},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_FLT, "r r r", FCMPU "; " MFCR ";  " RLWINM (29)},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_DLT, "r r r", FCMPU "; " MFCR ";  " RLWINM (29)},
+  /* fcmpu 7,ra,rb; crandc 28,28,31; mfcr rt; rlwinm rt,rt,29,31,31;*/
+  {MIR_FLT, "r r r", FCMPU "; " CRANDC (28, 28, 31) MFCR "; " RLWINM (29)},
+  /* fcmpu 7,ra,rb; crandc 28,28,31; mfcr rt; rlwinm rt,rt,29,31,31;*/
+  {MIR_DLT, "r r r", FCMPU "; " CRANDC (28, 28, 31) MFCR "; " RLWINM (29)},
 
 #define CMPLD "o31 O32 bf7 L1 ra1 rb2"
 #define CMPLDI "o10 bf7 L1 ra1 u"
@@ -1234,25 +1229,25 @@ static const struct pattern patterns[] = {
   {MIR_ULTS, "r r u", CMPLWI "; " MFCR ";  " RLWINM (29)},
 
   /* cmpd 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_GE, "r r r", CMPD "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_GE, "r r r", CMPD "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmpdi 7,ra,i; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31*/
-  {MIR_GE, "r r i", CMPDI (i) "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_GE, "r r i", CMPDI (i) "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmpw 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_GES, "r r r", CMPW "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_GES, "r r r", CMPW "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmpwi 7,ra,i; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31*/
-  {MIR_GES, "r r i", CMPWI (i) "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
-  /* fcmpu 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_FGE, "r r r", FCMPU "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
-  /* fcmpu 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_DGE, "r r r", FCMPU "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_GES, "r r i", CMPWI (i) "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
+  /* fcmpu 7,ra,rb; crnot 28,28,31; mfcr rt; rlwinm rt,rt,29,31,31;*/
+  {MIR_FGE, "r r r", FCMPU "; " CRNOR (28, 28, 31) MFCR ";  " RLWINM (29)},
+  /* fcmpu 7,ra,rb; crnor 28,28,31; mfcr rt; rlwinm rt,rt,29,31,31;*/
+  {MIR_DGE, "r r r", FCMPU "; " CRNOR (28, 28, 31) MFCR ";  " RLWINM (29)},
   /* cmpld 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_UGE, "r r r", CMPLD "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_UGE, "r r r", CMPLD "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmpldi 7,ra,u; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_UGE, "r r u", CMPLDI "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_UGE, "r r u", CMPLDI "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmplw 7,ra,rb; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_UGES, "r r r", CMPLW "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_UGES, "r r r", CMPLW "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
   /* cmplwi 7,ra,u; crnot 28,28; mfcr rt; rlwinm rt,rt,29,31,31;*/
-  {MIR_UGES, "r r u", CMPLWI "; " CRNOT (28, 28) "; " MFCR ";  " RLWINM (29)},
+  {MIR_UGES, "r r u", CMPLWI "; " CRNOT (28, 28) MFCR ";  " RLWINM (29)},
 
   /* cmpd 7,ra,rb; mfcr rt; rlwinm rt,rt,30,31,31;*/
   {MIR_GT, "r r r", CMPD "; " MFCR ";  " RLWINM (30)},
@@ -1262,10 +1257,10 @@ static const struct pattern patterns[] = {
   {MIR_GTS, "r r r", CMPW "; " MFCR ";  " RLWINM (30)},
   /* cmpwi 7,ra,i; mfcr rt; rlwinm rt,rt,30,31,31*/
   {MIR_GTS, "r r i", CMPWI (i) "; " MFCR ";  " RLWINM (30)},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_FGT, "r r r", FCMPU "; " MFCR ";  " RLWINM (30)},
-  /* fcmpu 7,ra,rb; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_DGT, "r r r", FCMPU "; " MFCR ";  " RLWINM (30)},
+  /* fcmpu 7,ra,rb; crandc 29,29,30; mfcr rt; rlwinm rt,rt,30,31,31;*/
+  {MIR_FGT, "r r r", FCMPU "; " CRANDC (29, 29, 31) MFCR "; " RLWINM (30)},
+  /* fcmpu 7,ra,rb; crandc 29,29,30; mfcr rt; rlwinm rt,rt,30,31,31;*/
+  {MIR_DGT, "r r r", FCMPU "; " CRANDC (29, 29, 31) MFCR ";  " RLWINM (30)},
   /* cmpld 7,ra,rb; mfcr rt; rlwinm rt,rt,30,31,31;*/
   {MIR_UGT, "r r r", CMPLD "; " MFCR ";  " RLWINM (30)},
   /* cmpldi 7,ra,u; mfcr rt; rlwinm rt,rt,30,31,31;*/
@@ -1276,87 +1271,121 @@ static const struct pattern patterns[] = {
   {MIR_UGTS, "r r u", CMPLWI "; " MFCR ";  " RLWINM (30)},
 
   /* cmpd 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_LE, "r r r", CMPD "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_LE, "r r r", CMPD "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmpdi 7,ra,i; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31*/
-  {MIR_LE, "r r i", CMPDI (i) "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_LE, "r r i", CMPDI (i) "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmpw 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_LES, "r r r", CMPW "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_LES, "r r r", CMPW "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmpwi 7,ra,i; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31*/
-  {MIR_LES, "r r i", CMPWI (i) "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
-  /* fcmpu 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_FLE, "r r r", FCMPU "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
-  /* fcmpu 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_DLE, "r r r", FCMPU "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_LES, "r r i", CMPWI (i) "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
+  /* fcmpu 7,ra,rb; crnor 29,29,31; mfcr rt; rlwinm rt,rt,30,31,31;*/
+  {MIR_FLE, "r r r", FCMPU "; " CRNOR (29, 29, 31) MFCR ";  " RLWINM (30)},
+  /* fcmpu 7,ra,rb; crnor 29,29,31; mfcr rt; rlwinm rt,rt,30,31,31;*/
+  {MIR_DLE, "r r r", FCMPU "; " CRNOR (29, 29, 31) MFCR ";  " RLWINM (30)},
   /* cmpld 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_ULE, "r r r", CMPLD "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_ULE, "r r r", CMPLD "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmpldi 7,ra,u; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_ULE, "r r u", CMPLDI "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_ULE, "r r u", CMPLDI "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmplw 7,ra,rb; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_ULES, "r r r", CMPLW "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_ULES, "r r r", CMPLW "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
   /* cmplwi 7,ra,u; crnot 29,29; mfcr rt; rlwinm rt,rt,30,31,31;*/
-  {MIR_ULES, "r r u", CMPLWI "; " CRNOT (29, 29) "; " MFCR ";  " RLWINM (30)},
+  {MIR_ULES, "r r u", CMPLWI "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
 
   {MIR_JMP, "L", "o18 L"}, /* 24-bit offset word jmp */
 
 #define BRC(o, i) "o16 BO" #o " BI" #i " l"
 #define BRCL(o, i) "o16 BO" #o " BI" #i " l8; o18 L"
-#define BRLOG(CODE, CMP, BI, COND, NEG_COND)                                       \
-  {CODE, "l r", CMP (i0) "; " BRC (COND, BI)},        /* cmp 7,ra1,0;bcond 7,l; */ \
-    {CODE, "L r", CMP (i0) "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,0;bneg_cond 7,o8;b L;l8:*/
+#define BRLOG(CODE, CMP, BI, COND, NEG_COND)                                \
+  {CODE, "l r", CMP (i0) "; " BRC (COND, BI)}, /* cmp 7,ra1,0;bcond 7,l; */ \
+  {                                                                         \
+    CODE, "L r", CMP (i0) "; " BRCL (NEG_COND, BI)                          \
+  } /* cmp 7,ra1,0;bneg_cond 7,o8;b L;l8:*/
 
-  BRLOG (MIR_BT, CMPDI, 30, 4, 12) BRLOG (MIR_BTS, CMPWI, 30, 4, 12)
-    BRLOG (MIR_BF, CMPDI, 30, 12, 4) BRLOG (MIR_BFS, CMPWI, 30, 12, 4)
+  BRLOG (MIR_BT, CMPDI, 30, 4, 12),
+  BRLOG (MIR_BTS, CMPWI, 30, 4, 12),
+  BRLOG (MIR_BF, CMPDI, 30, 12, 4),
+  BRLOG (MIR_BFS, CMPWI, 30, 12, 4),
 
-#define BRCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                            \
-  {CODE, "l r r", CMP "; " BRC (COND, BI)},         /* cmp 7,ra1,rb2;bcond 7,l; */            \
-    {CODE, "l r i", CMPI "; " BRC (COND, BI)},      /* cmpi 7,ra1,i;bcond 7,l;:*/             \
-    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},  /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
-    {CODE, "L r i", CMPI "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,i;bneg_cond 7,o8;b L;l8:*/
+#define BRCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                           \
+  {CODE, "l r r", CMP "; " BRC (COND, BI)},        /* cmp 7,ra1,rb2;bcond 7,l; */            \
+    {CODE, "l r i", CMPI "; " BRC (COND, BI)},     /* cmpi 7,ra1,i;bcond 7,l;:*/             \
+    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
+  {                                                                                          \
+    CODE, "L r i", CMPI "; " BRCL (NEG_COND, BI)                                             \
+  } /* cmp 7,ra1,i;bneg_cond 7,o8;b L;l8:*/
 
-#define BRFCMP(CODE, BI, COND, NEG_COND)                                            \
-  {CODE, "l r r", FCMPU "; " BRC (COND, BI)},        /* cmp 7,ra1,rb2;bcond 7,l; */ \
-    {CODE, "L r r", FCMPU "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/
+#define BRFCMP(CODE, BI, COND, COND_NAND, NEG_COND, NEG_COND_NAND)                     \
+  {CODE, "l r r", FCMPU "; " COND_NAND BRC (COND, BI)}, /* cmp 7,ra1,rb2;bcond 7,l; */ \
+  {                                                                                    \
+    CODE, "L r r", FCMPU "; " NEG_COND_NAND BRCL (NEG_COND, BI)                        \
+  } /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/
+
+#define LT_OR CROR (28, 28, 31)
+#define GT_OR CROR (29, 29, 31)
+#define EQ_OR CROR (30, 30, 31)
+
+#define LT_ANDC CRANDC (28, 28, 31)
+#define GT_ANDC CRANDC (29, 29, 31)
+#define EQ_ANDC CRANDC (30, 30, 31)
 
   // all ld insn are changed to builtins and bt/bts
-  BRCMP (MIR_BEQ, CMPD, CMPDI (i), 30, 12, 4) BRCMP (MIR_BEQS, CMPW, CMPWI (i), 30, 12, 4)
-    BRFCMP (MIR_FBEQ, 30, 12, 4) BRFCMP (MIR_DBEQ, 30, 12, 4)
+  BRCMP (MIR_BEQ, CMPD, CMPDI (i), 30, 12, 4),
+  BRCMP (MIR_BEQS, CMPW, CMPWI (i), 30, 12, 4),
+  BRFCMP (MIR_FBEQ, 30, 12, EQ_ANDC, 4, EQ_OR),
+  BRFCMP (MIR_DBEQ, 30, 12, EQ_ANDC, 4, EQ_OR),
 
-      BRCMP (MIR_BNE, CMPD, CMPDI (i), 30, 4, 12) BRCMP (MIR_BNES, CMPW, CMPWI (i), 30, 4, 12)
-        BRFCMP (MIR_FBNE, 30, 4, 12) BRFCMP (MIR_DBNE, 30, 4, 12)
+  BRCMP (MIR_BNE, CMPD, CMPDI (i), 30, 4, 12),
+  BRCMP (MIR_BNES, CMPW, CMPWI (i), 30, 4, 12),
+  BRFCMP (MIR_FBNE, 30, 4, EQ_ANDC, 12, EQ_ANDC),
+  BRFCMP (MIR_DBNE, 30, 4, EQ_ANDC, 12, EQ_ANDC),
 
-#define BRUCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                           \
-  {CODE, "l r r", CMP "; " BRC (COND, BI)},         /* cmp 7,ra1,rb2;bcond 7,l; */            \
-    {CODE, "l r u", CMPI "; " BRC (COND, BI)},      /* cmpi 7,ra1,u;bcond 7,l;:*/             \
-    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)},  /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
-    {CODE, "L r u", CMPI "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,u;bneg_cond 7,o8;b L;l8:*/
+#define BRUCMP(CODE, CMP, CMPI, BI, COND, NEG_COND)                                          \
+  {CODE, "l r r", CMP "; " BRC (COND, BI)},        /* cmp 7,ra1,rb2;bcond 7,l; */            \
+    {CODE, "l r u", CMPI "; " BRC (COND, BI)},     /* cmpi 7,ra1,u;bcond 7,l;:*/             \
+    {CODE, "L r r", CMP "; " BRCL (NEG_COND, BI)}, /* cmp 7,ra1,rb2;bneg_cond 7,o8;b L;l8:*/ \
+  {                                                                                          \
+    CODE, "L r u", CMPI "; " BRCL (NEG_COND, BI)                                             \
+  } /* cmp 7,ra1,u;bneg_cond 7,o8;b L;l8:*/
 
-          BRCMP (MIR_BLT, CMPD, CMPDI (i), 28, 12, 4) BRCMP (MIR_BLTS, CMPW, CMPWI (i), 28, 12, 4)
-            BRFCMP (MIR_FBLT, 28, 12, 4) BRFCMP (MIR_DBLT, 28, 12, 4)
-              BRUCMP (MIR_UBLT, CMPLD, CMPLDI, 28, 12, 4) BRUCMP (MIR_UBLTS, CMPLW, CMPLWI, 28, 12,
-                                                                  4)
+  /* LT: */
+  BRCMP (MIR_BLT, CMPD, CMPDI (i), 28, 12, 4),
+  BRCMP (MIR_BLTS, CMPW, CMPWI (i), 28, 12, 4),
+  BRFCMP (MIR_FBLT, 28, 12, LT_ANDC, 4, LT_OR),
+  BRFCMP (MIR_DBLT, 28, 12, LT_ANDC, 4, LT_OR),
+  BRUCMP (MIR_UBLT, CMPLD, CMPLDI, 28, 12, 4),
+  BRUCMP (MIR_UBLTS, CMPLW, CMPLWI, 28, 12, 4),
 
-                BRCMP (MIR_BGE, CMPD, CMPDI (i), 28, 4, 12)
-                  BRCMP (MIR_BGES, CMPW, CMPWI (i), 28, 4, 12) BRFCMP (MIR_FBGE, 28, 4, 12)
-                    BRFCMP (MIR_DBGE, 28, 4, 12) BRUCMP (MIR_UBGE, CMPLD, CMPLDI, 28, 4, 12)
-                      BRUCMP (MIR_UBGES, CMPLW, CMPLWI, 28, 4, 12)
+  /* GE: */
+  BRCMP (MIR_BGE, CMPD, CMPDI (i), 28, 4, 12),
+  BRCMP (MIR_BGES, CMPW, CMPWI (i), 28, 4, 12),
+  BRFCMP (MIR_FBGE, 28, 4, LT_OR, 12, LT_ANDC),
+  BRFCMP (MIR_DBGE, 28, 4, LT_OR, 12, LT_ANDC),
+  BRUCMP (MIR_UBGE, CMPLD, CMPLDI, 28, 4, 12),
+  BRUCMP (MIR_UBGES, CMPLW, CMPLWI, 28, 4, 12),
 
-                        BRCMP (MIR_BGT, CMPD, CMPDI (i), 29, 12, 4)
-                          BRCMP (MIR_BGTS, CMPW, CMPWI (i), 29, 12, 4) BRFCMP (MIR_FBGT, 29, 12, 4)
-                            BRFCMP (MIR_DBGT, 29, 12, 4) BRUCMP (MIR_UBGT, CMPLD, CMPLDI, 29, 12, 4)
-                              BRUCMP (MIR_UBGTS, CMPLW, CMPLWI, 29, 12, 4)
+  /* GT: */
+  BRCMP (MIR_BGT, CMPD, CMPDI (i), 29, 12, 4),
+  BRCMP (MIR_BGTS, CMPW, CMPWI (i), 29, 12, 4),
+  BRFCMP (MIR_FBGT, 29, 12, GT_ANDC, 4, GT_OR),
+  BRFCMP (MIR_DBGT, 29, 12, GT_ANDC, 4, GT_OR),
+  BRUCMP (MIR_UBGT, CMPLD, CMPLDI, 29, 12, 4),
+  BRUCMP (MIR_UBGTS, CMPLW, CMPLWI, 29, 12, 4),
 
-                                BRCMP (MIR_BLE, CMPD, CMPDI (i), 29, 4, 12)
-                                  BRCMP (MIR_BLES, CMPW, CMPWI (i), 29, 4, 12)
-                                    BRFCMP (MIR_FBLE, 29, 4, 12) BRFCMP (MIR_DBLE, 29, 4, 12)
-                                      BRUCMP (MIR_UBLE, CMPLD, CMPLDI, 29, 4, 12)
-                                        BRUCMP (MIR_UBLES, CMPLW, CMPLWI, 29, 4, 12)
+  /* LE: */
+  BRCMP (MIR_BLE, CMPD, CMPDI (i), 29, 4, 12),
+  BRCMP (MIR_BLES, CMPW, CMPWI (i), 29, 4, 12),
+  BRFCMP (MIR_FBLE, 29, 4, GT_OR, 12, GT_ANDC),
+  BRFCMP (MIR_DBLE, 29, 4, GT_OR, 12, GT_ANDC),
+  BRUCMP (MIR_UBLE, CMPLD, CMPLDI, 29, 4, 12),
+  BRUCMP (MIR_UBLES, CMPLW, CMPLWI, 29, 4, 12),
 
 #define NEG "o31 O104 rt0 ra1"
 #define FNEG "o63 O40 rt0 rb1"
-                                          {MIR_NEG, "r r", NEG}, /* neg Rt,Ra */
-  {MIR_NEGS, "r r", NEG},                                        /* neg Rt,Ra */
-  {MIR_FNEG, "r r", FNEG},                                       /* fneg rt,rb */
-  {MIR_DNEG, "r r", FNEG},                                       /* fneg rt,rb */
+
+  {MIR_NEG, "r r", NEG},   /* neg Rt,Ra */
+  {MIR_NEGS, "r r", NEG},  /* neg Rt,Ra */
+  {MIR_FNEG, "r r", FNEG}, /* fneg rt,rb */
+  {MIR_DNEG, "r r", FNEG}, /* fneg rt,rb */
 // ldneg is a builtin
 
 #define SHR(s) "o31 O" #s " ra0 rs1 rb2"
@@ -2305,8 +2334,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       binsn |= lb << (32 - 11);
       binsn_mask = check_and_set_mask (binsn_mask, 1 << (32 - 11));
     }
-    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
-    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0)
+      VARR_ADDR (label_ref_t, label_refs)
+      [label_ref_num].label_val_disp
+        = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_addr_insn_start = VARR_LENGTH (uint8_t, result_code);
     put_uint32 (gen_ctx, binsn); /* output the machine insn */

@@ -754,12 +754,13 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) { /* split to cmp and branch */
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ   ? MIR_LDEQ
-              : code == MIR_LDBNE ? MIR_LDNE
-              : code == MIR_LDBLT ? MIR_LDLT
-              : code == MIR_LDBGE ? MIR_LDGE
-              : code == MIR_LDBGT ? MIR_LDGT
-                                  : MIR_LDLE);
+      code = (code == MIR_LDBEQ
+                ? MIR_LDEQ
+                : code == MIR_LDBNE
+                    ? MIR_LDNE
+                    : code == MIR_LDBLT
+                        ? MIR_LDLT
+                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -1298,12 +1299,12 @@ static const struct pattern patterns[] = {
   {MIR_NES, "r 0 m2", "57 r0 m; 11* r0 R0; 88 r0 R0 Sd31"},
   {MIR_NES, "r 0 M2", "e3:57 r0 m; 11* r0 R0; 88 r0 R0 Sd31"},
 
-  /* (cer r1,r2 | ce r1, mf); lghi r0,1; jne L; lghi r0,0: */
-  {MIR_FNE, "r r r", "b309 r1 R2" CMPEND (6)},
-  {MIR_FNE, "r r mf", "ed:09 r1 m" CMPEND (6)},
-  /* (cdbr r1,r2 | cdb r1, mf); lghi r0,1; jne L; lghi r0,0: */
-  {MIR_DNE, "r r r", "b319 r1 R2" CMPEND (6)},
-  {MIR_DNE, "r r md", "ed:19 r1 m" CMPEND (6)},
+  /* (cer r1,r2 | ce r1, mf); lghi r0,1; j<lt, gt, un> L; lghi r0,0: */
+  {MIR_FNE, "r r r", "b309 r1 R2" CMPEND (7)},
+  {MIR_FNE, "r r mf", "ed:09 r1 m" CMPEND (7)},
+  /* (cdbr r1,r2 | cdb r1, mf); lghi r0,1; j<lt, gt, un> L; lghi r0,0: */
+  {MIR_DNE, "r r r", "b319 r1 R2" CMPEND (7)},
+  {MIR_DNE, "r r md", "ed:19 r1 m" CMPEND (7)},
 
 #define CMP(LC, SC, ULC, USC, FC, DC, m)                                                 \
   {LC, "r r r", "b920 r1 R2" CMPEND (m)},      /* cgr r1,r2;lghi r0,1;jm L;lghi r0,0 */  \
@@ -1338,22 +1339,24 @@ static const struct pattern patterns[] = {
   {MIR_BTS, "L r", "12* r1 R1" BRCL (6)}, /* ltr r0,r0; bcril m8,l */
   {MIR_BFS, "L r", "12* r1 R1" BRCL (8)}, /* ltr r1,r1; bcril m6,l */
 
-#define BCMP(LC, SC, FC, DC, m)                                        \
+#define BCMP(LC, SC, FC, DC, m, fm)                                    \
   {LC, "L r r", "b920 r1 R2" BRCL (m)},     /* cgr r1,r2; bcril m,l */ \
     {LC, "L r M3", "e3:20 r1 m" BRCL (m)},  /* cg r1,m; bcril m,l */   \
     {LC, "L r Ms2", "e3:30 r1 m" BRCL (m)}, /* cgf r1,m; bcril m,l */  \
     {SC, "L r r", "19* r1 R2" BRCL (m)},    /* cr r1,r2; bcril m,l */  \
     {SC, "L r m2", "59 r1 m" BRCL (m)},     /* c r1,m; bcril m,l */    \
     {SC, "L r M2", "e3:59 r1 m" BRCL (m)},  /* cy r1,m; bcril m,l */   \
-    {FC, "L r r", "b309 r1 R2" BRCL (m)},   /* cer r1,r2; bcril L */   \
-    {FC, "L r mf", "ed:09 r1 m" BRCL (m)},  /* ce r1, mf; bcril L */   \
-    {DC, "L r r", "b319 r1 R2" BRCL (m)},   /* cdbr r1,r2; bcril L */  \
-    {DC, "L r md", "ed:19 r1 m" BRCL (m)},  /* cdb r1, md; bcril L: */
+    {FC, "L r r", "b309 r1 R2" BRCL (fm)},  /* cer r1,r2; bcril L */   \
+    {FC, "L r mf", "ed:09 r1 m" BRCL (fm)}, /* ce r1, mf; bcril L */   \
+    {DC, "L r r", "b319 r1 R2" BRCL (fm)},  /* cdbr r1,r2; bcril L */  \
+    {DC, "L r md", "ed:19 r1 m" BRCL (fm)}, /* cdb r1, md; bcril L: */
 
-  BCMP (MIR_BEQ, MIR_BEQS, MIR_FBEQ, MIR_DBEQ, 8) BCMP (MIR_BNE, MIR_BNES, MIR_FBNE, MIR_DBNE, 6)
-    BCMP (MIR_BLT, MIR_BLTS, MIR_FBLT, MIR_DBLT, 4) BCMP (MIR_BGT, MIR_BGTS, MIR_FBGT, MIR_DBGT, 2)
-      BCMP (MIR_BLE, MIR_BLES, MIR_FBLE, MIR_DBLE, 12)
-        BCMP (MIR_BGE, MIR_BGES, MIR_FBGE, MIR_DBGE, 10)
+  BCMP (MIR_BEQ, MIR_BEQS, MIR_FBEQ, MIR_DBEQ, 8, 8)
+    BCMP (MIR_BNE, MIR_BNES, MIR_FBNE, MIR_DBNE, 6, 7) /* only fp ne has unordered mask bit */
+  BCMP (MIR_BLT, MIR_BLTS, MIR_FBLT, MIR_DBLT, 4, 4)
+    BCMP (MIR_BGT, MIR_BGTS, MIR_FBGT, MIR_DBGT, 2, 2)
+      BCMP (MIR_BLE, MIR_BLES, MIR_FBLE, MIR_DBLE, 12, 12)
+        BCMP (MIR_BGE, MIR_BGES, MIR_FBGE, MIR_DBGE, 10, 10)
 
 #define BCMPU(LC, SC, m)                                                \
   {LC, "L r r", "b921 r1 R2" BRCL (m)},     /* clgr r1,r2; bcril m,l */ \
@@ -2129,15 +2132,21 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       set_insn_field (&binsn, label_off, 16, 16);
       check_and_set_mask (&binsn_mask, 0xffff, 16, 16);
     }
-    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
-    [const_ref_num].insn_pc = VARR_LENGTH (uint8_t, result_code);
-    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
-    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0)
+      VARR_ADDR (const_ref_t, const_refs)
+      [const_ref_num].insn_pc
+        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0)
+      VARR_ADDR (label_ref_t, label_refs)
+      [label_ref_num].label_val_disp
+        = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_addr_insn_start = VARR_LENGTH (uint8_t, result_code);
     VARR_PUSH_ARR (uint8_t, result_code, (uint8_t *) &binsn, len); /* output the machine insn */
-    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
-    [const_ref_num].next_insn_pc = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0)
+      VARR_ADDR (const_ref_t, const_refs)
+      [const_ref_num].next_insn_pc
+        = VARR_LENGTH (uint8_t, result_code);
 
     if (*p == 0) break;
   }

@@ -431,10 +431,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 && mem_size % 16 != 0)
         mem_size = (mem_size + 15) / 16 * 16;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
-                       : type == MIR_T_D  ? MIR_DMOV
-                       : type == MIR_T_LD ? MIR_LDMOV
-                                          : MIR_MOV);
+      new_insn_code
+        = (type == MIR_T_F ? MIR_FMOV
+                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = get_new_hard_reg_mem_op (gen_ctx, mem_type, mem_size, SP_HARD_REG, &insn1, &insn2);
       if (type != MIR_T_RBLK) {
         new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
@@ -468,11 +467,9 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     type = proto->res_types[i];
     float_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
     if (float_p && n_vregs < 8) {
-      new_insn = MIR_new_insn (ctx,
-                               type == MIR_T_F   ? MIR_FMOV
-                               : type == MIR_T_D ? MIR_DMOV
-                                                 : MIR_LDMOV,
-                               ret_reg_op, _MIR_new_hard_reg_op (ctx, V0_HARD_REG + n_vregs));
+      new_insn
+        = MIR_new_insn (ctx, type == MIR_T_F ? MIR_FMOV : type == MIR_T_D ? MIR_DMOV : MIR_LDMOV,
+                        ret_reg_op, _MIR_new_hard_reg_op (ctx, V0_HARD_REG + n_vregs));
       n_vregs++;
     } else if (!float_p && n_iregs < 8) {
       new_insn = MIR_new_insn (ctx, MIR_MOV, ret_reg_op,
@@ -788,6 +785,13 @@ static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_di
   return offset >= 0 && offset % scale == 0 && offset / scale < (1 << 12);
 }
 
+#define SWAP(v1, v2, t) \
+  do {                  \
+    t = v1;             \
+    v1 = v2;            \
+    v2 = t;             \
+  } while (0)
+
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;
@@ -854,10 +858,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
       if (type == MIR_T_LD) mem_size = (mem_size + 15) / 16 * 16;
-      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
-                       : type == MIR_T_D  ? MIR_DMOV
-                       : type == MIR_T_LD ? MIR_LDMOV
-                                          : MIR_MOV);
+      new_insn_code
+        = (type == MIR_T_F ? MIR_FMOV
+                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
       mem_op = new_hard_reg_mem_op (gen_ctx, anchor, mem_type, mem_size, R8_HARD_REG);
       gen_mov (gen_ctx, anchor, new_insn_code, MIR_new_reg_op (ctx, i + 1), mem_op);
       mem_size += type == MIR_T_LD ? 16 : 8;
@@ -874,12 +877,13 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     if (code == MIR_LDBEQ || code == MIR_LDBNE || code == MIR_LDBLT || code == MIR_LDBGE
         || code == MIR_LDBGT || code == MIR_LDBLE) {
       temp_op = MIR_new_reg_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      code = (code == MIR_LDBEQ   ? MIR_LDEQ
-              : code == MIR_LDBNE ? MIR_LDNE
-              : code == MIR_LDBLT ? MIR_LDLT
-              : code == MIR_LDBGE ? MIR_LDGE
-              : code == MIR_LDBGT ? MIR_LDGT
-                                  : MIR_LDLE);
+      code = (code == MIR_LDBEQ
+                ? MIR_LDEQ
+                : code == MIR_LDBNE
+                    ? MIR_LDNE
+                    : code == MIR_LDBLT
+                        ? MIR_LDLT
+                        : code == MIR_LDBGE ? MIR_LDGE : code == MIR_LDBGT ? MIR_LDGT : MIR_LDLE);
       new_insn = MIR_new_insn (ctx, code, temp_op, insn->ops[1], insn->ops[2]);
       gen_add_insn_before (gen_ctx, insn, new_insn);
       next_insn = MIR_new_insn (ctx, MIR_BT, insn->ops[0], temp_op);
@@ -983,6 +987,18 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       leaf_p = FALSE;
     } else if (code == MIR_ALLOCA) {
       alloca_p = TRUE;
+    } else if (code == MIR_FBLT) { /* don't use blt/ble for correct nan processing: */
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_FBGT;
+    } else if (code == MIR_FBLE) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_FBGE;
+    } else if (code == MIR_DBLT) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_DBGT;
+    } else if (code == MIR_DBLE) {
+      SWAP (insn->ops[1], insn->ops[2], temp_op);
+      insn->code = MIR_DBGE;
     } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn
          and added extension insn (if any).  */
@@ -993,9 +1009,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
         assert (insn->ops[i].mode == MIR_OP_REG);
         res_type = func->res_types[i];
         if ((res_type == MIR_T_F || res_type == MIR_T_D || res_type == MIR_T_LD) && n_vregs < 8) {
-          new_insn_code = res_type == MIR_T_F   ? MIR_FMOV
-                          : res_type == MIR_T_D ? MIR_DMOV
-                                                : MIR_LDMOV;
+          new_insn_code
+            = res_type == MIR_T_F ? MIR_FMOV : res_type == MIR_T_D ? MIR_DMOV : MIR_LDMOV;
           ret_reg = V0_HARD_REG + n_vregs++;
         } else if (n_iregs < 8) {
           new_insn_code = MIR_MOV;
@@ -1613,18 +1628,9 @@ static const struct pattern patterns[] = {
   {MIR_UBLTS, "l r r", SCMPR "; " UBLT},
   /* cmp Wn,I,shift; bcc l */
   {MIR_UBLTS, "l r I", SCMPI "; " UBLT},
-  /* fcmpe Sn,Sm; blt l */
-  {MIR_FBLT, "l r r", FCMP "; " BLT},
-  /* fcmpe Dn,Dm; blt l */
-  {MIR_DBLT, "l r r", DCMP "; " BLT},
-  /* fcmpe Sn,0.0; blt l */
-  {MIR_FBLT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BLT},
-  /* fcmpe Dn,0.0; blt l */
-  {MIR_DBLT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BLT},
 
 #define BGE "5400000a:ff00001f l"
 #define UBGE "54000002:ff00001f l"
-#define FBGE "54000005:ff00001f l"
   /* cmp Rn,Rm; bge l */
   {MIR_BGE, "l r r", CMPR "; " BGE},
   /* cmp Rn,I,shift ; bge l */
@@ -1642,13 +1648,13 @@ static const struct pattern patterns[] = {
   /* cmp Wn,I,shift; bcs l */
   {MIR_UBGES, "l r I", SCMPI "; " UBGE},
   /* fcmpe Sn,Sm; bpl l */
-  {MIR_FBGE, "l r r", FCMP "; " FBGE},
+  {MIR_FBGE, "l r r", FCMP "; " BGE},
   /* fcmpe Dn,Dm; bpl l */
-  {MIR_DBGE, "l r r", DCMP "; " FBGE},
+  {MIR_DBGE, "l r r", DCMP "; " BGE},
   /* fcmpe Sn,0.0; bpl l */
-  {MIR_FBGE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " FBGE},
+  {MIR_FBGE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BGE},
   /* fcmpe Dn,0.0; bpl l */
-  {MIR_DBGE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " FBGE},
+  {MIR_DBGE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BGE},
 
 #define BGT "5400000c:ff00001f l"
 #define UBGT "54000008:ff00001f l"
@@ -1669,13 +1675,13 @@ static const struct pattern patterns[] = {
   /* cmp Wn,I,shift; bhi l */
   {MIR_UBGTS, "l r I", SCMPI "; " UBGT},
   /* fcmpe Sn,Sm; bhi l */
-  {MIR_FBGT, "l r r", FCMP "; " UBGT},
+  {MIR_FBGT, "l r r", FCMP "; " BGT},
   /* fcmpe Dn,Dm; bhi l */
-  {MIR_DBGT, "l r r", DCMP "; " UBGT},
+  {MIR_DBGT, "l r r", DCMP "; " BGT},
   /* fcmpe Sn,0.0; bhi l */
-  {MIR_FBGT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " UBGT},
+  {MIR_FBGT, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BGT},
   /* fcmpe Dn,0.0; bhi l */
-  {MIR_DBGT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " UBGT},
+  {MIR_DBGT, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BGT},
 
 #define BLE "5400000d:ff00001f l"
 #define UBLE "54000009:ff00001f l"
@@ -1695,14 +1701,6 @@ static const struct pattern patterns[] = {
   {MIR_UBLES, "l r r", SCMPR "; " UBLE},
   /* cmp Wn,I,shift; bls l */
   {MIR_UBLES, "l r I", SCMPI "; " UBLE},
-  /* fcmpe Sn,Sm; ble l */
-  {MIR_FBLE, "l r r", FCMP "; " BLE},
-  /* fcmpe Dn,Dm; ble l */
-  {MIR_DBLE, "l r r", DCMP "; " BLE},
-  /* fcmpe Sn,0.0; ble l */
-  {MIR_FBLE, "l r Zf", "1e202018:fffffc1f vn1 vm2; " BLE},
-  /* fcmpe Dn,0.0; ble l */
-  {MIR_DBLE, "l r Zd", "1e602018:fffffc1f vn1 vm2; " BLE},
 
   // ??? with shift
   {MIR_NEG, "r r", "cb0003e0:ff2003e0 rd0 rm1"},  /* neg Rd,Rm */
@@ -2066,10 +2064,9 @@ static void patterns_finish (gen_ctx_t gen_ctx) {
 }
 
 static int hex_value (int ch) {
-  return ('0' <= ch && ch <= '9'   ? ch - '0'
-          : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10
-          : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10
-                                   : -1);
+  return ('0' <= ch && ch <= '9'
+            ? ch - '0'
+            : 'A' <= ch && ch <= 'F' ? ch - 'A' + 10 : 'a' <= ch && ch <= 'f' ? ch - 'a' + 10 : -1);
 }
 
 static uint64_t read_hex (const char **ptr) {
@@ -2362,8 +2359,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       opcode |= imm12_shift << 22;
       opcode_mask = check_and_set_mask (opcode_mask, 0x3 << 22);
     }
-    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
-    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0)
+      VARR_ADDR (label_ref_t, label_refs)
+      [label_ref_num].label_val_disp
+        = VARR_LENGTH (uint8_t, result_code);
 
     if (switch_table_addr_p) switch_table_adr_insn_start = VARR_LENGTH (uint8_t, result_code);
     put_uint64 (gen_ctx, opcode, 4); /* output the machine insn */
