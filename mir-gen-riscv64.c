@@ -1880,7 +1880,6 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
   char ch, start_ch;
   MIR_op_t op, original;
   MIR_op_mode_t mode;
-  MIR_reg_t hr;
 
   for (nop = 0, p = pat->pattern; *p != 0; p++, nop++) {
     while (*p == ' ' || *p == '\t') p++;
@@ -2196,7 +2195,6 @@ static uint32_t check_and_set_mask (uint32_t opcode_mask, uint32_t mask) {
 
 static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement) {
   MIR_context_t ctx = gen_ctx->ctx;
-  size_t offset;
   const char *p, *insn_str;
   label_ref_t lr;
   const_ref_t cr;
@@ -2212,7 +2210,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     int n, opcode = -1, funct3 = -1, funct7 = -1, rd = -1, rs1 = -1, rs2 = -1;
     int opcodec = -1, funct3c = -1, funct4c = -1, funct6c = -1, funct2c = -1, funct2bc = -1;
     int rs2m = -1, rdc = -1, rs2c = -1, uimm8c = -1;
-    int shamt = -1, shamtc = -1, imm12, imm20, imm6c, st_disp, unsign_disp4 = -1, unsign_disp8 = -1;
+    int shamt = -1, shamtc = -1, imm12, imm20, imm6c = 0, st_disp = 0;
+    int unsign_disp4 = -1, unsign_disp8 = -1;
     int unsign_sp_disp4 = -1, unsign_sp_disp8 = -1;
     int unsign_sp_store_disp4 = -1, unsign_sp_store_disp8 = -1;
     int imm12_p = FALSE, imm20_p = FALSE, imm6c_p = FALSE, st_disp_p = FALSE;
