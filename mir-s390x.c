@@ -174,7 +174,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   assert (offset % 2 == 0);
   offset /= 2;
   if (-(1l << 31) < offset && offset < (1l << 31)) { /* brcl m15,offset: */
-    uint64_t brcl = ((0xc0l << 40) | (15l << 36) | (4l << 32) | offset & 0xffffffff) << 16;
+    uint64_t brcl = ((0xc0l << 40) | (15l << 36) | (4l << 32) | (offset & 0xffffffff)) << 16;
     push_insns (code, (uint8_t *) &brcl, 6);
   } else { /* 6b:lalr r1,8+padding; 6b:lg r1,0(r1); 2b:bcr m15,r1;padding; 64-bit address: */
     size_t rem = (VARR_LENGTH (uint8_t, code) + 14) % 8;
@@ -365,7 +365,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
           call handler with args; move results to return regs; restore r7,r14,r15; return */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
   MIR_func_t func = func_item->u.func;
-  uint32_t nres = func->nres, nargs = func->nargs;
+  uint32_t nres = func->nres;
   MIR_type_t type, *res_types = func->res_types;
   int disp, frame_size, local_var_size, n_gpregs, n_fpregs, va_list_disp, results_disp;
   VARR (uint8_t) * code;
