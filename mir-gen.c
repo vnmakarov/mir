@@ -4864,7 +4864,7 @@ static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   } else if (sign_p == sign2_p && size < size2) {
     saved_op = def_insn->ops[0];
     def_insn->ops[0] = insn->ops[0];
-    ok_p = target_insn_ok_p (gen_ctx, insn);
+    ok_p = target_insn_ok_p (gen_ctx, def_insn);
     def_insn->ops[0] = saved_op;
     if (!ok_p) return NULL;
     gen_move_insn_before (gen_ctx, insn, def_insn);
