@@ -197,7 +197,7 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
                                                   uint32_t *dict_pos) {
   uint32_t len, best_len, len_bound;
   uint64_t hash;
-  uint32_t off, ref_size, best_ref_size;
+  uint32_t off, ref_size, best_ref_size = 0;
   uint32_t curr, next;
   const uint8_t *s1, *s2;
   struct _reduce_el *el, *best_el = NULL;
