@@ -459,15 +459,9 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
-  static const uint32_t temp_reg = 10;               /* x10 */
   static const uint32_t save_x19_pat = 0xf81f0ff3;   /* str x19, [sp,-16]! */
-  static const uint32_t add_x2_sp = 0x910003e2;      /* add x2, sp, X*/
   static const uint32_t set_gr_offs = 0x128007e9;    /* mov w9, #-64 # gr_offs */
   static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
-  static const uint32_t arg_mov_start_pat[] = {
-    0x910003e9, /* mov x9,sp */
-    0xd10003ff, /* sub sp, sp, <frame size:10-21> # non-varg */
-  };
   static const uint32_t prepare_pat[] = {
 #if !defined(__APPLE__)
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
@@ -512,13 +506,19 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   MIR_type_t *results = func->res_types;
   VARR (uint8_t) * code;
   void *res;
-  uint32_t base_reg_mask = ~(uint32_t) (0x3f << 5);
 
   VARR_CREATE (uint8_t, code, 128);
 #if defined(__APPLE__)
   int stack_arg_sp_offset, sp_offset, scale;
   uint32_t qwords, sp = 31;
+  uint32_t base_reg_mask = ~(uint32_t) (0x3f << 5);
+  static const uint32_t temp_reg = 10; /* x10 */
   MIR_type_t type;
+  static const uint32_t add_x2_sp = 0x910003e2; /* add x2, sp, X*/
+  static const uint32_t arg_mov_start_pat[] = {
+    0x910003e9, /* mov x9,sp */
+    0xd10003ff, /* sub sp, sp, <frame size:10-21> # non-varg */
+  };
 
   assert (__SIZEOF_LONG_DOUBLE__ == 8);
   push_insns (code, arg_mov_start_pat, sizeof (arg_mov_start_pat));
