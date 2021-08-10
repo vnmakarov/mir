@@ -3586,8 +3586,6 @@ static int mem_protect (void *addr, size_t len, int prot) {
 #if !defined(__APPLE__) || !defined(__aarch64__)
   return mprotect (addr, len, prot);
 #else
-  int res;
-
   if (!pthread_jit_write_protect_supported_np ()) {
     fprintf (stderr, "unsupported pthread_jit_write_protect_np -- good bye!\n");
     exit (1);
@@ -3597,7 +3595,7 @@ static int mem_protect (void *addr, size_t len, int prot) {
     pthread_jit_write_protect_np (TRUE);
     sys_icache_invalidate (addr, len);
   } else if (0) {
-    if ((res = mprotect (addr, len, prot)) != 0) {
+    if (mprotect (addr, len, prot) != 0) {
       perror ("mem_protect");
       fprintf (stderr, "good bye!\n");
       exit (1);
