@@ -1026,6 +1026,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
   }
 }
 
+#if !defined(__APPLE__)
 static void isave (gen_ctx_t gen_ctx, MIR_insn_t anchor, int disp, MIR_reg_t base,
                    MIR_reg_t hard_reg) {
   gen_mov (gen_ctx, anchor, MIR_MOV, new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_I64, disp, base),
@@ -1037,6 +1038,7 @@ static void fsave (gen_ctx_t gen_ctx, MIR_insn_t anchor, int disp, MIR_reg_t bas
   gen_mov (gen_ctx, anchor, MIR_LDMOV, new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_LD, disp, base),
            _MIR_new_hard_reg_op (gen_ctx->ctx, hard_reg));
 }
+#endif
 
 static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_regs,
                                        size_t stack_slots_num) {
@@ -1044,7 +1046,6 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
   MIR_op_t sp_reg_op, fp_reg_op, treg_op, treg_op2;
-  int64_t start;
   int save_prev_stack_p;
   size_t i, offset, frame_size, frame_size_after_saved_regs, saved_iregs_num, saved_fregs_num;
 
@@ -1112,6 +1113,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #if !defined(__APPLE__)
   if (func->vararg_p) {  // ??? saving only regs corresponding to ...
     MIR_reg_t base = SP_HARD_REG;
+    int64_t start;
 
     start = (int64_t) frame_size - reg_save_area_size;
     if ((start + 184) >= (1 << 12)) {

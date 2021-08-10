@@ -66,7 +66,6 @@ struct aarch64_va_list {
 void *va_arg_builtin (void *p, uint64_t t) {
   struct aarch64_va_list *va = p;
   MIR_type_t type = t;
-  int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
 #if defined(__APPLE__)
   void *a = va->arg_area;
 
@@ -79,6 +78,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   if (type == MIR_T_F || type == MIR_T_I32) a = (char *) a + 4; /* 2nd word of doubleword */
 #endif
 #else
+  int fp_p = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD;
   void *a;
 
   if (fp_p && va->__vr_offs < 0) {
@@ -459,9 +459,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 /* Transform C call to call of void handler (MIR_context_t ctx, MIR_item_t func_item,
                                              va_list va, MIR_val_t *results) */
 void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler) {
-  static const uint32_t save_x19_pat = 0xf81f0ff3;   /* str x19, [sp,-16]! */
-  static const uint32_t set_gr_offs = 0x128007e9;    /* mov w9, #-64 # gr_offs */
-  static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
+  static const uint32_t save_x19_pat = 0xf81f0ff3; /* str x19, [sp,-16]! */
   static const uint32_t prepare_pat[] = {
 #if !defined(__APPLE__)
     0xd10083ff, /* sub sp, sp, 32 # allocate va_list */
@@ -502,7 +500,6 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   uint32_t pat, imm, n_xregs, n_vregs, offset, offset_imm;
   MIR_func_t func = func_item->u.func;
   uint32_t nres = func->nres;
-  int x8_res_p = func->nargs != 0 && VARR_GET (MIR_var_t, func->vars, 0).type == MIR_T_RBLK;
   MIR_type_t *results = func->res_types;
   VARR (uint8_t) * code;
   void *res;
@@ -604,6 +601,9 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   ((uint32_t *) VARR_ADDR (uint8_t, code))[1] |= sp_offset << 10;
   push_insns (code, &save_x19_pat, sizeof (save_x19_pat));
 #else
+  static const uint32_t set_gr_offs = 0x128007e9;    /* mov w9, #-64 # gr_offs */
+  static const uint32_t set_x8_gr_offs = 0x128008e9; /* mov w9, #-72 # gr_offs */
+  int x8_res_p = func->nargs != 0 && VARR_GET (MIR_var_t, func->vars, 0).type == MIR_T_RBLK;
   push_insns (code, &save_x19_pat, sizeof (save_x19_pat));
   push_insns (code, save_insns, sizeof (save_insns));
   if (x8_res_p)
