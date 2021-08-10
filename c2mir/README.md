@@ -1,6 +1,14 @@
 # C to MIR compiler
   * Implementation of a small C11 (2011 ANSI C standard) to MIR compiler
-    * no optional features: variable size arrays, complex, atomic
+    * no optional standard features: variable size arrays, complex, atomic
+    * support of the following C extensions:
+      * `\e` escape sequence
+      * binary numbers starting with `0b` or `0B` prefix
+      * macro `__has_include`
+      * empty structure, unions, and initializer list
+      * range cases `case <start>...<finish>`
+      * zero size arrays
+      * statement expressions
   * Minimal compiler code dependency.  No additional tools (like yacc/flex) are used
   * Simplicity of implementation over speed to make code easy to learn and maintain
     * Four passes to divide compilation on manageable sub-tasks:
