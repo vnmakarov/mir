@@ -17,6 +17,8 @@
 #include "mir-varr.h"
 #include "mir-htab.h"
 
+#define MIR_API_VERSION 0.1
+
 #ifdef NDEBUG
 static inline int mir_assert (int cond) { return 0 && cond; }
 #else
@@ -452,8 +454,20 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_JMP || MIR_int_branch_code_p (code) || MIR_FP_branch_code_p (code));
 }
 
+extern double _MIR_get_api_version (void);
+extern MIR_context_t _MIR_init (void);
+
 /* Use only the following API to create MIR code.  */
-extern MIR_context_t MIR_init (void);
+static inline MIR_context_t MIR_init (void) {
+  if (MIR_API_VERSION != _MIR_get_api_version ()) {
+    fprintf (stderr,
+             "mir.h header has version %g different from used mir code version %g -- good bye!\n",
+             MIR_API_VERSION, _MIR_get_api_version ());
+    exit (1);
+  }
+  return _MIR_init ();
+}
+
 extern void MIR_finish (MIR_context_t ctx);
 
 extern MIR_module_t MIR_new_module (MIR_context_t ctx, const char *name);
@@ -589,6 +603,8 @@ extern void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_va
 extern void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item);
 
 /* Private: */
+extern double _MIR_get_api_version (void);
+extern MIR_context_t _MIR_init (void);
 extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
