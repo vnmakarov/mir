@@ -1687,11 +1687,11 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
 // constraint: esp can not be index
 
 static int int8_p (int64_t v) { return INT8_MIN <= v && v <= INT8_MAX; }
-static int uint8_p (int64_t v) { return 0 <= v && v <= UINT8_MAX; }
+static int MIR_UNUSED uint8_p (int64_t v) { return 0 <= v && v <= UINT8_MAX; }
 static int int16_p (int64_t v) { return INT16_MIN <= v && v <= INT16_MAX; }
 static int MIR_UNUSED uint16_p (int64_t v) { return 0 <= v && v <= UINT16_MAX; }
 static int int32_p (int64_t v) { return INT32_MIN <= v && v <= INT32_MAX; }
-static int uint32_p (int64_t v) { return 0 <= v && v <= UINT32_MAX; }
+static int MIR_UNUSED uint32_p (int64_t v) { return 0 <= v && v <= UINT32_MAX; }
 
 static int dec_value (int ch) { return '0' <= ch && ch <= '9' ? ch - '0' : -1; }
 

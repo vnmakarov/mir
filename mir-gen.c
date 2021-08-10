@@ -2216,7 +2216,7 @@ static int find_expr (gen_ctx_t gen_ctx, MIR_insn_t insn, expr_t *e) {
 }
 
 static void insert_expr (gen_ctx_t gen_ctx, expr_t e) {
-  expr_t e2;
+  expr_t MIR_UNUSED e2;
 
   gen_assert (!find_expr (gen_ctx, e->insn, &e2));
   HTAB_DO (expr_t, expr_tab, e, HTAB_INSERT, e);
