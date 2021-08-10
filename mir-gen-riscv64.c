@@ -1589,7 +1589,6 @@ static const struct pattern patterns[] = {
   {MIR_ULTS, "r r i", "O13 F3 f0 rd0 rs1 i"},   /* sltiu rd,rs1,i */
 
   // ??? le r,imm -> lt r,imm+1
-  /* !(op2 < op1)
   /* sgt rd,rs1,rs2;xori rd,rs1,1 */
   {MIR_LE, "r r r", "O33 F2 f0 rd0 rs2 rS1; O13 F4 f0 rd0 rs0 i1"},
   /* sgti rd,rs1,i;xori rd,rs1,1 */
@@ -2206,7 +2205,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, ch2, start_ch, d;
-    uint32_t insn32 = 0, insn_mask = 0, el_mask;
+    uint32_t insn32 = 0, insn_mask = 0, el_mask = 0;
     int n, opcode = -1, funct3 = -1, funct7 = -1, rd = -1, rs1 = -1, rs2 = -1;
     int opcodec = -1, funct3c = -1, funct4c = -1, funct6c = -1, funct2c = -1, funct2bc = -1;
     int rs2m = -1, rdc = -1, rs2c = -1, uimm8c = -1;
