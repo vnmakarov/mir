@@ -14,7 +14,6 @@ static MIR_type_t fp_homogeneous_type (c2m_ctx_t c2m_ctx, struct type *param_typ
 #else
 static MIR_type_t fp_homogeneous_type_1 (c2m_ctx_t c2m_ctx, MIR_type_t curr_type, struct type *type,
                                          int *num) {
-  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   int n;
   MIR_type_t t;
 
