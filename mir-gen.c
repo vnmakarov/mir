@@ -65,11 +65,7 @@
 
 #include <assert.h>
 
-#ifdef NDEBUG
-static inline int gen_assert (int cond) { return 0 && cond; }
-#else
 #define gen_assert(cond) assert (cond)
-#endif
 
 typedef struct gen_ctx *gen_ctx_t;
 
