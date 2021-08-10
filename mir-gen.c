@@ -1268,6 +1268,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   curr_cfg->curr_bb_insn_index = 0;
   curr_cfg->max_reg = 0;
   curr_cfg->min_reg = 0;
+  curr_cfg->non_conflicting_moves = 0;
   curr_cfg->root_loop_node = NULL;
   curr_bb_index = 0;
   for (i = 0; i < VARR_LENGTH (MIR_var_t, curr_func_item->u.func->vars); i++) {
@@ -4309,9 +4310,11 @@ static void rewrite (gen_ctx_t gen_ctx) {
              "(%.1f%%), "
              "out of %lu all moves (%.1f), out of %lu all insns (%.1f)\n",
              (unsigned long) deleted_movs_num, (unsigned long) curr_cfg->non_conflicting_moves,
-             deleted_movs_num * 100.0 / curr_cfg->non_conflicting_moves, (unsigned long) movs_num,
-             deleted_movs_num * 100.0 / movs_num, (unsigned long) insns_num,
-             deleted_movs_num * 100.0 / insns_num);
+             curr_cfg->non_conflicting_moves == 0
+               ? 100.0
+               : deleted_movs_num * 100.0 / curr_cfg->non_conflicting_moves,
+             (unsigned long) movs_num, deleted_movs_num * 100.0 / movs_num,
+             (unsigned long) insns_num, deleted_movs_num * 100.0 / insns_num);
   });
 }
 
@@ -5632,6 +5635,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
                                               "can not destroy generator mutex  or signals");
   }
+  VARR_DESTROY (MIR_item_t, funcs_to_generate);
 #endif
   for (int i = 0; i < all_gen_ctx->gens_num; i++) {
     gen_ctx = &all_gen_ctx->gen_ctx[i];

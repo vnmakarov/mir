@@ -1090,10 +1090,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     frame_size += 16;
   }
   frame_size += 16; /* lr/fp */
+  treg_op2 = _MIR_new_hard_reg_op (ctx, R10_HARD_REG);
   if (frame_size < (1 << 12)) {
     new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, frame_size));
   } else {
-    treg_op2 = _MIR_new_hard_reg_op (ctx, R10_HARD_REG);
     new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op2, MIR_new_int_op (ctx, frame_size));
     gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = frame_size */
     new_insn = MIR_new_insn (ctx, MIR_SUB, sp_reg_op, sp_reg_op, treg_op2);
@@ -1195,16 +1195,17 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   /* Restore lr, sp, fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_hard_reg_op (ctx, LINK_HARD_REG),
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_HARD_REG, 1));
-  if (frame_size < (1 << 12)) {
-    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, frame_size));
-  } else {
-    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, frame_size));
-    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t = frame_size */
-    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, treg_op);
-  }
-  gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = fp + (frame_size|t) */
+  gen_mov (gen_ctx, anchor, MIR_MOV, treg_op2, fp_reg_op); /* r10 = fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op,
            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, FP_HARD_REG, MIR_NON_HARD_REG, 1));
+  if (frame_size < (1 << 12)) {
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, MIR_new_int_op (ctx, frame_size));
+  } else {
+    new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op, MIR_new_int_op (ctx, frame_size));
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* t(r9) = frame_size */
+    new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, treg_op2, treg_op);
+  }
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = r10 + (frame_size|t) */
 }
 
 struct pattern {
