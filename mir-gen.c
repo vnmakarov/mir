@@ -5635,6 +5635,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
                                               "can not destroy generator mutex  or signals");
   }
+  VARR_DESTROY (MIR_item_t, funcs_to_generate);
 #endif
   for (int i = 0; i < all_gen_ctx->gens_num; i++) {
     gen_ctx = &all_gen_ctx->gen_ctx[i];
