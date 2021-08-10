@@ -3603,7 +3603,7 @@ static int mem_protect (void *addr, size_t len, int prot) {
       exit (1);
     }
   }
-  return res;
+  return 0;
 #endif
 }
 
