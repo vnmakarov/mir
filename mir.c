@@ -587,7 +587,9 @@ static void parallel_error (MIR_context_t ctx, const char *err_message) {
   MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
 }
 
-MIR_context_t MIR_init (void) {
+double _MIR_get_api_version (void) { return MIR_API_VERSION; }
+
+MIR_context_t _MIR_init (void) {
   MIR_context_t ctx;
 
   mir_assert (MIR_OP_BOUND < OUT_FLAG);
