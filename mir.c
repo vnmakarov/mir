@@ -5485,7 +5485,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   const char *name;
   MIR_module_t module = NULL;
   MIR_item_t item, func = NULL;
-  MIR_insn_code_t insn_code;
+  MIR_insn_code_t insn_code = MIR_INSN_BOUND; /* for removing uninitialized warning */
   MIR_insn_t insn;
   MIR_type_t type, data_type = MIR_T_BOUND;
   MIR_op_t op, *op_addr;

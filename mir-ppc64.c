@@ -96,26 +96,26 @@ static void ppc64_gen_st (VARR (uint8_t) * insn_varr, unsigned from, unsigned ba
 
 static void ppc64_gen_stdu (VARR (uint8_t) * insn_varr, int disp) {
   assert ((disp & 0x3) == 0);
-  push_insn (insn_varr, 0xf8210001 | disp & 0xfffc); /* stdu 1, disp (1) */
+  push_insn (insn_varr, 0xf8210001 | (disp & 0xfffc)); /* stdu 1, disp (1) */
 }
 
 static void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int reg, void *p) {
   uint64_t a = (uint64_t) p;
   if ((a >> 32) == 0) {
     if (((a >> 31) & 1) == 0) { /* lis r,0,Z2 */
-      push_insn (insn_varr, (15 << 26) | (reg << 21) | (0 << 16) | (a >> 16) & 0xffff);
+      push_insn (insn_varr, (15 << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
     } else { /* xor r,r,r; oris r,r,Z2 */
       push_insn (insn_varr, (31 << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
-      push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | (a >> 16) & 0xffff);
+      push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
     }
   } else {
     /* lis r,0,Z0; ori r,r,Z1; rldicr r,r,32,31; oris r,r,Z2; ori r,r,Z3: */
     push_insn (insn_varr, (15 << 26) | (reg << 21) | (0 << 16) | (a >> 48));
-    push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | (a >> 32) & 0xffff);
+    push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
     push_insn (insn_varr, (30 << 26) | (reg << 21) | (reg << 16) | 0x07c6);
-    push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | (a >> 16) & 0xffff);
+    push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
   }
-  push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | a & 0xffff);
+  push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | (a & 0xffff));
 }
 
 static void ppc64_gen_jump (VARR (uint8_t) * insn_varr, unsigned int reg, int call_p) {
@@ -227,7 +227,6 @@ struct ppc64_va_list {
 void *va_arg_builtin (void *p, uint64_t t) {
   struct ppc64_va_list *va = p;
   MIR_type_t type = t;
-  int fp_p = type == MIR_T_F || type == MIR_T_D;
   void *a = va->arg_area;
 
   if (type == MIR_T_LD) {
