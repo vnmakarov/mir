@@ -587,7 +587,7 @@ gen-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR
 	$(BUILD_DIR)/gen-bench && size $(BUILD_DIR)/gen-bench
 
 gen-bench2: $(BUILD_DIR)/c2m # Ignore M1 MacOs as it needs another procedure to make code executable
-	@if test $(UNAME_S) != Darwin || test $(UNAME_M) != arm64; then\
+	@if test $(UNAME_S) != Darwin && test $(UNAME_M) != arm64; then\
 	  echo +++++ Compiling and generating all code for c2m: +++++;\
 	  for i in 0 1 2 3;do \
 	    echo === Optimization level $$i:;\
