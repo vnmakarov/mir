@@ -1,12 +1,12 @@
 # Building MIR
 
- You can build MIR in source directory simply with `make` or `make
- all`
+You can build MIR in source directory simply with `make` or `make
+all`
 
- You can also build MIR in a separate directory.  In this case you
- need to use `make SRC_DIR=<path to MIR sources>`.  **All other calls
- of make** should have the same `SRC_DIR` value on the make command
- line.
+You can also build MIR in a separate directory.  In this case you
+need to use `make SRC_DIR=<path to MIR sources> -f <path to MIR sources>/GNUmakefile`.
+**All other calls of make** should have the
+same `SRC_DIR` value and `-f` argument on the make command line.
 
  By default MIR is built in release mode (with optimizations).  If you
 want to build debugging version (without optimizations and additional
