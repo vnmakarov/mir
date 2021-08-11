@@ -10,7 +10,7 @@ static char stddef_str[]
     "typedef long ptrdiff_t;\n"
     "typedef unsigned long size_t;\n"
     "typedef long double max_align_t;\n"
-    "typedef unsigned int wchar_t;\n"
+    "typedef int wchar_t;\n"
     "\n"
     "#define NULL ((void *) 0)\n"
     "\n"
