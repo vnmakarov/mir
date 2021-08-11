@@ -204,7 +204,7 @@ clean-l2m:
 $(BUILD_DIR)/mir-utils:
 	   mkdir -p $@
 
-$(BUILD_DIR)/mir-utils/%.$(OBJSUFF): $(SRC_DIR)/mir-utils/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/mir-utils/%.$(OBJSUFF): $(SRC_DIR)/mir-utils/%.c | $(BUILD_DIR)/mir-utils
 	$(COMPILE) -c $< $(OBJO)$@
 
 .PHONY: clean-utils
@@ -654,7 +654,7 @@ gen-speed: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR
 	fi
 
 c2mir-sieve-bench: $(BUILD_DIR)/c2m
-	$(BUILD_DIR)/c2m -DSIEVE_BENCH -v sieve.c -eg && size $(BUILD_DIR)/c2m
+	$(BUILD_DIR)/c2m -DSIEVE_BENCH -v $(SRC_DIR)/sieve.c -eg && size $(BUILD_DIR)/c2m
 
 c2mir-bench: $(BUILD_DIR)/c2m
 	$(SRC_DIR)/c-benchmarks/run-benchmarks.sh
