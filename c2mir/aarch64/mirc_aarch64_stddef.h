@@ -10,11 +10,7 @@ static char stddef_str[]
     "typedef long ptrdiff_t;\n"
     "typedef unsigned long size_t;\n"
     "typedef long double max_align_t;\n"
-#if defined(__APPLE__)
     "typedef int wchar_t;\n"
-#else
-    "typedef unsigned int wchar_t;\n"
-#endif
     "\n"
     "#define NULL ((void *) 0)\n"
     "\n"

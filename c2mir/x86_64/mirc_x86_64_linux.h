@@ -50,6 +50,12 @@ static char x86_64_mirc[]
     "#define __UINT16_MAX__ (__INT16_MAX__ * 2u + 1u)\n"
     "#define __UINT32_MAX__ (__INT32_MAX__ * 2u + 1u)\n"
     "#define __UINT64_MAX__ (__INT64_MAX__ * 2u + 1u)\n"
+#if defined(__linux__)
+    "#define __WCHAR_MAX__ 0x7fffffff\n"
+#else
+    "#define __WCHAR_MAX__ 2147483647\n"
+#endif
+    "#define __WCHAR_MIN__ (-__WCHAR_MAX__ - 1)\n"
     "#define __SCHAR_MAX__ __INT8_MAX__\n"
     "#define __SHRT_MAX__ __INT16_MAX__\n"
     "#define __INT_MAX__ __INT32_MAX__\n"

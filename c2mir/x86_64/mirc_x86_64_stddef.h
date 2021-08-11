@@ -15,12 +15,10 @@ static char stddef_str[]
     "typedef unsigned long size_t;\n"
 #endif
     "typedef long double max_align_t;\n"
-#if defined(__APPLE__)
-    "typedef int wchar_t;\n"
-#elif defined(_WIN32)
+#if defined(_WIN32)
     "typedef unsigned short wchar_t;\n"
 #else
-    "typedef unsigned int wchar_t;\n"
+    "typedef int wchar_t;\n"
 #endif
     "\n"
 #if !defined(__APPLE__) && !defined(_WIN32)
