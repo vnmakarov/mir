@@ -2306,9 +2306,11 @@ static void define (c2m_ctx_t c2m_ctx) {
     if (!params_eq_p (m->params, params) || !replacement_eq_p (m->replacement, repl)) {
       if (c2m_options->pedantic_p) {
         error (c2m_ctx, id->pos, "different macro redefinition of %s", name);
+        error (c2m_ctx, m->id->pos, "previous definition of %s", m->id->repr);
       } else {
         VARR (token_t) * temp;
         warning (c2m_ctx, id->pos, "different macro redefinition of %s", name);
+        warning (c2m_ctx, m->id->pos, "previous definition of %s", m->id->repr);
         SWAP (m->params, params, temp);
         SWAP (m->replacement, repl, temp);
       }
