@@ -4,6 +4,7 @@ BUILD_DIR=.
 
 ADDITIONAL_INCLUDE_PATH:=
 UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_S),Darwin)
     XCRUN := $(shell xcrun --show-sdk-path >/dev/null 2>&1 && echo yes || echo no)
     ifeq ($(XCRUN),yes)
@@ -584,15 +585,17 @@ gen-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR
 	$(COMPILE_AND_LINK) -DTEST_GEN_SIEVE $^ $(EXEO)$(BUILD_DIR)/gen-bench$(EXE) $(LDLIBS)
 	$(BUILD_DIR)/gen-bench && size $(BUILD_DIR)/gen-bench
 
-gen-bench2: $(BUILD_DIR)/c2m
-	echo +++++ Compiling and generating all code for c2m: +++++
-	@for i in 0 1 2 3;do \
-	   echo === Optimization level $$i:;\
-           echo 'int main () {return 0;}'\
-	   | /usr/bin/time $(BUILD_DIR)/c2m -O$$i -Dx86_64 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
-	                                                     $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -el -i;\
-	   rm -f a.bmir;\
-	done
+gen-bench2: $(BUILD_DIR)/c2m # Ignore M1 MacOs as it needs another procedure to make code executable
+	@if test $(UNAME_S) != Darwin || test $(UNAME_M) != arm64; then\
+	  echo +++++ Compiling and generating all code for c2m: +++++;\
+	  for i in 0 1 2 3;do \
+	    echo === Optimization level $$i:;\
+            echo 'int main () {return 0;}'\
+	    | /usr/bin/time $(BUILD_DIR)/c2m -O$$i -Dx86_64 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
+	                                                      $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -el -i;\
+	    rm -f a.bmir;\
+	  done;\
+	fi
 
 gen-speed: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/loop-sieve-gen.c
 	if type valgrind  > /dev/null 2>&1; then \
