@@ -79,6 +79,7 @@
   * Option `-fpreprocessed` means skipping preprocessor for C files
   * Option `-fsyntax-only` means stopping after parsing and semantic
     checking of C files without MIR code generation
+  * Option `-w` means switching off reporting all warnings
   * Option `-pedantic` is used for stricter diagnostic about C
     standard conformance.  It might be useful as C2MIR implements some GCC extensions of C
   * Option `-O<n>` is used to set up MIR-generator optimization level.  The optimization levels are described

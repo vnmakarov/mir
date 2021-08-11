@@ -128,8 +128,9 @@ uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(P
 clean: clean-mir clean-c2m clean-utils clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF)
 
-test: adt-test simplify-test io-test scan-test interp-test gen-test readme-example-test\
-      mir2c-test c2mir-test
+test: readme-example-test c2mir-test
+
+test-all: adt-test simplify-test io-test scan-test mir2c-test test
 
 bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
 	@echo ==============================Bench is done

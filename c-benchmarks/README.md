@@ -13,5 +13,5 @@ Some thoughts:
 * `except` was considerably improved by inlining
 * `matrix`, `nbody`, and `spectral-norm` can be improved by loop-invariant motion
 * call-intensive bencmarkss (`funnkuch-reduce`, `method-call`, and `mandelbrot`) are slow because all calls in MIR
-  are implemented through thunks permitting how swap of function code
+  are implemented through thunks permitting hot swap of function code
   * they could be improved by direct calls but it is against MIR design
