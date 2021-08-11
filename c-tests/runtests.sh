@@ -2,8 +2,8 @@
 # Run runtests.sh execution_program
 #
 
-outf=c-tests/__temp.out
-errf=c-tests/__temp.err
+outf=__c-tests-temp.out
+errf=__c-tests-temp.err
 all=0
 ok=0
 ctest_dir=`dirname $0`
