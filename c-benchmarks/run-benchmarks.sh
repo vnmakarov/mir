@@ -2,11 +2,12 @@
 # Run run-benchmarks.sh [start_test_num]
 #
 
-tempc=c-benchmarks/__temp.c
-temp=c-benchmarks/__temp.out
-temp2=c-benchmarks/__temp2.out
-temp3=c-benchmarks/__temp3.out
-errf=c-benchmarks/__temp.err
+srcdir=`dirname $0`
+tempc=__c-bench-temp.c
+temp=__c-bench-temp.out
+temp2=__c-bench-temp2.out
+temp3=__c-bench-temp3.out
+errf=__c-bench-temp.err
 
 if test x`echo -n` != "x-n";then NECHO="echo -n"; else NECHO=printf; fi
 
@@ -77,12 +78,12 @@ runbench () {
 EOF
   first=first
   if gcc $tempc >/dev/null 2>&1; then
-      run "gcc -O2" "gcc -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
-      run "gcc -O0" "gcc -std=c99 -O0 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      run "gcc -O2" "gcc -std=c99 -O2 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      run "gcc -O0" "gcc -std=c99 -O0 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
       first=
   fi
   if clang $tempc >/dev/null 2>&1; then
-      run "clang -O2" "clang -std=c99 -O2 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      run "clang -O2" "clang -std=c99 -O2 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
   if pcc $tempc >/dev/null 2>&1; then
@@ -98,7 +99,7 @@ EOF
       first=
   fi
   if tcc $tempc >/dev/null 2>&1; then
-      run "tcc" "tcc -std=c11 -Ic-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
+      run "tcc" "tcc -std=c11 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
   if lacc $tempc >/dev/null 2>&1; then
@@ -136,8 +137,8 @@ EOF
       run "wasi -O2/wasmtime" "wasi-clang -O2 $bench.c" "wasmtime ./a.out -- $arg" "$expect_out" "$inputf" $first
     fi
   fi
-  run "c2m -eg" "" "./c2m -Ic-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
-  #  run "c2m -ei" "" "./c2m -Ic-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
+  run "c2m -eg" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
+  #  run "c2m -ei" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
   rm -f ./a.out
 }
 
@@ -149,7 +150,7 @@ bench_num=0
 for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat  # ackermann fib random 
 do
     if test $bench_num -ge $start_bench_num; then
-	b=c-benchmarks/$bench
+	b=$srcdir/$bench
 	if test -f $b.arg; then arg=`cat $b.arg`; else arg=; fi
 	echo "+++++ $bench_num:$bench $arg +++++"
 	runbench $b $arg
