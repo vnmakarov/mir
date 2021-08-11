@@ -127,12 +127,3 @@
       `syntax_only_p`, `asm_p`, and `object_p are zero, there will be no output files, only
       the generated MIR module will be kept in memory of the context `ctx`
     * Member `module_num` defines index in the generated MIR module name (if there is any)
-    
-## Current state C to MIR compiler
-  * **On Oct 25 we achieved a successful bootstrap**
-    * `c2m` compiles own sources and generate binary MIR, this binary
-      MIR compiles `c2m` sources again and generate another binary
-      MIR, and the two binary MIR files are identical
-    * The bootstrap test takes about CPU 10 sec (for comparison GCC minimal bootstrap takes about 2 CPU hours)    
-  * ABI compliant calls (multiple return regs, passing structures through regs) has implemented for x86-64, ppc64,
-    aarch64, and s390x
