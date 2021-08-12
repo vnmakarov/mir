@@ -1327,10 +1327,10 @@ struct pattern {
      mcd[s] - double memory with compressed based register (or stack register)
               and 6-bit unsigned displacement scaled by 8
 
-     i -- 2nd or 3rd immediate op for arithemtic insn (12-bit signed)
+     i -- 2nd or 3rd immediate op for arithmetic insn (12-bit signed)
      j -- as i but -j should be also i (it means excluding minimal 12-bit signed) and only 3rd op
      ju -- as j but but rounded to 16 first and only 2nd op
-     iu -- 32-bit signed immediate for arithemtic insn with zero 12 bits as 2nd op
+     iu -- 32-bit signed immediate for arithmetic insn with zero 12 bits as 2nd op
      ia -- any 32-bit signed immediate as 2nd op
      I --  any 64-bit immediate
      s --  immediate shift (5 bits) as 3th op
@@ -1338,10 +1338,10 @@ struct pattern {
      Sp --  nonzero immediate shift (6 bits) as 3th op
      l --  label as the 1st or 2nd op which can be present by signed 13-bit pc offset
 
-     k -- 2nd or 3rd immediate op for arithemtic insn (6-bit signed)
-     kp -- nonzero 2nd or 3rd immediate op for arithemtic insn (6-bit signed)
-     ks -- nonzero 2nd or 3rd immediate op for arithemtic insn (9-bit signed) multiple of 16
-     ku -- 18-bit signed immediate for arithemtic insn with zero low 12-bits as 2nd op
+     k -- 2nd or 3rd immediate op for arithmetic insn (6-bit signed)
+     kp -- nonzero 2nd or 3rd immediate op for arithmetic insn (6-bit signed)
+     ks -- nonzero 2nd or 3rd immediate op for arithmetic insn (9-bit signed) multiple of 16
+     ku -- 18-bit signed immediate for arithmetic insn with zero low 12-bits as 2nd op
      kw -- nonzero scaled by 4 8-bit unsigned immediate
      jus -- imm rounded to 16 first and considered as ks
 

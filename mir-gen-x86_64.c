@@ -1335,7 +1335,7 @@ struct pattern {
   const char *replacement;
 };
 
-// make imm always second operand (symplify for cmp and commutative op)
+// make imm always second operand (simplify for cmp and commutative op)
 // make result of cmp op always a register and memory only the 2nd operand if first is reg,
 // but not for FP (NAN) (simplify)
 // for FP cmp first operand should be always reg (machinize)

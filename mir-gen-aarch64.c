@@ -1247,8 +1247,8 @@ struct pattern {
      Mf - memory of float
      Md - memory of double
      Mld - memory of long double
-     I -- immediate as 3th op for arithemtic insn (12-bit unsigned with possible 12-bit LSL)
-     Iu -- immediate for arithemtic insn roundup to 16
+     I -- immediate as 3th op for arithmetic insn (12-bit unsigned with possible 12-bit LSL)
+     Iu -- immediate for arithmetic insn roundup to 16
      SR -- any immediate for right 64-bit shift (0-63)
      Sr -- any immediate for right 32-bit shift (0-31)
      SL -- any immediate for left 64-bit shift (0-63)
@@ -1854,13 +1854,13 @@ static int arithm_roundup_const (uint64_t v, int *imm) {
 }
 
 /* Return immr for right 64-bit or 32-bit (if SHORT_P) shift by V.  If the
-   shift can not be be represented, return FALSE. */
+   shift can not be represented, return FALSE. */
 static int rshift_const (int64_t v, int short_p) {
   return v < 0 || v > 63 || (short_p && v > 31) ? -1 : v;
 }
 
 /* Return immr and imms for left 64-bit or 32-bit (if SHORT_P) shift
-   by V.  If the shift can not be be represented, return FALSE. */
+   by V.  If the shift can not be represented, return FALSE. */
 static int lshift_const_p (int64_t v, int short_p, int *immr, int *imms) {
   if (short_p) {
     if (v < 0 || v > 31) return FALSE;

@@ -71,7 +71,7 @@ examine existing files `mir-x86_64.c`, `mir-aarhc64.c`,
   
   * `void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t
     ncase)` set up memory block with address `res` by the next block
-    argment of size `s` and `ncase` (e.g. `MIR_T_BLK` has case 0,
+    argument of size `s` and `ncase` (e.g. `MIR_T_BLK` has case 0,
     `MIR_T_BLK + 1` has case 1, and `MIR_T_BLK + MIR_BLK_NUM -1` has
     case `MIR_BLK_NUM - 1`), where `p` is `va_list`
   
@@ -138,7 +138,7 @@ mostly copies of already existing ones.
     file `c2mir.c` and add target standard include and library
     directories in files `c2mir.c` and `c2mir-driver.c`
 
-For debuging MIR interpreter, you can switch on MIR insn excution
+For debugging the MIR interpreter, you can switch on MIR insn execution
 tracing by adding `-DMIR_INTERP_TRACE` for compilation `mir.c` file.
 
 C programs compiled by C2MIR compiler need some compiler specific
@@ -155,14 +155,14 @@ target, you don't need to change anything probably except macros
 related long double, char signedness, wchar, and `va_list`
 definitions.
 
-To run C tests for C2MIR with MIR intepreter you can use `make
+To run C tests for C2MIR with the MIR interpreter you can use `make
 c2mir-interp-test`.
   
 ## Machine-dependent code for MIR-generator (file `mir-gen-<target>.c`)
 
-  The last step for porting MIR is to make MIR generator generates
+  The last step for porting MIR is to make the MIR generator generating
 code for your target. You need to provide the following
-machine-dependent functions and definitions used by MIR-generator:
+machine-dependent functions and definitions used by the MIR-generator:
  
   * `void target_init (MIR_context_t ctx)` and `void target_finish (MIR_context_t ctx)`
     can be used to initialize/finalize data
@@ -174,8 +174,8 @@ machine-dependent functions and definitions used by MIR-generator:
       to use in MIR-code during MIR-generator as C enumerator.
       The enumerator should contains hard regs used for register allocations, stack
       access, parameter passing etc.  All hard registers added in
-      machinize should be here.  MIR generator does not use the enumerator costants but you
-      can use them in `mir-gen-target.c` file for you convinence.  MIR generator only refers for
+      machinize should be here.  The MIR generator does not use the enumerator constants but you
+      can use them in `mir-gen-target.c` file for you convenience.  The MIR generator only refers for
       the following target hard registers descriptions:
 
       * `MAX_HARD_REG` is maximal number of the described hard registers

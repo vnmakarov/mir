@@ -85,7 +85,7 @@ SP,R11->+-- Back chain (optional)                              (SP + 0)
             Alloca area (after that new 160 bytes header should be created with new values)
 
 SP alignment is always 8.
-Originaly SP(r15) and FP (r11) are the same but r15 can be changed by alloca */
+Originally SP(r15) and FP (r11) are the same but r15 can be changed by alloca */
 
 #define S390X_STACK_HEADER_SIZE 160
 #define S390X_GP_REG_RSAVE_AREA_START 16
