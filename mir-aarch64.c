@@ -18,7 +18,7 @@
 
 /* Any small BLK type (less or equal to two quadwords) args are passed in
    *fully* regs or on stack (w/o address), otherwise it is put
-   somehwere on stack and its address passed instead. First RBLK arg
+   somewhere on stack and its address passed instead. First RBLK arg
    is passed in r8. Other RBLK independently of size is always passed
    by address as an usual argument.  */
 

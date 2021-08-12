@@ -3,7 +3,7 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* Simple high-quality multiplicative hash passing demerphq-smhsher,
+/* Simple high-quality multiplicative hash passing demerphq-smhasher,
    faster than spooky, city, or xxhash for strings less 100 bytes.
    Hash for the same key can be different on different architectures.
    To get machine-independent hash, use mir_hash_strict which is about

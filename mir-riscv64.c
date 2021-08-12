@@ -34,7 +34,7 @@ static const int fa0_num = 10;
    BLK: int regs and/or on stack (w/o address)
    BLK1: int regs (even-odd for 9-16 bytes) and/or on stack (w/o address)
 
-   Otherwise any BLK is put somehwere on the stack and its address passed instead.
+   Otherwise any BLK is put somewhere on the stack and its address passed instead.
    All RBLK independently of size is always passed by address as an usual argument.  */
 
 void *_MIR_get_bstart_builtin (MIR_context_t ctx) {

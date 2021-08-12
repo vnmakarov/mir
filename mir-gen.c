@@ -52,7 +52,7 @@
    reg - MIR (pseudo-)register (their numbers are in MIR_OP_REG and MIR_OP_MEM)
    hard reg - MIR hard register (their numbers are in MIR_OP_HARD_REG and MIR_OP_HARD_REG_MEM)
    breg (based reg) - function pseudo registers whose numbers start with zero
-   var - pseudo and hard register (var numbers for psedo-registers
+   var - pseudo and hard register (var numbers for pseudo-registers
          are based reg numbers + MAX_HARD_REG + 1)
    loc - hard register and stack locations (stack slot numbers start with MAX_HARD_REG + 1).
 
@@ -405,7 +405,7 @@ DEF_DLIST (src_mv_t, src_link);
 
 struct reg_info {
   long freq;
-  /* The followd members are defined and used only in RA */
+  /* The following members are defined and used only in RA */
   long thread_freq; /* thread accumulated freq, defined for first thread breg */
   /* first/next breg of the same thread, MIR_MAX_REG_NUM is end mark  */
   MIR_reg_t thread_first, thread_next;
@@ -1477,7 +1477,7 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
    All phi insns always use the same reg to guarantee conventional SSA.  It also means that
    some regs have more one definition but ssa edges represent the correct SSA.  The only
    optimization in the pipeline which would benefit from full renaming is copy propagation (full
-   SSA copy propgation would not keep conventional SSA).
+   SSA copy propagation would not keep conventional SSA).
 */
 
 typedef struct ssa_edge *ssa_edge_t;
@@ -5202,7 +5202,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/* SSA dead code elimnination */
+/* SSA dead code elimination */
 
 static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   MIR_insn_t insn = bb_insn->insn;

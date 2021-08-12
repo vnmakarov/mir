@@ -2773,7 +2773,7 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
     if (nop == 0) return; /* do nothing: it is a prototype */
     if (nop == 1 && op->mode == MIR_OP_REF
         && (op->u.ref->item_type == MIR_import_item || op->u.ref->item_type == MIR_func_item))
-      return; /* do nothing: it is an immediate oeprand */
+      return; /* do nothing: it is an immediate operand */
   }
   if (code == MIR_VA_ARG && nop == 2) return; /* do nothing: this operand is used as a type */
   switch (op->mode) {

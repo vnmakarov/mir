@@ -117,7 +117,7 @@
     * `nargs` and `arg_vars` define only fixed arguments
     * MIR functions can have more one result but possible number of results
       and combination of their types are machine-defined.  For example, for x86-64
-      the function can have upto six results and return two integer
+      the function can have up to six results and return two integer
       values, two float or double values, and two long double values
       in any combination
   * MIR function creation is finished by calling API function `MIR_finish_func (MIR_context_t ctx)`
@@ -445,7 +445,7 @@
 
 ## MIR text examples
 
-  * Sieve of eratosthenes:
+  * Sieve of Eratosthenes:
 
 ```mir
 m_sieve:  module
