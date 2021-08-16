@@ -108,11 +108,11 @@ typedef pthread_attr_t mir_thread_attr_t;
 #define INSN_EL(i) MIR_##i
 
 /* The most MIR insns have destination operand and one or two source
-   operands.  The destination can be ony a register or memory.
+   operands.  The destination can be only a register or memory.
 
    There are additional constraints on insn operands:
 
-   o A register in porgram can contain only one type values: integer,
+   o A register in program can contain only one type values: integer,
      float, double, or long double.
    o Operand types should be what the insn expects */
 typedef enum {
@@ -141,7 +141,7 @@ typedef enum {
   REP7 (INSN_EL, LE, LES, ULE, ULES, FLE, DLE, LDLE),        /* Less or equal */
   REP7 (INSN_EL, GT, GTS, UGT, UGTS, FGT, DGT, LDGT),        /* Greater then */
   REP7 (INSN_EL, GE, GES, UGE, UGES, FGE, DGE, LDGE),        /* Greater or equal */
-  /* Uncoditional (1 operand) and conditional (2 operands) branch
+  /* Unconditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
   REP5 (INSN_EL, JMP, BT, BTS, BF, BFS),
   /* Compare and branch (3 operand) insns.  The first operand is the
@@ -158,7 +158,7 @@ typedef enum {
   REP2 (INSN_EL, CALL, INLINE),
   /* 1st operand is an index, subsequent ops are labels to which goto
      according the index (1st label has index zero).  The insn
-     behaviour is undefined if there is no label for the index. */
+     behavior is undefined if there is no label for the index. */
   INSN_EL (SWITCH),
   /* 1 operand insn: */
   INSN_EL (RET),

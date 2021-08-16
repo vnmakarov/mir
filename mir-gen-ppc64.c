@@ -88,7 +88,7 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t ty
 SP,R31->+-- Back chain                                    (SP + 0)        (SP + 0)
             Alloca area (after that new 48 or 32 bytes header should be created with new values)
 
-Originaly SP(r1) and FP (r31) are the same but r1 can be changed by alloca */
+Originally SP(r1) and FP (r31) are the same but r1 can be changed by alloca */
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define PPC64_STACK_HEADER_SIZE 32
@@ -955,7 +955,7 @@ struct pattern {
      I - 16 bit signed immediate shift left by 16
      u - 16 bit unsigned immediate
      U - 16 bit unsigned immediate shift left by 16
-     x - 64 bit unsigned immediate whose hight 32-bit part is described by pattern 0*1*
+     x - 64 bit unsigned immediate whose high 32-bit part is described by pattern 0*1*
      z - 32-bit unsigned immediate
      zs - 32-bit unsigned immediate with zero 0-th bit
      Z - any integer immediate

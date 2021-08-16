@@ -7095,10 +7095,10 @@ static void check_assignment_types (c2m_ctx_t c2m_ctx, struct type *left, struct
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, POS (assign_node), "%s", msg);
       } else {
         msg = (code == N_CALL
-                 ? "incompatible argument type for arithemtic type parameter"
+                 ? "incompatible argument type for arithmetic type parameter"
                  : code != N_RETURN
-                     ? "incompatible types in assignment to an arithemtic type lvalue"
-                     : "incompatible return-expr type in function returning an arithemtic value");
+                     ? "incompatible types in assignment to an arithmetic type lvalue"
+                     : "incompatible return-expr type in function returning an arithmetic value");
         error (c2m_ctx, POS (assign_node), "%s", msg);
       }
     }
