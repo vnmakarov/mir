@@ -8,7 +8,7 @@ UNAME_M := $(shell uname -m)
 ifeq ($(UNAME_S),Darwin)
     XCRUN := $(shell xcrun --show-sdk-path >/dev/null 2>&1 && echo yes || echo no)
     ifeq ($(XCRUN),yes)
-        ADDITIONAL_INCLUDE_PATH := $(shell xcrun --show-sdk-path)/usr/include
+      ADDITIONAL_INCLUDE_PATH := $(shell xcrun --show-sdk-path)/usr/include
     endif
 endif
 
@@ -118,7 +118,8 @@ debug: CFLAGS:=$(subst $(COPTFLAGS),$(CDEBFLAGS),$(CFLAGS))
 debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES)
 
 install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
+	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
+		       $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
 	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(PREFIX)/lib
 	install -m a+rx $(EXECUTABLES) $(PREFIX)/bin
 
