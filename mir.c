@@ -1185,6 +1185,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of func %s", name);
   }
   func->name = get_ctx_str (ctx, name);
+  func->func_item = func_item;
   func->nres = nres;
   func->res_types = (MIR_type_t *) ((char *) func + sizeof (struct MIR_func));
   for (size_t i = 0; i < nres; i++) func->res_types[i] = canon_type (res_types[i]);
@@ -2220,7 +2221,7 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
     u.ld = op.u.ld;
     return mir_hash_step (mir_hash_step (h, u.u[0]), u.u[1]);
   }
-  case MIR_OP_REF: return mir_hash_step (h, (uint64_t) MIR_item_name (ctx, op.u.ref));
+  case MIR_OP_REF: return mir_hash_step (h, (uint64_t) op.u.ref);
   case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str.s);
   case MIR_OP_MEM:
     h = mir_hash_step (h, (uint64_t) op.u.mem.type);
@@ -2486,7 +2487,10 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
     }
     break;
   }
-  case MIR_OP_REF: fprintf (f, "%s", MIR_item_name (ctx, op.u.ref)); break;
+  case MIR_OP_REF:
+    if (op.u.ref->module != func->func_item->module) fprintf (f, "%s.", op.u.ref->module->name);
+    fprintf (f, "%s", MIR_item_name (ctx, op.u.ref));
+    break;
   case MIR_OP_STR: out_str (f, op.u.str); break;
   case MIR_OP_LABEL: output_label (ctx, f, func, op.u.label); break;
   default: mir_assert (FALSE);
