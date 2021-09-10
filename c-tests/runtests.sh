@@ -10,6 +10,8 @@ ctest_dir=`dirname $0`
 execution_program=$1
 compiler=$2
 
+EGREP=egrep
+
 ECHO=echo
 if test x$BASH_VERSION != x;then
   set +o posix
@@ -68,9 +70,9 @@ do
 	   runtest $ctest_dir/$dir/main.c
 	   continue;
 	fi
-	if test -f $ctest_dir/$dir/add-main.c;then add_main=$ctest_dir/$dir/add-main.c;else add_main=;fi
 	for t in $ctest_dir/$dir/*.c;do
-	    if test x$t = x$add_main;then continue;fi
+	    if $ECHO $t|$EGREP '/add-[a-zA-Z0-9]+.c$' >/dev/null; then continue; fi
+	    if test -f $ctest_dir/$dir/add-`basename $t`;then add_main=$ctest_dir/$dir/add-`basename $t`;else add_main=;fi
 	    runtest $t $add_main
 	done
 done
