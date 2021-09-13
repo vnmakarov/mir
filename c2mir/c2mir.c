@@ -4769,6 +4769,7 @@ D (param_type_list) {
   pos_t pos;
 
   list = new_node (c2m_ctx, N_LIST);
+  if (C (')')) return list;
   for (;;) { /* parameter-list, parameter-declaration */
     PA (declaration_specs, NULL);
     op1 = r;
