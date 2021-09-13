@@ -2175,7 +2175,9 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
   case MIR_OP_DOUBLE: return op1.u.d == op2.u.d;
   case MIR_OP_LDOUBLE: return op1.u.ld == op2.u.ld;
   case MIR_OP_REF:
-    return strcmp (MIR_item_name (ctx, op1.u.ref), MIR_item_name (ctx, op2.u.ref)) == 0;
+    if (op1.u.ref->item_type == MIR_export_item || op1.u.ref->item_type == MIR_import_item)
+      return strcmp (MIR_item_name (ctx, op1.u.ref), MIR_item_name (ctx, op2.u.ref)) == 0;
+    return op1.u.ref == op2.u.ref;
   case MIR_OP_STR:
     return op1.u.str.len == op2.u.str.len && memcmp (op1.u.str.s, op2.u.str.s, op1.u.str.len) == 0;
   case MIR_OP_MEM:
@@ -2221,7 +2223,10 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
     u.ld = op.u.ld;
     return mir_hash_step (mir_hash_step (h, u.u[0]), u.u[1]);
   }
-  case MIR_OP_REF: return mir_hash_step (h, (uint64_t) op.u.ref);
+  case MIR_OP_REF:
+    if (op.u.ref->item_type == MIR_export_item || op.u.ref->item_type == MIR_import_item)
+      return mir_hash_step (h, (uint64_t) MIR_item_name (ctx, op.u.ref));
+    return mir_hash_step (h, (uint64_t) op.u.ref);
   case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str.s);
   case MIR_OP_MEM:
     h = mir_hash_step (h, (uint64_t) op.u.mem.type);
