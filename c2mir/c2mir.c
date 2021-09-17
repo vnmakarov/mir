@@ -1117,7 +1117,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
   for (i = start + 1; i < str_len - 1; i++) {
     if (!string_p && last_c >= 0 && !pre_skip_if_part_p (c2m_ctx))
       error (c2m_ctx, t->pos, "multibyte character");
-    last_c = curr_c = str[i];
+    last_c = curr_c = (unsigned char) str[i];
     if (curr_c != '\\') {
       push_str_char (c2m_ctx, temp, curr_c, type);
       continue;
@@ -1623,11 +1623,21 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       VARR_PUSH (char, symbol_text, curr_c);
       for (curr_c = cs_get (c2m_ctx); curr_c != stop && curr_c != '\n' && curr_c != EOF;
            curr_c = cs_get (c2m_ctx)) {
-        VARR_PUSH (char, symbol_text, curr_c);
+        if (curr_c == '\0') {
+          warning (c2m_ctx, pos, "null character in %s literal ignored",
+                   stop == '"' ? "string" : "char");
+        } else {
+          VARR_PUSH (char, symbol_text, curr_c);
+        }
         if (curr_c != '\\') continue;
         curr_c = cs_get (c2m_ctx);
         if (curr_c == '\n' || curr_c == EOF) break;
-        VARR_PUSH (char, symbol_text, curr_c);
+        if (curr_c == '\0') {
+          warning (c2m_ctx, pos, "null character in %s literal ignored",
+                   stop == '"' ? "string" : "char");
+        } else {
+          VARR_PUSH (char, symbol_text, curr_c);
+        }
       }
       VARR_PUSH (char, symbol_text, curr_c);
       if (curr_c == stop) {
@@ -2600,7 +2610,8 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
     }
   }
   if (VARR_LENGTH (token_arr_t, args) > params_len) {
-    t = VARR_GET (token_t, VARR_GET (token_arr_t, args, params_len), 0);
+    token_arr_t arg = VARR_GET (token_arr_t, args, params_len);
+    if (VARR_LENGTH (token_t, arg) != 0) t = VARR_GET (token_t, arg, 0);
     while (VARR_LENGTH (token_arr_t, args) > params_len) {
       temp_arr = VARR_POP (token_arr_t, args);
       VARR_DESTROY (token_t, temp_arr);
@@ -2626,6 +2637,7 @@ static token_t token_concat (c2m_ctx_t c2m_ctx, token_t t1, token_t t2) {
   set_string_stream (c2m_ctx, VARR_ADDR (char, temp_string), t1->pos, NULL);
   t = get_next_pptoken (c2m_ctx);
   next = get_next_pptoken (c2m_ctx);
+  while (next->code == T_EOU) next = get_next_pptoken (c2m_ctx);
   if (next->code != T_EOFILE) {
     error (c2m_ctx, t1->pos, "wrong result of ##: %s", reverse (temp_string));
     remove_string_stream (c2m_ctx);
@@ -6040,7 +6052,8 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
   } else if (type->mode == TM_ARR) {
     struct arr_type *arr_type = type->u.arr_type;
     struct expr *cexpr = arr_type->size->attr;
-    mir_size_t nel = (arr_type->size->code == N_IGNORE || !cexpr->const_p ? 1 : cexpr->u.i_val);
+    mir_size_t nel
+      = (arr_type->size->code == N_IGNORE || cexpr == NULL || !cexpr->const_p ? 1 : cexpr->u.i_val);
 
     set_type_layout (c2m_ctx, arr_type->el_type);
     overall_size = type_size (c2m_ctx, arr_type->el_type) * nel;
@@ -9318,6 +9331,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       if (p->code == N_ST_ASSERT) continue;
       assert (p->code == N_SPEC_DECL);
       param_declarator = NL_EL (p->u.ops, 1);
+      if (param_declarator->code == N_IGNORE) continue;
       assert (param_declarator->code == N_DECL);
       param_id = NL_HEAD (param_declarator->u.ops);
       assert (param_id->code == N_ID);
