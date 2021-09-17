@@ -63,7 +63,7 @@ do
 	done
 done
 
-for dir in new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
+for dir in havoc new andrewchambers_c gcc lacc # $8cc avltree helloworld *lcc nano ^netlib %picoc set1 $-but-c2m *-but-l2m/c2m ^-but-l2m-gen %-but-clang-l2m
 do
 	$ECHO ++++++++++++++Running tests in $dir+++++++++++++
 	if test -f $ctest_dir/$dir/main.c;then

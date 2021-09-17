@@ -2297,10 +2297,20 @@ static void define (c2m_ctx_t c2m_ctx) {
   }
   if (t->code == ' ') t = get_next_pptoken (c2m_ctx);
   for (; t->code != '\n'; t = get_next_pptoken (c2m_ctx)) {
-    if (t->code == T_DBLNO) t->code = T_RDBLNO;
+    if (t->code == T_DBLNO) {
+      if (VARR_LENGTH (token_t, repl) == 0) {
+        error (c2m_ctx, t->pos, "## at the beginning of a macro expansion");
+        continue;
+      }
+      t->code = T_RDBLNO;
+    }
     VARR_PUSH (token_t, repl, t);
   }
   unget_next_pptoken (c2m_ctx, t);
+  if (VARR_LENGTH (token_t, repl) != 0 && (t = VARR_LAST (token_t, repl))->code == T_RDBLNO) {
+    VARR_POP (token_t, repl);
+    error (c2m_ctx, t->pos, "## at the end of a macro expansion");
+  }
   name = id->repr;
   macro_struct.id = id;
   if (!HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, m)) {
@@ -3063,6 +3073,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
       skip_nl (c2m_ctx, t1, temp_buffer);
       unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOP, N_IGNORE));
       push_back (c2m_ctx, temp_buffer);
+      if (n_errors != 0) VARR_TRUNC (macro_call_t, macro_call_stack, 0); /* can be non-empty */
       assert (VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && !no_out_p);
       no_out_p = TRUE;
       processing (c2m_ctx, TRUE);
@@ -3082,8 +3093,9 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
     skip_nl (c2m_ctx, NULL, temp_buffer);
     unget_next_pptoken (c2m_ctx, new_token (c2m_ctx, t->pos, "", T_EOP, N_IGNORE));
     push_back (c2m_ctx, temp_buffer);
+    if (n_errors != 0) VARR_TRUNC (macro_call_t, macro_call_stack, 0); /* can be non-empty */
     assert (VARR_LENGTH (macro_call_t, macro_call_stack) == 0 && !no_out_p);
-    no_out_p = 1;
+    no_out_p = TRUE;
     processing (c2m_ctx, TRUE);
     no_out_p = 0;
     move_tokens (temp_buffer, output_buffer);
@@ -5741,6 +5753,7 @@ struct decl {
 
 static enum basic_type get_enum_basic_type (const struct type *type) {
   assert (type->mode == TM_ENUM);
+  if (type->u.tag_type->attr == NULL) return TP_INT; /* in case of undefined enum */
   return ((struct enum_type *) type->u.tag_type->attr)->enum_basic_type;
 }
 
@@ -7246,7 +7259,7 @@ static int update_init_object_path (c2m_ctx_t c2m_ctx, size_t mark, struct type 
     }
     VARR_SET (init_object_t, init_object_path, VARR_LENGTH (init_object_t, init_object_path) - 1,
               init_object);
-    if (list_p || scalar_type_p (el_type)) return TRUE;
+    if (list_p || scalar_type_p (el_type) || void_type_p (el_type)) return TRUE;
     assert (el_type->mode == TM_ARR || el_type->mode == TM_STRUCT || el_type->mode == TM_UNION);
     if (el_type->mode != TM_ARR && value_type != NULL
         && el_type->u.tag_type == value_type->u.tag_type)
@@ -9281,6 +9294,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     /* Process parameter identifier list:  */
     assert (declarator->code == N_DECL);
     func = NL_HEAD (NL_EL (declarator->u.ops, 1)->u.ops);
+    /* func can be NULL or non-func in case of error */
+    if (n_errors != 0 && (func == NULL || func->code != N_FUNC)) break;
     assert (func != NULL && func->code == N_FUNC);
     param_list = NL_HEAD (func->u.ops);
     for (p = NL_HEAD (param_list->u.ops); p != NULL; p = next_p) {
