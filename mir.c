@@ -5524,6 +5524,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       scan_token (ctx, &t, get_string_char, unget_string_char);
       if (t.code != TC_COL) break;
       VARR_PUSH (label_name_t, label_names, name);
+      if (module != NULL)
+        process_reserved_name (name, TEMP_ITEM_NAME_PREFIX, &module->last_temp_item_num);
       scan_token (ctx, &t, get_string_char, unget_string_char);
       if (t.code == TC_NL)
         scan_token (ctx, &t, get_string_char, unget_string_char); /* label_names without insn */
