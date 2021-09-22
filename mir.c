@@ -2448,7 +2448,7 @@ static void out_str (FILE *f, MIR_str_t str) {
     else if (str.s[i] == '\f')
       fprintf (f, "\\f");
     else
-      fprintf (f, "\\%03o", str.s[i]);
+      fprintf (f, "\\%03o", (unsigned char) str.s[i]);
   fprintf (f, "\"");
 }
 
