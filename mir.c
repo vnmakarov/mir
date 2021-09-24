@@ -2322,6 +2322,7 @@ void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   mir_assert (func_item != NULL && func_item->item_type == MIR_func_item);
   func = func_item->u.func;
   mir_assert (DLIST_HEAD (MIR_insn_t, func->original_insns) == NULL);
+  func->original_vars_num = VARR_LENGTH (MIR_var_t, func->vars);
   func->original_insns = func->insns;
   DLIST_INIT (MIR_insn_t, func->insns);
   VARR_CREATE (MIR_insn_t, labels, 0);
@@ -2343,6 +2344,20 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
 
   mir_assert (func_item != NULL && func_item->item_type == MIR_func_item);
   func = func_item->u.func;
+  while (VARR_LENGTH (MIR_var_t, func->vars) > func->original_vars_num) {
+    reg_desc_t *rd;
+    int res_p = TRUE;
+    size_t rdn, tab_rdn;
+    MIR_var_t var = VARR_POP (MIR_var_t, func->vars);
+    func_regs_t func_regs = func->internal;
+
+    rd = find_rd_by_name (ctx, var.name, func);
+    mir_assert (rd != NULL);
+    rdn = rd - VARR_ADDR (reg_desc_t, func_regs->reg_descs);
+    res_p &= HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_DELETE, tab_rdn);
+    res_p &= HTAB_DO (size_t, func_regs->reg2rdn_tab, rdn, HTAB_DELETE, tab_rdn);
+    mir_assert (res_p);
+  }
   while ((insn = DLIST_HEAD (MIR_insn_t, func->insns)) != NULL)
     MIR_remove_insn (ctx, func_item, insn);
   func->insns = func->original_insns;
