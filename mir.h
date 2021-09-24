@@ -315,6 +315,7 @@ DEF_VARR (MIR_var_t);
 typedef struct MIR_func {
   const char *name;
   MIR_item_t func_item;
+  size_t original_vars_num;
   DLIST (MIR_insn_t) insns, original_insns;
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
