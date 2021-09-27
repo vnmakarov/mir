@@ -5525,7 +5525,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   t.code = TC_NL;
   for (;;) {
     if (setjmp (error_jmp_buf)) {
-      while (t.code != TC_NL && t.code != EOF)
+      while (t.code != TC_NL && t.code != TC_EOFILE)
         scan_token (ctx, &t, get_string_char, unget_string_char);
       if (t.code == TC_EOFILE) break;
     }
