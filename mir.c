@@ -3836,6 +3836,19 @@ static void code_finish (MIR_context_t ctx) {
 
 /* New Page */
 
+#if !MIR_NO_IO || !MIR_NO_SCAN
+static void process_reserved_name (const char *s, const char *prefix, uint32_t *max_num) {
+  char *end;
+  uint32_t num;
+  size_t len = strlen (prefix);
+
+  if (strncmp (s, prefix, len) != 0) return;
+  num = strtoul (s + len, &end, 10);
+  if (*end != '\0') return;
+  if (*max_num < num) *max_num = num;
+}
+#endif
+
 #if !MIR_NO_IO
 
 /* Input/output of binary MIR.  Major goal of binary MIR is fast
@@ -4460,17 +4473,6 @@ static MIR_str_t to_str (MIR_context_t ctx, uint64_t str_num) {
   if (str_num >= VARR_LENGTH (MIR_str_t, bin_strings))
     MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong string num %lu", str_num);
   return VARR_GET (MIR_str_t, bin_strings, str_num);
-}
-
-static void process_reserved_name (const char *s, const char *prefix, uint32_t *max_num) {
-  char *end;
-  uint32_t num;
-  size_t len = strlen (prefix);
-
-  if (strncmp (s, prefix, len) != 0) return;
-  num = strtoul (s + len, &end, 10);
-  if (*end != '\0') return;
-  if (*max_num < num) *max_num = num;
 }
 
 static MIR_reg_t to_reg (MIR_context_t ctx, uint64_t reg_str_num, MIR_item_t func) {
