@@ -5925,8 +5925,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (func != NULL) MIR_append_insn (ctx, func, insn);
     }
   }
-  if (func != NULL) { func = NULL; scan_error (ctx, "absent endfunc"); }
-  if (module != NULL) { module = NULL; scan_error (ctx, "absent endmodule"); }
+  if (func != NULL) { if (!setjmp(error_jmp_buf)) scan_error (ctx, "absent endfunc"); }
+  if (module != NULL) { if (!setjmp(error_jmp_buf)) scan_error (ctx, "absent endmodule"); }
   if (VARR_LENGTH (char, error_msg_buf) != 0)
     MIR_get_error_func (ctx) (MIR_syntax_error, VARR_ADDR (char, error_msg_buf));
 }
