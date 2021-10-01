@@ -634,12 +634,17 @@ MIR_context_t _MIR_init (void) {
   return ctx;
 }
 
-void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) {
+static void remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
+                         DLIST (MIR_insn_t) * insns) {
   mir_assert (func_item != NULL);
   if (func_item->item_type != MIR_func_item)
     MIR_get_error_func (ctx) (MIR_wrong_param_value_error, "MIR_remove_insn: wrong func item");
-  DLIST_REMOVE (MIR_insn_t, func_item->u.func->insns, insn);
+  DLIST_REMOVE (MIR_insn_t, *insns, insn);
   free (insn);
+}
+
+void MIR_remove_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn) {
+  remove_insn (ctx, func_item, insn, &func_item->u.func->insns);
 }
 
 static void remove_func_insns (MIR_context_t ctx, MIR_item_t func_item,
@@ -648,7 +653,7 @@ static void remove_func_insns (MIR_context_t ctx, MIR_item_t func_item,
 
   mir_assert (func_item->item_type == MIR_func_item);
   while ((insn = DLIST_HEAD (MIR_insn_t, *insns)) != NULL) {
-    MIR_remove_insn (ctx, func_item, insn);
+    remove_insn (ctx, func_item, insn, insns);
   }
 }
 

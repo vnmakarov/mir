@@ -656,7 +656,10 @@ DEF_VARR (const_ref_t);
 struct label_ref {
   int abs_addr_p;
   size_t label_val_disp, next_insn_disp;
-  MIR_label_t label;
+  union {
+    MIR_label_t label;
+    void *jump_addr; /* absolute addr for BBV */
+  } u;
 };
 
 typedef struct label_ref label_ref_t;
@@ -669,6 +672,8 @@ DEF_VARR (MIR_code_reloc_t);
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p;
   int start_sp_from_bp_offset;
+  MIR_insn_t temp_jump;
+  const char *temp_jump_replacement;
   VARR (int) * pattern_indexes;
   VARR (insn_pattern_info_t) * insn_pattern_info;
   VARR (uint8_t) * result_code;
@@ -683,6 +688,8 @@ struct target_ctx {
 #define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define start_sp_from_bp_offset gen_ctx->target_ctx->start_sp_from_bp_offset
+#define temp_jump gen_ctx->target_ctx->temp_jump
+#define temp_jump_replacement gen_ctx->target_ctx->temp_jump_replacement
 #define pattern_indexes gen_ctx->target_ctx->pattern_indexes
 #define insn_pattern_info gen_ctx->target_ctx->insn_pattern_info
 #define result_code gen_ctx->target_ctx->result_code
@@ -2090,7 +2097,8 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *r
   return VARR_LENGTH (const_ref_t, const_refs) - 1;
 }
 
-static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement) {
+static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement,
+                      void **jump_addrs) {
   MIR_context_t ctx = gen_ctx->ctx;
   const char *p, *insn_str;
   label_ref_t lr;
@@ -2274,7 +2282,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (op.mode == MIR_OP_LABEL);
         lr.abs_addr_p = FALSE;
         lr.label_val_disp = lr.next_insn_disp = 0;
-        lr.label = op.u.label;
+        if (jump_addrs == NULL)
+          lr.u.label = op.u.label;
+        else
+          lr.u.jump_addr = jump_addrs[0];
         gen_assert (label_ref_num < 0 && disp32 < 0);
         disp32 = 0; /* To reserve the space */
         label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
@@ -2396,7 +2407,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     gen_assert (insn->ops[i].mode == MIR_OP_LABEL);
     lr.abs_addr_p = TRUE;
     lr.label_val_disp = VARR_LENGTH (uint8_t, result_code);
-    lr.label = insn->ops[i].u.label;
+    if (jump_addrs == NULL)
+      lr.u.label = insn->ops[i].u.label;
+    else
+      lr.u.jump_addr = jump_addrs[i - 1];
     VARR_PUSH (label_ref_t, label_refs, lr);
     put_uint64 (gen_ctx, 0, 8);
   }
@@ -2411,18 +2425,49 @@ static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   return find_insn_pattern_replacement (gen_ctx, insn) != NULL;
 }
 
-static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  size_t i;
-  MIR_insn_t insn;
-  const char *replacement;
-
-  gen_assert (curr_func_item->item_type == MIR_func_item);
+static void translate_init (gen_ctx_t gen_ctx) {
   VARR_TRUNC (uint8_t, result_code, 0);
   VARR_TRUNC (uint64_t, const_pool, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);
   VARR_TRUNC (label_ref_t, label_refs, 0);
   VARR_TRUNC (uint64_t, abs_address_locs, 0);
+}
+
+static uint8_t *translate_finish (gen_ctx_t gen_ctx, size_t *len) {
+  /* Setting up labels */
+  for (size_t i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
+    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
+
+    if (!lr.abs_addr_p) {
+      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+                 (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.next_insn_disp, 4);
+    } else {
+      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+                 (int64_t) get_label_disp (gen_ctx, lr.u.label), 8);
+      VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
+    }
+  }
+  while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
+    VARR_PUSH (uint8_t, result_code, 0);
+  for (size_t i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) { /* Add pool constants */
+    const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
+
+    set_int64 (VARR_ADDR (uint8_t, result_code) + cr.pc,
+               VARR_LENGTH (uint8_t, result_code) - cr.next_insn_disp, 4);
+    put_uint64 (gen_ctx, VARR_GET (uint64_t, const_pool, cr.const_num), 8);
+    put_uint64 (gen_ctx, 0, 8); /* keep 16 bytes align */
+  }
+  *len = VARR_LENGTH (uint8_t, result_code);
+  return VARR_ADDR (uint8_t, result_code);
+}
+
+static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t insn;
+  const char *replacement;
+
+  gen_assert (curr_func_item->item_type == MIR_func_item);
+  translate_init (gen_ctx);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
@@ -2434,36 +2479,11 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
         exit (1);
       } else {
-        gen_assert (replacement != NULL);
-        out_insn (gen_ctx, insn, replacement);
+        out_insn (gen_ctx, insn, replacement, NULL);
       }
     }
   }
-  /* Setting up labels */
-  for (i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
-    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
-
-    if (!lr.abs_addr_p) {
-      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                 (int64_t) get_label_disp (gen_ctx, lr.label) - (int64_t) lr.next_insn_disp, 4);
-    } else {
-      set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-                 (int64_t) get_label_disp (gen_ctx, lr.label), 8);
-      VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
-    }
-  }
-  while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
-    VARR_PUSH (uint8_t, result_code, 0);
-  for (i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) { /* Add pool constants */
-    const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
-
-    set_int64 (VARR_ADDR (uint8_t, result_code) + cr.pc,
-               VARR_LENGTH (uint8_t, result_code) - cr.next_insn_disp, 4);
-    put_uint64 (gen_ctx, VARR_GET (uint64_t, const_pool, cr.const_num), 8);
-    put_uint64 (gen_ctx, 0, 8); /* keep 16 bytes align */
-  }
-  *len = VARR_LENGTH (uint8_t, result_code);
-  return VARR_ADDR (uint8_t, result_code);
+  return translate_finish (gen_ctx, len);
 }
 
 static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
@@ -2479,7 +2499,124 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
                         VARR_ADDR (MIR_code_reloc_t, relocs));
 }
 
+struct target_bb_version {
+  uint8_t *base;
+  label_ref_t branch_ref; /* label cand used for jump to this bb version */
+};
+
+static void target_init_bb_version_data (target_bb_version_t data) {
+  data->base = NULL; /* we don't know origin branch */
+}
+
+static void target_bb_translate_start (gen_ctx_t gen_ctx) {
+  VARR_TRUNC (uint8_t, result_code, 0);
+  VARR_TRUNC (uint64_t, const_pool, 0);
+  VARR_TRUNC (const_ref_t, const_refs, 0);
+  VARR_TRUNC (label_ref_t, label_refs, 0);
+  VARR_TRUNC (uint64_t, abs_address_locs, 0);
+}
+
+static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void **jump_addrs) {
+  const char *replacement;
+  if (insn->code == MIR_LABEL) return;
+  replacement = find_insn_pattern_replacement (gen_ctx, insn);
+  gen_assert (replacement != NULL);
+  out_insn (gen_ctx, insn, replacement, jump_addrs);
+}
+
+static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
+  out_insn (gen_ctx, temp_jump, temp_jump_replacement, jump_addrs);
+}
+
+static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
+#if 0
+  /* Setting up absolute labels */
+  for (size_t i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
+    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
+    if (!lr.abs_addr_p) continue;
+    set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
+               (int64_t) get_label_disp (gen_ctx, lr.u.label), 8);
+    VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
+  }
+#endif
+  while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
+    VARR_PUSH (uint8_t, result_code, 0);
+  for (size_t i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) { /* Add pool constants */
+    const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
+
+    set_int64 (VARR_ADDR (uint8_t, result_code) + cr.pc,
+               VARR_LENGTH (uint8_t, result_code) - cr.next_insn_disp, 4);
+    put_uint64 (gen_ctx, VARR_GET (uint64_t, const_pool, cr.const_num), 8);
+    put_uint64 (gen_ctx, 0, 8); /* keep 16 bytes align */
+  }
+  *len = VARR_LENGTH (uint8_t, result_code);
+  return VARR_ADDR (uint8_t, result_code);
+}
+
+static void setup_rel32 (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *addr) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  int64_t offset = (int64_t) addr - (int64_t) (base + lr->next_insn_disp);
+  int32_t rel32 = offset;
+
+  assert (!lr->abs_addr_p && INT32_MIN <= offset && offset <= INT32_MAX);
+  _MIR_change_code (ctx, (char *) base + lr->label_val_disp, (uint8_t *) &rel32, 4);
+}
+
+static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_code_reloc_t reloc;
+
+  /* Setting up relative labels */
+  for (size_t i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
+    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
+    if (lr.abs_addr_p) {
+      _MIR_change_code (ctx, (char *) base + lr.label_val_disp, (uint8_t *) &lr.u.jump_addr, 8);
+    } else {
+      setup_rel32 (gen_ctx, &lr, base, lr.u.jump_addr);
+    }
+  }
+  VARR_TRUNC (MIR_code_reloc_t, relocs, 0);
+  for (size_t i = 0; i < VARR_LENGTH (uint64_t, abs_address_locs); i++) {
+    reloc.offset = VARR_GET (uint64_t, abs_address_locs, i);
+    reloc.value = base + get_int64 (base + reloc.offset, 8);
+    VARR_PUSH (MIR_code_reloc_t, relocs, reloc);
+  }
+  _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
+                        VARR_ADDR (MIR_code_reloc_t, relocs));
+}
+
+static void target_setup_succ_bb_version_data (gen_ctx_t gen_ctx, uint8_t *base) {
+  if (VARR_LENGTH (label_ref_t, label_refs)
+      != VARR_LENGTH (target_bb_version_t, target_succ_bb_versions))
+    /* We can have more one possible branch from original insn
+       (e.g. SWITCH, FBNE).  If it is so, we will make jumps only
+       through BB thunk. */
+    return;
+  for (size_t i = 0; i < VARR_LENGTH (target_bb_version_t, target_succ_bb_versions); i++) {
+    target_bb_version_t data = VARR_GET (target_bb_version_t, target_succ_bb_versions, i);
+    if (data == NULL) continue;
+    data->branch_ref = VARR_GET (label_ref_t, label_refs, i);
+    data->base = base;
+  }
+}
+
+static void target_redirect_bb_origin_branch (gen_ctx_t gen_ctx, target_bb_version_t data,
+                                              void *addr) {
+  MIR_context_t ctx = gen_ctx->ctx;
+
+  if (data->base == NULL) return;
+  if (data->branch_ref.abs_addr_p) {
+    _MIR_change_code (ctx, (char *) data->base + data->branch_ref.label_val_disp, (uint8_t *) &addr,
+                      8);
+  } else {
+    setup_rel32 (gen_ctx, &data->branch_ref, data->base, addr);
+  }
+  data->base = NULL;
+}
+
 static void target_init (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, 0);
   VARR_CREATE (uint64_t, const_pool, 0);
@@ -2491,6 +2628,8 @@ static void target_init (gen_ctx_t gen_ctx) {
   MIR_var_t args[] = {{MIR_T_D, "src"}};
   _MIR_register_unspec_insn (gen_ctx->ctx, MOVDQA_CODE, "movdqa", 1, &res, 1, FALSE, args);
   patterns_init (gen_ctx);
+  temp_jump = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, NULL));
+  temp_jump_replacement = find_insn_pattern_replacement (gen_ctx, temp_jump);
 }
 
 static void target_finish (gen_ctx_t gen_ctx) {

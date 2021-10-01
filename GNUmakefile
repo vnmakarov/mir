@@ -501,12 +501,14 @@ c2mir-test: c2mir-simple-test c2mir-full-test
 c2mir-simple-test: $(BUILD_DIR)/c2m$(EXE)
 	$(BUILD_DIR)/c2m$(EXE) -v $(SRC_DIR)/sieve.c -ei
 
-c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap
+c2mir-full-test: c2mir-interp-test c2mir-gen-test c2mir-bb-gen-test c2mir-gen-test0 c2mir-gen-test1 c2mir-gen-test3 c2mir-bootstrap
 
 c2mir-interp-test: $(BUILD_DIR)/c2m$(EXE)
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-c2m-interp $(BUILD_DIR)/c2m$(EXE)
 c2mir-gen-test: $(BUILD_DIR)/c2m$(EXE)
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-c2m-gen $(BUILD_DIR)/c2m$(EXE)
+c2mir-bb-gen-test: $(BUILD_DIR)/c2m$(EXE)
+	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-c2m-gen-bb $(BUILD_DIR)/c2m$(EXE)
 c2mir-parallel-gen-test: $(BUILD_DIR)/c2m$(EXE)
 	$(SHELL) $(SRC_DIR)/c-tests/runtests.sh $(SRC_DIR)/c-tests/use-c2m-parallel-gen $(BUILD_DIR)/c2m$(EXE)
 c2mir-gen-test0: $(BUILD_DIR)/c2m$(EXE)
@@ -521,10 +523,10 @@ c2mir-gen-test3: $(BUILD_DIR)/c2m$(EXE)
 .PHONY: c2mir-bootstrap c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test c2mir-bootstrap-test3
 .PHONY: c2mir-parallel-bootstrap-test c2mir-bootstrap-test4 c2mir-bootstrap-test5
 
-c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test
+c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-bb-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test
 
 c2mir-bootstrap-test0: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O0 '... '
+	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with -O0 '... '
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -O0 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o0.bmir
 	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) -O0 $(BUILD_DIR)/1o0.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O0\
@@ -534,7 +536,7 @@ c2mir-bootstrap-test0: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) rm -rf $(BUILD_DIR)/1o0.bmir $(BUILD_DIR)/2o0.bmir
 
 c2mir-bootstrap-test1: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O1 '... '
+	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with -O1 '... '
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -O1 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o1.bmir
 	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) -O1 $(BUILD_DIR)/1o1.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O1\
@@ -544,7 +546,7 @@ c2mir-bootstrap-test1: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) rm -rf $(BUILD_DIR)/1o1.bmir $(BUILD_DIR)/2o1.bmir
 
 c2mir-bootstrap-test: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Test with default optimize level '... '
+	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with default optimize level '... '
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o2.bmir
 	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) $(BUILD_DIR)/1o2.bmir -el -w $(C2M_BOOTSTRAP_FLAGS)\
@@ -553,8 +555,18 @@ c2mir-bootstrap-test: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) cmp $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir
 
+c2mir-bootstrap-bb-test: $(BUILD_DIR)/c2m$(EXE)
+	$(Q) echo -n +++++++ C2MIR Bootstrap lazy bb test with default optimize level '... '
+	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
+	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o2.bmir
+	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) $(BUILD_DIR)/1o2.bmir -p4 -eb -w $(C2M_BOOTSTRAP_FLAGS)\
+	                    -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
+			     $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/2o2.bmir
+	$(Q) cmp $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir && echo Passed || echo FAIL
+	$(Q) rm -rf $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir
+
 c2mir-bootstrap-test3: $(BUILD_DIR)/c2m$(EXE)
-	$(Q) echo -n +++++++ C2MIR Bootstrap Test with -O3 '... '
+	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with -O3 '... '
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -O3 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o3.bmir
 	$(Q) $(BUILD_DIR)/c2m$(EXE) $(C2M_BOOTSTRAP_FLAGS) -O3 $(BUILD_DIR)/1o3.bmir -el -w $(C2M_BOOTSTRAP_FLAGS) -O3\
@@ -669,6 +681,9 @@ c2mir-sieve-bench: $(BUILD_DIR)/c2m
 c2mir-bench: $(BUILD_DIR)/c2m
 	$(SRC_DIR)/c-benchmarks/run-benchmarks.sh
 
+c2mir-bench-short: $(BUILD_DIR)/c2m
+	$(SRC_DIR)/c-benchmarks/run-benchmarks.sh short
+
 mir2c-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir2c/mir2c.c
 	$(COMPILE_AND_LINK) -DTEST_MIR2C $^ $(EXEO)$(BUILD_DIR)/mir2c-bench$(EXE) $(LDLIBS)
 	$(BUILD_DIR)/mir2c-bench -v && size $(BUILD_DIR)/mir2c-bench
@@ -717,7 +732,7 @@ oggenc-bench:
 	$(SHELL) $(SRC_DIR)/c-benchmarks/run-oggenc.sh
 
 # Very long testing (hours and hours):
-csmith: csmith-c2m-gcc csmit-c2m
+csmith: csmith-c2m-gcc csmith-c2m
 
 csmith-c2m-gcc:
 	$(SHELL) csmith-c2m-gcc.sh

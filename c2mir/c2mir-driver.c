@@ -138,7 +138,7 @@ typedef const char *char_ptr_t;
 DEF_VARR (char_ptr_t);
 static VARR (char_ptr_t) * headers;
 
-static int interp_exec_p, gen_exec_p, lazy_gen_exec_p;
+static int interp_exec_p, gen_exec_p, lazy_gen_exec_p, lazy_bb_gen_exec_p;
 static VARR (char_ptr_t) * exec_argv;
 static VARR (char_ptr_t) * source_file_names;
 
@@ -299,14 +299,16 @@ static void init_options (int argc, char *argv[]) {
     } else if (strcmp (argv[i], "-i") == 0) {
       VARR_PUSH (char_ptr_t, source_file_names, STDIN_SOURCE_NAME);
     } else if (strcmp (argv[i], "-ei") == 0 || strcmp (argv[i], "-eg") == 0
-               || strcmp (argv[i], "-el") == 0) {
+               || strcmp (argv[i], "-el") == 0 || strcmp (argv[i], "-eb") == 0) {
       VARR_TRUNC (char_ptr_t, exec_argv, 0);
       if (strcmp (argv[i], "-ei") == 0)
         interp_exec_p = TRUE;
       else if (strcmp (argv[i], "-eg") == 0)
         gen_exec_p = TRUE;
-      else
+      else if (strcmp (argv[i], "-el") == 0)
         lazy_gen_exec_p = TRUE;
+      else
+        lazy_bb_gen_exec_p = TRUE;
       VARR_PUSH (char_ptr_t, exec_argv, "c2m");
       for (i++; i < argc; i++) VARR_PUSH (char_ptr_t, exec_argv, argv[i]);
     } else if (strcmp (argv[i], "-s") == 0 && i + 1 < argc) { /* C code from cmd line */
@@ -338,6 +340,7 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -ei -- execute code in the interpreter\n");
       fprintf (stderr, "  -eg -- execute code generated with given options\n");
       fprintf (stderr, "  -el -- execute code lazily generated code with given options\n");
+      fprintf (stderr, "  -eb -- execute code lazily generated BB code with given options\n");
       exit (0);
     } else {
       fprintf (stderr, "unknown command line option %s (use -h for usage) -- goodbye\n", argv[i]);
@@ -637,7 +640,7 @@ int main (int argc, char *argv[], char *env[]) {
   int i, bin_p;
   size_t len;
 
-  interp_exec_p = gen_exec_p = lazy_gen_exec_p = FALSE;
+  interp_exec_p = gen_exec_p = lazy_gen_exec_p = lazy_bb_gen_exec_p = FALSE;
   VARR_CREATE (void_ptr_t, allocated, 100);
   VARR_CREATE (char_ptr_t, source_file_names, 32);
   VARR_CREATE (char_ptr_t, exec_argv, 32);
@@ -793,7 +796,7 @@ int main (int argc, char *argv[], char *env[]) {
     if (main_func == NULL) {
       fprintf (stderr, "cannot link program w/o main function\n");
       result_code = 1;
-    } else if (!interp_exec_p && !gen_exec_p && !lazy_gen_exec_p) {
+    } else if (!interp_exec_p && !gen_exec_p && !lazy_gen_exec_p && !lazy_bb_gen_exec_p) {
       const char *file_name
         = options.output_file_name == NULL ? "a.bmir" : options.output_file_name;
       FILE *f = fopen (file_name, "wb");
@@ -831,6 +834,8 @@ int main (int argc, char *argv[], char *env[]) {
         }
       } else {
         int n_gen = gen_debug_p || threads_num == 0 ? 1 : threads_num;
+        int fun_argc = (int) VARR_LENGTH (char_ptr_t, exec_argv);
+        const char **fun_argv = VARR_ADDR (char_ptr_t, exec_argv);
 
         MIR_gen_init (main_ctx, n_gen);
         for (int i = 0; i < n_gen; i++) {
@@ -839,13 +844,13 @@ int main (int argc, char *argv[], char *env[]) {
           if (gen_debug_p) MIR_gen_set_debug_file (main_ctx, i, stderr);
         }
         MIR_link (main_ctx,
-                  gen_exec_p ? (n_gen > 1 ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
-                             : MIR_set_lazy_gen_interface,
+                  gen_exec_p
+                    ? (n_gen > 1 ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
+                    : lazy_gen_exec_p ? MIR_set_lazy_gen_interface : MIR_set_lazy_bb_gen_interface,
                   import_resolver);
         fun_addr = gen_exec_p && n_gen > 1 ? MIR_gen (main_ctx, 0, main_func) : main_func->addr;
         start_time = real_usec_time ();
-        result_code
-          = fun_addr (VARR_LENGTH (char_ptr_t, exec_argv), VARR_ADDR (char_ptr_t, exec_argv), env);
+        result_code = fun_addr (fun_argc, fun_argv, env);
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);

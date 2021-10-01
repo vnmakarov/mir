@@ -135,6 +135,12 @@ struct all_gen_ctx;
 typedef struct bb_insn *bb_insn_t;
 DEF_VARR (bb_insn_t);
 
+typedef struct target_bb_version *target_bb_version_t;
+DEF_VARR (target_bb_version_t);
+
+typedef void *void_ptr_t;
+DEF_VARR (void_ptr_t);
+
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
   int gen_num; /* always 1 for non-parallel generation */
@@ -167,6 +173,9 @@ struct gen_ctx {
   int max_int_hard_regs, max_fp_hard_regs;
   /* Slots num for variables.  Some variable can take several slots and can be aligned. */
   size_t func_stack_slots_num;
+  VARR (target_bb_version_t) * target_succ_bb_versions;
+  VARR (void_ptr_t) * succ_bb_addrs;
+  void *bb_wrapper; /* to jump to lazy basic block generation */
 };
 
 #define optimize_level gen_ctx->optimize_level
@@ -188,14 +197,32 @@ struct gen_ctx {
 #define max_int_hard_regs gen_ctx->max_int_hard_regs
 #define max_fp_hard_regs gen_ctx->max_fp_hard_regs
 #define func_stack_slots_num gen_ctx->func_stack_slots_num
+#define target_succ_bb_versions gen_ctx->target_succ_bb_versions
+#define succ_bb_addrs gen_ctx->succ_bb_addrs
+#define bb_wrapper gen_ctx->bb_wrapper
 
-DEF_VARR (MIR_item_t);
+typedef struct bb_version *bb_version_t;
+
+struct func_or_bb {
+  /* full_p is used only when func_p and means generation machine code for full func */
+  char func_p, full_p;
+  union {
+    MIR_item_t func_item;
+    bb_version_t bb_version;
+  } u;
+};
+
+typedef struct func_or_bb func_or_bb_t;
+DEF_VARR (func_or_bb_t);
+
+static struct func_or_bb null_func_or_bb = {TRUE, TRUE, {NULL}};
+
 struct all_gen_ctx {
 #if MIR_PARALLEL_GEN
   mir_mutex_t queue_mutex;
   mir_cond_t generate_signal, done_signal;
   size_t funcs_start;
-  VARR (MIR_item_t) * funcs_to_generate;
+  VARR (func_or_bb_t) * code_to_generate;
 #endif
   MIR_context_t ctx;
   size_t gens_num; /* size of the following array: */
@@ -207,7 +234,7 @@ struct all_gen_ctx {
 #define generate_signal all_gen_ctx->generate_signal
 #define done_signal all_gen_ctx->done_signal
 #define funcs_start all_gen_ctx->funcs_start
-#define funcs_to_generate all_gen_ctx->funcs_to_generate
+#define code_to_generate all_gen_ctx->code_to_generate
 #endif
 
 static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
@@ -234,6 +261,33 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
 #else
 #error "undefined or unsupported generation target"
 #endif
+
+typedef struct attr_value {
+  unsigned value, attr;
+} attr_value_t;
+
+typedef struct bb_stub *bb_stub_t;
+DEF_DLIST_LINK (bb_version_t);
+
+struct bb_version {
+  bb_stub_t bb_stub;
+  DLIST_LINK (bb_version_t) bb_version_link;
+  int call_p;
+  unsigned n_attrs;
+  attr_value_t attrs[1];
+  void *addr; /* bb code address or generator creating and returning address */
+  void *machine_code;
+  struct target_bb_version target_data; /* data container for the target code */
+};
+
+/* Definition of double list of bb_version_t type elements */
+DEF_DLIST (bb_version_t, bb_version_link);
+
+struct bb_stub {
+  DLIST (bb_version_t) bb_versions;
+  MIR_item_t func_item;
+  MIR_insn_t first_insn, last_insn;
+};
 
 static void MIR_NO_RETURN util_error (gen_ctx_t gen_ctx, const char *message) {
   (*MIR_get_error_func (gen_ctx->ctx)) (MIR_alloc_error, message);
@@ -5279,7 +5333,7 @@ static void parallel_error (MIR_context_t ctx, const char *err_message) {
   MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
 }
 
-void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
+static void *func_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item, int machine_code_p) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
   uint8_t *code;
@@ -5417,20 +5471,23 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
-  code = target_translate (gen_ctx, &code_len);
-  machine_code = func_item->u.func->call_addr = _MIR_publish_code (ctx, code, code_len);
-  target_rebase (gen_ctx, func_item->u.func->call_addr);
+  if (machine_code_p) {
+    code = target_translate (gen_ctx, &code_len);
+    machine_code = func_item->u.func->call_addr = _MIR_publish_code (ctx, code, code_len);
+    target_rebase (gen_ctx, func_item->u.func->call_addr);
 #if MIR_GEN_CALL_TRACE
-  func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
+    func_item->u.func->call_addr = _MIR_get_wrapper (ctx, func_item, print_and_execute_wrapper);
 #endif
-  DEBUG ({
-    _MIR_dump_code (NULL, gen_ctx->gen_num, machine_code, code_len);
-    fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
-  });
-  _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+    DEBUG ({
+      _MIR_dump_code (NULL, gen_ctx->gen_num, machine_code, code_len);
+      fprintf (debug_file, "code size = %lu:\n", (unsigned long) code_len);
+    });
+    _MIR_redirect_thunk (ctx, func_item->addr, func_item->u.func->call_addr);
+  }
   destroy_func_live_ranges (gen_ctx);
   if (optimize_level != 0) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (gen_ctx);
+  if (!machine_code_p) return NULL;
   DEBUG ({
     fprintf (debug_file,
              "Generation of code for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
@@ -5450,6 +5507,10 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
 #endif
   return func_item->addr;
+}
+
+void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
+  return func_gen (ctx, gen_num, func_item, TRUE);
 }
 
 void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f) {
@@ -5482,9 +5543,93 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   optimize_level = level;
 }
 
+static void gen_bb_version1 (gen_ctx_t gen_ctx, bb_version_t bb_version);
+static void *gen_bb_version (gen_ctx_t gen_ctx, bb_version_t bb_version);
+
+/* create bb stubs and set up label data to the corresponding bb stub */
+/* todo finish bb on calls ??? */
+static void create_bb_stubs (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t insn, last_lab_insn;
+  size_t n_bbs;
+  int new_bb_p = TRUE;
+  bb_stub_t bb_stubs;
+
+  n_bbs = 0;
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = DLIST_NEXT (MIR_insn_t, insn)) {
+    if (insn->code == MIR_LABEL || new_bb_p) {
+      last_lab_insn = insn;
+      if (insn->code == MIR_LABEL)
+        for (insn = DLIST_NEXT (MIR_insn_t, insn); insn != NULL && insn->code == MIR_LABEL;
+             last_lab_insn = insn, insn = DLIST_NEXT (MIR_insn_t, insn))
+          ;
+      insn = last_lab_insn;
+      n_bbs++;
+    }
+    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH;
+  }
+  curr_func_item->data = bb_stubs = gen_malloc (gen_ctx, sizeof (struct bb_stub) * n_bbs);
+  n_bbs = 0;
+  new_bb_p = TRUE;
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = DLIST_NEXT (MIR_insn_t, insn)) {
+    if (insn->code == MIR_LABEL || new_bb_p) {
+      if (n_bbs != 0) bb_stubs[n_bbs - 1].last_insn = DLIST_PREV (MIR_insn_t, insn);
+      bb_stubs[n_bbs].func_item = curr_func_item;
+      bb_stubs[n_bbs].first_insn = insn;
+      DLIST_INIT (bb_version_t, bb_stubs[n_bbs].bb_versions);
+      last_lab_insn = insn;
+      if (insn->code == MIR_LABEL) {
+        insn->data = &bb_stubs[n_bbs];
+        for (insn = DLIST_NEXT (MIR_insn_t, insn); insn != NULL && insn->code == MIR_LABEL;
+             last_lab_insn = insn, insn = DLIST_NEXT (MIR_insn_t, insn))
+          insn->data = &bb_stubs[n_bbs];
+      }
+      insn = last_lab_insn;
+      n_bbs++;
+    }
+    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH;
+  }
+  bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
+  if (debug_file != NULL) {
+    fprintf (debug_file, "BBs for lazy code generation:\n");
+    for (size_t i = 0; i < n_bbs; i++) {
+      fprintf (debug_file, "  BB%lu:\n", (long unsigned) i);
+      for (insn = bb_stubs[i].first_insn;; insn = DLIST_NEXT (MIR_insn_t, insn)) {
+        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+        if (insn == bb_stubs[i].last_insn) break;
+      }
+    }
+  }
+}
+
+static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, int n_attrs, int *attrs,
+                                    int call_p, void **addr) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_version_t bb_version;
+
+  if ((bb_version = DLIST_HEAD (bb_version_t, bb_stub->bb_versions)) != NULL) {
+    VARR_PUSH (target_bb_version_t, target_succ_bb_versions, NULL);
+    *addr = bb_version->addr;
+    return bb_version;
+  }
+  bb_version = gen_malloc (gen_ctx, sizeof (struct bb_version));
+  target_init_bb_version_data (&bb_version->target_data);
+  VARR_PUSH (target_bb_version_t, target_succ_bb_versions,
+             call_p ? NULL : &bb_version->target_data);
+  bb_version->bb_stub = bb_stub;
+  bb_version->n_attrs = 0;
+  bb_version->call_p = call_p;
+  DLIST_APPEND (bb_version_t, bb_stub->bb_versions, bb_version);
+  bb_version->machine_code = NULL;
+  *addr = bb_version->addr = _MIR_get_bb_thunk (ctx, bb_version, bb_wrapper);
+  return bb_version;
+}
+
 #if MIR_PARALLEL_GEN
 static void *gen (void *arg) {
-  MIR_item_t func_item;
+  func_or_bb_t func_or_bb;
   gen_ctx_t gen_ctx = arg;
   struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
   MIR_context_t ctx = all_gen_ctx->ctx;
@@ -5492,24 +5637,46 @@ static void *gen (void *arg) {
 
   for (;;) {
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
-    while (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start)
+    while (VARR_LENGTH (func_or_bb_t, code_to_generate) <= funcs_start)
       if (mir_cond_wait (&generate_signal, &queue_mutex))
         parallel_error (ctx, "error in cond wait");
-    if ((func_item = VARR_GET (MIR_item_t, funcs_to_generate, funcs_start)) == NULL) {
+    func_or_bb = VARR_GET (func_or_bb_t, code_to_generate, funcs_start);
+    if (func_or_bb.u.func_item == NULL) {
       if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
       break;
     }
     funcs_start++;
-    if (funcs_start > 64 && VARR_LENGTH (MIR_item_t, funcs_to_generate) < 2 * funcs_start) {
-      len = VARR_LENGTH (MIR_item_t, funcs_to_generate) - funcs_start;
-      memmove (VARR_ADDR (MIR_item_t, funcs_to_generate), /* compact */
-               VARR_ADDR (MIR_item_t, funcs_to_generate) + funcs_start, len * sizeof (MIR_item_t));
-      VARR_TRUNC (MIR_item_t, funcs_to_generate, len);
+    if (funcs_start > 64 && VARR_LENGTH (func_or_bb_t, code_to_generate) < 2 * funcs_start) {
+      len = VARR_LENGTH (func_or_bb_t, code_to_generate) - funcs_start;
+      memmove (VARR_ADDR (func_or_bb_t, code_to_generate), /* compact */
+               VARR_ADDR (func_or_bb_t, code_to_generate) + funcs_start,
+               len * sizeof (func_or_bb_t));
+      VARR_TRUNC (func_or_bb_t, code_to_generate, len);
       funcs_start = 0;
     }
     gen_ctx->busy_p = TRUE;
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
-    MIR_gen (gen_ctx->ctx, gen_ctx->gen_num, func_item);
+    if (func_or_bb.func_p) {
+      func_gen (gen_ctx->ctx, gen_ctx->gen_num, func_or_bb.u.func_item, func_or_bb.full_p);
+      if (!func_or_bb.full_p) {
+        create_bb_stubs (gen_ctx);
+        void *addr;
+        bb_version_t bb_version
+          = get_bb_version (gen_ctx, &((struct bb_stub *) func_or_bb.u.func_item->data)[0], 0, NULL,
+                            TRUE, &addr);
+        _MIR_redirect_thunk (ctx, func_or_bb.u.func_item->addr, addr);
+#if MIR_PARALLEL_GEN
+        if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+        func_or_bb.u.func_item->u.func->machine_code = addr; /* ??? done flag */
+#if MIR_PARALLEL_GEN
+        if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+        if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+      }
+    } else {
+      gen_bb_version1 (gen_ctx, func_or_bb.u.bb_version);
+    }
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     gen_ctx->busy_p = FALSE;
     if (mir_cond_signal (&done_signal)) parallel_error (ctx, "error in cond signal");
@@ -5520,11 +5687,12 @@ static void *gen (void *arg) {
 
 static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
   MIR_context_t ctx = all_gen_ctx->ctx;
+  func_or_bb_t func_or_bb;
 
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
   funcs_start = 0;
-  VARR_TRUNC (MIR_item_t, funcs_to_generate, 0);
-  VARR_PUSH (MIR_item_t, funcs_to_generate, NULL); /* flag to finish threads */
+  VARR_TRUNC (func_or_bb_t, code_to_generate, 0);
+  VARR_PUSH (func_or_bb_t, code_to_generate, null_func_or_bb); /* flag to finish threads */
   if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
   if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
@@ -5544,8 +5712,9 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
   all_gen_ctx->ctx = ctx;
   all_gen_ctx->gens_num = gens_num;
 #if MIR_PARALLEL_GEN
+  /* Create threads, mutex, and conditional for generators [1, gens_num): */
   funcs_start = 0;
-  VARR_CREATE (MIR_item_t, funcs_to_generate, 0);
+  VARR_CREATE (func_or_bb_t, code_to_generate, 0);
   if (mir_mutex_init (&queue_mutex, NULL) != 0) {
     (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread lock");
   } else if (mir_cond_init (&generate_signal, NULL) != 0) {
@@ -5594,6 +5763,8 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (loop_node_t, loop_nodes, 32);
     VARR_CREATE (loop_node_t, queue_nodes, 32);
     VARR_CREATE (loop_node_t, loop_entries, 16);
+    VARR_CREATE (target_bb_version_t, target_succ_bb_versions, 16);
+    VARR_CREATE (void_ptr_t, succ_bb_addrs, 16);
     init_dead_vars (gen_ctx);
     init_data_flow (gen_ctx);
     init_ssa (gen_ctx);
@@ -5619,6 +5790,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     }
     insn_to_consider = bitmap_create2 (1024);
     func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
+    bb_wrapper = _MIR_get_bb_wrapper (ctx, gen_ctx, gen_bb_version);
   }
 }
 
@@ -5635,7 +5807,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
                                               "can not destroy generator mutex  or signals");
   }
-  VARR_DESTROY (MIR_item_t, funcs_to_generate);
+  VARR_DESTROY (func_or_bb_t, code_to_generate);
 #endif
   for (int i = 0; i < all_gen_ctx->gens_num; i++) {
     gen_ctx = &all_gen_ctx->gen_ctx[i];
@@ -5659,6 +5831,8 @@ void MIR_gen_finish (MIR_context_t ctx) {
     VARR_DESTROY (loop_node_t, loop_nodes);
     VARR_DESTROY (loop_node_t, queue_nodes);
     VARR_DESTROY (loop_node_t, loop_entries);
+    VARR_DESTROY (target_bb_version_t, target_succ_bb_versions);
+    VARR_DESTROY (void_ptr_t, succ_bb_addrs);
   }
   free (all_gen_ctx);
   *all_gen_ctx_ptr = NULL;
@@ -5669,43 +5843,66 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_gen (ctx, 0, func_item);
 }
 
+/* Generations will be done in parallel on different threads of generators [1, gens_num).  If
+   there is only one generator, the generation will be done right away on main thread. */
 void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
 
-#if !MIR_PARALLEL_GEN
-  if (func_item == NULL) return; /* finish setting interfaces */
-  MIR_gen (ctx, 0, func_item);
-#else
-  if (func_item == NULL) {
-    size_t i;
+  if (all_gen_ctx->gens_num <= 1) {
+    if (func_item != NULL) MIR_gen (ctx, 0, func_item);
+    return;
+  }
+#if MIR_PARALLEL_GEN
+  func_or_bb_t func_or_bb;
 
+  if (func_item == NULL) { /* finish setting interfaces */
+    size_t i;
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+    func_or_bb.func_p = func_or_bb.full_p = TRUE;
+    func_or_bb.u.func_item = NULL;
+    VARR_PUSH (func_or_bb_t, code_to_generate, func_or_bb);
     for (;;) {
-      for (i = 0; i < all_gen_ctx->gens_num; i++)
+      for (i = 1; i < all_gen_ctx->gens_num; i++)
         if (all_gen_ctx->gen_ctx[i].busy_p) break;
-      if (VARR_LENGTH (MIR_item_t, funcs_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
+      if (VARR_LENGTH (func_or_bb_t, code_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
         break; /* nothing to generate and nothing is being generated */
       if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
     }
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   } else {
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
-    VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
+    func_or_bb.func_p = func_or_bb.full_p = TRUE;
+    func_or_bb.u.func_item = func_item;
+    VARR_PUSH (func_or_bb_t, code_to_generate, func_or_bb);
     if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   }
 #endif
 }
 
-static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
+/* Lazy func generation is done right away. */
+static void func_gen_and_redirect1 (MIR_context_t ctx, MIR_item_t func_item, int full_p) {
 #if !MIR_PARALLEL_GEN
-  MIR_gen (ctx, 0, func_item);
+  func_gen (ctx, 0, func_item, full_p);
+  if (!full_p) {
+    struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+    gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
+    void *addr;
+
+    create_bb_stubs (gen_ctx);
+    (void) get_bb_version (gen_ctx, &((struct bb_stub *) func_item->data)[0], 0, NULL, TRUE, &addr);
+    _MIR_redirect_thunk (ctx, func_item->addr, addr);
+  }
 #else
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   MIR_func_t func = func_item->u.func;
+  func_or_bb_t func_or_bb;
 
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
-  VARR_PUSH (MIR_item_t, funcs_to_generate, func_item);
+  func_or_bb.func_p = TRUE;
+  func_or_bb.full_p = full_p;
+  func_or_bb.u.func_item = func_item;
+  VARR_PUSH (func_or_bb_t, code_to_generate, func_or_bb);
   if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
   if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
@@ -5715,6 +5912,10 @@ static void *gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
   }
   if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
 #endif
+}
+
+static void *func_gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
+  func_gen_and_redirect1 (ctx, func_item, TRUE);
   return func_item->u.func->machine_code;
 }
 
@@ -5722,7 +5923,102 @@ void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   void *addr;
 
   if (func_item == NULL) return;
-  addr = _MIR_get_wrapper (ctx, func_item, gen_and_redirect);
+  addr = _MIR_get_wrapper (ctx, func_item, func_gen_and_redirect);
+  _MIR_redirect_thunk (ctx, func_item->addr, addr);
+}
+
+static void gen_bb_version1 (gen_ctx_t gen_ctx, bb_version_t bb_version) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  bb_stub_t branch_bb_stub, bb_stub = bb_version->bb_stub;
+  MIR_insn_t curr_insn, last_insn = bb_stub->last_insn;
+  void *addr;
+  uint8_t *code;
+  size_t code_len;
+
+  VARR_TRUNC (target_bb_version_t, target_succ_bb_versions, 0);
+  target_bb_translate_start (gen_ctx);
+  for (curr_insn = bb_stub->first_insn;; curr_insn = DLIST_NEXT (MIR_insn_t, curr_insn)) {
+    if (MIR_branch_code_p (curr_insn->code) || curr_insn->code == MIR_SWITCH) break;
+    target_bb_insn_translate (gen_ctx, curr_insn, NULL);
+    if (curr_insn == last_insn) break;
+  }
+  VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
+  if (curr_insn->code == MIR_SWITCH) {
+    for (size_t i = 1; i < curr_insn->nops; i++) {
+      branch_bb_stub = curr_insn->ops[i].u.label->data;
+      (void) get_bb_version (gen_ctx, branch_bb_stub, 0, NULL, FALSE, &addr);
+      VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
+    }
+    target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
+  } else if (MIR_branch_code_p (curr_insn->code)) {  // ??? generate branch
+    branch_bb_stub = curr_insn->ops[0].u.label->data;
+    (void) get_bb_version (gen_ctx, branch_bb_stub, 0, NULL, FALSE, &addr);
+    VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
+    target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
+  }
+  if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_SWITCH && curr_insn->code != MIR_RET) {
+    VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
+    (void) get_bb_version (gen_ctx, bb_stub + 1, 0, NULL, FALSE, &addr);
+    VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
+    target_output_jump (gen_ctx, VARR_ADDR (void_ptr_t, succ_bb_addrs));
+  }
+  code = target_bb_translate_finish (gen_ctx, &code_len);
+  addr = _MIR_publish_code (ctx, code, code_len);
+  target_bb_rebase (gen_ctx, addr);
+  target_setup_succ_bb_version_data (gen_ctx, addr);
+  DEBUG ({
+    _MIR_dump_code (NULL, 0, addr, code_len);
+    fprintf (debug_file, "BB code size = %lu:\n", (unsigned long) code_len);
+  });
+  target_redirect_bb_origin_branch (gen_ctx, &bb_version->target_data, addr);
+  _MIR_replace_bb_thunk (ctx, bb_version->addr, addr);
+  bb_version->addr = addr;
+#if MIR_PARALLEL_GEN
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+  bb_version->machine_code = addr;
+#if MIR_PARALLEL_GEN
+  if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+}
+
+static void *gen_bb_version (gen_ctx_t gen_ctx, bb_version_t bb_version) {
+#if !MIR_PARALLEL_GEN
+  gen_bb_version1 (gen_ctx, bb_version);
+#else
+  MIR_context_t ctx = gen_ctx->ctx;
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  func_or_bb_t func_or_bb;
+
+  func_or_bb.func_p = FALSE;
+  func_or_bb.u.bb_version = bb_version;
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  VARR_PUSH (func_or_bb_t, code_to_generate, func_or_bb);
+  if (mir_cond_broadcast (&generate_signal)) parallel_error (ctx, "error in cond broadcast");
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
+  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  for (;;) {
+    if (bb_version->machine_code != NULL) break;
+    if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
+  }
+  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
+#endif
+  return bb_version->machine_code;
+}
+
+/* attrs ignored ??? implement versions */
+static void *gen_func_and_bb_gen_redirect (MIR_context_t ctx, MIR_item_t func_item) {
+  func_gen_and_redirect1 (ctx, func_item, FALSE);
+  return func_item->addr;
+}
+
+void MIR_set_lazy_bb_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
+  void *addr;
+
+  if (func_item == NULL) return; /* finish setting interfaces */
+  addr = _MIR_get_wrapper (ctx, func_item, gen_func_and_bb_gen_redirect);
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 

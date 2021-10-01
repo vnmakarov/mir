@@ -1,5 +1,5 @@
 #!/bin/bash
-# Run run-benchmarks.sh [start_test_num]
+# Run run-benchmarks.sh [start_test_num] [short]
 #
 
 srcdir=`dirname $0`
@@ -86,35 +86,35 @@ EOF
       run "clang -O2" "clang -std=c99 -O2 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if pcc $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && pcc $tempc >/dev/null 2>&1; then
       run "pcc -O" "pcc -O $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if cproc $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && cproc $tempc >/dev/null 2>&1; then
       run "cproc" "cproc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if cparser $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && cparser $tempc >/dev/null 2>&1; then
       run "cparser -O3" "cparser -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if tcc $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && tcc $tempc >/dev/null 2>&1; then
       run "tcc" "tcc -std=c11 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if lacc $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && lacc $tempc >/dev/null 2>&1; then
       run "lacc -O3" "lacc -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if chibicc $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && chibicc $tempc >/dev/null 2>&1; then
       run "chibicc" "chibicc $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if ccomp $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && ccomp $tempc >/dev/null 2>&1; then
       run "ccomp -O3" "ccomp -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if ! fgrep setjmp.h $bench.c >/dev/null 2>&1; then
+  if test x$short != xshort && ! fgrep setjmp.h $bench.c >/dev/null 2>&1; then
     if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
       run "emcc/wasmer" "emcc -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
     fi
@@ -138,14 +138,19 @@ EOF
     fi
   fi
   run "c2m -eg" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
+  run "c2m -eb" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
   #  run "c2m -ei" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
   rm -f ./a.out
 }
 
 start_bench_num=$1
-if test x$start_bench_num = x; then
+if echo $start_bench_num | egrep [0-9]+ >/dev/null; then
+  shift
+elif test x$start_bench_num = x || (echo $start_bench_num | egrep -v [0-9]+ >/dev/null); then
   start_bench_num=0
 fi
+short=$1
+
 bench_num=0
 for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists matrix method-call mandelbrot nbody sieve spectral-norm strcat  # ackermann fib random 
 do
