@@ -12201,13 +12201,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.mem.base, 0, 1);
       t = MIR_T_I64;
     } else if (type->mode == TM_STRUCT || type->mode == TM_UNION) { /* passed in regs */
-      res = get_new_temp (c2m_ctx, MIR_T_I64);
-      emit3 (c2m_ctx, MIR_ADD, res.mir_op,
-             MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
-             MIR_new_int_op (ctx, arg_area_offset));
-      if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
-      res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
-      t = MIR_T_I64;
+      if (!va_arg_p) {
+        res = get_new_temp (c2m_ctx, MIR_T_I64);
+        emit3 (c2m_ctx, MIR_ADD, res.mir_op,
+               MIR_new_reg_op (ctx, MIR_reg (ctx, FP_NAME, curr_func->u.func)),
+               MIR_new_int_op (ctx, arg_area_offset));
+        if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
+        res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
+        t = MIR_T_I64;
+      }
     } else if (n > 0) {
       assert (n == 1);
       t = promote_mir_int_type (get_mir_type (c2m_ctx, type));
