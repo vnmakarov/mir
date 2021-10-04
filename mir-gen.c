@@ -5333,7 +5333,8 @@ static void parallel_error (MIR_context_t ctx, const char *err_message) {
   MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
 }
 
-static void *func_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item, int machine_code_p) {
+static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func_item,
+                                 int machine_code_p) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
   uint8_t *code;
@@ -5510,7 +5511,7 @@ static void *func_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item, int
 }
 
 void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
-  return func_gen (ctx, gen_num, func_item, TRUE);
+  return generate_func_code (ctx, gen_num, func_item, TRUE);
 }
 
 void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f) {
@@ -5543,8 +5544,8 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
   optimize_level = level;
 }
 
-static void gen_bb_version1 (gen_ctx_t gen_ctx, bb_version_t bb_version);
-static void *gen_bb_version (gen_ctx_t gen_ctx, bb_version_t bb_version);
+static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb_version);
+static void *bb_version_generator (gen_ctx_t gen_ctx, bb_version_t bb_version);
 
 /* create bb stubs and set up label data to the corresponding bb stub */
 /* todo finish bb on calls ??? */
@@ -5628,7 +5629,7 @@ static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, int n_
 }
 
 #if MIR_PARALLEL_GEN
-static void *gen (void *arg) {
+static void *func_generator (void *arg) {
   func_or_bb_t func_or_bb;
   gen_ctx_t gen_ctx = arg;
   struct all_gen_ctx *all_gen_ctx = gen_ctx->all_gen_ctx;
@@ -5657,7 +5658,8 @@ static void *gen (void *arg) {
     gen_ctx->busy_p = TRUE;
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
     if (func_or_bb.func_p) {
-      func_gen (gen_ctx->ctx, gen_ctx->gen_num, func_or_bb.u.func_item, func_or_bb.full_p);
+      generate_func_code (gen_ctx->ctx, gen_ctx->gen_num, func_or_bb.u.func_item,
+                          func_or_bb.full_p);
       if (!func_or_bb.full_p) {
         create_bb_stubs (gen_ctx);
         void *addr;
@@ -5675,7 +5677,7 @@ static void *gen (void *arg) {
 #endif
       }
     } else {
-      gen_bb_version1 (gen_ctx, func_or_bb.u.bb_version);
+      generate_bb_version_machine_code (gen_ctx, func_or_bb.u.bb_version);
     }
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     gen_ctx->busy_p = FALSE;
@@ -5730,7 +5732,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
       gen_ctx->busy_p = FALSE;
       gen_ctx->gen_num = i;
       gen_ctx->all_gen_ctx = all_gen_ctx;
-      if (mir_thread_create (&gen_ctx->gen_thread, NULL, gen, gen_ctx) != 0) {
+      if (mir_thread_create (&gen_ctx->gen_thread, NULL, func_generator, gen_ctx) != 0) {
         signal_threads_to_finish (all_gen_ctx);
         for (int j = 0; j < i; j++) mir_thread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
         mir_cond_destroy (&done_signal);
@@ -5790,7 +5792,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     }
     insn_to_consider = bitmap_create2 (1024);
     func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
-    bb_wrapper = _MIR_get_bb_wrapper (ctx, gen_ctx, gen_bb_version);
+    bb_wrapper = _MIR_get_bb_wrapper (ctx, gen_ctx, bb_version_generator);
   }
 }
 
@@ -5878,9 +5880,9 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 /* Lazy func generation is done right away. */
-static void func_gen_and_redirect1 (MIR_context_t ctx, MIR_item_t func_item, int full_p) {
+static void generate_func_and_redirect (MIR_context_t ctx, MIR_item_t func_item, int full_p) {
 #if !MIR_PARALLEL_GEN
-  func_gen (ctx, 0, func_item, full_p);
+  generate_func_code (ctx, 0, func_item, full_p);
   if (!full_p) {
     struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
     gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
@@ -5911,8 +5913,8 @@ static void func_gen_and_redirect1 (MIR_context_t ctx, MIR_item_t func_item, int
 #endif
 }
 
-static void *func_gen_and_redirect (MIR_context_t ctx, MIR_item_t func_item) {
-  func_gen_and_redirect1 (ctx, func_item, TRUE);
+static void *generate_func_and_redirect_to_func_code (MIR_context_t ctx, MIR_item_t func_item) {
+  generate_func_and_redirect (ctx, func_item, TRUE);
   return func_item->u.func->machine_code;
 }
 
@@ -5920,11 +5922,11 @@ void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   void *addr;
 
   if (func_item == NULL) return;
-  addr = _MIR_get_wrapper (ctx, func_item, func_gen_and_redirect);
+  addr = _MIR_get_wrapper (ctx, func_item, generate_func_and_redirect_to_func_code);
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 
-static void gen_bb_version1 (gen_ctx_t gen_ctx, bb_version_t bb_version) {
+static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb_version) {
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   bb_stub_t branch_bb_stub, bb_stub = bb_version->bb_stub;
@@ -5981,9 +5983,9 @@ static void gen_bb_version1 (gen_ctx_t gen_ctx, bb_version_t bb_version) {
 #endif
 }
 
-static void *gen_bb_version (gen_ctx_t gen_ctx, bb_version_t bb_version) {
+static void *bb_version_generator (gen_ctx_t gen_ctx, bb_version_t bb_version) {
 #if !MIR_PARALLEL_GEN
-  gen_bb_version1 (gen_ctx, bb_version);
+  generate_bb_version_machine_code (gen_ctx, bb_version);
 #else
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
@@ -6006,8 +6008,8 @@ static void *gen_bb_version (gen_ctx_t gen_ctx, bb_version_t bb_version) {
 }
 
 /* attrs ignored ??? implement versions */
-static void *gen_func_and_bb_gen_redirect (MIR_context_t ctx, MIR_item_t func_item) {
-  func_gen_and_redirect1 (ctx, func_item, FALSE);
+static void *generate_func_and_redirect_to_bb_gen (MIR_context_t ctx, MIR_item_t func_item) {
+  generate_func_and_redirect (ctx, func_item, FALSE);
   return func_item->addr;
 }
 
@@ -6015,7 +6017,7 @@ void MIR_set_lazy_bb_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   void *addr;
 
   if (func_item == NULL) return; /* finish setting interfaces */
-  addr = _MIR_get_wrapper (ctx, func_item, gen_func_and_bb_gen_redirect);
+  addr = _MIR_get_wrapper (ctx, func_item, generate_func_and_redirect_to_bb_gen);
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 
