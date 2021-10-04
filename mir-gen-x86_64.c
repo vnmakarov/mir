@@ -2548,7 +2548,10 @@ static void setup_rel32 (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void
   int64_t offset = (int64_t) addr - (int64_t) (base + lr->next_insn_disp);
   int32_t rel32 = offset;
 
-  assert (!lr->abs_addr_p && INT32_MIN <= offset && offset <= INT32_MAX);
+  if (lr->abs_addr_p || !(INT32_MIN <= offset && offset <= INT32_MAX)) {
+    fprintf (stderr, "too big offset (%lld) in setup_rel32", (long long) offset);
+    exit (1);
+  }
   _MIR_change_code (ctx, (char *) base + lr->label_val_disp, (uint8_t *) &rel32, 4);
 }
 
