@@ -2529,16 +2529,6 @@ static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
 }
 
 static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
-#if 0
-  /* Setting up absolute labels */
-  for (size_t i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
-    label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
-    if (!lr.abs_addr_p) continue;
-    set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
-               (int64_t) get_label_disp (gen_ctx, lr.u.label), 8);
-    VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
-  }
-#endif
   while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
     VARR_PUSH (uint8_t, result_code, 0);
   for (size_t i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) { /* Add pool constants */
