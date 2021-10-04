@@ -5843,16 +5843,12 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_gen (ctx, 0, func_item);
 }
 
-/* Generations will be done in parallel on different threads of generators [1, gens_num).  If
-   there is only one generator, the generation will be done right away on main thread. */
 void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
+#if !MIR_PARALLEL_GEN
+  if (func_item == NULL) return; /* finish setting interfaces */
+  MIR_gen (ctx, 0, func_item);
+#else
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
-
-  if (all_gen_ctx->gens_num <= 1) {
-    if (func_item != NULL) MIR_gen (ctx, 0, func_item);
-    return;
-  }
-#if MIR_PARALLEL_GEN
   func_or_bb_t func_or_bb;
 
   if (func_item == NULL) { /* finish setting interfaces */
@@ -5862,9 +5858,10 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
     func_or_bb.u.func_item = NULL;
     VARR_PUSH (func_or_bb_t, code_to_generate, func_or_bb);
     for (;;) {
-      for (i = 1; i < all_gen_ctx->gens_num; i++)
+      for (i = 0; i < all_gen_ctx->gens_num; i++)
         if (all_gen_ctx->gen_ctx[i].busy_p) break;
-      if (VARR_LENGTH (func_or_bb_t, code_to_generate) <= funcs_start && i >= all_gen_ctx->gens_num)
+      if (VARR_LENGTH (func_or_bb_t, code_to_generate) <= funcs_start + 1
+          && i >= all_gen_ctx->gens_num)
         break; /* nothing to generate and nothing is being generated */
       if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
     }
