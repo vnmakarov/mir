@@ -226,6 +226,7 @@ struct all_gen_ctx {
 #endif
   MIR_context_t ctx;
   size_t gens_num; /* size of the following array: */
+  unsigned long long overall_bbs_num, overall_gen_bbs_num;
   struct gen_ctx gen_ctx[1];
 };
 
@@ -5333,6 +5334,8 @@ static void parallel_error (MIR_context_t ctx, const char *err_message) {
   MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
 }
 
+static const int collect_bb_stat_p = FALSE;
+
 static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func_item,
                                  int machine_code_p) {
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
@@ -5341,6 +5344,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   void *machine_code;
   size_t code_len;
   double start_time = real_usec_time ();
+  uint32_t bbs_num;
 
 #if !MIR_PARALLEL_GEN
   gen_num = 0;
@@ -5365,6 +5369,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   _MIR_duplicate_func_insns (ctx, func_item);
   curr_cfg = func_item->data = gen_malloc (gen_ctx, sizeof (struct func_cfg));
   build_func_cfg (gen_ctx);
+  bbs_num = curr_bb_index;
   DEBUG ({
     fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
     print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
@@ -5488,6 +5493,16 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   destroy_func_live_ranges (gen_ctx);
   if (optimize_level != 0) destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
   destroy_func_cfg (gen_ctx);
+  if (collect_bb_stat_p) {
+#if MIR_PARALLEL_GEN
+    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+    all_gen_ctx->overall_bbs_num += bbs_num;
+#if MIR_PARALLEL_GEN
+    if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+#endif
+  }
   if (!machine_code_p) return NULL;
   DEBUG ({
     fprintf (debug_file,
@@ -5794,6 +5809,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     func_used_hard_regs = bitmap_create2 (MAX_HARD_REG + 1);
     bb_wrapper = _MIR_get_bb_wrapper (ctx, gen_ctx, bb_version_generator);
   }
+  all_gen_ctx->overall_bbs_num = all_gen_ctx->overall_gen_bbs_num = 0;
 }
 
 void MIR_gen_finish (MIR_context_t ctx) {
@@ -5836,6 +5852,9 @@ void MIR_gen_finish (MIR_context_t ctx) {
     VARR_DESTROY (target_bb_version_t, target_succ_bb_versions);
     VARR_DESTROY (void_ptr_t, succ_bb_addrs);
   }
+  if (collect_bb_stat_p)
+    fprintf (stderr, "Overall bbs num = %llu, generated bbs num = %llu\n",
+             all_gen_ctx->overall_bbs_num, all_gen_ctx->overall_gen_bbs_num);
   free (all_gen_ctx);
   *all_gen_ctx_ptr = NULL;
 }
@@ -5976,6 +5995,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
 #if MIR_PARALLEL_GEN
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
 #endif
+  all_gen_ctx->overall_gen_bbs_num++;
   bb_version->machine_code = addr;
 #if MIR_PARALLEL_GEN
   if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
