@@ -2330,7 +2330,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         continue;
       if (phi_use_p (e->insn)) continue; /* keep conventional SSA */
       expr_bb_insn = e->insn->data;
-      if (!bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index)) continue;
+      if (bb->index != expr_bb_insn->bb->index
+          && !bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index))
+        continue;
       add_def_p = e->temp_reg == 0;
       temp_reg = get_expr_temp_reg (gen_ctx, e);
       op = MIR_new_reg_op (ctx, temp_reg);
