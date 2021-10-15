@@ -86,8 +86,9 @@
     standard conformance.  It might be useful as C2MIR implements some GCC extensions of C
   * Option `-O<n>` is used to set up MIR-generator optimization level.  The optimization levels are described
     in documentation for MIR generator API function `MIR_gen_set_optimize_level`
-  * Option `-dg` is used for debuging MIR-generator.  It results in dumping debug information
-    about MIR-generator work to `stderr`
+  * Option `-dg[<level>]` is used for debugging MIR-generator.  It results in dumping debug information
+    about MIR-generator work to `stderr` according to the debug level.  If the level is omitted,
+    it means maximal level
   * Besides C files, MIR textual files with suffix `.mir` and MIR
     binary files with suffix `.bmir` can be given on the command line.
     In this case these MIR files are read and added to generated MIR code

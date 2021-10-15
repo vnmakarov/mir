@@ -9016,6 +9016,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     if (!builtin_call_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
     if (builtin_call_p) {
+      if (func_block_scope != NULL && (va_arg_p || va_start_p))
+        ((struct node_scope *) func_block_scope->attr)->stack_var_p = TRUE;
       for (arg = NL_HEAD (arg_list->u.ops); arg != NULL; arg = NL_NEXT (arg))
         check (c2m_ctx, arg, r);
       init_type (&res_type);

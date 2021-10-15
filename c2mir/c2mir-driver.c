@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <stdint.h>
 
 #ifndef _WIN32
@@ -112,7 +113,7 @@ static const char *lib_suffix = ".dll";
 #endif
 
 static struct c2mir_options options;
-static int gen_debug_p;
+static int gen_debug_level;
 
 typedef void *void_ptr_t;
 
@@ -230,7 +231,7 @@ static void init_options (int argc, char *argv[]) {
   options.debug_p = options.verbose_p = options.ignore_warnings_p = FALSE;
   options.asm_p = options.object_p = options.no_prepro_p = options.prepro_only_p = FALSE;
   options.syntax_only_p = options.pedantic_p = FALSE;
-  gen_debug_p = FALSE;
+  gen_debug_level = -1;
   VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (char_ptr_t, headers, 0);
   VARR_CREATE (macro_command_t, macro_commands, 0);
@@ -240,8 +241,8 @@ static void init_options (int argc, char *argv[]) {
   for (int i = 1; i < argc; i++) {
     if (strcmp (argv[i], "-d") == 0) {
       options.verbose_p = options.debug_p = TRUE;
-    } else if (strcmp (argv[i], "-dg") == 0) {
-      gen_debug_p = TRUE;
+    } else if (strncmp (argv[i], "-dg", 3) == 0) {
+      gen_debug_level = argv[i][3] != '\0' ? atoi (&argv[i][3]) : INT_MAX;
     } else if (strcmp (argv[i], "-S") == 0) {
       options.asm_p = TRUE;
     } else if (strcmp (argv[i], "-c") == 0) {
@@ -324,8 +325,8 @@ static void init_options (int argc, char *argv[]) {
                "Usage: %s options (-i | -s \"program\" | source files); where options are:\n",
                argv[0]);
       fprintf (stderr, "\n");
-      fprintf (stderr,
-               "  -v, -d, -dg -- output work, general debug, or MIR-generator debug info\n");
+      fprintf (stderr, "  -v, -d -- output work, parser debug info\n");
+      fprintf (stderr, "  -dg[level] -- output given (or max) level MIR-generator debug info\n");
       fprintf (stderr, "  -E -- output C preprocessed code into stdout\n");
       fprintf (stderr, "  -Dname[=value], -Uname -- predefine or unpredefine macros\n");
       fprintf (stderr, "  -Idir, -Ldir -- add directories to search include headers or lbraries\n");
@@ -433,8 +434,6 @@ static FILE *get_output_file (const char *file_name) {
 
 static FILE *get_output_file_from_parts (const char **result_file_name, const char *out_file_name,
                                          const char *source_name, const char *suffix) {
-  FILE *f;
-
   *result_file_name = out_file_name != NULL ? out_file_name : get_file_name (source_name, suffix);
   return get_output_file (*result_file_name);
 }
@@ -833,7 +832,7 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "exit code: %lu\n", (long unsigned) result_code);
         }
       } else {
-        int n_gen = gen_debug_p || threads_num == 0 ? 1 : threads_num;
+        int n_gen = gen_debug_level >= 0 || threads_num == 0 ? 1 : threads_num;
         int fun_argc = (int) VARR_LENGTH (char_ptr_t, exec_argv);
         const char **fun_argv = VARR_ADDR (char_ptr_t, exec_argv);
 
@@ -841,12 +840,15 @@ int main (int argc, char *argv[], char *env[]) {
         for (int i = 0; i < n_gen; i++) {
           if (optimize_level >= 0)
             MIR_gen_set_optimize_level (main_ctx, i, (unsigned) optimize_level);
-          if (gen_debug_p) MIR_gen_set_debug_file (main_ctx, i, stderr);
+          if (gen_debug_level >= 0) {
+            MIR_gen_set_debug_file (main_ctx, i, stderr);
+            MIR_gen_set_debug_level (main_ctx, i, gen_debug_level);
+          }
         }
         MIR_link (main_ctx,
-                  gen_exec_p
-                    ? (n_gen > 1 ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
-                    : lazy_gen_exec_p ? MIR_set_lazy_gen_interface : MIR_set_lazy_bb_gen_interface,
+                  gen_exec_p ? (n_gen > 1 ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
+                  : lazy_gen_exec_p ? MIR_set_lazy_gen_interface
+                                    : MIR_set_lazy_bb_gen_interface,
                   import_resolver);
         fun_addr = gen_exec_p && n_gen > 1 ? MIR_gen (main_ctx, 0, main_func) : main_func->addr;
         start_time = real_usec_time ();
