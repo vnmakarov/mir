@@ -237,8 +237,9 @@ typedef union {
 typedef struct {
   MIR_type_t type : 8;
   MIR_scale_t scale;
-  /* 0 means no reg for memory.  MIR_NON_HARD_REG means no reg for
-     hard reg memory. */
+  uint16_t alias_set; /* 0 set may alias any memory */
+  uint32_t nloc;      /* mem operand with the same nonzero nloc always refers to the same memory */
+  /* 0 and MIR_NON_HARD_REG means no reg for correspondingly for memory and hard reg memory. */
   MIR_reg_t base, index;
   MIR_disp_t disp;
 } MIR_mem_t;

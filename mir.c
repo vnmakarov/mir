@@ -317,11 +317,11 @@ static void check_and_prepare_insn_descs (MIR_context_t ctx) {
 }
 
 static MIR_op_mode_t type2mode (MIR_type_t type) {
-  return (type == MIR_T_UNDEF
-            ? MIR_OP_UNDEF
-            : type == MIR_T_F
-                ? MIR_OP_FLOAT
-                : type == MIR_T_D ? MIR_OP_DOUBLE : type == MIR_T_LD ? MIR_OP_LDOUBLE : MIR_OP_INT);
+  return (type == MIR_T_UNDEF ? MIR_OP_UNDEF
+          : type == MIR_T_F   ? MIR_OP_FLOAT
+          : type == MIR_T_D   ? MIR_OP_DOUBLE
+          : type == MIR_T_LD  ? MIR_OP_LDOUBLE
+                              : MIR_OP_INT);
 }
 
 /* New Page */
@@ -2145,6 +2145,8 @@ MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MI
   op.u.mem.base = base;
   op.u.mem.index = index;
   op.u.mem.scale = scale;
+  op.u.mem.alias_set = 0;
+  op.u.mem.nloc = 0;
   return op;
 }
 
@@ -2854,20 +2856,18 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
       curr_module = m;
     }
     if (move_p) return;
-    type = (op->mode == MIR_OP_FLOAT ? MIR_T_F
-                                     : op->mode == MIR_OP_DOUBLE
-                                         ? MIR_T_D
-                                         : op->mode == MIR_OP_LDOUBLE
-                                             ? MIR_T_LD
-                                             : op->mode == MIR_OP_MEM ? op->u.mem.type : MIR_T_I64);
+    type = (op->mode == MIR_OP_FLOAT     ? MIR_T_F
+            : op->mode == MIR_OP_DOUBLE  ? MIR_T_D
+            : op->mode == MIR_OP_LDOUBLE ? MIR_T_LD
+            : op->mode == MIR_OP_MEM     ? op->u.mem.type
+                                         : MIR_T_I64);
     new_op = MIR_new_reg_op (ctx, vn_add_val (ctx, func, type, MIR_INSN_BOUND, *op, *op));
     MIR_insert_insn_before (ctx, func_item, insn,
                             MIR_new_insn (ctx,
-                                          type == MIR_T_F
-                                            ? MIR_FMOV
-                                            : type == MIR_T_D
-                                                ? MIR_DMOV
-                                                : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
+                                          type == MIR_T_F    ? MIR_FMOV
+                                          : type == MIR_T_D  ? MIR_DMOV
+                                          : type == MIR_T_LD ? MIR_LDMOV
+                                                             : MIR_MOV,
                                           new_op, *op));
     *op = new_op;
     break;
@@ -2954,9 +2954,10 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
                   || mem_op.u.mem.type == MIR_T_LD
                 ? mem_op.u.mem.type
                 : MIR_T_I64);
-      code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      code = (type == MIR_T_F    ? MIR_FMOV
+              : type == MIR_T_D  ? MIR_DMOV
+              : type == MIR_T_LD ? MIR_LDMOV
+                                 : MIR_MOV);
       new_op = MIR_new_reg_op (ctx, vn_add_val (ctx, func, type, MIR_INSN_BOUND, mem_op, mem_op));
       if (out_p)
         new_insn = MIR_new_insn (ctx, code, mem_op, new_op);
@@ -3015,10 +3016,10 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
     if (one_last_ret_p) {
       ret_reg_op = first_ret_insn->ops[i];
     } else {
-      mov_code
-        = (res_types[i] == MIR_T_F
-             ? MIR_FMOV
-             : res_types[i] == MIR_T_D ? MIR_DMOV : res_types[i] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      mov_code = (res_types[i] == MIR_T_F    ? MIR_FMOV
+                  : res_types[i] == MIR_T_D  ? MIR_DMOV
+                  : res_types[i] == MIR_T_LD ? MIR_LDMOV
+                                             : MIR_MOV);
       ret_reg = _MIR_new_temp_reg (ctx, mov_code == MIR_MOV ? MIR_T_I64 : res_types[i], func);
       ret_reg_op = MIR_new_reg_op (ctx, ret_reg);
       VARR_PUSH (MIR_op_t, ret_ops, ret_reg_op);
@@ -3046,10 +3047,10 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
       insn = VARR_GET (MIR_insn_t, temp_insns, i);
       mir_assert (func->nres == MIR_insn_nops (ctx, insn));
       for (j = 0; j < func->nres; j++) {
-        mov_code = (res_types[j] == MIR_T_F
-                      ? MIR_FMOV
-                      : res_types[j] == MIR_T_D ? MIR_DMOV
-                                                : res_types[j] == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+        mov_code = (res_types[j] == MIR_T_F    ? MIR_FMOV
+                    : res_types[j] == MIR_T_D  ? MIR_DMOV
+                    : res_types[j] == MIR_T_LD ? MIR_LDMOV
+                                               : MIR_MOV);
         reg_op = insn->ops[j];
         mir_assert (reg_op.mode == MIR_OP_REG);
         ret_reg_op = VARR_GET (MIR_op_t, ret_ops, j);
@@ -3156,14 +3157,12 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
 
     if ((code == MIR_MOV || code == MIR_FMOV || code == MIR_DMOV || code == MIR_LDMOV)
         && insn->ops[0].mode == MIR_OP_MEM && insn->ops[1].mode == MIR_OP_MEM) {
-      temp_op
-        = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx,
-                                                  code == MIR_MOV
-                                                    ? MIR_T_I64
-                                                    : code == MIR_FMOV
-                                                        ? MIR_T_F
-                                                        : code == MIR_DMOV ? MIR_T_D : MIR_T_LD,
-                                                  func));
+      temp_op = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx,
+                                                        code == MIR_MOV    ? MIR_T_I64
+                                                        : code == MIR_FMOV ? MIR_T_F
+                                                        : code == MIR_DMOV ? MIR_T_D
+                                                                           : MIR_T_LD,
+                                                        func));
       MIR_insert_insn_after (ctx, func_item, insn, MIR_new_insn (ctx, code, insn->ops[0], temp_op));
       insn->ops[0] = temp_op;
     }
@@ -3424,12 +3423,12 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
                         MIR_new_reg_op (ctx, op.u.mem.base), var.size);
         } else {
           if (var.type == MIR_T_RBLK) op = MIR_new_reg_op (ctx, op.u.mem.base);
-          new_insn
-            = MIR_new_insn (ctx,
-                            type == MIR_T_F
-                              ? MIR_FMOV
-                              : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
-                            MIR_new_reg_op (ctx, new_reg), op);
+          new_insn = MIR_new_insn (ctx,
+                                   type == MIR_T_F    ? MIR_FMOV
+                                   : type == MIR_T_D  ? MIR_DMOV
+                                   : type == MIR_T_LD ? MIR_LDMOV
+                                                      : MIR_MOV,
+                                   MIR_new_reg_op (ctx, new_reg), op);
           MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
         }
       }
@@ -3475,11 +3474,10 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
           mir_assert (ret_insn->ops[i].mode == MIR_OP_REG);
           ret_reg = ret_insn->ops[i].u.reg;
           new_insn = MIR_new_insn (ctx,
-                                   res_types[i] == MIR_T_F
-                                     ? MIR_FMOV
-                                     : res_types[i] == MIR_T_D
-                                         ? MIR_DMOV
-                                         : res_types[i] == MIR_T_LD ? MIR_LDMOV : MIR_MOV,
+                                   res_types[i] == MIR_T_F    ? MIR_FMOV
+                                   : res_types[i] == MIR_T_D  ? MIR_DMOV
+                                   : res_types[i] == MIR_T_LD ? MIR_LDMOV
+                                                              : MIR_MOV,
                                    call->ops[i + 2], MIR_new_reg_op (ctx, ret_reg));
           MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
         }
