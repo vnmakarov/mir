@@ -2362,12 +2362,10 @@ static int expr_eq (expr_t e1, expr_t e2, void *arg) {
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn1, i, &out_p);
     if (out_p && insn1->ops[i].mode != MIR_OP_MEM) continue;
-#if 1 /* ??? mem */
     if ((insn1->ops[i].mode != MIR_OP_REG || insn2->ops[i].mode != MIR_OP_REG)
         && (insn1->ops[i].mode != MIR_OP_MEM || insn2->ops[i].mode != MIR_OP_MEM)
         && !op_eq (gen_ctx, insn1->ops[i], insn2->ops[i]))
       return FALSE;
-#endif
     ssa_edge1 = insn1->ops[i].data;
     ssa_edge2 = insn2->ops[i].data;
     if (ssa_edge1 != NULL && ssa_edge2 != NULL
@@ -2391,10 +2389,8 @@ static htab_hash_t expr_hash (expr_t e, void *arg) {
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, e->insn, i, &out_p);
     if (out_p && e->insn->ops[i].mode != MIR_OP_MEM) continue;
-#if 1 /* ??? mem */
     if (e->insn->ops[i].mode != MIR_OP_REG && e->insn->ops[i].mode != MIR_OP_MEM)
       h = MIR_op_hash_step (ctx, h, e->insn->ops[i]);
-#endif
     if ((ssa_edge = e->insn->ops[i].data) != NULL) {
       h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val_const_p);
       h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
@@ -2521,17 +2517,10 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
 }
 
 static int gvn_insn_p (MIR_insn_t insn) {
-  return (
-    !MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_SWITCH
-    && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
-    && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
-    && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END
-    && insn->code != MIR_PHI
-    /* After simplification we have only mem insn in form: mem = reg or reg = mem. */
-    && (!move_code_p (insn->code)
-        || (1
-            || insn->ops[0].mode != MIR_OP_MEM && insn->ops[0].mode != MIR_OP_HARD_REG_MEM
-                 && insn->ops[1].mode != MIR_OP_MEM && insn->ops[1].mode != MIR_OP_HARD_REG_MEM)));
+  return (!MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_SWITCH
+          && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+          && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
+          && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END && insn->code != MIR_PHI);
 }
 
 #if !MIR_NO_GEN_DEBUG
