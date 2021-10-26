@@ -6038,7 +6038,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   addr = _MIR_publish_code (ctx, code, code_len);
   target_bb_rebase (gen_ctx, addr);
   target_setup_succ_bb_version_data (gen_ctx, addr);
-  DEBUG ({
+  DEBUG (1, {
     _MIR_dump_code (NULL, 0, addr, code_len);
     fprintf (debug_file, "BB code size = %lu:\n", (unsigned long) code_len);
   });
