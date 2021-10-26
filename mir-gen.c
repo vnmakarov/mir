@@ -6489,14 +6489,15 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   bb_stub_t branch_bb_stub, bb_stub = bb_version->bb_stub;
-  MIR_insn_t curr_insn, last_insn = bb_stub->last_insn;
+  MIR_insn_t curr_insn, new_insn, next_insn, last_insn = bb_stub->last_insn;
   void *addr;
   uint8_t *code;
   size_t code_len;
 
   VARR_TRUNC (target_bb_version_t, target_succ_bb_versions, 0);
   target_bb_translate_start (gen_ctx);
-  for (curr_insn = bb_stub->first_insn;; curr_insn = DLIST_NEXT (MIR_insn_t, curr_insn)) {
+  for (curr_insn = bb_stub->first_insn;; curr_insn = next_insn) {
+    next_insn = DLIST_NEXT (MIR_insn_t, curr_insn);
     if (MIR_branch_code_p (curr_insn->code) || curr_insn->code == MIR_SWITCH) break;
     target_bb_insn_translate (gen_ctx, curr_insn, NULL);
     if (curr_insn == last_insn) break;
