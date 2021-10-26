@@ -2813,6 +2813,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               insn->ops[1] = MIR_new_reg_op (ctx, temp_reg); /* changing mem */
               def_insn = DLIST_NEXT (MIR_insn_t, store);
               add_ssa_edge (gen_ctx, def_insn->data, 0, bb_insn, 1);
+              gvn_insns_num++;
               DEBUG (2, {
                 fprintf (debug_file, "  changing curr insn to ");
                 MIR_output_insn (ctx, debug_file, insn, func, TRUE);
@@ -2832,6 +2833,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         redirect_def (gen_ctx, insn, new_insn, FALSE);
         new_bb_insn->gvn_val_const_p = TRUE;
         new_bb_insn->gvn_val = val;
+        gvn_insns_num++;
         DEBUG (2, {
           fprintf (debug_file, "  Adding insn after:");
           MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
