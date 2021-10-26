@@ -3768,7 +3768,8 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
       });
       ccp_remove_insn_ssa_edges (gen_ctx, insn);
       gen_delete_insn (gen_ctx, insn);
-      delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
+      if ((e = DLIST_EL (out_edge_t, bb->out_edges, 1)) != NULL)
+        delete_edge (e); /* e can be arleady deleted by previous removing an unreachable BB */
       deleted_branches_num++;
     } else {
       insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]); /* label is always 0-th op */
