@@ -3825,7 +3825,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
   MIR_insn_t insn, prev_insn, first_insn;
   ssa_edge_t se, next_se;
   int res, change_p = FALSE;
-  long deleted_insns_num = 0, deleted_branches_num = 0;
+  long ccp_insns_num = 0, bb_deleted_insns_num = 0, deleted_branches_num = 0;
 
 #ifndef NDEBUG
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -3846,7 +3846,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         insn = bb_insn->insn;
         ccp_remove_insn_ssa_edges (gen_ctx, insn);
         gen_delete_insn (gen_ctx, insn);
-        deleted_insns_num++;
+        bb_deleted_insns_num++;
       }
       delete_bb (gen_ctx, bb);
       continue;
@@ -3885,6 +3885,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
         insn->data = bb_insn;
         bb_insn->insn = insn;
+        ccp_insns_num++;
         DEBUG (2, {
           fprintf (debug_file, "    on insn ");
           MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -3938,8 +3939,8 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
     }
   }
   DEBUG (1, {
-    fprintf (debug_file, "%5ld deleted CCP insns + %ld deleted branches\n", deleted_insns_num,
-             deleted_branches_num);
+    fprintf (debug_file, "%5ld ccp insns, %ld deleted BB CCP insns, %ld deleted branches\n",
+             ccp_insns_num, bb_deleted_insns_num, deleted_branches_num);
   });
   return change_p;
 }
