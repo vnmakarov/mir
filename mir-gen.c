@@ -2957,6 +2957,148 @@ static void finish_gvn (gen_ctx_t gen_ctx) {
   gen_ctx->gvn_ctx = NULL;
 }
 
+/* New page */
+
+/* Dead store elimination */
+
+#define mem_live_in in
+#define mem_live_out out
+#define mem_live_gen gen
+#define mem_live_kill kill
+
+static void mem_live_con_func_0 (bb_t bb) {
+  if (bb->index != 1) bitmap_clear (bb->mem_live_in);
+}
+
+static int mem_live_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
+  edge_t e;
+  int change_p = FALSE;
+
+  for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
+    change_p |= bitmap_ior (bb->mem_live_out, bb->mem_live_out, e->dst->mem_live_in);
+  return change_p;
+}
+
+static int mem_live_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
+  return bitmap_ior_and_compl (bb->mem_live_in, bb->mem_live_gen, bb->mem_live_out,
+                               bb->mem_live_kill);
+}
+
+static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn) {
+  bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
+  MIR_insn_t insn;
+  uint32_t nloc;
+
+  for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
+       insn = DLIST_PREV (MIR_insn_t, insn)) {
+    if (MIR_call_code_p (insn->code)) bitmap_set_bit_range_p (bb->mem_live_gen, 1, curr_nloc);
+    if (!move_code_p (insn->code)) continue;
+    if (insn->ops[0].mode == MIR_OP_MEM) { /* store */
+      if ((nloc = insn->ops[0].u.mem.nloc) != 0) {
+        bitmap_clear_bit_p (bb->mem_live_gen, nloc);
+        bitmap_set_bit_p (bb->mem_live_kill, nloc);
+      }
+    } else if (insn->ops[1].mode == MIR_OP_MEM) { /* load */
+      if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
+        bitmap_set_bit_p (bb->mem_live_gen, nloc);
+        bitmap_clear_bit_p (bb->mem_live_kill, nloc);
+        if (1 && insn->ops[1].u.mem.alias_set == 0) {
+          bitmap_set_bit_range_p (bb->mem_live_gen, 1, curr_nloc);
+          bitmap_clear_bit_range_p (bb->mem_live_kill, 1, curr_nloc);
+        } else {
+          ; /* ??? */
+        }
+      } else {
+        bitmap_set_bit_range_p (bb->mem_live_gen, 1, curr_nloc);
+      }
+    }
+  }
+  return insn;
+}
+
+static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
+  MIR_reg_t nregs, n;
+  bb_t exit_bb = DLIST_EL (bb_t, curr_cfg->bbs, 1);
+
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    gen_assert (bb->mem_live_in != NULL && bb->mem_live_out != NULL && bb->mem_live_gen != NULL
+                && bb->mem_live_kill != NULL);
+    bitmap_clear (bb->mem_live_in);
+    bitmap_clear (bb->mem_live_out);
+    bitmap_clear (bb->mem_live_gen);
+    bitmap_clear (bb->mem_live_kill);
+  }
+  for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
+    tail = initiate_bb_mem_live_info (gen_ctx, tail);
+  bitmap_set_bit_range_p (exit_bb->mem_live_in, 1, curr_nloc);
+  bitmap_set_bit_range_p (exit_bb->mem_live_out, 1, curr_nloc);
+}
+
+static void print_mem_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
+  fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
+  output_bitmap (gen_ctx, "   Mem live in:", bb->mem_live_in, FALSE);
+  output_bitmap (gen_ctx, "   Mem live out:", bb->mem_live_out, FALSE);
+  output_bitmap (gen_ctx, "   Mem live gen:", bb->mem_live_gen, FALSE);
+  output_bitmap (gen_ctx, "   Mem live kill:", bb->mem_live_kill, FALSE);
+}
+
+static void calculate_mem_live_info (gen_ctx_t gen_ctx) {
+  initiate_mem_live_info (gen_ctx);
+  solve_dataflow (gen_ctx, FALSE, mem_live_con_func_0, mem_live_con_func_n, mem_live_trans_func);
+  DEBUG (2, {
+    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+      print_mem_bb_live_info (gen_ctx, bb);
+  });
+}
+
+static void dse (gen_ctx_t gen_ctx) {
+  MIR_insn_t insn;
+  uint32_t nloc;
+  long dead_stores_num = 0;
+  bitmap_t live = temp_bitmap;
+
+  calculate_mem_live_info (gen_ctx);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    bitmap_copy (live, bb->mem_live_out);
+    for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
+      insn = bb_insn->insn;
+      if (MIR_call_code_p (insn->code)) bitmap_set_bit_range_p (live, 1, curr_nloc);
+      if (!move_code_p (insn->code)) continue;
+      if (insn->ops[0].mode == MIR_OP_MEM) { /* store */
+        if ((nloc = insn->ops[0].u.mem.nloc) != 0) {
+          if (!bitmap_clear_bit_p (live, nloc)) {
+            DEBUG (2, {
+              fprintf (debug_file, "Removing dead store ");
+              print_bb_insn (gen_ctx, bb_insn, FALSE);
+            });
+            remove_ssa_edge (gen_ctx, insn->ops[0].data);
+            remove_ssa_edge (gen_ctx, insn->ops[1].data);
+            gen_delete_insn (gen_ctx, insn);
+            dead_stores_num++;
+          }
+        }
+      } else if (insn->ops[1].mode == MIR_OP_MEM) { /* load */
+        if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
+          bitmap_set_bit_p (live, nloc);
+          if (1 && insn->ops[1].u.mem.alias_set == 0)
+            bitmap_set_bit_range_p (live, 1, curr_nloc);
+          else
+            ; /* ??? */
+        } else {
+          bitmap_set_bit_range_p (live, 1, curr_nloc);
+        }
+      }
+    }
+  }
+  DEBUG (1, { fprintf (debug_file, "%5ld removed dead stores\n", dead_stores_num); });
+}
+
+#undef mem_live_in
+#undef mem_live_out
+#undef mem_live_gen
+#undef mem_live_kill
+
 /* New Page */
 
 /* Sparse Conditional Constant Propagation.  Live info should exist.  */
