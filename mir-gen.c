@@ -6056,16 +6056,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#ifndef NO_COPY_PROP
-  if (optimize_level >= 2) {
-    DEBUG (2, { fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
-    copy_prop (gen_ctx);
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after Copy Propagation:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-    });
-  }
-#endif /* #ifndef NO_COPY_PROP */
 #ifndef NO_GVN
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++GVN:\n"); });
@@ -6077,6 +6067,26 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     gvn_clear (gen_ctx);
   }
 #endif /* #ifndef NO_GVN */
+#ifndef NO_COPY_PROP
+  if (optimize_level >= 2) {
+    DEBUG (2, { fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
+    copy_prop (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after Copy Propagation:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #ifndef NO_COPY_PROP */
+#if !defined(NO_DSE) && !defined(NO_GVN)
+  if (optimize_level >= 2) {
+    DEBUG (2, { fprintf (debug_file, "+++++++++++++DSE:\n"); });
+    dse (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after DSE after GVN:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #if !defined(NO_DSE) && !defined(NO_GVN) */
 #ifndef NO_GVN
   if (optimize_level >= 2) {
     ssa_dead_code_elimination (gen_ctx);
