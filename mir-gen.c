@@ -158,7 +158,7 @@ struct gen_ctx {
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
   bitmap_t call_used_hard_regs[MIR_T_BOUND], func_used_hard_regs;
   func_cfg_t curr_cfg;
-  uint32_t curr_bb_index, curr_loop_node_index;
+  uint32_t curr_bb_index, curr_loop_node_index, curr_nloc;
   DLIST (dead_var_t) free_dead_vars;
   struct target_ctx *target_ctx;
   struct data_flow_ctx *data_flow_ctx;
@@ -191,6 +191,7 @@ struct gen_ctx {
 #define curr_cfg gen_ctx->curr_cfg
 #define curr_bb_index gen_ctx->curr_bb_index
 #define curr_loop_node_index gen_ctx->curr_loop_node_index
+#define curr_nloc gen_ctx->curr_nloc
 #define free_dead_vars gen_ctx->free_dead_vars
 #define dead_bb_insns gen_ctx->dead_bb_insns
 #define loop_nodes gen_ctx->loop_nodes
@@ -2597,11 +2598,11 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t bb_insn, store_bb_insn, new_bb_insn, new_bb_insn2, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
-  long gvn_insns_num = 0;
-  uint32_t curr_nloc = 0;
+  long gvn_insns_num = 0, ccp_insns_num = 0;
   bitmap_t curr_mem_available = temp_bitmap;
   MIR_func_t func = curr_func_item->u.func;
 
+  curr_nloc = 0;
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%d:\n", bb->index); });
@@ -2685,6 +2686,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
             break;
           }
           val_p = TRUE;
+          ccp_insns_num++;
         } else if (add_sub_const_insn_p (insn, &val2) && (se = insn->ops[1].data) != NULL
                    && (def_insn = skip_moves (se->def->insn)) != NULL
                    && add_sub_const_insn_p (def_insn, &val)) {
@@ -2910,7 +2912,10 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       });
     }
   }
-  DEBUG (1, { fprintf (debug_file, "%5ld found GVN redundant insns\n", gvn_insns_num); });
+  DEBUG (1, {
+    fprintf (debug_file, "%5ld found GVN redundant insns, %ld ccp insns\n", gvn_insns_num,
+             ccp_insns_num);
+  });
 }
 
 static void gvn (gen_ctx_t gen_ctx) {
