@@ -1669,6 +1669,19 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
   return phi;
 }
 
+static MIR_insn_t get_last_bb_phi_insn (gen_ctx_t gen_ctx, MIR_insn_t phi_insn) {
+  MIR_insn_t curr_insn, next_insn;
+  bb_t bb = ((bb_insn_t) phi_insn->data)->bb;
+
+  gen_assert (phi_insn->code == MIR_PHI);
+  for (curr_insn = phi_insn;
+       (next_insn = DLIST_NEXT (MIR_insn_t, curr_insn)) != NULL
+       && ((bb_insn_t) next_insn->data)->bb == bb && next_insn->code == MIR_PHI;
+       curr_insn = next_insn)
+    ;
+  return curr_insn;
+}
+
 static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t src;
@@ -1792,6 +1805,14 @@ static void remove_ssa_edge (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
   gen_assert (ssa_edge->use->insn->ops[ssa_edge->use_op_num].data == ssa_edge);
   ssa_edge->use->insn->ops[ssa_edge->use_op_num].data = NULL;
   free (ssa_edge);
+}
+
+static void remove_insn_ssa_edges (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  ssa_edge_t ssa_edge;
+  for (size_t i = 0; i < insn->nops; i++) {
+    /* output operand refers to chain of ssa edges -- remove them all: */
+    while ((ssa_edge = insn->ops[i].data) != NULL) remove_ssa_edge (gen_ctx, ssa_edge);
+  }
 }
 
 static void change_ssa_edge_list_def (ssa_edge_t list, bb_insn_t new_bb_insn,
@@ -2518,10 +2539,10 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
 }
 
 static int gvn_insn_p (MIR_insn_t insn) {
-  return (!MIR_branch_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_SWITCH
-          && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
-          && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
-          && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END && insn->code != MIR_PHI);
+  return (insn->code != MIR_RET && insn->code != MIR_SWITCH && insn->code != MIR_LABEL
+          && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
+          && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_ARG
+          && insn->code != MIR_VA_END);
 }
 
 #if !MIR_NO_GEN_DEBUG
@@ -2593,12 +2614,229 @@ static void print_bb_insn_value (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   });
 }
 
+static int get_gvn_op (gen_ctx_t gen_ctx, MIR_insn_t insn, size_t nop, int64_t *val) {
+  MIR_op_t *op_ref = &insn->ops[nop];
+  ssa_edge_t ssa_edge;
+  bb_insn_t def_bb_insn;
+
+  if ((ssa_edge = op_ref->data) != NULL && (def_bb_insn = ssa_edge->def)->gvn_val_const_p) {
+    *val = def_bb_insn->gvn_val;
+    return TRUE;
+  }
+  return FALSE;
+}
+
+static int get_gvn_2ops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *val1) {
+  return get_gvn_op (gen_ctx, insn, 1, val1);
+}
+
+static int get_gvn_3ops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *val1, int64_t *val2) {
+  if (get_gvn_op (gen_ctx, insn, 1, val1) && get_gvn_op (gen_ctx, insn, 2, val2)) return TRUE;
+  return FALSE;
+}
+
+static int get_gvn_2iops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *p) {
+  int64_t val;
+
+  if (!get_gvn_2ops (gen_ctx, insn, &val)) return FALSE;
+  *p = val;
+  return TRUE;
+}
+
+static int get_gvn_2isops (gen_ctx_t gen_ctx, MIR_insn_t insn, int32_t *p) {
+  int64_t val;
+
+  if (!get_gvn_2ops (gen_ctx, insn, &val)) return FALSE;
+  *p = val;
+  return TRUE;
+}
+
+static int MIR_UNUSED get_gvn_2usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p) {
+  int64_t val;
+
+  if (!get_gvn_2ops (gen_ctx, insn, &val)) return FALSE;
+  *p = val;
+  return TRUE;
+}
+
+static int get_gvn_3iops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *p1, int64_t *p2) {
+  int64_t val1, val2;
+
+  if (!get_gvn_3ops (gen_ctx, insn, &val1, &val2)) return FALSE;
+  *p1 = val1;
+  *p2 = val2;
+  return TRUE;
+}
+
+static int get_gvn_3isops (gen_ctx_t gen_ctx, MIR_insn_t insn, int32_t *p1, int32_t *p2) {
+  int64_t val1, val2;
+
+  if (!get_gvn_3ops (gen_ctx, insn, &val1, &val2)) return FALSE;
+  *p1 = val1;
+  *p2 = val2;
+  return TRUE;
+}
+
+static int get_gvn_3uops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint64_t *p1, uint64_t *p2) {
+  int64_t val1, val2;
+
+  if (!get_gvn_3ops (gen_ctx, insn, &val1, &val2)) return FALSE;
+  *p1 = val1;
+  *p2 = val2;
+  return TRUE;
+}
+
+static int get_gvn_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uint32_t *p2) {
+  int64_t val1, val2;
+
+  if (!get_gvn_3ops (gen_ctx, insn, &val1, &val2)) return FALSE;
+  *p1 = val1;
+  *p2 = val2;
+  return TRUE;
+}
+
+#define GVN_EXT(tp)                                                \
+  do {                                                             \
+    int64_t p;                                                     \
+    if ((val_p = get_gvn_2iops (gen_ctx, insn, &p))) val = (tp) p; \
+  } while (0)
+
+#define GVN_IOP2(op)                                             \
+  do {                                                           \
+    int64_t p;                                                   \
+    if ((val_p = get_gvn_2iops (gen_ctx, insn, &p))) val = op p; \
+  } while (0)
+
+#define GVN_IOP2S(op)                                             \
+  do {                                                            \
+    int32_t p;                                                    \
+    if ((val_p = get_gvn_2isops (gen_ctx, insn, &p))) val = op p; \
+  } while (0)
+
+#define GVN_IOP3(op)                                                       \
+  do {                                                                     \
+    int64_t p1, p2;                                                        \
+    if ((val_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_IOP3S(op)                                                       \
+  do {                                                                      \
+    int32_t p1, p2;                                                         \
+    if ((val_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_UOP3(op)                                                       \
+  do {                                                                     \
+    uint64_t p1, p2;                                                       \
+    if ((val_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_UOP3S(op)                                                       \
+  do {                                                                      \
+    uint32_t p1, p2;                                                        \
+    if ((val_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_IOP30(op)                                                   \
+  do {                                                                  \
+    if (get_gvn_op (gen_ctx, insn, 2, &val) && val != 0) GVN_IOP3 (op); \
+  } while (0)
+
+#define GVN_IOP3S0(op)                                                   \
+  do {                                                                   \
+    if (get_gvn_op (gen_ctx, insn, 2, &val) && val != 0) GVN_IOP3S (op); \
+  } while (0)
+
+#define GVN_UOP30(op)                                                   \
+  do {                                                                  \
+    if (get_gvn_op (gen_ctx, insn, 2, &val) && val != 0) GVN_UOP3 (op); \
+  } while (0)
+
+#define GVN_UOP3S0(op)                                                   \
+  do {                                                                   \
+    if (get_gvn_op (gen_ctx, insn, 2, &val) && val != 0) GVN_UOP3S (op); \
+  } while (0)
+
+#define GVN_ICMP(op)                                                       \
+  do {                                                                     \
+    int64_t p1, p2;                                                        \
+    if ((val_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_ICMPS(op)                                                       \
+  do {                                                                      \
+    int32_t p1, p2;                                                         \
+    if ((val_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_UCMP(op)                                                       \
+  do {                                                                     \
+    uint64_t p1, p2;                                                       \
+    if ((val_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+#define GVN_UCMPS(op)                                                       \
+  do {                                                                      \
+    uint32_t p1, p2;                                                        \
+    if ((val_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+  } while (0)
+
+static int gvn_phi_update (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
+  MIR_insn_t phi_insn = phi->insn;
+  bb_t bb = phi->bb;
+  edge_t e;
+  size_t nop;
+  int64_t v;
+
+  nop = 1;
+  for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e), nop++) {
+    /* Update phi value: */
+    gen_assert (nop < phi_insn->nops);
+    if (!get_gvn_op (gen_ctx, phi_insn, nop, &v)) return FALSE;
+    if (nop == 1)
+      *val = v;
+    else if (*val != v)
+      return FALSE;
+  }
+  return TRUE;
+}
+
+static void remove_edge_phi_ops (gen_ctx_t gen_ctx, edge_t e) {
+  size_t i, nop;
+  edge_t e2;
+  MIR_insn_t insn;
+  ssa_edge_t se;
+
+  for (nop = 1, e2 = DLIST_HEAD (in_edge_t, e->dst->in_edges); e2 != NULL && e2 != e;
+       e2 = DLIST_NEXT (in_edge_t, e2), nop++)
+    ;
+  gen_assert (e2 != NULL);
+  for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, e->dst->bb_insns); bb_insn != NULL;
+       bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+    if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
+    if (insn->code != MIR_PHI) break;
+    if ((se = insn->ops[nop].data) != NULL) remove_ssa_edge (gen_ctx, se);
+    for (i = nop; i + 1 < insn->nops; i++) {
+      insn->ops[i] = insn->ops[i + 1];
+      /* se can be null from some previously removed BB insn: */
+      if ((se = insn->ops[i].data) != NULL) {
+        gen_assert (se->use_op_num == i + 1);
+        se->use_op_num = i;
+      }
+    }
+    insn->nops--;
+  }
+}
+static void remove_dest_phi_ops (gen_ctx_t gen_ctx, bb_t bb) {
+  for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
+    remove_edge_phi_ops (gen_ctx, e);
+}
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
   bb_insn_t bb_insn, store_bb_insn, new_bb_insn, new_bb_insn2, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
-  long gvn_insns_num = 0, ccp_insns_num = 0;
+  long gvn_insns_num = 0, ccp_insns_num = 0, bb_deleted_insns_num = 0, deleted_branches_num = 0;
   bitmap_t curr_mem_available = temp_bitmap;
   MIR_func_t func = curr_func_item->u.func;
 
@@ -2606,6 +2844,20 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%d:\n", bb->index); });
+    if (bb->index != 0 && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL) {
+      DEBUG (2, { fprintf (debug_file, "  BB%d is unreachable and removed\n", bb->index); });
+      for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+           bb_insn = next_bb_insn) {
+        next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
+        MIR_insn_t insn = bb_insn->insn;
+        remove_insn_ssa_edges (gen_ctx, insn);
+        gen_delete_insn (gen_ctx, insn);
+        bb_deleted_insns_num++;
+      }
+      remove_dest_phi_ops (gen_ctx, bb);
+      delete_bb (gen_ctx, bb);
+      continue;
+    }
     bitmap_copy (curr_mem_available, bb->in);
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e, prev_e, store_expr;
@@ -2613,7 +2865,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       int add_def_p, val_p, cont_p;
       MIR_type_t type;
       MIR_insn_code_t move_code;
-      MIR_insn_t store, new_insn, new_insn2, def_insn, insn = bb_insn->insn;
+      MIR_insn_t store, new_insn, new_insn2, def_insn, after, insn = bb_insn->insn;
       ssa_edge_t list, se, se2;
       bb_insn_t def_bb_insn, def_bb_insn2, new_bb_copy_insn;
       int64_t val, val2;
@@ -2629,67 +2881,90 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       if (MIR_call_code_p (insn->code)) bitmap_clear (curr_mem_available);
       if (!gvn_insn_p (insn)) continue;
       val_p = FALSE;
-      switch (insn->code) { /* we are interesting only in address calculations: */
-      case MIR_EXT8:
-      case MIR_UEXT8:
-        if ((se = insn->ops[1].data) != NULL && (def_bb_insn = se->def)->gvn_val_const_p) {
-          val = insn->code == MIR_EXT8 ? (int64_t) (int8_t) def_bb_insn->gvn_val
-                                       : (int64_t) (uint8_t) def_bb_insn->gvn_val;
-          val_p = TRUE;
-        }
+      switch (insn->code) {
+      case MIR_PHI: val_p = gvn_phi_update (gen_ctx, bb_insn, &val); break;
+      case MIR_EXT8: GVN_EXT (int8_t); break;
+      case MIR_EXT16: GVN_EXT (int16_t); break;
+      case MIR_EXT32: GVN_EXT (int32_t); break;
+      case MIR_UEXT8: GVN_EXT (uint8_t); break;
+      case MIR_UEXT16: GVN_EXT (uint16_t); break;
+      case MIR_UEXT32: GVN_EXT (uint32_t); break;
+
+      case MIR_NEG: GVN_IOP2 (-); break;
+      case MIR_NEGS: GVN_IOP2S (-); break;
+
+      case MIR_MUL: GVN_IOP3 (*); break;
+      case MIR_MULS: GVN_IOP3S (*); break;
+
+      case MIR_DIV: GVN_IOP30 (/); break;
+      case MIR_DIVS: GVN_IOP3S0 (/); break;
+      case MIR_UDIV: GVN_UOP30 (/); break;
+      case MIR_UDIVS: GVN_UOP3S0 (/); break;
+
+      case MIR_MOD: GVN_IOP30 (%); break;
+      case MIR_MODS: GVN_IOP3S0 (%); break;
+      case MIR_UMOD: GVN_UOP30 (%); break;
+      case MIR_UMODS: GVN_UOP3S0 (%); break;
+
+      case MIR_AND: GVN_IOP3 (&); break;
+      case MIR_ANDS: GVN_IOP3S (&); break;
+      case MIR_OR: GVN_IOP3 (|); break;
+      case MIR_ORS: GVN_IOP3S (|); break;
+      case MIR_XOR: GVN_IOP3 (^); break;
+      case MIR_XORS: GVN_IOP3S (^); break;
+
+      case MIR_LSH: GVN_IOP3 (<<); break;
+      case MIR_LSHS: GVN_IOP3S (<<); break;
+      case MIR_RSH: GVN_IOP3 (>>); break;
+      case MIR_RSHS: GVN_IOP3S (>>); break;
+      case MIR_URSH: GVN_UOP3 (>>); break;
+      case MIR_URSHS: GVN_UOP3S (>>); break;
+
+      case MIR_EQ: GVN_ICMP (==); break;
+      case MIR_EQS: GVN_ICMPS (==); break;
+      case MIR_NE: GVN_ICMP (!=); break;
+      case MIR_NES: GVN_ICMPS (!=); break;
+
+      case MIR_LT: GVN_ICMP (<); break;
+      case MIR_LTS: GVN_ICMPS (<); break;
+      case MIR_ULT: GVN_UCMP (<); break;
+      case MIR_ULTS: GVN_UCMPS (<); break;
+      case MIR_LE: GVN_ICMP (<=); break;
+      case MIR_LES: GVN_ICMPS (<=); break;
+      case MIR_ULE: GVN_UCMP (<=); break;
+      case MIR_ULES: GVN_UCMPS (<=); break;
+      case MIR_GT: GVN_ICMP (>); break;
+      case MIR_GTS: GVN_ICMPS (>); break;
+      case MIR_UGT: GVN_UCMP (>); break;
+      case MIR_UGTS: GVN_UCMPS (>); break;
+      case MIR_GE: GVN_ICMP (>=); break;
+      case MIR_GES: GVN_ICMPS (>=); break;
+      case MIR_UGE: GVN_UCMP (>=); break;
+      case MIR_UGES:
+        GVN_UCMPS (>=);
         break;
-      case MIR_EXT16:
-      case MIR_UEXT16:
-        if ((se = insn->ops[1].data) != NULL && (def_bb_insn = se->def)->gvn_val_const_p) {
-          val = insn->code == MIR_EXT16 ? (int64_t) (int16_t) def_bb_insn->gvn_val
-                                        : (int64_t) (uint16_t) def_bb_insn->gvn_val;
-          val_p = TRUE;
-        }
-        break;
-      case MIR_EXT32:
-      case MIR_UEXT32:
-        if ((se = insn->ops[1].data) != NULL && (def_bb_insn = se->def)->gvn_val_const_p) {
-          val = insn->code == MIR_EXT32 ? (int64_t) (int32_t) def_bb_insn->gvn_val
-                                        : (int64_t) (uint32_t) def_bb_insn->gvn_val;
-          val_p = TRUE;
-        }
-        break;
+        /* special treatement for address canonization: */
       case MIR_ADD:
-      case MIR_SUB:
-      case MIR_MUL:
-      case MIR_LSH:
+        GVN_IOP3 (+);
+        if (!val_p) goto canon_expr;
+        break;
       case MIR_ADDS:
+        GVN_IOP3S (+);
+        if (!val_p) goto canon_expr;
+        break;
+      case MIR_SUB:
+        GVN_IOP3 (-);
+        if (!val_p) goto canon_expr;
+        break;
       case MIR_SUBS:
-      case MIR_MULS:
-      case MIR_LSHS:
+        GVN_IOP3S (-);
+        if (!val_p) goto canon_expr;
+        break;
+      canon_expr:
         cont_p = TRUE;
-        if ((se = insn->ops[1].data) != NULL && (se2 = insn->ops[2].data) != NULL
-            && (def_bb_insn = se->def)->gvn_val_const_p
-            && (def_bb_insn2 = se2->def)->gvn_val_const_p) {
-          val_p = TRUE;
-          switch (insn->code) {
-          case MIR_ADD: val = def_bb_insn->gvn_val + def_bb_insn2->gvn_val; break;
-          case MIR_SUB: val = def_bb_insn->gvn_val - def_bb_insn2->gvn_val; break;
-          case MIR_MUL: val = def_bb_insn->gvn_val * def_bb_insn2->gvn_val; break;
-          case MIR_LSH: val = def_bb_insn->gvn_val << def_bb_insn2->gvn_val; break;
-          case MIR_ADDS:
-            val = (int32_t) def_bb_insn->gvn_val + (int32_t) def_bb_insn2->gvn_val;
-            break;
-          case MIR_SUBS:
-            val = (int32_t) def_bb_insn->gvn_val - (int32_t) def_bb_insn2->gvn_val;
-            break;
-          case MIR_MULS:
-            val = (int32_t) def_bb_insn->gvn_val * (int32_t) def_bb_insn2->gvn_val;
-            break;
-          case MIR_LSHS:
-            val = (int32_t) def_bb_insn->gvn_val << (int32_t) def_bb_insn2->gvn_val;
-            break;
-          }
-          val_p = TRUE;
-          ccp_insns_num++;
-        } else if (add_sub_const_insn_p (insn, &val2) && (se = insn->ops[1].data) != NULL
-                   && (def_insn = skip_moves (se->def->insn)) != NULL
-                   && add_sub_const_insn_p (def_insn, &val)) {
+        if (add_sub_const_insn_p (insn, &val2) && (se = insn->ops[1].data) != NULL
+            && (def_insn = skip_moves (se->def->insn)) != NULL
+            && add_sub_const_insn_p (def_insn, &val)) {
           /* r1=r0+const; ... r2=r1+const2 =>
              temp = r0; r1=r0+const; ... r2=r1+const2;r2=temp+(const+const2): */
           temp_reg = gen_new_temp_reg (gen_ctx, MIR_T_I64, func);
@@ -2825,24 +3100,90 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
           }
         }
         break;
+      case MIR_BT:
+      case MIR_BTS: val_p = get_gvn_op (gen_ctx, insn, 1, &val); break;
+      case MIR_BF:
+      case MIR_BFS:
+        val_p = get_gvn_op (gen_ctx, insn, 1, &val);
+        if (val_p) val = !val;
+        break;
+      case MIR_BEQ: GVN_ICMP (==); break;
+      case MIR_BEQS: GVN_ICMPS (==); break;
+      case MIR_BNE: GVN_ICMP (!=); break;
+      case MIR_BNES: GVN_ICMPS (!=); break;
+
+      case MIR_BLT: GVN_ICMP (<); break;
+      case MIR_BLTS: GVN_ICMPS (<); break;
+      case MIR_UBLT: GVN_UCMP (<); break;
+      case MIR_UBLTS: GVN_UCMPS (<); break;
+      case MIR_BLE: GVN_ICMP (<=); break;
+      case MIR_BLES: GVN_ICMPS (<=); break;
+      case MIR_UBLE: GVN_UCMP (<=); break;
+      case MIR_UBLES: GVN_UCMPS (<=); break;
+      case MIR_BGT: GVN_ICMP (>); break;
+      case MIR_BGTS: GVN_ICMPS (>); break;
+      case MIR_UBGT: GVN_UCMP (>); break;
+      case MIR_UBGTS: GVN_UCMPS (>); break;
+      case MIR_BGE: GVN_ICMP (>=); break;
+      case MIR_BGES: GVN_ICMPS (>=); break;
+      case MIR_UBGE: GVN_UCMP (>=); break;
+      case MIR_UBGES: GVN_UCMPS (>=); break;
       default: break;
       }
+      if (val_p) ccp_insns_num++;
       if (val_p) {
         print_bb_insn_value (gen_ctx, bb_insn);
-        new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], MIR_new_int_op (ctx, val));
-        gen_add_insn_after (gen_ctx, insn, new_insn);
-        new_bb_insn = new_insn->data;
-        redirect_def (gen_ctx, insn, new_insn, FALSE);
-        new_bb_insn->gvn_val_const_p = TRUE;
-        new_bb_insn->gvn_val = val;
-        gvn_insns_num++;
-        DEBUG (2, {
-          fprintf (debug_file, "  Adding insn after:");
-          MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
-        });
-        print_bb_insn_value (gen_ctx, new_bb_insn);
+        if (MIR_branch_code_p (insn->code)) {
+          edge_t e;
+
+          if (val == 0) {
+            DEBUG (2, {
+              fprintf (debug_file, "  removing branch insn ");
+              MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+              fprintf (debug_file, "\n");
+            });
+            remove_insn_ssa_edges (gen_ctx, insn);
+            gen_delete_insn (gen_ctx, insn);
+            e = DLIST_EL (out_edge_t, bb->out_edges, 1);
+            remove_edge_phi_ops (gen_ctx, e);
+            delete_edge (e);
+            deleted_branches_num++;
+          } else {
+            new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]); /* label is always 0-th op */
+            DEBUG (2, {
+              fprintf (debug_file, "  changing branch insn ");
+              MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+              fprintf (debug_file, " onto jump insn ");
+              MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
+              fprintf (debug_file, "\n");
+            });
+            MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+            remove_insn_ssa_edges (gen_ctx, insn);
+            MIR_remove_insn (ctx, curr_func_item, insn);
+            new_insn->data = bb_insn;
+            bb_insn->insn = new_insn;
+            e = DLIST_EL (out_edge_t, bb->out_edges, 0);
+            remove_edge_phi_ops (gen_ctx, e);
+            delete_edge (e);
+          }
+        } else {
+          new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], MIR_new_int_op (ctx, val));
+          after = insn->code == MIR_PHI ? get_last_bb_phi_insn (gen_ctx, insn) : insn;
+          gen_add_insn_after (gen_ctx, after, new_insn);
+          new_bb_insn = new_insn->data;
+          redirect_def (gen_ctx, insn, new_insn, FALSE);
+          new_bb_insn->gvn_val_const_p = TRUE;
+          new_bb_insn->gvn_val = val;
+          gvn_insns_num++;
+          DEBUG (2, {
+            fprintf (debug_file, "  Adding insn after:");
+            MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
+          });
+          print_bb_insn_value (gen_ctx, new_bb_insn);
+        }
         continue;
       }
+      if (MIR_branch_code_p (insn->code) || insn->code == MIR_PHI) continue;
       if (move_p (insn)) {
         e = NULL;
         def_bb_insn = ((ssa_edge_t) insn->ops[1].data)->def;
@@ -2913,8 +3254,10 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
     }
   }
   DEBUG (1, {
-    fprintf (debug_file, "%5ld found GVN redundant insns, %ld ccp insns\n", gvn_insns_num,
-             ccp_insns_num);
+    fprintf (debug_file,
+             "%5ld found GVN redundant insns, %ld ccp insns, %ld deleted bb insns, %ld deleted "
+             "branches\n",
+             gvn_insns_num, ccp_insns_num, bb_deleted_insns_num, deleted_branches_num);
   });
 }
 
@@ -3807,14 +4150,6 @@ static int get_ccp_res_val (gen_ctx_t gen_ctx, MIR_insn_t insn, const_t *val) {
   return TRUE;
 }
 
-static void ccp_remove_insn_ssa_edges (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  ssa_edge_t ssa_edge;
-  for (size_t i = 0; i < insn->nops; i++) {
-    /* output operand refers to chain of ssa edges -- remove them all: */
-    while ((ssa_edge = insn->ops[i].data) != NULL) remove_ssa_edge (gen_ctx, ssa_edge);
-  }
-}
-
 static int ccp_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb, next_bb;
@@ -3844,7 +4179,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
            bb_insn = next_bb_insn) {
         next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
         insn = bb_insn->insn;
-        ccp_remove_insn_ssa_edges (gen_ctx, insn);
+        remove_insn_ssa_edges (gen_ctx, insn);
         gen_delete_insn (gen_ctx, insn);
         bb_deleted_insns_num++;
       }
@@ -3881,7 +4216,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         insn = MIR_new_insn (ctx, MIR_MOV, bb_insn->insn->ops[0], op); /* copy ops[0].data too! */
         MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
         bb_insn->insn->ops[0].data = NULL;
-        ccp_remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
+        remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
         MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
         insn->data = bb_insn;
         bb_insn->insn = insn;
@@ -3902,7 +4237,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         MIR_output_insn (ctx, debug_file, prev_insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
       });
-      ccp_remove_insn_ssa_edges (gen_ctx, prev_insn);
+      remove_insn_ssa_edges (gen_ctx, prev_insn);
       gen_delete_insn (gen_ctx, prev_insn);
       deleted_branches_num++;
     }
@@ -3916,7 +4251,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         fprintf (debug_file, "\n");
       });
-      ccp_remove_insn_ssa_edges (gen_ctx, insn);
+      remove_insn_ssa_edges (gen_ctx, insn);
       gen_delete_insn (gen_ctx, insn);
       if ((e = DLIST_EL (out_edge_t, bb->out_edges, 1)) != NULL)
         delete_edge (e); /* e can be arleady deleted by previous removing an unreachable BB */
@@ -3931,7 +4266,7 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
         fprintf (debug_file, "\n");
       });
       MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
-      ccp_remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
+      remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
       MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
       insn->data = bb_insn;
       bb_insn->insn = insn;
