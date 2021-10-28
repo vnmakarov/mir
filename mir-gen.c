@@ -2,19 +2,20 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* Optimization pipeline:
-                                                          -------------     -------------
-           ----------     -----------     -----------    |  Copy       |   |   Global    |
-   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Propagation |-->|   Value     |
-           ----------     -----------     -----------    |             |   |  Numbering  |
-                                                          -------------     -------------
-                                                                                   |
-                                                           -------------           V
-    -------     ---------                     --------    |   Sparse    |    -------------
-   | Build |   | Finding |    -----------    | Out of |   | Conditional |   |  Dead Code  |
-   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<--|  Constant   |<--| Elimination |
-   | Info  |    ---------     -----------     --------    | Propagation |    -------------
-    -------                                                -------------
+/* Optimization pipeline:                                 ---------------
+                                                         | Global Value  |
+           ----------     -----------     -----------    | Numbering,    |    -------------
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Constant      |-->|  Copy       |
+           ----------     -----------     -----------    | Propagation,  |   | Propagation |
+                                                         | Redundant Load|    -------------
+                                                         | Elimination   |         |
+                                                          ---------------          |
+                                                                                   V
+    -------     ---------                     --------     -------------     -------------
+   | Build |   | Finding |    -----------    | Out of |   | Dead Code   |   | Dead Store  |
+   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<--| Elimination |<--| Elimination |
+   | Info  |    ---------     -----------     --------     -------------     -------------
+    -------
        |
        V
    --------                                                                ----------
@@ -26,12 +27,11 @@
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
    Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
+   Global Value Numbering: Removing redundant insns through GVN.  This includes constant
+                           propagation and redundant load eliminations.  Only for -O2 and above.
    Copy Propagation: SSA copy propagation keeping conventional SSA form and removing redundant
                      extension insns
-   Global Value Numbering: Removing redundant insns through GVN. Only for -O2 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
-   Sparse Conditional Constant Propagation: Constant propagation and removing death paths of CFG.
-                                            Only for -O2 and above.
    Out of SSA: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
