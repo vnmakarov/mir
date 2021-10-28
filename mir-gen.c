@@ -392,6 +392,7 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 struct bb_insn {
   MIR_insn_t insn;
   unsigned char gvn_val_const_p; /* true for int value, false otherwise */
+  unsigned char alloca_based_p;  /* true for value originated from alloca */
   uint32_t index, mem_index;
   int64_t gvn_val; /* used for GVN, it is negative index for non GVN expr insns */
   DLIST_LINK (bb_insn_t) bb_insn_link;
@@ -610,6 +611,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->bb = bb;
   bb_insn->insn = insn;
   bb_insn->gvn_val_const_p = FALSE;
+  bb_insn->alloca_based_p = insn->code == MIR_ALLOCA;
   bb_insn->call_hard_reg_args = NULL;
   gen_assert (curr_cfg->curr_bb_insn_index != (uint32_t) ~0ull);
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
@@ -2599,8 +2601,9 @@ static void print_bb_insn_value (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   MIR_context_t ctx = gen_ctx->ctx;
 
   DEBUG (2, {
-    fprintf (debug_file, "%s=%lld for insn %lu:", bb_insn->gvn_val_const_p ? "Const val" : "Val",
-             (long long) bb_insn->gvn_val, (unsigned long) bb_insn->index);
+    fprintf (debug_file, "%s%s=%lld for insn %lu:", bb_insn->alloca_based_p ? "alloca " : "",
+             bb_insn->gvn_val_const_p ? "const val" : "val", (long long) bb_insn->gvn_val,
+             (unsigned long) bb_insn->index);
     MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
   });
 }
@@ -2824,6 +2827,16 @@ static void remove_dest_phi_ops (gen_ctx_t gen_ctx, bb_t bb) {
     remove_edge_phi_ops (gen_ctx, e);
 }
 
+static void set_alloca_based_flag (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_insn_t insn = bb_insn->insn;
+  ssa_edge_t se;
+
+  gen_assert (insn->nops >= 2);
+  if (((se = insn->ops[1].data) != NULL && se->def->alloca_based_p)
+      || (insn->nops == 3 && (se = insn->ops[2].data) != NULL && se->def->alloca_based_p))
+    bb_insn->alloca_based_p = TRUE;
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -2941,18 +2954,22 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         break;
         /* special treatement for address canonization: */
       case MIR_ADD:
+        set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3 (+);
         if (!val_p) goto canon_expr;
         break;
       case MIR_ADDS:
+        set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3S (+);
         if (!val_p) goto canon_expr;
         break;
       case MIR_SUB:
+        set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3 (-);
         if (!val_p) goto canon_expr;
         break;
       case MIR_SUBS:
+        set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3S (-);
         if (!val_p) goto canon_expr;
         break;
@@ -3029,7 +3046,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
             next_bb_insn = new_bb_insn;
             continue;
           }
+          set_alloca_based_flag (gen_ctx, new_bb_copy_insn);
           cont_p = new_insn->code != MIR_MOV || new_insn->ops[1].mode != MIR_OP_REG;
+          if (!cont_p) set_alloca_based_flag (gen_ctx, new_bb_insn);
           insn = new_insn; /* to consider new insn next */
           bb_insn = new_bb_insn;
           next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
@@ -3040,6 +3059,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_FMOV:
       case MIR_DMOV:
       case MIR_LDMOV:
+        set_alloca_based_flag (gen_ctx, bb_insn);
         if (insn->ops[0].mode == MIR_OP_MEM) { /* store */
           se = insn->ops[0].data;              /* address def actually */
           if ((prev_e = add_store (gen_ctx, insn)) != NULL) {
@@ -3326,6 +3346,7 @@ static int mem_live_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
 static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn) {
   bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
   MIR_insn_t insn;
+  ssa_edge_t se;
   uint32_t nloc;
 
   for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
@@ -3341,7 +3362,9 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
       if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
         bitmap_set_bit_p (bb->mem_live_gen, nloc);
         bitmap_clear_bit_p (bb->mem_live_kill, nloc);
-        if (1 && insn->ops[1].u.mem.alias_set == 0) {
+        if ((se = insn->ops[1].data) != NULL && se->def->alloca_based_p)
+          ;
+        else if (insn->ops[1].u.mem.alias_set == 0) {
           bitmap_set_bit_range_p (bb->mem_live_gen, 1, curr_nloc);
           bitmap_clear_bit_range_p (bb->mem_live_kill, 1, curr_nloc);
         } else {
@@ -3394,6 +3417,7 @@ static void dse (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   uint32_t nloc;
   long dead_stores_num = 0;
+  ssa_edge_t se;
   bitmap_t live = temp_bitmap;
 
   calculate_mem_live_info (gen_ctx);
@@ -3420,7 +3444,9 @@ static void dse (gen_ctx_t gen_ctx) {
       } else if (insn->ops[1].mode == MIR_OP_MEM) { /* load */
         if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
           bitmap_set_bit_p (live, nloc);
-          if (1 && insn->ops[1].u.mem.alias_set == 0)
+          if ((se = insn->ops[1].data) != NULL && se->def->alloca_based_p)
+            ;
+          else if (insn->ops[1].u.mem.alias_set == 0)
             bitmap_set_bit_range_p (live, 1, curr_nloc);
           else
             ; /* ??? */
