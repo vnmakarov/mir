@@ -1540,8 +1540,10 @@ static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
 }
 
 static MIR_insn_code_t get_move_code (MIR_type_t type) {
-  return (type == MIR_T_F ? MIR_FMOV
-                          : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+  return (type == MIR_T_F    ? MIR_FMOV
+          : type == MIR_T_D  ? MIR_DMOV
+          : type == MIR_T_LD ? MIR_LDMOV
+                             : MIR_MOV);
 }
 
 static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t reg) {
@@ -2241,13 +2243,12 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, expr_t e) {
 
   if (e->temp_reg == 0) {
     mode = MIR_insn_op_mode (gen_ctx->ctx, e->insn, 0, &out_p);
-    e->temp_reg
-      = gen_new_temp_reg (gen_ctx,
-                          mode == MIR_OP_FLOAT
-                            ? MIR_T_F
-                            : mode == MIR_OP_DOUBLE ? MIR_T_D
-                                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64,
-                          curr_func_item->u.func);
+    e->temp_reg = gen_new_temp_reg (gen_ctx,
+                                    mode == MIR_OP_FLOAT     ? MIR_T_F
+                                    : mode == MIR_OP_DOUBLE  ? MIR_T_D
+                                    : mode == MIR_OP_LDOUBLE ? MIR_T_LD
+                                                             : MIR_T_I64,
+                                    curr_func_item->u.func);
   }
   return e->temp_reg;
 }
@@ -3206,6 +3207,8 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
       continue;
     change_p = TRUE;
     if (!res) {
+      edge_t e;
+
       DEBUG ({
         fprintf (debug_file, "  removing branch insn ");
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -3213,7 +3216,8 @@ static int ccp_modify (gen_ctx_t gen_ctx) {
       });
       ccp_remove_insn_ssa_edges (gen_ctx, insn);
       gen_delete_insn (gen_ctx, insn);
-      delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 1));
+      if ((e = DLIST_EL (out_edge_t, bb->out_edges, 1)) != NULL)
+        delete_edge (e); /* e can be arleady deleted by previous removing an unreachable BB */
     } else {
       insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]); /* label is always 0-th op */
       DEBUG ({
