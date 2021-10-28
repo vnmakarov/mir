@@ -2827,13 +2827,16 @@ static void remove_edge_phi_ops (gen_ctx_t gen_ctx, edge_t e) {
     insn->nops--;
   }
 }
+
 static void remove_dest_phi_ops (gen_ctx_t gen_ctx, bb_t bb) {
   for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
     remove_edge_phi_ops (gen_ctx, e);
 }
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
+  edge_t in_edge;
   bb_insn_t bb_insn, store_bb_insn, new_bb_insn, new_bb_insn2, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
   long gvn_insns_num = 0, ccp_insns_num = 0, bb_deleted_insns_num = 0, deleted_branches_num = 0;
@@ -2844,7 +2847,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%d:\n", bb->index); });
-    if (bb->index != 0 && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL) {
+    if (bb->index != 0
+        && ((in_edge = DLIST_HEAD (in_edge_t, bb->in_edges)) == NULL
+            || (DLIST_NEXT (in_edge_t, in_edge) == NULL && in_edge->src == bb))) {
       DEBUG (2, { fprintf (debug_file, "  BB%d is unreachable and removed\n", bb->index); });
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
            bb_insn = next_bb_insn) {
