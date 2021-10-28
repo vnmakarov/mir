@@ -4,10 +4,10 @@
 
 /* Optimization pipeline:                                 ---------------
                                                          | Global Value  |
-           ----------     -----------     -----------    | Numbering,    |    -------------
-   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Constant      |-->|  Copy       |
-           ----------     -----------     -----------    | Propagation,  |   | Propagation |
-                                                         | Redundant Load|    -------------
+           ----------     -----------     -----------    | Numbering,    |    ------------
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Constant      |-->| Copy       |
+           ----------     -----------     -----------    | Propagation,  |   | Propagation|
+                                                         | Redundant Load|    ------------
                                                          | Elimination   |         |
                                                           ---------------          |
                                                                                    V
