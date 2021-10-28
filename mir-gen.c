@@ -112,7 +112,6 @@ struct target_ctx;
 struct data_flow_ctx;
 struct ssa_ctx;
 struct gvn_ctx;
-struct ccp_ctx;
 struct lr_ctx;
 struct ra_ctx;
 struct selection_ctx;
@@ -164,7 +163,6 @@ struct gen_ctx {
   struct data_flow_ctx *data_flow_ctx;
   struct ssa_ctx *ssa_ctx;
   struct gvn_ctx *gvn_ctx;
-  struct ccp_ctx *ccp_ctx;
   struct lr_ctx *lr_ctx;
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
@@ -378,7 +376,6 @@ struct edge {
   DLIST_LINK (in_edge_t) in_link;
   DLIST_LINK (out_edge_t) out_link;
   unsigned char back_edge_p;
-  unsigned char skipped_p; /* used for CCP */
 };
 
 DEF_DLIST (in_edge_t, in_link);
@@ -394,7 +391,6 @@ struct insn_data { /* used only for calls/labels in -O0 mode */
 
 struct bb_insn {
   MIR_insn_t insn;
-  unsigned char flag;            /* used for CCP */
   unsigned char gvn_val_const_p; /* true for int value, false otherwise */
   uint32_t index, mem_index;
   int64_t gvn_val; /* used for GVN, it is negative index for non GVN expr insns */
@@ -409,7 +405,6 @@ DEF_DLIST (bb_insn_t, bb_insn_link);
 
 struct bb {
   size_t index, pre, rpost, bfs; /* preorder, reverse post order, breadth first order */
-  unsigned int flag;             /* used for CCP */
   DLIST_LINK (bb_t) bb_link;
   DLIST (in_edge_t) in_edges;
   /* The out edges order: optional fall through bb, optional label bb,
@@ -614,7 +609,6 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   insn->data = bb_insn;
   bb_insn->bb = bb;
   bb_insn->insn = insn;
-  bb_insn->flag = FALSE;
   bb_insn->gvn_val_const_p = FALSE;
   bb_insn->call_hard_reg_args = NULL;
   gen_assert (curr_cfg->curr_bb_insn_index != (uint32_t) ~0ull);
@@ -766,7 +760,6 @@ static bb_t create_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   bb_t bb = gen_malloc (gen_ctx, sizeof (struct bb));
 
   bb->pre = bb->rpost = bb->bfs = 0;
-  bb->flag = FALSE;
   bb->loop_node = NULL;
   DLIST_INIT (bb_insn_t, bb->bb_insns);
   DLIST_INIT (in_edge_t, bb->in_edges);
@@ -804,7 +797,7 @@ static edge_t create_edge (gen_ctx_t gen_ctx, bb_t src, bb_t dst, int append_p) 
     DLIST_PREPEND (in_edge_t, dst->in_edges, e);
     DLIST_PREPEND (out_edge_t, src->out_edges, e);
   }
-  e->back_edge_p = e->skipped_p = FALSE;
+  e->back_edge_p = FALSE;
   return e;
 }
 
@@ -1107,7 +1100,6 @@ static void output_in_edges (gen_ctx_t gen_ctx, bb_t bb) {
   fprintf (debug_file, "  in edges:");
   for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
     fprintf (debug_file, " %3lu", (unsigned long) e->src->index);
-    if (e->skipped_p) fprintf (debug_file, "(CCP skip)");
   }
   fprintf (debug_file, "\n");
 }
@@ -1118,7 +1110,6 @@ static void output_out_edges (gen_ctx_t gen_ctx, bb_t bb) {
   fprintf (debug_file, "  out edges:");
   for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
     fprintf (debug_file, " %3lu", (unsigned long) e->dst->index);
-    if (e->skipped_p) fprintf (debug_file, "(CCP skip)");
   }
   fprintf (debug_file, "\n");
 }
@@ -3449,891 +3440,6 @@ static void dse (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
-/* Sparse Conditional Constant Propagation.  Live info should exist.  */
-
-#define live_in in
-#define live_out out
-
-enum ccp_val_kind { CCP_CONST = 0, CCP_VARYING, CCP_UNKNOWN };
-
-struct ccp_val {
-  enum ccp_val_kind val_kind : 8;
-  unsigned int flag : 8;
-  size_t ccp_run;
-  const_t val;
-};
-
-typedef struct ccp_val *ccp_val_t;
-DEF_VARR (ccp_val_t);
-
-struct ccp_ctx {
-  size_t curr_ccp_run;
-  bitmap_t bb_visited;
-  VARR (bb_t) * ccp_bbs;
-  VARR (bb_insn_t) * ccp_insns;
-  VARR (ccp_val_t) * ccp_vals;
-};
-
-#define curr_ccp_run gen_ctx->ccp_ctx->curr_ccp_run
-#define bb_visited gen_ctx->ccp_ctx->bb_visited
-#define ccp_bbs gen_ctx->ccp_ctx->ccp_bbs
-#define ccp_insns gen_ctx->ccp_ctx->ccp_insns
-#define ccp_vals gen_ctx->ccp_ctx->ccp_vals
-
-static ccp_val_t get_ccp_val (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
-  ccp_val_t ccp_val;
-
-  while (VARR_LENGTH (ccp_val_t, ccp_vals) <= bb_insn->index) VARR_PUSH (ccp_val_t, ccp_vals, NULL);
-  if ((ccp_val = VARR_GET (ccp_val_t, ccp_vals, bb_insn->index)) == NULL) {
-    ccp_val = gen_malloc (gen_ctx, sizeof (struct ccp_val));
-    VARR_SET (ccp_val_t, ccp_vals, bb_insn->index, ccp_val);
-    ccp_val->ccp_run = 0;
-  }
-  if (ccp_val->ccp_run != curr_ccp_run) {
-    ccp_val->val_kind = bb_insn->bb == DLIST_HEAD (bb_t, curr_cfg->bbs) ? CCP_VARYING : CCP_UNKNOWN;
-    ccp_val->flag = FALSE;
-    ccp_val->ccp_run = curr_ccp_run;
-  }
-  return ccp_val;
-}
-
-#undef live_in
-#undef live_out
-
-static void initiate_ccp_info (gen_ctx_t gen_ctx) {
-  bb_insn_t bb_insn;
-  ccp_val_t ccp_val;
-
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) != NULL
-        && MIR_branch_code_p (bb_insn->insn->code) && bb_insn->insn->code != MIR_JMP
-        && bb_insn->insn->code != MIR_SWITCH) {
-      for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
-           e = DLIST_NEXT (out_edge_t, e))
-        if (e->dst != DLIST_EL (bb_t, curr_cfg->bbs, 1)) /* ignore exit bb */
-          e->skipped_p = TRUE;
-    }
-  }
-  bitmap_clear (bb_visited);
-  VARR_TRUNC (bb_insn_t, ccp_insns, 0);
-  VARR_TRUNC (bb_t, ccp_bbs, 0);
-  while (VARR_LENGTH (ccp_val_t, ccp_vals) != 0)
-    if ((ccp_val = VARR_POP (ccp_val_t, ccp_vals)) != NULL) free (ccp_val);
-  VARR_PUSH (bb_t, ccp_bbs, DLIST_HEAD (bb_t, curr_cfg->bbs)); /* entry bb */
-}
-
-static int var_op_p (MIR_op_t op) { return op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_REG; }
-static int var_insn_op_p (MIR_insn_t insn, size_t nop) { return var_op_p (insn->ops[nop]); }
-
-static enum ccp_val_kind get_op (gen_ctx_t gen_ctx, MIR_insn_t insn, size_t nop, const_t *val) {
-  MIR_op_t op;
-  ssa_edge_t ssa_edge;
-  ccp_val_t ccp_val;
-
-  if (!var_insn_op_p (insn, nop)) {
-    if ((op = insn->ops[nop]).mode == MIR_OP_INT) {
-      val->uns_p = FALSE;
-      val->u.i = op.u.i;
-      return CCP_CONST;
-    } else if (op.mode == MIR_OP_UINT) {
-      val->uns_p = TRUE;
-      val->u.u = op.u.u;
-      return CCP_CONST;
-    }
-    return CCP_VARYING;
-  }
-  ssa_edge = insn->ops[nop].data;
-  ccp_val = get_ccp_val (gen_ctx, ssa_edge->def);
-  if (ccp_val->val_kind == CCP_CONST) *val = ccp_val->val;
-  return ccp_val->val_kind;
-}
-
-static enum ccp_val_kind get_2ops (gen_ctx_t gen_ctx, MIR_insn_t insn, const_t *val1, int out_p) {
-  if (out_p && !var_insn_op_p (insn, 0)) return CCP_UNKNOWN;
-  return get_op (gen_ctx, insn, 1, val1);
-}
-
-static enum ccp_val_kind get_3ops (gen_ctx_t gen_ctx, MIR_insn_t insn, const_t *val1, const_t *val2,
-                                   int out_p) {
-  enum ccp_val_kind res1, res2;
-
-  if (out_p && !var_insn_op_p (insn, 0)) return CCP_UNKNOWN;
-  if ((res1 = get_op (gen_ctx, insn, 1, val1)) == CCP_VARYING) return CCP_VARYING;
-  if ((res2 = get_op (gen_ctx, insn, 2, val2)) == CCP_VARYING) return CCP_VARYING;
-  return res1 == CCP_UNKNOWN || res2 == CCP_UNKNOWN ? CCP_UNKNOWN : CCP_CONST;
-}
-
-static enum ccp_val_kind get_2iops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *p, int out_p) {
-  const_t val;
-  enum ccp_val_kind res;
-
-  if ((res = get_2ops (gen_ctx, insn, &val, out_p))) return res;
-  *p = val.u.i;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind get_2isops (gen_ctx_t gen_ctx, MIR_insn_t insn, int32_t *p, int out_p) {
-  const_t val;
-  enum ccp_val_kind res;
-
-  if ((res = get_2ops (gen_ctx, insn, &val, out_p))) return res;
-  *p = val.u.i;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind MIR_UNUSED get_2usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p,
-                                                int out_p) {
-  const_t val;
-  enum ccp_val_kind res;
-
-  if ((res = get_2ops (gen_ctx, insn, &val, out_p))) return res;
-  *p = val.u.u;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind get_3iops (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *p1, int64_t *p2,
-                                    int out_p) {
-  const_t val1, val2;
-  enum ccp_val_kind res;
-
-  if ((res = get_3ops (gen_ctx, insn, &val1, &val2, out_p))) return res;
-  *p1 = val1.u.i;
-  *p2 = val2.u.i;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind get_3isops (gen_ctx_t gen_ctx, MIR_insn_t insn, int32_t *p1, int32_t *p2,
-                                     int out_p) {
-  const_t val1, val2;
-  enum ccp_val_kind res;
-
-  if ((res = get_3ops (gen_ctx, insn, &val1, &val2, out_p))) return res;
-  *p1 = val1.u.i;
-  *p2 = val2.u.i;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind get_3uops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint64_t *p1, uint64_t *p2,
-                                    int out_p) {
-  const_t val1, val2;
-  enum ccp_val_kind res;
-
-  if ((res = get_3ops (gen_ctx, insn, &val1, &val2, out_p))) return res;
-  *p1 = val1.u.u;
-  *p2 = val2.u.u;
-  return CCP_CONST;
-}
-
-static enum ccp_val_kind get_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uint32_t *p2,
-                                     int out_p) {
-  const_t val1, val2;
-  enum ccp_val_kind res;
-
-  if ((res = get_3ops (gen_ctx, insn, &val1, &val2, out_p))) return res;
-  *p1 = val1.u.u;
-  *p2 = val2.u.u;
-  return CCP_CONST;
-}
-
-#define EXT(tp)                                                                       \
-  do {                                                                                \
-    int64_t p;                                                                        \
-    if ((ccp_res = get_2iops (gen_ctx, insn, &p, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                \
-    val.u.i = (tp) p;                                                                 \
-  } while (0)
-
-#define IOP2(op)                                                                      \
-  do {                                                                                \
-    int64_t p;                                                                        \
-    if ((ccp_res = get_2iops (gen_ctx, insn, &p, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                \
-    val.u.i = op p;                                                                   \
-  } while (0)
-
-#define IOP2S(op)                                                                      \
-  do {                                                                                 \
-    int32_t p;                                                                         \
-    if ((ccp_res = get_2isops (gen_ctx, insn, &p, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                 \
-    val.u.i = op p;                                                                    \
-  } while (0)
-
-#define UOP2S(op)                                                                      \
-  do {                                                                                 \
-    uint32_t p;                                                                        \
-    if ((ccp_res = get_2usops (gen_ctx, insn, &p, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                 \
-    val.u.u = op p;                                                                    \
-  } while (0)
-
-#define IOP3(op)                                                                            \
-  do {                                                                                      \
-    int64_t p1, p2;                                                                         \
-    if ((ccp_res = get_3iops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                      \
-    val.u.i = p1 op p2;                                                                     \
-  } while (0)
-
-#define IOP3S(op)                                                                            \
-  do {                                                                                       \
-    int32_t p1, p2;                                                                          \
-    if ((ccp_res = get_3isops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                       \
-    val.u.i = p1 op p2;                                                                      \
-  } while (0)
-
-#define UOP3(op)                                                                            \
-  do {                                                                                      \
-    uint64_t p1, p2;                                                                        \
-    if ((ccp_res = get_3uops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = TRUE;                                                                       \
-    val.u.u = p1 op p2;                                                                     \
-  } while (0)
-
-#define UOP3S(op)                                                                            \
-  do {                                                                                       \
-    uint32_t p1, p2;                                                                         \
-    if ((ccp_res = get_3usops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = TRUE;                                                                        \
-    val.u.u = p1 op p2;                                                                      \
-  } while (0)
-
-#define IOP30(op)                                                                                  \
-  do {                                                                                             \
-    if ((ccp_res = get_op (gen_ctx, insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const0; \
-    IOP3 (op);                                                                                     \
-  } while (0)
-
-#define IOP3S0(op)                                                                                 \
-  do {                                                                                             \
-    if ((ccp_res = get_op (gen_ctx, insn, 2, &val)) != CCP_CONST || val.u.i == 0) goto non_const0; \
-    IOP3S (op);                                                                                    \
-  } while (0)
-
-#define UOP30(op)                                                                                  \
-  do {                                                                                             \
-    if ((ccp_res = get_op (gen_ctx, insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const0; \
-    UOP3 (op);                                                                                     \
-  } while (0)
-
-#define UOP3S0(op)                                                                                 \
-  do {                                                                                             \
-    if ((ccp_res = get_op (gen_ctx, insn, 2, &val)) != CCP_CONST || val.u.u == 0) goto non_const0; \
-    UOP3S (op);                                                                                    \
-  } while (0)
-
-#define ICMP(op)                                                                            \
-  do {                                                                                      \
-    int64_t p1, p2;                                                                         \
-    if ((ccp_res = get_3iops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                      \
-    val.u.i = p1 op p2;                                                                     \
-  } while (0)
-
-#define ICMPS(op)                                                                            \
-  do {                                                                                       \
-    int32_t p1, p2;                                                                          \
-    if ((ccp_res = get_3isops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                       \
-    val.u.i = p1 op p2;                                                                      \
-  } while (0)
-
-#define UCMP(op)                                                                            \
-  do {                                                                                      \
-    uint64_t p1, p2;                                                                        \
-    if ((ccp_res = get_3uops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                      \
-    val.u.i = p1 op p2;                                                                     \
-  } while (0)
-
-#define UCMPS(op)                                                                            \
-  do {                                                                                       \
-    uint32_t p1, p2;                                                                         \
-    if ((ccp_res = get_3usops (gen_ctx, insn, &p1, &p2, TRUE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                       \
-    val.u.i = p1 op p2;                                                                      \
-  } while (0)
-
-#define BICMP(op)                                                                            \
-  do {                                                                                       \
-    int64_t p1, p2;                                                                          \
-    if ((ccp_res = get_3iops (gen_ctx, insn, &p1, &p2, FALSE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                       \
-    val.u.i = p1 op p2;                                                                      \
-  } while (0)
-
-#define BICMPS(op)                                                                            \
-  do {                                                                                        \
-    int32_t p1, p2;                                                                           \
-    if ((ccp_res = get_3isops (gen_ctx, insn, &p1, &p2, FALSE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                        \
-    val.u.i = p1 op p2;                                                                       \
-  } while (0)
-
-#define BUCMP(op)                                                                            \
-  do {                                                                                       \
-    uint64_t p1, p2;                                                                         \
-    if ((ccp_res = get_3uops (gen_ctx, insn, &p1, &p2, FALSE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                       \
-    val.u.i = p1 op p2;                                                                      \
-  } while (0)
-
-#define BUCMPS(op)                                                                            \
-  do {                                                                                        \
-    uint32_t p1, p2;                                                                          \
-    if ((ccp_res = get_3usops (gen_ctx, insn, &p1, &p2, FALSE)) != CCP_CONST) goto non_const; \
-    val.uns_p = FALSE;                                                                        \
-    val.u.i = p1 op p2;                                                                       \
-  } while (0)
-
-static int get_ccp_res_op (gen_ctx_t gen_ctx, MIR_insn_t insn, int out_num, MIR_op_t *op) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  int out_p;
-
-  gen_assert (!MIR_call_code_p (insn->code));
-  if (out_num > 0 || MIR_insn_nops (ctx, insn) < 1) return FALSE;
-  MIR_insn_op_mode (ctx, insn, 0, &out_p);
-  if (!out_p) return FALSE;
-  *op = insn->ops[0];
-  return TRUE;
-}
-
-static int ccp_phi_insn_update (gen_ctx_t gen_ctx, bb_insn_t phi) {
-  MIR_insn_t phi_insn = phi->insn;
-  bb_t bb = phi->bb;
-  edge_t e;
-  ssa_edge_t ssa_edge;
-  ccp_val_t res_ccp_val, op_ccp_val;
-  size_t nop;
-  int change_p = FALSE;
-
-  res_ccp_val = get_ccp_val (gen_ctx, phi);
-  if (res_ccp_val->val_kind == CCP_VARYING) return FALSE;
-  nop = 1;
-  for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e), nop++) {
-    /* Update phi value: */
-    if (e->skipped_p) continue;
-    gen_assert (nop < phi_insn->nops);
-    ssa_edge = phi_insn->ops[nop].data;
-    op_ccp_val = get_ccp_val (gen_ctx, ssa_edge->def);
-    if (op_ccp_val->val_kind == CCP_UNKNOWN) continue;
-    if (res_ccp_val->val_kind == CCP_UNKNOWN || op_ccp_val->val_kind == CCP_VARYING) {
-      change_p = res_ccp_val->val_kind != op_ccp_val->val_kind;
-      res_ccp_val->val_kind = op_ccp_val->val_kind;
-      if (op_ccp_val->val_kind == CCP_VARYING) break;
-      if (op_ccp_val->val_kind == CCP_CONST) res_ccp_val->val = op_ccp_val->val;
-    } else {
-      gen_assert (res_ccp_val->val_kind == CCP_CONST && op_ccp_val->val_kind == CCP_CONST);
-      if (res_ccp_val->val.uns_p != op_ccp_val->val.uns_p
-          || (res_ccp_val->val.uns_p && res_ccp_val->val.u.u != op_ccp_val->val.u.u)
-          || (!res_ccp_val->val.uns_p && res_ccp_val->val.u.i != op_ccp_val->val.u.i)) {
-        res_ccp_val->val_kind = CCP_VARYING;
-        change_p = TRUE;
-        break;
-      }
-    }
-  }
-  return change_p;
-}
-
-static int ccp_insn_update (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  // ??? should we do CCP for FP (fast-math) too
-  MIR_op_t op;
-  int change_p;
-  enum ccp_val_kind ccp_res;
-  const_t val;
-  ccp_val_t ccp_val;
-  enum ccp_val_kind val_kind;
-
-  switch (insn->code) {
-  case MIR_PHI: return ccp_phi_insn_update (gen_ctx, insn->data);
-  case MIR_MOV: IOP2 (+); break;
-  case MIR_EXT8: EXT (int8_t); break;
-  case MIR_EXT16: EXT (int16_t); break;
-  case MIR_EXT32: EXT (int32_t); break;
-  case MIR_UEXT8: EXT (uint8_t); break;
-  case MIR_UEXT16: EXT (uint16_t); break;
-  case MIR_UEXT32: EXT (uint32_t); break;
-
-  case MIR_NEG: IOP2 (-); break;
-  case MIR_NEGS: IOP2S (-); break;
-
-  case MIR_ADD: IOP3 (+); break;
-  case MIR_ADDS: IOP3S (+); break;
-
-  case MIR_SUB: IOP3 (-); break;
-  case MIR_SUBS: IOP3S (-); break;
-
-  case MIR_MUL: IOP3 (*); break;
-  case MIR_MULS: IOP3S (*); break;
-
-  case MIR_DIV: IOP30 (/); break;
-  case MIR_DIVS: IOP3S0 (/); break;
-  case MIR_UDIV: UOP30 (/); break;
-  case MIR_UDIVS: UOP3S0 (/); break;
-
-  case MIR_MOD: IOP30 (%); break;
-  case MIR_MODS: IOP3S0 (%); break;
-  case MIR_UMOD: UOP30 (%); break;
-  case MIR_UMODS: UOP3S0 (%); break;
-
-  case MIR_AND: IOP3 (&); break;
-  case MIR_ANDS: IOP3S (&); break;
-  case MIR_OR: IOP3 (|); break;
-  case MIR_ORS: IOP3S (|); break;
-  case MIR_XOR: IOP3 (^); break;
-  case MIR_XORS: IOP3S (^); break;
-
-  case MIR_LSH: IOP3 (<<); break;
-  case MIR_LSHS: IOP3S (<<); break;
-  case MIR_RSH: IOP3 (>>); break;
-  case MIR_RSHS: IOP3S (>>); break;
-  case MIR_URSH: UOP3 (>>); break;
-  case MIR_URSHS: UOP3S (>>); break;
-
-  case MIR_EQ: ICMP (==); break;
-  case MIR_EQS: ICMPS (==); break;
-  case MIR_NE: ICMP (!=); break;
-  case MIR_NES: ICMPS (!=); break;
-
-  case MIR_LT: ICMP (<); break;
-  case MIR_LTS: ICMPS (<); break;
-  case MIR_ULT: UCMP (<); break;
-  case MIR_ULTS: UCMPS (<); break;
-  case MIR_LE: ICMP (<=); break;
-  case MIR_LES: ICMPS (<=); break;
-  case MIR_ULE: UCMP (<=); break;
-  case MIR_ULES: UCMPS (<=); break;
-  case MIR_GT: ICMP (>); break;
-  case MIR_GTS: ICMPS (>); break;
-  case MIR_UGT: UCMP (>); break;
-  case MIR_UGTS: UCMPS (>); break;
-  case MIR_GE: ICMP (>=); break;
-  case MIR_GES: ICMPS (>=); break;
-  case MIR_UGE: UCMP (>=); break;
-  case MIR_UGES: UCMPS (>=); break;
-
-  default: ccp_res = CCP_VARYING; goto non_const;
-  }
-#ifndef NDEBUG
-  {
-    int out_p;
-
-    MIR_insn_op_mode (gen_ctx->ctx, insn, 0, &out_p); /* result here is always 0-th op */
-    gen_assert (out_p);
-  }
-#endif
-  ccp_val = get_ccp_val (gen_ctx, insn->data);
-  val_kind = ccp_val->val_kind;
-  gen_assert (val_kind == CCP_UNKNOWN || val_kind == CCP_CONST);
-  ccp_val->val_kind = CCP_CONST;
-  ccp_val->val = val;
-  return val_kind != CCP_CONST;
-non_const0:
-  if (ccp_res == CCP_CONST && val.u.i == 0) ccp_res = CCP_VARYING;
-non_const:
-  if (ccp_res == CCP_UNKNOWN) return FALSE;
-  if (MIR_call_code_p (insn->code)) {
-    ccp_val = get_ccp_val (gen_ctx, insn->data);
-    ccp_val->val_kind = CCP_VARYING;
-    return FALSE;
-  }
-  gen_assert (ccp_res == CCP_VARYING);
-  change_p = FALSE;
-  if (get_ccp_res_op (gen_ctx, insn, 0, &op)
-      && (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_REG)) {
-    ccp_val = get_ccp_val (gen_ctx, insn->data);
-    if (ccp_val->val_kind != CCP_VARYING) change_p = TRUE;
-    ccp_val->val_kind = CCP_VARYING;
-    gen_assert (!get_ccp_res_op (gen_ctx, insn, 1, &op));
-  }
-  return change_p;
-}
-
-static enum ccp_val_kind ccp_branch_update (gen_ctx_t gen_ctx, MIR_insn_t insn, int *res) {
-  enum ccp_val_kind ccp_res;
-  const_t val;
-
-  switch (insn->code) {
-  case MIR_BT:
-  case MIR_BTS:
-  case MIR_BF:
-  case MIR_BFS:
-    if ((ccp_res = get_op (gen_ctx, insn, 1, &val)) != CCP_CONST) return ccp_res;
-    if (insn->code == MIR_BTS || insn->code == MIR_BFS)
-      *res = val.uns_p ? (uint32_t) val.u.u != 0 : (int32_t) val.u.i != 0;
-    else
-      *res = val.uns_p ? val.u.u != 0 : val.u.i != 0;
-    if (insn->code == MIR_BF || insn->code == MIR_BFS) *res = !*res;
-    return CCP_CONST;
-  case MIR_BEQ: BICMP (==); break;
-  case MIR_BEQS: BICMPS (==); break;
-  case MIR_BNE: BICMP (!=); break;
-  case MIR_BNES: BICMPS (!=); break;
-
-  case MIR_BLT: BICMP (<); break;
-  case MIR_BLTS: BICMPS (<); break;
-  case MIR_UBLT: BUCMP (<); break;
-  case MIR_UBLTS: BUCMPS (<); break;
-  case MIR_BLE: BICMP (<=); break;
-  case MIR_BLES: BICMPS (<=); break;
-  case MIR_UBLE: BUCMP (<=); break;
-  case MIR_UBLES: BUCMPS (<=); break;
-  case MIR_BGT: BICMP (>); break;
-  case MIR_BGTS: BICMPS (>); break;
-  case MIR_UBGT: BUCMP (>); break;
-  case MIR_UBGTS: BUCMPS (>); break;
-  case MIR_BGE: BICMP (>=); break;
-  case MIR_BGES: BICMPS (>=); break;
-  case MIR_UBGE: BUCMP (>=); break;
-  case MIR_UBGES: BUCMPS (>=); break;
-
-  default: return CCP_VARYING;  // ??? should we do CCP for FP BCMP too
-  }
-  *res = val.u.i;
-  return CCP_CONST;
-non_const:
-  return ccp_res;
-}
-
-static void ccp_push_used_insns (gen_ctx_t gen_ctx, ssa_edge_t first_ssa_edge) {
-  MIR_context_t ctx = gen_ctx->ctx;
-
-  for (ssa_edge_t ssa_edge = first_ssa_edge; ssa_edge != NULL; ssa_edge = ssa_edge->next_use) {
-    bb_insn_t bb_insn = ssa_edge->use;
-
-    if (bb_insn->flag || !bitmap_bit_p (bb_visited, bb_insn->bb->index))
-      continue; /* already in ccp_insns or bb is not processed yet */
-    VARR_PUSH (bb_insn_t, ccp_insns, bb_insn);
-    DEBUG (2, {
-      fprintf (debug_file, "           pushing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
-      MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-    });
-    bb_insn->flag = TRUE;
-  }
-}
-
-static void ccp_process_active_edge (gen_ctx_t gen_ctx, edge_t e) {
-  if (e->skipped_p && !e->dst->flag) {
-    DEBUG (2, {
-      fprintf (debug_file, "         Make edge bb%lu->bb%lu active\n",
-               (unsigned long) e->src->index, (unsigned long) e->dst->index);
-    });
-    e->dst->flag = TRUE; /* just activated edge whose dest is not in ccp_bbs */
-    VARR_PUSH (bb_t, ccp_bbs, e->dst);
-  }
-  e->skipped_p = FALSE;
-}
-
-static void ccp_make_insn_update (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  MIR_op_t op;
-  ccp_val_t ccp_val;
-
-  if (!ccp_insn_update (gen_ctx, insn)) {
-    DEBUG (2, {
-      if (MIR_call_code_p (insn->code)) {
-        fprintf (debug_file, " -- keep all results varying");
-      } else if (get_ccp_res_op (gen_ctx, insn, 0, &op) && var_insn_op_p (insn, 0)) {
-        ccp_val = get_ccp_val (gen_ctx, insn->data);
-        if (ccp_val->val_kind == CCP_UNKNOWN) {
-          fprintf (debug_file, " -- make the result unknown");
-        } else if (ccp_val->val_kind == CCP_VARYING) {
-          fprintf (debug_file, " -- keep the result varying");
-        } else {
-          gen_assert (ccp_val->val_kind == CCP_CONST);
-          fprintf (debug_file, " -- keep the result a constant ");
-          print_const (debug_file, ccp_val->val);
-        }
-      }
-      fprintf (debug_file, "\n");
-    });
-  } else {
-    ccp_val = NULL; /* to remove an initilized warning */
-    if (get_ccp_res_op (gen_ctx, insn, 0, &op) && var_op_p (op)) {
-      ccp_val = get_ccp_val (gen_ctx, insn->data);
-      ccp_push_used_insns (gen_ctx, op.data);
-    }
-    gen_assert (ccp_val != NULL);
-    DEBUG (2, {
-      if (MIR_call_code_p (insn->code)) {
-        fprintf (debug_file, " -- make all results varying\n");
-      } else if (ccp_val->val_kind == CCP_VARYING) {
-        fprintf (debug_file, " -- make the result varying\n");
-      } else {
-        gen_assert (ccp_val->val_kind == CCP_CONST);
-        fprintf (debug_file, " -- make the result a constant ");
-        print_const (debug_file, ccp_val->val);
-        fprintf (debug_file, "\n");
-      }
-    });
-  }
-}
-
-static void ccp_process_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
-  int res;
-  enum ccp_val_kind ccp_res;
-  edge_t e;
-  bb_t bb = bb_insn->bb;
-  MIR_insn_t insn = bb_insn->insn;
-
-  DEBUG (2, {
-    fprintf (debug_file, "       processing bb%lu insn: ", (unsigned long) bb_insn->bb->index);
-    MIR_output_insn (gen_ctx->ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-  });
-  if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH) {
-    ccp_make_insn_update (gen_ctx, insn);  // ??? should we process SWITCH as cond branch
-    return;
-  }
-  DEBUG (2, { fprintf (debug_file, "\n"); });
-  if ((ccp_res = ccp_branch_update (gen_ctx, insn, &res)) == CCP_CONST) {
-    /* Remember about an edge to exit bb.  First edge is always for
-       fall through and the 2nd edge is for jump bb. */
-    gen_assert (DLIST_LENGTH (out_edge_t, bb->out_edges) >= 2);
-    e = res ? DLIST_EL (out_edge_t, bb->out_edges, 1) : DLIST_EL (out_edge_t, bb->out_edges, 0);
-    ccp_process_active_edge (gen_ctx, e);
-  } else if (ccp_res == CCP_VARYING) { /* activate all edges */
-    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
-      ccp_process_active_edge (gen_ctx, e);
-  }
-}
-
-static void ccp_process_bb (gen_ctx_t gen_ctx, bb_t bb) {
-  MIR_insn_t insn;
-  bb_insn_t bb_insn;
-  edge_t e;
-
-  DEBUG (2, { fprintf (debug_file, "       processing bb%lu\n", (unsigned long) bb->index); });
-  for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-       bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-    if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
-    if (insn->code != MIR_PHI) break;
-    DEBUG (2, {
-      gen_assert (insn->ops[0].mode == MIR_OP_REG);
-      fprintf (debug_file,
-               "       processing phi of reg%lu(%s) in bb%lu:", (long unsigned) insn->ops[0].u.reg,
-               MIR_reg_name (gen_ctx->ctx, insn->ops[0].u.reg, curr_func_item->u.func),
-               (unsigned long) bb->index);
-    });
-    ccp_make_insn_update (gen_ctx, bb_insn->insn);
-  }
-  if (!bitmap_set_bit_p (bb_visited, bb->index)) return;
-  for (; bb_insn != NULL; bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-    ccp_process_insn (gen_ctx, bb_insn);
-  }
-  if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL
-      || !MIR_branch_code_p (bb_insn->insn->code) || bb_insn->insn->code == MIR_JMP
-      || bb_insn->insn->code == MIR_SWITCH) {
-    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
-      gen_assert (!e->skipped_p);
-      if (!bitmap_bit_p (bb_visited, e->dst->index) && !e->dst->flag) {
-        e->dst->flag = TRUE; /* first process of dest which is not in ccp_bbs */
-        VARR_PUSH (bb_t, ccp_bbs, e->dst);
-      }
-      ccp_process_active_edge (gen_ctx, e);
-    }
-  }
-}
-
-static void ccp_traverse (bb_t bb) {
-  bb->flag = TRUE;
-  for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
-    if (!e->skipped_p && !e->dst->flag)
-      ccp_traverse (e->dst); /* visit unvisited active edge destination */
-}
-
-static int get_ccp_res_val (gen_ctx_t gen_ctx, MIR_insn_t insn, const_t *val) {
-  ccp_val_t ccp_val;
-  MIR_op_t op;
-
-  if (MIR_call_code_p (insn->code) || !get_ccp_res_op (gen_ctx, insn, 0, &op))
-    return FALSE; /* call results always produce varying values */
-  if (!var_insn_op_p (insn, 0)) return FALSE;
-  ccp_val = get_ccp_val (gen_ctx, insn->data);
-  if (ccp_val->val_kind != CCP_CONST) return FALSE;
-  *val = ccp_val->val;
-  return TRUE;
-}
-
-static int ccp_modify (gen_ctx_t gen_ctx) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  bb_t bb, next_bb;
-  edge_t e;
-  bb_insn_t bb_insn, next_bb_insn;
-  const_t val;
-  MIR_op_t op;
-  MIR_insn_t insn, prev_insn, first_insn;
-  ssa_edge_t se, next_se;
-  int res, change_p = FALSE;
-  long ccp_insns_num = 0, bb_deleted_insns_num = 0, deleted_branches_num = 0;
-
-#ifndef NDEBUG
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    gen_assert (!bb->flag);
-#endif
-  ccp_traverse (DLIST_HEAD (bb_t, curr_cfg->bbs)); /* entry */
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
-    next_bb = DLIST_NEXT (bb_t, bb);
-    if (!bb->flag) {
-      change_p = TRUE;
-      DEBUG (2, {
-        fprintf (debug_file, "  deleting unreachable bb%lu and its edges\n",
-                 (unsigned long) bb->index);
-      });
-      for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-           bb_insn = next_bb_insn) {
-        next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-        insn = bb_insn->insn;
-        remove_insn_ssa_edges (gen_ctx, insn);
-        gen_delete_insn (gen_ctx, insn);
-        bb_deleted_insns_num++;
-      }
-      delete_bb (gen_ctx, bb);
-      continue;
-    }
-    bb->flag = FALSE; /* reset for the future use */
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
-      next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-      if (get_ccp_res_val (gen_ctx, bb_insn->insn, &val)
-          && (bb_insn->insn->code != MIR_MOV
-              || (bb_insn->insn->ops[1].mode != MIR_OP_INT
-                  && bb_insn->insn->ops[1].mode != MIR_OP_UINT))) {
-        gen_assert (!MIR_call_code_p (bb_insn->insn->code));
-        change_p = TRUE;
-        DEBUG (2, {
-          fprintf (debug_file, "  changing insn ");
-          MIR_output_insn (gen_ctx->ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-        });
-        op = val.uns_p ? MIR_new_uint_op (ctx, val.u.u) : MIR_new_int_op (ctx, val.u.i);
-#ifndef NDEBUG
-        {
-          int out_p;
-
-          MIR_insn_op_mode (ctx, bb_insn->insn, 0, &out_p); /* result here is always 0-th op */
-          gen_assert (out_p);
-        }
-#endif
-        /* remove edges whose def and use is the insn, e.g. for case "5: phi a,a #index 5,5" */
-        for (se = bb_insn->insn->ops[0].data; se != NULL; se = next_se) {
-          next_se = se->next_use;
-          if (se->use == bb_insn) remove_ssa_edge (gen_ctx, se);
-        }
-        insn = MIR_new_insn (ctx, MIR_MOV, bb_insn->insn->ops[0], op); /* copy ops[0].data too! */
-        MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
-        bb_insn->insn->ops[0].data = NULL;
-        remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
-        MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
-        insn->data = bb_insn;
-        bb_insn->insn = insn;
-        ccp_insns_num++;
-        DEBUG (2, {
-          fprintf (debug_file, "    on insn ");
-          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        });
-      }
-    }
-    if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL) continue;
-    insn = bb_insn->insn;
-    first_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
-    if (first_insn->code == MIR_LABEL && (prev_insn = DLIST_PREV (MIR_insn_t, first_insn)) != NULL
-        && prev_insn->code == MIR_JMP && prev_insn->ops[0].u.label == first_insn) {
-      DEBUG (2, {
-        fprintf (debug_file, "  removing useless jump insn ");
-        MIR_output_insn (ctx, debug_file, prev_insn, curr_func_item->u.func, TRUE);
-        fprintf (debug_file, "\n");
-      });
-      remove_insn_ssa_edges (gen_ctx, prev_insn);
-      gen_delete_insn (gen_ctx, prev_insn);
-      deleted_branches_num++;
-    }
-    if (!MIR_branch_code_p (insn->code) || insn->code == MIR_JMP || insn->code == MIR_SWITCH
-        || ccp_branch_update (gen_ctx, insn, &res) != CCP_CONST)
-      continue;
-    change_p = TRUE;
-    if (!res) {
-      DEBUG (2, {
-        fprintf (debug_file, "  removing branch insn ");
-        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        fprintf (debug_file, "\n");
-      });
-      remove_insn_ssa_edges (gen_ctx, insn);
-      gen_delete_insn (gen_ctx, insn);
-      if ((e = DLIST_EL (out_edge_t, bb->out_edges, 1)) != NULL)
-        delete_edge (e); /* e can be arleady deleted by previous removing an unreachable BB */
-      deleted_branches_num++;
-    } else {
-      insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]); /* label is always 0-th op */
-      DEBUG (2, {
-        fprintf (debug_file, "  changing branch insn ");
-        MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-        fprintf (debug_file, " onto jump insn ");
-        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        fprintf (debug_file, "\n");
-      });
-      MIR_insert_insn_before (ctx, curr_func_item, bb_insn->insn, insn);
-      remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
-      MIR_remove_insn (ctx, curr_func_item, bb_insn->insn);
-      insn->data = bb_insn;
-      bb_insn->insn = insn;
-      delete_edge (DLIST_EL (out_edge_t, bb->out_edges, 0));
-    }
-  }
-  DEBUG (1, {
-    fprintf (debug_file, "%5ld ccp insns, %ld deleted BB CCP insns, %ld deleted branches\n",
-             ccp_insns_num, bb_deleted_insns_num, deleted_branches_num);
-  });
-  return change_p;
-}
-
-static int ccp (gen_ctx_t gen_ctx) { /* conditional constant propagation */
-  DEBUG (2, { fprintf (debug_file, "  CCP analysis:\n"); });
-  curr_ccp_run++;
-  bb_visited = temp_bitmap;
-  initiate_ccp_info (gen_ctx);
-  while (VARR_LENGTH (bb_t, ccp_bbs) != 0 || VARR_LENGTH (bb_insn_t, ccp_insns) != 0) {
-    while (VARR_LENGTH (bb_t, ccp_bbs) != 0) {
-      bb_t bb = VARR_POP (bb_t, ccp_bbs);
-
-      bb->flag = FALSE;
-      ccp_process_bb (gen_ctx, bb);
-    }
-    while (VARR_LENGTH (bb_insn_t, ccp_insns) != 0) {
-      bb_insn_t bb_insn = VARR_POP (bb_insn_t, ccp_insns);
-
-      gen_assert (bb_insn->flag);
-      bb_insn->flag = FALSE;
-      ccp_process_insn (gen_ctx, bb_insn);
-    }
-  }
-  DEBUG (2, { fprintf (debug_file, "  CCP modification:\n"); });
-  return ccp_modify (gen_ctx);
-}
-
-static void init_ccp (gen_ctx_t gen_ctx) {
-  gen_ctx->ccp_ctx = gen_malloc (gen_ctx, sizeof (struct ccp_ctx));
-  curr_ccp_run = 0;
-  VARR_CREATE (bb_t, ccp_bbs, 256);
-  VARR_CREATE (bb_insn_t, ccp_insns, 256);
-  VARR_CREATE (ccp_val_t, ccp_vals, 256);
-}
-
-static void finish_ccp (gen_ctx_t gen_ctx) {
-  ccp_val_t ccp_val;
-
-  VARR_DESTROY (bb_t, ccp_bbs);
-  VARR_DESTROY (bb_insn_t, ccp_insns);
-  while (VARR_LENGTH (ccp_val_t, ccp_vals) != 0)
-    if ((ccp_val = VARR_POP (ccp_val_t, ccp_vals)) != NULL) free (ccp_val);
-  VARR_DESTROY (ccp_val_t, ccp_vals);
-  free (gen_ctx->ccp_ctx);
-  gen_ctx->ccp_ctx = NULL;
-}
-
-#undef live_in
-#undef live_out
-
-/* New Page */
-
 #define live_in in
 #define live_out out
 #define live_kill kill
@@ -6436,22 +5542,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
   }
 #endif /* #ifndef NO_GVN */
-#ifndef NO_CCP
-  if (optimize_level >= 2) {
-    DEBUG (2, { fprintf (debug_file, "+++++++++++++CCP:\n"); });
-    if (ccp (gen_ctx)) {
-      DEBUG (2, {
-        fprintf (debug_file, "+++++++++++++MIR after CCP:\n");
-        print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-      });
-      ssa_dead_code_elimination (gen_ctx);
-      DEBUG (2, {
-        fprintf (debug_file, "+++++++++++++MIR after dead code elimination after CCP:\n");
-        print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
-      });
-    }
-  }
-#endif /* #ifndef NO_CCP */
   if (optimize_level >= 2) undo_build_ssa (gen_ctx);
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
@@ -6809,7 +5899,6 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     gen_ctx->target_ctx = NULL;
     gen_ctx->data_flow_ctx = NULL;
     gen_ctx->gvn_ctx = NULL;
-    gen_ctx->ccp_ctx = NULL;
     gen_ctx->lr_ctx = NULL;
     gen_ctx->ra_ctx = NULL;
     gen_ctx->selection_ctx = NULL;
@@ -6827,7 +5916,6 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     init_data_flow (gen_ctx);
     init_ssa (gen_ctx);
     init_gvn (gen_ctx);
-    init_ccp (gen_ctx);
     temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     init_live_ranges (gen_ctx);
@@ -6873,7 +5961,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
     finish_data_flow (gen_ctx);
     finish_ssa (gen_ctx);
     finish_gvn (gen_ctx);
-    finish_ccp (gen_ctx);
     bitmap_destroy (temp_bitmap);
     bitmap_destroy (temp_bitmap2);
     finish_live_ranges (gen_ctx);
