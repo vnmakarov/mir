@@ -2943,14 +2943,21 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_MOD: GVN_IOP30 (%); break;
       case MIR_MODS: GVN_IOP3S0 (%); break;
       case MIR_UMOD: GVN_UOP30 (%); break;
-      case MIR_UMODS: GVN_UOP3S0 (%); break;
+      case MIR_UMODS:
+        GVN_UOP3S0 (%);
+        break;
 
-      case MIR_AND: GVN_IOP3 (&); break;
-      case MIR_ANDS: GVN_IOP3S (&); break;
-      case MIR_OR: GVN_IOP3 (|); break;
-      case MIR_ORS: GVN_IOP3S (|); break;
-      case MIR_XOR: GVN_IOP3 (^); break;
-      case MIR_XORS: GVN_IOP3S (^); break;
+        /* The following insn can be involved in addres calculation too: */
+      case MIR_AND: GVN_IOP3 (&); goto set_alloca_flag;
+      case MIR_ANDS: GVN_IOP3S (&); goto set_alloca_flag;
+      case MIR_OR: GVN_IOP3 (|); goto set_alloca_flag;
+      case MIR_ORS: GVN_IOP3S (|); goto set_alloca_flag;
+      case MIR_XOR: GVN_IOP3 (^); goto set_alloca_flag;
+      case MIR_XORS:
+        GVN_IOP3S (^);
+      set_alloca_flag:
+        set_alloca_based_flag (gen_ctx, bb_insn);
+        break;
 
       case MIR_LSH: GVN_IOP3 (<<); break;
       case MIR_LSHS: GVN_IOP3S (<<); break;
