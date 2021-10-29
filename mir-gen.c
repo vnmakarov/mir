@@ -2849,6 +2849,46 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref, int flag) {
   VARR_PUSH (char, mem_loc_flags, flag);
 }
 
+static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
+  MIR_insn_t insn;
+  bb_insn_t bb_insn, next_bb_insn;
+  long deleted_insns_num = 0;
+
+  DEBUG (2, { fprintf (debug_file, "  BB%d is unreachable and removed\n", bb->index); });
+  for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
+    next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
+    insn = bb_insn->insn;
+    remove_insn_ssa_edges (gen_ctx, insn);
+    gen_delete_insn (gen_ctx, insn);
+    deleted_insns_num++;
+  }
+  remove_dest_phi_ops (gen_ctx, bb);
+  delete_bb (gen_ctx, bb);
+  return deleted_insns_num;
+}
+
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
+  long deleted_insns_num = 0;
+  bb_t next_bb, bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
+
+  if (bb == NULL) return 0;
+  bitmap_clear (temp_bitmap);
+  VARR_TRUNC (bb_t, worklist, 0);
+  VARR_PUSH (bb_t, worklist, bb);
+  bitmap_set_bit_p (temp_bitmap, bb->index);
+  while (VARR_LENGTH (bb_t, worklist) != 0) {
+    bb = VARR_POP (bb_t, worklist);
+    for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
+         e = DLIST_NEXT (out_edge_t, e))
+      if (bitmap_set_bit_p (temp_bitmap, e->dst->index)) VARR_PUSH (bb_t, worklist, e->dst);
+  }
+  for (bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
+    next_bb = DLIST_NEXT (bb_t, bb);
+    if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb);
+  }
+  return deleted_insns_num;
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -2866,17 +2906,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
     if (bb->index != 0
         && ((in_edge = DLIST_HEAD (in_edge_t, bb->in_edges)) == NULL
             || (DLIST_NEXT (in_edge_t, in_edge) == NULL && in_edge->src == bb))) {
-      DEBUG (2, { fprintf (debug_file, "  BB%d is unreachable and removed\n", bb->index); });
-      for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-           bb_insn = next_bb_insn) {
-        next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
-        MIR_insn_t insn = bb_insn->insn;
-        remove_insn_ssa_edges (gen_ctx, insn);
-        gen_delete_insn (gen_ctx, insn);
-        bb_deleted_insns_num++;
-      }
-      remove_dest_phi_ops (gen_ctx, bb);
-      delete_bb (gen_ctx, bb);
+      /* Remove a trivial case unreachable bb: no input edges or unreachable one block loop: */
+      bb_deleted_insns_num += remove_bb (gen_ctx, bb);
       continue;
     }
     bitmap_copy (curr_mem_available, bb->in);
@@ -3307,6 +3338,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       });
     }
   }
+  bb_deleted_insns_num += remove_unreachable_bbs (gen_ctx);
   DEBUG (1, {
     fprintf (debug_file,
              "%5ld found GVN redundant insns, %ld ccp insns, %ld deleted bb insns, %ld deleted "
