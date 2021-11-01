@@ -2783,18 +2783,26 @@ static int gvn_phi_update (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
   edge_t e;
   size_t nop;
   int64_t v;
+  ssa_edge_t se;
+  int res = TRUE;
 
   nop = 1;
   for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e), nop++) {
     /* Update phi value: */
     gen_assert (nop < phi_insn->nops);
-    if (!get_gvn_op (gen_ctx, phi_insn, nop, &v)) return FALSE;
-    if (nop == 1)
-      *val = v;
-    else if (*val != v)
-      return FALSE;
+    if (res) {
+      if (!get_gvn_op (gen_ctx, phi_insn, nop, &v)) {
+        res = FALSE;
+      } else if (nop == 1) {
+        *val = v;
+      } else if (*val != v) {
+        res = FALSE;
+      }
+    }
+    if ((se = phi_insn->ops[nop].data) != NULL && se->def->alloca_based_p)
+      phi->alloca_based_p = TRUE;
   }
-  return TRUE;
+  return res;
 }
 
 static void remove_edge_phi_ops (gen_ctx_t gen_ctx, edge_t e) {
