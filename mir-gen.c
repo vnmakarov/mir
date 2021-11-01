@@ -2780,29 +2780,33 @@ static int get_gvn_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uin
 static int gvn_phi_update (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
   MIR_insn_t phi_insn = phi->insn;
   bb_t bb = phi->bb;
+  bb_insn_t def_bb_insn;
   edge_t e;
   size_t nop;
   int64_t v;
   ssa_edge_t se;
-  int res = TRUE;
+  int const_p = TRUE, same_p = TRUE;
 
   nop = 1;
   for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e), nop++) {
     /* Update phi value: */
     gen_assert (nop < phi_insn->nops);
-    if (res) {
-      if (!get_gvn_op (gen_ctx, phi_insn, nop, &v)) {
-        res = FALSE;
+    if (same_p) {
+      if ((se = phi_insn->ops[nop].data) == NULL || (def_bb_insn = se->def) == NULL) {
+        same_p = FALSE;
       } else if (nop == 1) {
-        *val = v;
-      } else if (*val != v) {
-        res = FALSE;
+        const_p = def_bb_insn->gvn_val_const_p;
+        *val = def_bb_insn->gvn_val;
+      } else if (const_p != def_bb_insn->gvn_val_const_p || *val != def_bb_insn->gvn_val) {
+        same_p = FALSE;
       }
     }
-    if ((se = phi_insn->ops[nop].data) != NULL && se->def->alloca_based_p)
-      phi->alloca_based_p = TRUE;
+    if ((se = phi_insn->ops[nop].data) != NULL) {
+      if (nop == 1 || phi->alloca_based_p) phi->alloca_based_p = se->def->alloca_based_p;
+    }
   }
-  return res;
+  if (!same_p) *val = phi->index;
+  return same_p && const_p;
 }
 
 static void remove_edge_phi_ops (gen_ctx_t gen_ctx, edge_t e) {
@@ -2960,7 +2964,15 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       if (!gvn_insn_p (insn)) continue;
       val_p = FALSE;
       switch (insn->code) {
-      case MIR_PHI: val_p = gvn_phi_update (gen_ctx, bb_insn, &val); break;
+      case MIR_PHI:
+        val_p = gvn_phi_update (gen_ctx, bb_insn, &val);
+        if (!val_p) {
+          bb_insn->gvn_val_const_p = FALSE;
+          bb_insn->gvn_val = val;
+          print_bb_insn_value (gen_ctx, bb_insn);
+          continue;
+        }
+        break;
       case MIR_EXT8: GVN_EXT (int8_t); break;
       case MIR_EXT16: GVN_EXT (int16_t); break;
       case MIR_EXT32: GVN_EXT (int32_t); break;
@@ -5832,7 +5844,8 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH;
+    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+               || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   curr_func_item->data = bb_stubs = gen_malloc (gen_ctx, sizeof (struct bb_stub) * n_bbs);
   n_bbs = 0;
