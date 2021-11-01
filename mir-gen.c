@@ -2691,46 +2691,46 @@ static int get_gvn_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uin
   return TRUE;
 }
 
-#define GVN_EXT(tp)                                                \
+#define GVN_EXT(tp)                                                  \
+  do {                                                               \
+    int64_t p;                                                       \
+    if ((const_p = get_gvn_2iops (gen_ctx, insn, &p))) val = (tp) p; \
+  } while (0)
+
+#define GVN_IOP2(op)                                               \
   do {                                                             \
     int64_t p;                                                     \
-    if ((val_p = get_gvn_2iops (gen_ctx, insn, &p))) val = (tp) p; \
+    if ((const_p = get_gvn_2iops (gen_ctx, insn, &p))) val = op p; \
   } while (0)
 
-#define GVN_IOP2(op)                                             \
-  do {                                                           \
-    int64_t p;                                                   \
-    if ((val_p = get_gvn_2iops (gen_ctx, insn, &p))) val = op p; \
+#define GVN_IOP2S(op)                                               \
+  do {                                                              \
+    int32_t p;                                                      \
+    if ((const_p = get_gvn_2isops (gen_ctx, insn, &p))) val = op p; \
   } while (0)
 
-#define GVN_IOP2S(op)                                             \
-  do {                                                            \
-    int32_t p;                                                    \
-    if ((val_p = get_gvn_2isops (gen_ctx, insn, &p))) val = op p; \
+#define GVN_IOP3(op)                                                         \
+  do {                                                                       \
+    int64_t p1, p2;                                                          \
+    if ((const_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_IOP3(op)                                                       \
-  do {                                                                     \
-    int64_t p1, p2;                                                        \
-    if ((val_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_IOP3S(op)                                                         \
+  do {                                                                        \
+    int32_t p1, p2;                                                           \
+    if ((const_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_IOP3S(op)                                                       \
-  do {                                                                      \
-    int32_t p1, p2;                                                         \
-    if ((val_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_UOP3(op)                                                         \
+  do {                                                                       \
+    uint64_t p1, p2;                                                         \
+    if ((const_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_UOP3(op)                                                       \
-  do {                                                                     \
-    uint64_t p1, p2;                                                       \
-    if ((val_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
-  } while (0)
-
-#define GVN_UOP3S(op)                                                       \
-  do {                                                                      \
-    uint32_t p1, p2;                                                        \
-    if ((val_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_UOP3S(op)                                                         \
+  do {                                                                        \
+    uint32_t p1, p2;                                                          \
+    if ((const_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
 #define GVN_IOP30(op)                                                   \
@@ -2753,28 +2753,28 @@ static int get_gvn_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uin
     if (get_gvn_op (gen_ctx, insn, 2, &val) && val != 0) GVN_UOP3S (op); \
   } while (0)
 
-#define GVN_ICMP(op)                                                       \
-  do {                                                                     \
-    int64_t p1, p2;                                                        \
-    if ((val_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_ICMP(op)                                                         \
+  do {                                                                       \
+    int64_t p1, p2;                                                          \
+    if ((const_p = get_gvn_3iops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_ICMPS(op)                                                       \
-  do {                                                                      \
-    int32_t p1, p2;                                                         \
-    if ((val_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_ICMPS(op)                                                         \
+  do {                                                                        \
+    int32_t p1, p2;                                                           \
+    if ((const_p = get_gvn_3isops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_UCMP(op)                                                       \
-  do {                                                                     \
-    uint64_t p1, p2;                                                       \
-    if ((val_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_UCMP(op)                                                         \
+  do {                                                                       \
+    uint64_t p1, p2;                                                         \
+    if ((const_p = get_gvn_3uops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-#define GVN_UCMPS(op)                                                       \
-  do {                                                                      \
-    uint32_t p1, p2;                                                        \
-    if ((val_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
+#define GVN_UCMPS(op)                                                         \
+  do {                                                                        \
+    uint32_t p1, p2;                                                          \
+    if ((const_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
 static int gvn_phi_update (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
@@ -2926,7 +2926,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e, prev_e, store_expr;
       MIR_op_t op;
-      int add_def_p, val_p, cont_p;
+      int add_def_p, const_p, cont_p;
       MIR_type_t type;
       MIR_insn_code_t move_code;
       MIR_insn_t store, new_insn, new_insn2, def_insn, after, insn = bb_insn->insn;
@@ -2962,11 +2962,11 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         bitmap_clear (curr_mem_available);
       }
       if (!gvn_insn_p (insn)) continue;
-      val_p = FALSE;
+      const_p = FALSE;
       switch (insn->code) {
       case MIR_PHI:
-        val_p = gvn_phi_update (gen_ctx, bb_insn, &val);
-        if (!val_p) {
+        const_p = gvn_phi_update (gen_ctx, bb_insn, &val);
+        if (!const_p) {
           bb_insn->gvn_val_const_p = FALSE;
           bb_insn->gvn_val = val;
           print_bb_insn_value (gen_ctx, bb_insn);
@@ -3044,22 +3044,22 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_ADD:
         set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3 (+);
-        if (!val_p) goto canon_expr;
+        if (!const_p) goto canon_expr;
         break;
       case MIR_ADDS:
         set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3S (+);
-        if (!val_p) goto canon_expr;
+        if (!const_p) goto canon_expr;
         break;
       case MIR_SUB:
         set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3 (-);
-        if (!val_p) goto canon_expr;
+        if (!const_p) goto canon_expr;
         break;
       case MIR_SUBS:
         set_alloca_based_flag (gen_ctx, bb_insn);
         GVN_IOP3S (-);
-        if (!val_p) goto canon_expr;
+        if (!const_p) goto canon_expr;
         break;
       canon_expr:
         cont_p = TRUE;
@@ -3206,11 +3206,11 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         }
         break;
       case MIR_BT:
-      case MIR_BTS: val_p = get_gvn_op (gen_ctx, insn, 1, &val); break;
+      case MIR_BTS: const_p = get_gvn_op (gen_ctx, insn, 1, &val); break;
       case MIR_BF:
       case MIR_BFS:
-        val_p = get_gvn_op (gen_ctx, insn, 1, &val);
-        if (val_p) val = !val;
+        const_p = get_gvn_op (gen_ctx, insn, 1, &val);
+        if (const_p) val = !val;
         break;
       case MIR_BEQ: GVN_ICMP (==); break;
       case MIR_BEQS: GVN_ICMPS (==); break;
@@ -3235,8 +3235,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_UBGES: GVN_UCMPS (>=); break;
       default: break;
       }
-      if (val_p) ccp_insns_num++;
-      if (val_p) {
+      if (const_p) {
+        ccp_insns_num++;
         print_bb_insn_value (gen_ctx, bb_insn);
         if (MIR_branch_code_p (insn->code)) {
           edge_t e;
