@@ -2777,7 +2777,7 @@ static int get_gvn_3usops (gen_ctx_t gen_ctx, MIR_insn_t insn, uint32_t *p1, uin
     if ((const_p = get_gvn_3usops (gen_ctx, insn, &p1, &p2))) val = p1 op p2; \
   } while (0)
 
-static int gvn_phi_update (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
+static int gvn_phi_val (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
   MIR_insn_t phi_insn = phi->insn;
   bb_t bb = phi->bb;
   bb_insn_t def_bb_insn;
@@ -2965,7 +2965,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       const_p = FALSE;
       switch (insn->code) {
       case MIR_PHI:
-        const_p = gvn_phi_update (gen_ctx, bb_insn, &val);
+        const_p = gvn_phi_val (gen_ctx, bb_insn, &val);
         if (!const_p) {
           bb_insn->gvn_val_const_p = FALSE;
           bb_insn->gvn_val = val;
