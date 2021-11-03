@@ -2628,8 +2628,7 @@ static void print_bb_insn_value (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
              !bb_insn->alloca_flag                               ? ""
              : bb_insn->alloca_flag & (MAY_ALLOCA | MUST_ALLOCA) ? "may/must alloca "
              : bb_insn->alloca_flag & MAY_ALLOCA                 ? "may alloca"
-             : bb_insn->alloca_flag & MUST_ALLOCA                ? "must alloca"
-                                                                 : "arg my alloca",
+                                                                 : "must alloca",
              bb_insn->gvn_val_const_p ? "const val" : "val", (long long) bb_insn->gvn_val,
              (unsigned long) bb_insn->index);
     MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, TRUE);
@@ -3612,7 +3611,7 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
       if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
         bitmap_set_bit_p (bb->mem_live_gen, nloc);
         bitmap_clear_bit_p (bb->mem_live_kill, nloc);
-        if (1 && (se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA)) {
+        if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA)) {
           make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, bb->mem_live_gen,
                                           bb->mem_live_kill);
         } else if (insn->ops[1].u.mem.alias_set == 0) {
@@ -3700,7 +3699,7 @@ static void dse (gen_ctx_t gen_ctx) {
       } else if (insn->ops[1].mode == MIR_OP_MEM) { /* load */
         if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
           bitmap_set_bit_p (live, nloc);
-          if (1 && (se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA))
+          if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA))
             /* all but unintersected must alloca */
             make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, live, NULL);
           else if (insn->ops[1].u.mem.alias_set == 0)
