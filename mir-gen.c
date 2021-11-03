@@ -192,8 +192,9 @@ struct gen_ctx {
   struct fg_ctx *fg_ctx;
   VARR (bb_insn_t) * dead_bb_insns;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
+  /* true when alloca memory escapes by assigning alloca address to memory: */
   unsigned char full_escape_p;
-  VARR (mem_loc_t) * mem_locs;
+  VARR (mem_loc_t) * mem_locs; /* nloc (> 0) => mem attributes */
   int max_int_hard_regs, max_fp_hard_regs;
   /* Slots num for variables.  Some variable can take several slots and can be aligned. */
   size_t func_stack_slots_num;
