@@ -157,8 +157,8 @@ DEF_VARR (void_ptr_t);
 typedef struct {
   unsigned char alloca_flag;
   unsigned char disp_def_p; /* can be true only for MUST_ALLOCA */
+  MIR_type_t type;          /* memory type */
   int64_t disp;             /* defined only when disp_def_p, otherwise disp is unknown */
-  MIR_mem_t mem;
 } mem_loc_t;
 
 DEF_VARR (mem_loc_t);
@@ -2902,8 +2902,8 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
   MIR_insn_t def_insn;
 
   if ((mem_op_ref->u.mem.nloc = VARR_LENGTH (mem_loc_t, mem_locs)) == 0) mem_op_ref->u.mem.nloc = 1;
-  mem_loc.mem = mem_op_ref->u.mem;
   mem_loc.alloca_flag = flag;
+  mem_loc.type = mem_op_ref->u.mem.type;
   mem_loc.disp_def_p = FALSE;
   if (flag & MUST_ALLOCA) {
     se = mem_op_ref->data;
@@ -3570,9 +3570,9 @@ static void update_call_mem_live (gen_ctx_t gen_ctx, bitmap_t mem_live, MIR_insn
   }
 }
 
-static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref1, MIR_mem_t *mem_ref2) {
+static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, uint32_t nloc1, MIR_type_t type1,
+                                   uint32_t nloc2, MIR_type_t type2) {
   MIR_context_t ctx = gen_ctx->ctx;
-  uint32_t nloc1 = mem_ref1->nloc, nloc2 = mem_ref2->nloc;
   mem_loc_t *mem_loc_ref1 = &VARR_ADDR (mem_loc_t, mem_locs)[nloc1];
   mem_loc_t *mem_loc_ref2 = &VARR_ADDR (mem_loc_t, mem_locs)[nloc2];
   int64_t disp1, disp2, size1, size2;
@@ -3581,8 +3581,8 @@ static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref1, MIR_m
   if (!mem_loc_ref1->disp_def_p || !mem_loc_ref2->disp_def_p) return TRUE;
   disp1 = mem_loc_ref1->disp;
   disp2 = mem_loc_ref2->disp;
-  size1 = _MIR_type_size (ctx, mem_ref1->type);
-  size2 = _MIR_type_size (ctx, mem_ref2->type);
+  size1 = _MIR_type_size (ctx, type1);
+  size2 = _MIR_type_size (ctx, type2);
   if (disp2 <= disp1 && disp1 < disp2 + size2) return TRUE;
   return disp1 <= disp2 && disp2 < disp1 + size1;
 }
@@ -3593,7 +3593,7 @@ static void make_live_from_must_alloca_mem (gen_ctx_t gen_ctx, MIR_mem_t *mem_re
 
   for (size_t i = 1; i < VARR_LENGTH (mem_loc_t, mem_locs); i++) {
     if ((mem_loc_addr[i].alloca_flag & MUST_ALLOCA)
-        && !alloca_mem_intersect_p (gen_ctx, mem_ref, &mem_loc_addr[i].mem))
+        && !alloca_mem_intersect_p (gen_ctx, mem_ref->nloc, mem_ref->type, i, mem_loc_addr[i].type))
       continue;
     /* all but unintersected must alloca: */
     bitmap_set_bit_p (gen, i);
