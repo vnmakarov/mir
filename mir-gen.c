@@ -57,6 +57,20 @@
    loc - hard register and stack locations (stack slot numbers start with MAX_HARD_REG + 1).
 
    We use conventional SSA to make out-of-ssa fast and simple.
+
+   Memory aliasing rules:
+
+   * Memory has nloc attribute.  Memory with the same nloc always refer for the same memory
+     although memory with different nloc still may refer for the same memory.
+
+   * Memory can have flags 'must alloca' and 'may alloca'.  'Must alloca' always goes
+     with 'may alloca'.  'Must alloca' means that we guarantee memory can be allocated
+     only alloca in the func. 'May alloca' means that it is not excluded that memory is
+     allocated by alloca.
+
+   * Memory with 'must alloca' flag can have disp attribute.  We can define that
+     'must alloca' memory refers the same memory using disp attribute.
+
 */
 
 #include <stdlib.h>
