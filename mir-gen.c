@@ -159,9 +159,9 @@ typedef struct {
   unsigned char disp_def_p; /* can be true only for MUST_ALLOCA */
   MIR_type_t type;          /* memory type */
   int64_t disp;             /* defined only when disp_def_p, otherwise disp is unknown */
-} mem_loc_t;
+} mem_attr_t;
 
-DEF_VARR (mem_loc_t);
+DEF_VARR (mem_attr_t);
 
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
@@ -194,7 +194,7 @@ struct gen_ctx {
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
   /* true when alloca memory escapes by assigning alloca address to memory: */
   unsigned char full_escape_p;
-  VARR (mem_loc_t) * mem_locs; /* nloc (> 0) => mem attributes */
+  VARR (mem_attr_t) * mem_attrs; /* nloc (> 0) => mem attributes */
   int max_int_hard_regs, max_fp_hard_regs;
   /* Slots num for variables.  Some variable can take several slots and can be aligned. */
   size_t func_stack_slots_num;
@@ -216,7 +216,7 @@ struct gen_ctx {
 #define curr_bb_index gen_ctx->curr_bb_index
 #define curr_loop_node_index gen_ctx->curr_loop_node_index
 #define full_escape_p gen_ctx->full_escape_p
-#define mem_locs gen_ctx->mem_locs
+#define mem_attrs gen_ctx->mem_attrs
 #define free_dead_vars gen_ctx->free_dead_vars
 #define dead_bb_insns gen_ctx->dead_bb_insns
 #define loop_nodes gen_ctx->loop_nodes
@@ -1176,7 +1176,7 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
   for (size_t i = 0; i < bb_insn->insn->nops; i++) {
     op = bb_insn->insn->ops[i];
     if (op.mode == MIR_OP_MEM && op.u.mem.nloc != 0) {
-      flag = VARR_GET (mem_loc_t, mem_locs, op.u.mem.nloc).alloca_flag;
+      flag = VARR_GET (mem_attr_t, mem_attrs, op.u.mem.nloc).alloca_flag;
       fprintf (debug_file, " # m%lu%s", (unsigned long) op.u.mem.nloc,
                !flag                               ? ""
                : flag & (MAY_ALLOCA | MUST_ALLOCA) ? "au"
@@ -2898,14 +2898,15 @@ static void set_alloca_based_flag (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int mus
 
 static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
   /* zero loc is fixed: */
-  mem_loc_t mem_loc;
+  mem_attr_t mem_attr;
   ssa_edge_t se;
   MIR_insn_t def_insn;
 
-  if ((mem_op_ref->u.mem.nloc = VARR_LENGTH (mem_loc_t, mem_locs)) == 0) mem_op_ref->u.mem.nloc = 1;
-  mem_loc.alloca_flag = flag;
-  mem_loc.type = mem_op_ref->u.mem.type;
-  mem_loc.disp_def_p = FALSE;
+  if ((mem_op_ref->u.mem.nloc = VARR_LENGTH (mem_attr_t, mem_attrs)) == 0)
+    mem_op_ref->u.mem.nloc = 1;
+  mem_attr.alloca_flag = flag;
+  mem_attr.type = mem_op_ref->u.mem.type;
+  mem_attr.disp_def_p = FALSE;
   if (flag & MUST_ALLOCA) {
     se = mem_op_ref->data;
     for (;;) {
@@ -2915,25 +2916,25 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
       se = def_insn->ops[1].data;
     }
     if (def_insn->code == MIR_ALLOCA) {
-      mem_loc.disp_def_p = TRUE;
-      mem_loc.disp = 0;
+      mem_attr.disp_def_p = TRUE;
+      mem_attr.disp = 0;
     } else if ((def_insn->code == MIR_ADD || def_insn->code == MIR_ADDS || def_insn->code == MIR_SUB
                 || def_insn->code == MIR_SUBS)
                && (se = def_insn->ops[2].data) != NULL) {
       int add_p = def_insn->code == MIR_ADD || def_insn->code == MIR_ADDS;
       def_insn = se->def->insn;
       if (se->def->gvn_val_const_p) {
-        mem_loc.disp_def_p = TRUE;
-        mem_loc.disp = add_p ? se->def->gvn_val : -se->def->gvn_val;
+        mem_attr.disp_def_p = TRUE;
+        mem_attr.disp = add_p ? se->def->gvn_val : -se->def->gvn_val;
       }
     } else {
       gen_assert (def_insn->code == MIR_PHI);
     }
   }
-  if (VARR_LENGTH (mem_loc_t, mem_locs) == 0) VARR_PUSH (mem_loc_t, mem_locs, mem_loc);
+  if (VARR_LENGTH (mem_attr_t, mem_attrs) == 0) VARR_PUSH (mem_attr_t, mem_attrs, mem_attr);
   DEBUG (2, {
     fprintf (debug_file, "    new m%lu", (unsigned long) mem_op_ref->u.mem.nloc);
-    if (mem_loc.disp_def_p) fprintf (debug_file, "(disp=%lld)", (long long) mem_loc.disp);
+    if (mem_attr.disp_def_p) fprintf (debug_file, "(disp=%lld)", (long long) mem_attr.disp);
     if (flag)
       fprintf (debug_file, " is %s alloca based",
                flag & (MAY_ALLOCA | MUST_ALLOCA) ? "may/must"
@@ -2941,17 +2942,17 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
                                                  : "must");
     fprintf (debug_file, "\n");
   });
-  VARR_PUSH (mem_loc_t, mem_locs, mem_loc);
+  VARR_PUSH (mem_attr_t, mem_attrs, mem_attr);
 }
 
 static void update_mem_loc_alloca_flag (gen_ctx_t gen_ctx, size_t nloc, int flag) {
   int old_flag;
-  mem_loc_t *mem_loc_ref;
+  mem_attr_t *mem_attr_ref;
 
-  gen_assert (VARR_LENGTH (mem_loc_t, mem_locs) > nloc);
-  mem_loc_ref = &VARR_ADDR (mem_loc_t, mem_locs)[nloc];
-  old_flag = mem_loc_ref->alloca_flag;
-  mem_loc_ref->alloca_flag = ((old_flag | flag) & MAY_ALLOCA) | (old_flag & flag & MUST_ALLOCA);
+  gen_assert (VARR_LENGTH (mem_attr_t, mem_attrs) > nloc);
+  mem_attr_ref = &VARR_ADDR (mem_attr_t, mem_attrs)[nloc];
+  old_flag = mem_attr_ref->alloca_flag;
+  mem_attr_ref->alloca_flag = ((old_flag | flag) & MAY_ALLOCA) | (old_flag & flag & MUST_ALLOCA);
   DEBUG (2, {
     if (flag != old_flag) {
       fprintf (debug_file, "    m%lu ", (unsigned long) nloc);
@@ -3025,7 +3026,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_func_t func = curr_func_item->u.func;
 
   full_escape_p = FALSE;
-  VARR_TRUNC (mem_loc_t, mem_locs, 0);
+  VARR_TRUNC (mem_attr_t, mem_attrs, 0);
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
@@ -3562,26 +3563,26 @@ static void update_call_mem_live (gen_ctx_t gen_ctx, bitmap_t mem_live, MIR_insn
   gen_assert (call_insn->ops[0].mode == MIR_OP_REF
               && call_insn->ops[0].u.ref->item_type == MIR_proto_item);
   if (full_escape_p || alloca_arg_p (gen_ctx, call_insn)) {
-    bitmap_set_bit_range_p (mem_live, 1, VARR_LENGTH (mem_loc_t, mem_locs));
+    bitmap_set_bit_range_p (mem_live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
   } else {
-    mem_loc_t *mem_loc_addr = VARR_ADDR (mem_loc_t, mem_locs);
+    mem_attr_t *mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
 
-    for (size_t i = 1; i < VARR_LENGTH (mem_loc_t, mem_locs); i++)
-      if (!mem_loc_addr[i].alloca_flag) bitmap_set_bit_p (mem_live, i);
+    for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++)
+      if (!mem_attr_addr[i].alloca_flag) bitmap_set_bit_p (mem_live, i);
   }
 }
 
 static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, uint32_t nloc1, MIR_type_t type1,
                                    uint32_t nloc2, MIR_type_t type2) {
   MIR_context_t ctx = gen_ctx->ctx;
-  mem_loc_t *mem_loc_ref1 = &VARR_ADDR (mem_loc_t, mem_locs)[nloc1];
-  mem_loc_t *mem_loc_ref2 = &VARR_ADDR (mem_loc_t, mem_locs)[nloc2];
+  mem_attr_t *mem_attr_ref1 = &VARR_ADDR (mem_attr_t, mem_attrs)[nloc1];
+  mem_attr_t *mem_attr_ref2 = &VARR_ADDR (mem_attr_t, mem_attrs)[nloc2];
   int64_t disp1, disp2, size1, size2;
 
   gen_assert (nloc1 != 0 && nloc2 != 0);
-  if (!mem_loc_ref1->disp_def_p || !mem_loc_ref2->disp_def_p) return TRUE;
-  disp1 = mem_loc_ref1->disp;
-  disp2 = mem_loc_ref2->disp;
+  if (!mem_attr_ref1->disp_def_p || !mem_attr_ref2->disp_def_p) return TRUE;
+  disp1 = mem_attr_ref1->disp;
+  disp2 = mem_attr_ref2->disp;
   size1 = _MIR_type_size (ctx, type1);
   size2 = _MIR_type_size (ctx, type2);
   if (disp2 <= disp1 && disp1 < disp2 + size2) return TRUE;
@@ -3590,11 +3591,12 @@ static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, uint32_t nloc1, MIR_type_t
 
 static void make_live_from_must_alloca_mem (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref, bitmap_t gen,
                                             bitmap_t kill) {
-  mem_loc_t *mem_loc_addr = VARR_ADDR (mem_loc_t, mem_locs);
+  mem_attr_t *mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
 
-  for (size_t i = 1; i < VARR_LENGTH (mem_loc_t, mem_locs); i++) {
-    if ((mem_loc_addr[i].alloca_flag & MUST_ALLOCA)
-        && !alloca_mem_intersect_p (gen_ctx, mem_ref->nloc, mem_ref->type, i, mem_loc_addr[i].type))
+  for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++) {
+    if ((mem_attr_addr[i].alloca_flag & MUST_ALLOCA)
+        && !alloca_mem_intersect_p (gen_ctx, mem_ref->nloc, mem_ref->type, i,
+                                    mem_attr_addr[i].type))
       continue;
     /* all but unintersected must alloca: */
     bitmap_set_bit_p (gen, i);
@@ -3625,13 +3627,13 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
           make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, bb->mem_live_gen,
                                           bb->mem_live_kill);
         } else if (insn->ops[1].u.mem.alias_set == 0) {
-          bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_loc_t, mem_locs));
-          bitmap_clear_bit_range_p (bb->mem_live_kill, 1, VARR_LENGTH (mem_loc_t, mem_locs));
+          bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
+          bitmap_clear_bit_range_p (bb->mem_live_kill, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
         } else {
           ; /* ??? */
         }
       } else {
-        bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_loc_t, mem_locs));
+        bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
       }
     }
   }
@@ -3640,7 +3642,7 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
 
 static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
   bb_t exit_bb = DLIST_EL (bb_t, curr_cfg->bbs, 1);
-  mem_loc_t *mem_loc_addr;
+  mem_attr_t *mem_attr_addr;
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     gen_assert (bb->mem_live_in != NULL && bb->mem_live_out != NULL && bb->mem_live_gen != NULL
@@ -3652,9 +3654,9 @@ static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
   }
   for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
     tail = initiate_bb_mem_live_info (gen_ctx, tail);
-  mem_loc_addr = VARR_ADDR (mem_loc_t, mem_locs);
-  for (size_t i = 1; i < VARR_LENGTH (mem_loc_t, mem_locs); i++) {
-    if (mem_loc_addr[i].alloca_flag & MUST_ALLOCA) continue; /* skip alloca memory */
+  mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
+  for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++) {
+    if (mem_attr_addr[i].alloca_flag & MUST_ALLOCA) continue; /* skip alloca memory */
     bitmap_set_bit_p (exit_bb->mem_live_in, i);
     bitmap_set_bit_p (exit_bb->mem_live_out, i);
   }
@@ -3712,11 +3714,11 @@ static void dse (gen_ctx_t gen_ctx) {
             /* all but unintersected must alloca */
             make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, live, NULL);
           else if (insn->ops[1].u.mem.alias_set == 0)
-            bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_loc_t, mem_locs));
+            bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
           else
             ; /* ??? */
         } else {
-          bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_loc_t, mem_locs));
+          bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
         }
       }
     }
@@ -6201,7 +6203,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (loop_node_t, loop_nodes, 32);
     VARR_CREATE (loop_node_t, queue_nodes, 32);
     VARR_CREATE (loop_node_t, loop_entries, 16);
-    VARR_CREATE (mem_loc_t, mem_locs, 32);
+    VARR_CREATE (mem_attr_t, mem_attrs, 32);
     VARR_CREATE (target_bb_version_t, target_succ_bb_versions, 16);
     VARR_CREATE (void_ptr_t, succ_bb_addrs, 16);
     init_dead_vars (gen_ctx);
@@ -6269,7 +6271,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     VARR_DESTROY (loop_node_t, loop_nodes);
     VARR_DESTROY (loop_node_t, queue_nodes);
     VARR_DESTROY (loop_node_t, loop_entries);
-    VARR_DESTROY (mem_loc_t, mem_locs);
+    VARR_DESTROY (mem_attr_t, mem_attrs);
     VARR_DESTROY (target_bb_version_t, target_succ_bb_versions);
     VARR_DESTROY (void_ptr_t, succ_bb_addrs);
   }
