@@ -1162,7 +1162,7 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
     op = bb_insn->insn->ops[i];
     if (op.mode == MIR_OP_MEM && op.u.mem.nloc != 0) {
       flag = VARR_GET (mem_loc_t, mem_locs, op.u.mem.nloc).alloca_flag;
-      fprintf (debug_file, " # m%lu%s", op.u.mem.nloc,
+      fprintf (debug_file, " # m%lu%s", (unsigned long) op.u.mem.nloc,
                !flag                               ? ""
                : flag & (MAY_ALLOCA | MUST_ALLOCA) ? "au"
                : flag & MAY_ALLOCA                 ? "a"
@@ -2335,16 +2335,13 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
   DEBUG (2, { fprintf (debug_file, "Calculate memory availability:\n"); });
   gen_assert (VARR_LENGTH (expr_t, mem_exprs) == 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    DEBUG (2, { fprintf (debug_file, "  BB%d:\n", bb->index); });
+    DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
     bitmap_clear (bb->gen);
     for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       MIR_insn_t insn = bb_insn->insn;
-      MIR_op_mode_t mode;
-      int out_p, alias_p;
       expr_t e;
-      size_t nel, mem_num;
-      bitmap_iterator_t bi;
+      size_t mem_num;
 
       if (MIR_call_code_p (insn->code)) { /* ??? improving */
         bitmap_clear (bb->gen);
@@ -2372,7 +2369,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
   DEBUG (2, {
     fprintf (debug_file, "BB mem availability in/out:\n");
     for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-      fprintf (debug_file, "  BB%d:\n", bb->index);
+      fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index);
       output_bitmap (gen_ctx, "    mem av in:", bb->mem_av_in, FALSE);
       output_bitmap (gen_ctx, "    mem av out:", bb->mem_av_out, FALSE);
     }
@@ -2808,7 +2805,6 @@ static int gvn_phi_val (gen_ctx_t gen_ctx, bb_insn_t phi, int64_t *val) {
   bb_insn_t def_bb_insn;
   edge_t e;
   size_t nop;
-  int64_t v;
   ssa_edge_t se;
   int const_p = TRUE, same_p = TRUE;
 
@@ -2921,7 +2917,7 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
   }
   if (VARR_LENGTH (mem_loc_t, mem_locs) == 0) VARR_PUSH (mem_loc_t, mem_locs, mem_loc);
   DEBUG (2, {
-    fprintf (debug_file, "    new m%lu", mem_op_ref->u.mem.nloc);
+    fprintf (debug_file, "    new m%lu", (unsigned long) mem_op_ref->u.mem.nloc);
     if (mem_loc.disp_def_p) fprintf (debug_file, "(disp=%lld)", (long long) mem_loc.disp);
     if (flag)
       fprintf (debug_file, " is %s alloca based",
@@ -2943,11 +2939,11 @@ static void update_mem_loc_alloca_flag (gen_ctx_t gen_ctx, size_t nloc, int flag
   mem_loc_ref->alloca_flag = ((old_flag | flag) & MAY_ALLOCA) | (old_flag & flag & MUST_ALLOCA);
   DEBUG (2, {
     if (flag != old_flag) {
-      fprintf (debug_file, "    m%lu ", nloc);
+      fprintf (debug_file, "    m%lu ", (unsigned long) nloc);
       if (!flag)
-        fprintf (debug_file, "is no more %s%s alloca based\n");
+        fprintf (debug_file, "is no more alloca based\n");
       else
-        fprintf (debug_file, "becomes %s%s alloca based\n",
+        fprintf (debug_file, "becomes %s alloca based\n",
                  flag & (MAY_ALLOCA | MUST_ALLOCA) ? "may/must"
                  : flag & MAY_ALLOCA               ? "may"
                                                    : "must");
@@ -2960,7 +2956,9 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
   bb_insn_t bb_insn, next_bb_insn;
   long deleted_insns_num = 0;
 
-  DEBUG (2, { fprintf (debug_file, "  BB%d is unreachable and removed\n", bb->index); });
+  DEBUG (2, {
+    fprintf (debug_file, "  BB%lu is unreachable and removed\n", (unsigned long) bb->index);
+  });
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
     next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
     insn = bb_insn->insn;
@@ -3015,7 +3013,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   VARR_TRUNC (mem_loc_t, mem_locs, 0);
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
-    DEBUG (2, { fprintf (debug_file, "  BB%d:\n", bb->index); });
+    DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
     if (bb->index != 0
         && ((in_edge = DLIST_HEAD (in_edge_t, bb->in_edges)) == NULL
             || (DLIST_NEXT (in_edge_t, in_edge) == NULL && in_edge->src == bb))) {
@@ -3031,8 +3029,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       MIR_type_t type;
       MIR_insn_code_t move_code;
       MIR_insn_t store, new_insn, new_insn2, def_insn, after, insn = bb_insn->insn;
-      ssa_edge_t list, se, se2;
-      bb_insn_t def_bb_insn, def_bb_insn2, new_bb_copy_insn;
+      ssa_edge_t se, se2;
+      bb_insn_t def_bb_insn, new_bb_copy_insn;
       int64_t val, val2;
 
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
@@ -3545,15 +3543,12 @@ static int alloca_arg_p (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
 }
 
 static void update_call_mem_live (gen_ctx_t gen_ctx, bitmap_t mem_live, MIR_insn_t call_insn) {
-  bb_insn_t bb_insn = call_insn->data;
-
   gen_assert (MIR_call_code_p (call_insn->code));
   gen_assert (call_insn->ops[0].mode == MIR_OP_REF
               && call_insn->ops[0].u.ref->item_type == MIR_proto_item);
   if (full_escape_p || alloca_arg_p (gen_ctx, call_insn)) {
     bitmap_set_bit_range_p (mem_live, 1, VARR_LENGTH (mem_loc_t, mem_locs));
   } else {
-    MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
     mem_loc_t *mem_loc_addr = VARR_ADDR (mem_loc_t, mem_locs);
 
     for (size_t i = 1; i < VARR_LENGTH (mem_loc_t, mem_locs); i++)
@@ -3629,7 +3624,6 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
 }
 
 static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
-  MIR_reg_t nregs, n;
   bb_t exit_bb = DLIST_EL (bb_t, curr_cfg->bbs, 1);
   mem_loc_t *mem_loc_addr;
 
@@ -6117,7 +6111,6 @@ static void *func_generator (void *arg) {
 
 static void signal_threads_to_finish (struct all_gen_ctx *all_gen_ctx) {
   MIR_context_t ctx = all_gen_ctx->ctx;
-  func_or_bb_t func_or_bb;
 
   if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
   funcs_start = 0;
