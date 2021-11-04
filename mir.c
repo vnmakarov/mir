@@ -3940,6 +3940,9 @@ typedef enum {
   TAG_EL (TRBLOCK) = TAG_EL (TBLOCK) + MIR_BLK_NUM,
   TAG_EL (EOI),
   TAG_EL (EOFILE), /* end of insn with variable number operands (e.g. a call) or end of file */
+  REP4 (TAG_EL, ALIAS_MEM_DISP, ALIAS_MEM_BASE, ALIAS_MEM_INDEX, ALIAS_MEM_DISP_BASE),
+  REP3 (TAG_EL, ALIAS_MEM_DISP_INDEX, ALIAS_MEM_BASE_INDEX, ALIAS_MEM_DISP_BASE_INDEX),
+  TAG_EL (LAST) = TAG_EL (ALIAS_MEM_DISP_BASE_INDEX),
   /* unsigned integer 0..127 is kept in one byte.  The most significant bit of the byte is 1: */
   U0_MASK = 0x7f,
   U0_FLAG = 0x80,
@@ -4201,18 +4204,23 @@ static size_t write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func
   case MIR_OP_MEM: {
     bin_tag_t tag;
     size_t len;
+    int alias_p = op.u.mem.alias != 0 || op.u.mem.nonalias != 0;
 
     if (op.u.mem.disp != 0) {
       if (op.u.mem.base != 0)
-        tag = op.u.mem.index != 0 ? TAG_MEM_DISP_BASE_INDEX : TAG_MEM_DISP_BASE;
+        tag = op.u.mem.index != 0
+                ? (alias_p ? TAG_ALIAS_MEM_DISP_BASE_INDEX : TAG_MEM_DISP_BASE_INDEX)
+                : (alias_p ? TAG_ALIAS_MEM_DISP_BASE : TAG_MEM_DISP_BASE);
       else
-        tag = op.u.mem.index != 0 ? TAG_MEM_DISP_INDEX : TAG_MEM_DISP;
+        tag = op.u.mem.index != 0 ? (alias_p ? TAG_ALIAS_MEM_DISP_INDEX : TAG_MEM_DISP_INDEX)
+                                  : (alias_p ? TAG_ALIAS_MEM_DISP : TAG_MEM_DISP);
     } else if (op.u.mem.base != 0) {
-      tag = op.u.mem.index != 0 ? TAG_MEM_BASE_INDEX : TAG_MEM_BASE;
+      tag = op.u.mem.index != 0 ? (alias_p ? TAG_ALIAS_MEM_BASE_INDEX : TAG_MEM_BASE_INDEX)
+                                : (alias_p ? TAG_ALIAS_MEM_BASE : TAG_MEM_BASE);
     } else if (op.u.mem.index != 0) {
-      tag = TAG_MEM_INDEX;
+      tag = alias_p ? TAG_ALIAS_MEM_INDEX : TAG_MEM_INDEX;
     } else {
-      tag = TAG_MEM_DISP;
+      tag = alias_p ? TAG_ALIAS_MEM_DISP : TAG_MEM_DISP;
     }
     put_byte (ctx, writer, tag);
     len = write_type (ctx, writer, op.u.mem.type) + 1;
@@ -4222,6 +4230,10 @@ static size_t write_op (MIR_context_t ctx, writer_func_t writer, MIR_func_t func
     if (op.u.mem.index != 0) {
       len += write_reg (ctx, writer, MIR_reg_name (ctx, op.u.mem.index, func));
       len += write_uint (ctx, writer, op.u.mem.scale);
+    }
+    if (alias_p) {
+      len += write_name (ctx, writer, MIR_alias_name (ctx, op.u.mem.alias));
+      len += write_name (ctx, writer, MIR_alias_name (ctx, op.u.mem.nonalias));
     }
     output_mem_len += len;
     return len;
@@ -4649,6 +4661,8 @@ static bin_tag_t read_token (MIR_context_t ctx, token_attr_t *attr) {
     break;
     REP6 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX)
     REP3 (TAG_CASE, MEM_DISP_BASE_INDEX, EOI, EOFILE)
+    REP4 (TAG_CASE, ALIAS_MEM_DISP, ALIAS_MEM_BASE, ALIAS_MEM_INDEX, ALIAS_MEM_DISP_BASE)
+    REP3 (TAG_CASE, ALIAS_MEM_DISP_INDEX, ALIAS_MEM_BASE_INDEX, ALIAS_MEM_DISP_BASE_INDEX)
     break;
     REP8 (TAG_CASE, TI8, TU8, TI16, TU16, TI32, TU32, TI64, TU64)
     REP5 (TAG_CASE, TF, TD, TP, TV, TRBLOCK)
@@ -4691,6 +4705,8 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
   MIR_disp_t disp;
   MIR_reg_t base, index;
   MIR_scale_t scale;
+  int alias_p = FALSE;
+  const char *name;
 
   tag = read_token (ctx, &attr);
   switch (tag) {
@@ -4726,25 +4742,41 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
     REP4 (TAG_CASE, LAB1, LAB2, LAB3, LAB4)
     *op = MIR_new_label_op (ctx, to_lab (ctx, attr.u));
     break;
+    REP7 (TAG_CASE, ALIAS_MEM_DISP, ALIAS_MEM_BASE, ALIAS_MEM_INDEX, ALIAS_MEM_DISP_BASE,
+          ALIAS_MEM_DISP_INDEX, ALIAS_MEM_BASE_INDEX, ALIAS_MEM_DISP_BASE_INDEX)
+    alias_p = TRUE;
+    /* Fall through: */
     REP7 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX,
           MEM_DISP_BASE_INDEX)
     t = read_type (ctx, "wrong memory type");
     disp = (tag == TAG_MEM_DISP || tag == TAG_MEM_DISP_BASE || tag == TAG_MEM_DISP_INDEX
-                || tag == TAG_MEM_DISP_BASE_INDEX
+                || tag == TAG_MEM_DISP_BASE_INDEX || tag == TAG_ALIAS_MEM_DISP
+                || tag == TAG_ALIAS_MEM_DISP_BASE || tag == TAG_ALIAS_MEM_DISP_INDEX
+                || tag == TAG_ALIAS_MEM_DISP_BASE_INDEX
               ? read_disp (ctx)
               : 0);
     base = (tag == TAG_MEM_BASE || tag == TAG_MEM_DISP_BASE || tag == TAG_MEM_BASE_INDEX
-                || tag == TAG_MEM_DISP_BASE_INDEX
+                || tag == TAG_MEM_DISP_BASE_INDEX || tag == TAG_ALIAS_MEM_BASE
+                || tag == TAG_ALIAS_MEM_DISP_BASE || tag == TAG_ALIAS_MEM_BASE_INDEX
+                || tag == TAG_ALIAS_MEM_DISP_BASE_INDEX
               ? read_reg (ctx, func)
               : 0);
     index = 0;
     scale = 0;
     if (tag == TAG_MEM_INDEX || tag == TAG_MEM_DISP_INDEX || tag == TAG_MEM_BASE_INDEX
-        || tag == TAG_MEM_DISP_BASE_INDEX) {
+        || tag == TAG_MEM_DISP_BASE_INDEX || tag == TAG_ALIAS_MEM_INDEX
+        || tag == TAG_ALIAS_MEM_DISP_INDEX || tag == TAG_ALIAS_MEM_BASE_INDEX
+        || tag == TAG_ALIAS_MEM_DISP_BASE_INDEX) {
       index = read_reg (ctx, func);
       scale = read_uint (ctx, "wrong memory index scale");
     }
     *op = MIR_new_mem_op (ctx, t, disp, base, index, scale);
+    if (alias_p) {
+      name = read_name (ctx, func->module, "wrong alias name");
+      if (strcmp (name, "") != 0) op->u.mem.alias = MIR_alias (ctx, name);
+      name = read_name (ctx, func->module, "wrong nonalias name");
+      if (strcmp (name, "") != 0) op->u.mem.nonalias = MIR_alias (ctx, name);
+    }
     break;
   case TAG_EOI: return FALSE;
   default: mir_assert (FALSE);
@@ -5105,7 +5137,7 @@ void MIR_read (MIR_context_t ctx, FILE *f) {
 }
 
 static void io_init (MIR_context_t ctx) {
-  mir_assert (TAG_EOFILE < 127); /* see bin_tag_t */
+  mir_assert (TAG_LAST < 127); /* see bin_tag_t */
   if ((ctx->io_ctx = malloc (sizeof (struct io_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   VARR_CREATE (MIR_var_t, proto_vars, 0);
