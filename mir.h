@@ -534,6 +534,9 @@ extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t fu
 extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 
+extern const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias);
+extern MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name);
+
 extern MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg);
 extern MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t v);
 extern MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t v);
@@ -544,6 +547,9 @@ extern MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item);
 extern MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str);
 extern MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
                                 MIR_reg_t index, MIR_scale_t scale);
+extern MIR_op_t MIR_new_alias_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                      MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                      MIR_alias_t alias, MIR_alias_t noalias);
 extern MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label);
 extern int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2);
 extern htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op);
@@ -636,6 +642,9 @@ extern MIR_op_t _MIR_new_hard_reg_op (MIR_context_t ctx, MIR_reg_t hard_reg);
 
 extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
                                           MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale);
+extern MIR_op_t _MIR_new_alias_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                                MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                                MIR_alias_t alias, MIR_alias_t no_alias);
 
 extern MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const char *name,
                                       size_t nres, MIR_type_t *res_types, size_t nargs, ...);

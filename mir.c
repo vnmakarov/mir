@@ -19,6 +19,7 @@ struct gen_ctx;
 struct c2mir_ctx;
 struct string_ctx;
 struct reg_ctx;
+struct alias_ctx;
 struct simplify_ctx;
 struct machine_code_ctx;
 struct io_ctx;
@@ -46,6 +47,7 @@ struct MIR_context {
   VARR (MIR_module_t) * modules_to_link;
   struct string_ctx *string_ctx;
   struct reg_ctx *reg_ctx;
+  struct alias_ctx *alias_ctx;
   struct simplify_ctx *simplify_ctx;
   struct machine_code_ctx *machine_code_ctx;
   struct io_ctx *io_ctx;
@@ -399,6 +401,27 @@ static void string_finish (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) 
   HTAB_DESTROY (string_t, *str_tab);
 }
 
+/* Functions to work with aliases.  */
+
+struct alias_ctx {
+  VARR (string_t) * aliases;
+  HTAB (string_t) * alias_tab;
+};
+
+#define aliases ctx->alias_ctx->aliases
+#define alias_tab ctx->alias_ctx->alias_tab
+
+MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name) {
+  string_store (ctx, &aliases, &alias_tab, (MIR_str_t){strlen (name) + 1, name}).num;
+}
+
+const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias) {
+  if (alias == 0) return "";
+  if (alias >= VARR_LENGTH (string_t, aliases))
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for func regs info");
+  return VARR_ADDR (string_t, aliases)[alias].str.s;
+}
+
 /* New Page */
 
 typedef struct reg_desc {
@@ -596,6 +619,7 @@ MIR_context_t _MIR_init (void) {
   if ((ctx = malloc (sizeof (struct MIR_context))) == NULL)
     default_error (MIR_alloc_error, "Not enough memory for ctx");
   ctx->string_ctx = NULL;
+  ctx->alias_ctx = NULL;
   ctx->reg_ctx = NULL;
   ctx->simplify_ctx = NULL;
   ctx->machine_code_ctx = NULL;
@@ -610,9 +634,11 @@ MIR_context_t _MIR_init (void) {
   curr_module = NULL;
   curr_func = NULL;
   curr_label_num = 0;
-  if ((ctx->string_ctx = malloc (sizeof (struct string_ctx))) == NULL)
+  if ((ctx->string_ctx = malloc (sizeof (struct string_ctx))) == NULL
+      || (ctx->alias_ctx = malloc (sizeof (struct string_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   string_init (&strings, &string_tab);
+  string_init (&aliases, &alias_tab);
   VARR_CREATE (MIR_proto_t, unspec_protos, 0);
   check_and_prepare_insn_descs (ctx);
   DLIST_INIT (MIR_module_t, all_modules);
@@ -736,6 +762,7 @@ void MIR_finish (MIR_context_t ctx) {
   }
   VARR_DESTROY (MIR_proto_t, unspec_protos);
   string_finish (&strings, &string_tab);
+  string_finish (&aliases, &alias_tab);
   simplify_finish (ctx);
   VARR_DESTROY (size_t, insn_nops);
   code_finish (ctx);
@@ -2135,8 +2162,9 @@ MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str) {
   return op;
 }
 
-MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
-                         MIR_reg_t index, MIR_scale_t scale) {
+static MIR_op_t new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+                            MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
+                            MIR_alias_t nonalias) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_MEM);
@@ -2145,13 +2173,26 @@ MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MI
   op.u.mem.base = base;
   op.u.mem.index = index;
   op.u.mem.scale = scale;
-  op.u.mem.alias_set = 0;
   op.u.mem.nloc = 0;
+  op.u.mem.alias = alias;
+  op.u.mem.nonalias = nonalias;
   return op;
 }
 
-MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                   MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale) {
+MIR_op_t MIR_new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+                         MIR_reg_t index, MIR_scale_t scale) {
+  return new_mem_op (ctx, type, disp, base, index, scale, 0, 0);
+}
+
+MIR_op_t MIR_new_alias_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+                               MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
+                               MIR_alias_t nonalias) {
+  return new_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
+}
+
+static MIR_op_t new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                     MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                     MIR_alias_t alias, MIR_alias_t nonalias) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_HARD_REG_MEM);
@@ -2160,7 +2201,21 @@ MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_
   op.u.hard_reg_mem.base = base;
   op.u.hard_reg_mem.index = index;
   op.u.hard_reg_mem.scale = scale;
+  op.u.hard_reg_mem.nloc = 0;
+  op.u.hard_reg_mem.alias = alias;
+  op.u.hard_reg_mem.nonalias = nonalias;
   return op;
+}
+
+MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                   MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale) {
+  return new_hard_reg_mem_op (ctx, type, disp, base, index, scale, 0, 0);
+}
+
+MIR_op_t _MIR_new_alias_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                         MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                         MIR_alias_t alias, MIR_alias_t nonalias) {
+  return new_hard_reg_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
 }
 
 MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label) {
