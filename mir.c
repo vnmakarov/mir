@@ -2567,6 +2567,11 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
       }
       fprintf (f, ")");
     }
+    if (op.u.mem.alias != 0 || op.u.mem.nonalias != 0) {
+      fprintf (f, ":");
+      if (op.u.mem.alias != 0) fprintf (f, "%s", MIR_alias_name (ctx, op.u.mem.alias));
+      if (op.u.mem.nonalias != 0) fprintf (f, ":%s", MIR_alias_name (ctx, op.u.mem.nonalias));
+    }
     break;
   }
   case MIR_OP_REF:
