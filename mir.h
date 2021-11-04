@@ -230,6 +230,8 @@ typedef union {
   long double ld;
 } MIR_imm_t;
 
+typedef uint32_t MIR_alias_t; /* unique number of alias name */
+
 /* Memory: mem:type[base + index * scale + disp].  It also can be
    memory with hard regs but such memory used only internally.  An
    integer type memory value expands to int64_t value when the insn is
@@ -237,8 +239,10 @@ typedef union {
 typedef struct {
   MIR_type_t type : 8;
   MIR_scale_t scale;
-  uint16_t alias_set; /* 0 set may alias any memory */
-  uint32_t nloc;      /* mem operand with the same nonzero nloc always refers to the same memory */
+  MIR_alias_t alias;    /* 0 may alias any memory, memory with the same alias is aliased */
+  MIR_alias_t nonalias; /* 0 for ignoring, memory with the same nonalias is not aliased */
+  /* Used internally: mem operand with the same nonzero nloc always refers to the same memory */
+  uint32_t nloc;
   /* 0 and MIR_NON_HARD_REG means no reg for correspondingly for memory and hard reg memory. */
   MIR_reg_t base, index;
   MIR_disp_t disp;
@@ -268,10 +272,10 @@ typedef struct MIR_str MIR_str_t;
 /* An insn operand */
 typedef struct {
   void *data; /* Aux data  */
-  MIR_op_mode_t mode;
+  MIR_op_mode_t mode : 8;
   /* Defined after MIR_func_finish.  Only MIR_OP_INT, MIR_OP_UINT,
      MIR_OP_FLOAT, MIR_OP_DOUBLE, MIR_OP_LDOUBLE: */
-  MIR_op_mode_t value_mode;
+  MIR_op_mode_t value_mode : 8;
   union {
     MIR_reg_t reg;
     MIR_reg_t hard_reg; /* Used only internally */
