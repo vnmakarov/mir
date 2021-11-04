@@ -60,16 +60,22 @@
 
    Memory aliasing rules:
 
+   * Memory has aliases and they are used for recognizing aliased memory
+
    * Memory has nloc attribute.  Memory with the same nloc always refer for the same memory
-     although memory with different nloc still may refer for the same memory.
+     although memory with different nloc still may refer for the same memory.  Memory with
+     the same nloc has the same alias attributes
+
+   * Memory found aliased with alias attributes can be recognized as non-aliased one by
+     using alloca flags described below
 
    * Memory can have flags 'must alloca' and 'may alloca'.  'Must alloca' always goes
      with 'may alloca'.  'Must alloca' means that we guarantee memory can be allocated
      only alloca in the func. 'May alloca' means that it is not excluded that memory is
-     allocated by alloca.
+     allocated by alloca
 
    * Memory with 'must alloca' flag can have disp attribute.  We can define that
-     'must alloca' memory refers the same memory using disp attribute.
+     'must alloca' memory refers the same memory using disp attribute
 
 */
 
