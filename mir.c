@@ -5553,13 +5553,13 @@ static MIR_type_t str2type (const char *type_name) {
      label : name
      code : name
      op : name | int | float | double | long double | mem | str
-     mem : type ':' addr
+     mem : type ':' addr aliases
      addr : disp
           | [ disp ] '(' sib ')'
      sib : name | [ name ] ',' name [ ',' scale]
      disp : int | name
      scale : int
-
+     aliases :  [':' [name] [':' name] ]
 */
 
 void MIR_scan_string (MIR_context_t ctx, const char *str) {
@@ -5779,8 +5779,36 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             }
             if (t.code != TC_RIGHT_PAR) scan_error (ctx, "wrong memory op");
             scan_token (ctx, &t, get_string_char, unget_string_char);
-          } else if (!disp_p)
+          } else if (!disp_p) {
             scan_error (ctx, "wrong memory");
+          }
+          if (t.code == TC_COL) {
+            scan_token (ctx, &t, get_string_char, unget_string_char);
+            if (t.code == TC_COL) {
+              op.u.mem.alias = 0;
+              scan_token (ctx, &t, get_string_char, unget_string_char);
+              if (t.code != TC_NAME) {
+                scan_error (ctx, "empty nonalias name");
+              } else {
+                op.u.mem.nonalias = MIR_alias (ctx, t.u.name);
+                scan_token (ctx, &t, get_string_char, unget_string_char);
+              }
+            } else if (t.code != TC_NAME) {
+              scan_error (ctx, "wrong alias name");
+            } else {
+              op.u.mem.alias = MIR_alias (ctx, t.u.name);
+              scan_token (ctx, &t, get_string_char, unget_string_char);
+              if (t.code == TC_COL) {
+                scan_token (ctx, &t, get_string_char, unget_string_char);
+                if (t.code != TC_NAME) {
+                  scan_error (ctx, "empty nonalias name");
+                } else {
+                  op.u.mem.nonalias = MIR_alias (ctx, t.u.name);
+                  scan_token (ctx, &t, get_string_char, unget_string_char);
+                }
+              }
+            }
+          }
         }
         break;
       }
