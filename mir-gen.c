@@ -2290,7 +2290,10 @@ static void calculate_dominators (gen_ctx_t gen_ctx) {
 #define mem_av_in in
 #define mem_av_out out
 
-static int may_alias_p (const MIR_mem_t *mem1, const MIR_mem_t *mem2) { return TRUE; }
+static int may_alias_p (const MIR_mem_t *mem1, const MIR_mem_t *mem2) {
+  return (mem1->alias == 0 || mem2->alias == 0 || mem1->alias == mem2->alias)
+         && (mem1->nonalias == 0 || mem2->nonalias == 0 || mem1->alias != mem2->alias);
+}
 
 static void mem_av_con_func_0 (bb_t bb) { bitmap_clear (bb->mem_av_in); }
 
@@ -3626,7 +3629,7 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
         if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA)) {
           make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, bb->mem_live_gen,
                                           bb->mem_live_kill);
-        } else if (insn->ops[1].u.mem.alias_set == 0) {
+        } else if (insn->ops[1].u.mem.alias == 0) {
           bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
           bitmap_clear_bit_range_p (bb->mem_live_kill, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
         } else {
@@ -3713,7 +3716,7 @@ static void dse (gen_ctx_t gen_ctx) {
           if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA))
             /* all but unintersected must alloca */
             make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, live, NULL);
-          else if (insn->ops[1].u.mem.alias_set == 0)
+          else if (insn->ops[1].u.mem.alias == 0)
             bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
           else
             ; /* ??? */
