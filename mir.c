@@ -412,7 +412,7 @@ struct alias_ctx {
 #define alias_tab ctx->alias_ctx->alias_tab
 
 MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name) {
-  string_store (ctx, &aliases, &alias_tab, (MIR_str_t){strlen (name) + 1, name}).num;
+  return string_store (ctx, &aliases, &alias_tab, (MIR_str_t){strlen (name) + 1, name}).num;
 }
 
 const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias) {
