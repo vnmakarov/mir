@@ -156,9 +156,10 @@ DEF_VARR (void_ptr_t);
 
 typedef struct {
   unsigned char alloca_flag;
-  unsigned char disp_def_p; /* can be true only for MUST_ALLOCA */
-  MIR_type_t type;          /* memory type */
-  int64_t disp;             /* defined only when disp_def_p, otherwise disp is unknown */
+  unsigned char disp_def_p;    /* can be true only for MUST_ALLOCA */
+  MIR_type_t type;             /* memory type */
+  MIR_alias_t alias, nonalias; /* memory aliases */
+  int64_t disp;                /* defined only when disp_def_p, otherwise disp is unknown */
 } mem_attr_t;
 
 DEF_VARR (mem_attr_t);
@@ -2290,9 +2291,14 @@ static void calculate_dominators (gen_ctx_t gen_ctx) {
 #define mem_av_in in
 #define mem_av_out out
 
-static int may_alias_p (const MIR_mem_t *mem1, const MIR_mem_t *mem2) {
-  return (mem1->alias == 0 || mem2->alias == 0 || mem1->alias == mem2->alias)
-         && (mem1->nonalias == 0 || mem2->nonalias == 0 || mem1->alias != mem2->alias);
+static int may_alias_p (MIR_alias_t alias1, MIR_alias_t alias2, MIR_alias_t nonalias1,
+                        MIR_alias_t nonalias2) {
+  return (alias1 == 0 || alias2 == 0 || alias1 == alias2)
+         && (nonalias1 == 0 || nonalias2 == 0 || nonalias1 != nonalias2);
+}
+
+static int may_mem_alias_p (const MIR_mem_t *mem1, const MIR_mem_t *mem2) {
+  return may_alias_p (mem1->alias, mem2->alias, mem1->nonalias, mem2->nonalias);
 }
 
 static void mem_av_con_func_0 (bb_t bb) { bitmap_clear (bb->mem_av_in); }
@@ -2322,7 +2328,7 @@ static int mem_av_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
     alias_p = FALSE;
     mem_ref = &VARR_GET (expr_t, mem_exprs, nel)->insn->ops[0].u.mem;
     FOREACH_BITMAP_BIT (bi2, bb->gen, nel2) {
-      if (may_alias_p (mem_ref, &VARR_GET (expr_t, mem_exprs, nel2)->insn->ops[0].u.mem)) {
+      if (may_mem_alias_p (mem_ref, &VARR_GET (expr_t, mem_exprs, nel2)->insn->ops[0].u.mem)) {
         alias_p = TRUE;
         break;
       }
@@ -2341,7 +2347,8 @@ static void update_mem_availability (gen_ctx_t gen_ctx, bitmap_t mem_av, bb_insn
   gen_assert (move_code_p (store->insn->code) && store->insn->ops[0].mode == MIR_OP_MEM);
   FOREACH_BITMAP_BIT (bi, mem_av, nel) {
     mem_insn = VARR_GET (expr_t, mem_exprs, nel)->insn;
-    if (may_alias_p (&mem_insn->ops[mem_insn->ops[0].mode == MIR_OP_MEM ? 0 : 1].u.mem, mem_ref))
+    if (may_mem_alias_p (&mem_insn->ops[mem_insn->ops[0].mode == MIR_OP_MEM ? 0 : 1].u.mem,
+                         mem_ref))
       bitmap_clear_bit_p (mem_av, nel);
   }
   bitmap_set_bit_p (mem_av, store->mem_index);
@@ -2514,7 +2521,9 @@ static int store_eq (expr_t e1, expr_t e2, void *arg) {
   return (ssa_edge1 != NULL && ssa_edge2 != NULL
           && ssa_edge1->def->gvn_val_const_p == ssa_edge2->def->gvn_val_const_p
           && ssa_edge1->def->gvn_val == ssa_edge2->def->gvn_val
-          && canonic_type (st1->ops[0].u.mem.type) == canonic_type (st2->ops[0].u.mem.type));
+          && canonic_type (st1->ops[0].u.mem.type) == canonic_type (st2->ops[0].u.mem.type)
+          && st1->ops[0].u.mem.alias == st1->ops[0].u.mem.alias
+          && st1->ops[0].u.mem.nonalias == st1->ops[0].u.mem.nonalias);
 }
 
 static htab_hash_t store_hash (expr_t e, void *arg) {
@@ -2528,6 +2537,8 @@ static htab_hash_t store_hash (expr_t e, void *arg) {
     h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
   }
   h = mir_hash_step (h, (uint64_t) canonic_type (st->ops[0].u.mem.type));
+  h = mir_hash_step (h, (uint64_t) st->ops[0].u.mem.alias);
+  h = mir_hash_step (h, (uint64_t) st->ops[0].u.mem.nonalias);
   return mir_hash_finish (h);
 }
 
@@ -2909,6 +2920,8 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
     mem_op_ref->u.mem.nloc = 1;
   mem_attr.alloca_flag = flag;
   mem_attr.type = mem_op_ref->u.mem.type;
+  mem_attr.alias = mem_op_ref->u.mem.alias;
+  mem_attr.nonalias = mem_op_ref->u.mem.nonalias;
   mem_attr.disp_def_p = FALSE;
   if (flag & MUST_ALLOCA) {
     se = mem_op_ref->data;
@@ -3592,16 +3605,19 @@ static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, uint32_t nloc1, MIR_type_t
   return disp1 <= disp2 && disp2 < disp1 + size1;
 }
 
-static void make_live_from_must_alloca_mem (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref, bitmap_t gen,
-                                            bitmap_t kill) {
+static void make_live_from_mem (gen_ctx_t gen_ctx, MIR_mem_t *mem_ref, bitmap_t gen, bitmap_t kill,
+                                int must_alloca_p) {
   mem_attr_t *mem_attr_addr = VARR_ADDR (mem_attr_t, mem_attrs);
 
   for (size_t i = 1; i < VARR_LENGTH (mem_attr_t, mem_attrs); i++) {
-    if ((mem_attr_addr[i].alloca_flag & MUST_ALLOCA)
+    if (!may_alias_p (mem_ref->alias, mem_attr_addr[i].alias, mem_ref->nonalias,
+                      mem_attr_addr[i].nonalias))
+      continue;
+    if (must_alloca_p && (mem_attr_addr[i].alloca_flag & MUST_ALLOCA)
         && !alloca_mem_intersect_p (gen_ctx, mem_ref->nloc, mem_ref->type, i,
                                     mem_attr_addr[i].type))
       continue;
-    /* all but unintersected must alloca: */
+    /* all aliased but unintersected must alloca: */
     bitmap_set_bit_p (gen, i);
     if (kill != NULL) bitmap_clear_bit_p (kill, i);
   }
@@ -3626,15 +3642,9 @@ static MIR_insn_t initiate_bb_mem_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_ta
       if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
         bitmap_set_bit_p (bb->mem_live_gen, nloc);
         bitmap_clear_bit_p (bb->mem_live_kill, nloc);
-        if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA)) {
-          make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, bb->mem_live_gen,
-                                          bb->mem_live_kill);
-        } else if (insn->ops[1].u.mem.alias == 0) {
-          bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
-          bitmap_clear_bit_range_p (bb->mem_live_kill, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
-        } else {
-          ; /* ??? */
-        }
+        se = insn->ops[1].data;
+        make_live_from_mem (gen_ctx, &insn->ops[1].u.mem, bb->mem_live_gen, bb->mem_live_kill,
+                            se != NULL && (se->def->alloca_flag & MUST_ALLOCA));
       } else {
         bitmap_set_bit_range_p (bb->mem_live_gen, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
       }
@@ -3713,13 +3723,9 @@ static void dse (gen_ctx_t gen_ctx) {
       } else if (insn->ops[1].mode == MIR_OP_MEM) { /* load */
         if ((nloc = insn->ops[1].u.mem.nloc) != 0) {
           bitmap_set_bit_p (live, nloc);
-          if ((se = insn->ops[1].data) != NULL && (se->def->alloca_flag & MUST_ALLOCA))
-            /* all but unintersected must alloca */
-            make_live_from_must_alloca_mem (gen_ctx, &insn->ops[1].u.mem, live, NULL);
-          else if (insn->ops[1].u.mem.alias == 0)
-            bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
-          else
-            ; /* ??? */
+          se = insn->ops[1].data;
+          make_live_from_mem (gen_ctx, &insn->ops[1].u.mem, live, NULL,
+                              se != NULL && (se->def->alloca_flag & MUST_ALLOCA));
         } else {
           bitmap_set_bit_range_p (live, 1, VARR_LENGTH (mem_attr_t, mem_attrs));
         }
