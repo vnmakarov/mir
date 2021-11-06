@@ -418,7 +418,7 @@ MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name) {
 const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias) {
   if (alias == 0) return "";
   if (alias >= VARR_LENGTH (string_t, aliases))
-    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for func regs info");
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Wrong alias number");
   return VARR_ADDR (string_t, aliases)[alias].str.s;
 }
 
