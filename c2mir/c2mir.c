@@ -9763,7 +9763,7 @@ struct init_el {
   c2m_ctx_t c2m_ctx; /* for sorting */
   mir_size_t num, offset;
   decl_t member_decl; /* NULL for non-member initialization  */
-  struct type *el_type;
+  struct type *el_type, *container_type;
   node_t init;
 };
 
@@ -9793,6 +9793,7 @@ struct gen_ctx {
   VARR (case_t) * switch_cases;
   int curr_mir_proto_num;
   HTAB (MIR_item_t) * proto_tab;
+  VARR (node_t) * node_stack;
 };
 
 #define zero_op gen_ctx->zero_op
@@ -9816,6 +9817,7 @@ struct gen_ctx {
 #define switch_cases gen_ctx->switch_cases
 #define curr_mir_proto_num gen_ctx->curr_mir_proto_num
 #define proto_tab gen_ctx->proto_tab
+#define node_stack gen_ctx->node_stack
 
 static op_t new_op (decl_t decl, MIR_op_t mir_op) {
   op_t res;
@@ -9962,6 +9964,125 @@ static MIR_type_t get_op_type (c2m_ctx_t c2m_ctx, op_t op) {
   case MIR_OP_LDOUBLE: return MIR_T_LD;
   default: assert (FALSE); return MIR_T_I64;
   }
+}
+
+static void push_val (VARR (char) * repr, mir_long val) {
+  mir_long bound;
+
+  for (bound = 10; val >= bound;) bound *= 10;
+  while (bound != 1) {
+    bound /= 10;
+    VARR_PUSH (char, repr, '0' + val / bound);
+    val %= bound;
+  }
+}
+
+static void get_type_alias_name (c2m_ctx_t c2m_ctx, struct type *type, VARR (char) * name) {
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+  enum basic_type basic_type;
+  size_t i;
+
+  switch (type->mode) {
+  case TM_ENUM: basic_type = get_enum_basic_type (type); goto basic;
+  case TM_BASIC:
+    basic_type = type->u.basic_type;
+  basic:
+    switch (basic_type) {
+    case TP_VOID: VARR_PUSH (char, name, 'v'); break;
+    case TP_BOOL: VARR_PUSH (char, name, 'b'); break;
+    case TP_CHAR:
+    case TP_SCHAR:
+    case TP_UCHAR: VARR_PUSH (char, name, 'c'); break;
+    case TP_SHORT:
+    case TP_USHORT: VARR_PUSH (char, name, 's'); break;
+    case TP_INT:
+    case TP_UINT: VARR_PUSH (char, name, 'i'); break;
+    case TP_LONG:
+    case TP_ULONG: VARR_PUSH (char, name, 'l'); break;
+    case TP_LLONG:
+    case TP_ULLONG: VARR_PUSH (char, name, 'L'); break;
+    case TP_FLOAT: VARR_PUSH (char, name, 'f'); break;
+    case TP_DOUBLE: VARR_PUSH (char, name, 'd'); break;
+    case TP_LDOUBLE: VARR_PUSH (char, name, 'D'); break;
+    default: assert (FALSE);
+    }
+    break;
+  case TM_PTR:
+    VARR_PUSH (char, name, 'p');
+    get_type_alias_name (c2m_ctx, type->u.ptr_type, name);
+    break;
+  case TM_STRUCT:
+  case TM_UNION:
+    VARR_PUSH (char, name, type->mode == TM_STRUCT ? 'S' : 'U');
+    for (i = 0; i < VARR_LENGTH (node_t, node_stack); i++)
+      if (VARR_GET (node_t, node_stack, i) == type->u.tag_type) break;
+    if (i < VARR_LENGTH (node_t, node_stack)) {
+      VARR_PUSH (char, name, 'r');
+      push_val (name, i);
+    } else {
+      VARR_PUSH (node_t, node_stack, type->u.tag_type);
+      for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); member != NULL;
+           member = NL_NEXT (member))
+        if (member->code == N_MEMBER) {
+          decl_t decl = member->attr;
+          node_t width = NL_EL (member->u.ops, 2);
+          struct expr *expr;
+
+          get_type_alias_name (c2m_ctx, decl->decl_spec.type, name);
+          if (width->code != N_IGNORE && (expr = width->attr)->const_p) {
+            VARR_PUSH (char, name, 'w');
+            push_val (name, expr->u.u_val);
+            for (mir_ullong v = expr->u.u_val;;) {
+              VARR_PUSH (char, name, v % 10 + '0');
+              v /= 10;
+              if (v == 0) break;
+            }
+          }
+        }
+    }
+    VARR_PUSH (char, name, 'e');
+    break;
+  case TM_ARR:
+    VARR_PUSH (char, name, 'A');
+    get_type_alias_name (c2m_ctx, type->u.arr_type->el_type, name);
+    break;
+  case TM_FUNC:
+    VARR_PUSH (char, name, 'F');
+    get_type_alias_name (c2m_ctx, type->u.func_type->ret_type, name);
+    for (node_t p = NL_HEAD (type->u.func_type->param_list->u.ops); p != NULL; p = NL_NEXT (p)) {
+      struct decl_spec *ds = get_param_decl_spec (p);
+      get_type_alias_name (c2m_ctx, ds->type, name);
+    }
+    VARR_PUSH (char, name, type->u.func_type->dots_p ? 'E' : 'e');
+    break;
+  default: assert (FALSE);
+  }
+}
+
+static MIR_alias_t get_type_alias (c2m_ctx_t c2m_ctx, struct type *type) {
+  MIR_context_t ctx = c2m_ctx->ctx;
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+
+  switch (type->mode) {
+  case TM_BASIC:
+    if (type->u.basic_type != TP_CHAR && type->u.basic_type != TP_SCHAR
+        && type->u.basic_type != TP_UCHAR)
+      break;
+    /* fall through: */
+  case TM_UNDEF:
+  case TM_STRUCT:
+  case TM_ARR:
+  case TM_FUNC: return 0;
+  }
+  VARR_TRUNC (node_t, node_stack, 0);
+  VARR_TRUNC (char, temp_string, 0);
+  get_type_alias_name (c2m_ctx, type, temp_string);
+  VARR_PUSH (char, temp_string, '\0');
+  return MIR_alias (ctx, VARR_ADDR (char, temp_string));
+}
+
+static MIR_alias_t get_decl_noalias (c2m_ctx_t c2m_ctx, decl_t decl) { /* ??? */
+  return 0;
 }
 
 static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_t false_label,
@@ -10302,7 +10423,7 @@ static op_t force_val (c2m_ctx_t c2m_ctx, op_t op, int arr_p) {
   if (op.decl == NULL || op.decl->bit_offset < 0) return op;
   assert (op.mir_op.mode == MIR_OP_MEM);
   temp_op = get_new_temp (c2m_ctx, MIR_T_I64);
-  emit2 (c2m_ctx, MIR_MOV, temp_op.mir_op, op.mir_op);
+  emit2 (c2m_ctx, MIR_MOV, temp_op.mir_op, op.mir_op); /* ??? */
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   sh = 64 - op.decl->bit_offset - op.decl->width;
 #else
@@ -10557,6 +10678,7 @@ static op_t modify_for_block_move (c2m_ctx_t c2m_ctx, op_t mem, op_t index) {
     mem.mir_op.u.mem.index = index.mir_op.u.reg;
     mem.mir_op.u.mem.scale = 1;
   }
+  mem.mir_op.u.mem.alias = mem.mir_op.u.mem.nonalias = 0;
   return mem;
 }
 
@@ -10995,6 +11117,9 @@ check_one_value:
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = member_decl;
     init_el.el_type = type;
+    init_el.container_type = VARR_LENGTH (init_object_t, init_object_path) == 0
+                               ? NULL
+                               : VARR_LAST (init_object_t, init_object_path).container_type;
     init_el.init = initializer;
     VARR_PUSH (init_el_t, init_els, init_el);
     return;
@@ -11013,6 +11138,9 @@ check_one_value:
     init_el.offset = get_object_path_offset (c2m_ctx);
     init_el.member_decl = NULL;
     init_el.el_type = type;
+    init_el.container_type = VARR_LENGTH (init_object_t, init_object_path) == 0
+                               ? NULL
+                               : VARR_LAST (init_object_t, init_object_path).container_type;
     init_el.init = str;
     VARR_PUSH (init_el_t, init_els, init_el);
     return;
@@ -11238,7 +11366,7 @@ static void emit_scalar_assign (c2m_ctx_t c2m_ctx, op_t var, op_t *val, MIR_type
     op_t temp_op1, temp_op2, temp_op3, temp_op4;
     size_t MIR_UNUSED size = type_size (c2m_ctx, var.decl->decl_spec.type) * MIR_CHAR_BIT;
 
-    assert (var.mir_op.mode == MIR_OP_MEM);
+    assert (var.mir_op.mode == MIR_OP_MEM); /*???*/
     mask = 0xffffffffffffffff >> (64 - width);
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     mask2 = ~(mask << var.decl->bit_offset);
@@ -11363,7 +11491,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
     val = cast (c2m_ctx, val, get_mir_type (c2m_ctx, init_el.el_type), FALSE);
     emit_scalar_assign (c2m_ctx, var, &val, t, FALSE);
   } else if (local_p) { /* local variable initialization: */
-    assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0);
+    assert (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0); /*???*/
     offset = var.mir_op.u.mem.disp;
     base = var.mir_op.u.mem.base;
     for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
@@ -11385,11 +11513,17 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         gen_memcpy (c2m_ctx, offset + rel_offset, base, val, s);
         rel_offset = init_el.offset + s;
       } else {
+        MIR_op_t mem
+          = MIR_new_alias_mem_op (ctx, t, offset + init_el.offset, base, 0, 1,
+                                  get_type_alias (c2m_ctx,
+                                                  init_el.container_type != NULL
+                                                      && init_el.container_type->mode == TM_UNION
+                                                    ? init_el.container_type
+                                                    : init_el.el_type),
+                                  0);
         val = cast (c2m_ctx, val, get_mir_type (c2m_ctx, init_el.el_type), FALSE);
-        emit_scalar_assign (c2m_ctx,
-                            new_op (init_el.member_decl,
-                                    MIR_new_mem_op (ctx, t, offset + init_el.offset, base, 0, 1)),
-                            &val, t, i == init_start || rel_offset == init_el.offset);
+        emit_scalar_assign (c2m_ctx, new_op (init_el.member_decl, mem), &val, t,
+                            i == init_start || rel_offset == init_el.offset);
         rel_offset = init_el.offset + _MIR_type_size (ctx, t);
       }
     }
@@ -11876,11 +12010,13 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       t = get_mir_type (c2m_ctx, e->type);
       res = get_new_temp (c2m_ctx, MIR_T_I64);
       emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_ref_op (ctx, decl->item));
-      res = new_op (decl, MIR_new_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1));
+      res = new_op (decl, MIR_new_alias_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1,
+                                                get_type_alias (c2m_ctx, e->type), 0));
     } else if (!decl->reg_p) {
       t = get_mir_type (c2m_ctx, e->type);
-      res = new_op (decl, MIR_new_mem_op (ctx, t, decl->offset,
-                                          MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1));
+      res = new_op (decl, MIR_new_alias_mem_op (ctx, t, decl->offset,
+                                                MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1,
+                                                get_type_alias (c2m_ctx, e->type), 0));
     } else {
       const char *name;
       reg_var_t reg_var;
@@ -11920,7 +12056,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     }
     if (arr_type->mode == TM_PTR && arr_type->arr_type != NULL) { /* indexing an array */
       op1 = force_reg_or_mem (c2m_ctx, op1, MIR_T_I64);
-      assert (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM);
+      assert (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_MEM); /*???*/
     } else {
       op1 = force_reg (c2m_ctx, op1, MIR_T_I64);
       assert (op1.mir_op.mode == MIR_OP_REG);
@@ -11928,7 +12064,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     res = op1;
     res.decl = NULL;
     if (res.mir_op.mode == MIR_OP_REG)
-      res.mir_op = MIR_new_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1);
+      res.mir_op = MIR_new_alias_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1,
+                                         get_type_alias (c2m_ctx, type), 0);
     if (res.mir_op.u.mem.base == 0 && size == 1) {
       res.mir_op.u.mem.base = op2.mir_op.u.reg;
     } else if (res.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
@@ -11991,13 +12128,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       res = op1;
     } else {
       t = get_mir_type (c2m_ctx, type);
-      op1.mir_op = MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1);
+      op1.mir_op = MIR_new_alias_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1,
+                                         get_type_alias (c2m_ctx, type), 0);
       res = new_op (NULL, op1.mir_op);
     }
     break;
   case N_FIELD:
   case N_DEREF_FIELD: {
     node_t def_node;
+    MIR_alias_t alias;
 
     e = r->attr;
     def_node = e->lvalue_node;
@@ -12007,13 +12146,23 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     t = get_mir_type (c2m_ctx, decl->decl_spec.type);
     if (r->code == N_FIELD) {
       assert (op1.mir_op.mode == MIR_OP_MEM);
+      alias = (op1.mir_op.u.mem.alias != 0 && MIR_alias_name (ctx, op1.mir_op.u.mem.alias)[0] == 'U'
+                 ? op1.mir_op.u.mem.alias
+                 : get_type_alias (c2m_ctx, e->type));
       op1.mir_op
-        = MIR_new_mem_op (ctx, t, op1.mir_op.u.mem.disp + decl->offset, op1.mir_op.u.mem.base,
-                          op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale);
+        = MIR_new_alias_mem_op (ctx, t, op1.mir_op.u.mem.disp + decl->offset, op1.mir_op.u.mem.base,
+                                op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale, alias, 0);
     } else {
+      struct expr *left = NL_HEAD (r->u.ops)->attr;
+      assert (left->type->mode == TM_PTR);
       op1 = force_reg (c2m_ctx, op1, MIR_T_I64);
       assert (op1.mir_op.mode == MIR_OP_REG);
-      op1.mir_op = MIR_new_mem_op (ctx, t, decl->offset, op1.mir_op.u.reg, 0, 1);
+      op1.mir_op
+        = MIR_new_alias_mem_op (ctx, t, decl->offset, op1.mir_op.u.reg, 0, 1,
+                                get_type_alias (c2m_ctx, left->type->u.ptr_type->mode == TM_UNION
+                                                           ? left->type->u.ptr_type
+                                                           : e->type),
+                                0);
     }
     res = new_op (decl, op1.mir_op);
     break;
@@ -12107,8 +12256,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       var = new_op (decl, MIR_new_ref_op (ctx, NULL));
     } else {
       t = get_mir_type (c2m_ctx, expr->type);
-      var = new_op (decl, MIR_new_mem_op (ctx, t, decl->offset,
-                                          MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1));
+      var = new_op (decl, MIR_new_alias_mem_op (ctx, t, decl->offset,
+                                                MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1,
+                                                get_type_alias (c2m_ctx, expr->type), 0));
     }
     gen_initializer (c2m_ctx, init_start, var, global_name,
                      raw_type_size (c2m_ctx, decl->decl_spec.type),
@@ -12203,7 +12353,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         op2 = get_new_temp (c2m_ctx, t);
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, tp_mov (t), op2.mir_op,
-                                       MIR_new_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1)));
+                                       MIR_new_alias_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1,
+                                                             get_type_alias (c2m_ctx, type), 0)));
         if (res.mir_op.mode == MIR_OP_REG) {
           res = op2;
         } else {
@@ -12430,8 +12581,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         } else {
           param_mir_type = get_mir_type (c2m_ctx, param_type);
           emit2 (c2m_ctx, tp_mov (param_mir_type),
-                 MIR_new_mem_op (ctx, param_mir_type, param_decl->offset,
-                                 MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1),
+                 MIR_new_alias_mem_op (ctx, param_mir_type, param_decl->offset,
+                                       MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1,
+                                       get_type_alias (c2m_ctx, param_type), 0),
                  MIR_new_reg_op (ctx, get_reg_var (c2m_ctx, MIR_T_UNDEF, name).reg));
         }
       }
@@ -12842,6 +12994,7 @@ static void gen_finish (c2m_ctx_t c2m_ctx) {
   if (switch_ops != NULL) VARR_DESTROY (MIR_op_t, switch_ops);
   if (switch_cases != NULL) VARR_DESTROY (case_t, switch_cases);
   if (init_els != NULL) VARR_DESTROY (init_el_t, init_els);
+  if (node_stack != NULL) VARR_DESTROY (node_t, node_stack);
   free (c2m_ctx->gen_ctx);
 }
 
@@ -12862,6 +13015,7 @@ static void gen_mir (c2m_ctx_t c2m_ctx, node_t r) {
   VARR_CREATE (MIR_op_t, switch_ops, 128);
   VARR_CREATE (case_t, switch_cases, 64);
   VARR_CREATE (init_el_t, init_els, 128);
+  VARR_CREATE (node_t, node_stack, 8);
   memset_proto = memset_item = memcpy_proto = memcpy_item = NULL;
   top_gen (c2m_ctx, r, NULL, NULL);
   gen_finish (c2m_ctx);
