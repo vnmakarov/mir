@@ -170,6 +170,13 @@ typedef struct {
 
 DEF_VARR (mem_attr_t);
 
+typedef struct spot_attr {
+  uint32_t spot, prop;
+  MIR_op_t *mem_ref; /* ref for memory if the spot is memory, NULL otherwise */
+} spot_attr_t;
+
+DEF_VARR (spot_attr_t);
+
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
   int gen_num; /* always 1 for non-parallel generation */
@@ -208,6 +215,7 @@ struct gen_ctx {
   VARR (target_bb_version_t) * target_succ_bb_versions;
   VARR (void_ptr_t) * succ_bb_addrs;
   void *bb_wrapper; /* to jump to lazy basic block generation */
+  VARR (spot_attr_t) * spot_attrs, *spot2attr;
 };
 
 #define optimize_level gen_ctx->optimize_level
@@ -235,6 +243,8 @@ struct gen_ctx {
 #define target_succ_bb_versions gen_ctx->target_succ_bb_versions
 #define succ_bb_addrs gen_ctx->succ_bb_addrs
 #define bb_wrapper gen_ctx->bb_wrapper
+#define spot_attrs gen_ctx->spot_attrs
+#define spot2attr gen_ctx->spot2attr
 
 typedef struct bb_version *bb_version_t;
 
@@ -298,10 +308,6 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
 #error "undefined or unsupported generation target"
 #endif
 
-typedef struct attr_value {
-  unsigned value, attr;
-} attr_value_t;
-
 typedef struct bb_stub *bb_stub_t;
 DEF_DLIST_LINK (bb_version_t);
 
@@ -309,11 +315,11 @@ struct bb_version {
   bb_stub_t bb_stub;
   DLIST_LINK (bb_version_t) bb_version_link;
   int call_p;
-  unsigned n_attrs;
-  attr_value_t attrs[1];
   void *addr; /* bb code address or generator creating and returning address */
   void *machine_code;
   struct target_bb_version target_data; /* data container for the target code */
+  uint32_t n_attrs;
+  spot_attr_t attrs[1];
 };
 
 /* Definition of double list of bb_version_t type elements */
@@ -1401,6 +1407,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
         && (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+            || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE
             || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
       if (next_insn->code == MIR_LABEL && next_insn->data != NULL)
@@ -5504,6 +5511,29 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
           fprintf (debug_file, "  Processing ");
           print_bb_insn (gen_ctx, bb_insn, TRUE);
         });
+        if (insn->code == MIR_PRSET || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE) {
+          if (no_property_p) {
+            if (insn->code == MIR_PRSET
+                || (insn->code == MIR_PRBEQ
+                    && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i != 0))
+                || (insn->code == MIR_PRBNE
+                    && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i == 0))) {
+              DEBUG (2, { fprintf (debug_file, "      removing: it is a property insn\n"); });
+              gen_delete_insn (gen_ctx, insn);
+            } else { /* make unconditional jump */
+              new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]);
+              MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+              MIR_remove_insn (ctx, curr_func_item, insn);
+              new_insn->data = bb_insn;
+              bb_insn->insn = new_insn;
+              DEBUG (2, {
+                fprintf (debug_file, "      changing to ");
+                print_bb_insn (gen_ctx, bb_insn, TRUE);
+              });
+            }
+          }
+          continue;
+        }
         target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                               &early_clobbered_hard_reg2);
         if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
@@ -6046,7 +6076,8 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH;
+    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+               || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
   if (debug_file != NULL) {
@@ -6061,8 +6092,8 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
   }
 }
 
-static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, int n_attrs, int *attrs,
-                                    int call_p, void **addr) {
+static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, uint32_t n_attrs,
+                                    spot_attr_t *attrs, int call_p, void **addr) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_version_t bb_version;
 
@@ -6071,12 +6102,14 @@ static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, int n_
     *addr = bb_version->addr;
     return bb_version;
   }
-  bb_version = gen_malloc (gen_ctx, sizeof (struct bb_version));
+  bb_version = gen_malloc (gen_ctx, sizeof (struct bb_version)
+                                      + (n_attrs <= 1 ? 0 : n_attrs) * sizeof (spot_attr_t));
   target_init_bb_version_data (&bb_version->target_data);
   VARR_PUSH (target_bb_version_t, target_succ_bb_versions,
              call_p ? NULL : &bb_version->target_data);
   bb_version->bb_stub = bb_stub;
-  bb_version->n_attrs = 0;
+  bb_version->n_attrs = n_attrs;
+  if (n_attrs != 0) memcpy (bb_version->attrs, attrs, n_attrs * sizeof (spot_attr_t));
   bb_version->call_p = call_p;
   DLIST_APPEND (bb_version_t, bb_stub->bb_versions, bb_version);
   bb_version->machine_code = NULL;
@@ -6223,6 +6256,8 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (mem_attr_t, mem_attrs, 32);
     VARR_CREATE (target_bb_version_t, target_succ_bb_versions, 16);
     VARR_CREATE (void_ptr_t, succ_bb_addrs, 16);
+    VARR_CREATE (spot_attr_t, spot_attrs, 32);
+    VARR_CREATE (spot_attr_t, spot2attr, 32);
     init_dead_vars (gen_ctx);
     init_data_flow (gen_ctx);
     init_ssa (gen_ctx);
@@ -6291,6 +6326,8 @@ void MIR_gen_finish (MIR_context_t ctx) {
     VARR_DESTROY (mem_attr_t, mem_attrs);
     VARR_DESTROY (target_bb_version_t, target_succ_bb_versions);
     VARR_DESTROY (void_ptr_t, succ_bb_addrs);
+    VARR_DESTROY (spot_attr_t, spot_attrs);
+    VARR_DESTROY (spot_attr_t, spot2attr);
   }
   if (collect_bb_stat_p)
     fprintf (stderr, "Overall bbs num = %llu, generated bbs num = %llu\n",
@@ -6385,6 +6422,27 @@ void MIR_set_lazy_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   _MIR_redirect_thunk (ctx, func_item->addr, addr);
 }
 
+static void set_spot2attr (gen_ctx_t gen_ctx, const spot_attr_t *attr) {
+  gen_assert (attr->spot != 0 && attr->prop != 0);
+  while (VARR_LENGTH (spot_attr_t, spot2attr) <= attr->spot)
+    VARR_PUSH (spot_attr_t, spot2attr, *attr);
+  VARR_SET (spot_attr_t, spot2attr, attr->spot, *attr);
+}
+
+#define FIRST_MEM_SPOT (MAX_HARD_REG + 2)
+static int mem_spot_p (gen_ctx_t gen_ctx, uint32_t spot) { return spot >= FIRST_MEM_SPOT; }
+
+static uint32_t mem_nloc2spot (gen_ctx_t gen_ctx, uint32_t nloc) {
+  return nloc == 0 ? 0 : nloc + 1 + MAX_HARD_REG + 1;
+}
+
+static uint32_t op2spot (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+  if (op_ref->mode == MIR_OP_HARD_REG) return op_ref->u.hard_reg + 1;
+  if (op_ref->mode == MIR_OP_HARD_REG_MEM)
+    return mem_nloc2spot (gen_ctx, op_ref->u.hard_reg_mem.nloc);
+  return 0;
+}
+
 static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb_version) {
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
@@ -6392,20 +6450,46 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   MIR_insn_t curr_insn, new_insn, next_insn, last_insn = bb_stub->last_insn;
   void *addr;
   uint8_t *code;
-  size_t code_len;
+  size_t code_len, nel;
+  uint32_t dest_spot, src_spot, max_spot = 0;
+  bitmap_t nonzero_property_spots = temp_bitmap;
+  bitmap_iterator_t bi;
+  spot_attr_t spot_attr;
 
+  bitmap_clear (nonzero_property_spots);
+  for (size_t i = 0; i < bb_version->n_attrs; i++) {
+    bitmap_set_bit_p (nonzero_property_spots, bb_version->attrs[i].spot);
+    set_spot2attr (gen_ctx, &bb_version->attrs[i]);
+  }
+  if (bb_version->n_attrs != 0) max_spot = bb_version->attrs[bb_version->n_attrs - 1].spot;
   VARR_TRUNC (target_bb_version_t, target_succ_bb_versions, 0);
   target_bb_translate_start (gen_ctx);
   for (curr_insn = bb_stub->first_insn;; curr_insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, curr_insn);
     if (MIR_branch_code_p (curr_insn->code) || curr_insn->code == MIR_SWITCH) break;
-    if (curr_insn->code == MIR_PRSET || curr_insn->code == MIR_PRBEQ
-        || curr_insn->code == MIR_PRBNE) {
-      if (curr_insn->code == MIR_PRSET
-          || (curr_insn->code == MIR_PRBEQ
-              && (curr_insn->ops[2].mode != MIR_OP_INT || curr_insn->ops[2].u.i != 0))
+    switch (curr_insn->code) {
+    case MIR_PRSET:
+      gen_assert (curr_insn->ops[1].mode == MIR_OP_INT || curr_insn->ops[1].mode == MIR_OP_UINT);
+      dest_spot = op2spot (gen_ctx, &curr_insn->ops[0]);
+      if (dest_spot == 0) {
+      } else if (curr_insn->ops[1].u.i == 0) { /* ??? aliased */
+        bitmap_clear_bit_p (nonzero_property_spots, dest_spot);
+      } else {
+        bitmap_set_bit_p (nonzero_property_spots, dest_spot);
+        spot_attr.spot = dest_spot;
+        spot_attr.prop = (uint32_t) curr_insn->ops[1].u.i;
+        spot_attr.mem_ref = mem_spot_p (gen_ctx, dest_spot) ? &curr_insn->ops[0] : NULL;
+        VARR_SET (spot_attr_t, spot2attr, dest_spot, spot_attr);
+      }
+      continue;
+    case MIR_PRBEQ:
+    case MIR_PRBNE: /* ??? */
+      if ((curr_insn->code == MIR_PRBEQ
+           && ((curr_insn->ops[2].mode != MIR_OP_INT && curr_insn->ops[2].mode != MIR_OP_UINT)
+               || curr_insn->ops[2].u.i != 0))
           || (curr_insn->code == MIR_PRBNE
-              && (curr_insn->ops[2].mode != MIR_OP_INT || curr_insn->ops[2].u.i == 0))) {
+              && ((curr_insn->ops[2].mode != MIR_OP_INT && curr_insn->ops[2].mode != MIR_OP_UINT)
+                  || curr_insn->ops[2].u.i == 0))) {
         DEBUG (2, {
           fprintf (debug_file, "  Remove property insn ");
           MIR_output_insn (ctx, debug_file, curr_insn, curr_func_item->u.func, TRUE);
@@ -6425,27 +6509,62 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
         curr_insn = new_insn;
         break;
       }
+    case MIR_MOV:
+    case MIR_FMOV:
+    case MIR_DMOV:
+    case MIR_LDMOV:
+      dest_spot = op2spot (gen_ctx, &curr_insn->ops[0]);
+      src_spot = op2spot (gen_ctx, &curr_insn->ops[1]);
+      if (src_spot == 0) {
+        bitmap_clear_bit_p (nonzero_property_spots, dest_spot);
+      } else if (dest_spot == 0) { /* clear attrs of all memory locations */
+        if (max_spot >= FIRST_MEM_SPOT)
+          bitmap_clear_bit_range_p (nonzero_property_spots, FIRST_MEM_SPOT,
+                                    max_spot - FIRST_MEM_SPOT + 1);
+      } else if (bitmap_bit_p (nonzero_property_spots, src_spot)) {
+        spot_attr = VARR_GET (spot_attr_t, spot2attr, src_spot);
+        spot_attr.mem_ref = NULL;
+        if (mem_spot_p (gen_ctx, dest_spot)) {
+          spot_attr_t *spot_attr_addr = VARR_ADDR (spot_attr_t, spot_attrs);
+          for (uint32_t spot = FIRST_MEM_SPOT; spot <= max_spot; spot++)
+            if (may_mem_alias_p (spot_attr_addr[dest_spot].mem_ref, spot_attr_addr[spot].mem_ref))
+              bitmap_clear_bit_p (nonzero_property_spots, spot);
+          spot_attr.mem_ref = &curr_insn->ops[0];
+        }
+        bitmap_set_bit_p (nonzero_property_spots, dest_spot);
+        VARR_SET (spot_attr_t, spot2attr, dest_spot, spot_attr);
+      }
+      break;
+    default: break;
     }
     target_bb_insn_translate (gen_ctx, curr_insn, NULL);
     if (curr_insn == last_insn) break;
+  }
+  VARR_TRUNC (spot_attr_t, spot_attrs, 0);
+  FOREACH_BITMAP_BIT (bi, nonzero_property_spots, nel) {
+    if (MIR_call_code_p (curr_insn->code) && mem_spot_p (gen_ctx, (uint32_t) nel)) break;
+    VARR_PUSH (spot_attr_t, spot_attrs, VARR_GET (spot_attr_t, spot2attr, nel));
   }
   VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
   if (curr_insn->code == MIR_SWITCH) {
     for (size_t i = 1; i < curr_insn->nops; i++) {
       branch_bb_stub = curr_insn->ops[i].u.label->data;
-      (void) get_bb_version (gen_ctx, branch_bb_stub, 0, NULL, FALSE, &addr);
+      (void) get_bb_version (gen_ctx, branch_bb_stub, VARR_LENGTH (spot_attr_t, spot_attrs),
+                             VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);
       VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
     }
     target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
   } else if (MIR_branch_code_p (curr_insn->code)) {  // ??? generate branch
     branch_bb_stub = curr_insn->ops[0].u.label->data;
-    (void) get_bb_version (gen_ctx, branch_bb_stub, 0, NULL, FALSE, &addr);
+    (void) get_bb_version (gen_ctx, branch_bb_stub, VARR_LENGTH (spot_attr_t, spot_attrs),
+                           VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);
     VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
     target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
   }
   if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_SWITCH && curr_insn->code != MIR_RET) {
     VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
-    (void) get_bb_version (gen_ctx, bb_stub + 1, 0, NULL, FALSE, &addr);
+    (void) get_bb_version (gen_ctx, bb_stub + 1, VARR_LENGTH (spot_attr_t, spot_attrs),
+                           VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);
     VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
     target_output_jump (gen_ctx, VARR_ADDR (void_ptr_t, succ_bb_addrs));
   }
