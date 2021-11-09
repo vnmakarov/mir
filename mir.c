@@ -302,6 +302,9 @@ static const struct insn_desc insn_descs[] = {
   {MIR_VA_END, "va_end", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_LABEL, "label", {MIR_OP_BOUND}},
   {MIR_UNSPEC, "unspec", {MIR_OP_BOUND}},
+  {MIR_PRSET, "prset", {MIR_OP_UNDEF, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_PRBEQ, "prbeq", {MIR_OP_LABEL, MIR_OP_UNDEF, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_PRBNE, "prbne", {MIR_OP_LABEL, MIR_OP_UNDEF, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_PHI, "phi", {MIR_OP_BOUND}},
   {MIR_INVALID_INSN, "invalid-insn", {MIR_OP_BOUND}},
 };
@@ -1942,6 +1945,16 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
     if (ops[2].mode != MIR_OP_MEM)
       MIR_get_error_func (ctx) (MIR_op_mode_error,
                                 "3rd operand of va_arg should be any memory with given type");
+  } else if (code == MIR_PRSET) {
+    if (ops[1].mode != MIR_OP_INT)
+      MIR_get_error_func (ctx) (MIR_op_mode_error, "property should be a integer operand");
+  } else if (code == MIR_PRBEQ || code == MIR_PRBNE) {
+    if (ops[2].mode != MIR_OP_INT)
+      MIR_get_error_func (ctx) (MIR_op_mode_error, "property should be a integer operand");
+    if (ops[1].mode != MIR_OP_REG && ops[1].mode != MIR_OP_MEM)
+      MIR_get_error_func (
+        ctx) (MIR_op_mode_error,
+              "2nd operand of property branch should be any memory or reg with given type");
   }
   insn = create_insn (ctx, nops, code);
   insn->nops = nops;
@@ -2346,7 +2359,8 @@ void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t
 static void store_labels_for_duplication (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
                                           VARR (MIR_insn_t) * branch_insns, MIR_insn_t insn,
                                           MIR_insn_t new_insn) {
-  if (MIR_branch_code_p (insn->code) || insn->code == MIR_SWITCH) {
+  if (MIR_branch_code_p (insn->code) || insn->code == MIR_SWITCH || insn->code == MIR_PRBEQ
+      || insn->code == MIR_PRBNE) {
     VARR_PUSH (MIR_insn_t, branch_insns, new_insn);
   } else if (insn->code == MIR_LABEL) {
     mir_assert (insn->data == NULL);
@@ -2875,6 +2889,8 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
       return; /* do nothing: it is an immediate operand */
   }
   if (code == MIR_VA_ARG && nop == 2) return; /* do nothing: this operand is used as a type */
+  if ((code == MIR_PRBEQ || code == MIR_PRBNE) && nop == 2) return; /* it is a property */
+  if (code == MIR_PRSET && nop == 1) return;                        /* it is a property */
   switch (op->mode) {
   case MIR_OP_REF:
     if (keep_ref_p) break;
@@ -3321,7 +3337,8 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       next_insn = insn;
       continue;
     } else {
-      if (MIR_branch_code_p (code) || code == MIR_SWITCH) {
+      if (MIR_branch_code_p (code) || code == MIR_SWITCH || code == MIR_PRBEQ
+          || code == MIR_PRBNE) {
         int64_t label_num;
         size_t start_label_nop = 0, bound_label_nop = 1, n;
 
@@ -5748,7 +5765,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             MIR_new_forward (ctx, name);
             push_op_p = FALSE;
           } else if (!module_p && !end_module_p && !proto_p && !func_p && !end_func_p && !local_p
-                     && ((MIR_branch_code_p (insn_code)
+                     && (((MIR_branch_code_p (insn_code) || insn_code == MIR_PRBEQ
+                           || insn_code == MIR_PRBNE)
                           && VARR_LENGTH (MIR_op_t, scan_insn_ops) == 0)
                          || (insn_code == MIR_SWITCH
                              && VARR_LENGTH (MIR_op_t, scan_insn_ops) > 0))) {

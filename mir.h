@@ -168,10 +168,11 @@ typedef enum {
   INSN_EL (VA_ARG),       /* result is arg address, operands: va_list addr and memory */
   INSN_EL (VA_BLOCK_ARG), /* result is arg address, operands: va_list addr and integer (size) */
   INSN_EL (VA_START),
-  INSN_EL (VA_END), /* operand is va_list */
-  INSN_EL (LABEL),  /* One immediate operand is unique label number  */
-  INSN_EL (UNSPEC), /* First operand unspec code and the rest are args */
-  INSN_EL (PHI),    /* Used only internally in the generator, the first operand is output */
+  INSN_EL (VA_END),                    /* operand is va_list */
+  INSN_EL (LABEL),                     /* One immediate operand is unique label number  */
+  INSN_EL (UNSPEC),                    /* First operand unspec code and the rest are args */
+  REP3 (INSN_EL, PRSET, PRBEQ, PRBNE), /* work with properties */
+  INSN_EL (PHI), /* Used only internally in the generator, the first operand is output */
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
 } MIR_insn_code_t;
