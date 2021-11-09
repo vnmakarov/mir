@@ -370,6 +370,18 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       v.i = get_reg (ops[2], &max_nreg);
       VARR_PUSH (MIR_val_t, code_varr, v);
       break;
+    case MIR_PRSET: break; /* just ignore */
+    case MIR_PRBEQ:        /* make jump if property is zero or ignore otherwise */
+      if (ops[2].mode == MIR_OP_INT && ops[2].u.i == 0) goto jump;
+      break;
+    case MIR_PRBNE: /* make jump if property is nonzero or ignore otherwise */
+      if (ops[2].mode != MIR_OP_INT || ops[2].u.i == 0) break;
+    jump:
+      VARR_PUSH (MIR_insn_t, branches, insn);
+      push_insn_start (interp_ctx, MIR_JMP, insn);
+      v.i = 0;
+      VARR_PUSH (MIR_val_t, code_varr, v); /* place for label */
+      break;
     default:
       imm_call_p = FALSE;
       if (MIR_call_code_p (code))
@@ -378,10 +390,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_export_item
                           || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
-      push_insn_start (interp_ctx,
-                       imm_call_p           ? IC_IMM_CALL
-                       : code == MIR_INLINE ? MIR_CALL
-                                            : code,
+      push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
                        insn);
       if (code == MIR_SWITCH) {
         VARR_PUSH (MIR_insn_t, branches, insn);
@@ -1515,9 +1524,8 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
         if (mode == MIR_OP_FLOAT)
           (*MIR_get_error_func (ctx)) (MIR_call_op_error,
                                        "passing float variadic arg (should be passed as double)");
-        call_arg_descs[i].type = (mode == MIR_OP_DOUBLE    ? MIR_T_D
-                                  : mode == MIR_OP_LDOUBLE ? MIR_T_LD
-                                                           : MIR_T_I64);
+        call_arg_descs[i].type
+          = (mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
       }
     }
     ff_interface_addr = ffi_address_ptr->a
