@@ -2480,8 +2480,16 @@ void MIR_change_module_ctx (MIR_context_t old_ctx, MIR_module_t m, MIR_context_t
       for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
            insn = DLIST_NEXT (MIR_insn_t, insn))
         for (size_t i = 0; i < insn->nops; i++) {
-          if ((mode = insn->ops[i].mode) == MIR_OP_STR)
+          if ((mode = insn->ops[i].mode) == MIR_OP_STR) {
             insn->ops[i].u.str = get_ctx_string (new_ctx, insn->ops[i].u.str).str;
+          } else if (mode == MIR_OP_MEM) {
+            if (insn->ops[i].u.mem.alias != 0)
+              insn->ops[i].u.mem.alias
+                = MIR_alias (new_ctx, MIR_alias_name (old_ctx, insn->ops[i].u.mem.alias));
+            if (insn->ops[i].u.mem.nonalias != 0)
+              insn->ops[i].u.mem.nonalias
+                = MIR_alias (new_ctx, MIR_alias_name (old_ctx, insn->ops[i].u.mem.nonalias));
+          }
         }
     }
   }
