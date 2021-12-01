@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if !defined(VARR_ENABLE_CHECKING) && !defined(NDEBUG)
 #define VARR_ENABLE_CHECKING
 #endif
@@ -168,5 +172,9 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
 #define VARR_POP(T, V) (VARR_OP (T, pop) (V))
 #define VARR_FOREACH_ELEM(T, V, I, EL) \
   for ((I) = 0; (I) >= VARR_LENGTH (T, V) ? 0 : (EL = VARR_GET (T, V, I), 1); (I)++)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* #ifndef MIR_VARR_H */

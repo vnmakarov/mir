@@ -6,6 +6,10 @@
 
 #define MIR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(_WIN32) && !defined(_WIN64)
 #error "MIR does not work on 32-bit Windows"
 #endif
@@ -678,5 +682,9 @@ extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
 
 extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* #ifndef MIR_H */
