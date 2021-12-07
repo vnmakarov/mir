@@ -126,7 +126,7 @@
 ```
     <function name>: func {<result type>, } [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
-                     endfun
+                     endfunc
 ```
     * Textual presentation of block type argument in `func` has form `blk:<size>(<var_name>)`.
       The corresponding argument in `call` insn should have analogous form
