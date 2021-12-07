@@ -1768,7 +1768,6 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
   }
 
   MIR_finish_module (context);
-  LLVMDisposeModule (module);
   finish_bb_gen_info ();
   HTAB_DESTROY (expr_res_t, expr_res_tab);
   HTAB_DESTROY (item_t, item_tab);
