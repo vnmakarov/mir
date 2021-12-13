@@ -521,6 +521,15 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
   }
 }
 
+MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item) {
+  mir_assert (item != NULL);
+  if (item->item_type == MIR_func_item) {
+    return item->u.func;
+  } else {
+    return NULL;
+  }
+}
+
 #if !MIR_NO_IO
 static void io_init (MIR_context_t ctx);
 static void io_finish (MIR_context_t ctx);
