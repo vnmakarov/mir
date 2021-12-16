@@ -4478,7 +4478,7 @@ DA (type_spec) {
       id_p = TRUE;
     }
     if (M ('{')) {
-      if (!C ('}')) {
+      if (!C ('}') && !M (';')) {
         P (struct_declaration_list);
       } else {
         (c2m_options->pedantic_p ? error : warning) (c2m_ctx, pos, "empty struct/union");
