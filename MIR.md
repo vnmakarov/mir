@@ -59,36 +59,56 @@
 
 ## MIR module
   * Module is a high level entity of MIR program
+
   * Module is created through API function `MIR_module_t MIR_new_module (const char *name)`
+
   * Module creation is finished by calling API function `MIR_finish_module`
+
   * You can create only one module at any given time
+
   * List of all created modules can be gotten by function `DLIST (MIR_module_t) *MIR_get_module_list (MIR_context_t ctx)`
+
   * MIR module consists of **items**.  There are following **item types** (and function for their creation):
     * **Function**: `MIR_func_item`
+    
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name)`)
+    
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name)`)
+    
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (MIR_context_t ctx, const char *name)`)
+    
     * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
       `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
       `MIR_new_vararg_func` -- see below).  The only difference is that
       two or more prototype argument names can be the same
+      
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str)`)
+      
     * **Reference data**: `MIR_ref_data_item` with optional name
       (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
       * The address of the item after linking plus `disp` is used to initialize the data
+      
     * **Expression Data**: `MIR_expr_data_item` with optional name
-      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_func_item)`)
+      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, **const** **char** *****name,
+      
+      MIR_item_t expr_item))
+      
       * Not all MIR functions can be used for expression data.  The expression function should have
         only one result, have no arguments, not use any call or any instruction with memory
       * The expression function is called during linking and its result is used to initialize the data
+      
     * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
+    
   * Long double data item is changed to double one, if long double coincides with double for given target or ABI
+
   * Names of MIR functions, imports, and prototypes should be unique in a module
+
   * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
     and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
     textual representation into given file
+    
   * MIR text module syntax looks the following:
 ```
     <module name>: module
