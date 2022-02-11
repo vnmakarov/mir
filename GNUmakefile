@@ -87,7 +87,7 @@ MINOR_VERSION=3
 ifeq ($(CC),cl)
   OBJSUFF=obj
   LIBSUFF=lib
-  SOLIB=.dll
+  SOLIB=libmir.dll
 else
   OBJSUFF=o
   LIBSUFF=a
@@ -196,7 +196,7 @@ endif
 # ------------------ LIBMIR SO --------------------
 $(BUILD_DIR)/$(SOLIB): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(BUILD_DIR)/c2mir/c2mir.$(OBJSUFF)
 ifeq ($(CC),cl)
-	$(CC) /D_USRDLL /D_WINDLL $^ /link /DLL /OUT:$@
+	$(CC) -nologo -D_USRDLL -D_WINDLL $^ -link -DLL -OUT:$@
 else
 	$(CC) $(SOLIBFLAGS) -o $@ $^
 endif
