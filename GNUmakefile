@@ -92,7 +92,13 @@ else
   OBJSUFF=o
   LIBSUFF=a
   ifeq ($(OS),Windows_NT)
-    SOLIB=libmir.dll
+    ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+      SONAME=libmir.so.$(API_VERSION)
+      SOLIBFLAGS=-shared -Wl,-soname,$(SONAME)
+      SOLIB=$(SONAME).$(MAJOR_VERSION).$(MINOR_VERSION)
+    else
+      SOLIB=libmir.dll
+    endif
   else
     ifeq ($(UNAME_S),Darwin)
       SOLIBVERSION=$(API_VERSION).$(MAJOR_VERSION)
