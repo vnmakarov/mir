@@ -18,8 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - uses: ./
-        name: make test
+      - uses: uraimo/run-on-arch-action@v1.0.8
+        id: make test
         with:
           arch: aarch64
           run: |
