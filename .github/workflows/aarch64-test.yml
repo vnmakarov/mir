@@ -18,7 +18,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v1
-      - name: make test
+      - uses: ./
+        name: make test
         with:
           arch: aarch64
           run: |
