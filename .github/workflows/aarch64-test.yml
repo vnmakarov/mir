@@ -17,6 +17,10 @@ jobs:
             distro: fedora-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - name: make test
-      run: make test
+      with:
+        arch: aarch64
+        - uses: actions/checkout@v1
+        - name: make test
+        run: |
+	  uname -a
+	  make test
