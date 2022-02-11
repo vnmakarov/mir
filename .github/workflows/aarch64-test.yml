@@ -21,7 +21,7 @@ jobs:
       - uses: uraimo/run-on-arch-action@v1.0.8
         id: Test
         with:
-          arch: aarch64
+          architecture: aarch64
           run: |
             uname -a
             make test
