@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2.1.0
-      - uses: uraimo/run-on-arch-action@v2
+      - uses: uraimo/run-on-arch-action@2.1.0
         name: make test
         with:
           arch: aarch64
