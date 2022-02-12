@@ -4,7 +4,7 @@ jobs:
   aarch64_job:
     # The host should always be Linux
     runs-on: ubuntu-18.04
-    name: Build on ubuntu-18.04 aarch64
+    name: Build on alpine aarch64
     steps:
       - uses: actions/checkout@v1
       - uses: uraimo/run-on-arch-action@v2.1.0
@@ -12,7 +12,7 @@ jobs:
         id: test
         with:
           arch: aarch64
-          distro: fedora_latest
+          distro: alpine_latest
 
           # Not required, but speeds up builds by storing container images in
           # a GitHub package registry.
@@ -21,4 +21,5 @@ jobs:
           # Set an output parameter `uname` for use in subsequent steps
           run: |
             uname -a
+            apk add gcc make
             make test
