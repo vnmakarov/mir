@@ -5,7 +5,7 @@ on: [push]
 jobs:
   test:
 
-    runs-on: fedora-latest
+    runs-on: ubuntu-latest
     name: Build and test MIR
 
     steps:
