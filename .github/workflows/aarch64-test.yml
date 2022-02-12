@@ -1,3 +1,5 @@
+name: aarch64-test
+
 on: [push]
 
 jobs:
@@ -12,7 +14,7 @@ jobs:
         id: test
         with:
           arch: aarch64
-          distro: alpine_latest
+          distro: fedora_latest
 
           # Not required, but speeds up builds by storing container images in
           # a GitHub package registry.
@@ -21,5 +23,8 @@ jobs:
           # Set an output parameter `uname` for use in subsequent steps
           run: |
             uname -a
-            apk add gcc make musl-dev
+            echo 'fastestmirror=1' | tee -a /etc/dnf/dnf.conf
+            echo 'check_config_file_age=False' | tee -a /etc/dnf/dnf.conf
+            echo 'metadata_expire=-1' | tee -a /etc/dnf/dnf.conf
+            dnf -y -q install gcc make
             make test
