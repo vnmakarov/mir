@@ -21,5 +21,5 @@ jobs:
           # Set an output parameter `uname` for use in subsequent steps
           run: |
             uname -a
-            apk add gcc make
+            apk add gcc make musl-dev
             make test
