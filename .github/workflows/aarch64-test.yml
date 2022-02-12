@@ -5,18 +5,20 @@ on: [push]
 jobs:
   test:
 
+    # The host should always be linux
     runs-on: ubuntu-latest
-    name: Build and test MIR
+    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
+
+    # Run steps on a matrix of 3 arch/distro combinations
+    strategy:
+      matrix:
+        include:
+          - arch: aarch64
+            distro: fedora-latest
 
     steps:
-      - uses: actions/checkout@v2.1.0
-      - uses: uraimo/run-on-arch-action@2.1.0
-        name: make test
-        with:
-          arch: aarch64
-          distro: fedora-latest
-          githubToken: ${{ github.token }}
-
-          run: |
-            uname -a
-            make test
+    - uses: actions/checkout@v1
+    - name: make test
+      run: |
+        uname -a
+        make test
