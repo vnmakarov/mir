@@ -10,4 +10,4 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: ~/ssh-run.sh gcc112.fsffrance.org ~/mir-test.sh `git branch|awk '/^[*]/ {print $2}'` `git log |head -1|awk '{print $2}'`
+      run: ~/ssh-run.sh gcc112.fsffrance.org ~/mir-test.sh master `git log |head -1|awk '{print $2}'`
