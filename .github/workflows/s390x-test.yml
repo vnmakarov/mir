@@ -5,8 +5,8 @@ on: [push]
 jobs:
   s390x:
     # The host should always be Linux
-    runs-on: [self-hosted, linux, X64, gcc10-s390x]
-    name: Build and test under qemu on gcc10 x86_64
+    runs-on: [self-hosted, linux, X64, s390x]
+    name: Build and test under qemu on ton9 x86_64
     steps:
     - uses: actions/checkout@v1
     - name: make test
