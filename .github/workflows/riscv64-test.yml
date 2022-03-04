@@ -1,0 +1,13 @@
+name: riscv64-test
+
+on: [push]
+
+jobs:
+  riscv64:
+    # The host should always be Linux
+    runs-on: [self-hosted, linux, X64, riscv64]
+    name: Build and test under qemu on ton9 x86_64
+    steps:
+    - uses: actions/checkout@v1
+    - name: make test
+      run: ~/mir-riscv64-test.sh master `git log |head -1|awk '{print $2}'`
