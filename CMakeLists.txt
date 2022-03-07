@@ -14,7 +14,7 @@ if(NOT WIN32)
     $<$<CONFIG:RELEASE>:-O3>
     $<$<CONFIG:RelWithDebInfo>:-O3>
   )
-  add_compile_options(-std=gnu11 -Wno-abi -fsigned-char)
+  add_compile_options(-std=gnu11 -Wno-abi -fsigned-char -fPIC)
 endif()
 
 include(CheckCCompilerFlag)
@@ -39,12 +39,19 @@ message("C compiler flags: ${CMAKE_C_FLAGS}")
 option(BUILD_TESTING "" ON)
 include(CTest)
 
-# ------------------ LIBMIR -----------------------
-add_library(mir STATIC mir.c mir-gen.c c2mir/c2mir.c mir.h mir-gen.h c2mir/c2mir.h)
+add_library(mir OBJECT mir.c mir-gen.c c2mir/c2mir.c mir.h mir-gen.h c2mir/c2mir.h)
 target_include_directories(mir PRIVATE ${PROJECT_SOURCE_DIR})
 if(Threads_FOUND)
   target_compile_definitions(mir PUBLIC "MIR_PARALLEL_GEN")
 endif()
+
+# ------------------ LIBMIR -----------------------
+add_library(mir_static STATIC)
+target_link_libraries(mir_static PRIVATE mir)
+
+# ------------------ LIBMIR SO --------------------
+add_library(mir_shared SHARED)
+target_link_libraries(mir_shared PRIVATE mir)
 
 # ------------------ C2M --------------------------
 add_executable (c2m "c2mir/c2mir-driver.c")

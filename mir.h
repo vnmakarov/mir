@@ -6,6 +6,10 @@
 
 #define MIR_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #if defined(_WIN32) && !defined(_WIN64)
 #error "MIR does not work on 32-bit Windows"
 #endif
@@ -510,6 +514,7 @@ extern MIR_item_t MIR_new_vararg_func_arr (MIR_context_t ctx, const char *name, 
 extern MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name, size_t nres,
                                        MIR_type_t *res_types, size_t nargs, ...);
 extern const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item);
+extern MIR_func_t MIR_get_item_func(MIR_context_t ctx, MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                                    const char *name);
 extern void MIR_finish_func (MIR_context_t ctx);
@@ -696,5 +701,9 @@ extern void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address);
 
 extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* #ifndef MIR_H */

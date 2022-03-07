@@ -1,13 +1,13 @@
-name: s390x-test
+name: riscv64-test
 
 on: [push]
 
 jobs:
-  s390x:
+  riscv64:
     # The host should always be Linux
-    runs-on: [self-hosted, linux, X64, s390x]
+    runs-on: [self-hosted, linux, X64, riscv64]
     name: Build and test under qemu on ton9 x86_64
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: ~/mir-s390x-test.sh master `git log |head -1|awk '{print $2}'`
+      run: ~/mir-riscv64-test.sh master `git log |head -1|awk '{print $2}'`

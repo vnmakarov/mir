@@ -133,6 +133,7 @@ int main (int argc, char *argv[], char *env[]) {
   LLVMDisposeMemoryBuffer (memory_buffer);
   context = MIR_init ();
   mir_module = llvm2mir (context, module);
+  LLVMDisposeModule (module);
   if (!gen_p && !interpr_p) MIR_output (context, stderr);
   main_func = NULL;
   for (f = DLIST_HEAD (MIR_item_t, mir_module->items); f != NULL; f = DLIST_NEXT (MIR_item_t, f))

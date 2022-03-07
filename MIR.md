@@ -5,7 +5,7 @@
     * `[]` for optional construction
     * `{}` for repeating zero or more times
     * `<>` for some informal construction description or construction already described or will be described
-  
+
 ## MIR context
   * MIR API code has an implicit state called by MIR context
   * MIR context is represented by data of `MIR_context_t`
@@ -56,39 +56,59 @@
      and `blk`
    * Function `int MIR_int_type_p (MIR_type_t t)` returns TRUE if given type is an integer one (it includes pointer type too)
    * Function `int MIR_fp_type_p (MIR_type_t t)` returns TRUE if given type is a floating point type
-   
+
 ## MIR module
   * Module is a high level entity of MIR program
+
   * Module is created through API function `MIR_module_t MIR_new_module (const char *name)`
+
   * Module creation is finished by calling API function `MIR_finish_module`
+
   * You can create only one module at any given time
+
   * List of all created modules can be gotten by function `DLIST (MIR_module_t) *MIR_get_module_list (MIR_context_t ctx)`
+
   * MIR module consists of **items**.  There are following **item types** (and function for their creation):
     * **Function**: `MIR_func_item`
+    
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name)`)
+    
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name)`)
+    
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (MIR_context_t ctx, const char *name)`)
+    
     * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
       `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
       `MIR_new_vararg_func` -- see below).  The only difference is that
       two or more prototype argument names can be the same
+      
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str)`)
+      
     * **Reference data**: `MIR_ref_data_item` with optional name
       (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
       * The address of the item after linking plus `disp` is used to initialize the data
+      
     * **Expression Data**: `MIR_expr_data_item` with optional name
-      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_func_item)`)
+      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, **const** **char** *****name,
+      
+      MIR_item_t expr_item))
+      
       * Not all MIR functions can be used for expression data.  The expression function should have
         only one result, have no arguments, not use any call or any instruction with memory
       * The expression function is called during linking and its result is used to initialize the data
+      
     * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
+    
   * Long double data item is changed to double one, if long double coincides with double for given target or ABI
+
   * Names of MIR functions, imports, and prototypes should be unique in a module
+
   * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
     and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
     textual representation into given file
+    
   * MIR text module syntax looks the following:
 ```
     <module name>: module
@@ -126,7 +146,7 @@
 ```
     <function name>: func {<result type>, } [ arg-var {, <arg-var> } [, ...]]
                      {<insn>}
-                     endfun
+                     endfunc
 ```
     * Textual presentation of block type argument in `func` has form `blk:<size>(<var_name>)`.
       The corresponding argument in `call` insn should have analogous form
@@ -384,12 +404,12 @@
     call
   * The subsequent operands are arguments.  Their types and number and should be the same as in the prototype
     * Integer arguments are truncated according to integer prototype argument type
-  
+
 ### MIR_INLINE insn
   * This insn is analogous to `MIR_CALL` but after linking this insn
     will be changed by inlined function body if it is possible
   * Calls of vararg functions are never inlined
-  
+
 ### MIR_ALLOCA insn
   * Reserve memory on the stack whose size is given as the 2nd operand and assign the memory address to the 1st operand
   * The reserved memory will be aligned according target ABI
@@ -402,7 +422,7 @@
   * The both insns use one operand
   * The first insn saves the stack pointer in the operand
   * The second insn restores stack pointer from the operand
-  
+
 ### MIR_VA_START, MIR_VA_ARG, MIR_VA_BLOCK_ARG, and MIR_VA_END insns
   * These insns are only for variable number arguments functions
   * `MIR_VA_START` and `MIR_VA_END` have one input operand, an address
@@ -417,7 +437,7 @@
   * va_list operand can be memory with undefined type.  In this case
     address of the va_list is not in the memory but is the
     memory address
-  
+
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
@@ -471,25 +491,27 @@ cont3:    add i, i, 1
           jmp loop3
 fin3:     add iter, iter, 1
           jmp loop
-fin:      rets count
+fin:      ret count
           endfunc
           endmodule
+          
 m_ex100:  module
 format:   string "sieve (10) = %d\n"
 p_printf: proto p:fmt, i32:v
-p_seive:  proto i32, i32:iter
+p_sieve:  proto i32, i32:iter
           export ex100
           import sieve, printf
-ex100:    func v
+main:    func
           local i64:r
           call p_sieve, sieve, r, 100
           call p_printf, printf, format, r
           endfunc
           endmodule
+
 ```
 
   * Example of block arguments and `va_stack_arg`
-  
+
 ```mir
 m0:       module
 f_p:	  proto i64, 16:blk(a), ...

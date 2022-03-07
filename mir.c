@@ -547,6 +547,15 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
   }
 }
 
+MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item) {
+  mir_assert (item != NULL);
+  if (item->item_type == MIR_func_item) {
+    return item->u.func;
+  } else {
+    return NULL;
+  }
+}
+
 #if !MIR_NO_IO
 static void io_init (MIR_context_t ctx);
 static void io_finish (MIR_context_t ctx);
@@ -3438,16 +3447,16 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, old_reg, new_reg, temp_reg;
-  MIR_insn_t func_insn, next_func_insn, call, insn, new_insn, ret_insn, ret_label;
+  MIR_insn_t func_insn, next_func_insn, call, insn, prev_insn, new_insn, ret_insn, ret_label;
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
-  size_t func_insns_num, called_func_insns_num;
+  size_t original_func_insns_num, func_insns_num, called_func_insns_num;
   char buff[50];
 
   mir_assert (func_item->item_type == MIR_func_item);
   vn_empty (ctx);
   func = func_item->u.func;
-  func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
+  original_func_insns_num = func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
   for (func_insn = DLIST_HEAD (MIR_insn_t, func->insns); func_insn != NULL;
        func_insn = next_func_insn) {
     inline_insns_before++;
@@ -3475,7 +3484,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     if (called_func->vararg_p
         || called_func_insns_num > (func_insn->code == MIR_CALL ? MIR_MAX_INSNS_FOR_CALL_INLINE
                                                                 : MIR_MAX_INSNS_FOR_INLINE)
-        || (called_func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * func_insns_num / 100
+        || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
             && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
       MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
@@ -3484,6 +3493,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     inlined_calls++;
     res_types = call->ops[0].u.ref->u.proto->res_types;
     ret_label = MIR_new_label (ctx);
+    prev_insn = DLIST_PREV (MIR_insn_t, call);
     MIR_insert_insn_after (ctx, func_item, call, ret_label);
     func->n_inlines++;
     nargs = called_func->nargs;
@@ -3578,6 +3588,8 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       MIR_insert_insn_before (ctx, func_item, ret_label, new_insn);
     }
     MIR_remove_insn (ctx, func_item, call);
+    next_func_insn = (prev_insn == NULL ? DLIST_HEAD (MIR_insn_t, func->insns)
+                                        : DLIST_NEXT (MIR_insn_t, prev_insn));
   }
 }
 
