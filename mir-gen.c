@@ -454,6 +454,7 @@ struct bb {
      optional exit bb.  There is always at least one edge.  */
   DLIST (out_edge_t) out_edges;
   DLIST (bb_insn_t) bb_insns;
+  unsigned char mem_av_call_p; /* used in mem avail calculation, true if there is a call in BB */
   size_t freq;
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
   bitmap_t dom_in, dom_out;    /* additional var bitmaps */
@@ -808,6 +809,7 @@ static bb_t create_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   DLIST_INIT (bb_insn_t, bb->bb_insns);
   DLIST_INIT (in_edge_t, bb->in_edges);
   DLIST_INIT (out_edge_t, bb->out_edges);
+  bb->mem_av_call_p = FALSE;
   bb->in = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->gen = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -2339,16 +2341,18 @@ static int mem_av_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
 
   bitmap_copy (prev_mem_av_out, bb->mem_av_out);
   bitmap_copy (bb->mem_av_out, bb->gen);
-  FOREACH_BITMAP_BIT (bi, bb->mem_av_in, nel) {
-    alias_p = FALSE;
-    mem_ref = &VARR_GET (expr_t, mem_exprs, nel)->insn->ops[0];
-    FOREACH_BITMAP_BIT (bi2, bb->gen, nel2) {
-      if (may_mem_alias_p (mem_ref, &VARR_GET (expr_t, mem_exprs, nel2)->insn->ops[0])) {
-        alias_p = TRUE;
-        break;
+  if (!bb->mem_av_call_p) {
+    FOREACH_BITMAP_BIT (bi, bb->mem_av_in, nel) {
+      alias_p = FALSE;
+      mem_ref = &VARR_GET (expr_t, mem_exprs, nel)->insn->ops[0];
+      FOREACH_BITMAP_BIT (bi2, bb->gen, nel2) {
+        if (may_mem_alias_p (mem_ref, &VARR_GET (expr_t, mem_exprs, nel2)->insn->ops[0])) {
+          alias_p = TRUE;
+          break;
+        }
       }
+      if (!alias_p) bitmap_set_bit_p (bb->mem_av_out, nel);
     }
-    if (!alias_p) bitmap_set_bit_p (bb->mem_av_out, nel);
   }
   return !bitmap_equal_p (bb->mem_av_out, prev_mem_av_out);
 }
@@ -2383,6 +2387,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
       size_t mem_num;
 
       if (MIR_call_code_p (insn->code)) { /* ??? improving */
+        bb->mem_av_call_p = TRUE;
         bitmap_clear (bb->gen);
         continue;
       }
