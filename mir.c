@@ -3515,10 +3515,11 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   va_list argp;
   MIR_var_t *args = alloca (nargs * sizeof (MIR_var_t));
   MIR_item_t proto_item;
-  MIR_module_t saved_module = curr_module;
+  MIR_module_t saved_module;
 
   va_start (argp, nargs);
   if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
+  saved_module = curr_module;
   for (i = 0; i < nargs; i++) {
     args[i].type = va_arg (argp, MIR_type_t);
     args[i].name = va_arg (argp, const char *);
