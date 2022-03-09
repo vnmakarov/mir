@@ -853,6 +853,13 @@ static void delete_edge (edge_t e) {
   free (e);
 }
 
+static edge_t find_edge (bb_t src, bb_t dst) {
+  for (edge_t e = DLIST_HEAD (out_edge_t, src->out_edges); e != NULL;
+       e = DLIST_NEXT (out_edge_t, e))
+    if (e->dst == dst) return e;
+  return NULL;
+}
+
 static void delete_bb (gen_ctx_t gen_ctx, bb_t bb) {
   edge_t e, next_e;
 
@@ -1364,6 +1371,8 @@ static void free_move (gen_ctx_t gen_ctx, mv_t mv) {
   DLIST_APPEND (mv_t, curr_cfg->free_moves, mv);
 }
 
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx, int ssa_p);
+
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn, next_insn;
@@ -1433,6 +1442,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
         update_min_max_reg (gen_ctx, op->u.mem.index);
       }
   }
+  if (optimize_level > 0) remove_unreachable_bbs (gen_ctx, FALSE);
   /* Add additional edges with entry and exit */
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb != entry_bb && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL)
@@ -3002,7 +3012,7 @@ static void update_mem_loc_alloca_flag (gen_ctx_t gen_ctx, size_t nloc, int flag
   });
 }
 
-static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
+static long remove_bb (gen_ctx_t gen_ctx, bb_t bb, int ssa_p) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn;
   long deleted_insns_num = 0;
@@ -3013,16 +3023,20 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
     next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
     insn = bb_insn->insn;
-    remove_insn_ssa_edges (gen_ctx, insn);
+    if (ssa_p) remove_insn_ssa_edges (gen_ctx, insn);
+    DEBUG (2, {
+      fprintf (debug_file, "   ");
+      MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+    });
     gen_delete_insn (gen_ctx, insn);
     deleted_insns_num++;
   }
-  remove_dest_phi_ops (gen_ctx, bb);
+  if (ssa_p) remove_dest_phi_ops (gen_ctx, bb);
   delete_bb (gen_ctx, bb);
   return deleted_insns_num;
 }
 
-static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx, int ssa_p) {
   long deleted_insns_num = 0;
   bb_t next_bb, bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
 
@@ -3039,7 +3053,7 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
   }
   for (bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
-    if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb);
+    if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb, ssa_p);
   }
   return deleted_insns_num;
 }
@@ -3496,7 +3510,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       });
     }
   }
-  bb_deleted_insns_num += remove_unreachable_bbs (gen_ctx);
+  bb_deleted_insns_num += remove_unreachable_bbs (gen_ctx, TRUE);
   DEBUG (1, {
     fprintf (debug_file,
              "%5ld found GVN redundant insns, %ld ccp insns, %ld deleted bb insns, %ld deleted "
