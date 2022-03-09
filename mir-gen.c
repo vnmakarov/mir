@@ -3560,6 +3560,67 @@ static void finish_gvn (gen_ctx_t gen_ctx) {
 
 /* New page */
 
+/* Jump optimizations */
+
+static void jump_opt (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  int change_p = FALSE;
+
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    edge_t e, new_e;
+    bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
+    if (bb_insn == NULL) continue;
+    MIR_insn_t next_insn, last_label, insn = bb_insn->insn;
+    if (!MIR_branch_code_p (insn->code)) continue;
+    DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
+    gen_assert (insn->ops[0].mode == MIR_OP_LABEL);
+    int found_p = FALSE;
+    for (next_insn = DLIST_NEXT (MIR_insn_t, insn);
+         next_insn != NULL && next_insn->code == MIR_LABEL;
+         next_insn = DLIST_NEXT (MIR_insn_t, next_insn))
+      if (next_insn == insn->ops[0].u.label) {
+        found_p = TRUE;
+        break;
+      }
+    if (found_p) {
+      DEBUG (2, {
+        fprintf (debug_file, "  Removing trivial branch insn ");
+        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+      });
+      remove_insn_ssa_edges (gen_ctx, insn);
+      gen_delete_insn (gen_ctx, insn);
+      change_p = TRUE;
+    } else {
+      for (last_label = insn->ops[0].u.label;
+           0 && (next_insn = DLIST_NEXT (MIR_insn_t, last_label)) != NULL
+           && next_insn->code == MIR_LABEL;)
+        last_label = next_insn;
+      if (insn->ops[0].u.label != last_label) {
+        DEBUG (2, {
+          fprintf (debug_file, "  Changing label in branch insn ");
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+        });
+        label_bb_insn = insn->ops[0].u.label->data;
+        insn->ops[0].u.label = last_label;
+        last_label_bb_insn = last_label->data;
+        gen_assert (label_bb_insn->bb != last_label_bb_insn->bb);
+        e = find_edge (bb_insn->bb, label_bb_insn->bb);
+        new_e = create_edge (gen_ctx, bb_insn->bb, last_label_bb_insn->bb, TRUE);
+        new_e->back_edge_p = e->back_edge_p;
+        delete_edge (e);
+        DEBUG (2, {
+          fprintf (debug_file, "  , result insn ");
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+        });
+        change_p = TRUE;
+      }
+    }
+  }
+  if (change_p) remove_unreachable_bbs (gen_ctx, TRUE);
+}
+
+/* New page */
+
 /* Dead store elimination */
 
 #define mem_live_in in
@@ -5865,6 +5926,16 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     gvn_clear (gen_ctx);
   }
 #endif /* #ifndef NO_GVN */
+#ifndef NO_JUMP_OPT
+  if (optimize_level >= 2) {
+    DEBUG (2, { fprintf (debug_file, "+++++++++++++Jump optimization:\n"); });
+    jump_opt (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after Jump optimization:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #ifndef NO_JUMP_OPT */
 #ifndef NO_COPY_PROP
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
@@ -5880,7 +5951,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     DEBUG (2, { fprintf (debug_file, "+++++++++++++DSE:\n"); });
     dse (gen_ctx);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after DSE after GVN:\n");
+      fprintf (debug_file, "+++++++++++++MIR after DSE:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
@@ -5889,7 +5960,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   if (optimize_level >= 2) {
     ssa_dead_code_elimination (gen_ctx);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after GVN:\n");
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
