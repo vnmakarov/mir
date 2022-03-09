@@ -3065,13 +3065,6 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
-    if (bb->index != 0
-        && ((in_edge = DLIST_HEAD (in_edge_t, bb->in_edges)) == NULL
-            || (DLIST_NEXT (in_edge_t, in_edge) == NULL && in_edge->src == bb))) {
-      /* Remove a trivial case unreachable bb: no input edges or unreachable one block loop: */
-      bb_deleted_insns_num += remove_bb (gen_ctx, bb);
-      continue;
-    }
     bitmap_copy (curr_mem_available, bb->in);
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       expr_t e, new_e, prev_e, store_expr;
