@@ -3916,7 +3916,8 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   bb_freq = 1;
   if (moves_p)
-    for (int i = bb_loop_level (bb); i > 0; i--) bb_freq *= 5;
+    for (int i = bb_loop_level (bb); i > 0; i--)
+      if (bb_freq < SIZE_MAX / 8) bb_freq *= 5;
   bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
   for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
        insn = DLIST_PREV (MIR_insn_t, insn)) {
@@ -3936,7 +3937,12 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
             (int_var_type_p (gen_ctx, var) ? bb_int_pressure-- : bb_fp_pressure--);
           bitmap_set_bit_p (bb->live_kill, var);
         }
-        if (var_is_reg_p (var)) breg_infos[var2breg (gen_ctx, var)].freq += bb_freq;
+        if (var_is_reg_p (var)) {
+          if (breg_infos[var2breg (gen_ctx, var)].freq < LONG_MAX - bb_freq)
+            breg_infos[var2breg (gen_ctx, var)].freq += bb_freq;
+          else
+            breg_infos[var2breg (gen_ctx, var)].freq = LONG_MAX;
+        }
       }
     }
     target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
@@ -4500,9 +4506,16 @@ static void process_move_to_form_thread (gen_ctx_t gen_ctx, mv_t mv) {
     curr_breg_infos[last].thread_first = breg1_first;
     curr_breg_infos[last].thread_next = curr_breg_infos[breg1_first].thread_next;
     curr_breg_infos[breg1_first].thread_next = breg2_first;
-    curr_breg_infos[breg1_first].thread_freq += curr_breg_infos[breg2_first].thread_freq;
+    if (curr_breg_infos[breg1_first].thread_freq
+        < LONG_MAX - curr_breg_infos[breg2_first].thread_freq)
+      curr_breg_infos[breg1_first].thread_freq += curr_breg_infos[breg2_first].thread_freq;
+    else
+      curr_breg_infos[breg1_first].thread_freq = LONG_MAX;
   }
-  curr_breg_infos[breg1_first].thread_freq -= 2 * mv->freq;
+  if (curr_breg_infos[breg1_first].thread_freq < 2 * mv->freq)
+    curr_breg_infos[breg1_first].thread_freq = 0;
+  else
+    curr_breg_infos[breg1_first].thread_freq -= 2 * mv->freq;
   gen_assert (curr_breg_infos[breg1_first].thread_freq >= 0);
 }
 
@@ -4532,9 +4545,12 @@ static void setup_loc_profit_from_op (gen_ctx_t gen_ctx, MIR_op_t op, size_t fre
   else if ((loc = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (gen_ctx, op.u.reg)))
            == MIR_NON_HARD_REG)
     return;
-  if (curr_loc_profit_ages[loc] == curr_age)
-    curr_loc_profits[loc] += freq;
-  else {
+  if (curr_loc_profit_ages[loc] == curr_age) {
+    if (curr_loc_profits[loc] < SIZE_MAX - freq)
+      curr_loc_profits[loc] += freq;
+    else
+      curr_loc_profits[loc] = SIZE_MAX;
+  } else {
     curr_loc_profit_ages[loc] = curr_age;
     curr_loc_profits[loc] = freq;
   }
