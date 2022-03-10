@@ -3810,13 +3810,14 @@ static void dse (gen_ctx_t gen_ctx) {
   uint32_t nloc;
   long dead_stores_num = 0;
   ssa_edge_t se;
+  bb_insn_t bb_insn, prev_bb_insn;
   bitmap_t live = temp_bitmap;
 
   calculate_mem_live_info (gen_ctx);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bitmap_copy (live, bb->mem_live_out);
-    for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
+    for (bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = prev_bb_insn) {
+      prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
       if (MIR_call_code_p (insn->code)) update_call_mem_live (gen_ctx, live, insn);
       if (!move_code_p (insn->code)) continue;
