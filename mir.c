@@ -3305,15 +3305,15 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 }
 
 #ifndef MIR_MAX_INSNS_FOR_INLINE
-#define MIR_MAX_INSNS_FOR_INLINE 2000
+#define MIR_MAX_INSNS_FOR_INLINE 200
 #endif
 
 #ifndef MIR_MAX_INSNS_FOR_CALL_INLINE
-#define MIR_MAX_INSNS_FOR_CALL_INLINE 500
+#define MIR_MAX_INSNS_FOR_CALL_INLINE 50
 #endif
 
 #ifndef MIR_MAX_FUNC_INLINE_GROWTH
-#define MIR_MAX_FUNC_INLINE_GROWTH 500
+#define MIR_MAX_FUNC_INLINE_GROWTH 50
 #endif
 
 #ifndef MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE
