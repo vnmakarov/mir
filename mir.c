@@ -2790,8 +2790,8 @@ void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff
   snprintf (buff, buff_len, "%s%u", TEMP_ITEM_NAME_PREFIX, (unsigned) module->last_temp_item_num);
 }
 
-void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int nop, int out_p,
-                      MIR_insn_code_t code, int keep_ref_p, int mem_float_p) {
+static void simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int nop,
+                         int out_p, MIR_insn_code_t code, int keep_ref_p, int mem_float_p) {
   mir_assert (insn != NULL && func_item != NULL);
   MIR_op_t new_op, mem_op, *op = &insn->ops[nop];
   MIR_insn_t new_insn;
@@ -2977,8 +2977,8 @@ void MIR_simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, 
   op->value_mode = value_mode;
 }
 
-void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int keep_ref_p,
-                         int mem_float_p) {
+static void simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn, int keep_ref_p,
+                           int mem_float_p) {
   int out_p;
   mir_assert (insn != NULL);
   MIR_insn_code_t code = insn->code;
@@ -2986,9 +2986,9 @@ void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
 
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
-    MIR_simplify_op (ctx, func_item, insn, i, out_p, code,
-                     (insn->code == MIR_INLINE || insn->code == MIR_CALL) && i == 1 && keep_ref_p,
-                     mem_float_p);
+    simplify_op (ctx, func_item, insn, i, out_p, code,
+                 (insn->code == MIR_INLINE || insn->code == MIR_CALL) && i == 1 && keep_ref_p,
+                 mem_float_p);
   }
 }
 
@@ -3270,7 +3270,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
           VARR_SET (uint8_t, temp_data, label_num, TRUE);
         }
       }
-      _MIR_simplify_insn (ctx, func_item, insn, TRUE, mem_float_p);
+      simplify_insn (ctx, func_item, insn, TRUE, mem_float_p);
     }
     jmps_num = 0;
   }
@@ -3373,7 +3373,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     if (func_insn->code != MIR_INLINE && func_insn->code != MIR_CALL) continue;
     call = func_insn;
     if (call->ops[1].mode != MIR_OP_REF) {
-      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
     called_func_item = call->ops[1].u.ref;
@@ -3384,7 +3384,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       called_func_item = called_func_item->ref_def;
     if (called_func_item == NULL || called_func_item->item_type != MIR_func_item
         || func_item == called_func_item) { /* Simplify function operand in the inline insn */
-      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
     called_func = called_func_item->u.func;
@@ -3394,7 +3394,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
                                                                 : MIR_MAX_INSNS_FOR_INLINE)
         || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
             && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
-      MIR_simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
     func_insns_num += called_func_insns_num;

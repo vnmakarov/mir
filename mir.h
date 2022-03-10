@@ -508,7 +508,7 @@ extern MIR_item_t MIR_new_vararg_func_arr (MIR_context_t ctx, const char *name, 
 extern MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name, size_t nres,
                                        MIR_type_t *res_types, size_t nargs, ...);
 extern const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item);
-extern MIR_func_t MIR_get_item_func(MIR_context_t ctx, MIR_item_t item);
+extern MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                                    const char *name);
 extern void MIR_finish_func (MIR_context_t ctx);
@@ -626,8 +626,6 @@ extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const c
                                        int vararg_p, MIR_var_t *args);
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
-extern void _MIR_simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t insn,
-                                int keep_ref_p, int mem_float_p);
 
 extern void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff,
                                      size_t buff_len);
