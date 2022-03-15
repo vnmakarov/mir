@@ -2803,6 +2803,8 @@ struct simplify_ctx {
   HTAB (val_t) * val_tab;
   VARR (MIR_insn_t) * temp_insns, *labels; /* temp_insns is for branch or ret insns */
   VARR (MIR_reg_t) * inline_reg_map;
+  VARR (MIR_insn_t) * anchors;
+  VARR (size_t) * alloca_sizes;
   size_t inlined_calls, inline_insns_before, inline_insns_after;
 };
 
@@ -2810,6 +2812,8 @@ struct simplify_ctx {
 #define temp_insns ctx->simplify_ctx->temp_insns
 #define labels ctx->simplify_ctx->labels
 #define inline_reg_map ctx->simplify_ctx->inline_reg_map
+#define anchors ctx->simplify_ctx->anchors
+#define alloca_sizes ctx->simplify_ctx->alloca_sizes
 #define inlined_calls ctx->simplify_ctx->inlined_calls
 #define inline_insns_before ctx->simplify_ctx->inline_insns_before
 #define inline_insns_after ctx->simplify_ctx->inline_insns_after
@@ -2839,10 +2843,14 @@ static void simplify_init (MIR_context_t ctx) {
   VARR_CREATE (MIR_insn_t, temp_insns, 0);
   VARR_CREATE (MIR_insn_t, labels, 0);
   VARR_CREATE (MIR_reg_t, inline_reg_map, 256);
+  VARR_CREATE (MIR_insn_t, anchors, 32);
+  VARR_CREATE (size_t, alloca_sizes, 32);
   inlined_calls = inline_insns_before = inline_insns_after = 0;
 }
 
 static void simplify_finish (MIR_context_t ctx) {
+  VARR_DESTROY (size_t, alloca_sizes);
+  VARR_DESTROY (MIR_insn_t, anchors);
   VARR_DESTROY (MIR_reg_t, inline_reg_map);
 #if 0
   if (inlined_calls != 0)
@@ -3415,17 +3423,31 @@ static void set_inline_reg_map (MIR_context_t ctx, MIR_reg_t old_reg, MIR_reg_t 
 /* Simple alloca analysis.  Return top alloca insn with const size.
    If there are other allocas return true through
    non_top_alloca_p. Should we consider bstart/bend too?  */
-static MIR_insn_t func_alloca_features (MIR_context_t ctx, MIR_func_t func, int *non_top_alloca_p,
-                                        int64_t *alloca_size) {
+static MIR_insn_t func_alloca_features (MIR_context_t ctx, MIR_func_t func, int *top_alloca_used_p,
+                                        int *non_top_alloca_p, int64_t *alloca_size) {
   int set_top_alloca_p = TRUE;
+  MIR_reg_t alloca_reg;
   MIR_op_t *op_ref;
   MIR_insn_t top_alloca = NULL, insn, prev_insn;
 
+  *top_alloca_used_p = FALSE;
   if (non_top_alloca_p != NULL) *non_top_alloca_p = FALSE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL && set_top_alloca_p) set_top_alloca_p = FALSE;
-    if (insn->code != MIR_ALLOCA) continue;
+    if (insn->code != MIR_ALLOCA) {
+      if (top_alloca == NULL || *top_alloca_used_p) continue;
+      alloca_reg = top_alloca->ops[0].u.reg;
+      for (size_t i = 0; i < insn->nops; i++)
+        if ((insn->ops[i].mode == MIR_OP_REG && insn->ops[i].u.reg == alloca_reg)
+            || (insn->ops[i].mode == MIR_OP_MEM
+                && (insn->ops[i].u.mem.base == alloca_reg
+                    || insn->ops[i].u.mem.index == alloca_reg))) {
+          *top_alloca_used_p = TRUE;
+          break;
+        }
+      continue;
+    }
     op_ref = &insn->ops[1];
     if (insn->ops[1].mode == MIR_OP_REG && (prev_insn = DLIST_PREV (MIR_insn_t, insn)) != NULL
         && prev_insn->code == MIR_MOV && MIR_op_eq_p (ctx, prev_insn->ops[0], insn->ops[1]))
@@ -3433,11 +3455,13 @@ static MIR_insn_t func_alloca_features (MIR_context_t ctx, MIR_func_t func, int 
     if (op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) op_ref = NULL;
     if (!set_top_alloca_p || op_ref == NULL) {
       if (non_top_alloca_p != NULL) *non_top_alloca_p = TRUE;
-      return top_alloca;
+      if (top_alloca == NULL) return NULL;
+    } else {
+      top_alloca = insn;
+      if (insn->ops[0].mode != MIR_OP_REG) *top_alloca_used_p = TRUE;
+      set_top_alloca_p = FALSE;
+      if (alloca_size != NULL) *alloca_size = op_ref->u.i;
     }
-    top_alloca = insn;
-    set_top_alloca_p = FALSE;
-    if (alloca_size != NULL) *alloca_size = op_ref->u.i;
   }
   return top_alloca;
 }
@@ -3489,7 +3513,7 @@ static long add_blk_move (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t be
 /* Only simplified code should be inlined because we need already
    extensions and one return.  */
 static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
-  int non_top_alloca_p;
+  int non_top_alloca_p, func_top_alloca_used_p, called_func_top_alloca_used_p;
   int64_t alloca_size, alloca_align, max_func_top_alloca_align;
   int64_t init_func_top_alloca_size, curr_func_top_alloca_size, max_func_top_alloca_size;
   size_t i, actual_nops, nargs, nvars;
@@ -3509,16 +3533,23 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   vn_empty (ctx);
   func = func_item->u.func;
   original_func_insns_num = func_insns_num = DLIST_LENGTH (MIR_insn_t, func->insns);
-  func_top_alloca = func_alloca_features (ctx, func, NULL, &alloca_size);
+  func_top_alloca = func_alloca_features (ctx, func, &func_top_alloca_used_p, NULL, &alloca_size);
+  mir_assert (func_top_alloca != NULL || !func_top_alloca_used_p);
   init_func_top_alloca_size = curr_func_top_alloca_size = max_func_top_alloca_size = 0;
   max_func_top_alloca_align = 0;
-  if (func_top_alloca != NULL)
+  if (func_top_alloca != NULL && func_top_alloca_used_p)
     init_func_top_alloca_size = max_func_top_alloca_size = curr_func_top_alloca_size
       = get_alloca_size_align (alloca_size, &max_func_top_alloca_align);
+  VARR_TRUNC (MIR_insn_t, anchors, 0);
+  VARR_TRUNC (size_t, alloca_sizes, 0);
   for (head_func_insn = func_insn = DLIST_HEAD (MIR_insn_t, func->insns); func_insn != NULL;
        func_insn = next_func_insn) {
     inline_insns_before++;
     inline_insns_after++;
+    while (VARR_LENGTH (MIR_insn_t, anchors) != 0 && VARR_LAST (MIR_insn_t, anchors) == func_insn) {
+      VARR_POP (MIR_insn_t, anchors);
+      curr_func_top_alloca_size = VARR_POP (size_t, alloca_sizes);
+    }
     next_func_insn = DLIST_NEXT (MIR_insn_t, func_insn);
     if (func_insn->code == MIR_LABEL) func_insn->ops[0].u.i = new_label_num++;
     if (func_insn->code != MIR_INLINE && func_insn->code != MIR_CALL) continue;
@@ -3591,11 +3622,13 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       }
     }
     /* ??? No frame only alloca */
+    VARR_PUSH (MIR_insn_t, anchors, anchor);
+    VARR_PUSH (size_t, alloca_sizes, curr_func_top_alloca_size);
     /* Add new insns: */
     ret_reg = 0;
-    called_func_top_alloca
-      = func_alloca_features (ctx, called_func, &non_top_alloca_p, &alloca_size);
-    if (called_func_top_alloca != NULL) {
+    called_func_top_alloca = func_alloca_features (ctx, called_func, &called_func_top_alloca_used_p,
+                                                   &non_top_alloca_p, &alloca_size);
+    if (called_func_top_alloca != NULL && called_func_top_alloca_used_p) {
       alloca_size = get_alloca_size_align (alloca_size, &alloca_align);
       if (max_func_top_alloca_align < alloca_align) {
         max_func_top_alloca_align = alloca_align;
@@ -3615,9 +3648,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       actual_nops = MIR_insn_nops (ctx, insn);
       new_insn = MIR_copy_insn (ctx, insn);
       /* va insns are possible here as va_list can be passed as arg */
-      if (insn == called_func_top_alloca) {
-        new_called_func_top_alloca = new_insn;
-      }
+      if (insn == called_func_top_alloca) new_called_func_top_alloca = new_insn;
       for (i = 0; i < actual_nops; i++) switch (new_insn->ops[i].mode) {
         case MIR_OP_REG:
           new_insn->ops[i].u.reg = VARR_GET (MIR_reg_t, inline_reg_map, new_insn->ops[i].u.reg);
@@ -3664,40 +3695,47 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       MIR_insert_insn_before (ctx, func_item, anchor, new_insn);
     }
     if (called_func_top_alloca != NULL) {
-      // ???? at the ret: curr_func_top_alloca_size -= alloca_size;
-      if (func_top_alloca == NULL) {
+      if (called_func_top_alloca_used_p) {
+        func_top_alloca_used_p = TRUE;
+        if (func_top_alloca == NULL) {
+          temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
+          func_top_alloca = MIR_new_insn (ctx, MIR_ALLOCA, new_called_func_top_alloca->ops[0],
+                                          MIR_new_reg_op (ctx, temp_reg));
+          if (head_func_insn->code != MIR_LABEL)
+            MIR_insert_insn_before (ctx, func_item, head_func_insn, func_top_alloca);
+          else
+            MIR_insert_insn_after (ctx, func_item, head_func_insn, func_top_alloca);
+          init_func_top_alloca_size = 0;
+          new_insn
+            = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg), MIR_new_int_op (ctx, 0));
+          MIR_insert_insn_before (ctx, func_item, func_top_alloca, new_insn);
+        }
         temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
-        func_top_alloca = MIR_new_insn (ctx, MIR_ALLOCA, new_called_func_top_alloca->ops[0],
-                                        MIR_new_reg_op (ctx, temp_reg));
-        if (head_func_insn->code != MIR_LABEL)
-          MIR_insert_insn_before (ctx, func_item, head_func_insn, func_top_alloca);
-        else
-          MIR_insert_insn_after (ctx, func_item, head_func_insn, func_top_alloca);
-        init_func_top_alloca_size = 0;
         new_insn
-          = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg), MIR_new_int_op (ctx, 0));
-        MIR_insert_insn_before (ctx, func_item, func_top_alloca, new_insn);
+          = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, new_called_func_top_alloca->ops[0],
+                          func_top_alloca->ops[0], MIR_new_reg_op (ctx, temp_reg));
+        MIR_insert_insn_after (ctx, func_item, call, new_insn);
+        new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
+                                 MIR_new_int_op (ctx, curr_func_top_alloca_size - alloca_size));
+        MIR_insert_insn_after (ctx, func_item, call, new_insn);
       }
-      temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
-      new_insn
-        = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, new_called_func_top_alloca->ops[0],
-                        func_top_alloca->ops[0], MIR_new_reg_op (ctx, temp_reg));
       MIR_remove_insn (ctx, func_item, new_called_func_top_alloca);
-      MIR_insert_insn_after (ctx, func_item, call, new_insn);
-      new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
-                               MIR_new_int_op (ctx, curr_func_top_alloca_size - alloca_size));
-      MIR_insert_insn_after (ctx, func_item, call, new_insn);
     }
     MIR_remove_insn (ctx, func_item, call);
     next_func_insn = (prev_insn == NULL ? DLIST_HEAD (MIR_insn_t, func->insns)
                                         : DLIST_NEXT (MIR_insn_t, prev_insn));
   }
-  if (func_top_alloca != NULL && max_func_top_alloca_size != init_func_top_alloca_size) {
-    temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
-    new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
-                             MIR_new_int_op (ctx, max_func_top_alloca_size));
-    func_top_alloca->ops[1] = MIR_new_reg_op (ctx, temp_reg);
-    MIR_insert_insn_before (ctx, func_item, func_top_alloca, new_insn);
+  mir_assert (VARR_LENGTH (MIR_insn_t, anchors) == 0 && VARR_LENGTH (size_t, alloca_sizes) == 0);
+  if (func_top_alloca != NULL) {
+    if (!func_top_alloca_used_p) {
+      MIR_remove_insn (ctx, func_item, func_top_alloca);
+    } else if (max_func_top_alloca_size != init_func_top_alloca_size) {
+      temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
+      new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
+                               MIR_new_int_op (ctx, max_func_top_alloca_size));
+      func_top_alloca->ops[1] = MIR_new_reg_op (ctx, temp_reg);
+      MIR_insert_insn_before (ctx, func_item, func_top_alloca, new_insn);
+    }
   }
 }
 
