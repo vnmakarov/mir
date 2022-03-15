@@ -133,6 +133,7 @@ struct data_flow_ctx;
 struct ssa_ctx;
 struct gvn_ctx;
 struct lr_ctx;
+struct coalesce_ctx;
 struct ra_ctx;
 struct selection_ctx;
 struct fg_ctx;
@@ -202,6 +203,7 @@ struct gen_ctx {
   struct ssa_ctx *ssa_ctx;
   struct gvn_ctx *gvn_ctx;
   struct lr_ctx *lr_ctx;
+  struct coalesce_ctx *coalesce_ctx;
   struct ra_ctx *ra_ctx;
   struct selection_ctx *selection_ctx;
   struct fg_ctx *fg_ctx;
@@ -440,7 +442,7 @@ struct bb_insn {
   int64_t gvn_val; /* used for GVN, it is negative index for non GVN expr insns */
   DLIST_LINK (bb_insn_t) bb_insn_link;
   bb_t bb;
-  DLIST (dead_var_t) dead_vars;
+  DLIST (dead_var_t) insn_dead_vars;
   bitmap_t call_hard_reg_args; /* non-null for calls */
   size_t label_disp;           /* for label */
 };
@@ -572,18 +574,18 @@ static void finish_dead_vars (gen_ctx_t gen_ctx) {
 static void add_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t var) {
   dead_var_t dv;
 
-  for (dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars); dv != NULL;
+  for (dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL;
        dv = DLIST_NEXT (dead_var_t, dv))
     if (dv->var == var) return;
   dv = get_dead_var (gen_ctx);
   dv->var = var;
-  DLIST_APPEND (dead_var_t, bb_insn->dead_vars, dv);
+  DLIST_APPEND (dead_var_t, bb_insn->insn_dead_vars, dv);
 }
 
 static dead_var_t find_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t var) {
   dead_var_t dv;
 
-  for (dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars); dv != NULL;
+  for (dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL;
        dv = DLIST_NEXT (dead_var_t, dv))
     if (dv->var == var) return dv;
   return NULL;
@@ -592,8 +594,8 @@ static dead_var_t find_bb_insn_dead_var (bb_insn_t bb_insn, MIR_reg_t var) {
 static void clear_bb_insn_dead_vars (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   dead_var_t dv;
 
-  while ((dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars)) != NULL) {
-    DLIST_REMOVE (dead_var_t, bb_insn->dead_vars, dv);
+  while ((dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars)) != NULL) {
+    DLIST_REMOVE (dead_var_t, bb_insn->insn_dead_vars, dv);
     free_dead_var (gen_ctx, dv);
   }
 }
@@ -602,10 +604,10 @@ static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_r
   dead_var_t dv, next_dv;
 
   gen_assert (hr <= MAX_HARD_REG);
-  for (dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars); dv != NULL; dv = next_dv) {
+  for (dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL; dv = next_dv) {
     next_dv = DLIST_NEXT (dead_var_t, dv);
     if (dv->var != hr) continue;
-    DLIST_REMOVE (dead_var_t, bb_insn->dead_vars, dv);
+    DLIST_REMOVE (dead_var_t, bb_insn->insn_dead_vars, dv);
     free_dead_var (gen_ctx, dv);
   }
 }
@@ -613,9 +615,9 @@ static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_r
 static void move_bb_insn_dead_vars (bb_insn_t bb_insn, bb_insn_t from_bb_insn) {
   dead_var_t dv;
 
-  while ((dv = DLIST_HEAD (dead_var_t, from_bb_insn->dead_vars)) != NULL) {
-    DLIST_REMOVE (dead_var_t, from_bb_insn->dead_vars, dv);
-    DLIST_APPEND (dead_var_t, bb_insn->dead_vars, dv);
+  while ((dv = DLIST_HEAD (dead_var_t, from_bb_insn->insn_dead_vars)) != NULL) {
+    DLIST_REMOVE (dead_var_t, from_bb_insn->insn_dead_vars, dv);
+    DLIST_APPEND (dead_var_t, bb_insn->insn_dead_vars, dv);
   }
 }
 
@@ -661,7 +663,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->index = curr_cfg->curr_bb_insn_index++;
   bb_insn->mem_index = 0;
   bb_insn->gvn_val = bb_insn->index;
-  DLIST_INIT (dead_var_t, bb_insn->dead_vars);
+  DLIST_INIT (dead_var_t, bb_insn->insn_dead_vars);
   if (MIR_call_code_p (insn->code)) bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
   return bb_insn;
 }
@@ -1153,7 +1155,7 @@ static void output_in_edges (gen_ctx_t gen_ctx, bb_t bb) {
 
   fprintf (debug_file, "  in edges:");
   for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
-    fprintf (debug_file, " %3lu", (unsigned long) e->src->index);
+    fprintf (debug_file, " %3lu%s", (unsigned long) e->src->index, e->back_edge_p ? "*" : "");
   }
   fprintf (debug_file, "\n");
 }
@@ -1163,7 +1165,7 @@ static void output_out_edges (gen_ctx_t gen_ctx, bb_t bb) {
 
   fprintf (debug_file, "  out edges:");
   for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
-    fprintf (debug_file, " %3lu", (unsigned long) e->dst->index);
+    fprintf (debug_file, " %3lu%s", (unsigned long) e->dst->index, e->back_edge_p ? "*" : "");
   }
   fprintf (debug_file, "\n");
 }
@@ -1217,7 +1219,7 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
       fprintf (debug_file, "%d", get_op_reg_index (gen_ctx, op));
   }
   if (with_notes_p) {
-    for (dead_var_t dv = DLIST_HEAD (dead_var_t, bb_insn->dead_vars); dv != NULL;
+    for (dead_var_t dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL;
          dv = DLIST_NEXT (dead_var_t, dv)) {
       if (var_is_reg_p (dv->var)) {
         op.mode = MIR_OP_REG;
@@ -1226,7 +1228,8 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
         op.mode = MIR_OP_HARD_REG;
         op.u.hard_reg = dv->var;
       }
-      fprintf (debug_file, dv == DLIST_HEAD (dead_var_t, bb_insn->dead_vars) ? " # dead: " : " ");
+      fprintf (debug_file,
+               dv == DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars) ? " # dead: " : " ");
       MIR_output_op (ctx, debug_file, op, curr_func_item->u.func);
     }
     if (MIR_call_code_p (bb_insn->insn->code)) {
@@ -3652,6 +3655,7 @@ static void jump_opt (gen_ctx_t gen_ctx) {
   }
   /* Don't shorten phis in dest bbs. We don't care about SSA for new trivial unreachable bbs. */
   if (maybe_unreachable_bb_p) remove_unreachable_bbs (gen_ctx, FALSE);
+  enumerate_bbs (gen_ctx);
 }
 
 /* New page */
@@ -4129,6 +4133,17 @@ static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish,
   return lr;
 }
 
+/* Copy live range list given by its head R and return the result.  */
+static live_range_t copy_live_range_list (gen_ctx_t gen_ctx, live_range_t r) {
+  live_range_t p, first = NULL, *chain;
+
+  for (chain = &first; r != NULL; r = r->next) {
+    *chain = p = create_live_range (gen_ctx, r->start, r->finish, r->next);
+    chain = &p->next;
+  }
+  return first;
+}
+
 static void destroy_live_range (live_range_t lr) {
   live_range_t next_lr;
 
@@ -4245,6 +4260,67 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   });
 }
 
+/* Merge *non-intersected* ranges R1 and R2 and returns the result. The function maintains the order
+   of ranges and tries to minimize size of the result range list.  Ranges R1 and R2 may not be used
+   after the call.  */
+static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
+  live_range_t first, last, temp;
+
+  if (r1 == NULL) return r2;
+  if (r2 == NULL) return r1;
+  for (first = last = NULL; r1 != NULL && r2 != NULL;) {
+    if (r1->start < r2->start) { /* swap */
+      temp = r1;
+      r1 = r2;
+      r2 = temp;
+    }
+    if (r1->start == r2->finish + 1) {
+      /* Joint ranges: merge r1 and r2 into r1.  */
+      r1->start = r2->start;
+      temp = r2;
+      r2 = r2->next;
+      free (temp);
+    } else {
+      gen_assert (r2->finish + 1 < r1->start);
+      /* Add r1 to the result.  */
+      if (first == NULL) {
+        first = last = r1;
+      } else {
+        last->next = r1;
+        last = r1;
+      }
+      r1 = r1->next;
+    }
+  }
+  if (r1 != NULL) {
+    if (first == NULL)
+      first = r1;
+    else
+      last->next = r1;
+  } else {
+    gen_assert (r2 != NULL);
+    if (first == NULL)
+      first = r2;
+    else
+      last->next = r2;
+  }
+  return first;
+}
+
+/* Return TRUE if live ranges R1 and R2 intersect.  */
+static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
+  /* Remember the live ranges are always kept ordered.	*/
+  while (r1 != NULL && r2 != NULL) {
+    if (r1->start > r2->finish)
+      r1 = r1->next;
+    else if (r2->start > r1->finish)
+      r2 = r2->next;
+    else
+      return TRUE;
+  }
+  return FALSE;
+}
+
 static void build_live_ranges (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   MIR_reg_t var, nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
@@ -4358,8 +4434,6 @@ static void finish_live_ranges (gen_ctx_t gen_ctx) {
 
 /* Register allocation */
 
-DEF_VARR (MIR_reg_t);
-
 typedef struct breg_info {
   MIR_reg_t breg;
   reg_info_t *breg_infos;
@@ -4367,6 +4441,7 @@ typedef struct breg_info {
 
 DEF_VARR (breg_info_t);
 DEF_VARR (bitmap_t);
+DEF_VARR (MIR_reg_t);
 
 struct ra_ctx {
   VARR (MIR_reg_t) * breg_renumber;
@@ -4389,6 +4464,10 @@ struct ra_ctx {
 #define loc_profits gen_ctx->ra_ctx->loc_profits
 #define loc_profit_ages gen_ctx->ra_ctx->loc_profit_ages
 #define curr_age gen_ctx->ra_ctx->curr_age
+
+/* New Page */
+
+/* Fast RA */
 
 static void fast_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
@@ -4501,6 +4580,189 @@ static void fast_assign (gen_ctx_t gen_ctx) {
 #undef live_out
 #undef live_kill
 #undef live_gen
+
+/* New Page */
+
+/* Aggressive register coalescing */
+
+DEF_VARR (mv_t);
+
+struct coalesce_ctx {
+  VARR (mv_t) * moves;
+  /* the first and the next res in the coalesced regs group */
+  VARR (MIR_reg_t) * first_coalesced_reg, *next_coalesced_reg;
+};
+
+#define moves gen_ctx->coalesce_ctx->moves
+#define first_coalesced_reg gen_ctx->coalesce_ctx->first_coalesced_reg
+#define next_coalesced_reg gen_ctx->coalesce_ctx->next_coalesced_reg
+
+static int substitute_reg (gen_ctx_t gen_ctx, MIR_reg_t *reg) {
+  if (*reg == 0 || VARR_GET (MIR_reg_t, first_coalesced_reg, *reg) == *reg) return FALSE;
+  *reg = VARR_GET (MIR_reg_t, first_coalesced_reg, *reg);
+  return TRUE;
+}
+
+static int mv_freq_cmp (const void *v1p, const void *v2p) {
+  mv_t mv1 = *(mv_t const *) v1p;
+  mv_t mv2 = *(mv_t const *) v2p;
+  size_t freq1, freq2;
+
+  if (mv1->freq < mv2->freq) return -1;
+  if (mv1->freq > mv2->freq) return 1;
+  return (long) mv1->bb_insn->index - (long) mv2->bb_insn->index;
+}
+
+/* Merge two sets of coalesced regs given correspondingly by regs REG1 and REG2 (more accurately
+   merging REG2 group into REG1 group).  Set up COALESCED_REGS_BITMAP.  */
+static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
+  MIR_reg_t reg, first, first2, last, next, first_var, first2_var;
+
+  first = VARR_GET (MIR_reg_t, first_coalesced_reg, reg1);
+  if ((first2 = VARR_GET (MIR_reg_t, first_coalesced_reg, reg2)) == first) return;
+  for (last = reg2, reg = VARR_GET (MIR_reg_t, next_coalesced_reg, reg2);;
+       reg = VARR_GET (MIR_reg_t, next_coalesced_reg, reg)) {
+    VARR_SET (MIR_reg_t, first_coalesced_reg, reg, first);
+    if (reg == reg2) break;
+    last = reg;
+  }
+  next = VARR_GET (MIR_reg_t, next_coalesced_reg, first);
+  VARR_SET (MIR_reg_t, next_coalesced_reg, first, reg2);
+  VARR_SET (MIR_reg_t, next_coalesced_reg, last, next);
+  first_var = reg2var (gen_ctx, first);
+  first2_var = reg2var (gen_ctx, first2);
+  live_range_t list = VARR_GET (live_range_t, var_live_ranges, first_var);
+  live_range_t list2 = VARR_GET (live_range_t, var_live_ranges, first2_var);
+  VARR_SET (live_range_t, var_live_ranges, first2_var, NULL);
+  VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (list, list2));
+}
+
+static void coalesce (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_reg_t reg, sreg, dreg, first_reg, sreg_var, dreg_var;
+  MIR_insn_t insn, next_insn;
+  bb_insn_t bb_insn;
+  mv_t mv;
+  size_t nops;
+  int coalesced_moves = 0, change_p;
+
+  VARR_TRUNC (mv_t, moves, 0);
+  VARR_TRUNC (MIR_reg_t, first_coalesced_reg, 0);
+  VARR_TRUNC (MIR_reg_t, next_coalesced_reg, 0);
+  for (MIR_reg_t i = 0; i <= curr_cfg->max_reg; i++) {
+    VARR_PUSH (MIR_reg_t, first_coalesced_reg, i);
+    VARR_PUSH (MIR_reg_t, next_coalesced_reg, i);
+  }
+  for (mv_t mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = DLIST_NEXT (mv_t, mv)) {
+    MIR_insn_t insn = mv->bb_insn->insn;
+    if (insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG)
+      VARR_PUSH (mv_t, moves, mv);
+  }
+  qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
+  /* Coalesced moves, most frequently executed first. */
+  for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
+    mv = VARR_GET (mv_t, moves, i);
+    bb_insn = mv->bb_insn;
+    insn = bb_insn->insn;
+    dreg = insn->ops[0].u.reg;
+    sreg = insn->ops[1].u.reg;
+    if (VARR_GET (MIR_reg_t, first_coalesced_reg, sreg)
+        == VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) {
+      coalesced_moves++;
+      DEBUG (2, {
+        fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%ulld):", sreg, dreg,
+                 (unsigned long long) mv->freq);
+        print_bb_insn (gen_ctx, bb_insn, TRUE);
+      });
+    } else {
+      sreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, sreg));
+      dreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, dreg));
+      if (!live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, sreg_var),
+                                   VARR_GET (live_range_t, var_live_ranges, dreg_var))) {
+        coalesced_moves++;
+        DEBUG (2, {
+          fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llu):", sreg, dreg,
+                   (unsigned long long) mv->freq);
+          print_bb_insn (gen_ctx, bb_insn, TRUE);
+        });
+        merge_regs (gen_ctx, sreg, dreg);
+      }
+    }
+  }
+  reg_info_t *breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
+  for (reg = curr_cfg->min_reg; reg <= curr_cfg->max_reg; reg++) {
+    if ((first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, reg)) == reg) continue;
+    breg_infos[reg2breg (gen_ctx, first_reg)].freq += breg_infos[reg2breg (gen_ctx, reg)].freq;
+    breg_infos[reg2breg (gen_ctx, reg)].freq += 0;
+  }
+  for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
+    mv = VARR_GET (mv_t, moves, i);
+    bb_insn = mv->bb_insn;
+    insn = bb_insn->insn;
+    dreg = insn->ops[0].u.reg;
+    sreg = insn->ops[1].u.reg;
+    first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, sreg);
+    if (first_reg != VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) continue;
+    DLIST_REMOVE (dst_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[0].u.reg)].dst_moves, mv);
+    DLIST_REMOVE (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
+    free_move (gen_ctx, mv);
+    DEBUG (2, {
+      fprintf (debug_file, "Deleting coalesced move ");
+      MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+    });
+    gen_delete_insn (gen_ctx, insn);
+  }
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = next_insn) {
+    next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    nops = MIR_insn_nops (ctx, insn);
+    change_p = FALSE;
+    for (size_t i = 0; i < nops; i++) {
+      MIR_op_t *op = &insn->ops[i];
+      switch (op->mode) {
+      case MIR_OP_REG: change_p = substitute_reg (gen_ctx, &op->u.reg) || change_p; break;
+      case MIR_OP_MEM:
+        change_p = substitute_reg (gen_ctx, &op->u.mem.base) || change_p;
+        change_p = substitute_reg (gen_ctx, &op->u.mem.index) || change_p;
+        break;
+      default: /* do nothing */ break;
+      }
+    }
+    if (change_p)
+      for (dead_var_t dv = DLIST_HEAD (dead_var_t, ((bb_insn_t) insn->data)->insn_dead_vars);
+           dv != NULL; dv = DLIST_NEXT (dead_var_t, dv)) {
+        if (!var_is_reg_p (dv->var)) continue;
+        reg = var2reg (gen_ctx, dv->var);
+        if ((first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, reg)) != reg)
+          dv->var = reg2var (gen_ctx, first_reg);
+      }
+  }
+  DEBUG (1, {
+    int moves_num = (int) VARR_LENGTH (mv_t, moves);
+    if (coalesced_moves != 0)
+      fprintf (debug_file, "Coalesced Moves = %d out of %d moves (%.1f%%)\n", coalesced_moves,
+               moves_num, 100.0 * coalesced_moves / moves_num);
+  });
+}
+
+static void init_coalesce (gen_ctx_t gen_ctx) {
+  gen_ctx->coalesce_ctx = gen_malloc (gen_ctx, sizeof (struct coalesce_ctx));
+  VARR_CREATE (mv_t, moves, 0);
+  VARR_CREATE (MIR_reg_t, first_coalesced_reg, 0);
+  VARR_CREATE (MIR_reg_t, next_coalesced_reg, 0);
+}
+
+static void finish_coalesce (gen_ctx_t gen_ctx) {
+  VARR_DESTROY (mv_t, moves);
+  VARR_DESTROY (MIR_reg_t, first_coalesced_reg);
+  VARR_DESTROY (MIR_reg_t, next_coalesced_reg);
+  free (gen_ctx->coalesce_ctx);
+  gen_ctx->coalesce_ctx = NULL;
+}
+
+/* New Page */
+
+/* Priority RA */
 
 static void process_move_to_form_thread (gen_ctx_t gen_ctx, mv_t mv) {
   MIR_op_t op1 = mv->bb_insn->insn->ops[0], op2 = mv->bb_insn->insn->ops[1];
@@ -5241,12 +5503,14 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
           } else if (def_insn->code == MIR_MOV) { /* index = r */
             insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
             mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
-          } else if (def_insn->code == MIR_ADD) { /* index = r + const */
+          } else if (def_insn->code == MIR_ADD
+                     || def_insn->code == MIR_SUB) { /* index = r +- const */
             gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG);
             if ((src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT) {
               insn->ops[i].u.hard_reg_mem.index = src_op_ref->u.hard_reg;
               insn->ops[i].u.hard_reg_mem.disp
-                += src_op2_ref->u.i * insn->ops[i].u.hard_reg_mem.scale;
+                += ((def_insn->code == MIR_ADD ? src_op2_ref->u.i : -src_op2_ref->u.i)
+                    * insn->ops[i].u.hard_reg_mem.scale);
               mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
             }
           } else if ((def_insn->code == MIR_MUL || def_insn->code == MIR_LSH)
@@ -5283,18 +5547,19 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
             }
           } else if (src_op_ref->mode != MIR_OP_HARD_REG) { /* Can do nothing */
             ;
-          } else if (def_insn->code == MIR_ADD) {
+          } else if (def_insn->code == MIR_ADD || def_insn->code == MIR_SUB) {
             gen_assert (src_op_ref->u.hard_reg != MIR_NON_HARD_REG);
             src_op2_ref = &def_insn->ops[2];
-            if (src_op2_ref->mode == MIR_OP_HARD_REG
+            if (def_insn->code == MIR_ADD && src_op2_ref->mode == MIR_OP_HARD_REG
                 && op_ref->u.hard_reg_mem.index == MIR_NON_HARD_REG) { /* base = r1 + r2 */
               insn->ops[i].u.hard_reg_mem.base = src_op_ref->u.hard_reg;
               insn->ops[i].u.hard_reg_mem.index = src_op2_ref->u.hard_reg;
               insn->ops[i].u.hard_reg_mem.scale = 1;
               mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
-            } else if (src_op2_ref->mode == MIR_OP_INT) { /* base = r + const */
+            } else if (src_op2_ref->mode == MIR_OP_INT) { /* base = r +- const */
               insn->ops[i].u.hard_reg_mem.base = src_op_ref->u.hard_reg;
-              insn->ops[i].u.hard_reg_mem.disp += src_op2_ref->u.i;
+              insn->ops[i].u.hard_reg_mem.disp
+                += (def_insn->code == MIR_ADD ? src_op2_ref->u.i : -src_op2_ref->u.i);
               mem_reg_change_p = op_change_p = insn_hr_change_p = TRUE;
             }
           } else if (def_insn->code == MIR_MUL && op_ref->u.hard_reg_mem.index == MIR_NON_HARD_REG
@@ -6035,6 +6300,15 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
   });
   if (optimize_level != 0) build_live_ranges (gen_ctx);
+#ifndef NO_GVN
+  if (optimize_level >= 2) {
+    coalesce (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after coalescing:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
+  }
+#endif /* #ifndef NO_GVN */
   assign (gen_ctx);
   rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
   DEBUG (2, {
@@ -6064,7 +6338,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   target_make_prolog_epilog (gen_ctx, func_used_hard_regs, func_stack_slots_num);
   DEBUG (2, {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
-    print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (machine_code_p) {
     code = target_translate (gen_ctx, &code_len);
@@ -6402,6 +6676,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     init_live_ranges (gen_ctx);
+    init_coalesce (gen_ctx);
     init_ra (gen_ctx);
     init_selection (gen_ctx);
     target_init (gen_ctx);
@@ -6447,6 +6722,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
     bitmap_destroy (temp_bitmap);
     bitmap_destroy (temp_bitmap2);
     finish_live_ranges (gen_ctx);
+    finish_coalesce (gen_ctx);
     finish_ra (gen_ctx);
     finish_selection (gen_ctx);
     for (MIR_type_t type = MIR_T_I8; type < MIR_T_BOUND; type++)
@@ -6477,7 +6753,6 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   if (func_item == NULL) return; /* finish setting interfaces */
   MIR_gen (ctx, 0, func_item);
 }
-
 void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_PARALLEL_GEN
   if (func_item == NULL) return; /* finish setting interfaces */
