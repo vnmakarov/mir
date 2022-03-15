@@ -1,6 +1,6 @@
 name: ppc64le-test
 
-on: [push]
+# on: [push]
 
 jobs:
   ppc64le:

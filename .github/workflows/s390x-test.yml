@@ -1,6 +1,6 @@
 name: s390x-test
 
-on: [push]
+# on: [push]
 
 jobs:
   s390x:
