@@ -165,6 +165,7 @@ typedef struct {
   unsigned char disp_def_p;    /* can be true only for MUST_ALLOCA */
   MIR_type_t type;             /* memory type */
   MIR_alias_t alias, nonalias; /* memory aliases */
+  MIR_insn_t def_insn;         /* base def insn: its value + disp form address */
   int64_t disp;                /* defined only when disp_def_p, otherwise disp is unknown */
 } mem_attr_t;
 
@@ -2939,11 +2940,35 @@ static void set_alloca_based_flag (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int mus
     bb_insn->alloca_flag |= MAY_ALLOCA;
 }
 
+static ssa_edge_t skip_move_ssa_edges (ssa_edge_t se, MIR_insn_t *def_insn) {
+  for (;;) {
+    gen_assert (se != NULL);
+    *def_insn = se->def->insn;
+    if (!move_p (*def_insn)) return se;
+    se = (*def_insn)->ops[1].data;
+  }
+}
+
+static MIR_insn_t get_def_disp (ssa_edge_t se, int64_t *disp) {
+  MIR_insn_t def_insn;
+
+  *disp = 0;
+  for (;;) {
+    se = skip_move_ssa_edges (se, &def_insn);
+    if ((def_insn->code != MIR_ADD && def_insn->code != MIR_ADDS && def_insn->code != MIR_SUB
+         && def_insn->code != MIR_SUBS)
+        || (se = def_insn->ops[2].data) == NULL || !se->def->gvn_val_const_p)
+      return def_insn;
+    int add_p = def_insn->code == MIR_ADD || def_insn->code == MIR_ADDS;
+    *disp += add_p ? se->def->gvn_val : -se->def->gvn_val;
+    se = def_insn->ops[1].data; /* new base */
+  }
+}
+
 static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
   /* zero loc is fixed: */
+  int64_t disp;
   mem_attr_t mem_attr;
-  ssa_edge_t se;
-  MIR_insn_t def_insn;
 
   if ((mem_op_ref->u.mem.nloc = VARR_LENGTH (mem_attr_t, mem_attrs)) == 0)
     mem_op_ref->u.mem.nloc = 1;
@@ -2952,33 +2977,18 @@ static void new_mem_loc (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, int flag) {
   mem_attr.alias = mem_op_ref->u.mem.alias;
   mem_attr.nonalias = mem_op_ref->u.mem.nonalias;
   mem_attr.disp_def_p = FALSE;
-  if (flag & MUST_ALLOCA) {
-    se = mem_op_ref->data;
-    for (;;) {
-      gen_assert (se != NULL);
-      def_insn = se->def->insn;
-      if (!move_p (def_insn)) break;
-      se = def_insn->ops[1].data;
-    }
-    if (def_insn->code == MIR_ALLOCA) {
-      mem_attr.disp_def_p = TRUE;
-      mem_attr.disp = 0;
-    } else if ((def_insn->code == MIR_ADD || def_insn->code == MIR_ADDS || def_insn->code == MIR_SUB
-                || def_insn->code == MIR_SUBS)
-               && (se = def_insn->ops[2].data) != NULL) {
-      int add_p = def_insn->code == MIR_ADD || def_insn->code == MIR_ADDS;
-      def_insn = se->def->insn;
-      if (se->def->gvn_val_const_p) {
-        mem_attr.disp_def_p = TRUE;
-        mem_attr.disp = add_p ? se->def->gvn_val : -se->def->gvn_val;
-      }
-    } else {
-      gen_assert (def_insn->code == MIR_PHI);
-    }
+  mem_attr.disp = 0;
+  mem_attr.def_insn = NULL;
+  if ((flag & MUST_ALLOCA) != 0) {
+    mem_attr.def_insn = get_def_disp (mem_op_ref->data, &disp);
+    mem_attr.disp_def_p = TRUE;
+    mem_attr.disp = disp;
   }
   if (VARR_LENGTH (mem_attr_t, mem_attrs) == 0) VARR_PUSH (mem_attr_t, mem_attrs, mem_attr);
   DEBUG (2, {
     fprintf (debug_file, "    new m%lu", (unsigned long) mem_op_ref->u.mem.nloc);
+    if (mem_attr.def_insn != NULL)
+      fprintf (debug_file, "(def_insn=%u)", ((bb_insn_t) mem_attr.def_insn->data)->index);
     if (mem_attr.disp_def_p) fprintf (debug_file, "(disp=%lld)", (long long) mem_attr.disp);
     if (flag)
       fprintf (debug_file, " is %s alloca based",
@@ -3709,6 +3719,8 @@ static int alloca_mem_intersect_p (gen_ctx_t gen_ctx, uint32_t nloc1, MIR_type_t
 
   gen_assert (nloc1 != 0 && nloc2 != 0);
   if (!mem_attr_ref1->disp_def_p || !mem_attr_ref2->disp_def_p) return TRUE;
+  if (mem_attr_ref1->def_insn == NULL || mem_attr_ref1->def_insn != mem_attr_ref2->def_insn)
+    return TRUE;
   disp1 = mem_attr_ref1->disp;
   disp2 = mem_attr_ref2->disp;
   size1 = _MIR_type_size (ctx, type1);
