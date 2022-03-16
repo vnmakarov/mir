@@ -18,11 +18,11 @@
     -------
        |
        V
-   --------                                                                ----------
-  | Build  |    --------     ---------     ---------     -------------    | Generate |
-  | Live   |-->| Assign |-->| Rewrite |-->| Combine |-->|  Dead Code  |-->| Machine  |--> Machine
-  | Ranges |    --------     ---------     ---------    | Elimination |   |  Insns   |     Insns
-   --------                                              -------------     ----------
+    ------                                                                    --------
+   |Build |    --------    ------     -------     -------     -----------    |Generate|
+   |Live  |-->|Coalesce|->|Assign|-->|Rewrite|-->|Combine|-->| Dead Code |-->|Machine |--> Machine
+   |Ranges|    --------    ------     -------     -------    |Elimination|   | Insns  |     Insns
+    ------                                                    -----------     --------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
@@ -39,6 +39,7 @@
                   Only for -O1 and above.
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
+   Coalesce: Aggressive register coalescing
    Assign: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
    Rewrite: Transform MIR according to the assign using reserved hard regs.
    Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
