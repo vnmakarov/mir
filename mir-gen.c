@@ -511,7 +511,8 @@ struct reg_info {
   long thread_freq; /* thread accumulated freq, defined for first thread breg */
   /* first/next breg of the same thread, MIR_MAX_REG_NUM is end mark  */
   MIR_reg_t thread_first, thread_next;
-  size_t live_length; /* # of program points where breg lives */
+  unsigned sets_num;
+  unsigned live_length; /* # of program points where breg lives */
   DLIST (dst_mv_t) dst_moves;
   DLIST (src_mv_t) src_moves;
 };
@@ -3955,6 +3956,7 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
           bitmap_set_bit_p (bb->live_kill, var);
         }
         if (var_is_reg_p (var)) {
+          if (out_p && niter == 0) breg_infos[var2breg (gen_ctx, var)].sets_num++;
           if (breg_infos[var2breg (gen_ctx, var)].freq < LONG_MAX - bb_freq)
             breg_infos[var2breg (gen_ctx, var)].freq += bb_freq;
           else
@@ -4022,6 +4024,7 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   nregs = get_nregs (gen_ctx);
   for (n = 0; n < nregs; n++) {
     ri.freq = ri.thread_freq = 0;
+    ri.sets_num = 0;
     ri.live_length = 0;
     ri.thread_first = n;
     ri.thread_next = MIR_MAX_REG_NUM;
@@ -4179,6 +4182,10 @@ static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
 }
 
 #if !MIR_NO_GEN_DEBUG
+static void print_live_range (gen_ctx_t gen_ctx, live_range_t lr) {
+  for (; lr != NULL; lr = lr->next) fprintf (debug_file, " [%d..%d]", lr->start, lr->finish);
+}
+
 static void print_live_ranges (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   live_range_t lr;
@@ -4189,11 +4196,12 @@ static void print_live_ranges (gen_ctx_t gen_ctx) {
     if ((lr = VARR_GET (live_range_t, var_live_ranges, i)) == NULL) continue;
     fprintf (debug_file, "%lu", (unsigned long) i);
     if (var_is_reg_p (i))
-      fprintf (debug_file, " (%s:%s)",
+      fprintf (debug_file, " (%s:%s) [sets=%u]",
                MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, i), curr_func_item->u.func)),
-               MIR_reg_name (ctx, var2reg (gen_ctx, i), curr_func_item->u.func));
+               MIR_reg_name (ctx, var2reg (gen_ctx, i), curr_func_item->u.func),
+               VARR_ADDR (reg_info_t, curr_cfg->breg_info)[var2breg (gen_ctx, i)].sets_num);
     fprintf (debug_file, ":");
-    for (; lr != NULL; lr = lr->next) fprintf (debug_file, " [%d..%d]", lr->start, lr->finish);
+    print_live_range (gen_ctx, lr);
     fprintf (debug_file, "\n");
   }
 }
@@ -4261,50 +4269,55 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   });
 }
 
-/* Merge *non-intersected* ranges R1 and R2 and returns the result. The function maintains the order
-   of ranges and tries to minimize size of the result range list.  Ranges R1 and R2 may not be used
-   after the call.  */
+/* Merge possibly intersected ranges R1 and R2 and returns the result. The function maintains the
+   order of ranges and tries to minimize size of the result range list.  Ranges R1 and R2 may not be
+   used after the call.  */
 static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
   live_range_t first, last, temp;
 
   if (r1 == NULL) return r2;
   if (r2 == NULL) return r1;
-  for (first = last = NULL; r1 != NULL && r2 != NULL;) {
-    if (r1->start < r2->start) { /* swap */
+  for (first = last = NULL; r1 != NULL || r2 != NULL;) {
+    if (r2 == NULL
+        || (r1 != NULL
+            && (r2->finish < r1->finish
+                || (r2->finish == r1->finish && r1->start < r2->start)))) { /* swap */
       temp = r1;
       r1 = r2;
       r2 = temp;
     }
-    if (r1->start == r2->finish + 1) {
-      /* Joint ranges: merge r1 and r2 into r1.  */
-      r1->start = r2->start;
+    /* Add r1 to the result.  */
+    if (first == NULL) {
+      first = last = r2;
+      r2 = r2->next;
+      continue;
+    }
+    if (r2->finish + 1 == last->start) { /* Joint ranges: merge r2 and last into last.  */
+      last->start = r2->start;
       temp = r2;
       r2 = r2->next;
       free (temp);
-    } else {
-      gen_assert (r2->finish + 1 < r1->start);
-      /* Add r1 to the result.  */
-      if (first == NULL) {
-        first = last = r1;
-      } else {
-        last->next = r1;
-        last = r1;
-      }
-      r1 = r1->next;
+    } else if (!(last->start > r2->finish || r2->start > last->finish)) {
+      /* Intersected ranges: merge r2 and last into last */
+      if (last->start > r2->start) last->start = r2->start;
+      if (last->finish < r2->finish) last->finish = r2->finish;
+      temp = r2;
+      r2 = r2->next;
+      free (temp);
+    } else { /* non-intersected ranges: add r2 */
+      gen_assert (first != NULL && r2->finish + 1 < last->start);
+      last->next = r2;
+      last = r2;
+      r2 = r2->next;
     }
   }
-  if (r1 != NULL) {
-    if (first == NULL)
-      first = r1;
-    else
-      last->next = r1;
-  } else {
-    gen_assert (r2 != NULL);
-    if (first == NULL)
-      first = r2;
-    else
-      last->next = r2;
+  last->next = NULL;
+#ifndef NDEBUG
+  for (r1 = first, r2 = NULL; r1 != NULL; r2 = r1, r1 = r1->next) {
+    gen_assert (r1->start <= r1->finish);
+    gen_assert (r2 == NULL || r1->finish + 1 < r2->start);
   }
+#endif
   return first;
 }
 
@@ -4634,13 +4647,25 @@ static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
   first2_var = reg2var (gen_ctx, first2);
   live_range_t list = VARR_GET (live_range_t, var_live_ranges, first_var);
   live_range_t list2 = VARR_GET (live_range_t, var_live_ranges, first2_var);
+  DEBUG (2, {
+    fprintf (debug_file, "        ");
+    print_live_range (gen_ctx, list);
+    fprintf (debug_file, " &");
+    print_live_range (gen_ctx, list2);
+    fprintf (debug_file, " -> ");
+  });
   VARR_SET (live_range_t, var_live_ranges, first2_var, NULL);
-  VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (list, list2));
+  list = merge_live_ranges (list, list2);
+  VARR_SET (live_range_t, var_live_ranges, first_var, list);
+  DEBUG (2, {
+    print_live_range (gen_ctx, list);
+    fprintf (debug_file, "\n");
+  });
 }
 
 static void coalesce (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_reg_t reg, sreg, dreg, first_reg, sreg_var, dreg_var;
+  MIR_reg_t reg, sreg, dreg, first_reg, first_reg2, sreg_var, dreg_var;
   MIR_insn_t insn, next_insn;
   bb_insn_t bb_insn;
   mv_t mv;
@@ -4660,6 +4685,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
       VARR_PUSH (mv_t, moves, mv);
   }
   qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
+  reg_info_t *breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   /* Coalesced moves, most frequently executed first. */
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
@@ -4667,8 +4693,9 @@ static void coalesce (gen_ctx_t gen_ctx) {
     insn = bb_insn->insn;
     dreg = insn->ops[0].u.reg;
     sreg = insn->ops[1].u.reg;
-    if (VARR_GET (MIR_reg_t, first_coalesced_reg, sreg)
-        == VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) {
+    first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, sreg);
+    first_reg2 = VARR_GET (MIR_reg_t, first_coalesced_reg, dreg);
+    if (first_reg == first_reg2) {
       coalesced_moves++;
       DEBUG (2, {
         fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%ulld):", sreg, dreg,
@@ -4676,8 +4703,8 @@ static void coalesce (gen_ctx_t gen_ctx) {
         print_bb_insn (gen_ctx, bb_insn, TRUE);
       });
     } else {
-      sreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, sreg));
-      dreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, dreg));
+      sreg_var = reg2var (gen_ctx, first_reg);
+      dreg_var = reg2var (gen_ctx, first_reg2);
       if (!live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, sreg_var),
                                    VARR_GET (live_range_t, var_live_ranges, dreg_var))) {
         coalesced_moves++;
@@ -4687,14 +4714,30 @@ static void coalesce (gen_ctx_t gen_ctx) {
           print_bb_insn (gen_ctx, bb_insn, TRUE);
         });
         merge_regs (gen_ctx, sreg, dreg);
+        breg_infos[reg2breg (gen_ctx, first_reg)].sets_num
+          += breg_infos[reg2breg (gen_ctx, first_reg2)].sets_num;
+      } else if (breg_infos[var2breg (gen_ctx, sreg_var)].sets_num <= 1
+                 && breg_infos[var2breg (gen_ctx, dreg_var)].sets_num <= 1) {
+        coalesced_moves++;
+        DEBUG (2, {
+          fprintf (debug_file, "      Value coalescing move r%d-r%d (freq=%llu):", sreg, dreg,
+                   (unsigned long long) mv->freq);
+          print_bb_insn (gen_ctx, bb_insn, TRUE);
+        });
+        merge_regs (gen_ctx, sreg, dreg);
+      } else {
+        DEBUG (2, {
+          fprintf (debug_file, "      Coalescing move r%d-r%d failure:", sreg, dreg);
+          print_bb_insn (gen_ctx, bb_insn, TRUE);
+        });
       }
     }
   }
-  reg_info_t *breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   for (reg = curr_cfg->min_reg; reg <= curr_cfg->max_reg; reg++) {
     if ((first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, reg)) == reg) continue;
     breg_infos[reg2breg (gen_ctx, first_reg)].freq += breg_infos[reg2breg (gen_ctx, reg)].freq;
-    breg_infos[reg2breg (gen_ctx, reg)].freq += 0;
+    breg_infos[reg2breg (gen_ctx, reg)].freq = 0;
+    breg_infos[reg2breg (gen_ctx, reg)].sets_num = 0;
   }
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
@@ -4848,7 +4891,8 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   int j, k;
   live_range_t lr;
   bitmap_t bm;
-  size_t length, profit, best_profit;
+  unsigned length;
+  size_t profit, best_profit;
   bitmap_t *used_locs_addr;
   breg_info_t breg_info;
 
