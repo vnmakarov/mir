@@ -746,10 +746,13 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 }
 
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn) {
+  MIR_insn_t insn_for_bb = after;
+
   gen_assert (insn->code != MIR_LABEL);
-  gen_assert (!MIR_branch_code_p (after->code));
+  if (MIR_branch_code_p (insn_for_bb->code)) insn_for_bb = DLIST_NEXT (MIR_insn_t, insn_for_bb);
+  gen_assert (!MIR_branch_code_p (insn_for_bb->code));
   MIR_insert_insn_after (gen_ctx->ctx, curr_func_item, after, insn);
-  create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), after);
+  create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), insn_for_bb);
 }
 
 static void gen_move_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_t insn) {
