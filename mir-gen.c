@@ -2224,9 +2224,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           def = se->def;
           if (def->bb->index == 0) break; /* arg init or undef insn */
           def_insn = def->insn;
-          if (se->prev_use != NULL || se->next_use != NULL || !move_p (def_insn)
-              || bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg))
-            break;
+          if (!move_p (def_insn) || bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) break;
           DEBUG (2, {
             fprintf (debug_file, "  Removing copy insn %-5lu", (unsigned long) def->index);
             MIR_output_insn (gen_ctx->ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
@@ -2234,13 +2232,10 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           reg = var2reg (gen_ctx, var);
           new_reg = def_insn->ops[1].u.reg;
           remove_ssa_edge (gen_ctx, se);
-          insn->ops[op_num].data = def_insn->ops[1].data;
-          gen_delete_insn (gen_ctx, def_insn);
-          deleted_insns_num++;
-          se = insn->ops[op_num].data;
-          se->use = bb_insn;
-          se->use_op_num = op_num;
+          se = def_insn->ops[1].data;
+          add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, op_num);
           rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+          next_bb_insn = bb_insn;
         }
       }
       w = get_ext_params (insn->code, &sign_p);
@@ -2260,6 +2255,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
             fprintf (debug_file, "    after");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
           });
+          next_bb_insn = bb_insn;
         }
       }
     }
