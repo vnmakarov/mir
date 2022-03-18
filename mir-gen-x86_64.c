@@ -477,9 +477,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                            : _MIR_new_hard_reg_op (ctx, arg_op.u.hard_reg_mem.base);
       }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, arg_stack_size, SP_HARD_REG,
                                          MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
@@ -827,9 +828,10 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       /* arg is on the stack */
       block_arg_func_p = TRUE;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type,
                                          mem_size + 8 /* ret */
                                            + start_sp_from_bp_offset,
@@ -2372,10 +2374,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     }
     if (const_ref_num >= 0)
       VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, result_code);
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
     if (disp8 >= 0) put_byte (gen_ctx, disp8);
     if (disp32 >= 0) put_uint64 (gen_ctx, disp32, 4);
     if (imm8 >= 0) put_byte (gen_ctx, imm8);
@@ -2387,15 +2387,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       put_uint64 (gen_ctx, 0, 8);
     }
 
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].next_insn_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
 
-    if (const_ref_num >= 0)
-      VARR_ADDR (const_ref_t, const_refs)
-      [const_ref_num].next_insn_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
+    [const_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
     if (ch == '\0') break;
   }
   if (switch_table_addr_start < 0) return;
@@ -2552,7 +2548,7 @@ static void setup_rel32 (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void
     fprintf (stderr, "too big offset (%lld) in setup_rel32", (long long) offset);
     exit (1);
   }
-  _MIR_change_code (ctx, (char *) base + lr->label_val_disp, (uint8_t *) &rel32, 4);
+  _MIR_change_code (ctx, (uint8_t *) base + lr->label_val_disp, (uint8_t *) &rel32, 4);
 }
 
 static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
@@ -2563,7 +2559,7 @@ static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   for (size_t i = 0; i < VARR_LENGTH (label_ref_t, label_refs); i++) {
     label_ref_t lr = VARR_GET (label_ref_t, label_refs, i);
     if (lr.abs_addr_p) {
-      _MIR_change_code (ctx, (char *) base + lr.label_val_disp, (uint8_t *) &lr.u.jump_addr, 8);
+      _MIR_change_code (ctx, (uint8_t *) base + lr.label_val_disp, (uint8_t *) &lr.u.jump_addr, 8);
     } else {
       setup_rel32 (gen_ctx, &lr, base, lr.u.jump_addr);
     }
@@ -2599,8 +2595,8 @@ static void target_redirect_bb_origin_branch (gen_ctx_t gen_ctx, target_bb_versi
 
   if (data->base == NULL) return;
   if (data->branch_ref.abs_addr_p) {
-    _MIR_change_code (ctx, (char *) data->base + data->branch_ref.label_val_disp, (uint8_t *) &addr,
-                      8);
+    _MIR_change_code (ctx, (uint8_t *) data->base + data->branch_ref.label_val_disp,
+                      (uint8_t *) &addr, 8);
   } else {
     setup_rel32 (gen_ctx, &data->branch_ref, data->base, addr);
   }

@@ -528,15 +528,6 @@ typedef struct {
   } u;
 } const_t;
 
-#if !MIR_NO_GEN_DEBUG
-static void print_const (FILE *f, const_t c) {
-  if (c.uns_p)
-    fprintf (f, "%" PRIu64, c.u.u);
-  else
-    fprintf (f, "%" PRId64, c.u.i);
-}
-#endif
-
 struct func_cfg {
   MIR_reg_t min_reg, max_reg;
   uint32_t non_conflicting_moves; /* # of moves with non-conflicting regs */
@@ -2202,7 +2193,6 @@ static void copy_prop (gen_ctx_t gen_ctx) {
   size_t passed_mem_num;
   MIR_reg_t var, reg, new_reg;
   insn_var_iterator_t iter;
-  long deleted_insns_num = 0;
 
   bitmap_clear (temp_bitmap);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -2255,11 +2245,10 @@ static void copy_prop (gen_ctx_t gen_ctx) {
             fprintf (debug_file, "    after");
             MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
           });
-          next_bb_insn = bb_insn;
+          next_bb_insn = bb_insn; /* process the new move */
         }
       }
     }
-  DEBUG (1, { fprintf (debug_file, "%5ld deleted copy insns\n", deleted_insns_num); });
 }
 
 /* New Page */
@@ -3080,7 +3069,6 @@ static void copy_gvn_info (bb_insn_t to, bb_insn_t from) {
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
-  edge_t in_edge;
   bb_insn_t bb_insn, store_bb_insn, new_bb_insn, new_bb_insn2, next_bb_insn, expr_bb_insn;
   MIR_reg_t temp_reg;
   long gvn_insns_num = 0, ccp_insns_num = 0, deleted_branches_num = 0;
@@ -3102,7 +3090,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       MIR_insn_t store, new_insn, new_insn2, def_insn, after, insn = bb_insn->insn;
       ssa_edge_t se, se2;
       bb_insn_t def_bb_insn, new_bb_copy_insn;
-      int64_t val, val2;
+      int64_t val = 0, val2;
 
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (insn->code == MIR_MOV
@@ -3586,7 +3574,7 @@ static void jump_opt (gen_ctx_t gen_ctx) {
     DEBUG (1, { fprintf (debug_file, "%ld deleted unrechable bb insns\n", bb_deleted_insns_num); });
   }
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
-    edge_t e, out_e, new_e;
+    edge_t e, out_e;
     bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
     MIR_insn_t insn, prev_insn, next_insn, last_label;
     next_bb = DLIST_NEXT (bb_t, bb);
@@ -4133,17 +4121,6 @@ static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish,
   return lr;
 }
 
-/* Copy live range list given by its head R and return the result.  */
-static live_range_t copy_live_range_list (gen_ctx_t gen_ctx, live_range_t r) {
-  live_range_t p, first = NULL, *chain;
-
-  for (chain = &first; r != NULL; r = r->next) {
-    *chain = p = create_live_range (gen_ctx, r->start, r->finish, r->next);
-    chain = &p->next;
-  }
-  return first;
-}
-
 static void destroy_live_range (live_range_t lr) {
   live_range_t next_lr;
 
@@ -4606,7 +4583,6 @@ static int substitute_reg (gen_ctx_t gen_ctx, MIR_reg_t *reg) {
 static int mv_freq_cmp (const void *v1p, const void *v2p) {
   mv_t mv1 = *(mv_t const *) v1p;
   mv_t mv2 = *(mv_t const *) v2p;
-  size_t freq1, freq2;
 
   if (mv1->freq < mv2->freq) return -1;
   if (mv1->freq > mv2->freq) return 1;
@@ -4670,7 +4646,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
         == VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) {
       coalesced_moves++;
       DEBUG (2, {
-        fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%ulld):", sreg, dreg,
+        fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llud):", sreg, dreg,
                  (unsigned long long) mv->freq);
         print_bb_insn (gen_ctx, bb_insn, TRUE);
       });
@@ -6188,8 +6164,8 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   gen_ctx_t gen_ctx;
   uint8_t *code;
-  void *machine_code;
-  size_t code_len;
+  void *machine_code = NULL;
+  size_t code_len = 0;
   double start_time = real_usec_time ();
   uint32_t bbs_num;
 
@@ -6563,9 +6539,8 @@ static void *func_generator (void *arg) {
       if (!func_or_bb.full_p) {
         create_bb_stubs (gen_ctx);
         void *addr;
-        bb_version_t bb_version
-          = get_bb_version (gen_ctx, &((struct bb_stub *) func_or_bb.u.func_item->data)[0], 0, NULL,
-                            TRUE, &addr);
+        get_bb_version (gen_ctx, &((struct bb_stub *) func_or_bb.u.func_item->data)[0], 0, NULL,
+                        TRUE, &addr);
         _MIR_redirect_thunk (ctx, func_or_bb.u.func_item->addr, addr);
 #if MIR_PARALLEL_GEN
         if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
