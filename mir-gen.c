@@ -4694,7 +4694,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
   for (reg = curr_cfg->min_reg; reg <= curr_cfg->max_reg; reg++) {
     if ((first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, reg)) == reg) continue;
     breg_infos[reg2breg (gen_ctx, first_reg)].freq += breg_infos[reg2breg (gen_ctx, reg)].freq;
-    breg_infos[reg2breg (gen_ctx, reg)].freq += 0;
+    breg_infos[reg2breg (gen_ctx, reg)].freq = 0;
   }
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
