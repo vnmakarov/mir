@@ -6204,7 +6204,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#ifndef NO_GVN
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++GVN:\n"); });
     gvn (gen_ctx);
@@ -6214,8 +6213,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
     gvn_clear (gen_ctx);
   }
-#endif /* #ifndef NO_GVN */
-#ifndef NO_JUMP_OPT
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++Jump optimization:\n"); });
     jump_opt (gen_ctx);
@@ -6224,8 +6221,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #ifndef NO_JUMP_OPT */
-#ifndef NO_COPY_PROP
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
     copy_prop (gen_ctx);
@@ -6234,8 +6229,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #ifndef NO_COPY_PROP */
-#if !defined(NO_DSE) && !defined(NO_GVN)
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++DSE:\n"); });
     dse (gen_ctx);
@@ -6244,8 +6237,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #if !defined(NO_DSE) && !defined(NO_GVN) */
-#ifndef NO_GVN
   if (optimize_level >= 2) {
     ssa_dead_code_elimination (gen_ctx);
     DEBUG (2, {
@@ -6253,7 +6244,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #ifndef NO_GVN */
   if (optimize_level >= 2) undo_build_ssa (gen_ctx);
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
@@ -6270,7 +6260,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
   });
   if (optimize_level != 0) build_live_ranges (gen_ctx);
-#ifndef NO_GVN
   if (optimize_level >= 2) {
     coalesce (gen_ctx);
     DEBUG (2, {
@@ -6278,14 +6267,12 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
-#endif /* #ifndef NO_GVN */
   assign (gen_ctx);
   rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
   DEBUG (2, {
     fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
-#ifndef NO_COMBINE
   if (optimize_level >= 1) {
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     add_bb_insn_dead_vars (gen_ctx);
@@ -6304,7 +6291,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
     });
   }
-#endif /* #ifndef NO_COMBINE */
   target_make_prolog_epilog (gen_ctx, func_used_hard_regs, func_stack_slots_num);
   DEBUG (2, {
     fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
