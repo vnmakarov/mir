@@ -3710,13 +3710,18 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
             = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg), MIR_new_int_op (ctx, 0));
           MIR_insert_insn_before (ctx, func_item, func_top_alloca, new_insn);
         }
-        temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
-        new_insn
-          = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, new_called_func_top_alloca->ops[0],
-                          func_top_alloca->ops[0], MIR_new_reg_op (ctx, temp_reg));
-        MIR_insert_insn_after (ctx, func_item, call, new_insn);
-        new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
-                                 MIR_new_int_op (ctx, curr_func_top_alloca_size - alloca_size));
+        if (curr_func_top_alloca_size - alloca_size == 0) {
+          new_insn = MIR_new_insn (ctx, MIR_MOV, new_called_func_top_alloca->ops[0],
+                                   func_top_alloca->ops[0]);
+        } else {
+          temp_reg = _MIR_new_temp_reg (ctx, MIR_T_I64, func);
+          new_insn
+            = MIR_new_insn (ctx, MIR_PTR32 ? MIR_ADDS : MIR_ADD, new_called_func_top_alloca->ops[0],
+                            func_top_alloca->ops[0], MIR_new_reg_op (ctx, temp_reg));
+          MIR_insert_insn_after (ctx, func_item, call, new_insn);
+          new_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, temp_reg),
+                                   MIR_new_int_op (ctx, curr_func_top_alloca_size - alloca_size));
+        }
         MIR_insert_insn_after (ctx, func_item, call, new_insn);
       }
       MIR_remove_insn (ctx, func_item, new_called_func_top_alloca);
