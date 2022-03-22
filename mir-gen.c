@@ -1183,7 +1183,7 @@ static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int
   fprintf (debug_file, "\n");
 }
 
-static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op);
+static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from);
 static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_op_t op;
@@ -1206,12 +1206,8 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
   }
   fprintf (debug_file, " # indexes: ");
   for (size_t i = 0; i < bb_insn->insn->nops; i++) {
-    op = bb_insn->insn->ops[i];
     if (i != 0) fprintf (debug_file, ",");
-    if (op.data == NULL)
-      fprintf (debug_file, "_");
-    else
-      fprintf (debug_file, "%d", get_op_reg_index (gen_ctx, op));
+    print_op_data (gen_ctx, bb_insn->insn->ops[i].data, bb_insn);
   }
   if (with_notes_p) {
     for (dead_var_t dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL;
@@ -1327,7 +1323,7 @@ static void print_loop_tree (gen_ctx_t gen_ctx, int bb_p) {
 #endif
 
 static void rename_op_reg (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, MIR_reg_t new_reg,
-                           MIR_insn_t insn) {
+                           MIR_insn_t insn, int print_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   int change_p = FALSE;
 
@@ -1344,7 +1340,7 @@ static void rename_op_reg (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, M
       change_p = TRUE;
     }
   }
-  if (!change_p) return; /* definition was already changed from another use */
+  if (!change_p || !print_p) return; /* definition was already changed from another use */
   DEBUG (2, {
     MIR_func_t func = curr_func_item->u.func;
 
@@ -1647,10 +1643,6 @@ struct ssa_ctx {
 #define curr_reg_indexes gen_ctx->ssa_ctx->curr_reg_indexes
 #define reg_name gen_ctx->ssa_ctx->reg_name
 
-static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op) {
-  return def_use_repr_p ? ((ssa_edge_t) op.data)->def->index : ((bb_insn_t) op.data)->index;
-}
-
 static htab_hash_t def_tab_el_hash (def_tab_el_t el, void *arg) {
   return mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_init (0x33), (uint64_t) el.bb), (uint64_t) el.reg));
@@ -1829,6 +1821,22 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   }
 }
 
+static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
+  ssa_edge_t se;
+
+  if (op_data == NULL) {
+    fprintf (debug_file, "_");
+  } else if (!def_use_repr_p) {
+    fprintf (debug_file, "%d", ((bb_insn_t) op_data)->index);
+  } else if ((se = op_data)->def != from) {
+    fprintf (debug_file, "%d", se->def->index);
+  } else {
+    for (; se != NULL; se = se->next_use)
+      fprintf (debug_file, "%s%d", se == op_data ? "(" : ", ", se->use->index);
+    fprintf (debug_file, ")");
+  }
+}
+
 static void add_ssa_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
                           int use_op_num) {
   MIR_op_t *op_ref;
@@ -1889,8 +1897,13 @@ static void change_ssa_edge_list_def (ssa_edge_t list, bb_insn_t new_bb_insn,
 }
 
 static void redirect_def (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_insn_t by, int def_use_ssa_p) {
+  int out_p, by_out_p;
+
+  MIR_insn_op_mode (gen_ctx->ctx, insn, 0, &out_p);
+  MIR_insn_op_mode (gen_ctx->ctx, by, 0, &by_out_p);
   gen_assert (insn->ops[0].mode == MIR_OP_REG && by->ops[0].mode == MIR_OP_REG
-              && (def_use_ssa_p || insn->ops[0].u.reg == by->ops[0].u.reg));
+              && (def_use_ssa_p || insn->ops[0].u.reg == by->ops[0].u.reg) && insn->code != MIR_CALL
+              && insn->code != MIR_INLINE && out_p && by_out_p);
   by->ops[0].data = insn->ops[0].data;
   insn->ops[0].data = NULL; /* make redundant insn having no uses */
   change_ssa_edge_list_def (by->ops[0].data, by->data, 0, insn->ops[0].u.reg, by->ops[0].u.reg);
@@ -2016,7 +2029,7 @@ static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
     VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
     new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
     if (ssa_edge == NULL) { /* special case: unused output */
-      if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+      if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn, TRUE);
       continue;
     }
     VARR_TRUNC (ssa_edge_t, ssa_edges_to_process, 0);
@@ -2025,8 +2038,8 @@ static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
       while (pop_to_rename (gen_ctx, &ssa_edge)) {
         def_insn = ssa_edge->def->insn;
         use_insn = ssa_edge->use->insn;
-        rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn);
-        rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn);
+        rename_op_reg (gen_ctx, &def_insn->ops[ssa_edge->def_op_num], reg, new_reg, def_insn, TRUE);
+        rename_op_reg (gen_ctx, &use_insn->ops[ssa_edge->use_op_num], reg, new_reg, use_insn, TRUE);
       }
     }
   }
@@ -2342,15 +2355,16 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           def_insn = def->insn;
           if (!move_p (def_insn) || bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) break;
           DEBUG (2, {
-            fprintf (debug_file, "  Removing copy insn %-5lu", (unsigned long) def->index);
-            MIR_output_insn (gen_ctx->ctx, debug_file, def_insn, curr_func_item->u.func, TRUE);
+            fprintf (debug_file, "  Propagate from copy insn ");
+            print_bb_insn (gen_ctx, def, FALSE);
           });
           reg = var2reg (gen_ctx, var);
           new_reg = def_insn->ops[1].u.reg;
           remove_ssa_edge (gen_ctx, se);
           se = def_insn->ops[1].data;
           add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, op_num);
-          rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn);
+          rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn, TRUE);
+          var = reg2var (gen_ctx, new_reg);
         }
       }
       transform_mul_div (gen_ctx, insn);
@@ -2368,8 +2382,8 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           });
           insn->code = MIR_MOV;
           DEBUG (2, {
-            fprintf (debug_file, "    after");
-            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+            fprintf (debug_file, "    after ");
+            print_bb_insn (gen_ctx, bb_insn, FALSE);
           });
           next_bb_insn = bb_insn; /* process the new move */
         }
@@ -3447,7 +3461,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
                 gen_add_insn_after (gen_ctx, store, new_insn);
                 new_bb_insn = new_insn->data;
                 copy_gvn_info (new_bb_insn, store_bb_insn);
-                add_ssa_edge (gen_ctx, ((ssa_edge_t) store->ops[1].data)->def, 0, new_bb_insn, 1);
+                se = store->ops[1].data;
+                add_ssa_edge (gen_ctx, se->def, se->def_op_num, new_bb_insn, 1);
                 DEBUG (2, {
                   fprintf (debug_file, "  adding insn ");
                   MIR_output_insn (ctx, debug_file, new_insn, func, FALSE);
@@ -6118,10 +6133,10 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
     insn = bb_insn->insn;
     DEBUG (2, {
       fprintf (debug_file, "  Removing dead insn %-5lu", (unsigned long) bb_insn->index);
-      MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+      print_bb_insn (gen_ctx, bb_insn, FALSE);
     });
     FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-      if (out_p && !mem_p) continue;
+      if (out_p) continue;
       if ((ssa_edge = insn->ops[op_num].data) == NULL) continue;
       def = ssa_edge->def;
       remove_ssa_edge (gen_ctx, ssa_edge);
