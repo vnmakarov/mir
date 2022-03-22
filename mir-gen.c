@@ -3193,6 +3193,33 @@ static void copy_gvn_info (bb_insn_t to, bb_insn_t from) {
   to->alloca_flag = from->alloca_flag;
 }
 
+static void remove_move (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  ssa_edge_t se, last_se;
+  bb_insn_t def;
+  int def_op_num;
+
+  gen_assert (move_p (insn));
+  se = insn->ops[1].data;
+  def = se->def;
+  def_op_num = se->def_op_num;
+  remove_ssa_edge (gen_ctx, se);
+  if ((last_se = def->insn->ops[def_op_num].data) != NULL)
+    while (last_se->next_use != NULL) last_se = last_se->next_use;
+  change_ssa_edge_list_def (insn->ops[0].data, def, def_op_num, insn->ops[0].u.reg,
+                            insn->ops[1].u.reg);
+  if (last_se != NULL)
+    last_se->next_use = insn->ops[0].data;
+  else
+    def->insn->ops[def_op_num].data = insn->ops[0].data;
+  if (insn->ops[0].data != NULL) ((ssa_edge_t) insn->ops[0].data)->prev_use = last_se;
+  insn->ops[0].data = NULL;
+  DEBUG (2, {
+    fprintf (debug_file, "    Remove move %-5lu", (unsigned long) ((bb_insn_t) insn->data)->index);
+    print_bb_insn (gen_ctx, insn->data, FALSE);
+  });
+  gen_delete_insn (gen_ctx, insn);
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -3482,6 +3509,13 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               continue;
             }
           }
+        } else if (move_p (insn) && (se = insn->ops[1].data) != NULL
+                   && !start_insn_p (gen_ctx, se->def)
+                   && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use == NULL
+                   && !phi_use_p (insn)) { /* one source for definition: remove copy */
+          gen_assert (se->use == bb_insn && se->use_op_num == 1);
+          remove_move (gen_ctx, insn);
+          continue;
         }
         break;
       case MIR_BT:
