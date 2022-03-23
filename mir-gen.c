@@ -1394,12 +1394,10 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   exit_bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, exit_bb);
   insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
-  if (insn == NULL || insn->code == MIR_LABEL || MIR_call_code_p (insn->code)) {
-    /* To deal with special cases like adding insns before call in
-       machinize or moving invariant out of loop: */
-    MIR_prepend_insn (ctx, curr_func_item, MIR_new_label (ctx));
-    insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
-  }
+  /* To deal with special cases like adding insns before call in
+     machinize or moving invariant out of loop: */
+  MIR_prepend_insn (ctx, curr_func_item, MIR_new_label (ctx));
+  insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns);
   bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, bb);
   for (; insn != NULL; insn = next_insn) {
