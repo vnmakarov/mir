@@ -2381,19 +2381,10 @@ static void copy_prop (gen_ctx_t gen_ctx) {
   MIR_reg_t var, reg, new_reg;
   insn_var_iterator_t iter;
 
-  bitmap_clear (temp_bitmap);
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
-      if (insn->code != MIR_PHI) break;
-      bitmap_set_bit_p (temp_bitmap, insn->ops[0].u.reg);
-    }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
-      if (insn->code == MIR_PHI) continue; /* keep conventional SSA */
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p || !var_is_reg_p (var)) continue;
         for (;;) {
@@ -2401,7 +2392,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           def = se->def;
           if (def->bb->index == 0) break; /* arg init or undef insn */
           def_insn = def->insn;
-          if (!move_p (def_insn) || bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) break;
+          if (!move_p (def_insn)) break;
           DEBUG (2, {
             fprintf (debug_file, "  Propagate from copy insn ");
             print_bb_insn (gen_ctx, def, FALSE);
@@ -2416,7 +2407,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         }
       }
       if (move_p (insn) && insn->ops[0].data != NULL && (se = insn->ops[1].data) != NULL
-          && se->def->insn->code != MIR_PHI && se->def == DLIST_PREV (bb_insn_t, bb_insn)
+          && se->def == DLIST_PREV (bb_insn_t, bb_insn)
           && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use != NULL
           && se->next_use->next_use == NULL
           && (se->use == DLIST_NEXT (bb_insn_t, bb_insn)
@@ -2446,8 +2437,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         se = insn->ops[1].data;
         def_insn = se->def->insn;
         w2 = get_ext_params (def_insn->code, &sign2_p);
-        if (w2 != 0 && sign_p == sign2_p && w2 <= w
-            && !bitmap_bit_p (temp_bitmap, def_insn->ops[1].u.reg)) {
+        if (w2 != 0 && sign_p == sign2_p && w2 <= w) {
           DEBUG (2, {
             fprintf (debug_file, "    Change code of insn %lu: before",
                      (unsigned long) bb_insn->index);
