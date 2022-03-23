@@ -11,11 +11,11 @@
                                                          | Elimination   |         |
                                                           ---------------          |
                                                                                    V
-    -------     ---------                     --------     -------------     -------------
-   | Build |   | Finding |    -----------    | Out of |   | Dead Code   |   | Dead Store  |
-   | Live  |<--|  Loops  |<--| Machinize |<--| SSA    |<--| Elimination |<--| Elimination |
-   | Info  |    ---------     -----------     --------     -------------     -------------
-    -------
+    -----     -------                   ----     --------     -----------     -----------
+   |Build|   |Finding|    ---------    |Jump|   | Out of |   |Dead Code  |   |Dead Store |
+   |Live |<--| Loops |<--|Machinize|<--|opts|<--| SSA    |<--|Elimination|<--|Elimination|
+   |Info |    -------     ---------     ----     --------     -----------     -----------
+    -----
        |
        V
     ------                                                                    --------
@@ -29,10 +29,9 @@
    Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
    Global Value Numbering: Removing redundant insns through GVN.  This includes constant
                            propagation and redundant load eliminations.  Only for -O2 and above.
-   Copy Propagation: SSA copy propagation keeping conventional SSA form and removing redundant
-                     extension insns
+   Copy Propagation: SSA copy propagation and removing redundant extension insns
    Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
-   Out of SSA: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
+   Out of SSA: Making conventional SSA and removing phi nodes and SSA edges
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
    Finding Loops: Building loop tree which is used in subsequent register allocation.
@@ -56,8 +55,6 @@
    var - pseudo and hard register (var numbers for pseudo-registers
          are based reg numbers + MAX_HARD_REG + 1)
    loc - hard register and stack locations (stack slot numbers start with MAX_HARD_REG + 1).
-
-   We use conventional SSA to make out-of-ssa fast and simple.
 
    Memory aliasing rules:
 
@@ -1588,11 +1585,6 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
                        | (op.data)                      | (op.data)
       phi|insn: out, in:v1, ...        phi|insn: out, in:v1, ...
 
-   We use conventional SSA to make out-of-ssa fast and simple.  We don't rename all regs for SSA.
-   All phi insns always use the same reg to guarantee conventional SSA.  It also means that
-   some regs have more one definition but ssa edges represent the correct SSA.  The only
-   optimization in the pipeline which would benefit from full renaming is copy propagation (full
-   SSA copy propagation would not keep conventional SSA).
 */
 
 typedef struct ssa_edge *ssa_edge_t;
