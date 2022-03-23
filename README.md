@@ -231,7 +231,6 @@ ex100:    func v, 0
   * **SSA** form of MIR is used before register allocation
     * We use a form of Braun's algorithm to build SSA (M. Braun et al. "Simple and Efficient
       Construction of Static Single Assignment Form")
-    * We keep SSA in **conventional form** all the time to make out-of-SSA pass trivial
   * Simplicity of optimizations implementation over extreme generated code performance
 
   * More details about **full JIT compiler pipeline**:
@@ -240,13 +239,13 @@ ex100:    func v, 0
   * **Inline**: inlining MIR calls
   * **Build CFG**: building Control Flow Graph (basic blocks and CFG edges)
   * **Build SSA**: Building Single Static Assignment Form by adding phi nodes and SSA edges to operands
-  * **Copy Propagation**: SSA copy propagation keeping conventional SSA form and removing redundant
-    extension insns
+  * **Copy Propagation**: SSA copy propagation and removing redundant extension insns
   * **Global Value Numbering**: Removing redundant insns through GVN
   * **Dead Code Elimination**: removing insns with unused outputs
   * **Sparse Conditional Constant Propagation**: constant propagation
     and removing death paths of CFG
-  * **Out of SSA**: Removing phi nodes and SSA edges (we keep conventional SSA all the time)
+  * **Out of SSA**: Removing phi nodes and SSA edges
+  * **Jump opts**: Different jump optimizations
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Find Loops**: finding natural loops and building loop tree
   * **Build Live Info**: calculating live in and live out for the basic blocks
