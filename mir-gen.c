@@ -2830,12 +2830,6 @@ static void print_expr (gen_ctx_t gen_ctx, expr_t e, const char *title) {
 }
 #endif
 
-static int phi_use_p (MIR_insn_t insn) {
-  for (ssa_edge_t se = insn->ops[0].data; se != NULL; se = se->next_use)
-    if (se->use->insn->code == MIR_PHI) return TRUE;
-  return FALSE;
-}
-
 static int add_sub_const_insn_p (MIR_insn_t insn, int64_t *val) { /* check r1 = r0 +- const */
   ssa_edge_t ssa_edge;
   bb_insn_t def_bb_insn;
@@ -3574,8 +3568,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
           }
         } else if (move_p (insn) && (se = insn->ops[1].data) != NULL
                    && !start_insn_p (gen_ctx, se->def)
-                   && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use == NULL
-                   && !phi_use_p (insn)) { /* one source for definition: remove copy */
+                   && (se = se->def->insn->ops[se->def_op_num].data) != NULL
+                   && se->next_use == NULL) { /* one source for definition: remove copy */
           gen_assert (se->use == bb_insn && se->use_op_num == 1);
           remove_move (gen_ctx, insn);
           continue;
@@ -3685,7 +3679,6 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       print_bb_insn_value (gen_ctx, bb_insn);
       if (e == NULL || e->insn == insn || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
-      if (phi_use_p (e->insn)) continue; /* keep conventional SSA */
       expr_bb_insn = e->insn->data;
       if (bb->index != expr_bb_insn->bb->index
           && !bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index))
