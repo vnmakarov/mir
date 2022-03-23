@@ -1366,7 +1366,7 @@ static void free_move (gen_ctx_t gen_ctx, mv_t mv) {
   DLIST_APPEND (mv_t, curr_cfg->free_moves, mv);
 }
 
-static long remove_unreachable_bbs (gen_ctx_t gen_ctx, int ssa_p);
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx);
 
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -1435,7 +1435,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
         update_min_max_reg (gen_ctx, op->u.mem.index);
       }
   }
-  if (optimize_level > 0) remove_unreachable_bbs (gen_ctx, FALSE);
+  if (optimize_level > 0) remove_unreachable_bbs (gen_ctx);
   /* Add additional edges with entry and exit */
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     if (bb != entry_bb && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL)
@@ -1950,7 +1950,7 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
     }
 }
 
-static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
+static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t index) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
   MIR_type_t type = MIR_reg_type (ctx, reg, func);
@@ -1960,7 +1960,7 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, size_t index) {
 
   VARR_TRUNC (char, reg_name, 0);
   VARR_PUSH_ARR (char, reg_name, name, strlen (name));
-  VARR_PUSH (char, reg_name, '@');
+  VARR_PUSH (char, reg_name, sep);
   sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
@@ -1999,14 +1999,18 @@ static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_n
     ssa_edge_t ssa_edge = insn->ops[i].data;
     bb_insn_t def = ssa_edge->def;
 
-    /* process the def -> other uses: */
-    if (push_to_rename (gen_ctx, ssa_edge)) process_insn_to_rename (gen_ctx, def->insn, 0);
-  }
+static MIR_reg_t get_new_ssa_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, int new_p) {
+  size_t reg_index;
+
+  while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg) VARR_PUSH (size_t, curr_reg_indexes, 0);
+  reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
+  VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
+  return reg_index == 0 && !new_p ? 0 : get_new_reg (gen_ctx, reg, sep, reg_index);
 }
 
 static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   int op_num, out_p, mem_p;
-  size_t passed_mem_num, reg_index;
+  size_t passed_mem_num;
   MIR_reg_t var, reg, new_reg;
   MIR_insn_t insn, def_insn, use_insn;
   ssa_edge_t ssa_edge;
@@ -2022,10 +2026,7 @@ static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
       print_bb_insn (gen_ctx, bb_insn, FALSE);
     });
     reg = var2reg (gen_ctx, var);
-    while (VARR_LENGTH (size_t, curr_reg_indexes) <= reg) VARR_PUSH (size_t, curr_reg_indexes, 0);
-    reg_index = VARR_GET (size_t, curr_reg_indexes, reg);
-    VARR_SET (size_t, curr_reg_indexes, reg, reg_index + 1);
-    new_reg = reg_index == 0 ? 0 : get_new_reg (gen_ctx, reg, reg_index);
+    new_reg = get_new_ssa_reg (gen_ctx, reg, '@', FALSE);
     if (ssa_edge == NULL) { /* special case: unused output */
       if (new_reg != 0) rename_op_reg (gen_ctx, &insn->ops[op_num], reg, new_reg, insn, TRUE);
       continue;
@@ -2124,6 +2125,66 @@ static void build_ssa (gen_ctx_t gen_ctx) {
   minimize_ssa (gen_ctx, insns_num);
   make_ssa_def_use_repr (gen_ctx);
   rename_regs (gen_ctx);
+}
+
+static void make_conventional_ssa (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_type_t type;
+  MIR_reg_t reg, new_reg;
+  MIR_insn_code_t move_code;
+  MIR_insn_t insn, new_insn;
+  bb_t bb, prev_bb;
+  bb_insn_t bb_insn, next_bb_insn, tail, new_bb_insn, after;
+  edge_t e;
+  ssa_edge_t se;
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
+      next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
+      if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
+      if (insn->code != MIR_PHI) break;
+      gen_assert (insn->ops[0].mode == MIR_OP_REG);
+      reg = insn->ops[0].u.reg;
+      type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
+      move_code = get_move_code (type);
+      new_reg = get_new_ssa_reg (gen_ctx, reg, '%', TRUE);
+      gen_assert (new_reg != 0);
+      new_insn
+        = MIR_new_insn (ctx, move_code, MIR_new_reg_op (ctx, reg), MIR_new_reg_op (ctx, new_reg));
+      gen_add_insn_after (gen_ctx, insn, new_insn);
+      new_insn->ops[0].data = insn->ops[0].data;
+      insn->ops[0] = new_insn->ops[1];
+      change_ssa_edge_list_def (new_insn->ops[0].data, new_insn->data, 0, 0, 0);
+      add_ssa_edge (gen_ctx, bb_insn, 0, new_insn->data, 1);
+      e = DLIST_HEAD (in_edge_t, bb->in_edges);
+      for (size_t i = 1; i < insn->nops; i++) {
+        se = insn->ops[i].data;
+        insn->ops[i].data = NULL;
+        new_insn = MIR_new_insn (ctx, move_code, MIR_new_reg_op (ctx, new_reg), insn->ops[i]);
+        if ((tail = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL) {
+          for (prev_bb = DLIST_PREV (bb_t, e->src), after = NULL;
+               prev_bb != NULL && (after = DLIST_TAIL (bb_insn_t, prev_bb->bb_insns)) == NULL;
+               prev_bb = DLIST_PREV (bb_t, prev_bb))
+            ;
+          if (after != NULL)
+            MIR_insert_insn_after (ctx, curr_func_item, after->insn, new_insn);
+          else
+            MIR_prepend_insn (ctx, curr_func_item, new_insn);
+          new_bb_insn = create_bb_insn (gen_ctx, new_insn, e->src);
+          DLIST_APPEND (bb_insn_t, e->src->bb_insns, new_bb_insn);
+        } else if (MIR_branch_code_p (tail->insn->code) || tail->insn->code == MIR_SWITCH) {
+          gen_add_insn_before (gen_ctx, tail->insn, new_insn);
+        } else {
+          gen_add_insn_after (gen_ctx, tail->insn, new_insn);
+        }
+        new_insn->ops[1].data = se;
+        se->use = new_insn->data;
+        se->use_op_num = 1;
+        add_ssa_edge (gen_ctx, new_insn->data, 0, bb_insn, i);
+        insn->ops[i].mode = MIR_OP_REG;
+        insn->ops[i].u.reg = new_reg;
+        e = DLIST_NEXT (in_edge_t, e);
+      }
+    }
 }
 
 static void undo_build_ssa (gen_ctx_t gen_ctx) {
@@ -3167,7 +3228,7 @@ static void update_mem_loc_alloca_flag (gen_ctx_t gen_ctx, size_t nloc, int flag
   });
 }
 
-static long remove_bb (gen_ctx_t gen_ctx, bb_t bb, int ssa_p) {
+static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn;
   long deleted_insns_num = 0;
@@ -3178,7 +3239,6 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb, int ssa_p) {
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
     next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
     insn = bb_insn->insn;
-    if (ssa_p) remove_insn_ssa_edges (gen_ctx, insn);
     DEBUG (2, {
       fprintf (debug_file, "   ");
       MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -3186,12 +3246,11 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb, int ssa_p) {
     gen_delete_insn (gen_ctx, insn);
     deleted_insns_num++;
   }
-  if (ssa_p) remove_dest_phi_ops (gen_ctx, bb);
   delete_bb (gen_ctx, bb);
   return deleted_insns_num;
 }
 
-static long remove_unreachable_bbs (gen_ctx_t gen_ctx, int ssa_p) {
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
   long deleted_insns_num = 0;
   bb_t next_bb, bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
 
@@ -3208,7 +3267,7 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx, int ssa_p) {
   }
   for (bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
-    if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb, ssa_p);
+    if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb);
   }
   return deleted_insns_num;
 }
@@ -3748,94 +3807,6 @@ static void finish_gvn (gen_ctx_t gen_ctx) {
 
 /* New page */
 
-/* Jump optimizations */
-
-/* Remove empty blocks, branches to next insn, change branches to
-   jumps.  ??? consider switch as a branch. */
-static void jump_opt (gen_ctx_t gen_ctx) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  bb_t bb, next_bb;
-  int maybe_unreachable_bb_p = FALSE;
-  long bb_deleted_insns_num;
-
-  if ((bb_deleted_insns_num = remove_unreachable_bbs (gen_ctx, TRUE)) != 0) {
-    DEBUG (1, { fprintf (debug_file, "%ld deleted unrechable bb insns\n", bb_deleted_insns_num); });
-  }
-  for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
-    edge_t e, out_e;
-    bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
-    MIR_insn_t insn, prev_insn, next_insn, last_label;
-    next_bb = DLIST_NEXT (bb_t, bb);
-    if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
-        && (bb_insn == NULL
-            || ((insn = bb_insn->insn)->code == MIR_LABEL && DLIST_NEXT (bb_insn_t, bb_insn) == NULL
-                && DLIST_PREV (bb_insn_t, bb_insn) == NULL
-                && (prev_insn = DLIST_PREV (MIR_insn_t, insn)) != NULL && prev_insn->code != MIR_JMP
-                && prev_insn->code != MIR_SWITCH))) {
-      /* empty bb or bb with the only label which can be removed. we can have more one the same dest
-         edge (e.g. when removed cond branch to the next insn). */
-      out_e = DLIST_HEAD (out_edge_t, bb->out_edges);
-      gen_assert (out_e != NULL);
-      e->dst = out_e->dst;
-      DLIST_REMOVE (in_edge_t, bb->in_edges, e);
-      DLIST_INSERT_BEFORE (in_edge_t, out_e->dst->in_edges, out_e, e);
-      gen_assert (DLIST_HEAD (in_edge_t, bb->in_edges) == NULL);
-      /* Don't shorten phis in dest bbs. We don't care about SSA in this kind of bb. */
-      remove_bb (gen_ctx, bb, FALSE);
-      continue;
-    }
-    if (bb_insn == NULL) continue;
-    insn = bb_insn->insn;
-    if (!MIR_branch_code_p (insn->code)) continue;
-    DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
-    gen_assert (insn->ops[0].mode == MIR_OP_LABEL);
-    if ((next_insn = DLIST_NEXT (MIR_insn_t, insn)) != NULL && next_insn->code == MIR_LABEL
-        && next_insn == insn->ops[0].u.label) {
-      DEBUG (2, {
-        fprintf (debug_file, "  Removing trivial branch insn ");
-        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-      });
-      remove_insn_ssa_edges (gen_ctx, insn);
-      gen_delete_insn (gen_ctx, insn);
-      next_bb = bb; /* bb can became empty after removing jump.  */
-    } else {
-      for (;;) {
-        for (last_label = insn->ops[0].u.label;
-             (next_insn = DLIST_NEXT (MIR_insn_t, last_label)) != NULL
-             && next_insn->code == MIR_LABEL;)
-          last_label = next_insn;
-        if ((next_insn = DLIST_NEXT (MIR_insn_t, last_label)) != NULL
-            && next_insn->code == MIR_JMP) {
-          last_label = next_insn->ops[0].u.label;
-        }
-        if (insn->ops[0].u.label == last_label) break;
-        DEBUG (2, {
-          fprintf (debug_file, "  Changing label in branch insn ");
-          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
-        });
-        label_bb_insn = insn->ops[0].u.label->data;
-        insn->ops[0].u.label = last_label;
-        last_label_bb_insn = last_label->data;
-        gen_assert (label_bb_insn->bb != last_label_bb_insn->bb);
-        e = find_edge (bb, label_bb_insn->bb);
-        e->dst = last_label_bb_insn->bb;
-        DLIST_REMOVE (in_edge_t, label_bb_insn->bb->in_edges, e);
-        DLIST_APPEND (in_edge_t, e->dst->in_edges, e);
-        DEBUG (2, {
-          fprintf (debug_file, "  , result insn ");
-          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-        });
-        maybe_unreachable_bb_p = TRUE;
-      }
-    }
-  }
-  /* Don't shorten phis in dest bbs. We don't care about SSA for new trivial unreachable bbs. */
-  if (maybe_unreachable_bb_p) remove_unreachable_bbs (gen_ctx, FALSE);
-  enumerate_bbs (gen_ctx);
-}
-
-/* New page */
-
 /* Dead store elimination */
 
 #define mem_live_in in
@@ -4045,6 +4016,95 @@ static void dse (gen_ctx_t gen_ctx) {
 #undef mem_live_out
 #undef mem_live_gen
 #undef mem_live_kill
+
+/* New page */
+
+/* Jump optimizations */
+
+/* Remove empty blocks, branches to next insn, change branches to
+   jumps.  ??? consider switch as a branch. */
+static void jump_opt (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_t bb, next_bb;
+  int maybe_unreachable_bb_p = FALSE;
+  long bb_deleted_insns_num;
+
+  if ((bb_deleted_insns_num = remove_unreachable_bbs (gen_ctx)) != 0) {
+    DEBUG (1, { fprintf (debug_file, "%ld deleted unrechable bb insns\n", bb_deleted_insns_num); });
+  }
+  for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
+    edge_t e, out_e;
+    bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
+    MIR_insn_t insn, prev_insn, next_insn, last_label;
+
+    next_bb = DLIST_NEXT (bb_t, bb);
+    if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
+        && (bb_insn == NULL
+            || ((insn = bb_insn->insn)->code == MIR_LABEL && DLIST_NEXT (bb_insn_t, bb_insn) == NULL
+                && DLIST_PREV (bb_insn_t, bb_insn) == NULL
+                && (prev_insn = DLIST_PREV (MIR_insn_t, insn)) != NULL && prev_insn->code != MIR_JMP
+                && prev_insn->code != MIR_SWITCH))) {
+      /* empty bb or bb with the only label which can be removed. we can have more one the same dest
+         edge (e.g. when removed cond branch to the next insn). */
+      out_e = DLIST_HEAD (out_edge_t, bb->out_edges);
+      gen_assert (out_e != NULL);
+      e->dst = out_e->dst;
+      DLIST_REMOVE (in_edge_t, bb->in_edges, e);
+      DLIST_INSERT_BEFORE (in_edge_t, out_e->dst->in_edges, out_e, e);
+      gen_assert (DLIST_HEAD (in_edge_t, bb->in_edges) == NULL);
+      /* Don't shorten phis in dest bbs. We don't care about SSA in this kind of bb. */
+      remove_bb (gen_ctx, bb);
+      continue;
+    }
+    if (bb_insn == NULL) continue;
+    insn = bb_insn->insn;
+    if (!MIR_branch_code_p (insn->code)) continue;
+    DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
+    gen_assert (insn->ops[0].mode == MIR_OP_LABEL);
+    if ((next_insn = DLIST_NEXT (MIR_insn_t, insn)) != NULL && next_insn->code == MIR_LABEL
+        && next_insn == insn->ops[0].u.label) {
+      DEBUG (2, {
+        fprintf (debug_file, "  Removing trivial branch insn ");
+        MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+      });
+      gen_delete_insn (gen_ctx, insn);
+      next_bb = bb; /* bb can became empty after removing jump.  */
+    } else {
+      for (;;) {
+        for (last_label = insn->ops[0].u.label;
+             (next_insn = DLIST_NEXT (MIR_insn_t, last_label)) != NULL
+             && next_insn->code == MIR_LABEL;)
+          last_label = next_insn;
+        if ((next_insn = DLIST_NEXT (MIR_insn_t, last_label)) != NULL
+            && next_insn->code == MIR_JMP) {
+          last_label = next_insn->ops[0].u.label;
+        }
+        if (insn->ops[0].u.label == last_label) break;
+        DEBUG (2, {
+          fprintf (debug_file, "  Changing label in branch insn ");
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+        });
+        label_bb_insn = insn->ops[0].u.label->data;
+        insn->ops[0].u.label = last_label;
+        last_label_bb_insn = last_label->data;
+        gen_assert (label_bb_insn->bb != last_label_bb_insn->bb);
+        e = find_edge (bb, label_bb_insn->bb);
+        e->dst = last_label_bb_insn->bb;
+        DLIST_REMOVE (in_edge_t, label_bb_insn->bb->in_edges, e);
+        /* We don't need to keep the edge order as we are already off SSA: */
+        DLIST_APPEND (in_edge_t, e->dst->in_edges, e);
+        DEBUG (2, {
+          fprintf (debug_file, "  , result insn ");
+          MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
+        });
+        maybe_unreachable_bb_p = TRUE;
+      }
+    }
+  }
+  /* Don't shorten phis in dest bbs. We don't care about SSA for new trivial unreachable bbs. */
+  if (maybe_unreachable_bb_p) remove_unreachable_bbs (gen_ctx);
+  enumerate_bbs (gen_ctx);
+}
 
 /* New Page */
 
@@ -6289,14 +6349,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     gvn_clear (gen_ctx);
   }
   if (optimize_level >= 2) {
-    DEBUG (2, { fprintf (debug_file, "+++++++++++++Jump optimization:\n"); });
-    jump_opt (gen_ctx);
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after Jump optimization:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
-    });
-  }
-  if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++Copy Propagation:\n"); });
     copy_prop (gen_ctx);
     DEBUG (2, {
@@ -6319,7 +6371,22 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
-  if (optimize_level >= 2) undo_build_ssa (gen_ctx);
+  if (optimize_level >= 2) {
+    make_conventional_ssa (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
+    undo_build_ssa (gen_ctx);
+  }
+  if (optimize_level >= 2) {
+    DEBUG (2, { fprintf (debug_file, "+++++++++++++Jump optimization:\n"); });
+    jump_opt (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after Jump optimization:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
+    });
+  }
   make_io_dup_op_insns (gen_ctx);
   target_machinize (gen_ctx);
   DEBUG (2, {
