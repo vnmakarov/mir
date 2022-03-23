@@ -1992,12 +1992,8 @@ static int pop_to_rename (gen_ctx_t gen_ctx, ssa_edge_t *ssa_edge) {
 static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_num) {
   for (ssa_edge_t curr_edge = insn->ops[op_num].data; curr_edge != NULL;
        curr_edge = curr_edge->next_use)
-    if (push_to_rename (gen_ctx, curr_edge) && curr_edge->use->insn->code == MIR_PHI)
-      process_insn_to_rename (gen_ctx, curr_edge->use->insn, 0);
-  if (insn->code != MIR_PHI) return;
-  for (size_t i = 1; i < insn->nops; i++) { /* process a def -> the phi use */
-    ssa_edge_t ssa_edge = insn->ops[i].data;
-    bb_insn_t def = ssa_edge->def;
+    push_to_rename (gen_ctx, curr_edge);
+}
 
 static MIR_reg_t get_new_ssa_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, int new_p) {
   size_t reg_index;
