@@ -135,14 +135,14 @@ MIR的指令执行。
       * `SP_HARD_REG`和`HARD_REG_FRAME_POINTER` 用于目标ABI栈帧指针的硬件寄存器值
       * `TEMP_INT_HARD_REG1`, `TEMP_INT_HARD_REG2`, `TEMP_FLOAT_HARD_REG1`, `TEMP_FLOAT_HARD_REG2`,
         `TEMP_DOUBLE_HARD_REG1`, `TEMP_DOUBLE_HARD_REG2`, `TEMP_LDOUBLE_HARD_REG1`, 和 `TEMP_DOUBLE_HARD_REG2` 这些硬件寄存器不会用在生成机器代码时和寄存器分配时。
-        更优的方案是使用被调用者保存的硬件寄存器，这些寄存器仅在寄存器分配阶段后出现。
+        更优的方案是使用被调用者暂存的硬件寄存器，这些寄存器仅在寄存器分配阶段后出现。
         前缀相同的标着`_REG1`和`_REG2`需要被区分开来，但是有着不同前缀的硬件寄存器可以相同。
         译者注：可能想表达的是程序中使用时需要做区分，但是这些定义可能指代相同的硬件寄存器？
     * `int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type)` 仅在HARD_REG可以装下`type`
       类型的值时返回true。
     * `int target_fixed_hard_reg_p (MIR_reg_t hard_reg)`当`hard_reg`不被用于寄存器分配时返回true。
       对于栈帧指针来说，`hard_reg`为临时硬件寄存器（仅指代前面提到的前缀是`TEMP_`的）时总是返回true。
-    * `int target_call_used_hard_reg_p (MIR_reg_t hard_reg)`当`hard_reg`可以在目标ABI下被被调用者保存时
+    * `int target_call_used_hard_reg_p (MIR_reg_t hard_reg)`当`hard_reg`可以在目标ABI下被被调用者暂存时
       返回true。
     
   * `int target_locs_num (MIR_reg_t loc, MIR_type_t type)`返回以标准64位(8字节)栈空间为单位，
@@ -170,7 +170,7 @@ MIR的指令执行。
 
   * `void target_make_prolog_epilog (MIR_context_t ctx, bitmap_t
     used_hard_regs, size_t stack_slots_num)` 添加生成函数的准备和收尾代码，
-    一般来说包括保存/恢复用过的被调用者保存的硬件寄存器，分配栈空间，调整栈帧指针
+    一般来说包括暂存/恢复用过的被调用者暂存的硬件寄存器，分配栈空间，调整栈帧指针
     寄存器。
 
   * `int target_insn_ok_p (MIR_context_t ctx, MIR_insn_t insn)`
