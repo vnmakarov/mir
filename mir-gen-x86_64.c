@@ -4,18 +4,8 @@
 
 #include <limits.h>
 
-#define HREG_EL(h) h##_HARD_REG
-#define REP_SEP ,
-enum {
-  REP8 (HREG_EL, AX, CX, DX, BX, SP, BP, SI, DI),
-  REP8 (HREG_EL, R8, R9, R10, R11, R12, R13, R14, R15),
-  REP8 (HREG_EL, XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7),
-  REP8 (HREG_EL, XMM8, XMM9, XMM10, XMM11, XMM12, XMM13, XMM14, XMM15),
-  REP2 (HREG_EL, ST0, ST1),
-};
-#undef REP_SEP
+#include "mir-x86_64.h"
 
-static const MIR_reg_t MAX_HARD_REG = ST1_HARD_REG;
 static const MIR_reg_t FP_HARD_REG = BP_HARD_REG;
 
 static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
@@ -23,35 +13,6 @@ static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
 }
 
 static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
-
-/* Hard regs not used in machinized code, preferably call used ones. */
-const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
-#ifndef _WIN32
-const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM8_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM9_HARD_REG;
-const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM9_HARD_REG;
-#else
-const MIR_reg_t TEMP_FLOAT_HARD_REG1 = XMM4_HARD_REG, TEMP_FLOAT_HARD_REG2 = XMM5_HARD_REG;
-const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = XMM4_HARD_REG, TEMP_DOUBLE_HARD_REG2 = XMM5_HARD_REG;
-#endif
-const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_HARD_REG;
-const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = MIR_NON_HARD_REG;
-
-static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
-  assert (hard_reg <= MAX_HARD_REG);
-  /* For LD we need x87 stack regs and it is too complicated so no
-     hard register allocation for LD: */
-  if (type == MIR_T_LD) return FALSE;
-  return MIR_int_type_p (type) ? hard_reg < XMM0_HARD_REG : hard_reg >= XMM0_HARD_REG;
-}
-
-static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
-  assert (hard_reg <= MAX_HARD_REG);
-  return (hard_reg == BP_HARD_REG || hard_reg == SP_HARD_REG || hard_reg == TEMP_INT_HARD_REG1
-          || hard_reg == TEMP_INT_HARD_REG2 || hard_reg == TEMP_FLOAT_HARD_REG1
-          || hard_reg == TEMP_FLOAT_HARD_REG2 || hard_reg == TEMP_DOUBLE_HARD_REG1
-          || hard_reg == TEMP_DOUBLE_HARD_REG2 || hard_reg == ST0_HARD_REG
-          || hard_reg == ST1_HARD_REG);
-}
 
 static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);

@@ -2,6 +2,8 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+#include "mir-x86_64.h"
+
 /* RBLK args are always passed by address.
    BLK0 first is copied on the caller stack and passed implicitly.
    BLK1 is passed in general regs
