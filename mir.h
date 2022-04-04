@@ -347,11 +347,6 @@ typedef struct MIR_proto {
   VARR (MIR_var_t) * args; /* args name can be NULL */
 } * MIR_proto_t;
 
-typedef struct MIR_global { /* created only by new_global_reg */
-  MIR_type_t type;
-  const char *name;
-} * MIR_global_t;
-
 typedef struct MIR_data {
   const char *name; /* can be NULL */
   MIR_type_t el_type;
@@ -388,7 +383,7 @@ DEF_DLIST_LINK (MIR_item_t);
 #define ITEM_EL(i) MIR_##i##_item
 
 typedef enum {
-  REP8 (ITEM_EL, func, proto, import, export, forward, global, data, ref_data),
+  REP7 (ITEM_EL, func, proto, import, export, forward, data, ref_data),
   REP2 (ITEM_EL, expr_data, bss),
 } MIR_item_type_t;
 
@@ -420,7 +415,6 @@ struct MIR_item {
     MIR_name_t import_id;
     MIR_name_t export_id;
     MIR_name_t forward_id;
-    MIR_global_t global;
     MIR_data_t data;
     MIR_ref_data_t ref_data;
     MIR_expr_data_t expr_data;
