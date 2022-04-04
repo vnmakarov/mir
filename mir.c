@@ -2054,6 +2054,8 @@ static MIR_insn_t create_label (MIR_context_t ctx, int64_t label_num) {
 
 MIR_insn_t MIR_new_label (MIR_context_t ctx) { return create_label (ctx, ++curr_label_num); }
 
+void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn) { free (insn); }
+
 MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func) {
   char reg_name[30];
 

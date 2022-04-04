@@ -2623,6 +2623,7 @@ static void target_init (gen_ctx_t gen_ctx) {
 
 static void target_finish (gen_ctx_t gen_ctx) {
   patterns_finish (gen_ctx);
+  _MIR_free_insn (gen_ctx->ctx, temp_jump);
   VARR_DESTROY (uint8_t, result_code);
   VARR_DESTROY (uint64_t, const_pool);
   VARR_DESTROY (const_ref_t, const_refs);
