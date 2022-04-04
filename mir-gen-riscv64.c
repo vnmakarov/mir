@@ -2734,7 +2734,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
       }
     } else if (insn->code == MIR_LABEL) {
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
-    } else {
+    } else if (insn->code != MIR_USE) {
       replacement = find_insn_pattern_replacement (gen_ctx, insn);
       if (replacement == NULL) {
         fprintf (stderr, "fatal failure in matching insn:");
@@ -2823,7 +2823,8 @@ static void target_init (gen_ctx_t gen_ctx) {
   VARR_CREATE (uint64_t, abs_address_locs, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, 0);
   MIR_type_t res = MIR_T_I64;
-  MIR_var_t args1[] = {{MIR_T_F, "src"}}, args2[] = {{MIR_T_D, "src"}};
+  MIR_var_t args1[] = {{MIR_T_F, "src", 0}};
+  MIR_var_t args2[] = {{MIR_T_D, "src", 0}};
   _MIR_register_unspec_insn (gen_ctx->ctx, FMVXW_CODE, "fmv.x.w", 1, &res, 1, FALSE, args1);
   _MIR_register_unspec_insn (gen_ctx->ctx, FMVXD_CODE, "fmv.x.d", 1, &res, 1, FALSE, args2);
   patterns_init (gen_ctx);

@@ -69,7 +69,7 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define ERR_EL(e) MIR_##e##_error
 typedef enum MIR_error_type {
   REP8 (ERR_EL, no, syntax, binary_io, alloc, finish, no_module, nested_module, no_func),
-  REP4 (ERR_EL, func, vararg_func, nested_func, wrong_param_value),
+  REP5 (ERR_EL, func, vararg_func, nested_func, wrong_param_value, unknown_hard_reg),
   REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
   REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
   REP6 (ERR_EL, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
@@ -176,6 +176,7 @@ typedef enum {
   INSN_EL (LABEL),                     /* One immediate operand is unique label number  */
   INSN_EL (UNSPEC),                    /* First operand unspec code and the rest are args */
   REP3 (INSN_EL, PRSET, PRBEQ, PRBNE), /* work with properties */
+  INSN_EL (USE), /* Used only internally in the generator, all operands are input */
   INSN_EL (PHI), /* Used only internally in the generator, the first operand is output */
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
@@ -329,12 +330,13 @@ typedef struct MIR_func {
   DLIST (MIR_insn_t) insns, original_insns;
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
-  char vararg_p;           /* flag of variable number of arguments */
-  char expr_p;             /* flag of that the func can be used as a linker expression */
-  VARR (MIR_var_t) * vars; /* args and locals but temps */
-  void *machine_code;      /* address of generated machine code or NULL */
-  void *call_addr;         /* address to call the function, it can be the same as machine_code */
-  void *internal;          /* internal data structure */
+  char vararg_p;                  /* flag of variable number of arguments */
+  char expr_p;                    /* flag of that the func can be used as a linker expression */
+  VARR (MIR_var_t) * vars;        /* args and locals but temps */
+  VARR (MIR_var_t) * global_vars; /* can be NULL */
+  void *machine_code;             /* address of generated machine code or NULL */
+  void *call_addr; /* address to call the function, it can be the same as machine_code */
+  void *internal;  /* internal data structure */
 } * MIR_func_t;
 
 typedef struct MIR_proto {
@@ -344,6 +346,11 @@ typedef struct MIR_proto {
   char vararg_p;           /* flag of variable number of arguments */
   VARR (MIR_var_t) * args; /* args name can be NULL */
 } * MIR_proto_t;
+
+typedef struct MIR_global { /* created only by new_global_reg */
+  MIR_type_t type;
+  const char *name;
+} * MIR_global_t;
 
 typedef struct MIR_data {
   const char *name; /* can be NULL */
@@ -381,8 +388,8 @@ DEF_DLIST_LINK (MIR_item_t);
 #define ITEM_EL(i) MIR_##i##_item
 
 typedef enum {
-  REP8 (ITEM_EL, func, proto, import, export, forward, data, ref_data, expr_data),
-  ITEM_EL (bss),
+  REP8 (ITEM_EL, func, proto, import, export, forward, global, data, ref_data),
+  REP2 (ITEM_EL, expr_data, bss),
 } MIR_item_type_t;
 
 #undef ERR_EL
@@ -413,6 +420,7 @@ struct MIR_item {
     MIR_name_t import_id;
     MIR_name_t export_id;
     MIR_name_t forward_id;
+    MIR_global_t global;
     MIR_data_t data;
     MIR_ref_data_t ref_data;
     MIR_expr_data_t expr_data;
@@ -426,13 +434,17 @@ DEF_DLIST (MIR_item_t, item_link);
 /* Definition of link of double list of MIR_module_t type elements */
 DEF_DLIST_LINK (MIR_module_t);
 
+typedef const char *MIR_char_ptr_t;
+DEF_VARR (MIR_char_ptr_t);
+
 /* MIR module: */
 struct MIR_module {
   void *data;
   const char *name;
   DLIST (MIR_item_t) items; /* module items */
   DLIST_LINK (MIR_module_t) module_link;
-  uint32_t last_temp_item_num; /* Used only internally */
+  VARR (MIR_char_ptr_t) * hr_names; /* NULL for empty, hard reg names used for locals and globals */
+  uint32_t last_temp_item_num;      /* Used only internally */
 };
 
 /* Definition of double list of MIR_item_t type elements */
@@ -517,6 +529,8 @@ extern const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item);
 extern MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                                    const char *name);
+extern MIR_reg_t MIR_new_tied_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                        const char *name, const char *hard_reg_name, int global_p);
 extern void MIR_finish_func (MIR_context_t ctx);
 extern void MIR_finish_module (MIR_context_t ctx);
 
@@ -539,6 +553,8 @@ extern MIR_insn_t MIR_new_label (MIR_context_t ctx);
 extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func);
 extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
+extern const char *MIR_reg_hard_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
+extern int MIR_reg_global_p (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 
 extern const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias);
 extern MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name);
@@ -700,6 +716,8 @@ extern void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address);
 
 extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
+
+extern int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name);
 
 #ifdef __cplusplus
 }
