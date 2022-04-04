@@ -138,6 +138,10 @@ int main (int argc, char *argv[], char *env[]) {
     exit_code = val.i;
   } else {
     MIR_gen_init (ctx, 1);
+#if MIR_BIN_DEBUG
+    MIR_gen_set_debug_file (ctx, 0, stderr);
+    MIR_gen_set_debug_level (ctx, 0, MIR_BIN_DEBUG);
+#endif
     MIR_link (ctx, MIR_USE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
 #if MIR_BIN_DEBUG
