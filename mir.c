@@ -433,10 +433,9 @@ const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias) {
 
 typedef struct reg_desc {
   MIR_type_t type;
-  char global_p;
-  char *name;          /* 1st key for the name2rdn hash tab */
-  char *hard_reg_name; /* NULL unless tied */
-  MIR_reg_t reg;       /* 1st key reg2rdn hash tab */
+  MIR_reg_t reg;       /* key reg2rdn hash tab */
+  char *name;          /* key for the name2rdn hash tab */
+  char *hard_reg_name; /* NULL unless tied global, key for hrn2rdn */
 } reg_desc_t;
 
 DEF_VARR (reg_desc_t);
@@ -446,6 +445,7 @@ DEF_HTAB (size_t);
 typedef struct func_regs {
   VARR (reg_desc_t) * reg_descs;
   HTAB (size_t) * name2rdn_tab;
+  HTAB (size_t) * hrn2rdn_tab;
   HTAB (size_t) * reg2rdn_tab;
 } * func_regs_t;
 
@@ -461,6 +461,20 @@ static htab_hash_t name2rdn_hash (size_t rdn, void *arg) {
   reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
 
   return mir_hash (addr[rdn].name, strlen (addr[rdn].name), 0);
+}
+
+static int hrn2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
+
+  return strcmp (addr[rdn1].hard_reg_name, addr[rdn2].hard_reg_name) == 0;
+}
+
+static htab_hash_t hrn2rdn_hash (size_t rdn, void *arg) {
+  func_regs_t func_regs = arg;
+  reg_desc_t *addr = VARR_ADDR (reg_desc_t, func_regs->reg_descs);
+
+  return mir_hash (addr[rdn].hard_reg_name, strlen (addr[rdn].hard_reg_name), 0);
 }
 
 static int reg2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
@@ -479,23 +493,29 @@ static htab_hash_t reg2rdn_hash (size_t rdn, void *arg) {
 
 static void func_regs_init (MIR_context_t ctx, MIR_func_t func) {
   func_regs_t func_regs;
-  reg_desc_t rd = {MIR_T_I64, FALSE, NULL, NULL, 0};
+  reg_desc_t rd = {MIR_T_I64, 0, NULL, NULL};
 
   if ((func_regs = func->internal = malloc (sizeof (struct func_regs))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for func regs info");
   VARR_CREATE (reg_desc_t, func_regs->reg_descs, 50);
   VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd); /* for 0 reg */
   HTAB_CREATE (size_t, func_regs->name2rdn_tab, 100, name2rdn_hash, name2rdn_eq, func_regs);
+  HTAB_CREATE (size_t, func_regs->hrn2rdn_tab, 10, hrn2rdn_hash, hrn2rdn_eq, func_regs);
   HTAB_CREATE (size_t, func_regs->reg2rdn_tab, 100, reg2rdn_hash, reg2rdn_eq, func_regs);
 }
 
+static int target_locs_num (MIR_reg_t loc, MIR_type_t type);
+static int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type);
+static int target_fixed_hard_reg_p (MIR_reg_t hard_reg);
+
 static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char *name,
                                   const char *hard_reg_name, MIR_reg_t reg, MIR_type_t type,
-                                  int global_p, int any_p, char **name_ptr) {
+                                  int any_p, char **name_ptr) {
   func_regs_t func_regs = func->internal;
   reg_desc_t rd, *rd_ref;
   size_t i, rdn, tab_rdn;
   int htab_res;
+  MIR_reg_t hr;
 
   if (!any_p && _MIR_reserved_name_p (ctx, name))
     MIR_get_error_func (ctx) (MIR_reserved_name_error, "redefining a reserved name %s", name);
@@ -503,7 +523,6 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   if (hard_reg_name != NULL) hard_reg_name = get_ctx_str (ctx, hard_reg_name);
   rd.hard_reg_name = (char *) hard_reg_name;
   rd.type = type;
-  rd.global_p = global_p;
   rd.reg = reg; /* 0 is reserved */
   rdn = VARR_LENGTH (reg_desc_t, func_regs->reg_descs);
   VARR_PUSH (reg_desc_t, func_regs->reg_descs, rd);
@@ -511,13 +530,38 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
     VARR_POP (reg_desc_t, func_regs->reg_descs);
     MIR_get_error_func (ctx) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
   }
-  if (HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
-    VARR_POP (reg_desc_t, func_regs->reg_descs);
-    MIR_get_error_func (ctx) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
+  if (hard_reg_name != NULL) {
+    if ((hr = _MIR_get_hard_reg (ctx, hard_reg_name)) == MIR_NON_HARD_REG) {
+      MIR_get_error_func (ctx) (MIR_hard_reg_error, "unknown hard reg %s", hard_reg_name);
+    } else if (!target_hard_reg_type_ok_p (hr, type)) {
+      MIR_get_error_func (ctx) (MIR_hard_reg_error,
+                                "reg %s tied to hard reg %s can not be of type %s", name,
+                                hard_reg_name, MIR_type_str (ctx, type));
+    } else if (target_fixed_hard_reg_p (hr)) {
+      MIR_get_error_func (ctx) (MIR_hard_reg_error,
+                                "reg %s can not be tied to reserved hard reg %s", name,
+                                hard_reg_name);
+    } else if (target_locs_num (hr, type) > 1)
+      MIR_get_error_func (ctx) (MIR_hard_reg_error, "reg %s tied to %s requires more one hard reg",
+                                name, hard_reg_name);
+    if (HTAB_DO (size_t, func_regs->hrn2rdn_tab, rdn, HTAB_FIND, tab_rdn)) {
+      rd_ref = &VARR_ADDR (reg_desc_t, func_regs->reg_descs)[tab_rdn];
+      if (type != rd_ref->type)
+        MIR_get_error_func (ctx) (MIR_repeated_decl_error,
+                                  "regs %s and %s tied to hard reg %s have different types", name,
+                                  rd_ref->name, hard_reg_name);
+      VARR_POP (reg_desc_t, func_regs->reg_descs);
+      *name_ptr = rd_ref->name;
+      return rd_ref->reg;
+    }
   }
   *name_ptr = rd.name;
   htab_res = HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
   mir_assert (!htab_res);
+  if (hard_reg_name != NULL) {
+    htab_res = HTAB_DO (size_t, func_regs->hrn2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
+    mir_assert (!htab_res);
+  }
   htab_res = HTAB_DO (size_t, func_regs->reg2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
   mir_assert (!htab_res);
   return reg;
@@ -529,6 +573,7 @@ static void func_regs_finish (MIR_context_t ctx, MIR_func_t func) {
 
   VARR_DESTROY (reg_desc_t, func_regs->reg_descs);
   HTAB_DESTROY (size_t, func_regs->name2rdn_tab);
+  HTAB_DESTROY (size_t, func_regs->hrn2rdn_tab);
   HTAB_DESTROY (size_t, func_regs->reg2rdn_tab);
   free (func->internal);
   func->internal = NULL;
@@ -622,7 +667,6 @@ static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
   m->last_temp_item_num = 0;
   m->name = get_ctx_str (ctx, name);
   DLIST_INIT (MIR_item_t, m->items);
-  m->hr_names = NULL;
 }
 
 static void code_init (MIR_context_t ctx);
@@ -757,7 +801,6 @@ static void remove_module (MIR_context_t ctx, MIR_module_t module, int free_modu
     remove_item (ctx, item);
   }
   if (module->data != NULL) bitmap_destroy (module->data);
-  if (module->hr_names != NULL) VARR_DESTROY (MIR_char_ptr_t, module->hr_names);
   if (free_module_p) free (module);
 }
 
@@ -1271,7 +1314,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     MIR_reg_t reg
       = create_func_reg (ctx, func, vars[i].name, NULL, i + 1,
                          type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64,
-                         FALSE, FALSE, &stored_name);
+                         FALSE, &stored_name);
     mir_assert (i + 1 == reg);
     vars[i].name = stored_name;
     VARR_PUSH (MIR_var_t, func->vars, vars[i]);
@@ -1324,7 +1367,7 @@ MIR_item_t MIR_new_vararg_func (MIR_context_t ctx, const char *name, size_t nres
 }
 
 static MIR_reg_t new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                               const char *name, const char *hard_reg_name, int global_p) {
+                               const char *name, const char *hard_reg_name) {
   MIR_var_t var;
   MIR_reg_t res, reg;
   char *stored_name;
@@ -1334,15 +1377,13 @@ static MIR_reg_t new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t ty
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type for var %s: got '%s'", name,
                               type_str (ctx, type));
-  if (global_p && hard_reg_name == NULL)
-    MIR_get_error_func (ctx) (MIR_reg_type_error, "global var %s without hard reg", name);
   reg = VARR_LENGTH (MIR_var_t, func->vars) + 1;
   if (func->global_vars != NULL) reg += VARR_LENGTH (MIR_var_t, func->global_vars);
-  res = create_func_reg (ctx, func, name, hard_reg_name, reg, type, global_p, FALSE, &stored_name);
+  res = create_func_reg (ctx, func, name, hard_reg_name, reg, type, FALSE, &stored_name);
   if (res != reg) return res; /* already exists */
   var.type = type;
   var.name = stored_name;
-  if (!global_p) {
+  if (hard_reg_name == NULL) {
     VARR_PUSH (MIR_var_t, func->vars, var);
   } else {
     if (func->global_vars == NULL) VARR_CREATE (MIR_var_t, func->global_vars, 8);
@@ -1352,12 +1393,15 @@ static MIR_reg_t new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t ty
 }
 
 MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name) {
-  return new_func_reg (ctx, func, type, name, NULL, FALSE);
+  return new_func_reg (ctx, func, type, name, NULL);
 }
 
-MIR_reg_t MIR_new_tied_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                                 const char *name, const char *hard_reg_name, int global_p) {
-  return new_func_reg (ctx, func, type, name, hard_reg_name, global_p);
+MIR_reg_t MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                   const char *name, const char *hard_reg_name) {
+  if (hard_reg_name == NULL)
+    MIR_get_error_func (ctx) (MIR_hard_reg_error,
+                              "global var %s should have non-null hard reg name", name);
+  return new_func_reg (ctx, func, type, name, hard_reg_name);
 }
 
 static reg_desc_t *find_rd_by_name (MIR_context_t ctx, const char *name, MIR_func_t func) {
@@ -1652,18 +1696,6 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
 
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   mir_assert (m != NULL);
-  if (m->hr_names != NULL) {
-    for (size_t i = 0; i < VARR_LENGTH (MIR_char_ptr_t, m->hr_names); i++) {
-      int hr;
-      const char *hard_reg_name = VARR_GET (MIR_char_ptr_t, m->hr_names, i);
-      if ((hr = _MIR_get_hard_reg (ctx, hard_reg_name)) < 0) {
-        MIR_get_error_func (ctx) (MIR_unknown_hard_reg_error, "unknown hard reg %s", hard_reg_name);
-      } else {
-        if (m->data == NULL) m->data = bitmap_create2 (256);
-        bitmap_set_bit_p (m->data, hr);
-      }
-    }
-  }
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
     MIR_item_t first_item = item;
@@ -2158,11 +2190,8 @@ const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
 }
 
 const char *MIR_reg_hard_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  return get_func_rd_by_reg (ctx, reg, func)->hard_reg_name;
-}
-
-const int MIR_reg_global_p (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func) {
-  return get_func_rd_by_reg (ctx, reg, func)->global_p;
+  const reg_desc_t *rd = get_func_rd_by_reg (ctx, reg, func);
+  return rd->hard_reg_name;
 }
 
 /* Functions to create operands.  */
@@ -3626,10 +3655,9 @@ static void rename_regs (MIR_context_t ctx, MIR_func_t func, MIR_func_t called_f
     old_reg = MIR_reg (ctx, var.name, called_func);
     VARR_PUSH_ARR (char, temp_string, var.name, strlen (var.name) + 1);
     if ((hard_reg_name = MIR_reg_hard_reg_name (ctx, old_reg, called_func)) != NULL) {
-      new_reg = MIR_new_tied_func_reg (ctx, func, type, VARR_ADDR (char, temp_string),
-                                       hard_reg_name, MIR_reg_global_p (ctx, old_reg, called_func));
+      new_reg
+        = MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, temp_string), hard_reg_name);
     } else {
-      mir_assert (!MIR_reg_global_p (ctx, old_reg, called_func));
       new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, temp_string));
     }
     set_inline_reg_map (ctx, old_reg, new_reg);
@@ -5418,15 +5446,14 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
           name = read_name (ctx, module, "wrong local/global var name");
           type_tag = tag;
           tag = read_token (ctx, &attr);
-          if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
-            const char *reg_name = to_str (ctx, get_uint (ctx, tag - TAG_NAME1 + 1)).s;
-            MIR_new_tied_func_reg (ctx, func->u.func, tag_type (type_tag), name, reg_name,
-                                   global_p);
-            tag = read_token (ctx, &attr);
-          } else if (global_p) {
-            MIR_get_error_func (ctx) (MIR_binary_io_error, "global without hard reg name");
-          } else {
+          if (!global_p) {
             MIR_new_func_reg (ctx, func->u.func, tag_type (type_tag), name);
+          } else if (TAG_NAME1 <= tag && tag <= TAG_NAME4) {
+            const char *reg_name = to_str (ctx, get_uint (ctx, tag - TAG_NAME1 + 1)).s;
+            MIR_new_global_func_reg (ctx, func->u.func, tag_type (type_tag), name, reg_name);
+            tag = read_token (ctx, &attr);
+          } else {
+            MIR_get_error_func (ctx) (MIR_binary_io_error, "global without hard reg name");
           }
         }
       } else {
@@ -6112,10 +6139,10 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
             if (t.code == TC_NAME) {
               op.u.mem.disp = (MIR_disp_t) t.u.name;
               scan_token (ctx, &t, get_string_char, unget_string_char);
-              if (!local_p && !global_p) {
-              } else if (t.code != TC_COL && global_p) {
+              if (!global_p) {
+              } else if (t.code != TC_COL) {
                 scan_error (ctx, "global %s without hard register", (const char *) op.u.mem.disp);
-              } else if (t.code == TC_COL) {
+              } else {
                 scan_token (ctx, &t, get_string_char, unget_string_char);
                 if (t.code != TC_NAME) {
                   scan_error (ctx, "hard register for %s is not a name", (char *) op.data);
@@ -6339,9 +6366,9 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           MIR_new_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
                             (const char *) op_addr[i].u.mem.disp);
         } else {
-          MIR_new_tied_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
-                                 (const char *) op_addr[i].u.mem.disp,
-                                 (const char *) op_addr[i].data, global_p);
+          MIR_new_global_func_reg (ctx, func->u.func, op_addr[i].u.mem.type,
+                                   (const char *) op_addr[i].u.mem.disp,
+                                   (const char *) op_addr[i].data);
         }
       }
     } else if (data_type != MIR_T_BOUND) {

@@ -69,7 +69,7 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define ERR_EL(e) MIR_##e##_error
 typedef enum MIR_error_type {
   REP8 (ERR_EL, no, syntax, binary_io, alloc, finish, no_module, nested_module, no_func),
-  REP5 (ERR_EL, func, vararg_func, nested_func, wrong_param_value, unknown_hard_reg),
+  REP5 (ERR_EL, func, vararg_func, nested_func, wrong_param_value, hard_reg),
   REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
   REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
   REP6 (ERR_EL, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
@@ -428,17 +428,13 @@ DEF_DLIST (MIR_item_t, item_link);
 /* Definition of link of double list of MIR_module_t type elements */
 DEF_DLIST_LINK (MIR_module_t);
 
-typedef const char *MIR_char_ptr_t;
-DEF_VARR (MIR_char_ptr_t);
-
 /* MIR module: */
 struct MIR_module {
   void *data;
   const char *name;
   DLIST (MIR_item_t) items; /* module items */
   DLIST_LINK (MIR_module_t) module_link;
-  VARR (MIR_char_ptr_t) * hr_names; /* NULL for empty, hard reg names used for locals and globals */
-  uint32_t last_temp_item_num;      /* Used only internally */
+  uint32_t last_temp_item_num; /* Used only internally */
 };
 
 /* Definition of double list of MIR_item_t type elements */
@@ -523,8 +519,8 @@ extern const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item);
 extern MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item);
 extern MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                                    const char *name);
-extern MIR_reg_t MIR_new_tied_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                                        const char *name, const char *hard_reg_name, int global_p);
+extern MIR_reg_t MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                          const char *name, const char *hard_reg_name);
 extern void MIR_finish_func (MIR_context_t ctx);
 extern void MIR_finish_module (MIR_context_t ctx);
 
@@ -548,7 +544,6 @@ extern MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t fu
 extern MIR_type_t MIR_reg_type (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 extern const char *MIR_reg_hard_reg_name (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
-extern int MIR_reg_global_p (MIR_context_t ctx, MIR_reg_t reg, MIR_func_t func);
 
 extern const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias);
 extern MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name);
