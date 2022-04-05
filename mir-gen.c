@@ -193,7 +193,7 @@ struct gen_ctx {
   FILE *debug_file;
   int debug_level;
 #endif
-  bitmap_t tied_regs;
+  bitmap_t tied_regs; /* regs tied to hard reg */
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
   bitmap_t call_used_hard_regs[MIR_T_BOUND], func_used_hard_regs;
   func_cfg_t curr_cfg;
@@ -1828,7 +1828,7 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p) continue;
+        if (out_p || insn->ops[op_num].data == NULL) continue;
         insn->ops[op_num].data = skip_redundant_phis (insn->ops[op_num].data);
       }
     }
@@ -1964,9 +1964,10 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p) continue;
+        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
+          continue;
         def = insn->ops[op_num].data;
-        gen_assert (var > MAX_HARD_REG && def != NULL);
+        gen_assert (def != NULL);
         insn->ops[op_num].data = NULL;
         add_ssa_edge (gen_ctx, def, get_var_def_op_num (gen_ctx, var, def->insn), bb_insn, op_num);
       }
@@ -1979,7 +1980,6 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t 
   MIR_type_t type = MIR_reg_type (ctx, reg, func);
   const char *name = MIR_reg_name (ctx, reg, func);
   const char *hard_reg_name = MIR_reg_hard_reg_name (ctx, reg, func);
-  int global_p = MIR_reg_global_p (ctx, reg, func);
   char ind_str[30];
   MIR_reg_t new_reg;
 
@@ -1988,13 +1988,9 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t 
   VARR_PUSH (char, reg_name, sep);
   sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
-  gen_assert (!global_p || hard_reg_name != NULL);
-  if (hard_reg_name == NULL)
-    new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
-  else
-    new_reg = MIR_new_tied_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name,
-                                     global_p);
-  if (global_p) bitmap_set_bit_p (tied_regs, new_reg);
+  gen_assert (hard_reg_name == NULL);
+  new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
+  if (hard_reg_name != NULL) bitmap_set_bit_p (tied_regs, new_reg);
   update_min_max_reg (gen_ctx, new_reg);
   return new_reg;
 }
@@ -2045,7 +2041,7 @@ static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
 
   insn = bb_insn->insn;
   FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-    if (!out_p || !var_is_reg_p (var)) continue;
+    if (!out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var))) continue;
     ssa_edge = insn->ops[op_num].data;
     if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
     DEBUG (2, {
@@ -2085,7 +2081,8 @@ static void rename_regs (gen_ctx_t gen_ctx) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* clear all ssa edge flags */
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var)) continue;
+        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
+          continue;
         ssa_edge = insn->ops[op_num].data;
         ssa_edge->flag = FALSE;
       }
@@ -2128,7 +2125,7 @@ static void build_ssa (gen_ctx_t gen_ctx) {
       if (bb_insn->insn->code != MIR_PHI) {
         FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
           gen_assert (var > MAX_HARD_REG);
-          if (out_p) continue;
+          if (out_p || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var))) continue;
           def = get_def (gen_ctx, var - MAX_HARD_REG, bb);
           bb_insn->insn->ops[op_num].data = def;
         }
@@ -2427,7 +2424,8 @@ static void copy_prop (gen_ctx_t gen_ctx) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var)) continue;
+        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
+          continue;
         for (;;) {
           se = insn->ops[op_num].data;
           def = se->def;
@@ -5155,13 +5153,12 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     if (VARR_GET (breg_info_t, sorted_bregs, i).tied_reg_p) {
       const char *hard_reg_name = MIR_reg_hard_reg_name (ctx, reg, func);
       int hard_reg = _MIR_get_hard_reg (ctx, hard_reg_name);
-      int global_p = MIR_reg_global_p (ctx, reg, func);
       gen_assert (hard_reg >= 0 && hard_reg <= MAX_HARD_REG
                   && target_locs_num (hard_reg, type) == 1);
       VARR_SET (MIR_reg_t, breg_renumber, breg, hard_reg);
       for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
         for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], hard_reg);
-      if (!global_p) setup_used_hard_regs (gen_ctx, type, hard_reg);
+      if (hard_reg_name == NULL) setup_used_hard_regs (gen_ctx, type, hard_reg);
       DEBUG (2, {
         fprintf (debug_file, " Assigning to tied %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
                  MIR_reg_name (gen_ctx->ctx, reg, func), reg2var (gen_ctx, reg), breg,
