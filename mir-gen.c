@@ -4114,7 +4114,7 @@ static void jump_opt (gen_ctx_t gen_ctx) {
 #define live_gen gen
 
 /* Life analysis */
-static void live_con_func_0 (bb_t bb) { bitmap_clear (bb->live_in); }
+static void live_con_func_0 (bb_t bb) {}
 
 static int live_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
   edge_t e;
@@ -4163,6 +4163,8 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
   mv_t mv;
   reg_info_t *breg_infos;
   insn_var_iterator_t insn_var_iter;
+  bitmap_t global_hard_regs
+    = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
   gen_assert (!moves_p || optimize_level != 0);
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
@@ -4175,7 +4177,8 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
        insn = DLIST_PREV (MIR_insn_t, insn)) {
     if (MIR_call_code_p (insn->code)) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs[MIR_T_UNDEF]);
-      bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs[MIR_T_UNDEF]);
+      bitmap_ior_and_compl (bb->live_gen, global_hard_regs, bb->live_gen,
+                            call_used_hard_regs[MIR_T_UNDEF]);
     }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
@@ -4248,6 +4251,8 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   mv_t mv, next_mv;
   reg_info_t ri;
   uint32_t mvs_num = 0;
+  bitmap_t global_hard_regs
+    = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
   for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
     next_mv = DLIST_NEXT (mv_t, mv);
@@ -4272,6 +4277,7 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
     bitmap_clear (bb->live_gen);
     bitmap_clear (bb->live_kill);
   }
+  bitmap_copy (DLIST_EL (bb_t, curr_cfg->bbs, 1)->live_out, global_hard_regs); /* exit bb */
   for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
     tail = initiate_bb_live_info (gen_ctx, tail, moves_p, &mvs_num);
   if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
@@ -6214,6 +6220,8 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
   long dead_insns_num = 0;
+  bitmap_t global_hard_regs
+    = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
   DEBUG (2, { fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
   live = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -6244,8 +6252,10 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
         dead_insns_num++;
         continue;
       }
-      if (MIR_call_code_p (insn->code))
+      if (MIR_call_code_p (insn->code)) {
         bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
+        bitmap_ior (live, live, global_hard_regs);
+      }
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
       }
@@ -6482,7 +6492,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     add_bb_insn_dead_vars (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR before combine:\n");
-      print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, output_bb_live_info);
     });
     combine (gen_ctx, machine_code_p); /* After combine the BB live info is still valid */
     DEBUG (2, {
