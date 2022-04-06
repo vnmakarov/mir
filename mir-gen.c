@@ -4177,8 +4177,11 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
        insn = DLIST_PREV (MIR_insn_t, insn)) {
     if (MIR_call_code_p (insn->code)) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs[MIR_T_UNDEF]);
-      bitmap_ior_and_compl (bb->live_gen, global_hard_regs, bb->live_gen,
-                            call_used_hard_regs[MIR_T_UNDEF]);
+      if (global_hard_regs != NULL)
+        bitmap_ior_and_compl (bb->live_gen, global_hard_regs, bb->live_gen,
+                              call_used_hard_regs[MIR_T_UNDEF]);
+      else
+        bitmap_and_compl (bb->live_gen, bb->live_gen, call_used_hard_regs[MIR_T_UNDEF]);
     }
     /* Process output ops on 0-th iteration, then input ops. */
     for (niter = 0; niter <= 1; niter++) {
@@ -4277,7 +4280,8 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
     bitmap_clear (bb->live_gen);
     bitmap_clear (bb->live_kill);
   }
-  bitmap_copy (DLIST_EL (bb_t, curr_cfg->bbs, 1)->live_out, global_hard_regs); /* exit bb */
+  if (global_hard_regs != NULL)
+    bitmap_copy (DLIST_EL (bb_t, curr_cfg->bbs, 1)->live_out, global_hard_regs); /* exit bb */
   for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
     tail = initiate_bb_live_info (gen_ctx, tail, moves_p, &mvs_num);
   if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
@@ -6254,7 +6258,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
       }
       if (MIR_call_code_p (insn->code)) {
         bitmap_and_compl (live, live, call_used_hard_regs[MIR_T_UNDEF]);
-        bitmap_ior (live, live, global_hard_regs);
+        if (global_hard_regs != NULL) bitmap_ior (live, live, global_hard_regs);
       }
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (!out_p) bitmap_set_bit_p (live, var);
