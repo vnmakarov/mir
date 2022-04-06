@@ -431,6 +431,7 @@ const char *MIR_alias_name (MIR_context_t ctx, MIR_alias_t alias) {
 
 /* New Page */
 
+/* We attribute global vars to func as func can be inlined from different module.  */
 typedef struct reg_desc {
   MIR_type_t type;
   MIR_reg_t reg;       /* key reg2rdn hash tab */
@@ -512,6 +513,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
                                   const char *hard_reg_name, MIR_reg_t reg, MIR_type_t type,
                                   int any_p, char **name_ptr) {
   func_regs_t func_regs = func->internal;
+  MIR_module_t func_module;
   reg_desc_t rd, *rd_ref;
   size_t i, rdn, tab_rdn;
   int htab_res;
@@ -550,10 +552,14 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
         MIR_get_error_func (ctx) (MIR_repeated_decl_error,
                                   "regs %s and %s tied to hard reg %s have different types", name,
                                   rd_ref->name, hard_reg_name);
+      /* Use always one reg for global vars assigned to hard regs: */
       VARR_POP (reg_desc_t, func_regs->reg_descs);
       *name_ptr = rd_ref->name;
       return rd_ref->reg;
     }
+    func_module = func->func_item->module;
+    if (func_module->data == NULL) func_module->data = bitmap_create2 (128);
+    bitmap_set_bit_p (func_module->data, hr); /* hard regs used for globals */
   }
   *name_ptr = rd.name;
   htab_res = HTAB_DO (size_t, func_regs->name2rdn_tab, rdn, HTAB_INSERT, tab_rdn);
@@ -6625,6 +6631,10 @@ int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name) {
 static const char *get_hard_reg_name (MIR_context_t ctx, int hard_reg) {
   if (hard_reg > MAX_HARD_REG || target_fixed_hard_reg_p (hard_reg)) return NULL;
   return target_hard_reg_names[hard_reg];
+}
+
+void *_MIR_get_module_global_var_hard_regs (MIR_context_t ctx, MIR_module_t module) {
+  return module->data;
 }
 
 /* New Page */

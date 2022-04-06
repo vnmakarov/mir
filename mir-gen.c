@@ -195,7 +195,8 @@ struct gen_ctx {
 #endif
   bitmap_t tied_regs; /* regs tied to hard reg */
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2;
-  bitmap_t call_used_hard_regs[MIR_T_BOUND], func_used_hard_regs;
+  bitmap_t call_used_hard_regs[MIR_T_BOUND];
+  bitmap_t func_used_hard_regs; /* before prolog: used hard regs except global var hard regs */
   func_cfg_t curr_cfg;
   uint32_t curr_bb_index, curr_loop_node_index;
   DLIST (dead_var_t) free_dead_vars;
@@ -4712,14 +4713,17 @@ struct ra_ctx {
 /* Fast RA */
 
 static void fast_assign (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t loc, curr_loc, best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
+  MIR_func_t func = curr_func_item->u.func;
   int slots_num;
   int k;
   bitmap_t bm;
   bitmap_t *used_locs_addr;
   size_t nel;
   bitmap_iterator_t bi;
+  bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
 
   func_stack_slots_num = 0;
   if (nregs == 0) return;
@@ -4729,6 +4733,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
     bm = bitmap_create2 (curr_bb_index);
     VARR_PUSH (bitmap_t, var_bbs, bm);
   }
+  /* Find bbs where var is living: */
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bitmap_ior (temp_bitmap, bb->live_in, bb->live_out);
     bitmap_ior (temp_bitmap, temp_bitmap, bb->gen);
@@ -4738,11 +4743,29 @@ static void fast_assign (gen_ctx_t gen_ctx) {
     }
   }
   VARR_TRUNC (MIR_reg_t, breg_renumber, 0);
-  for (i = 0; i < nregs; i++) VARR_PUSH (MIR_reg_t, breg_renumber, MIR_NON_HARD_REG);
+  for (i = 0; i < nregs; i++) {
+    VARR_PUSH (MIR_reg_t, breg_renumber, MIR_NON_HARD_REG);
+    reg = breg2reg (gen_ctx, i);
+    if (bitmap_bit_p (tied_regs, reg)) { /* Assign to global */
+      const char *hard_reg_name = MIR_reg_hard_reg_name (ctx, reg, func);
+      int hard_reg = _MIR_get_hard_reg (ctx, hard_reg_name);
+      VARR_SET (MIR_reg_t, breg_renumber, i, hard_reg);
+      DEBUG (2, {
+        fprintf (debug_file, " Assigning to global %s:var=%3u, breg=%3u -- %lu\n",
+                 MIR_reg_name (ctx, reg, func), reg2var (gen_ctx, reg), i,
+                 (unsigned long) hard_reg);
+      });
+    }
+  }
+  /* Set up used locs for each bb: */
   for (size_t n = 0; n < curr_bb_index && n < VARR_LENGTH (bitmap_t, used_locs); n++)
-    bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+    if (global_hard_regs == NULL)
+      bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+    else
+      bitmap_copy (VARR_GET (bitmap_t, used_locs, n), global_hard_regs);
   while (VARR_LENGTH (bitmap_t, used_locs) < curr_bb_index) {
     bm = bitmap_create2 (2 * MAX_HARD_REG + 1);
+    if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
     VARR_PUSH (bitmap_t, used_locs, bm);
   }
   used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
@@ -4754,6 +4777,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
     breg = i;
     reg = breg2reg (gen_ctx, breg);
+    if (bitmap_bit_p (tied_regs, reg)) continue;
     var = reg2var (gen_ctx, reg);
     bitmap_clear (conflict_locs);
     FOREACH_BITMAP_BIT (bi, VARR_GET (bitmap_t, var_bbs, var), nel) {
@@ -4811,6 +4835,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
     });
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
+    /* exclude assigned var locations from available in bbs where var lives: */
     FOREACH_BITMAP_BIT (bi, VARR_GET (bitmap_t, var_bbs, var), nel) {
       for (k = 0; k < slots_num; k++)
         bitmap_set_bit_p (used_locs_addr[nel], target_nth_loc (best_loc, type, k));
@@ -5100,6 +5125,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   bitmap_t *used_locs_addr;
   breg_info_t breg_info;
   MIR_func_t func = curr_func_item->u.func;
+  bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
 
   func_stack_slots_num = 0;
   if (nregs == 0) return;
@@ -5131,9 +5157,13 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_PUSH (size_t, loc_profit_ages, 0);
   }
   for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, used_locs); n++)
-    bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+    if (global_hard_regs == NULL)
+      bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
+    else
+      bitmap_copy (VARR_GET (bitmap_t, used_locs, n), global_hard_regs);
   while (VARR_LENGTH (bitmap_t, used_locs) <= curr_point) {
     bm = bitmap_create2 (MAX_HARD_REG + 1);
+    if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
     VARR_PUSH (bitmap_t, used_locs, bm);
   }
   qsort (VARR_ADDR (breg_info_t, sorted_bregs), nregs, sizeof (breg_info_t),
@@ -5160,7 +5190,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
         for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], hard_reg);
       if (hard_reg_name == NULL) setup_used_hard_regs (gen_ctx, type, hard_reg);
       DEBUG (2, {
-        fprintf (debug_file, " Assigning to tied %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
+        fprintf (debug_file, " Assigning to global %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
                  MIR_reg_name (gen_ctx->ctx, reg, func), reg2var (gen_ctx, reg), breg,
                  curr_breg_infos[breg].freq, (unsigned long) hard_reg);
       });
@@ -5368,6 +5398,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
   MIR_reg_t hard_reg;
   int out_p, first_in_p;
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
+  bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
 
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = next_insn) {
@@ -5448,6 +5479,8 @@ static void rewrite (gen_ctx_t gen_ctx) {
              (unsigned long) movs_num, deleted_movs_num * 100.0 / movs_num,
              (unsigned long) insns_num, deleted_movs_num * 100.0 / insns_num);
   });
+  if (global_hard_regs != NULL) /* we should not save/restore hard regs used by globals */
+    bitmap_and_compl (func_used_hard_regs, func_used_hard_regs, global_hard_regs);
 }
 
 static void init_ra (gen_ctx_t gen_ctx) {

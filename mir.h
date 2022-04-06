@@ -707,6 +707,7 @@ extern void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_addr
 extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
 
 extern int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name);
+extern void *_MIR_get_module_global_var_hard_regs (MIR_context_t ctx, MIR_module_t module);
 
 #ifdef __cplusplus
 }
