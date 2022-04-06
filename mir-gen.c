@@ -1380,7 +1380,7 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx);
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, next_insn, ret_insn, use_insn;
+  MIR_insn_t insn, next_insn;
   size_t i, nops;
   MIR_op_t *op;
   MIR_reg_t reg;
@@ -1412,25 +1412,8 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, bb);
   bitmap_clear (tied_regs);
-  for (ret_insn = NULL; insn != NULL; insn = next_insn) {
+  for (; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    if (insn->code == MIR_RET) {
-      if (ret_insn != NULL) { /* we should have only one ret insn before generator */
-        gen_assert (ret_insn == insn);
-      } else if (func->global_vars != NULL) {
-        VARR_TRUNC (MIR_op_t, temp_ops, 0);
-        for (i = 0; i < VARR_LENGTH (MIR_var_t, func->global_vars); i++) {
-          reg = MIR_reg (ctx, VARR_GET (MIR_var_t, func->global_vars, i).name, func);
-          VARR_PUSH (MIR_op_t, temp_ops, MIR_new_reg_op (ctx, reg));
-        }
-        use_insn = MIR_new_insn_arr (ctx, MIR_USE, VARR_LENGTH (MIR_op_t, temp_ops),
-                                     VARR_ADDR (MIR_op_t, temp_ops));
-        MIR_insert_insn_before (ctx, curr_func_item, insn, use_insn);
-        next_insn = use_insn;
-        ret_insn = insn;
-        continue;
-      }
-    }
     if (MIR_call_code_p (insn->code)) bb->call_p = TRUE;
     if (insn->data == NULL) {
       if (optimize_level != 0)

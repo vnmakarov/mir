@@ -176,7 +176,6 @@ typedef enum {
   INSN_EL (LABEL),                     /* One immediate operand is unique label number  */
   INSN_EL (UNSPEC),                    /* First operand unspec code and the rest are args */
   REP3 (INSN_EL, PRSET, PRBEQ, PRBNE), /* work with properties */
-  INSN_EL (USE), /* Used only internally in the generator, all operands are input */
   INSN_EL (PHI), /* Used only internally in the generator, the first operand is output */
   INSN_EL (INVALID_INSN),
   INSN_EL (INSN_BOUND), /* Should be the last  */
