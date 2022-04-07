@@ -8,6 +8,5 @@ jobs:
     runs-on: [self-hosted, linux, X64, gcc187]
     name: Build on gcc112 through gcc187 x86_64
     steps:
-    - uses: actions/checkout@v1
     - name: make test
       run: ~/ssh-run.sh gcc112.fsffrance.org ~/mir-test.sh master `git log |head -1|awk '{print $2}'`
