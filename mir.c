@@ -5801,6 +5801,11 @@ static void unget_string_char (MIR_context_t ctx, int ch) {
   if (ch == '\n') curr_lno--;
 }
 
+int _MIR_name_char_p (MIR_context_t ctx, int ch, int first_p) {
+  if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') return TRUE;
+  return !first_p && isdigit (ch);
+}
+
 static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_context_t),
                         void (*unget_char) (MIR_context_t, int)) {
   int ch;
@@ -5824,11 +5829,11 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
     case '"': scan_string (ctx, token, ch, get_char, unget_char); return;
     default:
       VARR_TRUNC (char, temp_string, 0);
-      if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') {
+      if (_MIR_name_char_p (ctx, ch, TRUE)) {
         do {
           VARR_PUSH (char, temp_string, ch);
           ch = get_char (ctx);
-        } while (isalpha (ch) || isdigit (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.');
+        } while (_MIR_name_char_p (ctx, ch, FALSE));
         VARR_PUSH (char, temp_string, '\0');
         unget_char (ctx, ch);
         token->u.name = _MIR_uniq_string (ctx, VARR_ADDR (char, temp_string));

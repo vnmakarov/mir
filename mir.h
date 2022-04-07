@@ -659,7 +659,6 @@ extern MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, co
                                       size_t nres, MIR_type_t *res_types, size_t nargs, ...);
 extern MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char *name,
                                      void *addr);
-
 extern void _MIR_flush_code_cache (void *start, void *bound);
 extern uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code, size_t code_len);
 extern uint8_t *_MIR_get_new_code_addr (MIR_context_t ctx, size_t size);
@@ -703,6 +702,7 @@ extern void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handl
 extern void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address);
 
+extern int _MIR_name_char_p (MIR_context_t ctx, int ch, int first_p);
 extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
 
 extern int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name);
