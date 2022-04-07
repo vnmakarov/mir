@@ -5756,7 +5756,7 @@ struct decl {
      NULL otherwise: */
   node_t containing_unnamed_anon_struct_union_member;
   union {
-    const char *asm_str; /* register name for global reg */
+    const char *asm_str; /* register name for global reg used and defined only if reg_p */
     MIR_item_t item;     /* MIR_item for some declarations */
   } u;
   c2m_ctx_t c2m_ctx;
