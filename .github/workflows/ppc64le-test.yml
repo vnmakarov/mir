@@ -5,8 +5,8 @@ on: [push]
 jobs:
   ppc64le:
     # The host should always be Linux
-    runs-on: [self-hosted, linux, X64, gcc10]
-    name: Build on gcc112 through gcc10 x86_64
+    runs-on: [self-hosted, linux, X64, gcc120]
+    name: Build on gcc112 through gcc120 x86_64
     steps:
     - uses: actions/checkout@v1
     - name: make test
