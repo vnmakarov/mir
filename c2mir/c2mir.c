@@ -5743,7 +5743,7 @@ struct node_scope {
 
 struct decl {
   /* true if address is taken, reg can be used or is used: */
-  unsigned addr_p : 1, reg_p : 1, used_p : 1;
+  unsigned addr_p : 1, reg_p : 1, asm_p : 1, used_p : 1;
   int bit_offset, width; /* for bitfields, -1 bit_offset for non bitfields. */
   mir_size_t offset;     /* var offset in frame or bss */
   node_t scope;          /* declaration scope */
@@ -5756,7 +5756,7 @@ struct decl {
      NULL otherwise: */
   node_t containing_unnamed_anon_struct_union_member;
   union {
-    const char *asm_str; /* register name for global reg used and defined only if reg_p */
+    const char *asm_str; /* register name for global reg used and defined only if asm_p */
     MIR_item_t item;     /* MIR_item for some declarations */
   } u;
   c2m_ctx_t c2m_ctx;
@@ -7721,7 +7721,7 @@ static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
   check_ctx_t check_ctx = c2m_ctx->check_ctx;
 
   decl->addr_p = FALSE;
-  decl->reg_p = decl->used_p = FALSE;
+  decl->reg_p = decl->asm_p = decl->used_p = FALSE;
   decl->offset = 0;
   decl->bit_offset = -1;
   decl->param_args_start = decl->param_args_num = 0;
@@ -9179,7 +9179,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         if (!scalar_type_p (decl->decl_spec.type)) {
           error (c2m_ctx, POS (r), "asm register decl should have a scalar type");
         } else {
-          decl->reg_p = TRUE;
+          decl->reg_p = decl->asm_p = TRUE;
           decl->u.asm_str = asm_str;
         }
       } else if ((initializer == NULL || initializer->code == N_IGNORE)
@@ -12051,7 +12051,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       res = new_op (NULL, MIR_new_ref_op (ctx, ((decl_t) e->def_node->attr)->u.item));
     } else if (((decl = e->lvalue_node->attr)->scope == top_scope || decl->decl_spec.static_p
                 || decl->decl_spec.linkage != N_IGNORE)
-               && !decl->reg_p) {
+               && !decl->asm_p) {
       t = get_mir_type (c2m_ctx, e->type);
       res = get_new_temp (c2m_ctx, MIR_T_I64);
       emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_ref_op (ctx, decl->u.item));
@@ -12485,7 +12485,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       name = (decl->scope != top_scope && decl->decl_spec.static_p
                 ? get_func_static_var_name (c2m_ctx, id->u.s.s, decl)
                 : id->u.s.s);
-      if (decl->reg_p) {
+      if (decl->asm_p) {
       } else if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
         decl->u.item = MIR_new_forward (ctx, name);
         move_item_forward (c2m_ctx, decl->u.item);
@@ -12502,7 +12502,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         if (decl->scope != top_scope) move_item_forward (c2m_ctx, decl->u.item);
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
-          && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p && !decl->reg_p) {
+          && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p && !decl->asm_p) {
         if (initializer->code == N_IGNORE) {
           if (decl->scope != top_scope && decl->decl_spec.static_p) {
             decl->u.item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
@@ -13236,6 +13236,7 @@ static void print_decl (c2m_ctx_t c2m_ctx, FILE *f, decl_t decl) {
     fprintf (f, ", offset = %llu", (unsigned long long) decl->offset);
     if (decl->bit_offset >= 0) fprintf (f, ", bit offset = %d", decl->bit_offset);
   }
+  if (decl->asm_p) fprintf (f, ", asm=%s", decl->u.asm_str);
 }
 
 static void print_expr (c2m_ctx_t c2m_ctx, FILE *f, struct expr *e) {
