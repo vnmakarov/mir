@@ -491,7 +491,8 @@ stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
     | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
 compound_stmt: N_BLOCK(N_LIST:(label)*, N_LIST:(declaration | stmt)*)
-declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, initializer?) | st_assert
+attr: N_ASM (N_STR | N_STR16 | N_STR32)
+declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, attr?, initializer?) | st_assert
 st_assert: N_ST_ASSERT(const_expr, N_STR | N_STR16 | N_STR32)
 declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
 align_spec: N_ALIGNAS(type_name|const_expr)
@@ -511,7 +512,7 @@ direct_declarator: N_DECL(N_ID,
                                                     (assign_expr|N_STAR)?))*)
 pointer: N_LIST: N_POINTER(type_qual_list)*
 type_qual_list : N_LIST: type_qual*
-parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore)
+parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore, ignore)
                              | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
 id_list: N_LIST: N_ID*
 initializer: assign_expr | initialize_list
@@ -577,6 +578,7 @@ typedef enum {
   REP8 (NODE_EL, BOOL, STRUCT, UNION, ENUM, ENUM_CONST, MEMBER, CONST, RESTRICT),
   REP8 (NODE_EL, VOLATILE, ATOMIC, INLINE, NO_RETURN, ALIGNAS, FUNC, STAR, POINTER),
   REP8 (NODE_EL, DOTS, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE),
+  NODE_EL (ASM),
 } node_code_t;
 
 #undef REP_SEP
@@ -4260,16 +4262,17 @@ D (st_assert);
 
 D (asm_spec) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
-  node_t r;
+  node_t r, id;
 
   PTN (T_ID);
-  if (strcmp (r->u.s.s, "__asm") != 0) PTFAIL (T_ID);
+  if (strcmp (r->u.s.s, "__asm") != 0 && strcmp (r->u.s.s, "asm") != 0) PTFAIL (T_ID);
+  id = r;
   PT ('(');
   while (!C (')')) {
-    PT (T_STR);
+    PTN (T_STR);
   }
   PT (')');
-  return NULL;
+  return new_pos_node1 (c2m_ctx, N_ASM, POS (id), r);
 }
 
 static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
@@ -4293,7 +4296,7 @@ static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
 D (declaration) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   int typedef_p;
-  node_t op, list, decl, spec, r;
+  node_t op, list, decl, spec, r, attr;
   pos_t pos, last_pos;
 
   if (C (T_STATIC_ASSERT)) {
@@ -4310,8 +4313,8 @@ D (declaration) {
     list = new_node (c2m_ctx, N_LIST);
     if (C (';')) {
       op_append (c2m_ctx, list,
-                 new_node3 (c2m_ctx, N_SPEC_DECL, spec, new_node (c2m_ctx, N_IGNORE),
-                            new_node (c2m_ctx, N_IGNORE)));
+                 new_node4 (c2m_ctx, N_SPEC_DECL, spec, new_node (c2m_ctx, N_IGNORE),
+                            new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE)));
     } else { /* init-declarator-list */
       for (op = NL_HEAD (spec->u.ops); op != NULL; op = NL_NEXT (op))
         if (op->code == N_TYPEDEF) break;
@@ -4323,15 +4326,16 @@ D (declaration) {
         assert (decl->code == N_DECL);
         op = NL_HEAD (decl->u.ops);
         tpname_add (c2m_ctx, op, curr_scope, typedef_p);
-        try_attr_spec (c2m_ctx, last_pos);
+        attr = try_attr_spec (c2m_ctx, last_pos);
+        if (attr == err_node) attr = new_node (c2m_ctx, N_IGNORE);
         if (M ('=')) {
           P (initializer);
         } else {
           r = new_node (c2m_ctx, N_IGNORE);
         }
         op_append (c2m_ctx, list,
-                   new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (decl),
-                                  new_node1 (c2m_ctx, N_SHARE, spec), decl, r));
+                   new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (decl),
+                                  new_node1 (c2m_ctx, N_SHARE, spec), decl, attr, r));
         if (!M (',')) break;
       }
     }
@@ -4811,7 +4815,8 @@ D (param_type_list) {
       r = new_node2 (c2m_ctx, N_TYPE, op1, op2);
     } else {
       P (declarator);
-      r = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (op2), op1, r, new_node (c2m_ctx, N_IGNORE));
+      r = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (op2), op1, r, new_node (c2m_ctx, N_IGNORE),
+                         new_node (c2m_ctx, N_IGNORE));
     }
     op_append (c2m_ctx, list, r);
     comma_p = FALSE;
@@ -5750,7 +5755,10 @@ struct decl {
   /* Unnamed member if this scope is anon struct/union for the member,
      NULL otherwise: */
   node_t containing_unnamed_anon_struct_union_member;
-  MIR_item_t item; /* MIR_item for some declarations */
+  union {
+    const char *asm_str; /* register name for global reg */
+    MIR_item_t item;     /* MIR_item for some declarations */
+  } u;
   c2m_ctx_t c2m_ctx;
 };
 
@@ -7719,7 +7727,7 @@ static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
   decl->param_args_start = decl->param_args_num = 0;
   decl->scope = curr_scope;
   decl->containing_unnamed_anon_struct_union_member = curr_unnamed_anon_struct_union_member;
-  decl->item = NULL;
+  decl->u.item = NULL;
   decl->c2m_ctx = c2m_ctx;
 }
 
@@ -8175,8 +8183,9 @@ static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_nam
                                          new_pos_node (c2m_ctx, N_IGNORE, pos)));
   declarator
     = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str.str, pos), list);
-  decl = new_pos_node3 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
-                        new_str_node (c2m_ctx, N_STR, func_name, pos));
+  decl
+    = new_pos_node4 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
+                     new_node (c2m_ctx, N_IGNORE), new_str_node (c2m_ctx, N_STR, func_name, pos));
   NL_PREPEND (NL_EL (func_block->u.ops, 1)->u.ops, decl);
 }
 
@@ -8974,15 +8983,16 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
       va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
       if (!va_arg_p && !va_start_p && !alloca_p) {
-        /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
+        /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE,
+         * N_IGNORE) */
         spec_list = new_node (c2m_ctx, N_LIST);
         op_append (c2m_ctx, spec_list, new_node (c2m_ctx, N_INT));
         list = new_node (c2m_ctx, N_LIST);
         op_append (c2m_ctx, list, new_node1 (c2m_ctx, N_FUNC, new_node (c2m_ctx, N_LIST)));
         decl
-          = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (op1), new_node1 (c2m_ctx, N_SHARE, spec_list),
+          = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (op1), new_node1 (c2m_ctx, N_SHARE, spec_list),
                            new_node2 (c2m_ctx, N_DECL, copy_node (c2m_ctx, op1), list),
-                           new_node (c2m_ctx, N_IGNORE));
+                           new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
         curr_scope = top_scope;
         check (c2m_ctx, decl, NULL);
         curr_scope = saved_scope;
@@ -9136,17 +9146,46 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   case N_SPEC_DECL: {
     node_t specs = NL_HEAD (r->u.ops);
     node_t declarator = NL_NEXT (specs);
-    node_t initializer = NL_NEXT (declarator);
+    node_t attr = NL_NEXT (declarator);
+    node_t initializer = NL_NEXT (attr);
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->u.ops);
     struct decl_spec decl_spec = check_decl_spec (c2m_ctx, unshared_specs, r);
+    int i;
+    const char *asm_str = NULL;
 
+    if (attr->code == N_ASM) {
+      if (!decl_spec.register_p) {
+        error (c2m_ctx, POS (r), "asm decl without register");
+      } else if (initializer->code != N_IGNORE) {
+        error (c2m_ctx, POS (r), "asm register decl with initializer");
+      } else if (curr_scope != top_scope) {
+        error (c2m_ctx, POS (r), "asm register decl should be at the top level");
+      } else {
+        asm_str = NL_HEAD (attr->u.ops)->u.s.s;
+        for (i = 0; asm_str[i] != '\0' && _MIR_name_char_p (c2m_ctx->ctx, asm_str[i], i == 0); i++)
+          ;
+        if (asm_str[i] != '\0') {
+          error (c2m_ctx, POS (r), "asm register name %s contains wrong char '%c'", asm_str,
+                 asm_str[i]);
+          asm_str = NULL;
+        }
+      }
+    }
     if (declarator->code != N_IGNORE) {
       create_decl (c2m_ctx, curr_scope, r, decl_spec, NULL, initializer,
                    context != NULL && context->code == N_FUNC);
       decl_t decl = r->attr;
-      if ((initializer == NULL || initializer->code == N_IGNORE) && !decl->decl_spec.typedef_p
-          && !decl->decl_spec.extern_p
-          && (decl->decl_spec.type->mode == TM_STRUCT || decl->decl_spec.type->mode == TM_UNION)) {
+      if (asm_str != NULL) {
+        if (!scalar_type_p (decl->decl_spec.type)) {
+          error (c2m_ctx, POS (r), "asm register decl should have a scalar type");
+        } else {
+          decl->reg_p = TRUE;
+          decl->u.asm_str = asm_str;
+        }
+      } else if ((initializer == NULL || initializer->code == N_IGNORE)
+                 && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p
+                 && (decl->decl_spec.type->mode == TM_STRUCT
+                     || decl->decl_spec.type->mode == TM_UNION)) {
         VARR_PUSH (node_t, possible_incomplete_decls, r);
       }
     } else if (decl_spec.type->mode == TM_STRUCT || decl_spec.type->mode == TM_UNION) {
@@ -9289,14 +9328,14 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           error (c2m_ctx, POS (p), "parameter %s has no type", p->u.s.s);
         } else {
           warning (c2m_ctx, POS (p), "type of parameter %s defaults to int", p->u.s.s);
-          decl_node = new_pos_node3 (c2m_ctx, N_SPEC_DECL, POS (p),
+          decl_node = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (p),
                                      new_node1 (c2m_ctx, N_SHARE,
                                                 new_node1 (c2m_ctx, N_LIST,
                                                            new_pos_node (c2m_ctx, N_INT, POS (p)))),
                                      new_pos_node2 (c2m_ctx, N_DECL, POS (p),
                                                     new_str_node (c2m_ctx, N_ID, p->u.s, POS (p)),
                                                     new_node (c2m_ctx, N_LIST)),
-                                     new_node (c2m_ctx, N_IGNORE));
+                                     new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
           NL_APPEND (param_list->u.ops, decl_node);
           check (c2m_ctx, decl_node, r);
         }
@@ -9310,7 +9349,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         param_declarator = NL_EL (decl_node->u.ops, 1);
         assert (param_declarator->code == N_DECL);
         param_id = NL_HEAD (param_declarator->u.ops);
-        if (NL_NEXT (param_declarator)->code != N_IGNORE) {
+        if (NL_NEXT (NL_NEXT (param_declarator))->code != N_IGNORE) {
           error (c2m_ctx, POS (p), "initialized parameter %s", param_id->u.s.s);
         }
         decl_spec_ptr = &((decl_t) decl_node->attr)->decl_spec;
@@ -9854,7 +9893,8 @@ static void finish_reg_vars (c2m_ctx_t c2m_ctx) {
   if (reg_var_tab != NULL) HTAB_DESTROY (reg_var_t, reg_var_tab);
 }
 
-static reg_var_t get_reg_var (c2m_ctx_t c2m_ctx, MIR_type_t t, const char *reg_name) {
+static reg_var_t get_reg_var (c2m_ctx_t c2m_ctx, MIR_type_t t, const char *reg_name,
+                              const char *asm_str) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   reg_var_t reg_var, el;
@@ -9864,8 +9904,12 @@ static reg_var_t get_reg_var (c2m_ctx_t c2m_ctx, MIR_type_t t, const char *reg_n
   reg_var.name = reg_name;
   if (HTAB_DO (reg_var_t, reg_var_tab, reg_var, HTAB_FIND, el)) return el;
   t = t == MIR_T_I32 || t == MIR_T_U32 || t == MIR_T_U64 ? MIR_T_I64 : t;
-  reg = (t != MIR_T_UNDEF ? MIR_new_func_reg (ctx, curr_func->u.func, t, reg_name)
-                          : MIR_reg (ctx, reg_name, curr_func->u.func));
+  if (asm_str == NULL) {
+    reg = (t != MIR_T_UNDEF ? MIR_new_func_reg (ctx, curr_func->u.func, t, reg_name)
+                            : MIR_reg (ctx, reg_name, curr_func->u.func));
+  } else {
+    reg = MIR_new_global_func_reg (ctx, curr_func->u.func, t, reg_name, asm_str);
+  }
   str = reg_malloc (c2m_ctx, (strlen (reg_name) + 1) * sizeof (char));
   strcpy (str, reg_name);
   reg_var.name = str;
@@ -9917,7 +9961,7 @@ static op_t get_new_temp (c2m_ctx_t c2m_ctx, MIR_type_t t) {
            : t == MIR_T_D   ? "d_%u"
                             : "D_%u",
            reg_free_mark++);
-  reg = get_reg_var (c2m_ctx, t, reg_name).reg;
+  reg = get_reg_var (c2m_ctx, t, reg_name, NULL).reg;
   return new_op (NULL, MIR_new_reg_op (ctx, reg));
 }
 
@@ -11550,7 +11594,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
       }
       if (rel_offset < init_el.offset) { /* fill the gap: */
         data = MIR_new_bss (ctx, global_name, init_el.offset - rel_offset);
-        if (global_name != NULL) var.decl->item = data;
+        if (global_name != NULL) var.decl->u.item = data;
         global_name = NULL;
       }
       t = get_mir_type (c2m_ctx, init_el.el_type);
@@ -11564,7 +11608,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
           data_size = _MIR_type_size (ctx, MIR_T_P);
         } else {
           if (def->code != N_STR && def->code != N_STR16 && def->code != N_STR32) {
-            data = ((decl_t) def->attr)->item;
+            data = ((decl_t) def->attr)->u.item;
           } else {
             data = get_string_data (c2m_ctx, def);
           }
@@ -11649,13 +11693,13 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         data = MIR_new_ref_data (ctx, global_name, data, 0);
         data_size = _MIR_type_size (ctx, t);
       }
-      if (global_name != NULL) var.decl->item = data;
+      if (global_name != NULL) var.decl->u.item = data;
       global_name = NULL;
       rel_offset = init_el.offset + data_size;
     }
     if (rel_offset < size || size == 0) { /* fill the tail: */
       data = MIR_new_bss (ctx, global_name, size - rel_offset);
-      if (global_name != NULL) var.decl->item = data;
+      if (global_name != NULL) var.decl->u.item = data;
     }
   }
 }
@@ -12004,12 +12048,13 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     e = r->attr;
     assert (!e->const_p);
     if (e->lvalue_node == NULL) {
-      res = new_op (NULL, MIR_new_ref_op (ctx, ((decl_t) e->def_node->attr)->item));
-    } else if ((decl = e->lvalue_node->attr)->scope == top_scope || decl->decl_spec.static_p
-               || decl->decl_spec.linkage != N_IGNORE) {
+      res = new_op (NULL, MIR_new_ref_op (ctx, ((decl_t) e->def_node->attr)->u.item));
+    } else if (((decl = e->lvalue_node->attr)->scope == top_scope || decl->decl_spec.static_p
+                || decl->decl_spec.linkage != N_IGNORE)
+               && !decl->reg_p) {
       t = get_mir_type (c2m_ctx, e->type);
       res = get_new_temp (c2m_ctx, MIR_T_I64);
-      emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_ref_op (ctx, decl->item));
+      emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_ref_op (ctx, decl->u.item));
       res = new_op (decl, MIR_new_alias_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1,
                                                 get_type_alias (c2m_ctx, e->type), 0));
     } else if (!decl->reg_p) {
@@ -12026,7 +12071,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       t = promote_mir_int_type (t);
       name = get_reg_var_name (c2m_ctx, t, r->u.s.s,
                                ((struct node_scope *) decl->scope->attr)->func_scope_num);
-      reg_var = get_reg_var (c2m_ctx, t, name);
+      reg_var = get_reg_var (c2m_ctx, t, name, decl->u.asm_str);
       res = new_op (decl, MIR_new_reg_op (ctx, reg_var.reg));
     }
     break;
@@ -12240,7 +12285,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     size_t init_start;
 
     if (decl->scope == top_scope) {
-      assert (decl->item == NULL);
+      assert (decl->u.item == NULL);
       _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
       global_name = buff;
     }
@@ -12265,7 +12310,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                      decl->scope != top_scope && !decl->decl_spec.static_p
                        && !decl->decl_spec.thread_local_p);
     VARR_TRUNC (init_el_t, init_els, init_start);
-    if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->item;
+    if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->u.item;
     res = var;
     break;
   }
@@ -12426,7 +12471,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   case N_SPEC_DECL: {  // ??? export and defintion with external declaration
     node_t specs = NL_HEAD (r->u.ops);
     node_t declarator = NL_NEXT (specs);
-    node_t initializer = NL_NEXT (declarator);
+    node_t attr = NL_NEXT (declarator);
+    node_t initializer = NL_NEXT (attr);
     node_t id, curr_node;
     symbol_t sym;
     decl_t curr_decl;
@@ -12434,43 +12480,45 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     const char *name;
 
     decl = (decl_t) r->attr;
-    if (declarator != NULL && declarator->code != N_IGNORE && decl->item == NULL) {
+    if (declarator != NULL && declarator->code != N_IGNORE && decl->u.item == NULL) {
       id = NL_HEAD (declarator->u.ops);
       name = (decl->scope != top_scope && decl->decl_spec.static_p
                 ? get_func_static_var_name (c2m_ctx, id->u.s.s, decl)
                 : id->u.s.s);
-      if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
-        decl->item = MIR_new_forward (ctx, name);
-        move_item_forward (c2m_ctx, decl->item);
+      if (decl->reg_p) {
+      } else if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
+        decl->u.item = MIR_new_forward (ctx, name);
+        move_item_forward (c2m_ctx, decl->u.item);
       } else if (decl->used_p && decl->decl_spec.linkage != N_IGNORE) {
         if (symbol_find (c2m_ctx, S_REGULAR, id,
                          decl->decl_spec.linkage == N_EXTERN ? top_scope : decl->scope, &sym)
-            && (decl->item = get_ref_item (c2m_ctx, sym.def_node, name)) == NULL) {
+            && (decl->u.item = get_ref_item (c2m_ctx, sym.def_node, name)) == NULL) {
           for (i = 0; i < VARR_LENGTH (node_t, sym.defs); i++)
-            if ((decl->item = get_ref_item (c2m_ctx, VARR_GET (node_t, sym.defs, i), name)) != NULL)
+            if ((decl->u.item = get_ref_item (c2m_ctx, VARR_GET (node_t, sym.defs, i), name))
+                != NULL)
               break;
         }
-        if (decl->item == NULL) decl->item = MIR_new_import (ctx, name);
-        if (decl->scope != top_scope) move_item_forward (c2m_ctx, decl->item);
+        if (decl->u.item == NULL) decl->u.item = MIR_new_import (ctx, name);
+        if (decl->scope != top_scope) move_item_forward (c2m_ctx, decl->u.item);
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
-          && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p) {
+          && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p && !decl->reg_p) {
         if (initializer->code == N_IGNORE) {
           if (decl->scope != top_scope && decl->decl_spec.static_p) {
-            decl->item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
+            decl->u.item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
           } else if (decl->scope == top_scope
                      && symbol_find (c2m_ctx, S_REGULAR, id, top_scope, &sym)
-                     && ((curr_decl = sym.def_node->attr)->item == NULL
-                         || curr_decl->item->item_type != MIR_bss_item)) {
+                     && ((curr_decl = sym.def_node->attr)->u.item == NULL
+                         || curr_decl->u.item->item_type != MIR_bss_item)) {
             for (i = 0; i < VARR_LENGTH (node_t, sym.defs); i++) {
               curr_node = VARR_GET (node_t, sym.defs, i);
               curr_decl = curr_node->attr;
-              if ((curr_decl->item != NULL && curr_decl->item->item_type == MIR_bss_item)
-                  || NL_EL (curr_node->u.ops, 2)->code != N_IGNORE)
+              if ((curr_decl->u.item != NULL && curr_decl->u.item->item_type == MIR_bss_item)
+                  || NL_EL (curr_node->u.ops, 3)->code != N_IGNORE)
                 break;
             }
             if (i >= VARR_LENGTH (node_t, sym.defs)) /* No item yet or no decl with intializer: */
-              decl->item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
+              decl->u.item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
           }
         } else if (initializer->code != N_IGNORE) {  // ??? general code
           init_start = VARR_LENGTH (init_el_t, init_els);
@@ -12503,9 +12551,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                              && !decl->decl_spec.thread_local_p);
           VARR_TRUNC (init_el_t, init_els, init_start);
         }
-        if (decl->item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p) {
+        if (decl->u.item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p) {
           MIR_new_export (ctx, name);
-        } else if (decl->item != NULL && decl->scope != top_scope && decl->decl_spec.static_p) {
+        } else if (decl->u.item != NULL && decl->scope != top_scope && decl->decl_spec.static_p) {
           MIR_item_t item = MIR_new_forward (ctx, name);
 
           move_item_forward (c2m_ctx, item);
@@ -12546,7 +12594,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                          VARR_ADDR (MIR_type_t, proto_info.ret_types),
                                          VARR_LENGTH (MIR_var_t, proto_info.arg_vars),
                                          VARR_ADDR (MIR_var_t, proto_info.arg_vars)));
-    decl->item = curr_func;
+    decl->u.item = curr_func;
     if (ns->stack_var_p /* we can have empty struct only with size 0 and still need a frame: */
         || ns->size > 0) {
       fp_reg = MIR_new_func_reg (ctx, curr_func->u.func, MIR_T_I64, FP_NAME);
@@ -12555,7 +12603,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                      MIR_new_int_op (ctx, ns->size)));
     }
     for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, proto_info.arg_vars); i++)
-      get_reg_var (c2m_ctx, MIR_T_UNDEF, VARR_GET (MIR_var_t, proto_info.arg_vars, i).name);
+      get_reg_var (c2m_ctx, MIR_T_UNDEF, VARR_GET (MIR_var_t, proto_info.arg_vars, i).name, NULL);
     target_init_arg_vars (c2m_ctx, &arg_info);
     if ((first_param = NL_HEAD (decl_type->u.func_type->param_list->u.ops)) != NULL
         && !void_param_p (first_param)) {
@@ -12572,7 +12620,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         if (param_decl->reg_p) continue;
         if (param_type->mode == TM_STRUCT
             || param_type->mode == TM_UNION) { /* ??? only block pass */
-          param_reg = get_reg_var (c2m_ctx, MIR_POINTER_TYPE, name).reg;
+          param_reg = get_reg_var (c2m_ctx, MIR_POINTER_TYPE, name, NULL).reg;
           val = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, param_reg, 0, 1));
           var
             = new_op (param_decl, MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
@@ -12584,7 +12632,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                  MIR_new_alias_mem_op (ctx, param_mir_type, param_decl->offset,
                                        MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1,
                                        get_type_alias (c2m_ctx, param_type), 0),
-                 MIR_new_reg_op (ctx, get_reg_var (c2m_ctx, MIR_T_UNDEF, name).reg));
+                 MIR_new_reg_op (ctx, get_reg_var (c2m_ctx, MIR_T_UNDEF, name, NULL).reg));
         }
       }
     }
@@ -13046,7 +13094,7 @@ static const char *get_node_name (node_code_t code) {
     REP8 (C, SHORT, INT, LONG, FLOAT, DOUBLE, SIGNED, UNSIGNED, BOOL);
     REP8 (C, STRUCT, UNION, ENUM, ENUM_CONST, MEMBER, CONST, RESTRICT, VOLATILE);
     REP8 (C, ATOMIC, INLINE, NO_RETURN, ALIGNAS, FUNC, STAR, POINTER, DOTS);
-    REP7 (C, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE);
+    REP8 (C, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE, ASM);
   default: abort ();
   }
 #undef C
@@ -13350,6 +13398,7 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_FIELD_ID:
   case N_TYPE:
   case N_ST_ASSERT:
+  case N_ASM:
     fprintf (f, "\n");
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
@@ -13588,6 +13637,7 @@ static int top_level_getc (c2m_ctx_t c2m_ctx) { return c_getc (c_getc_data); }
 int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
                    void *getc_data, const char *source_name, FILE *output_file) {
   struct c2m_ctx *c2m_ctx = *c2m_ctx_loc (ctx);
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   double start_time = real_usec_time ();
   node_t r;
   unsigned n_error_before;
