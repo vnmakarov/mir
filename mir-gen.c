@@ -2114,14 +2114,35 @@ static void rename_regs (gen_ctx_t gen_ctx) {
       rename_bb_insn (gen_ctx, bb_insn);
 }
 
-static void build_ssa (gen_ctx_t gen_ctx) {
-  bb_t bb;
-  bb_insn_t def, bb_insn, phi;
+static void process_bb_insn_for_ssa (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  bb_t bb = bb_insn->bb;
+  bb_insn_t def;
   int op_num, out_p, mem_p;
-  size_t passed_mem_num, insns_num, i;
+  size_t passed_mem_num;
   MIR_reg_t var;
   def_tab_el_t el;
   insn_var_iterator_t iter;
+
+  FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    gen_assert (var > MAX_HARD_REG);
+    if (out_p) continue;
+    def = get_def (gen_ctx, var - MAX_HARD_REG, bb);
+    bb_insn->insn->ops[op_num].data = def;
+  }
+  FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    if (!out_p) continue;
+    el.bb = bb;
+    el.reg = var - MAX_HARD_REG;
+    el.def = bb_insn;
+    HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
+  }
+}
+
+static void build_ssa (gen_ctx_t gen_ctx) {
+  bb_t bb;
+  bb_insn_t bb_insn, phi;
+  size_t i, insns_num;
+  bitmap_iterator_t bi;
 
   gen_assert (VARR_LENGTH (bb_insn_t, arg_bb_insns) == 0
               && VARR_LENGTH (bb_insn_t, undef_insns) == 0);
@@ -2136,24 +2157,11 @@ static void build_ssa (gen_ctx_t gen_ctx) {
   for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
       if (bb_insn->insn->code != MIR_PHI) {
-        FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-          gen_assert (var > MAX_HARD_REG);
-          if (out_p || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var))) continue;
-          def = get_def (gen_ctx, var - MAX_HARD_REG, bb);
-          bb_insn->insn->ops[op_num].data = def;
-        }
         insns_num++;
-        FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p, passed_mem_num) {
-          if (!out_p) continue;
-          el.bb = bb;
-          el.reg = var - MAX_HARD_REG;
-          el.def = bb_insn;
-          HTAB_DO (def_tab_el_t, def_tab, el, HTAB_REPLACE, el);
-        }
+        process_bb_insn_for_ssa (gen_ctx, bb_insn);
       }
-    }
   }
   for (i = 0; i < VARR_LENGTH (bb_insn_t, phis); i++) {
     phi = VARR_GET (bb_insn_t, phis, i);
