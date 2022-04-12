@@ -2421,7 +2421,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
       }
       if (insn->code == MIR_LABEL) {
         set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
-      } else {
+      } else if (insn->code != MIR_USE) {
         int use_short_label_p = TRUE;
 
         if (n_iter > 0 && MIR_branch_code_p (code)) {

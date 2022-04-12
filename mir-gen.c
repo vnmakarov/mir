@@ -7057,6 +7057,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     next_insn = DLIST_NEXT (MIR_insn_t, curr_insn);
     if (MIR_branch_code_p (curr_insn->code) || curr_insn->code == MIR_SWITCH) break;
     switch (curr_insn->code) {
+    case MIR_USE: continue;
     case MIR_PRSET:
       gen_assert (curr_insn->ops[1].mode == MIR_OP_INT || curr_insn->ops[1].mode == MIR_OP_UINT);
       dest_spot = op2spot (gen_ctx, &curr_insn->ops[0]);

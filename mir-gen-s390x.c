@@ -2212,7 +2212,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
     }
     if (insn->code == MIR_LABEL) {
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
-    } else {
+    } else if (insn->code != MIR_USE) {
       replacement = find_insn_pattern_replacement (gen_ctx, insn);
       if (replacement == NULL) {
         fprintf (stderr, "fatal failure in matching insn:");
