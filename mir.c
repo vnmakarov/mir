@@ -2796,7 +2796,7 @@ static void output_vars (MIR_context_t ctx, FILE *f, MIR_func_t func, VARR (MIR_
     const char *hard_reg_name = MIR_reg_hard_reg_name (ctx, reg, func);
     if (hard_reg_name != NULL) fprintf (f, ":%s", hard_reg_name);
   }
-  if (vars_num % 8 != 0) fprintf (f, "\n");
+  fprintf (f, "\n");
 }
 
 void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {

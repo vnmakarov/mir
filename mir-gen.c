@@ -1387,7 +1387,7 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx);
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, next_insn;
+  MIR_insn_t insn, next_insn, ret_insn, use_insn;
   size_t i, nops;
   MIR_op_t *op;
   MIR_reg_t reg;
@@ -1419,8 +1419,25 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, bb);
   bitmap_clear (tied_regs);
-  for (; insn != NULL; insn = next_insn) {
+  for (ret_insn = NULL; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    if (insn->code == MIR_RET) {
+      if (ret_insn != NULL) { /* we should have only one ret insn before generator */
+        gen_assert (ret_insn == insn);
+      } else if (func->global_vars != NULL) {
+        VARR_TRUNC (MIR_op_t, temp_ops, 0);
+        for (i = 0; i < VARR_LENGTH (MIR_var_t, func->global_vars); i++) {
+          reg = MIR_reg (ctx, VARR_GET (MIR_var_t, func->global_vars, i).name, func);
+          VARR_PUSH (MIR_op_t, temp_ops, MIR_new_reg_op (ctx, reg));
+        }
+        use_insn = MIR_new_insn_arr (ctx, MIR_USE, VARR_LENGTH (MIR_op_t, temp_ops),
+                                     VARR_ADDR (MIR_op_t, temp_ops));
+        MIR_insert_insn_before (ctx, curr_func_item, insn, use_insn);
+        next_insn = use_insn;
+        ret_insn = insn;
+        continue;
+      }
+    }
     if (MIR_call_code_p (insn->code)) bb->call_p = TRUE;
     if (insn->data == NULL) {
       if (optimize_level != 0)
@@ -1635,7 +1652,7 @@ DEF_VARR (char);
 
 struct ssa_ctx {
   int def_use_repr_p; /* flag of def_use_chains */
-  /* Insns defining undef and initial arg values. They are not in insn lists. */
+  /* Different fake insns: defining undef, initial arg values. They are not in insn lists. */
   VARR (bb_insn_t) * arg_bb_insns, *undef_insns;
   VARR (bb_insn_t) * phis, *deleted_phis;
   HTAB (def_tab_el_t) * def_tab; /* reg,bb -> insn defining reg  */
@@ -1671,27 +1688,29 @@ static MIR_insn_code_t get_move_code (MIR_type_t type) {
                              : MIR_MOV);
 }
 
-static bb_insn_t get_start_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * start_insns, MIR_reg_t reg) {
+static bb_insn_t get_fake_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * fake_insns, MIR_reg_t reg) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_type_t type;
   MIR_op_t op;
   MIR_insn_t insn;
   bb_insn_t bb_insn;
+  bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); /* enter bb */
 
-  gen_assert (DLIST_HEAD (bb_t, curr_cfg->bbs)->index == 0);
+  gen_assert (bb->index == 0); /* enter bb */
   op = MIR_new_reg_op (ctx, reg);
-  while (VARR_LENGTH (bb_insn_t, start_insns) <= reg) VARR_PUSH (bb_insn_t, start_insns, NULL);
-  if ((bb_insn = VARR_GET (bb_insn_t, start_insns, reg)) == NULL) {
+  while (VARR_LENGTH (bb_insn_t, fake_insns) <= reg) VARR_PUSH (bb_insn_t, fake_insns, NULL);
+  if ((bb_insn = VARR_GET (bb_insn_t, fake_insns, reg)) == NULL) {
     type = MIR_reg_type (ctx, reg, curr_func_item->u.func);
     insn = MIR_new_insn (ctx, get_move_code (type), op, op);
-    bb_insn = create_bb_insn (gen_ctx, insn, DLIST_HEAD (bb_t, curr_cfg->bbs));
-    VARR_SET (bb_insn_t, start_insns, reg, bb_insn);
+    bb_insn = create_bb_insn (gen_ctx, insn, bb);
+    VARR_SET (bb_insn_t, fake_insns, reg, bb_insn);
   }
   return bb_insn;
 }
 
-static int start_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
-  return bb_insn->bb == DLIST_HEAD (bb_t, curr_cfg->bbs);
+static int fake_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  return bb_insn->bb->index == 0; /* enter bb */
+  ;
 }
 
 static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
@@ -1706,7 +1725,7 @@ static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_o
     same = def;
   }
   gen_assert (phi->insn->ops[0].mode == MIR_OP_REG);
-  if (same == NULL) same = get_start_insn (gen_ctx, undef_insns, phi->insn->ops[0].u.reg);
+  if (same == NULL) same = get_fake_insn (gen_ctx, undef_insns, phi->insn->ops[0].u.reg);
   return same;
 }
 
@@ -1755,7 +1774,7 @@ static bb_insn_t get_def (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb) {
   if (HTAB_DO (def_tab_el_t, def_tab, el, HTAB_FIND, tab_el)) return tab_el.def;
   if (DLIST_LENGTH (in_edge_t, bb->in_edges) == 1) {
     if ((src = DLIST_HEAD (in_edge_t, bb->in_edges)->src)->index == 0) { /* start bb: args */
-      return get_start_insn (gen_ctx, arg_bb_insns, reg);
+      return get_fake_insn (gen_ctx, arg_bb_insns, reg);
     }
     return get_def (gen_ctx, reg, DLIST_HEAD (in_edge_t, bb->in_edges)->src);
   }
@@ -1980,9 +1999,12 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t 
   VARR_PUSH (char, reg_name, sep);
   sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
-  gen_assert (hard_reg_name == NULL);
-  new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
-  if (hard_reg_name != NULL) bitmap_set_bit_p (tied_regs, new_reg);
+  if (hard_reg_name == NULL) {
+    new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
+  } else {
+    new_reg = MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name);
+    bitmap_set_bit_p (tied_regs, new_reg);
+  }
   update_min_max_reg (gen_ctx, new_reg);
   return new_reg;
 }
@@ -2033,7 +2055,7 @@ static void rename_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
 
   insn = bb_insn->insn;
   FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-    if (!out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var))) continue;
+    if (!out_p || !var_is_reg_p (var)) continue;
     ssa_edge = insn->ops[op_num].data;
     if (ssa_edge != NULL && ssa_edge->flag) continue; /* already processed */
     DEBUG (2, {
@@ -2073,8 +2095,7 @@ static void rename_regs (gen_ctx_t gen_ctx) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* clear all ssa edge flags */
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
-          continue;
+        if (out_p || !var_is_reg_p (var)) continue;
         ssa_edge = insn->ops[op_num].data;
         ssa_edge->flag = FALSE;
       }
@@ -2397,12 +2418,9 @@ static int get_ext_params (MIR_insn_code_t code, int *sign_p) {
   }
 }
 
-static int tied_reg_op_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
-  return op_ref->mode == MIR_OP_REG && bitmap_bit_p (tied_regs, op_ref->u.reg);
-}
-
 static void copy_prop (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
+  MIR_func_t func = curr_func_item->u.func;
   MIR_insn_t insn, def_insn;
   bb_insn_t bb_insn, next_bb_insn, def;
   ssa_edge_t se;
@@ -2416,17 +2434,15 @@ static void copy_prop (gen_ctx_t gen_ctx) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
-          continue;
+        if (out_p || !var_is_reg_p (var)) continue;
         for (;;) {
           se = insn->ops[op_num].data;
           def = se->def;
           if (def->bb->index == 0) break; /* arg init or undef insn */
           def_insn = def->insn;
-          if (!move_p (def_insn)
-              /* Keep setting of tied reg and do not extend its life */
-              || tied_reg_op_p (gen_ctx, &def_insn->ops[0])
-              || tied_reg_op_p (gen_ctx, &def_insn->ops[1]))
+          if (!move_p (def_insn) || def_insn->ops[0].u.reg == def_insn->ops[1].u.reg) break;
+          if (MIR_reg_hard_reg_name (ctx, def_insn->ops[0].u.reg, func)
+              != MIR_reg_hard_reg_name (ctx, def_insn->ops[1].u.reg, func))
             break;
           DEBUG (2, {
             fprintf (debug_file, "  Propagate from copy insn ");
@@ -2441,9 +2457,8 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           var = reg2var (gen_ctx, new_reg);
         }
       }
-      if (move_p (insn) && !tied_reg_op_p (gen_ctx, &insn->ops[0])
-          && !tied_reg_op_p (gen_ctx, &insn->ops[1]) && insn->ops[0].data != NULL
-          && (se = insn->ops[1].data) != NULL && se->def == DLIST_PREV (bb_insn_t, bb_insn)
+      if (move_p (insn) && insn->ops[0].data != NULL && (se = insn->ops[1].data) != NULL
+          && se->def == DLIST_PREV (bb_insn_t, bb_insn)
           && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use != NULL
           && se->next_use->next_use == NULL
           && (se->use == DLIST_NEXT (bb_insn_t, bb_insn)
@@ -2477,7 +2492,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           DEBUG (2, {
             fprintf (debug_file, "    Change code of insn %lu: before",
                      (unsigned long) bb_insn->index);
-            MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+            MIR_output_insn (ctx, debug_file, insn, func, FALSE);
           });
           insn->code = MIR_MOV;
           DEBUG (2, {
@@ -4922,9 +4937,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
   }
   for (mv_t mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = DLIST_NEXT (mv_t, mv)) {
     MIR_insn_t insn = mv->bb_insn->insn;
-    if (insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG
-        && !bitmap_bit_p (tied_regs, insn->ops[0].u.reg)
-        && !bitmap_bit_p (tied_regs, insn->ops[1].u.reg))
+    if (insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG)
       VARR_PUSH (mv_t, moves, mv);
   }
   qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
@@ -6304,13 +6317,11 @@ static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
       || (insn->nops > 0 && insn->ops[0].mode == MIR_OP_HARD_REG
           && (insn->ops[0].u.hard_reg == FP_HARD_REG || insn->ops[0].u.hard_reg == SP_HARD_REG)))
     return FALSE;
-  if (start_insn_p (gen_ctx, bb_insn)) return FALSE;
+  if (fake_insn_p (gen_ctx, bb_insn)) return FALSE;
   FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
     if (!out_p) continue;
     output_exists_p = TRUE;
-    if (mem_p || (ssa_edge = insn->ops[op_num].data) != NULL
-        || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
-      return FALSE;
+    if (mem_p || (ssa_edge = insn->ops[op_num].data) != NULL) return FALSE;
   }
   return output_exists_p;
 }
