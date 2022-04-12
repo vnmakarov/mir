@@ -1959,30 +1959,32 @@ static int get_var_def_op_num (gen_ctx_t gen_ctx, MIR_reg_t var, MIR_insn_t insn
   return -1;
 }
 
-static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
-  MIR_insn_t insn;
-  bb_t bb;
-  bb_insn_t bb_insn, def;
+static void process_insn_inputs_for_ssa_def_use_repr (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_insn_t insn = bb_insn->insn;
+  bb_insn_t def;
   int op_num, out_p, mem_p;
   size_t passed_mem_num;
   MIR_reg_t var;
   insn_var_iterator_t iter;
 
+  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+    if (out_p || !var_is_reg_p (var)) continue;
+    def = insn->ops[op_num].data;
+    gen_assert (def != NULL);
+    insn->ops[op_num].data = NULL;
+    add_ssa_edge (gen_ctx, def, get_var_def_op_num (gen_ctx, var, def->insn), bb_insn, op_num);
+  }
+}
+
+static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
+  bb_insn_t bb_insn;
+
   if (def_use_repr_p) return;
   def_use_repr_p = TRUE;
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      insn = bb_insn->insn;
-      FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p || !var_is_reg_p (var) || bitmap_bit_p (tied_regs, var2reg (gen_ctx, var)))
-          continue;
-        def = insn->ops[op_num].data;
-        gen_assert (def != NULL);
-        insn->ops[op_num].data = NULL;
-        add_ssa_edge (gen_ctx, def, get_var_def_op_num (gen_ctx, var, def->insn), bb_insn, op_num);
-      }
-    }
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+      process_insn_inputs_for_ssa_def_use_repr (gen_ctx, bb_insn);
 }
 
 static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t index) {
