@@ -3313,12 +3313,12 @@ static void copy_gvn_info (bb_insn_t to, bb_insn_t from) {
   to->alloca_flag = from->alloca_flag;
 }
 
-static void remove_move (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+static void remove_copy (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   ssa_edge_t se, last_se;
   bb_insn_t def;
   int def_op_num;
 
-  gen_assert (move_p (insn));
+  gen_assert (move_p (insn) || (insn->code == MIR_PHI && insn->nops == 2));
   se = insn->ops[1].data;
   def = se->def;
   def_op_num = se->def_op_num;
@@ -3380,13 +3380,18 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       switch (insn->code) {
       case MIR_PHI:
         const_p = gvn_phi_val (gen_ctx, bb_insn, &val);
-        if (!const_p) {
-          bb_insn->gvn_val_const_p = FALSE;
-          bb_insn->gvn_val = val;
-          print_bb_insn_value (gen_ctx, bb_insn);
+        if (const_p) break;
+        if (0 && insn->nops == 2 && insn->ops[0].mode == MIR_OP_REG
+            && insn->ops[1].mode == MIR_OP_REG
+            && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func)
+                 == MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func)) {
+          remove_copy (gen_ctx, insn);
           continue;
         }
-        break;
+        bb_insn->gvn_val_const_p = FALSE;
+        bb_insn->gvn_val = val;
+        print_bb_insn_value (gen_ctx, bb_insn);
+        continue;
       case MIR_EXT8: GVN_EXT (int8_t); break;
       case MIR_EXT16: GVN_EXT (int16_t); break;
       case MIR_EXT32: GVN_EXT (int32_t); break;
@@ -3629,13 +3634,14 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               continue;
             }
           }
-        } else if (move_p (insn) && !tied_reg_op_p (gen_ctx, &insn->ops[0])
-                   && !tied_reg_op_p (gen_ctx, &insn->ops[1]) && (se = insn->ops[1].data) != NULL
-                   && !start_insn_p (gen_ctx, se->def)
-                   && (se = se->def->insn->ops[se->def_op_num].data) != NULL
-                   && se->next_use == NULL) { /* one source for definition: remove copy */
+        } else if (move_p (insn) && (se = insn->ops[1].data) != NULL
+                   && !fake_insn_p (gen_ctx, se->def)
+                   && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use == NULL
+                   && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func)
+                        == MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func)) {
+          /* one source for definition: remove copy */
           gen_assert (se->use == bb_insn && se->use_op_num == 1);
-          remove_move (gen_ctx, insn);
+          remove_copy (gen_ctx, insn);
           continue;
         }
         break;
