@@ -2224,6 +2224,16 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
     }
 }
 
+static void free_bb_insns (gen_ctx_t gen_ctx, VARR (bb_insn_t) * bb_insns) {
+  bb_insn_t bb_insn;
+
+  while (VARR_LENGTH (bb_insn_t, bb_insns) != 0)
+    if ((bb_insn = VARR_POP (bb_insn_t, bb_insns)) != NULL) {  // ??? specialized free funcs
+      free (bb_insn->insn);
+      free (bb_insn);
+    }
+}
+
 static void undo_build_ssa (gen_ctx_t gen_ctx) {
   bb_t bb;
   bb_insn_t bb_insn, next_bb_insn;
@@ -2250,16 +2260,8 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (bb_insn->insn->code == MIR_PHI) gen_delete_insn (gen_ctx, bb_insn->insn);
     }
-  while (VARR_LENGTH (bb_insn_t, arg_bb_insns) != 0)
-    if ((bb_insn = VARR_POP (bb_insn_t, arg_bb_insns)) != NULL) {  // ??? specialized free funcs
-      free (bb_insn->insn);
-      free (bb_insn);
-    }
-  while (VARR_LENGTH (bb_insn_t, undef_insns) != 0)
-    if ((bb_insn = VARR_POP (bb_insn_t, undef_insns)) != NULL) {  // ??? specialized free funcs
-      free (bb_insn->insn);
-      free (bb_insn);
-    }
+  free_bb_insns (gen_ctx, arg_bb_insns);
+  free_bb_insns (gen_ctx, undef_insns);
 }
 
 static void init_ssa (gen_ctx_t gen_ctx) {
