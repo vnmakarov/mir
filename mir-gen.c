@@ -2447,7 +2447,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
         if (out_p || !var_is_reg_p (var)) continue;
-        for (;;) {
+        for (int n = 0; n < 30; n++) { /* unreachable code can create loops in copies */
           se = insn->ops[op_num].data;
           def = se->def;
           if (def->bb->index == 0) break; /* arg init or undef insn */
@@ -3397,8 +3397,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_PHI:
         const_p = gvn_phi_val (gen_ctx, bb_insn, &val);
         if (const_p) break;
-        if (0 && insn->nops == 2 && insn->ops[0].mode == MIR_OP_REG
-            && insn->ops[1].mode == MIR_OP_REG
+        if (insn->nops == 2 && insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG
             && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func)
                  == MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func)) {
           remove_copy (gen_ctx, insn);
