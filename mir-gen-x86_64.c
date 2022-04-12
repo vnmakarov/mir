@@ -666,13 +666,6 @@ static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_di
   return TRUE;
 }
 
-#define SWAP(v1, v2, t) \
-  do {                  \
-    t = v1;             \
-    v1 = v2;            \
-    v2 = t;             \
-  } while (0)
-
 static void target_machinize (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func;

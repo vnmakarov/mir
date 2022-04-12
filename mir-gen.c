@@ -111,6 +111,13 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn);
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg);
 
+#define SWAP(v1, v2, temp) \
+  do {                     \
+    temp = v1;             \
+    v1 = v2;               \
+    v2 = temp;             \
+  } while (0)
+
 #ifndef MIR_GEN_CALL_TRACE
 #define MIR_GEN_CALL_TRACE 0
 #endif
@@ -1713,10 +1720,11 @@ static bb_insn_t create_phi (gen_ctx_t gen_ctx, bb_t bb, MIR_op_t op) {
   while (VARR_LENGTH (MIR_op_t, temp_ops) < len) VARR_PUSH (MIR_op_t, temp_ops, op);
   phi_insn = MIR_new_insn_arr (ctx, MIR_PHI, len, VARR_ADDR (MIR_op_t, temp_ops));
   bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns);
-  if (bb_insn->insn->code == MIR_LABEL)
+  if (bb_insn->insn->code == MIR_LABEL) {
     gen_add_insn_after (gen_ctx, bb_insn->insn, phi_insn);
-  else
+  } else {
     gen_add_insn_before (gen_ctx, bb_insn->insn, phi_insn);
+  }
   phi_insn->ops[0].data = phi = phi_insn->data;
   VARR_PUSH (bb_insn_t, phis, phi);
   return phi;
@@ -4504,11 +4512,7 @@ static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
   if (r1 == NULL) return r2;
   if (r2 == NULL) return r1;
   for (first = last = NULL; r1 != NULL && r2 != NULL;) {
-    if (r1->start < r2->start) { /* swap */
-      temp = r1;
-      r1 = r2;
-      r2 = temp;
-    }
+    if (r1->start < r2->start) SWAP (r1, r2, temp);
     if (r1->start == r2->finish + 1) {
       /* Joint ranges: merge r1 and r2 into r1.  */
       r1->start = r2->start;
@@ -4872,13 +4876,17 @@ static int mv_freq_cmp (const void *v1p, const void *v2p) {
   return (long) mv1->bb_insn->index - (long) mv2->bb_insn->index;
 }
 
-/* Merge two sets of coalesced regs given correspondingly by regs REG1 and REG2 (more accurately
-   merging REG2 group into REG1 group).  Set up COALESCED_REGS_BITMAP.  */
+/* Merge two sets of coalesced regs given correspondingly by regs REG1 and REG2.  Set up
+   COALESCED_REGS_BITMAP.  */
 static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
-  MIR_reg_t reg, first, first2, last, next, first_var, first2_var;
+  MIR_reg_t reg, first, first2, last, next, first_var, first2_var, temp;
 
   first = VARR_GET (MIR_reg_t, first_coalesced_reg, reg1);
   if ((first2 = VARR_GET (MIR_reg_t, first_coalesced_reg, reg2)) == first) return;
+  if (MIR_reg_hard_reg_name (gen_ctx->ctx, first2, curr_func_item->u.func) != NULL) {
+    SWAP (first, first2, temp);
+    SWAP (reg1, reg2, temp);
+  }
   for (last = reg2, reg = VARR_GET (MIR_reg_t, next_coalesced_reg, reg2);;
        reg = VARR_GET (MIR_reg_t, next_coalesced_reg, reg)) {
     VARR_SET (MIR_reg_t, first_coalesced_reg, reg, first);
