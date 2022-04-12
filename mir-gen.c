@@ -3334,10 +3334,26 @@ static void remove_copy (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   if (insn->ops[0].data != NULL) ((ssa_edge_t) insn->ops[0].data)->prev_use = last_se;
   insn->ops[0].data = NULL;
   DEBUG (2, {
-    fprintf (debug_file, "    Remove move %-5lu", (unsigned long) ((bb_insn_t) insn->data)->index);
+    fprintf (debug_file, "    Remove copy %-5lu", (unsigned long) ((bb_insn_t) insn->data)->index);
     print_bb_insn (gen_ctx, insn->data, FALSE);
   });
   gen_delete_insn (gen_ctx, insn);
+}
+
+/* we are at curr bb from start, return true if can go to start avoiding dst */
+static int reachable_without_visiting_bb_p (gen_ctx_t gen_ctx, bb_t curr, bb_t start,
+                                            bb_t exclude) {
+  if (curr == exclude || !bitmap_set_bit_p (temp_bitmap2, curr->index)) return FALSE;
+  for (edge_t e = DLIST_HEAD (out_edge_t, curr->out_edges); e != NULL;
+       e = DLIST_NEXT (out_edge_t, e))
+    if (e->dst == start || reachable_without_visiting_bb_p (gen_ctx, e->dst, start, exclude))
+      return TRUE;
+  return FALSE;
+}
+
+static int cycle_without_visiting_bb_p (gen_ctx_t gen_ctx, bb_t start, bb_t exclude) {
+  bitmap_clear (temp_bitmap2);
+  return reachable_without_visiting_bb_p (gen_ctx, start, start, exclude);
 }
 
 static void gvn_modify (gen_ctx_t gen_ctx) {
@@ -3581,7 +3597,14 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         if (insn->ops[0].mode == MIR_OP_MEM) { /* store */
           if ((se = insn->ops[1].data) != NULL && se->def->alloca_flag) full_escape_p = TRUE;
           se = insn->ops[0].data; /* address def actually */
-          if ((prev_e = add_store (gen_ctx, insn)) != NULL) {
+          if ((prev_e = add_store (gen_ctx, insn)) != NULL
+              /* If we can reach prev expression bb from itself w/o going through given bb then
+                 it means it can be stores with different addresses and we just have the same
+                 memory only for the last store and can not make dead store in prev expr bb.  It
+                 is also not worth to reuse stored value as it will create a move from some loop
+                 containing prev expr bb and not containing given bb.  Make new memory for such
+                 case.  */
+              && !cycle_without_visiting_bb_p (gen_ctx, ((bb_insn_t) prev_e->insn->data)->bb, bb)) {
             insn->ops[0].u.mem.nloc = prev_e->insn->ops[0].u.mem.nloc;
             update_mem_loc_alloca_flag (gen_ctx, insn->ops[0].u.mem.nloc, se->def->alloca_flag);
           } else {
