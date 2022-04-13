@@ -4647,8 +4647,11 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
         if (out_p) incr_p |= make_var_dead (gen_ctx, var, curr_point);
       }
       if (MIR_call_code_p (insn->code)) {
+        if (incr_p) curr_point++;
+        incr_p = FALSE;
         FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
           make_var_dead (gen_ctx, nel, curr_point);
+          incr_p = TRUE;
         }
         FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
           make_var_live (gen_ctx, nel, curr_point);
