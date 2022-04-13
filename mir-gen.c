@@ -5179,6 +5179,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   live_range_t lr;
   bitmap_t bm;
   size_t length, profit, best_profit;
+  int best_saved_p;
   bitmap_t *used_locs_addr;
   breg_info_t breg_info;
   MIR_func_t func = curr_func_item->u.func;
@@ -5262,6 +5263,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     setup_loc_profits (gen_ctx, breg);
     best_loc = MIR_NON_HARD_REG;
     best_profit = 0;
+    best_saved_p = FALSE;
     if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
     for (n = 0; n <= MAX_HARD_REG; n++) {
@@ -5283,7 +5285,10 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       profit = (VARR_GET (size_t, loc_profit_ages, loc) != curr_age
                   ? 0
                   : VARR_GET (size_t, loc_profits, loc));
-      if (best_loc == MIR_NON_HARD_REG || best_profit < profit) {
+      if (best_loc == MIR_NON_HARD_REG || best_profit < profit
+          || (best_profit == profit && best_saved_p
+              && bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], loc))) {
+        best_saved_p = !bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], loc);
         best_loc = loc;
         best_profit = profit;
       }
