@@ -3356,6 +3356,15 @@ static int cycle_without_visiting_bb_p (gen_ctx_t gen_ctx, bb_t start, bb_t excl
   return reachable_without_visiting_bb_p (gen_ctx, start, start, exclude);
 }
 
+/* Memory displacement to prefer for memory address recalculation instead.  */
+#ifndef TARGET_MAX_MEM_DISP
+#define TARGET_MAX_MEM_DISP 127
+#endif
+
+#ifndef TARGET_MIN_MEM_DISP
+#define TARGET_MIN_MEM_DISP -128
+#endif
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -3771,6 +3780,16 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       print_bb_insn_value (gen_ctx, bb_insn);
       if (e == NULL || e->insn == insn || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
+      /* Do not recalculate reg + const if it is only used in address: */
+      if ((insn->code == MIR_ADD || insn->code == MIR_SUB) && (se = insn->ops[0].data) != NULL
+          && se->next_use == NULL && se->use->insn->ops[se->use_op_num].mode == MIR_OP_MEM
+          && (((se2 = insn->ops[2].data) != NULL && imm_move_p (se2->def->insn))
+              || (insn->code == MIR_ADD && (se2 = insn->ops[1].data) != NULL
+                  && imm_move_p (se2->def->insn)))) {
+        int64_t disp = se2->def->insn->ops[1].u.i;
+        if (insn->code == MIR_SUB) disp = -disp;
+        if (TARGET_MIN_MEM_DISP <= disp && disp <= TARGET_MAX_MEM_DISP) continue;
+      }
       expr_bb_insn = e->insn->data;
       if (bb->index != expr_bb_insn->bb->index
           && !bitmap_bit_p (bb->dom_in, expr_bb_insn->bb->index))
