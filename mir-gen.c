@@ -2360,7 +2360,7 @@ static int addr_eliminable_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
 }
 
 // aliasing, loc ???
-static int remove_addr_insns (gen_ctx_t gen_ctx) {
+static void transform_addrs (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   int op_num, out_p, mem_p, ssa_rebuild_p = FALSE;
   size_t passed_mem_num;
@@ -2517,10 +2517,7 @@ static int remove_addr_insns (gen_ctx_t gen_ctx) {
         gen_delete_insn (gen_ctx, insn);
       }
     }
-  return ssa_rebuild_p;
 }
-
-static void transform_addrs (gen_ctx_t gen_ctx) { remove_addr_insns (gen_ctx); }
 
 /* New Page */
 
