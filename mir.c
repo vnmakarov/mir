@@ -171,6 +171,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_FNEG, "fneg", {MIR_OP_FLOAT | OUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DNEG, "dneg", {MIR_OP_DOUBLE | OUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
   {MIR_LDNEG, "ldneg", {MIR_OP_LDOUBLE | OUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
+  {MIR_ADDR, "addr", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}}, /* MIR_OP_REG! */
   {MIR_ADD, "add", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ADDS, "adds", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FADD, "fadd", {MIR_OP_FLOAT | OUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
@@ -1578,6 +1579,12 @@ void MIR_finish_func (MIR_context_t ctx) {
               || ((code == MIR_VA_ARG || code == MIR_VA_BLOCK_ARG) && i == 1)
               || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
         insn->ops[i].value_mode = expected_mode;
+      } else if (expected_mode == MIR_OP_REG) {
+        if (insn->ops[i].mode != MIR_OP_REG && insn->ops[i].mode != MIR_OP_HARD_REG)
+          MIR_get_error_func (
+            ctx) (MIR_op_mode_error,
+                  "func %s: in instruction '%s': expected reg for operand #%d. Got '%s'", func_name,
+                  insn_descs[code].name, i + 1, mode_str (insn->ops[i].mode));
       } else if (expected_mode != MIR_OP_UNDEF
                  && (mode == MIR_OP_UINT ? MIR_OP_INT : mode) != expected_mode) {
         curr_func = NULL;
@@ -1891,6 +1898,9 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
     *out_p = FALSE;
     /* should be already checked in MIR_finish_func */
     return nop == 0 && code == MIR_SWITCH ? MIR_OP_INT : insn->ops[nop].mode;
+  } else if (code == MIR_ADDR) {
+    *out_p = nop == 0;
+    return nop == 0 ? MIR_OP_INT : insn->ops[nop].mode;
   } else if (code == MIR_PHI) {
     *out_p = nop == 0;
     return insn->ops[nop].mode;

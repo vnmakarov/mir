@@ -390,7 +390,10 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_export_item
                           || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
-      push_insn_start (interp_ctx, imm_call_p ? IC_IMM_CALL : code == MIR_INLINE ? MIR_CALL : code,
+      push_insn_start (interp_ctx,
+                       imm_call_p           ? IC_IMM_CALL
+                       : code == MIR_INLINE ? MIR_CALL
+                                            : code,
                        insn);
       if (code == MIR_SWITCH) {
         VARR_PUSH (MIR_insn_t, branches, insn);
@@ -911,7 +914,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP6 (LAB_EL, MIR_EXT8, MIR_EXT16, MIR_EXT32, MIR_UEXT8, MIR_UEXT16, MIR_UEXT32);
     REP6 (LAB_EL, MIR_I2F, MIR_I2D, MIR_I2LD, MIR_UI2F, MIR_UI2D, MIR_UI2LD);
     REP8 (LAB_EL, MIR_F2I, MIR_D2I, MIR_LD2I, MIR_F2D, MIR_F2LD, MIR_D2F, MIR_D2LD, MIR_LD2F);
-    REP8 (LAB_EL, MIR_LD2D, MIR_NEG, MIR_NEGS, MIR_FNEG, MIR_DNEG, MIR_LDNEG, MIR_ADD, MIR_ADDS);
+    REP6 (LAB_EL, MIR_LD2D, MIR_NEG, MIR_NEGS, MIR_FNEG, MIR_DNEG, MIR_LDNEG);
+    REP3 (LAB_EL, MIR_ADDR, MIR_ADD, MIR_ADDS);
     REP8 (LAB_EL, MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, MIR_LDSUB);
     REP8 (LAB_EL, MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_LDMUL, MIR_DIV, MIR_DIVS, MIR_UDIV);
     REP8 (LAB_EL, MIR_UDIVS, MIR_FDIV, MIR_DDIV, MIR_LDDIV, MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS);
@@ -1120,6 +1124,14 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_FNEG, 2, FOP2 (-));
   SCASE (MIR_DNEG, 2, DOP2 (-));
   SCASE (MIR_LDNEG, 2, LDOP2 (-));
+
+  CASE (MIR_ADDR, 2) {
+    int64_t *r = get_iop (bp, ops);
+    void **p = get_aop (bp, ops + 1);
+
+    *r = (int64_t) p;
+    END_INSN;
+  }
 
   SCASE (MIR_ADD, 3, IOP3 (+));
   SCASE (MIR_ADDS, 3, IOP3S (+));
@@ -1524,8 +1536,9 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
         if (mode == MIR_OP_FLOAT)
           (*MIR_get_error_func (ctx)) (MIR_call_op_error,
                                        "passing float variadic arg (should be passed as double)");
-        call_arg_descs[i].type
-          = (mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64);
+        call_arg_descs[i].type = (mode == MIR_OP_DOUBLE    ? MIR_T_D
+                                  : mode == MIR_OP_LDOUBLE ? MIR_T_LD
+                                                           : MIR_T_I64);
       }
     }
     ff_interface_addr = ffi_address_ptr->a
