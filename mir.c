@@ -3223,6 +3223,13 @@ static void simplify_insn (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t i
   }
 }
 
+static MIR_insn_code_t get_type_move_code (MIR_type_t type) {
+  return (type == MIR_T_F    ? MIR_FMOV
+          : type == MIR_T_D  ? MIR_DMOV
+          : type == MIR_T_LD ? MIR_LDMOV
+                             : MIR_MOV);
+}
+
 static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   size_t i, j;
   MIR_insn_code_t mov_code, ext_code;
@@ -3249,10 +3256,7 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
     if (one_last_ret_p) {
       ret_reg_op = first_ret_insn->ops[i];
     } else {
-      mov_code = (res_types[i] == MIR_T_F    ? MIR_FMOV
-                  : res_types[i] == MIR_T_D  ? MIR_DMOV
-                  : res_types[i] == MIR_T_LD ? MIR_LDMOV
-                                             : MIR_MOV);
+      mov_code = get_type_move_code (res_types[i]);
       ret_reg = _MIR_new_temp_reg (ctx, mov_code == MIR_MOV ? MIR_T_I64 : res_types[i], func);
       ret_reg_op = MIR_new_reg_op (ctx, ret_reg);
       VARR_PUSH (MIR_op_t, ret_ops, ret_reg_op);
@@ -3267,11 +3271,16 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
     default: ext_code = MIR_INVALID_INSN; break;
     }
     if (ext_code == MIR_INVALID_INSN) continue;
-    if (one_last_ret_p)
+    if (one_last_ret_p) {
+      mov_code = get_type_move_code (res_types[i]);
+      ret_reg = _MIR_new_temp_reg (ctx, mov_code == MIR_MOV ? MIR_T_I64 : res_types[i], func);
+      ret_reg_op = MIR_new_reg_op (ctx, ret_reg);
       MIR_insert_insn_before (ctx, func_item, first_ret_insn,
-                              MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
-    else
+                              MIR_new_insn (ctx, ext_code, ret_reg_op, first_ret_insn->ops[i]));
+      first_ret_insn->ops[i] = ret_reg_op;
+    } else {
       MIR_append_insn (ctx, func_item, MIR_new_insn (ctx, ext_code, ret_reg_op, ret_reg_op));
+    }
   }
   if (!one_last_ret_p) {
     MIR_append_insn (ctx, func_item,
@@ -3280,10 +3289,7 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
       insn = VARR_GET (MIR_insn_t, temp_insns, i);
       mir_assert (func->nres == MIR_insn_nops (ctx, insn));
       for (j = 0; j < func->nres; j++) {
-        mov_code = (res_types[j] == MIR_T_F    ? MIR_FMOV
-                    : res_types[j] == MIR_T_D  ? MIR_DMOV
-                    : res_types[j] == MIR_T_LD ? MIR_LDMOV
-                                               : MIR_MOV);
+        mov_code = get_type_move_code (res_types[j]);
         reg_op = insn->ops[j];
         mir_assert (reg_op.mode == MIR_OP_REG);
         ret_reg_op = VARR_GET (MIR_op_t, ret_ops, j);
