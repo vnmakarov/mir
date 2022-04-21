@@ -8216,7 +8216,7 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
     decl = VARR_GET (decl_t, func_decls_for_allocation, i);
     type = decl->decl_spec.type;
     ns = decl->scope->attr;
-    if (scalar_type_p (type) && !decl->addr_p) {
+    if (scalar_type_p (type)) {
       decl->reg_p = TRUE;
       continue;
     }
@@ -12133,14 +12133,19 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int add_p = FALSE;
 
     op1 = gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL);
-    if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF
-        || op1.mir_op.mode == MIR_OP_STR) { /* array or func */
+    type = ((struct expr *) r->attr)->type;
+    t = get_mir_type (c2m_ctx, type);
+    if (op1.mir_op.mode == MIR_OP_REG && type->mode == TM_PTR && scalar_type_p (type->u.ptr_type)) {
+      res = get_new_temp (c2m_ctx, t);
+      emit2 (c2m_ctx, MIR_ADDR, res.mir_op, MIR_new_reg_op (ctx, op1.mir_op.u.reg));
+      break;
+    } else if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF
+               || op1.mir_op.mode == MIR_OP_STR) { /* array or func */
       res = op1;
       res.decl = NULL;
       break;
     }
     assert (op1.mir_op.mode == MIR_OP_MEM);
-    t = get_mir_type (c2m_ctx, ((struct expr *) r->attr)->type);
     res = get_new_temp (c2m_ctx, t);
     if (op1.mir_op.u.mem.index != 0) {
       emit3 (c2m_ctx, MIR_MUL, res.mir_op, MIR_new_reg_op (ctx, op1.mir_op.u.mem.index),
