@@ -2235,6 +2235,15 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
           DLIST_APPEND (bb_insn_t, e->src->bb_insns, new_bb_insn);
         } else if (MIR_branch_code_p (tail->insn->code) || tail->insn->code == MIR_SWITCH) {
           gen_add_insn_before (gen_ctx, tail->insn, new_insn);
+          for (size_t j = 0; j < tail->insn->nops; j++) {
+            /* remove a conflict: we have new_reg = p; b ..p.. => new_reg = p; b .. new_reg .. */
+            if (tail->insn->ops[j].mode != MIR_OP_REG
+                || tail->insn->ops[j].u.reg != new_insn->ops[1].u.reg)
+              continue;
+            tail->insn->ops[j].u.reg = new_reg;
+            remove_ssa_edge (gen_ctx, tail->insn->ops[j].data);
+            add_ssa_edge (gen_ctx, new_insn->data, 0, tail, j);
+          }
         } else {
           gen_add_insn_after (gen_ctx, tail->insn, new_insn);
         }
