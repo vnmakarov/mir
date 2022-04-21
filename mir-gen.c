@@ -3633,6 +3633,30 @@ static mem_expr_t find_first_available_mem_expr (mem_expr_t list, bitmap_t avail
 #define TARGET_MIN_MEM_DISP -128
 #endif
 
+static void remove_unreachable_bb_edges (gen_ctx_t gen_ctx, bb_t bb, VARR (bb_t) * bbs) {
+  bb_t dst;
+  edge_t e, next_e;
+
+  VARR_TRUNC (bb_t, bbs, 0);
+  VARR_PUSH (bb_t, bbs, bb);
+  while (VARR_LENGTH (bb_t, bbs) != 0) {
+    bb = VARR_POP (bb_t, bbs);
+    DEBUG (2, {
+      fprintf (debug_file, "  Deleting output edges of unreachable bb%lu\n",
+               (unsigned long) bb->index);
+    });
+    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = next_e) {
+      next_e = DLIST_NEXT (out_edge_t, e);
+      remove_edge_phi_ops (gen_ctx, e);
+      dst = e->dst;
+      dst->flag = TRUE; /* to recalculate dst mem_av_in */
+      delete_edge (e);
+      if (dst->index > 2 && DLIST_HEAD (in_edge_t, dst->in_edges) == NULL)
+        VARR_PUSH (bb_t, bbs, dst);
+    }
+  }
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -3650,6 +3674,14 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
     bb = VARR_GET (bb_t, worklist, i);
     DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
+    if (bb->index > 2 && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL) {
+      /* Unreachable bb because of branch transformation: remove output edges
+         recursively as it shorten phis in successors and this creates more opportunity for
+         optimizations. But don't remove insns as their output can be used in unreachable loops
+         (unreachable loops will be removed in jump optimization pass). */
+      remove_unreachable_bb_edges (gen_ctx, bb, pending);
+      continue;
+    }
     /* Recalculate mem_avin and mem_av_out: */
     if (DLIST_HEAD (in_edge_t, bb->in_edges) != NULL && bb->flag
         && mem_av_con_func_n (gen_ctx, bb)) {
