@@ -698,6 +698,7 @@ extern void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_t
                                _MIR_arg_desc_t *arg_descs, size_t arg_vars_num);
 extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handler);
 extern void *_MIR_get_thunk (MIR_context_t ctx);
+extern void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
 extern void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler);

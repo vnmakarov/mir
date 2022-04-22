@@ -163,6 +163,12 @@ void *_MIR_get_thunk (MIR_context_t ctx) {
   return res;
 }
 
+void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk) {
+  void *addr;
+  memcpy ((char *) &addr, (char *) thunk + 2, sizeof (addr));
+  return addr;
+}
+
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   _MIR_update_code (ctx, thunk, 1, 2, to);
 }
