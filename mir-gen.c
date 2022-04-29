@@ -2659,12 +2659,28 @@ static int get_ext_params (MIR_insn_code_t code, int *sign_p) {
   }
 }
 
+static int cmp_res64_p (MIR_insn_code_t cmp_code) {
+  switch (cmp_code) {
+#define REP_SEP :
+#define CASE_EL(e) case MIR_##e
+    REP4 (CASE_EL, EQ, FEQ, DEQ, LDEQ)
+      : REP4 (CASE_EL, NE, FNE, DNE, LDNE)
+      : REP5 (CASE_EL, LT, ULT, FLT, DLT, LDLT)
+      : REP5 (CASE_EL, LE, ULE, FLE, DLE, LDLE)
+      : REP5 (CASE_EL, GT, UGT, FGT, DGT, LDGT)
+      : REP5 (CASE_EL, GE, UGE, FGE, DGE, LDGE) : return TRUE;
+#undef REP_SEP
+  default: return FALSE;
+  }
+}
+
 static void copy_prop (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, def_insn;
+  MIR_insn_t insn, def_insn, new_insn, mov_insn;
+  MIR_op_t temp_op;
   bb_insn_t bb_insn, next_bb_insn, def;
-  ssa_edge_t se;
+  ssa_edge_t se, se2;
   int op_num, out_p, mem_p, w, w2, sign_p, sign2_p;
   size_t passed_mem_num;
   MIR_reg_t var, reg, new_reg;
@@ -2734,24 +2750,70 @@ static void copy_prop (gen_ctx_t gen_ctx) {
       insn = transform_mul_div (gen_ctx, insn);
       bb_insn = insn->data;
       w = get_ext_params (insn->code, &sign_p);
-      if (w != 0 && insn->ops[1].mode == MIR_OP_REG && var_is_reg_p (insn->ops[1].u.reg)) {
-        se = insn->ops[1].data;
-        def_insn = se->def->insn;
-        w2 = get_ext_params (def_insn->code, &sign2_p);
-        if (w2 != 0 && sign_p == sign2_p && w2 <= w) {
-          DEBUG (2, {
-            fprintf (debug_file, "    Change code of insn %lu: before",
-                     (unsigned long) bb_insn->index);
-            MIR_output_insn (ctx, debug_file, insn, func, FALSE);
-          });
-          insn->code = MIR_MOV;
-          DEBUG (2, {
-            fprintf (debug_file, "    after ");
-            print_bb_insn (gen_ctx, bb_insn, FALSE);
-          });
-          next_bb_insn = bb_insn; /* process the new move */
+      if (w == 0 || insn->ops[1].mode != MIR_OP_REG) continue;
+      se = insn->ops[1].data;
+      def_insn = se->def->insn;
+      if (cmp_res64_p (def_insn->code)) {
+        DEBUG (2, {
+          fprintf (debug_file, "    Change code of insn %lu ", (unsigned long) bb_insn->index);
+          MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+          fprintf (debug_file, "    to move\n");
+        });
+        insn->code = MIR_MOV;
+        next_bb_insn = bb_insn; /* process the new move */
+        continue;
+      }
+      w2 = get_ext_params (def_insn->code, &sign2_p);
+      if (w2 != 0 && sign_p == sign2_p && w2 <= w) { /* ext a,...; ext b,... */
+        DEBUG (2, {
+          fprintf (debug_file, "    Change code of insn %lu: before",
+                   (unsigned long) bb_insn->index);
+          MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+        });
+        insn->code = MIR_MOV;
+        DEBUG (2, {
+          fprintf (debug_file, "    after ");
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        next_bb_insn = bb_insn; /* process the new move */
+        continue;
+      }
+      if (!sign_p && (def_insn->code == MIR_AND || def_insn->code == MIR_ANDS)) {
+        if ((se2 = def_insn->ops[1].data) != NULL && (mov_insn = se2->def->insn)->code == MIR_MOV
+            && (mov_insn->ops[1].mode == MIR_OP_INT || mov_insn->ops[1].mode == MIR_OP_UINT))
+          SWAP (def_insn->ops[1], def_insn->ops[2], temp_op);
+        if ((se2 = def_insn->ops[2].data) == NULL || (mov_insn = se2->def->insn)->code != MIR_MOV
+            || (mov_insn->ops[1].mode != MIR_OP_INT && mov_insn->ops[1].mode != MIR_OP_UINT))
           continue;
-        }
+        uint64_t c1 = mov_insn->ops[1].u.u;
+        uint64_t c2 = w == 8 ? 0xff : w == 16 ? 0xffff : 0xffffffff;
+        /* and r1,r2,c1; ... uext r, r1 => and r1,r2,c1; ... mov t, c1 & c2; and r, r2, t */
+        DEBUG (2, {
+          fprintf (debug_file, "    Change code of insn %lu ", (unsigned long) bb_insn->index);
+          MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+        });
+        new_reg = gen_new_temp_reg (gen_ctx, MIR_T_I64, func);
+        mov_insn = MIR_new_insn (ctx, MIR_MOV, MIR_new_reg_op (ctx, new_reg),
+                                 MIR_new_int_op (ctx, c1 & c2));
+        gen_add_insn_before (gen_ctx, insn, mov_insn);
+        new_insn = MIR_new_insn (ctx, MIR_AND, insn->ops[0], /* include ssa def list */
+                                 MIR_new_reg_op (ctx, def_insn->ops[1].u.reg),
+                                 MIR_new_reg_op (ctx, new_reg));
+        gen_add_insn_before (gen_ctx, insn, new_insn);
+        remove_ssa_edge (gen_ctx, se);                                /* r1 */
+        add_ssa_edge (gen_ctx, mov_insn->data, 0, new_insn->data, 2); /* t */
+        se = def_insn->ops[1].data;
+        add_ssa_edge (gen_ctx, se->def, se->def_op_num, new_insn->data, 1); /* r2 */
+        insn->ops[0].data = NULL;
+        change_ssa_edge_list_def (new_insn->ops[0].data, new_insn->data, 0, 0, 0); /* r */
+        remove_insn_ssa_edges (gen_ctx, insn);
+        gen_delete_insn (gen_ctx, insn);
+        DEBUG (2, {
+          fprintf (debug_file, " on ", (unsigned long) ((bb_insn_t) mov_insn->data)->index);
+          MIR_output_insn (ctx, debug_file, mov_insn, func, FALSE);
+          fprintf (debug_file, " and ", (unsigned long) ((bb_insn_t) new_insn->data)->index);
+          MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
+        });
       }
     }
   }
