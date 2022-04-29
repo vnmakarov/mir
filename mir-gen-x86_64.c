@@ -67,12 +67,12 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
 
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {
   /* see possible patterns */
-  MIR_FADD,  MIR_DADD,  MIR_LDADD, MIR_SUB,  MIR_SUBS,  MIR_FSUB,       MIR_DSUB,
-  MIR_LDSUB, MIR_MUL,   MIR_MULS,  MIR_FMUL, MIR_DMUL,  MIR_LDMUL,      MIR_DIV,
-  MIR_DIVS,  MIR_UDIV,  MIR_FDIV,  MIR_DDIV, MIR_LDDIV, MIR_MOD,        MIR_MODS,
-  MIR_UMOD,  MIR_UMODS, MIR_AND,   MIR_ANDS, MIR_OR,    MIR_ORS,        MIR_XOR,
-  MIR_XORS,  MIR_LSH,   MIR_LSHS,  MIR_RSH,  MIR_RSHS,  MIR_URSH,       MIR_URSHS,
-  MIR_NEG,   MIR_NEGS,  MIR_FNEG,  MIR_DNEG, MIR_LDNEG, MIR_INSN_BOUND,
+  MIR_FADD, MIR_DADD,  MIR_LDADD, MIR_SUB,   MIR_SUBS,       MIR_FSUB, MIR_DSUB,  MIR_LDSUB,
+  MIR_MUL,  MIR_MULS,  MIR_FMUL,  MIR_DMUL,  MIR_LDMUL,      MIR_DIV,  MIR_DIVS,  MIR_UDIV,
+  MIR_FDIV, MIR_DDIV,  MIR_LDDIV, MIR_MOD,   MIR_MODS,       MIR_UMOD, MIR_UMODS, MIR_AND,
+  MIR_ANDS, MIR_OR,    MIR_ORS,   MIR_XOR,   MIR_XORS,       MIR_LSH,  MIR_LSHS,  MIR_RSH,
+  MIR_RSHS, MIR_URSH,  MIR_URSHS, MIR_NEG,   MIR_NEGS,       MIR_FNEG, MIR_DNEG,  MIR_LDNEG,
+  MIR_ADDO, MIR_ADDOS, MIR_SUBO,  MIR_SUBOS, MIR_INSN_BOUND,
 };
 
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
@@ -1202,9 +1202,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       offset += 8;
     }
   /* Epilogue: */
-  anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  /* It might be infinite loop after CCP with dead code elimination: */
-  if (anchor->code == MIR_JMP) return;
+  for (anchor = DLIST_TAIL (MIR_insn_t, func->insns); anchor != NULL;
+       anchor = DLIST_PREV (MIR_insn_t, anchor))
+    if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
+  gen_assert (anchor != NULL);
   /* Restoring hard registers: */
   offset = -bp_saved_reg_offset;
 #ifdef _WIN32
@@ -1529,6 +1530,9 @@ static const struct pattern patterns[] = {
 
   IOP (MIR_SUB, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions */
 
+  IOP (MIR_ADDO, "03", "01", "83 /0", "81 /0") /* x86_64 int additions with ovfl flag */
+  IOP (MIR_SUBO, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions with ovfl flag */
+
   {MIR_MUL, "r 0 r", "X 0F AF r0 R2"},    /* imul r0,r1*/
   {MIR_MUL, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/
   {MIR_MUL, "r r i2", "X 69 r0 R1 I2"},   /* imul r0,r1,i32*/
@@ -1593,6 +1597,12 @@ static const struct pattern patterns[] = {
   {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3"},
 
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
+
+  {MIR_BO, "l", "0F 80 l0"},  /* 32-bit offset jmp on signed overflow */
+  {MIR_UBO, "l", "0F 82 l0"}, /* 32-bit offset jmp on unsigned overflow */
+
+  {MIR_BNO, "l", "0F 81 l0"},  /* 32-bit offset jmp on signed non-overflow */
+  {MIR_UBNO, "l", "0F 83 l0"}, /* 32-bit offset jmp on unsigned non-overflow */
 
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE, "0F 85")  /* 1. int compare and branch */
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") /* 2. int compare and branch */

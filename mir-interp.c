@@ -62,8 +62,8 @@ typedef enum {
   REP6 (IC_EL, LDU8, LDI16, LDU16, LDI32, LDU32, LDI64),
   REP3 (IC_EL, LDF, LDD, LDLD),
   REP7 (IC_EL, STI8, STU8, STI16, STU16, STI32, STU32, STI64),
-  REP3 (IC_EL, STF, STD, STLD),
-  REP7 (IC_EL, MOVI, MOVP, MOVF, MOVD, MOVLD, IMM_CALL, INSN_BOUND),
+  REP8 (IC_EL, STF, STD, STLD, MOVI, MOVP, MOVF, MOVD, MOVLD),
+  REP3 (IC_EL, IMM_CALL, LADDR, INSN_BOUND),
 } MIR_full_insn_code_t;
 #undef REP_SEP
 
@@ -312,6 +312,16 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       v.i = 0;
       VARR_PUSH (MIR_val_t, code_varr, v);
       break;
+    case MIR_LADDR:
+      VARR_PUSH (MIR_insn_t, branches, insn);
+      push_insn_start (interp_ctx, code, insn);
+      v.a = NULL;
+      VARR_PUSH (MIR_val_t, code_varr, v); /* jmpi thunk addr */
+      v.i = get_reg (ops[0], &max_nreg);
+      VARR_PUSH (MIR_val_t, code_varr, v);
+      v.i = 0;
+      VARR_PUSH (MIR_val_t, code_varr, v);
+      break;
     case MIR_BT:
     case MIR_BTS:
     case MIR_BF:
@@ -442,7 +452,11 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     size_t start_label_nop = 0, bound_label_nop = 1, start_label_loc = 1, n;
 
     insn = VARR_GET (MIR_insn_t, branches, i);
-    if (insn->code == MIR_SWITCH) {
+    if (insn->code == MIR_LADDR) {
+      start_label_nop = 1;
+      bound_label_nop = 2;
+      start_label_loc++; /* we thunk first */
+    } else if (insn->code == MIR_SWITCH) {
       start_label_nop = 1;
       bound_label_nop = start_label_nop + insn->nops - 1;
       start_label_loc++; /* we put nops for MIR_SWITCH */
@@ -886,6 +900,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
                            MIR_val_t *results) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   code_t pc, ops, code;
+  void *jmpi_val; /* where label thunk execution result will be: */
 
 #if MIR_INTERP_TRACE
   MIR_full_insn_code_t trace_insn_code;
@@ -931,7 +946,8 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_BLE, MIR_BLES, MIR_UBLE, MIR_UBLES, MIR_FBLE, MIR_DBLE, MIR_LDBLE, MIR_BGT);
     REP8 (LAB_EL, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT, MIR_LDBGT, MIR_BGE, MIR_BGES);
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
-    REP4 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_SWITCH, MIR_RET);
+    REP2 (LAB_EL, MIR_LADDR, MIR_JMPI);
+    REP6 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_JCALL, MIR_SWITCH, MIR_RET, MIR_JRET);
     REP3 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND);
     REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_BLOCK_ARG, MIR_VA_START, MIR_VA_END);
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
@@ -983,6 +999,11 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     int insn_code = pc->ic;
     switch (insn_code) {
 #endif
+
+L_jmpi_finish : { /* jmpi thunk return */
+  pc = jmpi_val;
+  END_INSN;
+}
 
   CASE (MIR_MOV, 2) {
     int64_t p, *r = get_2iops (bp, ops, &p);
@@ -1286,6 +1307,27 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_DBGE, 3, BDCMP (>=));
   SCASE (MIR_LDBGE, 3, BLDCMP (>=));
 
+  CASE (MIR_LADDR, 3) {
+    void *thunk_addr = get_a (ops);
+    void **r = get_aop (bp, ops + 1);
+    if (thunk_addr == NULL) {
+#if 0
+      ops[0].a = thunk_addr
+        = _MIR_get_jmpi_thunk (ctx, &jmpi_val, code + get_i (ops + 2), &&L_jmpi_finish);
+#endif
+    }
+    *r = thunk_addr;
+    END_INSN;
+  }
+
+  CASE (MIR_JMPI, 1) { /* jmpi thunk */
+#if 0
+    void *addr = *get_aop (bp, ops);
+    goto *addr;
+#endif
+    END_INSN;
+  }
+
   CASE (MIR_CALL, 0) {
     int (*func_addr) (void *buf) = *get_aop (bp, ops + 4);
 
@@ -1327,6 +1369,9 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
 
   SCASE (MIR_INLINE, 0, mir_assert (FALSE));
 
+  CASE (MIR_JCALL, 0) {  // ???
+  }
+
   CASE (MIR_SWITCH, 0) {
     int64_t nops = get_i (ops); /* #ops */
     int64_t index = *get_iop (bp, ops + 1);
@@ -1343,6 +1388,9 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     pc += nops + 1;
     return;
     END_INSN;
+  }
+
+  CASE (MIR_JRET, 0) {  // ???
   }
 
   CASE (MIR_ALLOCA, 2) {

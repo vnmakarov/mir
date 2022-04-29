@@ -146,6 +146,7 @@ typedef enum {
   REP7 (INSN_EL, LE, LES, ULE, ULES, FLE, DLE, LDLE),        /* Less or equal */
   REP7 (INSN_EL, GT, GTS, UGT, UGTS, FGT, DGT, LDGT),        /* Greater then */
   REP7 (INSN_EL, GE, GES, UGE, UGES, FGE, DGE, LDGE),        /* Greater or equal */
+  REP4 (INSN_EL, ADDO, ADDOS, SUBO, SUBOS), /* Addition/subtraction with setting overflow flag */
   /* Unconditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
   REP5 (INSN_EL, JMP, BT, BTS, BF, BFS),
@@ -157,16 +158,21 @@ typedef enum {
   REP7 (INSN_EL, BLE, BLES, UBLE, UBLES, FBLE, DBLE, LDBLE),
   REP7 (INSN_EL, BGT, BGTS, UBGT, UBGTS, FBGT, DBGT, LDBGT),
   REP7 (INSN_EL, BGE, BGES, UBGE, UBGES, FBGE, DBGE, LDBGE),
+  REP2 (INSN_EL, BO, UBO),   /* branch on overflow: prev insn should be overflow add/sub */
+  REP2 (INSN_EL, BNO, UBNO), /* branch on not overflow: prev insn should be overflow add/sub */
+  INSN_EL (LADDR),           /* put label address (2nd op) into the 1st op */
+  INSN_EL (JMPI),            /* indirect jump to the label whose address stored in the 1st op */
   /* 1st operand is a prototype, 2nd one is ref or op containing func
      address, 3rd and subsequent ops are optional result (if result in
      the prototype is not of void type), call arguments. */
-  REP2 (INSN_EL, CALL, INLINE),
+  REP3 (INSN_EL, CALL, INLINE, JCALL),
   /* 1st operand is an index, subsequent ops are labels to which goto
      according the index (1st label has index zero).  The insn
      behavior is undefined if there is no label for the index. */
   INSN_EL (SWITCH),
-  /* 1 operand insn: */
   INSN_EL (RET),
+  INSN_EL (JRET), /* return by jumping to address of the first operand */
+  /* 1 operand insn: */
   INSN_EL (ALLOCA),             /* 2 operands: result address and size  */
   REP2 (INSN_EL, BSTART, BEND), /* block start: result addr; block end: addr from block start */
   /* Special insns: */
@@ -453,7 +459,7 @@ static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
 }
 
 static inline int MIR_call_code_p (MIR_insn_code_t code) {
-  return code == MIR_CALL || code == MIR_INLINE;
+  return code == MIR_CALL || code == MIR_INLINE || code == MIR_JCALL;
 }
 
 static inline int MIR_int_branch_code_p (MIR_insn_code_t code) {
@@ -462,11 +468,16 @@ static inline int MIR_int_branch_code_p (MIR_insn_code_t code) {
           || code == MIR_BLTS || code == MIR_UBLT || code == MIR_UBLTS || code == MIR_BLE
           || code == MIR_BLES || code == MIR_UBLE || code == MIR_UBLES || code == MIR_BGT
           || code == MIR_BGTS || code == MIR_UBGT || code == MIR_UBGTS || code == MIR_BGE
-          || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES);
+          || code == MIR_BGES || code == MIR_UBGE || code == MIR_UBGES || code == MIR_BO
+          || code == MIR_UBO || code == MIR_BNO || code == MIR_UBNO);
 }
 
 static inline int MIR_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_JMP || MIR_int_branch_code_p (code) || MIR_FP_branch_code_p (code));
+}
+
+static inline int MIR_overflow_insn_code_p (MIR_insn_code_t code) {
+  return code == MIR_ADDO || code == MIR_ADDOS || code == MIR_SUBO || code == MIR_SUBOS;
 }
 
 extern double _MIR_get_api_version (void);
@@ -532,7 +543,9 @@ extern MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, siz
                                     MIR_op_t *ops);
 extern MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...);
 extern MIR_insn_t MIR_new_call_insn (MIR_context_t ctx, size_t nops, ...);
+extern MIR_insn_t MIR_new_jcall_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...);
+extern MIR_insn_t MIR_new_jret_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn);
 
 extern const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code);
@@ -700,6 +713,7 @@ extern void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void
 extern void *_MIR_get_thunk (MIR_context_t ctx);
 extern void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk);
 extern void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to);
+extern void *_MIR_get_jmpi_thunk (MIR_context_t ctx, void **res_loc, void *res, void *cont);
 extern void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address);
 extern void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler);
 extern void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to);
