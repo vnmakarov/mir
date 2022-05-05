@@ -380,6 +380,15 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
       v.i = get_reg (ops[2], &max_nreg);
       VARR_PUSH (MIR_val_t, code_varr, v);
       break;
+    case MIR_BO:
+    case MIR_UBO:
+    case MIR_BNO:
+    case MIR_UBNO:
+      VARR_PUSH (MIR_insn_t, branches, insn);
+      push_insn_start (interp_ctx, code, insn);
+      v.i = 0;
+      VARR_PUSH (MIR_val_t, code_varr, v);
+      break;
     case MIR_PRSET: break; /* just ignore */
     case MIR_PRBEQ:        /* make jump if property is zero or ignore otherwise */
       if (ops[2].mode == MIR_OP_INT && ops[2].u.i == 0) goto jump;
@@ -901,6 +910,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   code_t pc, ops, code;
   void *jmpi_val; /* where label thunk execution result will be: */
+  int signed_overflow_p, unsigned_overflow_p;
 
 #if MIR_INTERP_TRACE
   MIR_full_insn_code_t trace_insn_code;
@@ -940,13 +950,14 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_ULT, MIR_ULTS, MIR_FLT, MIR_DLT, MIR_LDLT, MIR_LE, MIR_LES, MIR_ULE);
     REP8 (LAB_EL, MIR_ULES, MIR_FLE, MIR_DLE, MIR_LDLE, MIR_GT, MIR_GTS, MIR_UGT, MIR_UGTS);
     REP8 (LAB_EL, MIR_FGT, MIR_DGT, MIR_LDGT, MIR_GE, MIR_GES, MIR_UGE, MIR_UGES, MIR_FGE);
-    REP8 (LAB_EL, MIR_DGE, MIR_LDGE, MIR_JMP, MIR_BT, MIR_BTS, MIR_BF, MIR_BFS, MIR_BEQ);
+    REP6 (LAB_EL, MIR_DGE, MIR_LDGE, MIR_ADDO, MIR_ADDOS, MIR_SUBO, MIR_SUBOS);
+    REP6 (LAB_EL, MIR_JMP, MIR_BT, MIR_BTS, MIR_BF, MIR_BFS, MIR_BEQ);
     REP8 (LAB_EL, MIR_BEQS, MIR_FBEQ, MIR_DBEQ, MIR_LDBEQ, MIR_BNE, MIR_BNES, MIR_FBNE, MIR_DBNE);
     REP8 (LAB_EL, MIR_LDBNE, MIR_BLT, MIR_BLTS, MIR_UBLT, MIR_UBLTS, MIR_FBLT, MIR_DBLT, MIR_LDBLT);
     REP8 (LAB_EL, MIR_BLE, MIR_BLES, MIR_UBLE, MIR_UBLES, MIR_FBLE, MIR_DBLE, MIR_LDBLE, MIR_BGT);
     REP8 (LAB_EL, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT, MIR_LDBGT, MIR_BGE, MIR_BGES);
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
-    REP2 (LAB_EL, MIR_LADDR, MIR_JMPI);
+    REP6 (LAB_EL, MIR_BO, MIR_UBO, MIR_BNO, MIR_UBNO, MIR_LADDR, MIR_JMPI);
     REP6 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_JCALL, MIR_SWITCH, MIR_RET, MIR_JRET);
     REP3 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND);
     REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_BLOCK_ARG, MIR_VA_START, MIR_VA_END);
@@ -1243,6 +1254,42 @@ L_jmpi_finish : { /* jmpi thunk return */
   SCASE (MIR_DGE, 3, DCMP (>=));
   SCASE (MIR_LDGE, 3, LDCMP (>=));
 
+  CASE (MIR_ADDO, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    unsigned_overflow_p = (uint64_t) op1 > UINT64_MAX - (uint64_t) op2;
+    signed_overflow_p = op2 >= 0 ? op1 > INT64_MAX - op2 : op1 < INT64_MIN - op2;
+    *r = op1 + op2;
+    END_INSN;
+  }
+
+  CASE (MIR_ADDOS, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    unsigned_overflow_p = (uint32_t) op1 > UINT32_MAX - (uint32_t) op2;
+    signed_overflow_p = op2 >= 0 ? op1 > INT32_MAX - op2 : op1 < INT32_MIN - op2;
+    *r = op1 + op2;
+    END_INSN;
+  }
+
+  CASE (MIR_SUBO, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    unsigned_overflow_p = (uint64_t) op1 < (uint64_t) op2;
+    signed_overflow_p = op2 < 0 ? op1 > INT64_MAX + op2 : op1 < INT64_MIN + op2;
+    *r = op1 - op2;
+    END_INSN;
+  }
+
+  CASE (MIR_SUBOS, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    unsigned_overflow_p = (uint32_t) op1 < (uint32_t) op2;
+    signed_overflow_p = op2 < 0 ? op1 > INT32_MAX + op2 : op1 < INT32_MIN + op2;
+    *r = op1 - op2;
+    END_INSN;
+  }
+
   SCASE (MIR_JMP, 1, pc = code + get_i (ops));
   CASE (MIR_BT, 2) {
     int64_t cond = *get_iop (bp, ops + 1);
@@ -1307,6 +1354,22 @@ L_jmpi_finish : { /* jmpi thunk return */
   SCASE (MIR_DBGE, 3, BDCMP (>=));
   SCASE (MIR_LDBGE, 3, BLDCMP (>=));
 
+  CASE (MIR_BO, 1) {
+    if (signed_overflow_p) pc = code + get_i (ops);
+    END_INSN;
+  }
+  CASE (MIR_UBO, 1) {
+    if (unsigned_overflow_p) pc = code + get_i (ops);
+    END_INSN;
+  }
+  CASE (MIR_BNO, 1) {
+    if (!signed_overflow_p) pc = code + get_i (ops);
+    END_INSN;
+  }
+  CASE (MIR_UBNO, 1) {
+    if (!unsigned_overflow_p) pc = code + get_i (ops);
+    END_INSN;
+  }
   CASE (MIR_LADDR, 3) {
     void *thunk_addr = get_a (ops);
     void **r = get_aop (bp, ops + 1);

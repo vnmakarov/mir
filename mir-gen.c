@@ -2683,7 +2683,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
   ssa_edge_t se, se2;
   int op_num, out_p, mem_p, w, w2, sign_p, sign2_p;
   size_t passed_mem_num;
-  MIR_reg_t var, reg, new_reg;
+  MIR_reg_t var, reg, new_reg, src_reg;
   insn_var_iterator_t iter;
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
@@ -2842,6 +2842,14 @@ typedef struct mem_expr {
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
 
+struct insn_nop_pair {
+  bb_insn_t bb_insn;
+  size_t nop;
+};
+typedef struct insn_nop_pair insn_nop_pair_t;
+
+DEF_VARR (insn_nop_pair_t);
+
 struct gvn_ctx {
   MIR_insn_t temp_mem_insn;
   VARR (expr_t) * exprs; /* the expr number -> expression */
@@ -2849,6 +2857,7 @@ struct gvn_ctx {
   HTAB (expr_t) * expr_tab; /* keys: insn code and input operands */
   /* keys: gvn val of memory address -> list of mem exprs: last added is the first */
   HTAB (mem_expr_t) * mem_expr_tab;
+  VARR (insn_nop_pair_t) * insn_nop_pairs;
 };
 
 #define temp_mem_insn gen_ctx->gvn_ctx->temp_mem_insn
@@ -2856,6 +2865,7 @@ struct gvn_ctx {
 #define mem_exprs gen_ctx->gvn_ctx->mem_exprs
 #define expr_tab gen_ctx->gvn_ctx->expr_tab
 #define mem_expr_tab gen_ctx->gvn_ctx->mem_expr_tab
+#define insn_nop_pairs gen_ctx->gvn_ctx->insn_nop_pairs
 
 static void dom_con_func_0 (bb_t bb) { bitmap_clear (bb->dom_in); }
 
@@ -3725,6 +3735,239 @@ static void remove_unreachable_bb_edges (gen_ctx_t gen_ctx, bb_t bb, VARR (bb_t)
   }
 }
 
+static int can_be_transformed_into_jump_p (gen_ctx_t gen_ctx, MIR_insn_t def_insn, int nop,
+                                           int bt_p) {
+  ssa_edge_t se;
+  return ((se = def_insn->ops[nop].data) != NULL && se->def->gvn_val_const_p
+          && (bt_p != !se->def->gvn_val));
+}
+
+/* We have the following situations for other phi (whose result is not used in bt/bf):
+   1. let assume first_p is false
+          p0 = phi (p1, p2)     =>      removed
+          dst: no phi using p0          dst: p0 = phi (p1, ..., p2)
+   2. let assume first_p is true
+          p0 = phi (p1, p2)     =>      removed
+          dst: no phi using p0          dst: p0 = phi (p2, ..., p1)
+   3. let assume first_p is false
+          p0 = phi (p1, p2)     =>      p0 = phi (p1)
+          dst: p3 = phi (..., p0, ...)  dst: p0 = phi (..., p0, ..., p2)
+   4. let assume first_p is true
+          p0 = phi (p1, p2)     =>      p0 = phi (p2)
+          dst: p3 = phi (..., p0, ...)  dst: p0 = phi (..., p0, ..., p1)
+*/
+static void transform_other_phis (gen_ctx_t gen_ctx, bb_t dst, int first_p,
+                                  VARR (bb_insn_t) * other_phis) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_reg_t phi_reg;
+  MIR_insn_t insn, phi_insn, new_phi_insn;
+  bb_insn_t phi_bb_insn, new_phi_bb_insn, non_label_bb_insn, bb_insn;
+  ssa_edge_t se;
+  int i, len, no_phi_p;
+  insn_nop_pair_t insn_nop_pair;
+
+  while (VARR_LENGTH (bb_insn_t, other_phis) != 0) {
+    phi_bb_insn = VARR_POP (bb_insn_t, other_phis);
+    phi_insn = phi_bb_insn->insn;
+    gen_assert (phi_insn->ops[0].mode == MIR_OP_REG);
+    phi_reg = phi_insn->ops[0].u.reg;
+    non_label_bb_insn = NULL;
+    insn = NULL;
+    for (bb_insn = DLIST_HEAD (bb_insn_t, dst->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      insn = bb_insn->insn;
+      if (insn->code == MIR_LABEL) continue;
+      if (non_label_bb_insn == NULL) non_label_bb_insn = bb_insn;
+      if (insn->code != MIR_PHI) break;
+      for (i = 1; i < insn->nops; i++)
+        if (insn->ops[i].mode == MIR_OP_REG && insn->ops[i].u.reg == phi_reg) break;
+      if (i < insn->nops) break; /* we found phi with phi_reg */
+    }
+    VARR_TRUNC (MIR_op_t, temp_ops, 0);
+    no_phi_p = bb_insn == NULL || insn->code != MIR_PHI;
+    /* collect ops for new phi in dst: */
+    if (no_phi_p) {
+      VARR_PUSH (MIR_op_t, temp_ops, phi_insn->ops[0]); /* result */
+      len = (int) DLIST_LENGTH (in_edge_t, dst->in_edges);
+      for (i = 0; i < len - 1; i++) VARR_PUSH (MIR_op_t, temp_ops, phi_insn->ops[first_p ? 2 : 1]);
+    } else {
+      VARR_PUSH (MIR_op_t, temp_ops, insn->ops[0]); /* result */
+      for (i = 1; i < insn->nops; i++) VARR_PUSH (MIR_op_t, temp_ops, insn->ops[i]);
+    }
+    /* add new phi in dst: */
+    VARR_PUSH (MIR_op_t, temp_ops, phi_insn->ops[first_p ? 1 : 2]); /* removed op from phi */
+    new_phi_insn = MIR_new_insn_arr (ctx, MIR_PHI, VARR_LENGTH (MIR_op_t, temp_ops),
+                                     VARR_ADDR (MIR_op_t, temp_ops));
+    if (non_label_bb_insn != NULL)
+      gen_add_insn_before (gen_ctx, non_label_bb_insn->insn, new_phi_insn);
+    else
+      gen_add_insn_after (gen_ctx, DLIST_TAIL (bb_insn_t, dst->bb_insns)->insn, new_phi_insn);
+    new_phi_bb_insn = new_phi_insn->data;
+    change_ssa_edge_list_def (new_phi_insn->ops[0].data, new_phi_bb_insn, 0, 0, 0);
+    DEBUG (2, {
+      fprintf (debug_file, "    add phi %lu in bb%lu ", (unsigned long) new_phi_bb_insn->index,
+               (unsigned long) new_phi_bb_insn->bb->index);
+      MIR_output_insn (ctx, debug_file, new_phi_insn, func, TRUE);
+    });
+    if (no_phi_p) {
+      /* no phi with phi_reg in dst: remove phi */
+      phi_insn->ops[0].data = NULL; /* it is reused in new_phi_insn */
+      VARR_TRUNC (insn_nop_pair_t, insn_nop_pairs, 0);
+      /* collect info for new phi inputs */
+      for (i = 1; i < (int) VARR_LENGTH (MIR_op_t, temp_ops); i++) {
+        se = new_phi_insn->ops[i].data;
+        insn_nop_pair.bb_insn = se->def;
+        insn_nop_pair.nop = se->def_op_num;
+        VARR_PUSH (insn_nop_pair_t, insn_nop_pairs, insn_nop_pair);
+      }
+      remove_insn_ssa_edges (gen_ctx, phi_insn);
+      for (i = 1; i < new_phi_insn->nops; i++) { /* add ssa edges for inputs of new phi insn */
+        new_phi_insn->ops[i].data = NULL;
+        insn_nop_pair = VARR_GET (insn_nop_pair_t, insn_nop_pairs, i - 1);
+        add_ssa_edge (gen_ctx, insn_nop_pair.bb_insn, insn_nop_pair.nop, new_phi_bb_insn, i);
+      }
+      DEBUG (2, {
+        fprintf (debug_file, "    remove phi %lu in bb%lu ", (unsigned long) phi_bb_insn->index,
+                 (unsigned long) phi_bb_insn->bb->index);
+        MIR_output_insn (ctx, debug_file, phi_insn, func, TRUE);
+      });
+      gen_delete_insn (gen_ctx, phi_insn);
+    } else {
+      /* phi insn (bb_insn) with phi_reg in dst: remove op in phi and remove bb_insn */
+      for (i = 0; i < insn->nops; i++) insn->ops[i].data = NULL;
+      for (i = 1; i < new_phi_insn->nops; i++) { /* change uses of ssa edges */
+        se = new_phi_insn->ops[i].data;
+        se->use = new_phi_bb_insn;
+        se->use_op_num = i;
+      }
+      DEBUG (2, {
+        fprintf (debug_file, "    change phi %-5lu", (unsigned long) phi_bb_insn->index);
+        MIR_output_insn (ctx, debug_file, phi_insn, func, FALSE);
+      });
+      if (first_p) { /* remove op from phi */
+        se = phi_insn->ops[2].data;
+        se->use_op_num = 1;
+        phi_insn->ops[1] = phi_insn->ops[2];
+      }
+      phi_insn->nops = 2;
+      DEBUG (2, {
+        fprintf (debug_file, " onto ");
+        MIR_output_insn (ctx, debug_file, phi_insn, func, TRUE);
+        fprintf (debug_file, "    remove phi %lu in bb%lu ", (unsigned long) bb_insn->index,
+                 (unsigned long) bb_insn->bb->index);
+        MIR_output_insn (ctx, debug_file, insn, func, TRUE);
+      });
+      gen_delete_insn (gen_ctx, insn); /* ssa edges are re-used in new_phi_insn */
+    }
+  }
+}
+
+/* Optimize
+      op1 is const         or              op2 is const
+      jmp L                                fallthrough to L
+      ...
+      L: op0 = phi (op1, op2)  -- only one use
+      bt|bf L2, op0
+
+   to (if bt|bf with a const results in jmp to L):
+      op1 is const        or             op2 is const
+      jmp L2                             jump L2
+      ...
+      L: op0 = op1 or op2
+      bt|bf L2, op0
+*/
+static void hammock_opt (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_t bb = bb_insn->bb, src, dst;
+  int bt_p, nop;
+  MIR_insn_t insn = bb_insn->insn, def_insn, last_insn, label, new_insn;
+  bb_insn_t def_bb_insn, last_bb_insn, prev_bb_insn, bb_insn2;
+  edge_t e, e1, e2;
+  ssa_edge_t se;
+  MIR_func_t func = curr_func_item->u.func;
+
+  if (insn->code != MIR_BT && insn->code != MIR_BTS && insn->code != MIR_BF
+      && insn->code != MIR_BFS)
+    return;
+  se = insn->ops[1].data;
+  if (se == NULL || (def_bb_insn = se->def) == NULL || def_bb_insn->bb != bb
+      || (def_insn = def_bb_insn->insn)->code != MIR_PHI
+      || (prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) == NULL
+      || prev_bb_insn->insn->code != MIR_PHI)
+    return;
+  /* more one phi consumer -- see function comment */
+  if (((ssa_edge_t) def_insn->ops[0].data)->next_use != NULL) return;
+  if ((e1 = DLIST_HEAD (in_edge_t, bb->in_edges)) == NULL
+      || (e2 = DLIST_NEXT (in_edge_t, e1)) == NULL || DLIST_NEXT (in_edge_t, e2) != NULL)
+    return; /* we require only two source bbs */
+  gen_assert (def_insn->nops == 3);
+  /* now we have only phis and bt/bf consuming phi in the same block -- collect other phis: */
+  VARR_TRUNC (bb_insn_t, temp_bb_insns, 0);
+  while (prev_bb_insn != NULL && prev_bb_insn->insn->code == MIR_PHI) {
+    if (prev_bb_insn != def_bb_insn) VARR_PUSH (bb_insn_t, temp_bb_insns, prev_bb_insn);
+    prev_bb_insn = DLIST_PREV (bb_insn_t, prev_bb_insn);
+  }
+  bt_p = insn->code == MIR_BT || insn->code == MIR_BTS;
+  if (can_be_transformed_into_jump_p (gen_ctx, def_insn, 1, bt_p)) {
+    e = e1;
+    nop = 1;
+  } else if (can_be_transformed_into_jump_p (gen_ctx, def_insn, 2, bt_p)) {
+    e = e2;
+    nop = 2;
+  } else {
+    return;
+  }
+  se = def_insn->ops[nop].data;
+  label = insn->ops[0].u.label;
+  dst = DLIST_EL (out_edge_t, bb->out_edges, 1)->dst;
+  gen_assert (DLIST_HEAD (bb_insn_t, dst->bb_insns)->insn == label);
+  src = e->src;
+  if ((last_bb_insn = DLIST_TAIL (bb_insn_t, src->bb_insns)) != NULL
+      && (last_insn = last_bb_insn->insn) != NULL && MIR_branch_code_p (last_insn->code)
+      && last_insn->code != MIR_JMP)
+    return;
+  if (last_insn != NULL && last_insn->code == MIR_JMP) {
+    DEBUG (2, {
+      fprintf (debug_file, "    change insn %-5lu", (unsigned long) last_bb_insn->index);
+      MIR_output_insn (ctx, debug_file, last_insn, func, FALSE);
+    });
+    last_insn->ops[0].u.label = label;
+    DEBUG (2, {
+      fprintf (debug_file, " onto  ");
+      MIR_output_insn (ctx, debug_file, last_insn, func, TRUE);
+    });
+    last_insn->ops[0].u.label = label;
+  } else {  // last_insn == NULL ???
+    new_insn = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, label));
+    gen_add_insn_after (gen_ctx, last_insn, new_insn);
+    DEBUG (2, {
+      fprintf (debug_file, "    Add insn %-5lu",
+               (unsigned long) ((bb_insn_t) new_insn->data)->index);
+      MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
+    });
+  }
+  gen_assert (DLIST_NEXT (out_edge_t, e) == NULL);
+  delete_edge (e);
+  create_edge (gen_ctx, src, dst, TRUE);
+  DEBUG (2, {
+    fprintf (debug_file, "    change phi %-5lu", (unsigned long) def_bb_insn->index);
+    MIR_output_insn (ctx, debug_file, def_insn, func, FALSE);
+  });
+  remove_ssa_edge (gen_ctx, se);
+  if (nop == 1) {
+    se = def_insn->ops[2].data;
+    se->use_op_num = 1;
+    def_insn->ops[1] = def_insn->ops[2];
+  }
+  def_insn->nops = 2;
+  DEBUG (2, {
+    fprintf (debug_file, " onto ");
+    MIR_output_insn (ctx, debug_file, def_insn, func, TRUE);
+  });
+  transform_other_phis (gen_ctx, dst, nop == 1, temp_bb_insns);
+}
+
 static void gvn_modify (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb;
@@ -3869,21 +4112,25 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         break;
         /* special treatement for address canonization: */
       case MIR_ADD:
+      case MIR_ADDO:
         set_alloca_based_flag (gen_ctx, bb_insn, TRUE);
         GVN_IOP3 (+);
         if (!const_p) goto canon_expr;
         break;
       case MIR_ADDS:
+      case MIR_ADDOS:
         set_alloca_based_flag (gen_ctx, bb_insn, TRUE);
         GVN_IOP3S (+);
         if (!const_p) goto canon_expr;
         break;
       case MIR_SUB:
+      case MIR_SUBO:
         set_alloca_based_flag (gen_ctx, bb_insn, TRUE);
         GVN_IOP3 (-);
         if (!const_p) goto canon_expr;
         break;
       case MIR_SUBS:
+      case MIR_SUBOS:
         set_alloca_based_flag (gen_ctx, bb_insn, TRUE);
         GVN_IOP3S (-);
         if (!const_p) goto canon_expr;
@@ -4181,13 +4428,14 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         }
         continue;
       }
+      hammock_opt (gen_ctx, bb_insn);
       if (MIR_branch_code_p (insn->code) || insn->code == MIR_PHI) continue;
+      e = NULL;
       if (move_p (insn)) {
-        e = NULL;
         def_bb_insn = ((ssa_edge_t) insn->ops[1].data)->def;
         copy_gvn_info (bb_insn, def_bb_insn);
       } else { /* r=e; ...; x=e => r=e; t=r; ...; x=e; x=t */
-        if (!find_expr (gen_ctx, insn, &e)) {
+        if (MIR_overflow_insn_code_p (insn->code) || !find_expr (gen_ctx, insn, &e)) {
           e = add_expr (gen_ctx, insn, FALSE);
           DEBUG (2, { print_expr (gen_ctx, e, "Adding"); });
         } else if (move_code_p (insn->code) && insn->ops[1].mode == MIR_OP_MEM
@@ -4300,6 +4548,7 @@ static void init_gvn (gen_ctx_t gen_ctx) {
                                 MIR_new_reg_op (ctx, 0));
   VARR_CREATE (mem_expr_t, mem_exprs, 256);
   HTAB_CREATE (mem_expr_t, mem_expr_tab, 512, mem_expr_hash, mem_expr_eq, gen_ctx);
+  VARR_CREATE (insn_nop_pair_t, insn_nop_pairs, 16);
 }
 
 static void finish_gvn (gen_ctx_t gen_ctx) {
@@ -4308,6 +4557,7 @@ static void finish_gvn (gen_ctx_t gen_ctx) {
   free (temp_mem_insn); /* ??? */
   VARR_DESTROY (mem_expr_t, mem_exprs);
   HTAB_DESTROY (mem_expr_t, mem_expr_tab);
+  VARR_DESTROY (insn_nop_pair_t, insn_nop_pairs);
   free (gen_ctx->gvn_ctx);
   gen_ctx->gvn_ctx = NULL;
 }
@@ -4542,7 +4792,7 @@ static void jump_opt (gen_ctx_t gen_ctx) {
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     edge_t e, out_e;
     bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
-    MIR_insn_t insn, prev_insn, next_insn, last_label;
+    MIR_insn_t insn, new_insn, prev_insn, next_insn, last_label;
 
     next_bb = DLIST_NEXT (bb_t, bb);
     if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
@@ -6794,6 +7044,17 @@ static void finish_selection (gen_ctx_t gen_ctx) {
 
 #define live_out out
 
+static int reachable_bo_exists_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  for (; bb_insn != NULL; bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+    if (bb_insn->insn->code == MIR_BO || bb_insn->insn->code == MIR_UBO
+        || bb_insn->insn->code == MIR_BNO || bb_insn->insn->code == MIR_UBNO)
+      return TRUE;
+    else if (bb_insn->insn->code != MIR_MOV && bb_insn->insn->code != MIR_EXT32
+             && bb_insn->insn->code != MIR_UEXT32)
+      break;
+  return FALSE;
+}
+
 static void dead_code_elimination (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
@@ -6824,6 +7085,8 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
       if (dead_p && !MIR_call_code_p (insn->code) && insn->code != MIR_RET
           && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
           && insn->code != MIR_VA_START && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END
+          && !(MIR_overflow_insn_code_p (insn->code)
+               && reachable_bo_exists_p (gen_ctx, DLIST_NEXT (bb_insn_t, bb_insn)))
           && !(insn->ops[0].mode == MIR_OP_HARD_REG
                && (insn->ops[0].u.hard_reg == FP_HARD_REG
                    || insn->ops[0].u.hard_reg == SP_HARD_REG))) {
@@ -6881,7 +7144,10 @@ static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
     output_exists_p = TRUE;
     if (mem_p || (ssa_edge = insn->ops[op_num].data) != NULL) return FALSE;
   }
-  return output_exists_p;
+  if (!MIR_overflow_insn_code_p (insn->code)
+      || !reachable_bo_exists_p (gen_ctx, DLIST_NEXT (bb_insn_t, bb_insn)))
+    return output_exists_p;
+  return FALSE;
 }
 
 static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
