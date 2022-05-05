@@ -1205,7 +1205,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   for (anchor = DLIST_TAIL (MIR_insn_t, func->insns); anchor != NULL;
        anchor = DLIST_PREV (MIR_insn_t, anchor))
     if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
-  gen_assert (anchor != NULL);
+  if (anchor == NULL) return;
   /* Restoring hard registers: */
   offset = -bp_saved_reg_offset;
 #ifdef _WIN32
