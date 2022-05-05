@@ -294,6 +294,7 @@ enum type_mode {
 struct type {
   node_t pos_node;       /* set up and used only for checking type correctness */
   struct type *arr_type; /* NULL or array type before its adjustment */
+  MIR_alias_t antialias; /* it can be non-zero only for pointers */
   struct type_qual type_qual;
   enum type_mode mode;
   char func_type_before_adjustment_p;
@@ -463,9 +464,9 @@ void c2mir_finish (MIR_context_t ctx) {
    '}'.  The input is parse tokens and the output is the following AST
    nodes (the AST root is transl_unit):
 
-expr : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD
-     | N_CH | N_CH16 | N_CH32 | N_STR | N_STR16 | N_STR32 | N_ID
-     | N_ADD (expr) | N_SUB (expr) | N_ADD (expr, expr) | N_SUB (expr, expr)
+const : N_I | N_L | N_LL | N_U | N_UL | N_ULL | N_F | N_D | N_LD
+      | N_CH | N_CH16 | N_CH32 | N_STR | N_STR16 | N_STR32
+expr : const | N_ID | N_ADD (expr) | N_SUB (expr) | N_ADD (expr, expr) | N_SUB (expr, expr)
      | N_MUL (expr, expr) | N_DIV (expr, expr) | N_MOD (expr, expr)
      | N_LSH (expr, expr) | N_RSH (expr, expr)
      | N_NOT (expr) | N_BITWISE_NOT (expr)
@@ -491,10 +492,14 @@ stmt: compound_stmt | N_IF(N_LIST:(label)*, expr, stmt, stmt?)
     | N_GOTO(N_LIST:(label)*, N_ID) | (N_CONTINUE|N_BREAK) (N_LIST:(label)*)
     | N_RETURN(N_LIST:(label)*, expr?) | N_EXPR(N_LIST:(label)*, expr)
 compound_stmt: N_BLOCK(N_LIST:(label)*, N_LIST:(declaration | stmt)*)
-attr: N_ASM (N_STR | N_STR16 | N_STR32)
-declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, attr?, initializer?) | st_assert
+asm: N_ASM(N_STR | N_STR16 | N_STR32)
+attr_arg: const | N_ID
+attr: N_ATTR(N_ID, NLIST:(attr_arg)*)
+attrs: N_LIST:(attrs)*
+declaration: N_SPEC_DECL(N_SHARE(declaration_specs), declarator?, attrs?, asm?, initializer?)
+           | st_assert
 st_assert: N_ST_ASSERT(const_expr, N_STR | N_STR16 | N_STR32)
-declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec)*
+declaration_specs: N_LIST:(align_spec|sc_spec|type_qual|func_spec|type_spec|attr)*
 align_spec: N_ALIGNAS(type_name|const_expr)
 sc_spec: N_TYPEDEF|N_EXTERN|N_STATIC|N_AUTO|N_REGISTER|N_THREAD_LOCAL
 type_qual: N_CONST|N_RESTRICT|N_VOLATILE|N_ATOMIC
@@ -503,7 +508,7 @@ type_spec: N_VOID|N_CHAR|N_SHORT|N_INT|N_LONG|N_FLOAT|N_DOUBLE|N_SIGNED|N_UNSIGN
          | (N_STRUCT|N_UNION) (N_ID?, struct_declaration_list?)
          | N_ENUM(N_ID?, N_LIST?: N_ENUM_COST(N_ID, const_expr?)*) | typedef_name
 struct_declaration_list: N_LIST: struct_declaration*
-struct_declaration: st_assert | N_MEMBER(N_SHARE(spec_qual_list), declarator?, const_expr?)
+struct_declaration: st_assert | N_MEMBER(N_SHARE(spec_qual_list), declarator?, attrs?, const_expr?)
 spec_qual_list: N_LIST:(type_qual|type_spec)*
 declarator: the same as direct declarator
 direct_declarator: N_DECL(N_ID,
@@ -512,7 +517,7 @@ direct_declarator: N_DECL(N_ID,
                                                     (assign_expr|N_STAR)?))*)
 pointer: N_LIST: N_POINTER(type_qual_list)*
 type_qual_list : N_LIST: type_qual*
-parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, ignore, ignore)
+parameter_type_list: N_LIST:(N_SPEC_DECL(declaration_specs, declarator, attrs?, ignore, ignore)
                              | N_TYPE(declaration_specs, abstract_declarator))+ [N_DOTS]
 id_list: N_LIST: N_ID*
 initializer: assign_expr | initialize_list
@@ -578,7 +583,7 @@ typedef enum {
   REP8 (NODE_EL, BOOL, STRUCT, UNION, ENUM, ENUM_CONST, MEMBER, CONST, RESTRICT),
   REP8 (NODE_EL, VOLATILE, ATOMIC, INLINE, NO_RETURN, ALIGNAS, FUNC, STAR, POINTER),
   REP8 (NODE_EL, DOTS, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE),
-  NODE_EL (ASM),
+  REP2 (NODE_EL, ASM, ATTR),
 } node_code_t;
 
 #undef REP_SEP
@@ -706,6 +711,14 @@ static node_t new_node4 (c2m_ctx_t c2m_ctx, node_code_t nc, node_t op1, node_t o
 static node_t new_pos_node4 (c2m_ctx_t c2m_ctx, node_code_t nc, pos_t p, node_t op1, node_t op2,
                              node_t op3, node_t op4) {
   return add_pos (c2m_ctx, new_node4 (c2m_ctx, nc, op1, op2, op3, op4), p);
+}
+static node_t new_node5 (c2m_ctx_t c2m_ctx, node_code_t nc, node_t op1, node_t op2, node_t op3,
+                         node_t op4, node_t op5) {
+  return op_append (c2m_ctx, new_node4 (c2m_ctx, nc, op1, op2, op3, op4), op5);
+}
+static node_t new_pos_node5 (c2m_ctx_t c2m_ctx, node_code_t nc, pos_t p, node_t op1, node_t op2,
+                             node_t op3, node_t op4, node_t op5) {
+  return add_pos (c2m_ctx, new_node5 (c2m_ctx, nc, op1, op2, op3, op4, op5), p);
 }
 static node_t new_ch_node (c2m_ctx_t c2m_ctx, int ch, pos_t p) {
   node_t n = new_pos_node (c2m_ctx, N_CH, p);
@@ -3554,6 +3567,10 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
   return mc;
 }
 
+#define ADD_OVERFLOW "__builtin_add_overflow"
+#define SUB_OVERFLOW "__builtin_sub_overflow"
+#define EXPECT "__builtin_expect"
+
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t;
@@ -3690,8 +3707,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
               if (i != len)
                 error (c2m_ctx, t->pos, "garbage after identifier in __has_builtin");
               else
-                res = strcmp (t->repr, "__builtin_add_overflow") == 0
-                      || strcmp (t->repr, "__builtin_expect") == 0;
+                res = (strcmp (t->repr, ADD_OVERFLOW) == 0 || strcmp (t->repr, SUB_OVERFLOW) == 0
+                       || strcmp (t->repr, EXPECT) == 0);
             }
           }
           m->ignore_p = TRUE;
@@ -4304,27 +4321,30 @@ D (asm_spec) {
   if (strcmp (r->u.s.s, "__asm") != 0 && strcmp (r->u.s.s, "asm") != 0) PTFAIL (T_ID);
   id = r;
   PT ('(');
-  while (!C (')')) {
-    PTN (T_STR);
-  }
+  PTN (T_STR);
   PT (')');
   return new_pos_node1 (c2m_ctx, N_ASM, POS (id), r);
 }
 
-static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
+static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos, node_t *asm_part) {
   node_t r;
 
   if (c2m_options->pedantic_p) return NULL;
+  if (asm_part != NULL) {
+    *asm_part = NULL;
+    if ((r = TRY (asm_spec)) != err_node) {
+      if (c2m_options->pedantic_p)
+        error (c2m_ctx, pos, "asm is not implemented");
+      else
+        /*warning (c2m_ctx, pos, "asm is not implemented -- ignoring it")*/;
+      *asm_part = r;
+    }
+  }
   if ((r = TRY (attr_spec)) != err_node) {
     if (c2m_options->pedantic_p)
       error (c2m_ctx, pos, "GCC attributes are not implemented");
     else
       /*warning (c2m_ctx, pos, "GCC attributes are not implemented -- ignoring them")*/;
-  } else if ((r = TRY (asm_spec)) != err_node) {
-    if (c2m_options->pedantic_p)
-      error (c2m_ctx, pos, "asm is not implemented");
-    else
-      /*warning (c2m_ctx, pos, "asm is not implemented -- ignoring it")*/;
   }
   return r;
 }
@@ -4332,7 +4352,7 @@ static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos) {
 D (declaration) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   int typedef_p;
-  node_t op, list, decl, spec, r, attr;
+  node_t op, list, decl, spec, r, attrs, asm_part;
   pos_t pos, last_pos;
 
   if (C (T_STATIC_ASSERT)) {
@@ -4342,15 +4362,15 @@ D (declaration) {
     if (curr_scope == top_scope && c2m_options->pedantic_p)
       warning (c2m_ctx, pos, "extra ; outside of a function");
   } else {
-    try_attr_spec (c2m_ctx, curr_token->pos);
     PA (declaration_specs, curr_scope == top_scope ? (node_t) 1 : NULL);
     spec = r;
     last_pos = POS (spec);
     list = new_node (c2m_ctx, N_LIST);
     if (C (';')) {
       op_append (c2m_ctx, list,
-                 new_node4 (c2m_ctx, N_SPEC_DECL, spec, new_node (c2m_ctx, N_IGNORE),
-                            new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE)));
+                 new_node5 (c2m_ctx, N_SPEC_DECL, spec, new_node (c2m_ctx, N_IGNORE),
+                            new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE),
+                            new_node (c2m_ctx, N_IGNORE)));
     } else { /* init-declarator-list */
       for (op = NL_HEAD (spec->u.ops); op != NULL; op = NL_NEXT (op))
         if (op->code == N_TYPEDEF) break;
@@ -4362,16 +4382,17 @@ D (declaration) {
         assert (decl->code == N_DECL);
         op = NL_HEAD (decl->u.ops);
         tpname_add (c2m_ctx, op, curr_scope, typedef_p);
-        attr = try_attr_spec (c2m_ctx, last_pos);
-        if (attr == err_node) attr = new_node (c2m_ctx, N_IGNORE);
+        attrs = try_attr_spec (c2m_ctx, last_pos, &asm_part);
+        if (attrs == err_node) attrs = new_node (c2m_ctx, N_IGNORE);
+        if (asm_part == NULL) asm_part = new_node (c2m_ctx, N_IGNORE);
         if (M ('=')) {
           P (initializer);
         } else {
           r = new_node (c2m_ctx, N_IGNORE);
         }
         op_append (c2m_ctx, list,
-                   new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (decl),
-                                  new_node1 (c2m_ctx, N_SHARE, spec), decl, attr, r));
+                   new_pos_node5 (c2m_ctx, N_SPEC_DECL, POS (decl),
+                                  new_node1 (c2m_ctx, N_SHARE, spec), decl, attrs, asm_part, r));
         if (!M (',')) break;
       }
     }
@@ -4383,43 +4404,54 @@ D (declaration) {
 
 D (attr) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
+  node_t r, res, list;
 
   if (C (')') || C (',')) /* empty */
     return NULL;
-  if (FIRST_KW <= curr_token->code && curr_token->code <= LAST_KW)
+  if (FIRST_KW <= curr_token->code && curr_token->code <= LAST_KW) {
+    token_t kw = curr_token;
     PT (curr_token->code);
-  else
-    PT (T_ID);
+    r = new_str_node (c2m_ctx, N_ID, uniq_cstr (c2m_ctx, kw->repr), kw->pos);
+  } else {
+    PTN (T_ID);
+  }
+  list = new_node (c2m_ctx, N_LIST);
+  res = new_node2 (c2m_ctx, N_ATTR, r, list);
   if (C ('(')) {
     PT ('(');
     while (!C (')')) {
       if (C (T_NUMBER) || C (T_CH) || C (T_STR))
-        PT (curr_token->code);
+        PTN (curr_token->code);
       else
-        PT (T_ID);
+        PTN (T_ID);
+      op_append (c2m_ctx, list, r);
       if (!C (')')) PT (',');
     }
     PT (')');
   }
-  return NULL;
+  return res;
 }
 
 D (attr_spec) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
-  node_t r;
+  node_t list, r;
 
   PTN (T_ID);
-  if (strcmp (r->u.s.s, "__attribute__") != 0) PTFAIL (T_ID);
+  /* libc can define empty __attribute__ for non-GNU C compiler -- define also __mirc_attribute__ */
+  if (strcmp (r->u.s.s, "__attribute__") != 0 && strcmp (r->u.s.s, "__mirc_attribute__") != 0)
+    PTFAIL (T_ID);
   PT ('(');
   PT ('(');
+  list = new_node (c2m_ctx, N_LIST);
   for (;;) {
     P (attr);
+    op_append (c2m_ctx, list, r);
     if (C (')')) break;
     PT (',');
   }
   PT (')');
   PT (')');
-  return NULL;
+  return list;
 }
 
 DA (declaration_specs) {
@@ -4441,8 +4473,8 @@ DA (declaration_specs) {
       prev_type_spec = r;
     } else if ((r = TRY_A (type_spec, prev_type_spec)) != err_node) {
       prev_type_spec = r;
-    } else if ((r = try_attr_spec (c2m_ctx, spec_pos)) != err_node && r != NULL) {
-      continue;
+    } else if ((r = try_attr_spec (c2m_ctx, spec_pos, FALSE)) != err_node && r != NULL) {
+      continue; /* ignore attrs for declaration specs (type attrs) */
     } else
       break;
     op_append (c2m_ctx, list, r);
@@ -4593,7 +4625,7 @@ D (struct_declaration_list) {
 
 D (struct_declaration) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
-  node_t list, spec, op, r;
+  node_t list, spec, op, r, attrs;
 
   if (C (T_STATIC_ASSERT)) {
     P (st_assert);
@@ -4602,23 +4634,28 @@ D (struct_declaration) {
     spec = r;
     list = new_node (c2m_ctx, N_LIST);
     if (M (';')) {
-      op = new_pos_node3 (c2m_ctx, N_MEMBER, POS (spec), new_node1 (c2m_ctx, N_SHARE, spec),
-                          new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
+      op = new_pos_node4 (c2m_ctx, N_MEMBER, POS (spec), new_node1 (c2m_ctx, N_SHARE, spec),
+                          new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE),
+                          new_node (c2m_ctx, N_IGNORE));
       op_append (c2m_ctx, list, op);
     } else {     /* struct-declarator-list */
       for (;;) { /* struct-declarator */
         if (!C (':')) {
           P (declarator);
+          attrs = try_attr_spec (c2m_ctx, curr_token->pos, NULL);
           op = r;
         } else {
+          attrs = err_node;
           op = new_node (c2m_ctx, N_IGNORE);
         }
+        if (attrs == err_node) attrs = new_node (c2m_ctx, N_IGNORE);
         if (M (':')) {
           P (const_expr);
         } else {
           r = new_node (c2m_ctx, N_IGNORE);
         }
-        op = new_pos_node3 (c2m_ctx, N_MEMBER, POS (op), new_node1 (c2m_ctx, N_SHARE, spec), op, r);
+        op = new_pos_node4 (c2m_ctx, N_MEMBER, POS (op), new_node1 (c2m_ctx, N_SHARE, spec), op,
+                            attrs, r);
         op_append (c2m_ctx, list, op);
         if (!M (',')) break;
       }
@@ -4831,7 +4868,7 @@ D (param_type_abstract_declarator) {
 
 D (param_type_list) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
-  node_t list, op1, op2, r = err_node;
+  node_t list, attrs, op1, op2, r = err_node;
   int comma_p;
   pos_t pos;
 
@@ -4851,8 +4888,10 @@ D (param_type_list) {
       r = new_node2 (c2m_ctx, N_TYPE, op1, op2);
     } else {
       P (declarator);
-      r = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (op2), op1, r, new_node (c2m_ctx, N_IGNORE),
-                         new_node (c2m_ctx, N_IGNORE));
+      attrs = try_attr_spec (c2m_ctx, curr_token->pos, NULL);
+      if (attrs == err_node) attrs = new_node (c2m_ctx, N_IGNORE);
+      r = new_pos_node5 (c2m_ctx, N_SPEC_DECL, POS (op2), op1, r, attrs,
+                         new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
     }
     op_append (c2m_ctx, list, r);
     comma_p = FALSE;
@@ -5597,6 +5636,7 @@ static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
   type->pos_node = NULL;
   type->arr_type = NULL;
+  type->antialias = 0;
   type->align = -1;
   type->raw_size = MIR_SIZE_MAX;
   type->func_type_before_adjustment_p = FALSE;
@@ -5994,7 +6034,7 @@ static void aux_set_type_align (c2m_ctx_t c2m_ctx, struct type *type) {
            member = NL_NEXT (member))
         if (member->code == N_MEMBER) {
           decl_t decl = member->attr;
-          node_t width = NL_EL (member->u.ops, 2);
+          node_t width = NL_EL (member->u.ops, 3);
           struct expr *expr;
 
           if (type->mode == TM_UNION && width->code != N_IGNORE && (expr = width->attr)->const_p
@@ -6133,7 +6173,7 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
           decl_t decl = el->attr;
           int member_align;
           mir_size_t member_size;
-          node_t width = NL_EL (el->u.ops, 2);
+          node_t width = NL_EL (el->u.ops, 3);
           struct expr *expr;
           int anon_process_p = (!type->unnamed_anon_struct_union_member_type_p
                                 && decl->decl_spec.type->unnamed_anon_struct_union_member_type_p
@@ -8219,9 +8259,9 @@ static void add__func__def (c2m_ctx_t c2m_ctx, node_t func_block, str_t func_nam
                                          new_pos_node (c2m_ctx, N_IGNORE, pos)));
   declarator
     = new_pos_node2 (c2m_ctx, N_DECL, pos, new_str_node (c2m_ctx, N_ID, str.str, pos), list);
-  decl
-    = new_pos_node4 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
-                     new_node (c2m_ctx, N_IGNORE), new_str_node (c2m_ctx, N_STR, func_name, pos));
+  decl = new_pos_node5 (c2m_ctx, N_SPEC_DECL, pos, decl_specs, declarator,
+                        new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE),
+                        new_str_node (c2m_ctx, N_STR, func_name, pos));
   NL_PREPEND (NL_EL (func_block->u.ops, 1)->u.ops, decl);
 }
 
@@ -8295,11 +8335,43 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
   }
 }
 
+static const char *check_attrs (c2m_ctx_t c2m_ctx, node_t r, decl_t decl, node_t attrs,
+                                int check_p) {
+  node_t n, list, id, alias_id;
+  if (attrs->code == N_IGNORE) return NULL;
+  assert (attrs->code == N_LIST);
+  alias_id = NULL;
+  for (n = NL_HEAD (attrs->u.ops); n != NULL; n = NL_NEXT (n)) {
+    assert (n->code == N_ATTR);
+    id = NL_HEAD (n->u.ops);
+    assert (id->code == N_ID);
+    if (strcmp (id->u.s.s, "antialias") != 0) continue;
+    list = NL_NEXT (id);
+    assert (list->code == N_LIST);
+    id = NL_HEAD (list->u.ops);
+    if (id == NULL) continue;
+    if (!check_p) {
+      if (id->code == N_ID) return id->u.s.s;
+    } else if (NL_NEXT (id) != NULL) {
+      error (c2m_ctx, POS (r), "antialias attribute has more one arg");
+    } else if (id->code != N_ID) {
+      error (c2m_ctx, POS (r), "antialias attribute arg should be an identifier");
+    } else if (alias_id != NULL && strcmp (id->u.s.s, alias_id->u.s.s) != 0) {
+      error (c2m_ctx, POS (r), "antialias attributes have different ids %s and %s", id->u.s.s,
+             alias_id->u.s.s);
+    }
+    alias_id = id;
+  }
+  if (alias_id == NULL) return NULL;
+  if (decl->decl_spec.type->mode != TM_PTR) {
+    error (c2m_ctx, POS (r), "antialias attribute should be given for a pointer type");
+  }
+  return alias_id->u.s.s;
+}
+
 #define BUILTIN_VA_START "__builtin_va_start"
 #define BUILTIN_VA_ARG "__builtin_va_arg"
 #define ALLOCA "alloca"
-#define ADD_OVERFLOW "__builtin_add_overflow"
-#define EXPECT "__builtin_expect"
 
 static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   check_ctx_t check_ctx = c2m_ctx->check_ctx;
@@ -8723,7 +8795,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       t2 = create_type (c2m_ctx, decl->decl_spec.type);
     } else if (e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->u.ops, 1);
-      node_t width = NL_NEXT (declarator);
+      node_t width = NL_NEXT (NL_NEXT (declarator));
       decl_t decl = e1->lvalue_node->attr;
 
       assert (declarator->code == N_DECL);
@@ -8789,7 +8861,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       decl = sym.def_node->attr;
       *e->type = *decl->decl_spec.type;
       e->lvalue_node = sym.def_node;
-      if ((width = NL_EL (sym.def_node->u.ops, 2))->code != N_IGNORE && e->type->mode == TM_BASIC
+      if ((width = NL_EL (sym.def_node->u.ops, 3))->code != N_IGNORE && e->type->mode == TM_BASIC
           && (width_expr = width->attr)->const_p
           && width_expr->u.i_val < sizeof (mir_int) * MIR_CHAR_BIT)
         e->type->u.basic_type = TP_INT;
@@ -8931,7 +9003,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       error (c2m_ctx, POS (r), "sizeof of function type requested");
     } else if (e1->lvalue_node && e1->lvalue_node->code == N_MEMBER) {
       node_t declarator = NL_EL (e1->lvalue_node->u.ops, 1);
-      node_t width = NL_NEXT (declarator);
+      node_t width = NL_NEXT (NL_NEXT (declarator));
 
       assert (declarator->code == N_DECL);
       if (width->code != N_IGNORE) {
@@ -9013,27 +9085,29 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     struct decl_spec *decl_spec;
     mir_size_t saved_call_arg_area_offset_before_args;
     struct type res_type;
-    int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE, add_overflow_p = FALSE,
-                                  expect_p = FALSE;
+    int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
+    int add_overflow_p = FALSE, sub_overflow_p = FALSE, expect_p = FALSE;
 
     op1 = NL_HEAD (r->u.ops);
     alloca_p = op1->code == N_ID && strcmp (op1->u.s.s, ALLOCA) == 0;
     add_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, ADD_OVERFLOW) == 0;
+    sub_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, SUB_OVERFLOW) == 0;
     expect_p = op1->code == N_ID && strcmp (op1->u.s.s, EXPECT) == 0;
     if (op1->code == N_ID && find_def (c2m_ctx, S_REGULAR, op1, curr_scope, NULL) == NULL) {
       va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
       va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
       if (!va_arg_p && !va_start_p && !alloca_p) {
         /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE,
-         * N_IGNORE) */
+           N_IGNORE, N_IGNORE) */
         spec_list = new_node (c2m_ctx, N_LIST);
         op_append (c2m_ctx, spec_list, new_node (c2m_ctx, N_INT));
         list = new_node (c2m_ctx, N_LIST);
         op_append (c2m_ctx, list, new_node1 (c2m_ctx, N_FUNC, new_node (c2m_ctx, N_LIST)));
         decl
-          = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (op1), new_node1 (c2m_ctx, N_SHARE, spec_list),
+          = new_pos_node5 (c2m_ctx, N_SPEC_DECL, POS (op1), new_node1 (c2m_ctx, N_SHARE, spec_list),
                            new_node2 (c2m_ctx, N_DECL, copy_node (c2m_ctx, op1), list),
-                           new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
+                           new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE),
+                           new_node (c2m_ctx, N_IGNORE));
         curr_scope = top_scope;
         check (c2m_ctx, decl, NULL);
         curr_scope = saved_scope;
@@ -9043,7 +9117,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         op_prepend (c2m_ctx, list, decl);
       }
     }
-    builtin_call_p = alloca_p || va_arg_p || va_start_p || add_overflow_p || expect_p;
+    builtin_call_p
+      = alloca_p || va_arg_p || va_start_p || add_overflow_p || sub_overflow_p || expect_p;
     if (!builtin_call_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
     if (builtin_call_p) {
@@ -9057,7 +9132,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         res_type.u.ptr_type = &VOID_TYPE;
       } else {
         res_type.mode = TM_BASIC;
-        res_type.u.basic_type = va_arg_p || add_overflow_p ? TP_INT : expect_p ? TP_LONG : TP_VOID;
+        res_type.u.basic_type = va_arg_p || add_overflow_p || sub_overflow_p ? TP_INT
+                                : expect_p                                   ? TP_LONG
+                                                                             : TP_VOID;
       }
       ret_type = &res_type;
       if (va_start_p && NL_LENGTH (arg_list->u.ops) != 1) {
@@ -9066,6 +9143,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", ALLOCA);
       } else if (add_overflow_p && NL_LENGTH (arg_list->u.ops) != 3) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", ADD_OVERFLOW);
+      } else if (sub_overflow_p && NL_LENGTH (arg_list->u.ops) != 3) {
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", SUB_OVERFLOW);
       } else if (expect_p && NL_LENGTH (arg_list->u.ops) != 2) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", EXPECT);
       } else if (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2) {
@@ -9080,19 +9159,20 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
             error (c2m_ctx, POS (arg), "wrong type of 2nd argument of %s call", BUILTIN_VA_ARG);
           else
             ret_type = t2->u.ptr_type;
-        } else if (add_overflow_p) {
+        } else if (add_overflow_p || sub_overflow_p) {
           arg = NL_EL (arg_list->u.ops, 2);
           e2 = arg->attr;
           t2 = e2->type;
           if (t2->mode != TM_PTR || !standard_integer_type_p (t2->u.ptr_type)
               || t2->u.ptr_type->u.basic_type < TP_INT) /* only [u]int, [u]long, [u]longlong */
-            error (c2m_ctx, POS (arg), "wrong type of 3rd argument of %s call", ADD_OVERFLOW);
+            error (c2m_ctx, POS (arg), "wrong type of 3rd argument of %s call",
+                   add_overflow_p ? ADD_OVERFLOW : SUB_OVERFLOW);
           for (int i = 0; i < 2; i++) {
             arg = NL_EL (arg_list->u.ops, i);
             e2 = arg->attr;
             if (!integer_type_p (e2->type))
               error (c2m_ctx, POS (arg), "non-integer type of %d argument of %s call", i,
-                     ADD_OVERFLOW);
+                     add_overflow_p ? ADD_OVERFLOW : SUB_OVERFLOW);
           }
         } else if (expect_p) {
           for (int i = 0; i < 2; i++) {
@@ -9212,14 +9292,15 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   case N_SPEC_DECL: {
     node_t specs = NL_HEAD (r->u.ops);
     node_t declarator = NL_NEXT (specs);
-    node_t attr = NL_NEXT (declarator);
-    node_t initializer = NL_NEXT (attr);
+    node_t attrs = NL_NEXT (declarator);
+    node_t asm_part = NL_NEXT (attrs);
+    node_t initializer = NL_NEXT (asm_part);
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->u.ops);
     struct decl_spec decl_spec = check_decl_spec (c2m_ctx, unshared_specs, r);
     int i;
     const char *asm_str = NULL;
 
-    if (attr->code == N_ASM) {
+    if (asm_part->code == N_ASM) {
       if (!decl_spec.register_p) {
         error (c2m_ctx, POS (r), "asm decl without register");
       } else if (initializer->code != N_IGNORE) {
@@ -9227,7 +9308,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       } else if (curr_scope != top_scope) {
         error (c2m_ctx, POS (r), "asm register decl should be at the top level");
       } else {
-        asm_str = NL_HEAD (attr->u.ops)->u.s.s;
+        asm_str = NL_HEAD (asm_part->u.ops)->u.s.s;
         for (i = 0; asm_str[i] != '\0' && _MIR_name_char_p (c2m_ctx->ctx, asm_str[i], i == 0); i++)
           ;
         if (asm_str[i] != '\0') {
@@ -9241,6 +9322,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       create_decl (c2m_ctx, curr_scope, r, decl_spec, NULL, initializer,
                    context != NULL && context->code == N_FUNC);
       decl_t decl = r->attr;
+      const char *antialias = check_attrs (c2m_ctx, r, decl, attrs, TRUE);
+      if (decl->decl_spec.type->mode == TM_PTR && antialias != NULL)
+        decl->decl_spec.type->antialias = MIR_alias (c2m_ctx->ctx, antialias);
       if (asm_str != NULL) {
         if (!scalar_type_p (decl->decl_spec.type)) {
           error (c2m_ctx, POS (r), "asm register decl should have a scalar type");
@@ -9293,7 +9377,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     struct type *type;
     node_t specs = NL_HEAD (r->u.ops);
     node_t declarator = NL_NEXT (specs);
-    node_t const_expr = NL_NEXT (declarator);
+    node_t attrs = NL_NEXT (declarator);
+    node_t const_expr = NL_NEXT (attrs);
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->u.ops);
     struct decl_spec decl_spec = check_decl_spec (c2m_ctx, unshared_specs, r);
 
@@ -9301,7 +9386,6 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
       struct expr *cexpr;
-
       check (c2m_ctx, const_expr, r);
       cexpr = const_expr->attr;
       if (cexpr != NULL) {
@@ -9334,7 +9418,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         error (c2m_ctx, POS (r), "no declarator in struct or union declaration");
     } else {
       node_t id = NL_HEAD (declarator->u.ops);
-
+      const char *antialias = check_attrs (c2m_ctx, r, r->attr, attrs, TRUE);
+      if (type->mode == TM_PTR && antialias != NULL)
+        type->antialias = MIR_alias (c2m_ctx->ctx, antialias);
       if (type->mode == TM_FUNC) {
         error (c2m_ctx, POS (id), "field %s is declared as a function", id->u.s.s);
       } else if (incomplete_type_p (c2m_ctx, type)) {
@@ -9365,7 +9451,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
     if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
         || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0 || strcmp (id->u.s.s, ADD_OVERFLOW) == 0
-        || strcmp (id->u.s.s, EXPECT) == 0) {
+        || strcmp (id->u.s.s, SUB_OVERFLOW) == 0 || strcmp (id->u.s.s, EXPECT) == 0) {
       error (c2m_ctx, POS (id), "%s is a builtin function", id->u.s.s);
       break;
     }
@@ -9395,14 +9481,15 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           error (c2m_ctx, POS (p), "parameter %s has no type", p->u.s.s);
         } else {
           warning (c2m_ctx, POS (p), "type of parameter %s defaults to int", p->u.s.s);
-          decl_node = new_pos_node4 (c2m_ctx, N_SPEC_DECL, POS (p),
+          decl_node = new_pos_node5 (c2m_ctx, N_SPEC_DECL, POS (p),
                                      new_node1 (c2m_ctx, N_SHARE,
                                                 new_node1 (c2m_ctx, N_LIST,
                                                            new_pos_node (c2m_ctx, N_INT, POS (p)))),
                                      new_pos_node2 (c2m_ctx, N_DECL, POS (p),
                                                     new_str_node (c2m_ctx, N_ID, p->u.s, POS (p)),
                                                     new_node (c2m_ctx, N_LIST)),
-                                     new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE));
+                                     new_node (c2m_ctx, N_IGNORE), new_node (c2m_ctx, N_IGNORE),
+                                     new_node (c2m_ctx, N_IGNORE));
           NL_APPEND (param_list->u.ops, decl_node);
           check (c2m_ctx, decl_node, r);
         }
@@ -10138,7 +10225,7 @@ static void get_type_alias_name (c2m_ctx_t c2m_ctx, struct type *type, VARR (cha
            member = NL_NEXT (member))
         if (member->code == N_MEMBER) {
           decl_t decl = member->attr;
-          node_t width = NL_EL (member->u.ops, 2);
+          node_t width = NL_EL (member->u.ops, 3);
           struct expr *expr;
 
           get_type_alias_name (c2m_ctx, decl->decl_spec.type, name);
@@ -12186,7 +12273,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     res.decl = NULL;
     if (res.mir_op.mode == MIR_OP_REG)
       res.mir_op = MIR_new_alias_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1,
-                                         get_type_alias (c2m_ctx, type), 0);
+                                         get_type_alias (c2m_ctx, type), arr_type->antialias);
     if (res.mir_op.u.mem.base == 0 && size == 1) {
       res.mir_op.u.mem.base = op2.mir_op.u.reg;
     } else if (res.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
@@ -12253,9 +12340,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         && type->u.ptr_type->mode == TM_FUNC && type->func_type_before_adjustment_p) {
       res = op1;
     } else {
+      struct expr *e = NL_HEAD (r->u.ops)->attr;
       t = get_mir_type (c2m_ctx, type);
       op1.mir_op = MIR_new_alias_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1,
-                                         get_type_alias (c2m_ctx, type), 0);
+                                         get_type_alias (c2m_ctx, type), e->type->antialias);
       res = new_op (NULL, op1.mir_op);
     }
     break;
@@ -12277,7 +12365,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                  : get_type_alias (c2m_ctx, e->type));
       op1.mir_op
         = MIR_new_alias_mem_op (ctx, t, op1.mir_op.u.mem.disp + decl->offset, op1.mir_op.u.mem.base,
-                                op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale, alias, 0);
+                                op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale, alias,
+                                decl->decl_spec.type->antialias);
     } else {
       struct expr *left = NL_HEAD (r->u.ops)->attr;
       assert (left->type->mode == TM_PTR);
@@ -12288,7 +12377,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                 get_type_alias (c2m_ctx, left->type->u.ptr_type->mode == TM_UNION
                                                            ? left->type->u.ptr_type
                                                            : e->type),
-                                0);
+                                decl->decl_spec.type->antialias);
     }
     res = new_op (decl, op1.mir_op);
     break;
@@ -12409,14 +12498,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
     int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
     int add_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ADD_OVERFLOW) == 0;
+    int sub_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, SUB_OVERFLOW) == 0;
     int expect_p = call_expr->builtin_call_p && strcmp (func->u.s.s, EXPECT) == 0;
-    int builtin_call_p = alloca_p || va_arg_p || va_start_p || add_overflow_p, inline_p = FALSE;
+    int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
     node_t block = NL_EL (curr_func_def->u.ops, 3);
     struct node_scope *ns = block->attr;
     target_arg_info_t arg_info;
     int n, struct_p;
 
-    if (add_overflow_p) {
+    if (add_overflow_p || sub_overflow_p) {
       op1 = val_gen (c2m_ctx, NL_HEAD (args->u.ops));
       op2 = val_gen (c2m_ctx, NL_EL (args->u.ops, 1));
       op3 = val_gen (c2m_ctx, NL_EL (args->u.ops, 2));
@@ -12425,18 +12515,19 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       t = get_mir_type (c2m_ctx, e->type->u.ptr_type);
       assert (op3.mir_op.mode == MIR_OP_REG);
       MIR_append_insn (ctx, curr_func,
-                       MIR_new_insn (ctx, t == MIR_T_I32 || t == MIR_T_U32 ? MIR_ADDOS : MIR_ADDO,
+                       MIR_new_insn (ctx,
+                                     t == MIR_T_I32 || t == MIR_T_U32
+                                       ? (add_overflow_p ? MIR_ADDOS : MIR_SUBOS)
+                                       : (add_overflow_p ? MIR_ADDO : MIR_SUBO),
                                      MIR_new_mem_op (ctx, t, 0, op3.mir_op.u.reg, 0, 1), op1.mir_op,
                                      op2.mir_op));
       if (true_label != NULL) {
         MIR_op_t lab_op = MIR_new_label_op (ctx, true_label);
-
         emit1 (c2m_ctx, t == MIR_T_I32 || t == MIR_T_I64 ? MIR_BO : MIR_UBO, lab_op);
         emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, false_label));
       } else {
         label = MIR_new_label (ctx);
         res = get_new_temp (c2m_ctx, MIR_T_I64);
-        // emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_int_op (ctx, 1));
         emit1 (c2m_ctx, t == MIR_T_I32 || t == MIR_T_I64 ? MIR_BO : MIR_UBO,
                MIR_new_label_op (ctx, label));
         emit2 (c2m_ctx, MIR_MOV, res.mir_op, MIR_new_int_op (ctx, 0));
@@ -12593,8 +12684,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   case N_SPEC_DECL: {  // ??? export and defintion with external declaration
     node_t specs = NL_HEAD (r->u.ops);
     node_t declarator = NL_NEXT (specs);
-    node_t attr = NL_NEXT (declarator);
-    node_t initializer = NL_NEXT (attr);
+    node_t attrs = NL_NEXT (declarator);
+    node_t asm_part = NL_NEXT (attrs);
+    node_t initializer = NL_NEXT (asm_part);
     node_t id, curr_node;
     symbol_t sym;
     decl_t curr_decl;
@@ -12636,7 +12728,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
               curr_node = VARR_GET (node_t, sym.defs, i);
               curr_decl = curr_node->attr;
               if ((curr_decl->u.item != NULL && curr_decl->u.item->item_type == MIR_bss_item)
-                  || NL_EL (curr_node->u.ops, 3)->code != N_IGNORE)
+                  || NL_EL (curr_node->u.ops, 4)->code != N_IGNORE)
                 break;
             }
             if (i >= VARR_LENGTH (node_t, sym.defs)) /* No item yet or no decl with intializer: */
@@ -13245,7 +13337,8 @@ static const char *get_node_name (node_code_t code) {
     REP8 (C, SHORT, INT, LONG, FLOAT, DOUBLE, SIGNED, UNSIGNED, BOOL);
     REP8 (C, STRUCT, UNION, ENUM, ENUM_CONST, MEMBER, CONST, RESTRICT, VOLATILE);
     REP8 (C, ATOMIC, INLINE, NO_RETURN, ALIGNAS, FUNC, STAR, POINTER, DOTS);
-    REP8 (C, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE, ASM);
+    REP7 (C, ARR, INIT, FIELD_ID, TYPE, ST_ASSERT, FUNC_DEF, MODULE);
+    REP2 (C, ASM, ATTR);
   default: abort ();
   }
 #undef C
@@ -13551,6 +13644,10 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
   case N_TYPE:
   case N_ST_ASSERT:
   case N_ASM:
+    fprintf (f, "\n");
+    print_ops (c2m_ctx, f, n, indent, attr_p);
+    break;
+  case N_ATTR:
     fprintf (f, "\n");
     print_ops (c2m_ctx, f, n, indent, attr_p);
     break;
