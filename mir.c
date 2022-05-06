@@ -3988,6 +3988,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     if (insn->code == MIR_LABEL) insn->ops[0].u.i = new_label_num++;
     MIR_append_insn (ctx, func_item, insn);
   }
+  if (curr_label_num < new_label_num) curr_label_num = new_label_num;
 }
 
 /* New Page */
