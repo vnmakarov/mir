@@ -1629,18 +1629,21 @@ static MIR_insn_t get_insn_label (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   if (insn->code == MIR_LABEL) return insn;
   label = MIR_new_label (ctx);
   MIR_insert_insn_before (ctx, curr_func_item, insn, label);
-  add_new_bb_insn (gen_ctx, label, ((bb_insn_t) insn->data)->bb, TRUE);
+  add_new_bb_insn (gen_ctx, label, ((bb_insn_t) insn->data)->bb, FALSE);
   return label;
 }
 
+/* Clone hot BBs to cold ones (which are after ret insn) to improve
+   optimization opportunities in hot part.  */
 static int clone_bbs (gen_ctx_t gen_ctx) {
+  const int max_bb_growth_factor = 3;
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t dst_insn, last_dst_insn, new_insn, label, next_insn, after;
   bb_t bb, dst, new_bb;
   edge_t e;
   bb_insn_t bb_insn, dst_bb_insn, next_bb_insn;
   MIR_func_t func = curr_func_item->u.func;
-  size_t max_bb_index = 0;
+  size_t max_bb_index = 0, size, orig_size, len, last_orig_bound;
   int res;
 
   gen_assert (optimize_level != 0);
@@ -1662,7 +1665,13 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
       VARR_PUSH (bb_t, worklist, bb);
   }
   res = FALSE;
-  while (VARR_LENGTH (bb_t, worklist) != 0) {
+  last_orig_bound = VARR_LENGTH (bb_t, worklist);
+  size = 0;
+  while ((len = VARR_LENGTH (bb_t, worklist)) != 0) {
+    if (last_orig_bound > len) {
+      last_orig_bound = len;
+      orig_size = size = DLIST_LENGTH (bb_insn_t, VARR_LAST (bb_t, worklist)->bb_insns);
+    }
     bb = VARR_POP (bb_t, worklist);
     e = DLIST_HEAD (out_edge_t, bb->out_edges);
     gen_assert (DLIST_NEXT (out_edge_t, e) == NULL);
@@ -1672,7 +1681,7 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
     dst = e->dst;
     dst_bb_insn = DLIST_TAIL (bb_insn_t, dst->bb_insns);
     if (dst_bb_insn->insn->code == MIR_RET || dst_bb_insn->insn->code == MIR_JRET
-        || dst_bb_insn->insn->code == MIR_SWITCH)
+        || dst_bb_insn->insn->code == MIR_SWITCH || size > max_bb_growth_factor * orig_size)
       continue;
     res = TRUE;
     DEBUG (2, { fprintf (debug_file, "  Cloning from BB%d into BB%d:\n", dst->index, bb->index); });
@@ -1694,6 +1703,7 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
                  (unsigned long) ((bb_insn_t) new_insn->data)->index);
         MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
       });
+      size++;
     }
     delete_edge (e);
     gen_assert (last_dst_insn != NULL);
