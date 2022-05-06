@@ -1388,9 +1388,9 @@ struct pattern {
   /*fld m2;fld m1;xor %eax,%eax;fcomip st,st(1);fstp %st;setx az; mov %rax,r0:  */ \
   {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF F1; DD D8; " SET_OPCODE " H0;X 8B r0 H0"},
 
-#define BR0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                 \
-  {ICODE##SUFF, "l r", #PREF " 83 /7 R1 v0;" LONG_JMP_OPCODE " l0"},    /*cmp r0,$0;jxx rel32*/ \
-    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel8*/
+#define BR0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
+  {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " l0"},       /*test r0,r0;jxx rel32*/ \
+    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel32*/
 
 #define BR(ICODE, LONG_JMP_OPCODE)  \
   BR0 (ICODE, , X, LONG_JMP_OPCODE) \
