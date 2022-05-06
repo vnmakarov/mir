@@ -678,10 +678,13 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   return bb_insn;
 }
 
-static bb_insn_t add_new_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
+static bb_insn_t add_new_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb, int append_p) {
   bb_insn_t bb_insn = create_bb_insn (gen_ctx, insn, bb);
 
-  DLIST_APPEND (bb_insn_t, bb->bb_insns, bb_insn);
+  if (append_p)
+    DLIST_APPEND (bb_insn_t, bb->bb_insns, bb_insn);
+  else
+    DLIST_PREPEND (bb_insn_t, bb->bb_insns, bb_insn);
   return bb_insn;
 }
 
@@ -745,10 +748,10 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn_for_bb = before;
 
-  gen_assert (!MIR_branch_code_p (insn->code) && insn->code != MIR_LABEL);
+  gen_assert (!MIR_any_branch_code_p (insn->code) && insn->code != MIR_LABEL);
   if (before->code == MIR_LABEL) {
     insn_for_bb = DLIST_PREV (MIR_insn_t, before);
-    gen_assert (insn_for_bb == NULL || !MIR_branch_code_p (insn_for_bb->code));
+    gen_assert (insn_for_bb == NULL || !MIR_any_branch_code_p (insn_for_bb->code));
   }
   MIR_insert_insn_before (ctx, curr_func_item, before, insn);
   create_new_bb_insns (gen_ctx, DLIST_PREV (MIR_insn_t, insn), before, insn_for_bb);
@@ -758,8 +761,8 @@ static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t 
   MIR_insn_t insn_for_bb = after;
 
   gen_assert (insn->code != MIR_LABEL);
-  if (MIR_branch_code_p (insn_for_bb->code)) insn_for_bb = DLIST_NEXT (MIR_insn_t, insn_for_bb);
-  gen_assert (!MIR_branch_code_p (insn_for_bb->code));
+  if (MIR_any_branch_code_p (insn_for_bb->code)) insn_for_bb = DLIST_NEXT (MIR_insn_t, insn_for_bb);
+  gen_assert (!MIR_any_branch_code_p (insn_for_bb->code));
   MIR_insert_insn_after (gen_ctx->ctx, curr_func_item, after, insn);
   create_new_bb_insns (gen_ctx, after, DLIST_NEXT (MIR_insn_t, insn), insn_for_bb);
 }
@@ -837,7 +840,7 @@ static bb_t create_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
     if (optimize_level == 0)
       setup_insn_data (gen_ctx, insn, bb);
     else
-      add_new_bb_insn (gen_ctx, insn, bb);
+      add_new_bb_insn (gen_ctx, insn, bb, TRUE);
   }
   return bb;
 }
@@ -1454,15 +1457,14 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
     }
     if (insn->data == NULL) {
       if (optimize_level != 0)
-        add_new_bb_insn (gen_ctx, insn, bb);
+        add_new_bb_insn (gen_ctx, insn, bb, TRUE);
       else
         setup_insn_data (gen_ctx, insn, bb);
     }
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
-        && (MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
-            || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE
-            || next_insn->code == MIR_LABEL)) {
+        && (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_PRBEQ
+            || insn->code == MIR_PRBNE || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
       if (next_insn->code == MIR_LABEL && next_insn->data != NULL)
         bb = get_insn_bb (gen_ctx, next_insn);
@@ -1616,6 +1618,126 @@ static void finish_data_flow (gen_ctx_t gen_ctx) {
   bitmap_destroy (bb_to_consider);
   free (gen_ctx->data_flow_ctx);
   gen_ctx->data_flow_ctx = NULL;
+}
+
+/* New Page */
+
+static MIR_insn_t get_insn_label (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t label;
+
+  if (insn->code == MIR_LABEL) return insn;
+  label = MIR_new_label (ctx);
+  MIR_insert_insn_before (ctx, curr_func_item, insn, label);
+  add_new_bb_insn (gen_ctx, label, ((bb_insn_t) insn->data)->bb, TRUE);
+  return label;
+}
+
+static int clone_bbs (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t dst_insn, last_dst_insn, new_insn, label, next_insn, after;
+  bb_t bb, dst, new_bb;
+  edge_t e;
+  bb_insn_t bb_insn, dst_bb_insn, next_bb_insn;
+  MIR_func_t func = curr_func_item->u.func;
+  size_t max_bb_index = 0;
+  int res;
+
+  gen_assert (optimize_level != 0);
+  bitmap_clear (temp_bitmap);
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    if (max_bb_index < bb->index) max_bb_index = bb->index;
+    bitmap_set_bit_p (temp_bitmap, bb->index);
+    if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL) continue;
+    if (bb_insn->insn->code == MIR_RET || bb_insn->insn->code == MIR_JRET) break;
+  }
+  if (bb == NULL) return FALSE;
+  VARR_TRUNC (bb_t, worklist, 0);
+  for (bb = DLIST_NEXT (bb_t, bb); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    if (max_bb_index < bb->index) max_bb_index = bb->index;
+    bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
+    gen_assert (bb_insn != NULL);
+    if (bb_insn->insn->code == MIR_JMP && (e = DLIST_HEAD (out_edge_t, bb->out_edges)) != NULL
+        && bitmap_bit_p (temp_bitmap, e->dst->index))
+      VARR_PUSH (bb_t, worklist, bb);
+  }
+  res = FALSE;
+  while (VARR_LENGTH (bb_t, worklist) != 0) {
+    bb = VARR_POP (bb_t, worklist);
+    e = DLIST_HEAD (out_edge_t, bb->out_edges);
+    gen_assert (DLIST_NEXT (out_edge_t, e) == NULL);
+    if (e->back_edge_p) continue;
+    bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
+    gen_assert (bb_insn != NULL && bb_insn->insn->code == MIR_JMP);
+    dst = e->dst;
+    dst_bb_insn = DLIST_TAIL (bb_insn_t, dst->bb_insns);
+    if (dst_bb_insn->insn->code == MIR_RET || dst_bb_insn->insn->code == MIR_JRET
+        || dst_bb_insn->insn->code == MIR_SWITCH)
+      continue;
+    res = TRUE;
+    DEBUG (2, { fprintf (debug_file, "  Cloning from BB%d into BB%d:\n", dst->index, bb->index); });
+    last_dst_insn = DLIST_TAIL (bb_insn_t, dst->bb_insns)->insn;
+    after = DLIST_PREV (MIR_insn_t, bb_insn->insn);
+    gen_delete_insn (gen_ctx, bb_insn->insn);
+    bb_insn = NULL;
+    for (dst_bb_insn = DLIST_HEAD (bb_insn_t, dst->bb_insns); dst_bb_insn != NULL;
+         dst_bb_insn = DLIST_NEXT (bb_insn_t, dst_bb_insn)) {
+      dst_insn = dst_bb_insn->insn;
+      if (dst_insn->code == MIR_LABEL) continue;
+      new_insn = MIR_copy_insn (ctx, dst_insn);
+      /* we can not use gen_add_insn_xxx becuase of some cases (e.g. bb_insn is the last insn): */
+      MIR_insert_insn_after (ctx, curr_func_item, after, new_insn);
+      add_new_bb_insn (gen_ctx, new_insn, bb, TRUE);
+      after = new_insn;
+      DEBUG (2, {
+        fprintf (debug_file, "  Adding insn %-5lu",
+                 (unsigned long) ((bb_insn_t) new_insn->data)->index);
+        MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
+      });
+    }
+    delete_edge (e);
+    gen_assert (last_dst_insn != NULL);
+    if (last_dst_insn->code == MIR_JMP) {
+      label = last_dst_insn->ops[0].u.label;
+      create_edge (gen_ctx, bb, ((bb_insn_t) label->data)->bb, TRUE);
+      if (bitmap_bit_p (temp_bitmap, ((bb_insn_t) label->data)->index))
+        VARR_PUSH (bb_t, worklist, bb);
+    } else if (!MIR_branch_code_p (last_dst_insn->code)) {
+      next_insn = DLIST_NEXT (MIR_insn_t, last_dst_insn);
+      next_bb_insn = next_insn->data;
+      gen_assert (next_insn->code == MIR_LABEL);
+      new_insn = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, next_insn));
+      MIR_insert_insn_after (ctx, curr_func_item, after, new_insn);
+      add_new_bb_insn (gen_ctx, new_insn, bb, TRUE);
+      if (bitmap_bit_p (temp_bitmap, next_bb_insn->index)) VARR_PUSH (bb_t, worklist, bb);
+      create_edge (gen_ctx, bb, ((bb_insn_t) next_insn->data)->bb, TRUE);
+    } else {
+      label = get_insn_label (gen_ctx, DLIST_NEXT (MIR_insn_t, last_dst_insn)); /* fallthrough */
+      new_insn = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, label));
+      MIR_insert_insn_after (ctx, curr_func_item, after, new_insn);
+      new_bb = create_bb (gen_ctx, new_insn);
+      new_bb->index = ++max_bb_index;
+      DLIST_INSERT_AFTER (bb_t, curr_cfg->bbs, bb, new_bb);
+      if (bitmap_bit_p (temp_bitmap, ((bb_insn_t) label->data)->bb->index))
+        VARR_PUSH (bb_t, worklist, new_bb);
+      create_edge (gen_ctx, bb, new_bb, TRUE); /* fall through */
+      create_edge (gen_ctx, bb, ((bb_insn_t) last_dst_insn->ops[0].u.label->data)->bb,
+                   TRUE); /* branch */
+      create_edge (gen_ctx, new_bb, ((bb_insn_t) label->data)->bb, TRUE);
+    }
+    DEBUG (2, {
+      fprintf (debug_file, "  Result BB%d:\n", bb->index);
+      output_in_edges (gen_ctx, bb);
+      output_out_edges (gen_ctx, bb);
+      for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+           bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+        fprintf (debug_file, "  %-5lu", (unsigned long) bb_insn->index);
+        MIR_output_insn (ctx, debug_file, bb_insn->insn, func, TRUE);
+      }
+    });
+  }
+  if (res) enumerate_bbs (gen_ctx);
+  return res;
 }
 
 /* New Page */
@@ -2233,7 +2355,7 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
             MIR_prepend_insn (ctx, curr_func_item, new_insn);
           new_bb_insn = create_bb_insn (gen_ctx, new_insn, e->src);
           DLIST_APPEND (bb_insn_t, e->src->bb_insns, new_bb_insn);
-        } else if (MIR_branch_code_p (tail->insn->code) || tail->insn->code == MIR_SWITCH) {
+        } else if (MIR_any_branch_code_p (tail->insn->code)) {
           gen_add_insn_before (gen_ctx, tail->insn, new_insn);
           for (size_t j = 0; j < tail->insn->nops; j++) {
             /* remove a conflict: we have new_reg = p; b ..p.. => new_reg = p; b .. new_reg .. */
@@ -3924,7 +4046,7 @@ static void hammock_opt (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   gen_assert (DLIST_HEAD (bb_insn_t, dst->bb_insns)->insn == label);
   src = e->src;
   if ((last_bb_insn = DLIST_TAIL (bb_insn_t, src->bb_insns)) != NULL
-      && (last_insn = last_bb_insn->insn) != NULL && MIR_branch_code_p (last_insn->code)
+      && (last_insn = last_bb_insn->insn) != NULL && MIR_any_branch_code_p (last_insn->code)
       && last_insn->code != MIR_JMP)
     return;
   if (last_insn != NULL && last_insn->code == MIR_JMP) {
@@ -3982,8 +4104,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
   bitmap_clear (removed_mem);
   for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++)
     VARR_GET (bb_t, worklist, i)->flag = FALSE;
-  for (size_t i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
-    bb = VARR_GET (bb_t, worklist, i);
+  while (VARR_LENGTH (bb_t, worklist) != 0) {
+    bb = VARR_POP (bb_t, worklist);
     DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
     if (bb->index > 2 && DLIST_HEAD (in_edge_t, bb->in_edges) == NULL) {
       /* Unreachable bb because of branch transformation: remove output edges
@@ -4378,7 +4500,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       if (const_p) {
         ccp_insns_num++;
         print_bb_insn_value (gen_ctx, bb_insn);
-        if (MIR_branch_code_p (insn->code)) {
+        if (MIR_any_branch_code_p (insn->code)) {
+          gen_assert (insn->code != MIR_SWITCH);
           if (val == 0) {
             DEBUG (2, {
               fprintf (debug_file, "  removing branch insn ");
@@ -4429,7 +4552,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         continue;
       }
       hammock_opt (gen_ctx, bb_insn);
-      if (MIR_branch_code_p (insn->code) || insn->code == MIR_PHI) continue;
+      if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_PHI) continue;
       e = NULL;
       if (move_p (insn)) {
         def_bb_insn = ((ssa_edge_t) insn->ops[1].data)->def;
@@ -4527,7 +4650,7 @@ static void gvn (gen_ctx_t gen_ctx) {
   VARR_TRUNC (bb_t, worklist, 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     VARR_PUSH (bb_t, worklist, bb);
-  qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), rpost_cmp);
+  qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb_t), post_cmp);
   gvn_modify (gen_ctx);
 }
 
@@ -7248,6 +7371,13 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     fprintf (debug_file, "+++++++++++++MIR after building CFG:\n");
     print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
   });
+  if (optimize_level >= 2 && !addr_insn_p && clone_bbs (gen_ctx)) {
+    /* do not clone bbs before addr transformation: it can prevent addr transformations */
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after cloning BBs:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
+    });
+  }
   if (optimize_level >= 2) {
     build_ssa (gen_ctx, !addr_insn_p);
     DEBUG (2, {
@@ -7260,12 +7390,13 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
   }
   if (optimize_level >= 2 && addr_insn_p) {
-    DEBUG (2, { fprintf (debug_file, "+++++++++++++Transform Addr Insns:\n"); });
+    DEBUG (2, { fprintf (debug_file, "+++++++++++++Transform Addr Insns and cloning BBs:\n"); });
     transform_addrs (gen_ctx);
     undo_build_ssa (gen_ctx);
+    clone_bbs (gen_ctx);
     build_ssa (gen_ctx, TRUE);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after Addr Insns Transformation:\n");
+      fprintf (debug_file, "+++++++++++++MIR after Addr Insns Transformation and cloning BBs:\n");
       print_varr_insns (gen_ctx, "undef init", undef_insns);
       print_varr_insns (gen_ctx, "arg init", arg_bb_insns);
       fprintf (debug_file, "\n");
@@ -7495,7 +7626,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   curr_func_item->data = bb_stubs = gen_malloc (gen_ctx, sizeof (struct bb_stub) * n_bbs);
@@ -7518,7 +7649,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_SWITCH
+    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
@@ -7919,7 +8050,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   target_bb_translate_start (gen_ctx);
   for (curr_insn = bb_stub->first_insn;; curr_insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, curr_insn);
-    if (MIR_branch_code_p (curr_insn->code) || curr_insn->code == MIR_SWITCH) break;
+    if (MIR_any_branch_code_p (curr_insn->code)) break;
     switch (curr_insn->code) {
     case MIR_USE: continue;
     case MIR_PRSET:
