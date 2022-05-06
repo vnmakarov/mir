@@ -4912,18 +4912,35 @@ static void jump_opt (gen_ctx_t gen_ctx) {
   if ((bb_deleted_insns_num = remove_unreachable_bbs (gen_ctx)) != 0) {
     DEBUG (1, { fprintf (debug_file, "%ld deleted unrechable bb insns\n", bb_deleted_insns_num); });
   }
+  bitmap_clear (temp_bitmap);
+  for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    bb_insn_t bb_insn;
+    int i, start_nop, bound_nop;
+
+    if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL) continue;
+    if (bb_insn->insn->code == MIR_SWITCH) {
+      start_nop = 1;
+      bound_nop = bb_insn->insn->nops;
+    } else if (MIR_branch_code_p (bb_insn->insn->code)) {
+      start_nop = 0;
+      bound_nop = 1;
+    } else {
+      continue;
+    }
+    for (i = start_nop; i < bound_nop; i++)
+      bitmap_set_bit_p (temp_bitmap, bb_insn->insn->ops[i].u.label->ops[0].u.u);
+  }
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     edge_t e, out_e;
     bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
-    MIR_insn_t insn, new_insn, prev_insn, next_insn, last_label;
+    MIR_insn_t insn, new_insn, next_insn, last_label;
 
     next_bb = DLIST_NEXT (bb_t, bb);
     if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
         && (bb_insn == NULL
             || ((insn = bb_insn->insn)->code == MIR_LABEL && DLIST_NEXT (bb_insn_t, bb_insn) == NULL
                 && DLIST_PREV (bb_insn_t, bb_insn) == NULL
-                && (prev_insn = DLIST_PREV (MIR_insn_t, insn)) != NULL && prev_insn->code != MIR_JMP
-                && prev_insn->code != MIR_SWITCH))) {
+                && !bitmap_bit_p (temp_bitmap, insn->ops[0].u.u)))) {
       /* empty bb or bb with the only label which can be removed. we can have more one the same
          dest edge (e.g. when removed cond branch to the next insn). */
       out_e = DLIST_HEAD (out_edge_t, bb->out_edges);
