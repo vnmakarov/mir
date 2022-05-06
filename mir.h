@@ -476,6 +476,10 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
   return (code == MIR_JMP || MIR_int_branch_code_p (code) || MIR_FP_branch_code_p (code));
 }
 
+static inline int MIR_any_branch_code_p (MIR_insn_code_t code) {
+  return (MIR_branch_code_p (code) || code == MIR_SWITCH);
+}
+
 static inline int MIR_overflow_insn_code_p (MIR_insn_code_t code) {
   return code == MIR_ADDO || code == MIR_ADDOS || code == MIR_SUBO || code == MIR_SUBOS;
 }

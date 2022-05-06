@@ -2520,8 +2520,7 @@ void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t
 static void store_labels_for_duplication (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
                                           VARR (MIR_insn_t) * branch_insns, MIR_insn_t insn,
                                           MIR_insn_t new_insn) {
-  if (MIR_branch_code_p (insn->code) || insn->code == MIR_SWITCH || insn->code == MIR_PRBEQ
-      || insn->code == MIR_PRBNE) {
+  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE) {
     VARR_PUSH (MIR_insn_t, branch_insns, new_insn);
   } else if (insn->code == MIR_LABEL) {
     mir_assert (insn->data == NULL);
@@ -3560,7 +3559,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       next_insn = insn;
       continue;
     } else {
-      if (MIR_branch_code_p (code) || code == MIR_SWITCH || code == MIR_LADDR || code == MIR_PRBEQ
+      if (MIR_any_branch_code_p (code) || code == MIR_LADDR || code == MIR_PRBEQ
           || code == MIR_PRBNE) {
         int64_t label_num;
         size_t start_label_nop = 0, bound_label_nop = 1, n;
