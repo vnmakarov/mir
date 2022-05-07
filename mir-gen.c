@@ -1836,7 +1836,8 @@ static void process_insn_to_rename (gen_ctx_t gen_ctx, MIR_insn_t insn, int op_n
     bb_insn_t def = ssa_edge->def;
 
     /* process the def -> other uses: */
-    if (push_to_rename (gen_ctx, ssa_edge)) process_insn_to_rename (gen_ctx, def->insn, 0);
+    if (push_to_rename (gen_ctx, ssa_edge))
+      process_insn_to_rename (gen_ctx, def->insn, ssa_edge->def_op_num);
   }
 }
 

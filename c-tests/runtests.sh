@@ -72,7 +72,12 @@ do
 	fi
 	for t in $ctest_dir/$dir/*.c;do
 	    if $ECHO $t|$EGREP '/add-[a-zA-Z0-9]+.c$' >/dev/null; then continue; fi
-	    if test -f $ctest_dir/$dir/add-`basename $t`;then add_main=$ctest_dir/$dir/add-`basename $t`;else add_main=;fi
+	    if test -f $ctest_dir/$dir/add-`basename $t`;then add_main=$ctest_dir/$dir/add-`basename $t`
+	    elif test -f $ctest_dir/$dir/add-`basename $t .c`.mir;then
+		add_main=$ctest_dir/$dir/add-`basename $t .c`.mir
+	    else
+		add_main=
+	    fi
 	    runtest $t $add_main
 	done
 done
