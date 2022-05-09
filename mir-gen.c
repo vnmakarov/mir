@@ -6018,7 +6018,7 @@ static void assign (gen_ctx_t gen_ctx) {
   });
 }
 
-static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
+static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg, MIR_reg_t base_reg,
                              MIR_op_mode_t data_mode, int first_p, MIR_insn_t insn, int out_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t loc = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (gen_ctx, reg));
@@ -6056,7 +6056,7 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
   n = 0;
   if (!addr_reg_p && target_valid_mem_offset_p (gen_ctx, type, offset)) {
-    *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, FP_HARD_REG, MIR_NON_HARD_REG, 0);
+    *mem_op = _MIR_new_hard_reg_mem_op (ctx, type, offset, base_reg, MIR_NON_HARD_REG, 0);
   } else {
     MIR_reg_t temp_hard_reg
       = (first_p && !out_p) || (out_p && !first_p) ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
@@ -6064,7 +6064,7 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
                                  MIR_new_int_op (ctx, offset));
     new_insns[1] = MIR_new_insn (ctx, MIR_ADD, _MIR_new_hard_reg_op (ctx, temp_hard_reg),
                                  _MIR_new_hard_reg_op (ctx, temp_hard_reg),
-                                 _MIR_new_hard_reg_op (ctx, FP_HARD_REG));
+                                 _MIR_new_hard_reg_op (ctx, base_reg));
     n = 2;
     if (addr_reg_p)
       hard_reg = temp_hard_reg;
@@ -6115,11 +6115,12 @@ static void rewrite (gen_ctx_t gen_ctx) {
 #endif
   MIR_mem_t mem;
   MIR_op_mode_t data_mode;
-  MIR_reg_t hard_reg;
+  MIR_reg_t hard_reg, base_reg;
   int out_p, first_in_p;
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
 
+  base_reg = target_get_stack_slot_base_reg (gen_ctx);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
@@ -6151,8 +6152,8 @@ static void rewrite (gen_ctx_t gen_ctx) {
                       : type == MIR_T_LD ? MIR_OP_LDOUBLE
                                          : MIR_OP_INT;
         }
-        hard_reg
-          = change_reg (gen_ctx, &mem_op, op->u.reg, data_mode, out_p || first_in_p, insn, out_p);
+        hard_reg = change_reg (gen_ctx, &mem_op, op->u.reg, base_reg, data_mode,
+                               out_p || first_in_p, insn, out_p);
         if (!out_p) first_in_p = FALSE;
         if (hard_reg == MIR_NON_HARD_REG) {
           *op = mem_op;
@@ -6167,7 +6168,8 @@ static void rewrite (gen_ctx_t gen_ctx) {
         if (op->u.mem.base == 0) {
           mem.base = MIR_NON_HARD_REG;
         } else {
-          mem.base = change_reg (gen_ctx, &mem_op, op->u.mem.base, MIR_OP_INT, FALSE, insn, FALSE);
+          mem.base = change_reg (gen_ctx, &mem_op, op->u.mem.base, base_reg, MIR_OP_INT, FALSE,
+                                 insn, FALSE);
           gen_assert (mem.base != MIR_NON_HARD_REG); /* we can always use GP regs */
         }
         gen_assert (op->u.mem.index == 0);
