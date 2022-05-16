@@ -4194,7 +4194,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
             op_ref = mem_insn->ops[0].mode == MIR_OP_MEM ? &mem_insn->ops[0] : &mem_insn->ops[1];
             insn->ops[1].u.mem.nloc = op_ref->u.mem.nloc;
             update_mem_loc_alloca_flag (gen_ctx, op_ref->u.mem.nloc, se->def->alloca_flag);
-            if (!bitmap_bit_p (curr_available_mem, (mem_bb_insn = mem_insn->data)->mem_index)) {
+            if (!bitmap_bit_p (curr_available_mem, (mem_bb_insn = mem_insn->data)->mem_index)
+                /* last available load can become dead: */
+                || (mem_insn->ops[1].mode == MIR_OP_MEM && mem_insn->ops[0].data == NULL)) {
               add_mem_insn (gen_ctx, insn);
             } else { /* (mem=x|x=mem); ...; r=mem => (mem=x|x=mem); t=x; ...; r=t */
               copy_gvn_info (bb_insn, mem_bb_insn);
