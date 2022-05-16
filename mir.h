@@ -171,7 +171,7 @@ typedef enum {
      behavior is undefined if there is no label for the index. */
   INSN_EL (SWITCH),
   INSN_EL (RET),
-  INSN_EL (JRET), /* return by jumping to address of the first operand */
+  INSN_EL (JRET), /* return by jumping to address of the operand */
   /* 1 operand insn: */
   INSN_EL (ALLOCA),             /* 2 operands: result address and size  */
   REP2 (INSN_EL, BSTART, BEND), /* block start: result addr; block end: addr from block start */
@@ -339,6 +339,7 @@ typedef struct MIR_func {
   MIR_type_t *res_types;
   char vararg_p;                  /* flag of variable number of arguments */
   char expr_p;                    /* flag of that the func can be used as a linker expression */
+  char jret_p;                    /* flag of jcall/jret func, set up after MIR_func_finish */
   VARR (MIR_var_t) * vars;        /* args and locals but temps */
   VARR (MIR_var_t) * global_vars; /* can be NULL */
   void *machine_code;             /* address of generated machine code or NULL */
@@ -549,7 +550,6 @@ extern MIR_insn_t MIR_new_insn (MIR_context_t ctx, MIR_insn_code_t code, ...);
 extern MIR_insn_t MIR_new_call_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_new_jcall_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_new_ret_insn (MIR_context_t ctx, size_t nops, ...);
-extern MIR_insn_t MIR_new_jret_insn (MIR_context_t ctx, size_t nops, ...);
 extern MIR_insn_t MIR_copy_insn (MIR_context_t ctx, MIR_insn_t insn);
 
 extern const char *MIR_insn_name (MIR_context_t ctx, MIR_insn_code_t code);

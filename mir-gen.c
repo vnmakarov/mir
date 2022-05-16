@@ -1463,15 +1463,17 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
     }
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
-        && (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_PRBEQ
-            || insn->code == MIR_PRBNE || next_insn->code == MIR_LABEL)) {
+        && (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
+            || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE
+            || next_insn->code == MIR_LABEL)) {
       prev_bb = bb;
       if (next_insn->code == MIR_LABEL && next_insn->data != NULL)
         bb = get_insn_bb (gen_ctx, next_insn);
       else
         bb = create_bb (gen_ctx, next_insn);
       add_bb (gen_ctx, bb);
-      if (insn->code != MIR_JMP && insn->code != MIR_RET && insn->code != MIR_SWITCH)
+      if (insn->code != MIR_JMP && insn->code != MIR_RET && insn->code != MIR_JRET
+          && insn->code != MIR_SWITCH)
         create_edge (gen_ctx, prev_bb, bb, TRUE);
     }
     for (i = 0; i < nops; i++)
@@ -2079,8 +2081,8 @@ static void redirect_def (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_insn_t by, int
   MIR_insn_op_mode (gen_ctx->ctx, insn, 0, &out_p);
   MIR_insn_op_mode (gen_ctx->ctx, by, 0, &by_out_p);
   gen_assert (insn->ops[0].mode == MIR_OP_REG && by->ops[0].mode == MIR_OP_REG
-              && (def_use_ssa_p || insn->ops[0].u.reg == by->ops[0].u.reg) && insn->code != MIR_CALL
-              && insn->code != MIR_INLINE && out_p && by_out_p);
+              && (def_use_ssa_p || insn->ops[0].u.reg == by->ops[0].u.reg)
+              && !MIR_call_code_p (insn->code) && out_p && by_out_p);
   by->ops[0].data = insn->ops[0].data;
   insn->ops[0].data = NULL; /* make redundant insn having no uses */
   change_ssa_edge_list_def (by->ops[0].data, by->data, 0, insn->ops[0].u.reg, by->ops[0].u.reg);
@@ -3235,7 +3237,7 @@ static expr_t add_expr (gen_ctx_t gen_ctx, MIR_insn_t insn, int replace_p) {
   expr_t e = gen_malloc (gen_ctx, sizeof (struct expr));
 
   /* can not be calls, rets, stores */
-  gen_assert (!MIR_call_code_p (insn->code) && insn->code != MIR_RET
+  gen_assert (!MIR_call_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_JRET
               && (!move_code_p (insn->code) || insn->ops[0].mode != MIR_OP_MEM));
   e->insn = insn;
   e->num = ((bb_insn_t) insn->data)->index;
@@ -3340,10 +3342,10 @@ static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_
 }
 
 static int gvn_insn_p (MIR_insn_t insn) {
-  return (insn->code != MIR_RET && insn->code != MIR_SWITCH && insn->code != MIR_LABEL
-          && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART
-          && insn->code != MIR_BEND && insn->code != MIR_VA_START && insn->code != MIR_VA_ARG
-          && insn->code != MIR_VA_END);
+  return (insn->code != MIR_RET && insn->code != MIR_JRET && insn->code != MIR_SWITCH
+          && insn->code != MIR_LABEL && !MIR_call_code_p (insn->code) && insn->code != MIR_ALLOCA
+          && insn->code != MIR_BSTART && insn->code != MIR_BEND && insn->code != MIR_VA_START
+          && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END);
 }
 
 #if !MIR_NO_GEN_DEBUG
@@ -7000,7 +7002,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
         if (bitmap_clear_bit_p (live, var)) dead_p = FALSE;
       }
       if (!reg_def_p) dead_p = FALSE;
-      if (dead_p && !MIR_call_code_p (insn->code) && insn->code != MIR_RET
+      if (dead_p && !MIR_call_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_JRET
           && insn->code != MIR_ALLOCA && insn->code != MIR_BSTART && insn->code != MIR_BEND
           && insn->code != MIR_VA_START && insn->code != MIR_VA_ARG && insn->code != MIR_VA_END
           && !(MIR_overflow_insn_code_p (insn->code)
@@ -7421,7 +7423,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET
+    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   curr_func_item->data = bb_stubs = gen_malloc (gen_ctx, sizeof (struct bb_stub) * n_bbs);
@@ -7444,7 +7446,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       insn = last_lab_insn;
       n_bbs++;
     }
-    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET
+    new_bb_p = MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
@@ -7941,7 +7943,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
     target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
   }
-  if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_SWITCH && curr_insn->code != MIR_RET) {
+  if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_SWITCH && curr_insn->code != MIR_RET
+      && curr_insn->code != MIR_JRET) {
     VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
     (void) get_bb_version (gen_ctx, bb_stub + 1, VARR_LENGTH (spot_attr_t, spot_attrs),
                            VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);

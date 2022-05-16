@@ -29,7 +29,8 @@ static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t ty
 |               |  prev func stack frame               |               |
 | ...           |  (start addr aligned to 16 bytes)    | ...           |
 |---------------|  				       |---------------|
-| return pc     |  sp before call = start sp hard reg  | return pc     |
+| return pc     |  sp before call = start sp hard reg  |               |
+|               |  absent for jcall/jret func          | return pc     |
 |---------------|				       |               |
 | old bp        |  new bp refers here		       |               |
 |---------------|     				       |---------------|
@@ -1173,7 +1174,8 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
                _MIR_new_hard_reg_op (ctx, get_int_arg_reg (i)));
   }
 #endif
-  service_area_size = func->vararg_p ? reg_save_area_size + 8 : 8;
+  service_area_size = func->vararg_p ? reg_save_area_size : 0;
+  if (!func->jret_p) service_area_size += 8; /* return address */
   stack_slots_size = stack_slots_num * 8;
   if (!keep_fp_p) stack_slots_size = (stack_slots_size + 15) / 16 * 16;
   /* stack slots, and saved regs as multiple of 16 bytes: */
@@ -1661,8 +1663,10 @@ static const struct pattern patterns[] = {
   {MIR_LDBNE, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A l0; 0F 85 l0"},
 
   {MIR_CALL, "X r $", "Y FF /2 R1"}, /* call *r1 */
+  {MIR_RET, "$", "C3"},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
-  {MIR_RET, "$", "C3"}, /* ret ax, dx, xmm0, xmm1, st0, st1  */
+  {MIR_JCALL, "X r $", "Y FF /4 R1"}, /* jmp *r1 */
+  {MIR_JRET, "r $", "Y FF /4 R0"},    /* jmp *r1  */
 };
 
 static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {

@@ -3570,6 +3570,8 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 #define ADD_OVERFLOW "__builtin_add_overflow"
 #define SUB_OVERFLOW "__builtin_sub_overflow"
 #define EXPECT "__builtin_expect"
+#define JCALL "__builtin_jcall"
+#define JRET "__builtin_jret"
 
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
@@ -3708,7 +3710,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
                 error (c2m_ctx, t->pos, "garbage after identifier in __has_builtin");
               else
                 res = (strcmp (t->repr, ADD_OVERFLOW) == 0 || strcmp (t->repr, SUB_OVERFLOW) == 0
-                       || strcmp (t->repr, EXPECT) == 0);
+                       || strcmp (t->repr, EXPECT) == 0 || strcmp (t->repr, JCALL) == 0
+                       || strcmp (t->repr, JRET) == 0);
             }
           }
           m->ignore_p = TRUE;
@@ -5508,7 +5511,7 @@ struct check_ctx {
   VARR (node_t) * gotos;
   node_t func_block_scope;
   unsigned curr_func_scope_num;
-  int in_params_p;
+  unsigned char in_params_p, jump_ret_p;
   node_t curr_unnamed_anon_struct_union_member;
   node_t curr_switch;
   VARR (decl_t) * func_decls_for_allocation;
@@ -5525,6 +5528,7 @@ struct check_ctx {
 #define func_block_scope check_ctx->func_block_scope
 #define curr_func_scope_num check_ctx->curr_func_scope_num
 #define in_params_p check_ctx->in_params_p
+#define jump_ret_p check_ctx->jump_ret_p
 #define curr_unnamed_anon_struct_union_member check_ctx->curr_unnamed_anon_struct_union_member
 #define curr_switch check_ctx->curr_switch
 #define func_decls_for_allocation check_ctx->func_decls_for_allocation
@@ -8594,6 +8598,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
                         : r->code == N_GT ? e1->u.u_val > e2->u.u_val
                                           : e1->u.u_val >= e2->u.u_val);
       }
+    } else if ((t1->mode == TM_PTR && integer_type_p (t2))
+               || (t2->mode == TM_PTR && integer_type_p (t1))) {
+      warning (c2m_ctx, POS (r), "comparison of integer with a pointer");
     } else {
       error (c2m_ctx, POS (r), "invalid types of comparison operands");
     }
@@ -9080,19 +9087,22 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   case N_CALL: {
     struct func_type *func_type = NULL; /* to remove an uninitialized warning */
     struct type *ret_type;
-    node_t list, spec_list, decl, param_list, start_param, param, arg_list, arg;
+    node_t list, spec_list, decl, param_list, start_param, param, arg_list, first_arg, arg;
     node_t saved_scope = curr_scope;
     struct decl_spec *decl_spec;
     mir_size_t saved_call_arg_area_offset_before_args;
     struct type res_type;
     int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
     int add_overflow_p = FALSE, sub_overflow_p = FALSE, expect_p = FALSE;
+    int jcall_p = FALSE, jret_p = FALSE;
 
     op1 = NL_HEAD (r->u.ops);
     alloca_p = op1->code == N_ID && strcmp (op1->u.s.s, ALLOCA) == 0;
     add_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, ADD_OVERFLOW) == 0;
     sub_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, SUB_OVERFLOW) == 0;
     expect_p = op1->code == N_ID && strcmp (op1->u.s.s, EXPECT) == 0;
+    jcall_p = op1->code == N_ID && strcmp (op1->u.s.s, JCALL) == 0;
+    jret_p = op1->code == N_ID && strcmp (op1->u.s.s, JRET) == 0;
     if (op1->code == N_ID && find_def (c2m_ctx, S_REGULAR, op1, curr_scope, NULL) == NULL) {
       va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
       va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
@@ -9117,9 +9127,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         op_prepend (c2m_ctx, list, decl);
       }
     }
-    builtin_call_p
-      = alloca_p || va_arg_p || va_start_p || add_overflow_p || sub_overflow_p || expect_p;
-    if (!builtin_call_p) VARR_PUSH (node_t, call_nodes, r);
+    builtin_call_p = alloca_p || va_arg_p || va_start_p || add_overflow_p || sub_overflow_p
+                     || expect_p || jcall_p || jret_p;
+    if (!builtin_call_p || jcall_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
     if (builtin_call_p) {
       if (func_block_scope != NULL && (va_arg_p || va_start_p))
@@ -9147,6 +9157,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", SUB_OVERFLOW);
       } else if (expect_p && NL_LENGTH (arg_list->u.ops) != 2) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", EXPECT);
+      } else if (jret_p && NL_LENGTH (arg_list->u.ops) != 1) {
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", JRET);
       } else if (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", BUILTIN_VA_ARG);
       } else {
@@ -9181,6 +9193,26 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
             if (!integer_type_p (e2->type))
               error (c2m_ctx, POS (arg), "non-integer type of %d argument of %s call", i, EXPECT);
           }
+        } else if (jret_p) {
+          arg = NL_HEAD (arg_list->u.ops);
+          e2 = arg->attr;
+          t2 = e2->type;
+          if (t2->mode != TM_PTR)
+            error (c2m_ctx, POS (arg), "non-pointer type of 1st argument of %s call", JRET);
+        } else if (jcall_p) {
+          arg = NL_HEAD (arg_list->u.ops);
+          e2 = arg->attr;
+          t2 = e2->type;
+          if (t2->mode != TM_PTR || (t2 = t2->u.ptr_type)->mode != TM_FUNC) {
+            error (c2m_ctx, POS (r), "calling non-function in %s", JCALL);
+            break;
+          }
+          func_type = t2->u.func_type;
+          ret_type = func_type->ret_type;
+          if (!void_type_p (ret_type)) {
+            error (c2m_ctx, POS (arg), "calling non-void function in %s", JCALL);
+            break;
+          }
         }
       }
     } else {
@@ -9205,16 +9237,16 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       set_type_layout (c2m_ctx, ret_type);
       if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, ret_type, TRUE);
     }
-    if (builtin_call_p) break;
+    if (builtin_call_p && !jcall_p) break;
+    first_arg = jcall_p ? NL_EL (arg_list->u.ops, 1) : NL_HEAD (arg_list->u.ops);
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->u.ops);
     if (void_param_p (start_param)) { /* f(void) */
-      if ((arg = NL_HEAD (arg_list->u.ops)) != NULL)
-        error (c2m_ctx, POS (arg), "too many arguments");
+      if (first_arg != NULL) error (c2m_ctx, POS (arg), "too many arguments");
       break;
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
-    for (arg = NL_HEAD (arg_list->u.ops); arg != NULL; arg = NL_NEXT (arg)) {
+    for (arg = first_arg; arg != NULL; arg = NL_NEXT (arg)) {
       check (c2m_ctx, arg, r);
       e2 = arg->attr;
       if (start_param == NULL || start_param->code == N_ID) continue; /* no params or ident list */
@@ -9451,7 +9483,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
     if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
         || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0 || strcmp (id->u.s.s, ADD_OVERFLOW) == 0
-        || strcmp (id->u.s.s, SUB_OVERFLOW) == 0 || strcmp (id->u.s.s, EXPECT) == 0) {
+        || strcmp (id->u.s.s, SUB_OVERFLOW) == 0 || strcmp (id->u.s.s, EXPECT) == 0
+        || strcmp (id->u.s.s, JCALL) == 0 || strcmp (id->u.s.s, JRET) == 0) {
       error (c2m_ctx, POS (id), "%s is a builtin function", id->u.s.s);
       break;
     }
@@ -9459,6 +9492,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     create_node_scope (c2m_ctx, block);
     func_block_scope = curr_scope;
     curr_func_def = r;
+    jump_ret_p = FALSE;
     curr_switch = curr_loop = curr_loop_switch = NULL;
     curr_call_arg_area_offset = 0;
     VARR_TRUNC (decl_t, func_decls_for_allocation, 0);
@@ -12485,7 +12519,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   }
   case N_CALL: {
-    node_t func = NL_HEAD (r->u.ops), param_list, param, args = NL_EL (r->u.ops, 1);
+    node_t func = NL_HEAD (r->u.ops), param_list, param, args = NL_EL (r->u.ops, 1), first_arg;
     struct decl_spec *decl_spec;
     size_t ops_start;
     struct expr *call_expr = r->attr, *func_expr;
@@ -12500,6 +12534,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int add_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ADD_OVERFLOW) == 0;
     int sub_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, SUB_OVERFLOW) == 0;
     int expect_p = call_expr->builtin_call_p && strcmp (func->u.s.s, EXPECT) == 0;
+    int jcall_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JCALL) == 0;
+    int jret_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JRET) == 0;
     int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
     node_t block = NL_EL (curr_func_def->u.ops, 3);
     struct node_scope *ns = block->attr;
@@ -12546,8 +12582,21 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       val_p = FALSE;
       break;
     }
+    if (jret_p) {
+      op1 = val_gen (c2m_ctx, NL_HEAD (args->u.ops));
+      emit1 (c2m_ctx, MIR_JRET, op1.mir_op);
+      true_label = false_label = NULL;
+      val_p = FALSE;
+      break;
+    }
+    first_arg = NL_HEAD (args->u.ops);
+    if (jcall_p) {
+      func = NL_HEAD (args->u.ops);
+      first_arg = NL_EL (args->u.ops, 1);
+      assert (void_type_p (type));
+    }
     ops_start = VARR_LENGTH (MIR_op_t, call_ops);
-    if (!builtin_call_p) {
+    if (!builtin_call_p || jcall_p) {
       func_expr = func->attr;
       func_type = func_expr->type;
       assert (func_type->mode == TM_PTR && func_type->u.ptr_type->mode == TM_FUNC);
@@ -12555,7 +12604,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       proto_item = func_type->u.func_type->proto_item;  // ???
       VARR_PUSH (MIR_op_t, call_ops, MIR_new_ref_op (ctx, proto_item));
       op1 = val_gen (c2m_ctx, func);
-      if (op1.mir_op.mode == MIR_OP_REF && func->code == N_ID
+      if (!jcall_p && op1.mir_op.mode == MIR_OP_REF && func->code == N_ID
           && ((decl_t) func_expr->def_node->attr)->decl_spec.inline_p)
         inline_p = TRUE;
       VARR_PUSH (MIR_op_t, call_ops, op1.mir_op);
@@ -12565,7 +12614,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     if ((n = target_add_call_res_op (c2m_ctx, type, &arg_info, arg_area_offset)) < 0) {
       /* pass nothing */
     } else if (n == 0) { /* by addr */
-      if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
+      if (!builtin_call_p || jcall_p) update_call_arg_area_offset (c2m_ctx, type, FALSE);
       res = new_op (NULL, VARR_LAST (MIR_op_t, call_ops));
       assert (res.mir_op.mode == MIR_OP_MEM && res.mir_op.u.mem.type == MIR_T_RBLK);
       res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.mem.base, 0, 1);
@@ -12636,7 +12685,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     } else {
       param_list = func_type->u.func_type->param_list;
       param = NL_HEAD (param_list->u.ops);
-      for (node_t arg = NL_HEAD (args->u.ops); arg != NULL; arg = NL_NEXT (arg)) {
+      for (node_t arg = first_arg; arg != NULL; arg = NL_NEXT (arg)) {
         struct type *arg_type;
         e = arg->attr;
         struct_p = e->type->mode == TM_STRUCT || e->type->mode == TM_UNION;
@@ -12660,7 +12709,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         target_add_call_arg_op (c2m_ctx, arg_type, &arg_info, op2);
         if (param != NULL) param = NL_NEXT (param);
       }
-      call_insn = MIR_new_insn_arr (ctx, (inline_p ? MIR_INLINE : MIR_CALL),
+      call_insn = MIR_new_insn_arr (ctx,
+                                    (jcall_p    ? MIR_JCALL
+                                     : inline_p ? MIR_INLINE
+                                                : MIR_CALL),
                                     VARR_LENGTH (MIR_op_t, call_ops) - ops_start,
                                     VARR_ADDR (MIR_op_t, call_ops) + ops_start);
       MIR_append_insn (ctx, curr_func, call_insn);
@@ -12853,9 +12905,12 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     }
     gen (c2m_ctx, stmt, NULL, NULL, FALSE, NULL, NULL);
     if ((insn = DLIST_TAIL (MIR_insn_t, curr_func->u.func->insns)) == NULL
-        || (insn->code != MIR_RET && insn->code != MIR_JMP)) {
+        || (insn->code != MIR_RET && insn->code != MIR_JRET && insn->code != MIR_JMP)) {
       if (VARR_LENGTH (MIR_type_t, proto_info.ret_types) == 0) {
-        emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 0));
+        if (jump_ret_p)
+          emit1 (c2m_ctx, MIR_JRET, MIR_new_int_op (ctx, 0));
+        else
+          emit_insn (c2m_ctx, MIR_new_ret_insn (ctx, 0));
       } else {
         VARR_TRUNC (MIR_op_t, ret_ops, 0);
         for (size_t i = 0; i < VARR_LENGTH (MIR_type_t, proto_info.ret_types); i++) {
@@ -13250,16 +13305,21 @@ static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p, VARR (MIR_type
 
 static void gen_mir_protos (c2m_ctx_t c2m_ctx) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
-  node_t call, func;
+  node_t call, func, op1;
   struct type *type;
   struct func_type *func_type;
+  int jcall_p;
 
   curr_mir_proto_num = 0;
   HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq, NULL);
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
     assert (call->code == N_CALL);
-    func = NL_HEAD (call->u.ops);
+    op1 = NL_HEAD (call->u.ops);
+    if (op1->code == N_ID && strcmp (op1->u.s.s, JCALL) == 0)
+      func = NL_HEAD (NL_NEXT (op1)->u.ops);
+    else
+      func = NL_HEAD (call->u.ops);
     type = ((struct expr *) func->attr)->type;
     assert (type->mode == TM_PTR && type->u.ptr_type->mode == TM_FUNC);
     set_type_layout (c2m_ctx, type);
