@@ -1864,6 +1864,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
           && op.u.hard_reg_mem.scale != 2 && op.u.hard_reg_mem.scale != 4
           && op.u.hard_reg_mem.scale != 8)
         return FALSE;
+      if (!int32_p (op.u.hard_reg_mem.disp)) return FALSE;
       break;
     }
     case 'l':
