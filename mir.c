@@ -46,6 +46,7 @@ struct MIR_context {
   int curr_label_num;
   DLIST (MIR_module_t) all_modules;
   VARR (MIR_module_t) * modules_to_link;
+  VARR (MIR_op_t) * temp_ops;
   struct string_ctx *string_ctx;
   struct reg_ctx *reg_ctx;
   struct alias_ctx *alias_ctx;
@@ -71,6 +72,7 @@ struct MIR_context {
 #define curr_label_num ctx->curr_label_num
 #define all_modules ctx->all_modules
 #define modules_to_link ctx->modules_to_link
+#define temp_ops ctx->temp_ops
 #define setjmp_addr ctx->setjmp_addr
 
 static void util_error (MIR_context_t ctx, const char *message);
@@ -741,6 +743,7 @@ MIR_context_t _MIR_init (void) {
   scan_init (ctx);
 #endif
   VARR_CREATE (MIR_module_t, modules_to_link, 0);
+  VARR_CREATE (MIR_op_t, temp_ops, 0);
   init_module (ctx, &environment_module, ".environment");
   HTAB_CREATE (MIR_item_t, module_item_tab, 512, item_hash, item_eq, NULL);
   setjmp_addr = NULL;
@@ -838,6 +841,7 @@ void MIR_finish (MIR_context_t ctx) {
   remove_all_modules (ctx);
   HTAB_DESTROY (MIR_item_t, module_item_tab);
   VARR_DESTROY (MIR_module_t, modules_to_link);
+  VARR_DESTROY (MIR_op_t, temp_ops);
 #if !MIR_NO_SCAN
   scan_finish (ctx);
 #endif
@@ -1634,6 +1638,25 @@ void MIR_finish_func (MIR_context_t ctx) {
                                   func_name, insn_descs[code].name, i + 1);
       }
     }
+  }
+  if (!ret_p && !jret_p
+      && ((insn = DLIST_TAIL (MIR_insn_t, curr_func->insns)) == NULL || insn->code != MIR_JMP)) {
+    VARR_TRUNC (MIR_op_t, temp_ops, 0);
+    for (size_t i = 0; i < curr_func->nres; i++) { /* add absent ret */
+      MIR_op_t op;
+      if (curr_func->res_types[i] == MIR_T_F)
+        op = MIR_new_float_op (ctx, 0.0f);
+      else if (curr_func->res_types[i] == MIR_T_D)
+        op = MIR_new_double_op (ctx, 0.0);
+      else if (curr_func->res_types[i] == MIR_T_LD)
+        op = MIR_new_ldouble_op (ctx, 0.0);
+      else
+        op = MIR_new_int_op (ctx, 0);
+      VARR_PUSH (MIR_op_t, temp_ops, op);
+    }
+    MIR_append_insn (ctx, curr_func->func_item,
+                     MIR_new_insn_arr (ctx, MIR_RET, curr_func->nres,
+                                       VARR_ADDR (MIR_op_t, temp_ops)));
   }
   curr_func->expr_p = expr_p;
   curr_func->jret_p = jret_p;
@@ -3289,11 +3312,11 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_type_t *res_types = func->res_types;
   MIR_insn_t ret_label, insn, last_ret_insn;
   VARR (MIR_insn_t) *ret_insns = temp_insns;
-  VARR (MIR_op_t) * ret_ops;
+  VARR (MIR_op_t) *ret_ops = temp_ops;
 
   if (VARR_LENGTH (MIR_insn_t, ret_insns) == 0) return; /* jcall/jret func */
   last_ret_insn = VARR_LAST (MIR_insn_t, ret_insns);
-  VARR_CREATE (MIR_op_t, ret_ops, 16);
+  VARR_TRUNC (MIR_op_t, ret_ops, 0);
   if (VARR_LENGTH (MIR_insn_t, ret_insns) > 1) {
     ret_label = MIR_new_label (ctx);
     MIR_insert_insn_before (ctx, func_item, last_ret_insn, ret_label);
@@ -3335,7 +3358,6 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
                             MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, ret_label)));
     MIR_remove_insn (ctx, func_item, insn);
   }
-  VARR_DESTROY (MIR_op_t, ret_ops);
 }
 
 static void remove_unused_and_enumerate_labels (MIR_context_t ctx, MIR_item_t func_item) {
