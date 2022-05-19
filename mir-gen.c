@@ -2835,8 +2835,9 @@ static void copy_prop (gen_ctx_t gen_ctx) {
           if (def->bb->index == 0) break; /* arg init or undef insn */
           def_insn = def->insn;
           if (!move_p (def_insn) || def_insn->ops[0].u.reg == def_insn->ops[1].u.reg) break;
+          src_reg = def_insn->ops[1].u.reg;
           if (MIR_reg_hard_reg_name (ctx, def_insn->ops[0].u.reg, func)
-              != MIR_reg_hard_reg_name (ctx, def_insn->ops[1].u.reg, func))
+              != MIR_reg_hard_reg_name (ctx, src_reg, func))
             break;
           DEBUG (2, {
             fprintf (debug_file, "  Propagate from copy insn ");
@@ -4676,6 +4677,42 @@ static void dse (gen_ctx_t gen_ctx) {
 #undef mem_live_out
 #undef mem_live_gen
 #undef mem_live_kill
+
+/* New Page */
+
+/* Pressure relief */
+
+static int pressure_relief (gen_ctx_t gen_ctx) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_func_t func = curr_func_item->u.func;
+  MIR_insn_t insn, before;
+  bb_insn_t bb_insn, next_bb_insn, use;
+  ssa_edge_t se;
+  int moved_p = FALSE;
+
+  DEBUG (2, { fprintf (debug_file, "+++++++++++++Pressure Relief:\n"); });
+  gen_assert (def_use_repr_p);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
+      next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
+      insn = bb_insn->insn;
+      if (!move_code_p (insn->code) || insn->ops[0].mode != MIR_OP_REG
+          || insn->ops[1].mode == MIR_OP_REG || insn->ops[1].mode == MIR_OP_MEM
+          || (se = insn->ops[0].data) == NULL || se->next_use != NULL || (use = se->use)->bb == bb
+          || use->insn->code == MIR_PHI)
+        continue;
+      /* One use in another BB: move closer */
+      DEBUG (2, {
+        fprintf (debug_file, "  Move insn %-5lu", (unsigned long) bb_insn->index);
+        MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+        fprintf (debug_file, "  before insn %-5lu", (unsigned long) use->index);
+        MIR_output_insn (ctx, debug_file, use->insn, func, TRUE);
+      });
+      gen_move_insn_before (gen_ctx, use->insn, insn);
+      moved_p = TRUE;
+    }
+  return moved_p;
+}
 
 /* New page */
 
@@ -7231,6 +7268,12 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     ssa_dead_code_elimination (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
+  }
+  if (optimize_level >= 2 && pressure_relief (gen_ctx)) {
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after pressure relief:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
