@@ -1686,7 +1686,10 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
         || dst_bb_insn->insn->code == MIR_SWITCH || size > max_bb_growth_factor * orig_size)
       continue;
     res = TRUE;
-    DEBUG (2, { fprintf (debug_file, "  Cloning from BB%d into BB%d:\n", dst->index, bb->index); });
+    DEBUG (2, {
+      fprintf (debug_file, "  Cloning from BB%lu into BB%lu:\n", (unsigned long) dst->index,
+               (unsigned long) bb->index);
+    });
     last_dst_insn = DLIST_TAIL (bb_insn_t, dst->bb_insns)->insn;
     after = DLIST_PREV (MIR_insn_t, bb_insn->insn);
     gen_delete_insn (gen_ctx, bb_insn->insn);
@@ -1738,7 +1741,7 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
       create_edge (gen_ctx, new_bb, ((bb_insn_t) label->data)->bb, TRUE);
     }
     DEBUG (2, {
-      fprintf (debug_file, "  Result BB%d:\n", bb->index);
+      fprintf (debug_file, "  Result BB%lu:\n", (unsigned long) bb->index);
       output_in_edges (gen_ctx, bb);
       output_out_edges (gen_ctx, bb);
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
@@ -2944,9 +2947,9 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         remove_insn_ssa_edges (gen_ctx, insn);
         gen_delete_insn (gen_ctx, insn);
         DEBUG (2, {
-          fprintf (debug_file, " on ", (unsigned long) ((bb_insn_t) mov_insn->data)->index);
+          fprintf (debug_file, " on ");
           MIR_output_insn (ctx, debug_file, mov_insn, func, FALSE);
-          fprintf (debug_file, " and ", (unsigned long) ((bb_insn_t) new_insn->data)->index);
+          fprintf (debug_file, " and ");
           MIR_output_insn (ctx, debug_file, new_insn, func, TRUE);
         });
       }
