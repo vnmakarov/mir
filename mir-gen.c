@@ -2519,6 +2519,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
   ssa_edge_t se;
   MIR_func_t func = curr_func_item->u.func;
 
+  gen_assert (addr_insn_p);
   bitmap_clear (addr_regs);
   VARR_TRUNC (bb_insn_t, temp_bb_insns, 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -2529,7 +2530,8 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
       } else if (move_p (bb_insn->insn)) {
         gen_assert (bb_insn->insn->ops[1].data != NULL);
       }
-  gen_assert (addr_insn_p && VARR_LENGTH (bb_insn_t, temp_bb_insns) != 0);
+  if (VARR_LENGTH (bb_insn_t, temp_bb_insns) == 0)
+    return; /* all addr insns can be unreachable and removed */
   for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, temp_bb_insns); i++) {
     bb_insn = VARR_GET (bb_insn_t, temp_bb_insns, i);
     insn = bb_insn->insn;
