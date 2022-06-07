@@ -1092,6 +1092,7 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
                                  MIR_type_t *res_types, size_t nargs, int vararg_p,
                                  MIR_var_t *args) {
   MIR_proto_t proto = malloc (sizeof (struct MIR_proto) + nres * sizeof (MIR_type_t));
+  MIR_var_t arg;
 
   if (proto == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
@@ -1101,7 +1102,11 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
   proto->nres = nres;
   proto->vararg_p = vararg_p != 0;
   VARR_CREATE (MIR_var_t, proto->args, nargs);
-  for (size_t i = 0; i < nargs; i++) VARR_PUSH (MIR_var_t, proto->args, args[i]);
+  for (size_t i = 0; i < nargs; i++) {
+    arg = args[i];
+    arg.name = get_ctx_str (ctx, arg.name);
+    VARR_PUSH (MIR_var_t, proto->args, arg);
+  }
   return proto;
 }
 
