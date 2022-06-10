@@ -3941,8 +3941,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         const_p = gvn_phi_val (gen_ctx, bb_insn, &val);
         if (const_p) break;
         if (insn->nops == 2 && insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG
-            && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func)
-                 == MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func)) {
+            && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func) == NULL
+            && MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func) == NULL) {
           remove_copy (gen_ctx, insn);
           continue;
         }
@@ -4251,8 +4251,8 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         } else if (move_p (insn) && (se = insn->ops[1].data) != NULL
                    && !fake_insn_p (gen_ctx, se->def)
                    && (se = se->def->insn->ops[se->def_op_num].data) != NULL && se->next_use == NULL
-                   && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func)
-                        == MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func)) {
+                   && MIR_reg_hard_reg_name (ctx, insn->ops[0].u.reg, func) == NULL
+                   && MIR_reg_hard_reg_name (ctx, insn->ops[1].u.reg, func) == NULL) {
           /* one source for definition: remove copy */
           gen_assert (se->use == bb_insn && se->use_op_num == 1);
           remove_copy (gen_ctx, insn);
@@ -4348,8 +4348,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       if (move_p (insn)) {
         def_bb_insn = ((ssa_edge_t) insn->ops[1].data)->def;
         copy_gvn_info (bb_insn, def_bb_insn);
-      } else { /* r=e; ...; x=e => r=e; t=r; ...; x=e; x=t */
-        if (MIR_overflow_insn_code_p (insn->code) || !find_expr (gen_ctx, insn, &e)) {
+      } else if (!MIR_overflow_insn_code_p (insn->code)) {
+        /* r=e; ...; x=e => r=e; t=r; ...; x=e; x=t */
+        if (!find_expr (gen_ctx, insn, &e)) {
           e = add_expr (gen_ctx, insn, FALSE);
           DEBUG (2, { print_expr (gen_ctx, e, "Adding"); });
         } else if (move_code_p (insn->code) && insn->ops[1].mode == MIR_OP_MEM
