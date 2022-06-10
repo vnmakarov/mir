@@ -3569,6 +3569,7 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 
 #define ADD_OVERFLOW "__builtin_add_overflow"
 #define SUB_OVERFLOW "__builtin_sub_overflow"
+#define MUL_OVERFLOW "__builtin_mul_overflow"
 #define EXPECT "__builtin_expect"
 #define JCALL "__builtin_jcall"
 #define JRET "__builtin_jret"
@@ -3710,8 +3711,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
                 error (c2m_ctx, t->pos, "garbage after identifier in __has_builtin");
               else
                 res = (strcmp (t->repr, ADD_OVERFLOW) == 0 || strcmp (t->repr, SUB_OVERFLOW) == 0
-                       || strcmp (t->repr, EXPECT) == 0 || strcmp (t->repr, JCALL) == 0
-                       || strcmp (t->repr, JRET) == 0);
+                       || strcmp (t->repr, MUL_OVERFLOW) == 0 || strcmp (t->repr, EXPECT) == 0
+                       || strcmp (t->repr, JCALL) == 0 || strcmp (t->repr, JRET) == 0);
             }
           }
           m->ignore_p = TRUE;
@@ -9093,13 +9094,14 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     mir_size_t saved_call_arg_area_offset_before_args;
     struct type res_type;
     int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
-    int add_overflow_p = FALSE, sub_overflow_p = FALSE, expect_p = FALSE;
+    int add_overflow_p = FALSE, sub_overflow_p = FALSE, mul_overflow_p = FALSE, expect_p = FALSE;
     int jcall_p = FALSE, jret_p = FALSE;
 
     op1 = NL_HEAD (r->u.ops);
     alloca_p = op1->code == N_ID && strcmp (op1->u.s.s, ALLOCA) == 0;
     add_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, ADD_OVERFLOW) == 0;
     sub_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, SUB_OVERFLOW) == 0;
+    mul_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, MUL_OVERFLOW) == 0;
     expect_p = op1->code == N_ID && strcmp (op1->u.s.s, EXPECT) == 0;
     jcall_p = op1->code == N_ID && strcmp (op1->u.s.s, JCALL) == 0;
     jret_p = op1->code == N_ID && strcmp (op1->u.s.s, JRET) == 0;
@@ -9128,7 +9130,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
     }
     builtin_call_p = alloca_p || va_arg_p || va_start_p || add_overflow_p || sub_overflow_p
-                     || expect_p || jcall_p || jret_p;
+                     || mul_overflow_p || expect_p || jcall_p || jret_p;
     if (!builtin_call_p || jcall_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
     if (builtin_call_p) {
@@ -9142,9 +9144,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         res_type.u.ptr_type = &VOID_TYPE;
       } else {
         res_type.mode = TM_BASIC;
-        res_type.u.basic_type = va_arg_p || add_overflow_p || sub_overflow_p ? TP_INT
-                                : expect_p                                   ? TP_LONG
-                                                                             : TP_VOID;
+        res_type.u.basic_type
+          = (va_arg_p || add_overflow_p || sub_overflow_p || mul_overflow_p ? TP_INT
+             : expect_p                                                     ? TP_LONG
+                                                                            : TP_VOID);
       }
       ret_type = &res_type;
       if (va_start_p && NL_LENGTH (arg_list->u.ops) != 1) {
@@ -9155,6 +9158,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", ADD_OVERFLOW);
       } else if (sub_overflow_p && NL_LENGTH (arg_list->u.ops) != 3) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", SUB_OVERFLOW);
+      } else if (mul_overflow_p && NL_LENGTH (arg_list->u.ops) != 3) {
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", MUL_OVERFLOW);
       } else if (expect_p && NL_LENGTH (arg_list->u.ops) != 2) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", EXPECT);
       } else if (jret_p && NL_LENGTH (arg_list->u.ops) != 1) {
@@ -9171,20 +9176,24 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
             error (c2m_ctx, POS (arg), "wrong type of 2nd argument of %s call", BUILTIN_VA_ARG);
           else
             ret_type = t2->u.ptr_type;
-        } else if (add_overflow_p || sub_overflow_p) {
+        } else if (add_overflow_p || sub_overflow_p || mul_overflow_p) {
           arg = NL_EL (arg_list->u.ops, 2);
           e2 = arg->attr;
           t2 = e2->type;
           if (t2->mode != TM_PTR || !standard_integer_type_p (t2->u.ptr_type)
               || t2->u.ptr_type->u.basic_type < TP_INT) /* only [u]int, [u]long, [u]longlong */
             error (c2m_ctx, POS (arg), "wrong type of 3rd argument of %s call",
-                   add_overflow_p ? ADD_OVERFLOW : SUB_OVERFLOW);
+                   add_overflow_p   ? ADD_OVERFLOW
+                   : sub_overflow_p ? SUB_OVERFLOW
+                                    : MUL_OVERFLOW);
           for (int i = 0; i < 2; i++) {
             arg = NL_EL (arg_list->u.ops, i);
             e2 = arg->attr;
             if (!integer_type_p (e2->type))
               error (c2m_ctx, POS (arg), "non-integer type of %d argument of %s call", i,
-                     add_overflow_p ? ADD_OVERFLOW : SUB_OVERFLOW);
+                     add_overflow_p   ? ADD_OVERFLOW
+                     : sub_overflow_p ? SUB_OVERFLOW
+                                      : MUL_OVERFLOW);
           }
         } else if (expect_p) {
           for (int i = 0; i < 2; i++) {
@@ -9483,8 +9492,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
 
     if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
         || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0 || strcmp (id->u.s.s, ADD_OVERFLOW) == 0
-        || strcmp (id->u.s.s, SUB_OVERFLOW) == 0 || strcmp (id->u.s.s, EXPECT) == 0
-        || strcmp (id->u.s.s, JCALL) == 0 || strcmp (id->u.s.s, JRET) == 0) {
+        || strcmp (id->u.s.s, SUB_OVERFLOW) == 0 || strcmp (id->u.s.s, MUL_OVERFLOW) == 0
+        || strcmp (id->u.s.s, EXPECT) == 0 || strcmp (id->u.s.s, JCALL) == 0
+        || strcmp (id->u.s.s, JRET) == 0) {
       error (c2m_ctx, POS (id), "%s is a builtin function", id->u.s.s);
       break;
     }
@@ -12533,6 +12543,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
     int add_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ADD_OVERFLOW) == 0;
     int sub_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, SUB_OVERFLOW) == 0;
+    int mul_overflow_p = call_expr->builtin_call_p && strcmp (func->u.s.s, MUL_OVERFLOW) == 0;
     int expect_p = call_expr->builtin_call_p && strcmp (func->u.s.s, EXPECT) == 0;
     int jcall_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JCALL) == 0;
     int jret_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JRET) == 0;
@@ -12542,7 +12553,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     target_arg_info_t arg_info;
     int n, struct_p;
 
-    if (add_overflow_p || sub_overflow_p) {
+    if (add_overflow_p || sub_overflow_p || mul_overflow_p) {
       op1 = val_gen (c2m_ctx, NL_HEAD (args->u.ops));
       op2 = val_gen (c2m_ctx, NL_EL (args->u.ops, 1));
       op3 = val_gen (c2m_ctx, NL_EL (args->u.ops, 2));
@@ -12553,8 +12564,14 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx,
                                      t == MIR_T_I32 || t == MIR_T_U32
-                                       ? (add_overflow_p ? MIR_ADDOS : MIR_SUBOS)
-                                       : (add_overflow_p ? MIR_ADDO : MIR_SUBO),
+                                       ? (add_overflow_p   ? MIR_ADDOS
+                                          : sub_overflow_p ? MIR_SUBOS
+                                          : t == MIR_T_I32 ? MIR_MULOS
+                                                           : MIR_UMULOS)
+                                       : (add_overflow_p   ? MIR_ADDO
+                                          : sub_overflow_p ? MIR_SUBO
+                                          : t == MIR_T_I64 ? MIR_MULO
+                                                           : MIR_UMULO),
                                      MIR_new_mem_op (ctx, t, 0, op3.mir_op.u.reg, 0, 1), op1.mir_op,
                                      op2.mir_op));
       if (true_label != NULL) {
