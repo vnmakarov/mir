@@ -254,6 +254,10 @@ static const struct insn_desc insn_descs[] = {
   {MIR_ADDOS, "addos", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_SUBO, "subo", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_SUBOS, "subos", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_MULO, "mulo", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_MULOS, "mulos", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_UMULO, "umulo", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
+  {MIR_UMULOS, "umulos", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_JMP, "jmp", {MIR_OP_LABEL, MIR_OP_BOUND}},
   {MIR_BT, "bt", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_BTS, "bts", {MIR_OP_LABEL, MIR_OP_INT, MIR_OP_BOUND}},
@@ -1519,6 +1523,18 @@ void MIR_finish_func (MIR_context_t ctx) {
                                   "func %s: instruction '%s' has no previous overflow insn "
                                   "separated only by stores and reg moves",
                                   func_name, insn_descs[code].name);
+      else if ((code == MIR_UBO || code == MIR_UBNO)
+               && (prev_insn->code == MIR_MULO || prev_insn->code == MIR_MULOS))
+        MIR_get_error_func (
+          ctx) (MIR_invalid_insn_error,
+                "func %s: unsigned overflow branch '%s' consumes flag of signed overflow insn '%s'",
+                func_name, insn_descs[code].name, insn_descs[prev_insn->code].name);
+      else if ((code == MIR_BO || code == MIR_BNO)
+               && (prev_insn->code == MIR_UMULO || prev_insn->code == MIR_UMULOS))
+        MIR_get_error_func (
+          ctx) (MIR_invalid_insn_error,
+                "func %s: signed overflow branch '%s' consumes flag of unsigned overflow insn '%s'",
+                func_name, insn_descs[code].name, insn_descs[prev_insn->code].name);
     }
     for (i = 0; i < actual_nops; i++) {
       if (code == MIR_UNSPEC && i == 0) {
@@ -3516,7 +3532,8 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
         && skip_labels (next_insn, insn->ops[0].u.label) == insn->ops[0].u.label) {
       /* BR L|JMP L; <labels>L: => <labels>L: Also Remember signaling NAN*/
       MIR_remove_insn (ctx, func_item, insn);
-    } else if (((code == MIR_MUL || code == MIR_MULS || code == MIR_DIV || code == MIR_DIVS)
+    } else if (((code == MIR_MUL || code == MIR_MULS || code == MIR_MULO || code == MIR_MULOS
+                 || code == MIR_DIV || code == MIR_DIVS)
                 && insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i == 1)
                || ((code == MIR_ADD || code == MIR_ADDS || code == MIR_SUB || code == MIR_SUBS
                     || code == MIR_OR || code == MIR_ORS || code == MIR_XOR || code == MIR_XORS

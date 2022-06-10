@@ -3963,6 +3963,11 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       case MIR_MUL: GVN_IOP3 (*); break;
       case MIR_MULS: GVN_IOP3S (*); break;
 
+      case MIR_MULO: GVN_IOP3 (*); break;
+      case MIR_MULOS: GVN_IOP3S (*); break;
+      case MIR_UMULO: GVN_UOP3 (*); break;
+      case MIR_UMULOS: GVN_UOP3S (*); break;
+
       case MIR_DIV: GVN_IOP30 (/); break;
       case MIR_DIVS: GVN_IOP3S0 (/); break;
       case MIR_UDIV: GVN_UOP30 (/); break;
@@ -6343,6 +6348,10 @@ static MIR_insn_code_t commutative_insn_code (MIR_insn_code_t insn_code) {
   case MIR_LDADD:
   case MIR_MUL:
   case MIR_MULS:
+  case MIR_MULO:
+  case MIR_MULOS:
+  case MIR_UMULO:
+  case MIR_UMULOS:
   case MIR_FMUL:
   case MIR_DMUL:
   case MIR_LDMUL:

@@ -146,7 +146,7 @@ typedef enum {
   REP7 (INSN_EL, LE, LES, ULE, ULES, FLE, DLE, LDLE),        /* Less or equal */
   REP7 (INSN_EL, GT, GTS, UGT, UGTS, FGT, DGT, LDGT),        /* Greater then */
   REP7 (INSN_EL, GE, GES, UGE, UGES, FGE, DGE, LDGE),        /* Greater or equal */
-  REP4 (INSN_EL, ADDO, ADDOS, SUBO, SUBOS), /* Addition/subtraction with setting overflow flag */
+  REP8 (INSN_EL, ADDO, ADDOS, SUBO, SUBOS, MULO, MULOS, UMULO, UMULOS), /* setting overflow flag */
   /* Unconditional (1 operand) and conditional (2 operands) branch
      insns.  The first operand is a label.  */
   REP5 (INSN_EL, JMP, BT, BTS, BF, BFS),
@@ -482,7 +482,8 @@ static inline int MIR_any_branch_code_p (MIR_insn_code_t code) {
 }
 
 static inline int MIR_overflow_insn_code_p (MIR_insn_code_t code) {
-  return code == MIR_ADDO || code == MIR_ADDOS || code == MIR_SUBO || code == MIR_SUBOS;
+  return (code == MIR_ADDO || code == MIR_ADDOS || code == MIR_SUBO || code == MIR_SUBOS
+          || code == MIR_MULO || code == MIR_MULOS || code == MIR_UMULO || code == MIR_UMULOS);
 }
 
 extern double _MIR_get_api_version (void);

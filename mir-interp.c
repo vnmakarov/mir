@@ -951,6 +951,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_ULES, MIR_FLE, MIR_DLE, MIR_LDLE, MIR_GT, MIR_GTS, MIR_UGT, MIR_UGTS);
     REP8 (LAB_EL, MIR_FGT, MIR_DGT, MIR_LDGT, MIR_GE, MIR_GES, MIR_UGE, MIR_UGES, MIR_FGE);
     REP6 (LAB_EL, MIR_DGE, MIR_LDGE, MIR_ADDO, MIR_ADDOS, MIR_SUBO, MIR_SUBOS);
+    REP4 (LAB_EL, MIR_MULO, MIR_MULOS, MIR_UMULO, MIR_UMULOS);
     REP6 (LAB_EL, MIR_JMP, MIR_BT, MIR_BTS, MIR_BF, MIR_BFS, MIR_BEQ);
     REP8 (LAB_EL, MIR_BEQS, MIR_FBEQ, MIR_DBEQ, MIR_LDBEQ, MIR_BNE, MIR_BNES, MIR_FBNE, MIR_DBNE);
     REP8 (LAB_EL, MIR_LDBNE, MIR_BLT, MIR_BLTS, MIR_UBLT, MIR_UBLTS, MIR_FBLT, MIR_DBLT, MIR_LDBLT);
@@ -1287,6 +1288,44 @@ L_jmpi_finish : { /* jmpi thunk return */
     unsigned_overflow_p = (uint32_t) op1 < (uint32_t) op2;
     signed_overflow_p = op2 < 0 ? op1 > INT32_MAX + op2 : op1 < INT32_MIN + op2;
     *r = op1 - op2;
+    END_INSN;
+  }
+
+  CASE (MIR_MULO, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    signed_overflow_p = (op1 == 0    ? FALSE
+                         : op1 == -1 ? op2 < -INT64_MAX
+                         : op1 > 0   ? (op2 > 0 ? INT64_MAX / op1 < op2 : INT64_MIN / op1 > op2)
+                                     : (op2 > 0 ? INT64_MIN / op1 < op2 : INT64_MAX / op1 > op2));
+    *r = op1 * op2;
+    END_INSN;
+  }
+
+  CASE (MIR_MULOS, 3) {
+    int64_t *r = get_iop (bp, ops);
+    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    signed_overflow_p = (op1 == 0    ? FALSE
+                         : op1 == -1 ? op2 < -INT32_MAX
+                         : op1 > 0   ? (op2 > 0 ? INT32_MAX / op1 < op2 : INT32_MIN / op1 > op2)
+                                     : (op2 > 0 ? INT32_MIN / op1 < op2 : INT32_MAX / op1 > op2));
+    *r = op1 * op2;
+    END_INSN;
+  }
+
+  CASE (MIR_UMULO, 3) {
+    uint64_t *r = get_uop (bp, ops);
+    uint64_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2);
+    unsigned_overflow_p = op1 == 0 ? FALSE : UINT64_MAX / op1 < op2;
+    *r = op1 * op2;
+    END_INSN;
+  }
+
+  CASE (MIR_UMULOS, 3) {
+    uint64_t *r = get_uop (bp, ops);
+    uint32_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2);
+    unsigned_overflow_p = op1 == 0 ? FALSE : UINT32_MAX / op1 < op2;
+    *r = op1 * op2;
     END_INSN;
   }
 

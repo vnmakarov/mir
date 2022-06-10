@@ -65,12 +65,13 @@ static const int spill_space_size = 32;
 
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {
   /* see possible patterns */
-  MIR_FADD, MIR_DADD,  MIR_LDADD, MIR_SUB,   MIR_SUBS,       MIR_FSUB, MIR_DSUB,  MIR_LDSUB,
-  MIR_MUL,  MIR_MULS,  MIR_FMUL,  MIR_DMUL,  MIR_LDMUL,      MIR_DIV,  MIR_DIVS,  MIR_UDIV,
-  MIR_FDIV, MIR_DDIV,  MIR_LDDIV, MIR_MOD,   MIR_MODS,       MIR_UMOD, MIR_UMODS, MIR_AND,
-  MIR_ANDS, MIR_OR,    MIR_ORS,   MIR_XOR,   MIR_XORS,       MIR_LSH,  MIR_LSHS,  MIR_RSH,
-  MIR_RSHS, MIR_URSH,  MIR_URSHS, MIR_NEG,   MIR_NEGS,       MIR_FNEG, MIR_DNEG,  MIR_LDNEG,
-  MIR_ADDO, MIR_ADDOS, MIR_SUBO,  MIR_SUBOS, MIR_INSN_BOUND,
+  MIR_FADD,  MIR_DADD,  MIR_LDADD, MIR_SUB,   MIR_SUBS,  MIR_FSUB,   MIR_DSUB,
+  MIR_LDSUB, MIR_MUL,   MIR_MULS,  MIR_FMUL,  MIR_DMUL,  MIR_LDMUL,  MIR_DIV,
+  MIR_DIVS,  MIR_UDIV,  MIR_FDIV,  MIR_DDIV,  MIR_LDDIV, MIR_MOD,    MIR_MODS,
+  MIR_UMOD,  MIR_UMODS, MIR_AND,   MIR_ANDS,  MIR_OR,    MIR_ORS,    MIR_XOR,
+  MIR_XORS,  MIR_LSH,   MIR_LSHS,  MIR_RSH,   MIR_RSHS,  MIR_URSH,   MIR_URSHS,
+  MIR_NEG,   MIR_NEGS,  MIR_FNEG,  MIR_DNEG,  MIR_LDNEG, MIR_ADDO,   MIR_ADDOS,
+  MIR_SUBO,  MIR_SUBOS, MIR_MULO,  MIR_MULOS, MIR_UMULO, MIR_UMULOS, MIR_INSN_BOUND,
 };
 
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
@@ -979,6 +980,18 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       insn->ops[2] = creg_op;
       break;
     }
+    case MIR_UMULO:
+    case MIR_UMULOS: {
+      /* We can use only ax as zero and the 1st operand: */
+      MIR_op_t areg_op = _MIR_new_hard_reg_op (ctx, AX_HARD_REG);
+
+      new_insn = MIR_new_insn (ctx, MIR_MOV, areg_op, insn->ops[1]);
+      gen_add_insn_before (gen_ctx, insn, new_insn);
+      new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], areg_op);
+      gen_add_insn_after (gen_ctx, insn, new_insn);
+      insn->ops[0] = insn->ops[1] = areg_op;
+      break;
+    }
     case MIR_DIV:
     case MIR_UDIV:
     case MIR_DIVS:
@@ -1565,16 +1578,27 @@ static const struct pattern patterns[] = {
   IOP (MIR_ADDO, "03", "01", "83 /0", "81 /0") /* x86_64 int additions with ovfl flag */
   IOP (MIR_SUBO, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions with ovfl flag */
 
-  {MIR_MUL, "r 0 r", "X 0F AF r0 R2"},    /* imul r0,r1*/
-  {MIR_MUL, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/
-  {MIR_MUL, "r r i2", "X 69 r0 R1 I2"},   /* imul r0,r1,i32*/
-  {MIR_MUL, "r m3 i2", "X 69 r0 m1 I2"},  /* imul r0,m1,i32*/
-  {MIR_MUL, "r r s", "X 8D r0 ap"},       /* lea r0,(,r1,s2)*/
-  {MIR_MULS, "r 0 r", "Y 0F AF r0 R2"},   /* imul r0,r1*/
-  {MIR_MULS, "r 0 m2", "Y 0F AF r0 m2"},  /* imul r0,m1*/
-  {MIR_MULS, "r r i2", "Y 69 r0 R1 I2"},  /* imul r0,r1,i32*/
-  {MIR_MULS, "r m2 i2", "Y 69 r0 m1 I2"}, /* imul r0,m1,i32*/
-  {MIR_MULS, "r r s", "Y 8D r0 ap"},      /* lea r0,(,r1,s2)*/
+#define IMULL(ICODE, ICODES)                                  \
+  {ICODE, "r 0 r", "X 0F AF r0 R2"},      /* imul r0,r1*/     \
+    {ICODE, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/     \
+    {ICODE, "r r i2", "X 69 r0 R1 I2"},   /* imul r0,r1,i32*/ \
+    {ICODE, "r m3 i2", "X 69 r0 m1 I2"},  /* imul r0,m1,i32*/ \
+    {ICODES, "r 0 r", "Y 0F AF r0 R2"},   /* imul r0,r1*/     \
+    {ICODES, "r 0 m2", "Y 0F AF r0 m2"},  /* imul r0,m1*/     \
+    {ICODES, "r r i2", "Y 69 r0 R1 I2"},  /* imul r0,r1,i32*/ \
+    {ICODES, "r m2 i2", "Y 69 r0 m1 I2"}, /* imul r0,m1,i32*/
+
+  IMULL (MIR_MUL, MIR_MULS)
+
+    {MIR_MUL, "r r s", "X 8D r0 ap"}, /* lea r0,(,r1,s2)*/
+  {MIR_MULS, "r r s", "Y 8D r0 ap"},  /* lea r0,(,r1,s2)*/
+
+  IMULL (MIR_MULO, MIR_MULOS)
+
+    {MIR_UMULO, "h0 0 r", "X F7 /4 R2"}, /* mul rax,r1*/
+  {MIR_UMULO, "h0 0 m3", "X F7 /4 m2"},  /* mul rax,m1*/
+  {MIR_UMULOS, "h0 0 r", "Y F7 /4 R2"},  /* mul rax,r1*/
+  {MIR_UMULOS, "h0 0 m2", "Y F7 /4 m2"}, /* mul rax,m1*/
 
   {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
   {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
