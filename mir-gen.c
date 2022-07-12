@@ -5162,7 +5162,7 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   size_t p;
   long int n;
   live_range_t lr, prev_lr, next_lr;
-  int born_p, dead_p, prev_born_p, prev_dead_p;
+  int born_p, dead_p, prev_dead_p;
   bitmap_iterator_t bi;
 
   bitmap_clear (born_vars);
@@ -5179,16 +5179,15 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i <= curr_point; i++) VARR_PUSH (int, point_map, 0);
   bitmap_ior (born_or_dead_vars, born_vars, dead_vars);
   n = -1;
-  prev_born_p = prev_dead_p = FALSE;
+  prev_dead_p = TRUE;
   FOREACH_BITMAP_BIT (bi, born_or_dead_vars, p) {
     born_p = bitmap_bit_p (born_vars, p);
     dead_p = bitmap_bit_p (dead_vars, p);
-    if ((prev_born_p && !prev_dead_p && born_p && !dead_p)
-        || (prev_dead_p && !prev_born_p && dead_p && !born_p))
+    assert (born_p || dead_p);
+    if (!prev_dead_p || !born_p) /* 1st point is always a born */
       VARR_SET (int, point_map, p, n);
     else
       VARR_SET (int, point_map, p, ++n);
-    prev_born_p = born_p;
     prev_dead_p = dead_p;
   }
 
