@@ -2898,15 +2898,14 @@ non_const0:
   if (ccp_res == CCP_CONST && val.u.i == 0) ccp_res = CCP_VARYING;
 non_const:
   if (ccp_res == CCP_UNKNOWN) return FALSE;
-  if (MIR_call_code_p (insn->code)) {
-    ccp_val = get_ccp_val (gen_ctx, insn->data);
-    ccp_val->val_kind = CCP_VARYING;
-    return FALSE;
-  }
   gen_assert (ccp_res == CCP_VARYING);
   change_p = FALSE;
-  if (get_ccp_res_op (gen_ctx, insn, 0, &op)
-      && (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_REG)) {
+  if (MIR_call_code_p (insn->code)) {
+    ccp_val = get_ccp_val (gen_ctx, insn->data);
+    if (ccp_val->val_kind != CCP_VARYING) change_p = TRUE;
+    ccp_val->val_kind = CCP_VARYING;
+  } else if (get_ccp_res_op (gen_ctx, insn, 0, &op)
+             && (op.mode == MIR_OP_HARD_REG || op.mode == MIR_OP_REG)) {
     ccp_val = get_ccp_val (gen_ctx, insn->data);
     if (ccp_val->val_kind != CCP_VARYING) change_p = TRUE;
     ccp_val->val_kind = CCP_VARYING;
@@ -3014,7 +3013,13 @@ static void ccp_make_insn_update (gen_ctx_t gen_ctx, MIR_insn_t insn) {
     });
   } else {
     ccp_val = NULL; /* to remove an initilized warning */
-    if (get_ccp_res_op (gen_ctx, insn, 0, &op) && var_op_p (op)) {
+    if (MIR_call_code_p (insn->code)) {
+      ccp_val = get_ccp_val (gen_ctx, insn->data);
+      gen_assert (insn->ops[0].u.ref->item_type == MIR_proto_item);
+      MIR_proto_t proto = insn->ops[0].u.ref->u.proto;
+      for (uint32_t i = 0; i < proto->nres; i++)
+        ccp_push_used_insns (gen_ctx, insn->ops[i + 2].data);
+    } else if (get_ccp_res_op (gen_ctx, insn, 0, &op) && var_op_p (op)) {
       ccp_val = get_ccp_val (gen_ctx, insn->data);
       ccp_push_used_insns (gen_ctx, op.data);
     }
