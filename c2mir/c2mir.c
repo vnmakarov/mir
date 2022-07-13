@@ -9341,15 +9341,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     struct decl_spec decl_spec = check_decl_spec (c2m_ctx, unshared_specs, r);
     int i;
     const char *asm_str = NULL;
-    node_t list, el;
 
-    if (asm_part->code == N_ASM && declarator->code == N_DECL
-        && (list = NL_EL (declarator->u.ops, 1)) != NULL && list->code == N_LIST
-        && ((el = NL_HEAD (list->u.ops)) == NULL || el->code != N_FUNC)) {
+    if (asm_part->code == N_ASM && decl_spec.register_p) {
       /* func can have asm which ignore here */
-      if (!decl_spec.register_p) {
-        error (c2m_ctx, POS (r), "asm decl without register");
-      } else if (initializer->code != N_IGNORE) {
+      if (initializer->code != N_IGNORE) {
         error (c2m_ctx, POS (r), "asm register decl with initializer");
       } else if (curr_scope != top_scope) {
         error (c2m_ctx, POS (r), "asm register decl should be at the top level");
