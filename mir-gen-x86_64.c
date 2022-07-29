@@ -477,9 +477,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                            : _MIR_new_hard_reg_op (ctx, arg_op.u.hard_reg_mem.base);
       }
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type, arg_stack_size, SP_HARD_REG,
                                          MIR_NON_HARD_REG, 1);
       new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
@@ -820,9 +821,10 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       /* arg is on the stack */
       block_arg_func_p = TRUE;
       mem_type = type == MIR_T_F || type == MIR_T_D || type == MIR_T_LD ? type : MIR_T_I64;
-      new_insn_code
-        = (type == MIR_T_F ? MIR_FMOV
-                           : type == MIR_T_D ? MIR_DMOV : type == MIR_T_LD ? MIR_LDMOV : MIR_MOV);
+      new_insn_code = (type == MIR_T_F    ? MIR_FMOV
+                       : type == MIR_T_D  ? MIR_DMOV
+                       : type == MIR_T_LD ? MIR_LDMOV
+                                          : MIR_MOV);
       mem_op = _MIR_new_hard_reg_mem_op (ctx, mem_type,
                                          mem_size + 8 /* ret */
                                            + start_sp_from_bp_offset,
@@ -1478,7 +1480,7 @@ static const struct pattern patterns[] = {
 
   {MIR_MOV, "r mu0", "X 0F B6 r0 m1"}, /* movzx r0, m1 */
   {MIR_MOV, "r mu1", "X 0F B7 r0 m1"}, /* movzx r0, m1 */
-  {MIR_MOV, "r mu2", "8B r0 m1"},      /* mov r0, m1 */
+  {MIR_MOV, "r mu2", "Y 8B r0 m1"},    /* mov r0, m1 */
 
   {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"}, /* mov m0,i8 */
   {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1"}, /* mov m0,i32 */
@@ -1581,20 +1583,20 @@ static const struct pattern patterns[] = {
   {MIR_MULS, "r m2 i2", "Y 69 r0 m1 I2"}, /* imul r0,m1,i32*/
   {MIR_MULS, "r r s", "Y 8D r0 ap"},      /* lea r0,(,r1,s2)*/
 
-  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
-  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
-  {MIR_DIVS, "h0 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_DIVS, "h0 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_DIVS, "h0 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
+  {MIR_DIVS, "h0 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
 
   {MIR_UDIV, "h0 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
   {MIR_UDIV, "h0 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
   {MIR_UDIVS, "h0 h0 r", "31 D2; Y F7 /6 R2"},  /* xorl edx,edx; div r2*/
   {MIR_UDIVS, "h0 h0 m2", "31 D2; Y F7 /6 m2"}, /* xorl edx,edx; div m2*/
 
-  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
-  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
-  {MIR_MODS, "h2 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_MODS, "h2 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_MODS, "h2 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
+  {MIR_MODS, "h2 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
 
   {MIR_UMOD, "h2 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
   {MIR_UMOD, "h2 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
@@ -2362,10 +2364,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     }
     if (const_ref_num >= 0)
       VARR_ADDR (const_ref_t, const_refs)[const_ref_num].pc = VARR_LENGTH (uint8_t, result_code);
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].label_val_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].label_val_disp = VARR_LENGTH (uint8_t, result_code);
     if (disp8 >= 0) put_byte (gen_ctx, disp8);
     if (disp32 >= 0) put_uint64 (gen_ctx, disp32, 4);
     if (imm8 >= 0) put_byte (gen_ctx, imm8);
@@ -2377,15 +2377,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       put_uint64 (gen_ctx, 0, 8);
     }
 
-    if (label_ref_num >= 0)
-      VARR_ADDR (label_ref_t, label_refs)
-      [label_ref_num].next_insn_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
+    [label_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
 
-    if (const_ref_num >= 0)
-      VARR_ADDR (const_ref_t, const_refs)
-      [const_ref_num].next_insn_disp
-        = VARR_LENGTH (uint8_t, result_code);
+    if (const_ref_num >= 0) VARR_ADDR (const_ref_t, const_refs)
+    [const_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
     if (ch == '\0') break;
   }
   if (switch_table_addr_start < 0) return;
