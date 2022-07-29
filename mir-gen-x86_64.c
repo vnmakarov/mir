@@ -1483,7 +1483,7 @@ static const struct pattern patterns[] = {
 
   {MIR_MOV, "r mu0", "X 0F B6 r0 m1"}, /* movzx r0, m1 */
   {MIR_MOV, "r mu1", "X 0F B7 r0 m1"}, /* movzx r0, m1 */
-  {MIR_MOV, "r mu2", "8B r0 m1"},      /* mov r0, m1 */
+  {MIR_MOV, "r mu2", "Y 8B r0 m1"},    /* mov r0, m1 */
 
   {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"}, /* mov m0,i8 */
   {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1"}, /* mov m0,i32 */
@@ -1600,20 +1600,20 @@ static const struct pattern patterns[] = {
   {MIR_UMULOS, "h0 0 r", "Y F7 /4 R2"},  /* mul rax,r1*/
   {MIR_UMULOS, "h0 0 m2", "Y F7 /4 m2"}, /* mul rax,m1*/
 
-  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
-  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
-  {MIR_DIVS, "h0 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_DIVS, "h0 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_DIVS, "h0 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
+  {MIR_DIVS, "h0 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
 
   {MIR_UDIV, "h0 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
   {MIR_UDIV, "h0 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
   {MIR_UDIVS, "h0 h0 r", "31 D2; Y F7 /6 R2"},  /* xorl edx,edx; div r2*/
   {MIR_UDIVS, "h0 h0 m2", "31 D2; Y F7 /6 m2"}, /* xorl edx,edx; div m2*/
 
-  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2"},   /* cqo; idiv r2*/
-  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2"},  /* cqo; idiv m2*/
-  {MIR_MODS, "h2 h0 r", "Y 99; Y F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_MODS, "h2 h0 m2", "Y 99; Y F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
+  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
+  {MIR_MODS, "h2 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
+  {MIR_MODS, "h2 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
 
   {MIR_UMOD, "h2 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
   {MIR_UMOD, "h2 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
