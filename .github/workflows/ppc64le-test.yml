@@ -5,8 +5,8 @@ on: [push]
 jobs:
   ppc64le:
     # The host should always be Linux
-    runs-on: [self-hosted, linux, X64, gcc120]
-    name: Build on gcc112 through gcc120 x86_64
+    runs-on: [self-hosted, linux, X64, gcc187]
+    name: Build on gcc112 through gcc187 x86_64
     steps:
     - name: make test
       run: ~/ssh-run.sh gcc112.fsffrance.org ~/mir-test.sh master `git log |head -1|awk '{print $2}'`
