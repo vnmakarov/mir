@@ -1,22 +1,13 @@
 name: s390x-test
 
-on: [push]
+on: [workflow_dispatch]
 
 jobs:
-  test:
-
-    # The host should always be linux
-    runs-on: ubuntu-latest
-    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
-
-    # Run steps on a matrix of 3 arch/distro combinations
-    strategy:
-      matrix:
-        include:
-          - arch: s390x
-            distro: stretch
-
+  s390x:
+    # The host should always be Linux
+    runs-on: [self-hosted, linux, X64, s390x]
+    name: Build and test under qemu on ton9 x86_64
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: make test
+      run: ~/mir-s390x-test.sh master `git log |head -1|awk '{print $2}'`
