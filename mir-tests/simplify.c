@@ -1,4 +1,4 @@
-#include "../mir.h"
+#include <mir.h>
 
 #include "api-loop.h"
 #include "api-memop.h"

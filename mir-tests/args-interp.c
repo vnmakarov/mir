@@ -1,4 +1,4 @@
-#include "../mir.h"
+#include <mir.h>
 #include <inttypes.h>
 #include "scan-args.h"
 

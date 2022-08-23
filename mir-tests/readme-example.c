@@ -1,5 +1,5 @@
-#include "../mir.h"
-#include "../mir-gen.h"
+#include <mir.h>
+#include <mir-gen.h>
 #include "../real-time.h"
 
 #if defined(_WIN32)
