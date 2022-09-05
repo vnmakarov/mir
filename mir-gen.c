@@ -216,7 +216,9 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
   return (struct all_gen_ctx **) ctx;
 }
 
-#if defined(__x86_64__) || defined(_M_AMD64)
+#if defined(__i686__) || defined(__wasm32__)
+#include "mir-gen-x86_64.c"
+#elif defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-gen-aarch64.c"
@@ -1534,7 +1536,7 @@ static int get_op_reg_index (gen_ctx_t gen_ctx, MIR_op_t op) {
 
 static htab_hash_t def_tab_el_hash (def_tab_el_t el, void *arg) {
   return mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (0x33), (uint64_t) el.bb), (uint64_t) el.reg));
+    mir_hash_step (mir_hash_step (mir_hash_init (0x33), (uintptr_t) el.bb), (uintptr_t) el.reg));
 }
 
 static int def_tab_el_eq (def_tab_el_t el1, def_tab_el_t el2, void *arg) {
@@ -2205,14 +2207,14 @@ static htab_hash_t expr_hash (expr_t e, void *arg) {
   ssa_edge_t ssa_edge;
   htab_hash_t h = mir_hash_init (0x42);
 
-  h = mir_hash_step (h, (uint64_t) e->insn->code);
+  h = mir_hash_step (h, (uintptr_t) e->insn->code);
   nops = MIR_insn_nops (ctx, e->insn);
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, e->insn, i, &out_p);
     if (out_p) continue;
     if (e->insn->ops[i].mode != MIR_OP_REG) h = MIR_op_hash_step (ctx, h, e->insn->ops[i]);
     if ((ssa_edge = e->insn->ops[i].data) != NULL)
-      h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
+      h = mir_hash_step (h, (uintptr_t) ssa_edge->def->gvn_val);
   }
   return mir_hash_finish (h);
 }
@@ -5491,10 +5493,10 @@ void *MIR_gen (MIR_context_t ctx, int gen_num, MIR_item_t func_item) {
   destroy_func_cfg (gen_ctx);
   DEBUG (0, {
     fprintf (debug_file,
-             "  Code generation for %s: %lu MIR insns (addr=%llx, len=%lu) -- time %.2f ms\n",
+             "  Code generation for %s: %zd MIR insns (addr=%" PRIxPTR ", len=%zd) -- time %.2f ms\n",
              MIR_item_name (ctx, func_item),
-             (long unsigned) DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
-             (unsigned long long) machine_code, (unsigned long) code_len,
+             (size_t) DLIST_LENGTH (MIR_insn_t, func_item->u.func->insns),
+             (uintptr_t) machine_code, (size_t) code_len,
              (real_usec_time () - start_time) / 1000.0);
   });
   _MIR_restore_func_insns (ctx, func_item);

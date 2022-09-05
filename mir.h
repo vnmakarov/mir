@@ -215,7 +215,7 @@ typedef uint8_t MIR_scale_t; /* Index reg scale in memory */
 
 #define MIR_MAX_SCALE UINT8_MAX
 
-typedef int64_t MIR_disp_t; /* Address displacement in memory */
+typedef intptr_t MIR_disp_t; /* Address displacement in memory */
 
 /* Register number (> 0).  A register always contain only one type
    value: integer, float, or (long) double.  Register numbers in insn
@@ -594,8 +594,8 @@ extern void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ct
 typedef union {
   MIR_insn_code_t ic;
   void *a;
-  int64_t i;
-  uint64_t u;
+  intptr_t i;
+  uintptr_t u;
   float f;
   double d;
   long double ld;

@@ -204,7 +204,7 @@ $(BUILD_DIR)/$(SOLIB): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUF
 ifeq ($(CC),cl)
 	$(CC) -nologo -D_USRDLL -D_WINDLL $^ -link -DLL -OUT:$@
 else
-	$(CC) $(SOLIBFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(SOLIBFLAGS) -o $@ $^
 endif
 
 # ------------------ C2M --------------------------

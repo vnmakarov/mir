@@ -632,7 +632,11 @@ static void sort_modules (MIR_context_t ctx) {
   VARR_DESTROY (MIR_module_t, modules);
 }
 
-int main (int argc, char *argv[], char *env[]) {
+int main (int argc, char *argv[]
+#ifndef __wasm__
+    , char *env[]
+#endif
+) {
   int i, bin_p;
   size_t len;
 
@@ -774,7 +778,11 @@ int main (int argc, char *argv[], char *env[]) {
     MIR_val_t val;
     MIR_module_t module;
     MIR_item_t func, main_func = NULL;
-    uint64_t (*fun_addr) (int, void *argv, char *env[]);
+    uint64_t (*fun_addr) (int, void *argv
+#ifndef __wasm__
+            , char *env[]
+#endif
+            );
     double start_time;
 
 #if MIR_PARALLEL_GEN
@@ -821,7 +829,12 @@ int main (int argc, char *argv[], char *env[]) {
         MIR_interp (main_ctx, main_func, &val, 3,
                     (MIR_val_t){.i = VARR_LENGTH (char_ptr_t, exec_argv)},
                     (MIR_val_t){.a = (void *) VARR_ADDR (char_ptr_t, exec_argv)},
-                    (MIR_val_t){.a = (void *) env});
+#ifndef __wasm__
+                    (MIR_val_t){.a = (void *) env}
+#else
+                    NULL
+#endif
+                    );
         result_code = val.i;
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
@@ -847,7 +860,11 @@ int main (int argc, char *argv[], char *env[]) {
         fun_addr = gen_exec_p && n_gen > 1 ? MIR_gen (main_ctx, 0, main_func) : main_func->addr;
         start_time = real_usec_time ();
         result_code
-          = fun_addr (VARR_LENGTH (char_ptr_t, exec_argv), VARR_ADDR (char_ptr_t, exec_argv), env);
+          = fun_addr (VARR_LENGTH (char_ptr_t, exec_argv), VARR_ADDR (char_ptr_t, exec_argv)
+#ifndef __wasm__
+                    ,env
+#endif
+                );
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);

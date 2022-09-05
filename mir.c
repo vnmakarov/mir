@@ -551,8 +551,8 @@ void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atom
 
 static htab_hash_t item_hash (MIR_item_t it, void *arg) {
   return mir_hash_finish (
-    mir_hash_step (mir_hash_step (mir_hash_init (28), (uint64_t) MIR_item_name (NULL, it)),
-                   (uint64_t) it->module));
+    mir_hash_step (mir_hash_step (mir_hash_init (28), (uintptr_t) MIR_item_name (NULL, it)),
+                   (uintptr_t) it->module));
 }
 static int item_eq (MIR_item_t it1, MIR_item_t it2, void *arg) {
   return it1->module == it2->module && MIR_item_name (NULL, it1) == MIR_item_name (NULL, it2);
@@ -2212,12 +2212,12 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
 }
 
 htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
-  h = mir_hash_step (h, (uint64_t) op.mode);
+  h = mir_hash_step (h, (uintptr_t) op.mode);
   switch (op.mode) {
-  case MIR_OP_REG: return mir_hash_step (h, (uint64_t) op.u.reg);
-  case MIR_OP_HARD_REG: return mir_hash_step (h, (uint64_t) op.u.hard_reg);
-  case MIR_OP_INT: return mir_hash_step (h, (uint64_t) op.u.i);
-  case MIR_OP_UINT: return mir_hash_step (h, (uint64_t) op.u.u);
+  case MIR_OP_REG: return mir_hash_step (h, (uintptr_t) op.u.reg);
+  case MIR_OP_HARD_REG: return mir_hash_step (h, (uintptr_t) op.u.hard_reg);
+  case MIR_OP_INT: return mir_hash_step (h, (uintptr_t) op.u.i);
+  case MIR_OP_UINT: return mir_hash_step (h, (uintptr_t) op.u.u);
   case MIR_OP_FLOAT: {
     union {
       double d;
@@ -2239,25 +2239,25 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
   }
   case MIR_OP_REF:
     if (op.u.ref->item_type == MIR_export_item || op.u.ref->item_type == MIR_import_item)
-      return mir_hash_step (h, (uint64_t) MIR_item_name (ctx, op.u.ref));
-    return mir_hash_step (h, (uint64_t) op.u.ref);
-  case MIR_OP_STR: return mir_hash_step (h, (uint64_t) op.u.str.s);
+      return mir_hash_step (h, (uintptr_t) MIR_item_name (ctx, op.u.ref));
+    return mir_hash_step (h, (uintptr_t) op.u.ref);
+  case MIR_OP_STR: return mir_hash_step (h, (uintptr_t) op.u.str.s);
   case MIR_OP_MEM:
-    h = mir_hash_step (h, (uint64_t) op.u.mem.type);
-    h = mir_hash_step (h, (uint64_t) op.u.mem.disp);
-    h = mir_hash_step (h, (uint64_t) op.u.mem.base);
-    h = mir_hash_step (h, (uint64_t) op.u.mem.index);
-    if (op.u.mem.index != 0) h = mir_hash_step (h, (uint64_t) op.u.mem.scale);
+    h = mir_hash_step (h, (uintptr_t) op.u.mem.type);
+    h = mir_hash_step (h, (uintptr_t) op.u.mem.disp);
+    h = mir_hash_step (h, (uintptr_t) op.u.mem.base);
+    h = mir_hash_step (h, (uintptr_t) op.u.mem.index);
+    if (op.u.mem.index != 0) h = mir_hash_step (h, (uintptr_t) op.u.mem.scale);
     break;
   case MIR_OP_HARD_REG_MEM:
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.base);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
+    h = mir_hash_step (h, (uintptr_t) op.u.hard_reg_mem.type);
+    h = mir_hash_step (h, (uintptr_t) op.u.hard_reg_mem.disp);
+    h = mir_hash_step (h, (uintptr_t) op.u.hard_reg_mem.base);
+    h = mir_hash_step (h, (uintptr_t) op.u.hard_reg_mem.index);
     if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
       h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
     break;
-  case MIR_OP_LABEL: return mir_hash_step (h, (uint64_t) op.u.label);
+  case MIR_OP_LABEL: return mir_hash_step (h, (uintptr_t) op.u.label);
   default: mir_assert (FALSE); /* we should not have other operands here */
   }
   return h;
@@ -2734,8 +2734,8 @@ static htab_hash_t val_hash (val_t v, void *arg) {
   MIR_context_t ctx = arg;
   htab_hash_t h;
 
-  h = mir_hash_step (mir_hash_init (0), (uint64_t) v.code);
-  h = mir_hash_step (h, (uint64_t) v.type);
+  h = mir_hash_step (mir_hash_init (0), (uintptr_t) v.code);
+  h = mir_hash_step (h, (uintptr_t) v.type);
   h = MIR_op_hash_step (ctx, h, v.op1);
   if (v.code != MIR_INSN_BOUND) h = MIR_op_hash_step (ctx, h, v.op2);
   return mir_hash_finish (h);
@@ -3816,7 +3816,7 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
 
   if ((len = VARR_LENGTH (code_holder_t, code_holders)) > 0) {
     ch_ptr = VARR_ADDR (code_holder_t, code_holders) + len - 1;
-    ch_ptr->free = (uint8_t *) ((uint64_t) (ch_ptr->free + 15) / 16 * 16); /* align */
+    ch_ptr->free = (uint8_t *) ((uintptr_t) (ch_ptr->free + 15) / 16 * 16); /* align */
     if (ch_ptr->free + size <= ch_ptr->bound) return ch_ptr;
   }
   npages = (size + page_size) / page_size;
@@ -3832,7 +3832,7 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
 }
 
 void _MIR_flush_code_cache (void *start, void *bound) {
-#if defined(__GNUC__) && !defined(__MIRC__)
+#if defined(__GNUC__) && !defined(__MIRC__) &&  !defined(__wasm__)
   __builtin___clear_cache (start, bound);
 #endif
 }
@@ -6144,9 +6144,9 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
   fclose (bf);
   sprintf (command,
            "gcc -c -o %s.o %s 2>&1 && objcopy --update-section .text=%s %s.o && objdump "
-           "--adjust-vma=0x%llx -d %s.o; rm -f "
+           "--adjust-vma=0x%" PRIxPTR " -d %s.o; rm -f "
            "%s.o %s %s",
-           cfname, cfname, bfname, cfname, (unsigned long long) code, cfname, cfname, cfname,
+           cfname, cfname, bfname, cfname, (uintptr_t) code, cfname, cfname, cfname,
            bfname);
 #endif
   fprintf (stderr, "%s\n", command);
@@ -6157,7 +6157,9 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
 
 /* New Page */
 
-#if defined(__x86_64__) || defined(_M_AMD64)
+#if defined(__i686__) || defined(__wasm32__)
+#include "mir-x86_64.c"
+#elif defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-x86_64.c"
 #elif defined(__aarch64__)
 #include "mir-aarch64.c"
