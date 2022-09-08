@@ -114,13 +114,13 @@ endif
 
 C2M_BOOTSTRAP_FLAGS = -DMIR_BOOTSTRAP
 C2M_BOOTSTRAP_FLAGS0 := $(C2M_BOOTSTRAP_FLAGS)
-ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
-  ifneq ($(CC),cl)
-    MIR_LIBS += -lpthread
-    CFLAGS += -DMIR_PARALLEL_GEN
-    C2M_BOOTSTRAP_FLAGS += -DMIR_PARALLEL_GEN
-  endif
-endif
+#ifeq ($(shell sh $(SRC_DIR)/check-threads.sh), ok)
+#  ifneq ($(CC),cl)
+#    MIR_LIBS += -lpthread
+#    CFLAGS += -DMIR_PARALLEL_GEN
+#    C2M_BOOTSTRAP_FLAGS += -DMIR_PARALLEL_GEN
+#  endif
+#endif
 
 L2M_EXE=
 L2M_TEST=

@@ -7733,7 +7733,7 @@ void MIR_gen_finish (MIR_context_t ctx) {
   if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&generate_signal) != 0
       || mir_cond_destroy (&done_signal) != 0) {  // ???
     (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
-                                              "can not destroy generator mutex  or signals");
+                                              "can not destroy generator mutex or signals");
   }
   VARR_DESTROY (func_or_bb_t, code_to_generate);
 #endif
