@@ -1209,14 +1209,16 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= block size + service_area_size */
   bp_saved_reg_offset = block_size;
 #ifdef MIR_NO_RED_ZONE_ABI
-  new_insn
-    = MIR_new_insn (ctx, MIR_MOV,
-                    _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, block_size + service_area_size - 8,
-                                              SP_HARD_REG, MIR_NON_HARD_REG, 1),
-                    fp_reg_op);
-  gen_add_insn_before (gen_ctx, anchor, new_insn); /* -8(old sp) = bp */
-  new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op, temp_reg_op);
-  gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = temp */
+  if (keep_fp_p) {
+    new_insn
+      = MIR_new_insn (ctx, MIR_MOV,
+                      _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, block_size + service_area_size - 8,
+                                                SP_HARD_REG, MIR_NON_HARD_REG, 1),
+                      fp_reg_op);
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* -8(old sp) = bp */
+    new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op, temp_reg_op);
+    gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = temp */
+  }
 #endif
 #ifndef _WIN32
   if (func->vararg_p) {
