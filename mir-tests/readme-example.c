@@ -52,6 +52,7 @@ ex100:    func\n\
           local i64:r\n\
           call p_sieve, sieve, r, 200\n\
           call p_printf, printf, format, r\n\
+          ret\n\
           endfunc\n\
           endmodule\n\
 ";
