@@ -1158,6 +1158,9 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   MIR_func_t func;
   MIR_insn_t anchor, new_insn;
   MIR_op_t sp_reg_op, fp_reg_op;
+#ifdef MIR_NO_RED_ZONE_ABI
+  MIR_op_t temp_reg_op;
+#endif
   int64_t bp_saved_reg_offset, offset;
   size_t i, service_area_size, saved_hard_regs_size, stack_slots_size, block_size;
 
@@ -1177,7 +1180,15 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   anchor = DLIST_HEAD (MIR_insn_t, func->insns);
   sp_reg_op = _MIR_new_hard_reg_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_hard_reg_op (ctx, FP_HARD_REG);
+#ifdef MIR_NO_RED_ZONE_ABI
+  temp_reg_op = _MIR_new_hard_reg_op (ctx, TEMP_INT_HARD_REG1);
+#endif
   /* Prologue: */
+  /* Use add for matching LEA: */
+#ifdef MIR_NO_RED_ZONE_ABI
+  new_insn = MIR_new_insn (ctx, MIR_ADD, temp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -8));
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* temp = sp - 8 */
+#else
   new_insn
     = MIR_new_insn (ctx, MIR_MOV,
                     _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, -8, SP_HARD_REG, MIR_NON_HARD_REG, 1),
@@ -1186,6 +1197,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   /* Use add for matching LEA: */
   new_insn = MIR_new_insn (ctx, MIR_ADD, fp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -8));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = sp - 8 */
+#endif
 #ifdef _WIN32
   if (func->vararg_p) { /* filling spill space */
     for (i = 0, offset = 16 /* ret & bp */; i < 4; i++, offset += 8)
@@ -1202,6 +1214,16 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
                            MIR_new_int_op (ctx, block_size + service_area_size));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= block size + service_area_size */
   bp_saved_reg_offset = block_size;
+#ifdef MIR_NO_RED_ZONE_ABI
+  new_insn
+    = MIR_new_insn (ctx, MIR_MOV,
+                    _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, block_size + service_area_size - 8,
+                                              SP_HARD_REG, MIR_NON_HARD_REG, 1),
+                    fp_reg_op);
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* -8(old sp) = bp */
+  new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op, temp_reg_op);
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = temp */
+#endif
 #ifndef _WIN32
   if (func->vararg_p) {
     offset = block_size;
@@ -1269,12 +1291,23 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       gen_add_insn_before (gen_ctx, anchor, new_insn); /* hard reg = disp(sp) */
       offset += 8;
     }
+#ifdef MIR_NO_RED_ZONE_ABI
+  new_insn = MIR_new_insn (ctx, MIR_MOV, temp_reg_op, fp_reg_op);
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* temp = bp */
+  new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op,
+                           _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, 0, TEMP_INT_HARD_REG1,
+                                                     MIR_NON_HARD_REG, 1));
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = 0(bp) */
+  new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, temp_reg_op, MIR_new_int_op (ctx, 8));
+  gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = temp + 8 */
+#else
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, 8));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp = bp + 8 */
   new_insn = MIR_new_insn (ctx, MIR_MOV, fp_reg_op,
                            _MIR_new_hard_reg_mem_op (ctx, MIR_T_I64, -8, SP_HARD_REG,
                                                      MIR_NON_HARD_REG, 1));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* bp = -8(sp) */
+#endif
 }
 
 struct pattern {
