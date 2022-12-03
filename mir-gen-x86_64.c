@@ -1054,12 +1054,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     case MIR_DLE:
     case MIR_DGT:
     case MIR_DGE: {
-      /* We can access only 4 regs in setxx -- use ax as the result: */
-      MIR_op_t areg_op = _MIR_new_hard_reg_op (ctx, AX_HARD_REG);
-
-      new_insn = MIR_new_insn (ctx, MIR_UEXT8, insn->ops[0], areg_op);
+      new_insn = MIR_new_insn (ctx, MIR_UEXT8, insn->ops[0], insn->ops[0]);
       gen_add_insn_after (gen_ctx, insn, new_insn);
-      insn->ops[0] = areg_op;
       /* Following conditional branches are changed to correctly process unordered numbers: */
       switch (code) {
       case MIR_FLT:
@@ -1419,14 +1415,14 @@ struct pattern {
   SHOP0 (ICODE, , X, CL_OP_CODE, I8_OP_CODE) \
   SHOP0 (ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
-/* cmp ...; setx r0; movzbl r0,r0: */
+/* cmp ...; setx r0: */
 #define CMP0(ICODE, SUFF, PREF, SETX)                                                            \
-  {ICODE##SUFF, "t r r", #PREF " 3B r1 R2;" SETX " R0"},        /* cmp r1,r2;...*/ \
-    {ICODE##SUFF, "t r m3", #PREF " 3B r1 m2;" SETX " R0"},     /* cmp r1,m2;...*/ \
-    {ICODE##SUFF, "t r i0", #PREF " 83 /7 R1 i2;" SETX " R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "t r i2", #PREF " 81 /7 R1 I2;" SETX " R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "t m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0"}, /* cmp m1,i2;...*/ \
-    {ICODE##SUFF, "t m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0"}, /* cmp m1,i2;...*/
+  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Z " SETX " R0"},        /* cmp r1,r2;...*/ \
+    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Z " SETX " R0"},     /* cmp r1,m2;...*/ \
+    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Z " SETX " R0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2; Z " SETX " R0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2; Z " SETX " R0"}, /* cmp m1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2; Z " SETX " R0"}, /* cmp m1,i2;...*/
 
 #define CMP(ICODE, SET_OPCODE)  \
   CMP0 (ICODE, , X, SET_OPCODE) \
