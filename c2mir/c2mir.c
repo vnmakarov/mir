@@ -1717,7 +1717,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
       } else {
         VARR_PUSH (char, symbol_text, curr_c);
         VARR_PUSH (char, symbol_text, '\0');
-        return new_token_wo_uniq_repr (c2m_ctx, pos, VARR_ADDR (char, symbol_text), curr_c,
+        return new_token_wo_uniq_repr (c2m_ctx, cs->pos, VARR_ADDR (char, symbol_text), curr_c,
                                        N_IGNORE);
       }
     }
