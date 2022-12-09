@@ -2967,7 +2967,7 @@ typedef struct expr {
   MIR_insn_t insn;
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} * expr_t;
+} *expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -2977,7 +2977,7 @@ typedef struct mem_expr {
   uint32_t mem_num;   /* the memory expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant load/store */
   struct mem_expr *next;
-} * mem_expr_t;
+} *mem_expr_t;
 
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
@@ -3168,6 +3168,12 @@ static int op_eq (gen_ctx_t gen_ctx, MIR_op_t op1, MIR_op_t op2) {
   return MIR_op_eq_p (gen_ctx->ctx, op1, op2);
 }
 
+static int multi_out_insn_p (MIR_insn_t insn) {
+  if (!MIR_call_code_p (insn->code)) return FALSE;
+  gen_assert (insn->ops[0].u.ref->item_type == MIR_proto_item);
+  return insn->ops[0].u.ref->u.proto->nres > 1;
+}
+
 static int expr_eq (expr_t e1, expr_t e2, void *arg) {
   gen_ctx_t gen_ctx = arg;
   MIR_context_t ctx = gen_ctx->ctx;
@@ -3189,7 +3195,9 @@ static int expr_eq (expr_t e1, expr_t e2, void *arg) {
     ssa_edge2 = insn2->ops[i].data;
     if (ssa_edge1 != NULL && ssa_edge2 != NULL
         && (ssa_edge1->def->gvn_val_const_p != ssa_edge2->def->gvn_val_const_p
-            || ssa_edge1->def->gvn_val != ssa_edge2->def->gvn_val))
+            || ssa_edge1->def->gvn_val != ssa_edge2->def->gvn_val
+            /* we can not be sure what definition we use in multi-output insn: */
+            || multi_out_insn_p (ssa_edge1->def->insn) || multi_out_insn_p (ssa_edge2->def->insn)))
       return FALSE;
   }
   return TRUE;
