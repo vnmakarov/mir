@@ -1,4 +1,4 @@
-#include "../mir.h"
+#include <mir.h>
 #include "scan-hi.h"
 
 static int32_t print (int32_t c) {

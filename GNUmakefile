@@ -42,7 +42,7 @@ ifeq ($(OS),Windows_NT)
     EXEO=-Fe:
   endif
 
-  CPPFLAGS = -I$(SRC_DIR)
+  CPPFLAGS = -I$(SRC_DIR) -I$(SRC_DIR)/include
   LDLIBS   = $(MIR_LIBS)
   COMPILE = $(CC) $(CPPFLAGS) $(CFLAGS)
   ifeq ($(CC),gcc)
@@ -72,7 +72,7 @@ else
   COPTFLAGS = -O3 -DNDEBUG
   CDEBFLAGS =
   CFLAGS += $(COPTFLAGS)
-  CPPFLAGS = -I$(SRC_DIR)
+  CPPFLAGS = -I$(SRC_DIR) -I$(SRC_DIR)/include
   LDLIBS   = $(MIR_LIBS)
 
   COMPILE = $(CC) $(CPPFLAGS) -MMD -MP $(CFLAGS)
@@ -142,8 +142,8 @@ debug: CFLAGS:=$(subst $(COPTFLAGS),$(CDEBFLAGS),$(CFLAGS))
 debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
 install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
-		       $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
+	install -m a+r $(SRC_DIR)/include/mir.h $(SRC_DIR)/include/mir-dlist.h $(SRC_DIR)/include/mir-varr.h $(SRC_DIR)/include/mir-htab.h\
+		       $(SRC_DIR)/include/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
 	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(PREFIX)/lib
 ifeq ($(OS),Windows_NT)
 else

@@ -1,6 +1,6 @@
 #include <string.h>
-#include "../mir.h"
-#include "../mir-gen.h"
+#include <mir.h>
+#include <mir-gen.h>
 #include "test-read.h"
 
 static char *program_str = NULL;

@@ -1,4 +1,4 @@
-#include "../mir.h"
+#include <mir.h>
 
 int main (void) {
   MIR_module_t m;

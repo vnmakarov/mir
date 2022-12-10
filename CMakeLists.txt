@@ -39,8 +39,13 @@ message("C compiler flags: ${CMAKE_C_FLAGS}")
 option(BUILD_TESTING "" ON)
 include(CTest)
 
-add_library(mir OBJECT mir.c mir-gen.c c2mir/c2mir.c mir.h mir-gen.h c2mir/c2mir.h)
-target_include_directories(mir PRIVATE ${PROJECT_SOURCE_DIR})
+add_library(mir OBJECT mir.c mir-gen.c c2mir/c2mir.c)
+target_include_directories(mir
+    PUBLIC
+        $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR})
 if(Threads_FOUND)
   target_compile_definitions(mir PUBLIC "MIR_PARALLEL_GEN")
 endif()
@@ -82,18 +87,23 @@ endif()
 # ------------------ ADT tests --------------------------
 add_executable (varr_test "adt-tests/mir-varr-test.c")
 target_include_directories(varr_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(varr_test mir)
 
 add_executable (dlist_test "adt-tests/mir-dlist-test.c")
 target_include_directories(dlist_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(dlist_test mir)
 
 add_executable (bitmap_test "adt-tests/mir-bitmap-test.c")
 target_include_directories(bitmap_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(bitmap_test mir)
 
 add_executable (htab_test "adt-tests/mir-htab-test.c")
 target_include_directories(htab_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(htab_test mir)
 
 add_executable (reduce_test "adt-tests/mir-reduce-test.c")
 target_include_directories(reduce_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(reduce_test mir)
 
 add_test(varr-test varr_test)
 add_test(dlist-test dlist_test)

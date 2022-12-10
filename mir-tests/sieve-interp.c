@@ -1,4 +1,4 @@
-#include "../mir.h"
+#include <mir.h>
 #include "../real-time.h"
 #define TEST_INTERP_SIEVE
 #include "scan-sieve.h"
