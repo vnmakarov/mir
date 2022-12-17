@@ -6004,7 +6004,12 @@ static int basic_type_size (enum basic_type bt) {
   }
 }
 
-static int basic_type_align (enum basic_type bt) { return basic_type_size (bt); }
+static int basic_type_align (enum basic_type bt) {
+#ifdef MIR_LDOUBLE_ALIGN
+  if (bt == TP_LDOUBLE) return MIR_LDOUBLE_ALIGN;
+#endif
+  return basic_type_size (bt);
+}
 
 static int type_align (struct type *type) {
   assert (type->align >= 0);
