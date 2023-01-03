@@ -8255,9 +8255,15 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
   }
 }
 
-#define BUILTIN_VA_START "__builtin_va_start"
-#define BUILTIN_VA_ARG "__builtin_va_arg"
-#define ALLOCA "alloca"
+#define BUILTIN_VA_START (const char *[]){"__builtin_va_start", NULL}
+#define BUILTIN_VA_ARG (const char *[]){"__builtin_va_arg", NULL}
+#define ALLOCA (const char *[]){"alloca", "__builtin_alloca", NULL}
+
+static int str_eq_p (const char *str, const char *v[]) {
+  for (int i = 0; v[i] != NULL; i++)
+    if (strcmp (v[i], str) == 0) return TRUE;
+  return FALSE;
+}
 
 static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
   check_ctx_t check_ctx = c2m_ctx->check_ctx;
@@ -8974,10 +8980,10 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
 
     op1 = NL_HEAD (r->u.ops);
-    alloca_p = op1->code == N_ID && strcmp (op1->u.s.s, ALLOCA) == 0;
+    alloca_p = op1->code == N_ID && str_eq_p (op1->u.s.s, ALLOCA);
     if (op1->code == N_ID && find_def (c2m_ctx, S_REGULAR, op1, curr_scope, NULL) == NULL) {
-      va_arg_p = strcmp (op1->u.s.s, BUILTIN_VA_ARG) == 0;
-      va_start_p = strcmp (op1->u.s.s, BUILTIN_VA_START) == 0;
+      va_arg_p = str_eq_p (op1->u.s.s, BUILTIN_VA_ARG);
+      va_start_p = str_eq_p (op1->u.s.s, BUILTIN_VA_START);
       if (!va_arg_p && !va_start_p && !alloca_p) {
         /* N_SPEC_DECL (N_SHARE (N_LIST (N_INT)), N_DECL (N_ID, N_FUNC (N_LIST)), N_IGNORE) */
         spec_list = new_node (c2m_ctx, N_LIST);
@@ -9015,11 +9021,11 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
       ret_type = &res_type;
       if (va_start_p && NL_LENGTH (arg_list->u.ops) != 1) {
-        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", BUILTIN_VA_START);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", op1->u.s.s);
       } else if (alloca_p && NL_LENGTH (arg_list->u.ops) != 1) {
-        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", ALLOCA);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", op1->u.s.s);
       } else if (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2) {
-        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", BUILTIN_VA_ARG);
+        error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", op1->u.s.s);
       } else {
         /* first argument type ??? */
         if (va_arg_p) {
@@ -9263,8 +9269,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     symbol_t sym;
     struct node_scope *ns;
 
-    if (strcmp (id->u.s.s, ALLOCA) == 0 || strcmp (id->u.s.s, BUILTIN_VA_START) == 0
-        || strcmp (id->u.s.s, BUILTIN_VA_ARG) == 0) {
+    if (str_eq_p (id->u.s.s, ALLOCA) || str_eq_p (id->u.s.s, BUILTIN_VA_START)
+        || str_eq_p (id->u.s.s, BUILTIN_VA_ARG)) {
       error (c2m_ctx, POS (id), "%s is a builtin function", id->u.s.s);
       break;
     }
@@ -12134,9 +12140,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     MIR_item_t proto_item;
     MIR_insn_t call_insn;
     mir_size_t saved_call_arg_area_offset_before_args, arg_area_offset;
-    int va_arg_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_ARG) == 0;
-    int va_start_p = call_expr->builtin_call_p && strcmp (func->u.s.s, BUILTIN_VA_START) == 0;
-    int alloca_p = call_expr->builtin_call_p && strcmp (func->u.s.s, ALLOCA) == 0;
+    int va_arg_p = call_expr->builtin_call_p && str_eq_p (func->u.s.s, BUILTIN_VA_ARG);
+    int va_start_p = call_expr->builtin_call_p && str_eq_p (func->u.s.s, BUILTIN_VA_START);
+    int alloca_p = call_expr->builtin_call_p && str_eq_p (func->u.s.s, ALLOCA);
     int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
     node_t block = NL_EL (curr_func_def->u.ops, 3);
     struct node_scope *ns = block->attr;
