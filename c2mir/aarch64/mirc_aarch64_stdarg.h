@@ -8,7 +8,7 @@ static char stdarg_str[]
     "\n"
 #if defined(__APPLE__)
     "typedef __darwin_va_list va_list;\n"
-#else
+#elif defined(__GNU_LIBRARY__)
     "typedef struct {\n"
     "  void *__stack;\n"
     "  void *__gr_top;\n"
