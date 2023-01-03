@@ -3,9 +3,7 @@ int puts (const char *);
 
 #define STR(x) #x
 
-#ifdef _WIN32
-#define puts(s) printf ("%s\n", s);
-#endif
+#define puts(s) printf ("%s\n", s)
 
 static char *c[] = {
 	STR(
