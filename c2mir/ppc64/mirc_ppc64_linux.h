@@ -113,6 +113,11 @@ static char ppc64_mirc[]
     "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
+#ifndef __GNU_LIBRARY__
+    "typedef void *__builtin_va_list[1];\n"
+    "typedef __builtin_va_list va_list;\n"
+    "#define __DEFINED_va_list\n"
+#endif
 #endif
     "\n"
     "void *alloca (unsigned long);\n";

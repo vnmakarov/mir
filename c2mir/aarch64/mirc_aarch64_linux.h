@@ -117,6 +117,17 @@ static char aarch64_mirc[]
     "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
+#ifndef __GNU_LIBRARY__
+    "typedef struct {\n"
+    "  void *__stack;\n"
+    "  void *__gr_top;\n"
+    "  void *__vr_top;\n"
+    "  int __gr_offs;\n"
+    "  int __vr_offs;\n"
+    "} __builtin_va_list[1];\n"
+    "typedef __builtin_va_list va_list;\n"
+    "#define __DEFINED_va_list\n"
+#endif
 #elif defined(__APPLE__)
     "#define __APPLE__ 1\n"
     "#define __arm64__\n"
