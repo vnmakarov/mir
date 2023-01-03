@@ -161,7 +161,7 @@ uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) |
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
 
-clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
+clean: clean-mir clean-c2m clean-utils clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB)
 
 test: readme-example-test c2mir-test
