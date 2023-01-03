@@ -1,6 +1,6 @@
 name: riscv64-test
 
-on: [workflow_dispatch]
+on: [push]
 
 jobs:
   riscv64:

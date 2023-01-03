@@ -25,7 +25,7 @@ ifeq ($(OS),Windows_NT)
     endif
   endif
   ifeq ($(CC),gcc)
-    CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
+    CFLAGS += -fPIC -g -std=gnu11 -Wno-abi -fsigned-char
     CFLAGS += -fno-tree-sra
     COPTFLAGS = -O3 -DNDEBUG
     CDEBFLAGS =
@@ -54,7 +54,7 @@ ifeq ($(OS),Windows_NT)
 else
   EXE=
   CC=gcc
-  CFLAGS += -g -std=gnu11 -Wno-abi -fsigned-char
+  CFLAGS += -fPIC -g -std=gnu11 -Wno-abi -fsigned-char
   ifneq ($(ADDITIONAL_INCLUDE_PATH),)
     CFLAGS += -DADDITIONAL_INCLUDE_PATH=\"$(ADDITIONAL_INCLUDE_PATH)\"
   endif
@@ -80,12 +80,36 @@ else
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
 endif
 
+API_VERSION=0
+MAJOR_VERSION=0
+MINOR_VERSION=3
+
 ifeq ($(CC),cl)
   OBJSUFF=obj
   LIBSUFF=lib
+  SOLIB=libmir.dll
 else
   OBJSUFF=o
   LIBSUFF=a
+  ifeq ($(OS),Windows_NT)
+    ifeq ($(findstring MINGW,$(UNAME_S)),MINGW)
+      SONAME=libmir.so.$(API_VERSION)
+      SOLIBFLAGS=-shared -Wl,-soname,$(SONAME)
+      SOLIB=$(SONAME).$(MAJOR_VERSION).$(MINOR_VERSION)
+    else
+      SOLIB=libmir.dll
+    endif
+  else
+    ifeq ($(UNAME_S),Darwin)
+      SOLIBVERSION=$(API_VERSION).$(MAJOR_VERSION)
+      SOLIB=libmir.$(API_VERSION).dylib
+      SOLIBFLAGS=-dynamiclib -install_name "$(SOLIB)" -current_version $(SOLIBVERSION).$(MINOR_VERSION) -compatibility_version $(SOLIBVERSION)
+    else
+      SONAME=libmir.so.$(API_VERSION)
+      SOLIBFLAGS=-shared -Wl,-soname,$(SONAME)
+      SOLIB=$(SONAME).$(MAJOR_VERSION).$(MINOR_VERSION)
+    endif
+  endif
 endif
 
 C2M_BOOTSTRAP_FLAGS = -DMIR_BOOTSTRAP
@@ -105,29 +129,40 @@ Q=@
 # Entries should be used for building and installation
 .PHONY: all debug install uninstall clean test bench
 
-all: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES)
+all: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
 debug: CFLAGS:=$(subst $(COPTFLAGS),$(CDEBFLAGS),$(CFLAGS))
-debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES)
+debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
-install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
+install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
 		       $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
-	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(PREFIX)/lib
+	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(PREFIX)/lib
+ifeq ($(OS),Windows_NT)
+else
+    ifeq ($(UNAME_S),Darwin)
+	rm -f $(PREFIX)/lib/libmir.dylib
+	ln -s $(PREFIX)/lib/$(SOLIB) $(PREFIX)/lib/libmir.dylib
+	install_name_tool -change "$(SOLIB)" "$(PREFIX)/lib/$(SOLIB)" $(PREFIX)/lib/$(SOLIB)
+    else
+	rm -f $(PREFIX)/lib/$(SONAME)
+	ln -s $(PREFIX)/lib/$(SOLIB) $(PREFIX)/lib/$(SONAME)
+    endif
+endif
 	install -m a+rx $(EXECUTABLES) $(PREFIX)/bin
 
 $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
 
-uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
+uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-gen.h $(PREFIX)/include/c2mir.h
-	$(RM) $(PREFIX)/lib/libmir.$(LIBSUFF)
+	$(RM) $(PREFIX)/lib/libmir.$(LIBSUFF) $(PREFIX)/lib/$(SOLIB)
 	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
 
-clean: clean-mir clean-c2m clean-utils clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
-	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF)
+clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
+	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB)
 
 test: readme-example-test c2mir-test
 
@@ -155,6 +190,14 @@ ifeq ($(CC),cl)
 	lib -nologo $^ -OUT:$@
 else
 	$(AR) rcs $@ $^
+endif
+
+# ------------------ LIBMIR SO --------------------
+$(BUILD_DIR)/$(SOLIB): $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(BUILD_DIR)/c2mir/c2mir.$(OBJSUFF)
+ifeq ($(CC),cl)
+	$(CC) -nologo -D_USRDLL -D_WINDLL $^ -link -DLL -OUT:$@
+else
+	$(CC) $(SOLIBFLAGS) -o $@ $^
 endif
 
 # ------------------ C2M --------------------------

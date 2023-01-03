@@ -3,20 +3,13 @@ name: aarch64-test
 on: [push]
 
 jobs:
-  test:
-
-    # The host should always be linux
-    runs-on: ubuntu-latest
-    name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
-
-    # Run steps on a matrix of 3 arch/distro combinations
-    strategy:
-      matrix:
-        include:
-          - arch: aarch64
-            distro: fedora-latest
-
+  aarch64_job:
+    # The host should always be Linux
+    runs-on: [self-hosted, linux, ARM64]
+    name: Build on gcc117 aarch64
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: make test
+      run: |
+         uname -a
+         make test

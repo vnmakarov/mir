@@ -644,8 +644,12 @@ main:	  func
     `gen_num`  should be a number in the range `0` .. `gens_num - 1` from corresponding `MIR_gen_init`
   * API function `void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f)` sets up MIR generator
     debug file to `f` for generator instance `gen_num`.
-    If it is not NULL a lot of debugging and optimization information will be output to the file.  It is useful mostly
-    for MIR developers
+    If it is not NULL a debugging and optimization information will be output to the file according to the
+    current generator debug level.  It is useful mostly for MIR developers
+  * API function `void MIR_gen_set_debug_level (MIR_context_t ctx, int gen_num, level)` sets up MIR generator
+    debug level to `level` for generator instance `gen_num`.  The default level value is maximum possible level
+    for printing information as much as possible.  Negative level results in no output.  The function is useful
+    mostly for MIR developers
   * API function `void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int level)` sets up optimization
     level for MIR generator instance `gen_num`:
     * `0` means only register allocator and machine code generator work
