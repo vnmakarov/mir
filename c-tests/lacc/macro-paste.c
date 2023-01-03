@@ -4,6 +4,7 @@ int puts (const char *);
 #define STR(s) #s
 #define CAT(a, b) STR (a##b)
 
+extern int printf (const char *, ...);
 #define puts(s) printf ("%s\n", s)
 int foo_func (void) { return puts (CAT (foo, 5)); }
 
@@ -14,6 +15,4 @@ int foo_func (void) { return puts (CAT (foo, 5)); }
 
 int test (void) { return puts (glue (HELLO, WORLD)) + puts (cat (HELLO, WORLD)); }
 
-int main (void) {
-  return !(FOO (foo) () + test () == 24);
-}
+int main (void) { return !(FOO (foo) () + test () == 24); }
