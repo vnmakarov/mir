@@ -569,7 +569,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       } else if (n_xregs < 8) { /* str xreg, sp_offset[sp]  */
         pat = st_pat | ((sp_offset >> scale) << 10) | n_xregs++ | (sp << 5);
       } else { /* ldr t, stack_arg_offset[x9]; st t, sp_offset[sp]: */
-        pat = (ld_pat & base_reg_mask) | stack_arg_sp_offset | temp_reg | (9 << 5);
+        pat
+          = (ld_pat & base_reg_mask) | ((stack_arg_sp_offset >> scale) << 10) | temp_reg | (9 << 5);
         push_insns (code, &pat, sizeof (pat));
         pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
         stack_arg_sp_offset += 8;

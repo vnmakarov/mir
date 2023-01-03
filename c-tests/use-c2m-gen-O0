@@ -1,4 +1,4 @@
-# ! /bin/sh
+#! /bin/sh
 compiler=$1
 shift
 $compiler -O0 $* -eg

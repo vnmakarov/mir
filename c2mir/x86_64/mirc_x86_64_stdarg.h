@@ -11,7 +11,7 @@ static char stdarg_str[]
     "typedef __darwin_va_list va_list;\n"
 #elif defined(__WIN32)
     "typedef char *va_list;\n"
-#else
+#elif defined(__GNU_LIBRARY__)
     "typedef struct {\n"
     "  unsigned int gp_offset;\n"
     "  unsigned int fp_offset;\n"

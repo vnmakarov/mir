@@ -105,6 +105,16 @@ static char x86_64_mirc[]
     "#define linux 1\n"
     "#define __unix 1\n"
     "#define __unix__ 1\n"
+#ifndef __GNU_LIBRARY__
+    "typedef struct {\n"
+    "  unsigned int gp_offset;\n"
+    "  unsigned int fp_offset;\n"
+    "  void *overflow_arg_area;\n"
+    "  void *reg_save_area;\n"
+    "} __builtin_va_list[1];\n"
+    "typedef __builtin_va_list va_list;\n"
+    "#define __DEFINED_va_list\n"
+#endif
 #elif defined(__APPLE__)
     "#define __APPLE__ 1\n"
     "#define __DARWIN_OS_INLINE static inline\n"

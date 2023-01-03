@@ -6,12 +6,14 @@ static char stdarg_str[]
   = "#ifndef __STDARG_H\n"
     "#define __STDARG_H\n"
     "\n"
+#if defined(__GNU_LIBRARY__)
     "typedef struct {\n"
     "  long __gpr, __fpr;\n"
     "  void *__overflow_arg_area;\n"
     "  void *__reg_save_area;\n"
     "} va_list[1];\n"
     "\n"
+#endif
     "#define va_start(ap, param) __builtin_va_start (ap)\n"
     "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
     "#define va_end(ap) 0\n"

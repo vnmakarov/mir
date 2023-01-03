@@ -1,11 +1,6 @@
 int puts (const char *);
 void abort (void);
 /* form feed, 0x0c */
-
-int main (void) {
-#if defined(__APPLE__) || defined(_WIN32) /* different puts return meaning */
-  return !(puts ("Hello") >= 0);
-#else
-  return !(puts ("Hello") == 6);
-#endif
-}
+extern int printf (const char *, ...);
+#define puts(s) printf ("%s\n", s)
+int main (void) { return !(puts ("Hello") == 6); }

@@ -1,5 +1,5 @@
 M0:	module
-proto0:	proto	i32, ...
+proto0:	proto	i32, p:fmt, ...
 	import	printf
 .lc1:   u8 36, 0 # "$\000"
 main:	func	i32

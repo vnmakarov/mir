@@ -53,3 +53,5 @@ typedef int64_t mir_ptrdiff_t;
 typedef uint64_t mir_size_t;
 
 #define MIR_SIZE_MAX UINT64_MAX
+
+#define MIR_LDOUBLE_ALIGN 8
