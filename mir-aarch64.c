@@ -1,6 +1,8 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
+
+#include "mir-aarch64.h"
 
 /* x31 - sp; x30 - link reg; x29 - fp; x0-x7, v0-v7 - arg/result regs;
    x19-x29, v8-v15 - callee-saved (only bottom 64-bits are saved for v8-v15);
@@ -198,10 +200,9 @@ static void gen_call_addr (VARR (uint8_t) * insn_varr, void *base_addr, int temp
   push_insns (insn_varr, &insn, sizeof (insn));
 }
 
-#define NOP 0xd503201f
-
 void *_MIR_get_thunk (MIR_context_t ctx) {
-  int pat[5] = {NOP, NOP, NOP, NOP, NOP}; /* maximal size thunk -- see _MIR_redirect_thunk */
+  /* maximal size thunk -- see _MIR_redirect_thunk */
+  int pat[5] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
 
   return _MIR_publish_code (ctx, (uint8_t *) pat, sizeof (pat));
 }
@@ -480,7 +481,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 #if defined(__APPLE__)
     0x910023e3, /* add x3, sp, 8 # results arg */
 #else
-    0x910043e3, /* add x3, sp, 16 # results arg */
+    0x910043e3,                                      /* add x3, sp, 16 # results arg */
 #endif
     0xaa0303f3, /* mov x19, x3 # results */
     0xf90003fe, /* str x30, [sp] # save lr */
@@ -662,19 +663,20 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   return res;
 }
 
+static const uint32_t save_fplr = 0xa9bf7bfd;    /* stp R29, R30, [SP, #-16]! */
+static const uint32_t restore_fplr = 0xa8c17bfd; /* ldp R29, R30, SP, #16 */
+
 /* Save regs x8, x0-x7, q0-q7; x9 = call hook_address (ctx, called_func); restore regs; br x9 */
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
-  static const uint32_t jmp_insn = 0xd61f0120;     /* br x9 */
-  static const uint32_t move_insn = 0xaa0003e9;    /* mov x9, x0 */
-  static const uint32_t save_fplr = 0xa9bf7bfd;    /* stp R29, R30, [SP, #-16]! */
-  static const uint32_t restore_fplr = 0xa8c17bfd; /* ldp R29, R30, SP, #16 */
+  static const uint32_t jmp_insn = 0xd61f0120;  /* br x9 */
+  static const uint32_t move_insn = 0xaa0003e9; /* mov x9, x0 */
   uint8_t *base_addr, *curr_addr, *res_code = NULL;
-  size_t len = sizeof (save_insns) + sizeof (restore_insns); /* initial code length */
+  size_t len = (sizeof (save_insns) + sizeof (restore_insns)); /* initial code length */
   VARR (uint8_t) * code;
 
   mir_mutex_lock (&code_mutex);
   VARR_CREATE (uint8_t, code, 128);
-  for (;;) { /* dealing with moving code to another page */
+  for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
     curr_addr = base_addr = _MIR_get_new_code_addr (ctx, len);
     if (curr_addr == NULL) break;
     VARR_TRUNC (uint8_t, code, 0);
@@ -696,4 +698,95 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   VARR_DESTROY (uint8_t, code);
   mir_mutex_unlock (&code_mutex);
   return res_code;
+}
+
+/* r9=<bb_version>; (b|br) handler  ??? mutex free */
+void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
+  /* maximal size thunk -- see _MIR_redirect_thunk */
+  int pat[5] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
+  void *res;
+  size_t offset;
+  VARR (uint8_t) * code;
+
+  VARR_CREATE (uint8_t, code, 64);
+  offset = gen_mov_addr (code, 9, bb_version); /* x9 = bb_version */
+  push_insns (code, pat, sizeof (pat));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  _MIR_redirect_thunk (ctx, (uint8_t *) res + offset, handler);
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("bb thunk:", 0, res, VARR_LENGTH (uint8_t, code));
+#endif
+  VARR_DESTROY (uint8_t, code);
+  return res;
+}
+
+/* change to (b|br) to */
+void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
+  _MIR_redirect_thunk (ctx, thunk, to);
+}
+
+static const uint32_t save_insns2[] = {
+  /* save r10-r18,v16-v31: should be used only right after save_insn */
+  0xf90043ea, /* str R10, [SP, #128]  */
+  0xa9bf4bf1, /* stp R17, R18, [SP, #-16]! */
+  0xa9bf43ef, /* stp R15, R16, [SP, #-16]! */
+  0xa9bf3bed, /* stp R13, R14, [SP, #-16]! */
+  0xa9bf33eb, /* stp R11, R12, [SP, #-16]! */
+  0xadbf7ffe, /* stp Q30, Q31, [SP, #-32]! */
+  0xadbf77fc, /* stp Q28, Q29, [SP, #-32]! */
+  0xadbf6ffa, /* stp Q26, Q27, [SP, #-32]! */
+  0xadbf67f8, /* stp Q24, Q25, [SP, #-32]! */
+  0xadbf5ff6, /* stp Q22, Q23, [SP, #-32]! */
+  0xadbf57f4, /* stp Q20, Q21, [SP, #-32]! */
+  0xadbf4ff2, /* stp Q18, Q19, [SP, #-32]! */
+  0xadbf47f0, /* stp Q16, Q17, [SP, #-32]! */
+};
+static const uint32_t restore_insns2[] = {
+  /* restore r10-r18,v16-v32: should be used only right before restore_insns */
+  0xacc147f0, /* ldp Q16, Q17, SP, #32 */
+  0xacc14ff2, /* ldp Q18, Q19, SP, #32 */
+  0xacc157f4, /* ldp Q20, Q21, SP, #32 */
+  0xacc15ff6, /* ldp Q22, Q23, SP, #32 */
+  0xacc167f8, /* ldp Q24, Q25, SP, #32 */
+  0xacc16ffa, /* ldp Q26, Q27, SP, #32 */
+  0xacc177fc, /* ldp Q28, Q29, SP, #32 */
+  0xacc17ffe, /* ldp Q30, Q31, SP, #32 */
+  0xa8c133eb, /* ldp R11, R12, SP, #16 */
+  0xa8c13bed, /* ldp R13, R14, SP, #16 */
+  0xa8c143ef, /* ldp R15, R16, SP, #16 */
+  0xa8c14bf1, /* ldp R17, R18, SP, #16 */
+  0xf94043ea, /* ldr R10, [SP, #128]  */
+};
+
+/* save all clobbered regs but 9; r9 = call hook_address (data, r9); restore regs; br r9
+   r9 is a generator temp reg which is not used across bb borders. */
+void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
+  static const uint32_t wrap_end = 0xd61f0120; /* br   x9			   */
+  static const uint32_t call_pat[] = {
+    0xaa0903e1, /* mov x1,x9 */
+    0xd63f0140, /* blr  x10 */
+    0xaa0003e9, /* mov x9,x0 */
+  };
+  void *res;
+  VARR (uint8_t) * code;
+
+  VARR_CREATE (uint8_t, code, 128);
+  push_insns (code, &save_fplr, sizeof (save_fplr));
+  push_insns (code, save_insns, sizeof (save_insns));
+  push_insns (code, save_insns2, sizeof (save_insns2));
+  gen_mov_addr (code, 10, hook_address); /* x10 = hook_address */
+  gen_mov_addr (code, 0, data);          /* x0 = data */
+  push_insns (code, call_pat, sizeof (call_pat));
+  push_insns (code, restore_insns2, sizeof (restore_insns2));
+  push_insns (code, restore_insns, sizeof (restore_insns));
+  push_insns (code, &restore_fplr, sizeof (restore_fplr));
+  push_insns (code, &wrap_end, sizeof (wrap_end));
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("bb wrapper:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
+  VARR_DESTROY (uint8_t, code);
+  return res;
 }
