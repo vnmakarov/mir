@@ -1218,9 +1218,9 @@ struct pattern {
      Sr -- any immediate for right 32-bit shift (0-31)
      SL -- any immediate for left 64-bit shift (0-63)
      Sl -- any immediate for left 32-bit shift (0-31)
-     L - reference or label as the 1st or 2nd op which can be present by signed 26-bit pc offset (in
+     L - reference or label as the 1st or 2nd op which can be present by signed 26-bit pc offset
+     (in 4 insn bytes) l - label as the 1st op which can be present by signed 19-bit pc offset (in
      4 insn bytes)
-     l - label as the 1st op which can be present by signed 19-bit pc offset (in 4 insn bytes)
 
      Remember we have no float or (long) double immediate at this stage. They are represented
      by a reference to data item.  */
@@ -1248,9 +1248,17 @@ struct pattern {
      L -- operand-label as 26-bit offset
      l -- operand-label as 19-bit offset
      T -- pc-relative address [5..23]
+     i<one or two hex digits> -- shift value in [10..15]
+     I<one or two hex digits> -- shift value in [16..21]
   */
   const char *replacement;
 };
+
+#define SUB_UBO MIR_INSN_BOUND
+#define SUB_UBNO (SUB_UBO + 1)
+#define MUL_BO (SUB_UBNO + 1)
+#define MUL_BNO (MUL_BO + 1)
+#define ARM_INSN_BOUND (MUL_BNO + 1)
 
 static const struct pattern patterns[] = {
   {MIR_MOV, "r h31", "91000000:fffffc00 rd0 hn1f"}, /* mov Rd,SP */
@@ -1328,20 +1336,24 @@ static const struct pattern patterns[] = {
   {MIR_UEXT16, "r r", "53003c00:fffffc00 rd0 rn1"}, /* uxth wd, wn */
   {MIR_UEXT32, "r r", "2a0003e0:7fe0ffe0 rd0 rm1"}, /* mov wd, wm */
 
-  {MIR_ADD, "r r r", "8b206000:ffe0fc00 rd0 rn1 rm2"},  /* extended add Rd,Rn,Rm*/
-  {MIR_ADD, "r r I", "91000000:ff000000 rd0 rn1 I"},    /* add Rd,Rn,I,shift */
-  {MIR_ADDS, "r r r", "0b000000:ff200000 rd0 rn1 rm2"}, /* add Wd,Wn,Wm*/
-  {MIR_ADDS, "r r I", "11000000:ff000000 rd0 rn1 I"},   /* add Wd,Wn,I,shift */
-  {MIR_FADD, "r r r", "1e202800:ffe0fc00 vd0 vn1 vm2"}, /* fadd Sd,Sn,Sm*/
-  {MIR_DADD, "r r r", "1e602800:ffe0fc00 vd0 vn1 vm2"}, /* fadd Dd,Dn,Dm*/
+#define IOP(icode, rop, iop, rops, iops)                                         \
+  {icode, "r r r", rop ":ffe0fc00 rd0 rn1 rm2"},       /* extended op Rd,Rn,Rm*/ \
+    {icode, "r r I", iop ":ff000000 rd0 rn1 I"},       /* op Rd,Rn,I,shift */    \
+    {icode##S, "r r r", rops ":ff200000 rd0 rn1 rm2"}, /* op Wd,Wn,Wm*/          \
+    {icode##S, "r r I", iops ":ff000000 rd0 rn1 I"},   /* op Wd,Wn,I,shift */
+
+  IOP (MIR_ADD, "8b206000", "91000000", "0b000000", "11000000")
+    IOP (MIR_ADDO, "ab206000", "b1000000", "2b000000", "31000000")
+
+      {MIR_FADD, "r r r", "1e202800:ffe0fc00 vd0 vn1 vm2"}, /* fadd Sd,Sn,Sm*/
+  {MIR_DADD, "r r r", "1e602800:ffe0fc00 vd0 vn1 vm2"},     /* fadd Dd,Dn,Dm*/
   // ldadd is implemented through builtin
 
-  {MIR_SUB, "r r r", "cb206000:ffe0fc00 rd0 rn1 rm2"},  /* extended sub Rd,Rn,Rm*/
-  {MIR_SUB, "r r I", "d1000000:ff000000 rd0 rn1 I"},    /* sub Rd,Rn,I,shift */
-  {MIR_SUBS, "r r r", "4b000000:ff200000 rd0 rn1 rm2"}, /* sub Wd,Wn,Wm*/
-  {MIR_SUBS, "r r I", "51000000:ff000000 rd0 rn1 I"},   /* sub Wd,Wn,I,shift */
-  {MIR_FSUB, "r r r", "1e203800:ffe0fc00 vd0 vn1 vm2"}, /* fsub Sd,Sn,Sm*/
-  {MIR_DSUB, "r r r", "1e603800:ffe0fc00 vd0 vn1 vm2"}, /* fsub Dd,Dn,Dm*/
+  IOP (MIR_SUB, "cb206000", "d1000000", "4b000000", "51000000")
+    IOP (MIR_SUBO, "eb206000", "f1000000", "6b000000", "71000000")
+
+      {MIR_FSUB, "r r r", "1e203800:ffe0fc00 vd0 vn1 vm2"}, /* fsub Sd,Sn,Sm*/
+  {MIR_DSUB, "r r r", "1e603800:ffe0fc00 vd0 vn1 vm2"},     /* fsub Dd,Dn,Dm*/
   // ldsub is implemented through builtin
 
   {MIR_MUL, "r r r", "9b007c00:ffe0fc00 rd0 rn1 rm2"},  /* mul Rd,Rn,Rm*/
@@ -1539,6 +1551,12 @@ static const struct pattern patterns[] = {
   {MIR_BF, "l r", "b4000000:ff000000 rd1 l"},  /* cbz rd,l */
   {MIR_BFS, "l r", "34000000:ff000000 rd1 l"}, /* cbz wd,l */
 
+  {MIR_BO, "l", "54000006:ff00001f l"},  /* b.vs */
+  {MIR_UBO, "l", "54000002:ff00001f l"}, /* b.cs */
+
+  {MIR_BNO, "l", "54000007:ff00001f l"},  /* b.vc */
+  {MIR_UBNO, "l", "54000003:ff00001f l"}, /* b.cc */
+
 #define BEQ "54000000:ff00001f l"
   // ??? add extended reg cmp insns:
   // all ld insn are changed to builtins and bt/bts
@@ -1734,6 +1752,30 @@ static const struct pattern patterns[] = {
   {MIR_SWITCH, "r $",
    "10000000:ff000000 hda T; f8607800:ffe0fc00 hda hna rm0; d61f0000:fffffc00 hna;"},
 
+  /* Used only during machine code generation.  Should have the same format as branch on overflow
+     insns */
+  /* unsigned sub sets up carry flag when there is no overflow: */
+  {SUB_UBO, "l", "54000003:ff00001f l"},  /* b.cc */
+  {SUB_UBNO, "l", "54000002:ff00001f l"}, /* b.cs */
+
+  /* MULOS:smull Rd,Wn,Wm; asr r10,Rd,32; cmp W10,Wd,asr 31 */
+  {MIR_MULOS, "r r r",
+   "9b207c00:ffe0fc00 rd0 rn1 rm2; 9340fc00:ffc0fc00 hda rn0 I20; "
+   "6b80001f:ffe0001f hna rm0 i1f"},
+  /* UMULOS:umull Rd,Wn,Wm; cmp xzr,Rd,lsr 32 */
+  {MIR_UMULOS, "r r r", "9ba07c00:ffe0fc00 rd0 rn1 rm2; eb40001f:ffe0001f hn1f rm0 i20"},
+  /* MULO:smulh h11,Rn,Rm; mul Rd,Rn,Rm; cmp h11,Rd,asr 63 (r11 is a scratch reg) */
+  {MIR_MULO, "r r r",
+   "9b407c00:ffe0fc00 hdb rn1 rm2; 9b007c00:ffe0fc00 rd0 rn1 rm2; "
+   "eb80001f:ffe0001f hnb rm0 i3f"},
+  /* UMULO:umulh h11,Rn,Rm; mul Rd,Rn,Rm; cmp xzr,h11 (r11 is a scratch reg) */
+  {MIR_UMULO, "r r r",
+   "9bc07c00:ffe0fc00 hdb rn1 rm2; 9b007c00:ffe0fc00 rd0 rn1 rm2; "
+   "eb00001f:ff20001f hn1f hmb"},
+
+  /* [u]mulo[s] insns uses zero flag to check overflow: */
+  {MUL_BO, "l", BNE},  /* b.ne */
+  {MUL_BNO, "l", BEQ}, /* b.eq */
 };
 
 static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
@@ -1741,6 +1783,8 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
   if (insn->code == MIR_MOD || insn->code == MIR_MODS || insn->code == MIR_UMOD
       || insn->code == MIR_UMODS)
     *hr1 = R8_HARD_REG;
+  else if (insn->code == MIR_MULO || insn->code == MIR_UMULO)
+    *hr1 = R11_HARD_REG;
 }
 
 static int pattern_index_cmp (const void *a1, const void *a2) {
@@ -1760,9 +1804,9 @@ static void patterns_init (gen_ctx_t gen_ctx) {
   for (i = 0; i < n; i++) VARR_PUSH (int, pattern_indexes, i);
   qsort (VARR_ADDR (int, pattern_indexes), n, sizeof (int), pattern_index_cmp);
   VARR_CREATE (insn_pattern_info_t, insn_pattern_info, 0);
-  for (i = 0; i < MIR_INSN_BOUND; i++) VARR_PUSH (insn_pattern_info_t, insn_pattern_info, pinfo);
+  for (i = 0; i < ARM_INSN_BOUND; i++) VARR_PUSH (insn_pattern_info_t, insn_pattern_info, pinfo);
   info_addr = VARR_ADDR (insn_pattern_info_t, insn_pattern_info);
-  for (prev_code = MIR_INSN_BOUND, i = 0; i < n; i++) {
+  for (prev_code = ARM_INSN_BOUND, i = 0; i < n; i++) {
     ind = VARR_GET (int, pattern_indexes, i);
     if ((code = patterns[ind].code) != prev_code) {
       if (i != 0) info_addr[prev_code].num = i - info_addr[prev_code].start;
@@ -1770,7 +1814,7 @@ static void patterns_init (gen_ctx_t gen_ctx) {
       prev_code = code;
     }
   }
-  assert (prev_code != MIR_INSN_BOUND);
+  assert (prev_code != ARM_INSN_BOUND);
   info_addr[prev_code].num = n - info_addr[prev_code].start;
 }
 
@@ -2016,8 +2060,28 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
 static const char *find_insn_pattern_replacement (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   int i;
   const struct pattern *pat;
-  insn_pattern_info_t info = VARR_GET (insn_pattern_info_t, insn_pattern_info, insn->code);
+  insn_pattern_info_t info;
+  int code = insn->code;
 
+  if (code == MIR_BO || code == MIR_BNO || code == MIR_UBO || code == MIR_UBNO) {
+    for (MIR_insn_t prev_insn = DLIST_PREV (MIR_insn_t, insn); prev_insn != NULL;
+         prev_insn = DLIST_PREV (MIR_insn_t, prev_insn)) {
+      if (prev_insn->code == MIR_SUBOS || prev_insn->code == MIR_SUBO) {
+        /* unsigned sub sets up carry flag when there is no overflow: */
+        if (code == MIR_UBO || code == MIR_UBNO) code = code == MIR_UBO ? SUB_UBO : SUB_UBNO;
+        break;
+      } else if (prev_insn->code == MIR_MULOS || prev_insn->code == MIR_MULO
+                 || prev_insn->code == MIR_UMULOS || prev_insn->code == MIR_UMULO) {
+        /* [u]mulo[s] insns uses zero flag to check overflow: */
+        code = code == MIR_BO || code == MIR_UBO ? MUL_BO : MUL_BNO;
+        break;
+      } else if (prev_insn->code == MIR_ADDOS || prev_insn->code == MIR_ADDO
+                 || prev_insn->code == MIR_LABEL || MIR_branch_code_p (prev_insn->code)) {
+        break;
+      }
+    }
+  }
+  info = VARR_GET (insn_pattern_info_t, insn_pattern_info, code);
   for (i = 0; i < info.num; i++) {
     pat = &patterns[VARR_GET (int, pattern_indexes, info.start + i)];
     if (pattern_match_p (gen_ctx, pat, insn)) return pat->replacement;
@@ -2235,16 +2299,24 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       }
       case 'I': {
         ch = *++p;
-        if (ch != 'u') { /* I */
+        if (ch == 'u') { /* Iu */
+          op = insn->ops[1];
+          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
+          imm12_shift = arithm_roundup_const (op.u.u, &imm12);
+        } else if (hex_value (ch) >= 0) {
+          immr = read_hex (&p);
+        } else { /* I */
           op = insn->ops[2];
           gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
           imm12_shift = arithm_const (op.u.u, &imm12);
           p--;
-        } else {
-          op = insn->ops[1];
-          gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT);
-          imm12_shift = arithm_roundup_const (op.u.u, &imm12);
         }
+        break;
+      }
+      case 'i': {
+        p++;
+        gen_assert (hex_value (*p) >= 0);
+        imms = read_hex (&p);
         break;
       }
       case 'T': {
