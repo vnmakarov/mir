@@ -1,6 +1,6 @@
 name: aarch64-test
 
-on: [workflow_dispatch]
+on: [push]
 
 jobs:
   aarch64_job:
