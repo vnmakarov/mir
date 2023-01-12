@@ -415,7 +415,7 @@ typedef struct func_regs {
   VARR (reg_desc_t) * reg_descs;
   HTAB (size_t) * name2rdn_tab;
   HTAB (size_t) * reg2rdn_tab;
-} * func_regs_t;
+} *func_regs_t;
 
 static int name2rdn_eq (size_t rdn1, size_t rdn2, void *arg) {
   func_regs_t func_regs = arg;
@@ -4489,7 +4489,8 @@ static size_t reduce_writer (const void *start, size_t len, void *aux_data) {
 
 void MIR_write_module_with_func (MIR_context_t ctx, int (*const writer) (MIR_context_t, uint8_t),
                                  MIR_module_t module) {
-  size_t len, str_len;
+  size_t MIR_UNUSED len;
+  size_t str_len;
 
   io_writer = writer;
 #ifndef MIR_NO_BIN_COMPRESSION
@@ -4999,7 +5000,6 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
         MIR_new_expr_data (ctx, name, item);
       } else if (strcmp (name, "ndata") == 0 || strcmp (name, "data") == 0) {
         MIR_type_t type;
-        size_t nel;
         union {
           uint8_t u8;
           uint16_t u16;
@@ -5020,7 +5020,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
           MIR_get_error_func (ctx) (MIR_binary_io_error, "wrong data type tag %d", tag);
         type = tag_type (tag);
         VARR_TRUNC (uint8_t, temp_data, 0);
-        for (nel = 0;; nel++) {
+        for (;;) {
           tag = read_token (ctx, &attr);
           if (tag == TAG_EOI) break;
           switch (tag) {
