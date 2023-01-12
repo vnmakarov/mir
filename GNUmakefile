@@ -162,7 +162,8 @@ $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
 
 uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-gen.h $(PREFIX)/include/c2mir.h
+	$(RM) $(PREFIX)/mir.h $(PREFIX)/mir-dlist.h $(PREFIX)/mir-varr.h $(PREFIX)/mir-htab.h\
+		       $(PREFIX)/mir-gen.h $(PREFIX)/c2mir/c2mir.h
 	$(RM) $(PREFIX)/lib/libmir.$(LIBSUFF) $(PREFIX)/lib/$(SOLIB)
 	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
@@ -739,6 +740,8 @@ sloc:
 	@echo -n 'ppc64 machine dependent code: ' && wc -l $(SRC_DIR)/mir-ppc64.c $(SRC_DIR)/mir-gen-ppc64.c\
 	| awk '{last=$$1} END {print last}'
 	@echo -n 's390x machine dependent code: ' && wc -l $(SRC_DIR)/mir-s390x.c $(SRC_DIR)/mir-gen-s390x.c\
+	| awk '{last=$$1} END {print last}'
+	@echo -n 'riscv64 machine dependent code: ' && wc -l $(SRC_DIR)/mir-riscv64.c $(SRC_DIR)/mir-gen-riscv64.c\
 	| awk '{last=$$1} END {print last}'
 	@echo -n 'Overall: ' && wc -l $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-hash.h\
 	                              $(SRC_DIR)/mir-htab.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-reduce.h\
