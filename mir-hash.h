@@ -1,6 +1,6 @@
 /* This file is a part of MIR project.
 
-   Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* Simple high-quality multiplicative hash passing demerphq-smhasher,

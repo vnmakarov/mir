@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* x31 - sp; x30 - link reg; x29 - fp; x0-x7, v0-v7 - arg/result regs;
