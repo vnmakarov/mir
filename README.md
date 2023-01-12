@@ -325,7 +325,9 @@ ex100:    func v, 0
     * It is small (10K C lines)
     * It uses SSA based IR (kind of simplified LLVM IR)
     * It has the same optimizations as MIR-generator plus aliasing but QBE has no inlining
+    * It generates slower code
     * It generates assembler code which makes QBE 30 slower in machine code generation than MIR-generator
+    * It generates code for more targets
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
       * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR
