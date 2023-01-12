@@ -302,7 +302,7 @@ ex100:    func v, 0
     | execution [3]  | **1.0** (3.05s)  | 6.0 (18.3s)     | **0.95** (2.9s)  |  2.08 (6.34s)   |
     | code size [4]  | **1.0** (325KB)  | 0.51 (165KB)    | **76** (25.2MB)  |  76 (25.2MB)   |
     | startup [5]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [6]        | **1.0** (15.8K)  | 0.59 (9.4K)     | **94** (1480K)   |  94  (1480K)    |
+    | LOC [6]        | **1.0** (19.1K)  | 0.53 (10.1K)    | **77** (1480K)   |  77  (1480K)    |
 
    [1] is based on wall time of compilation of sieve code (w/o any include file and with
    using memory file system for GCC) 100 times.  The used optimization level is 1
