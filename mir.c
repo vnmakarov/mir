@@ -3416,7 +3416,7 @@ static long add_blk_move (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t be
    extensions and one return.  */
 static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   int non_top_alloca_p;
-  int64_t alloca_size, alloca_align, max_func_top_alloca_align;
+  int64_t alloca_size = 0, alloca_align, max_func_top_alloca_align;
   int64_t init_func_top_alloca_size, curr_func_top_alloca_size, max_func_top_alloca_size;
   size_t i, actual_nops, nargs, nvars;
   MIR_type_t type, *res_types;
