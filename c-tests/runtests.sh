@@ -10,6 +10,7 @@ ctest_dir=`dirname $0`
 execution_program=$1
 compiler=$2
 
+FGREP=fgrep
 EGREP=egrep
 
 ECHO=echo
@@ -27,15 +28,22 @@ else
     TIMEOUT=
 fi
 
+if arch >/dev/null 2>&1;then
+    ARCH=`arch`
+else
+    ARCH="other"
+fi
+
 runtest () {
 	t=$1
 	add_main=$2
 	all=`expr $all + 1`
+	$ECHO -n $t:
+	if test -f $t.disable && $FGREP "$ARCH" $t.disable >/dev/null 2>&1; then $ECHO Skipped; return; fi
 	if test -f $t.expectrc; then expect_code=`cat $t.expectrc`; else expect_code=0; fi
 	if test -f $t.expect; then expect_out=$t.expect; else expect_out=; fi
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
-	$ECHO -n $t:
 	$TIMEOUT sh $execution_program $compiler $t $add_main 2>$errf >$outf
 	code=$?
 	if test $code = $expect_code; then
