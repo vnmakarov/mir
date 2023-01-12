@@ -3422,7 +3422,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, old_reg, new_reg, temp_reg;
-  MIR_insn_t func_top_alloca, called_func_top_alloca, new_called_func_top_alloca;
+  MIR_insn_t func_top_alloca, called_func_top_alloca, new_called_func_top_alloca = NULL;
   MIR_insn_t func_insn, head_func_insn, next_func_insn;
   MIR_insn_t call, insn, prev_insn, new_insn, ret_insn, anchor;
   MIR_item_t called_func_item;
