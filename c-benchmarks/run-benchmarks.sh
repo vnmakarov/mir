@@ -151,7 +151,7 @@ for bench in array binary-trees except funnkuch-reduce hash hash2 heapsort lists
 do
     if test $bench_num -ge $start_bench_num; then
 	b=$srcdir/$bench
-	if test -f $b.arg; then arg=`cat $b.arg`; else arg=; fi
+	if test -f $b.arg; then arg=`sh $b.arg`; else arg=; fi
 	echo "+++++ $bench_num:$bench $arg +++++"
 	runbench $b $arg
     fi
