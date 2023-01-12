@@ -480,7 +480,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 #if defined(__APPLE__)
     0x910023e3, /* add x3, sp, 8 # results arg */
 #else
-    0x910043e3, /* add x3, sp, 16 # results arg */
+    0x910043e3,                                      /* add x3, sp, 16 # results arg */
 #endif
     0xaa0303f3, /* mov x19, x3 # results */
     0xf90003fe, /* str x30, [sp] # save lr */
