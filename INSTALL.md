@@ -25,6 +25,8 @@ with the right `SRC_DIR` if you build MIR in a different directory.
 
   * `libmir.a` - a static library containing MIR API functions,
     MIR generator and interpreter, and C-to-MIR compiler
+  * `libmir.so` - a dynamic library containing MIR API functions,
+    MIR generator and interpreter, and C-to-MIR compiler
   * `mir.h`, `mir-gen.h`, `c2mir.h` - include files to use MIR API functions
     and interpreter, MIR-generator, and C-to-MIR compiler
   * `c2m` - a standalone C compiler based on MIR
