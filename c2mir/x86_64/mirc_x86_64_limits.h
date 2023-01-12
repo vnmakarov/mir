@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2019-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2019-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
 /* See 5.2.4.2 */
