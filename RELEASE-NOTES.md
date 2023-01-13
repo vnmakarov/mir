@@ -1,4 +1,4 @@
-Major changes from v0.1.1 to v0.1.2:
+# Major changes from v0.1.1 to v0.1.2:
 
  * Numerous bugs were fixed
  * Shared library is now built and installed beside the static library
