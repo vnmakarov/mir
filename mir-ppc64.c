@@ -1,6 +1,8 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2018-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
+
+#include "mir-ppc64.h"
 
 /* All BLK type values is passed in int regs, and if the regs are not enough, the rest is passed on
    the stack. RBLK is always passed by address.  */
@@ -99,18 +101,20 @@ static void ppc64_gen_stdu (VARR (uint8_t) * insn_varr, int disp) {
   push_insn (insn_varr, 0xf8210001 | (disp & 0xfffc)); /* stdu 1, disp (1) */
 }
 
+#define LIS_OPCODE 15
+#define XOR_OPCODE 31
 static void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int reg, void *p) {
   uint64_t a = (uint64_t) p;
   if ((a >> 32) == 0) {
     if (((a >> 31) & 1) == 0) { /* lis r,0,Z2 */
-      push_insn (insn_varr, (15 << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
+      push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
     } else { /* xor r,r,r; oris r,r,Z2 */
-      push_insn (insn_varr, (31 << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
+      push_insn (insn_varr, (XOR_OPCODE << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
       push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
     }
   } else {
     /* lis r,0,Z0; ori r,r,Z1; rldicr r,r,32,31; oris r,r,Z2; ori r,r,Z3: */
-    push_insn (insn_varr, (15 << 26) | (reg << 21) | (0 << 16) | (a >> 48));
+    push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | (a >> 48));
     push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
     push_insn (insn_varr, (30 << 26) | (reg << 21) | (reg << 16) | 0x07c6);
     push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
@@ -183,6 +187,8 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   return ppc64_publish_func_and_redirect (ctx, code);
 }
 
+static const int max_thunk_len = (7 * 4); /* 5 insns for r=addr and 2 insns for goto r */
+
 void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descriptor: */
   VARR (uint8_t) * code;
 
@@ -190,31 +196,31 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
   ppc64_push_func_desc (&code);
   return ppc64_publish_func_and_redirect (ctx, code);
 #else
-  const uint32_t nop_insn = 24 << (32 - 6);                                /* ori 0,0,0 */
-  const int max_thunk_len = (7 * 8);
   void *res;
 
   VARR_CREATE (uint8_t, code, 128);
-  for (int i = 0; i < max_thunk_len; i++) push_insn (code, nop_insn);
+  for (int i = 0; i < max_thunk_len; i++) push_insn (code, TARGET_NOP);
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
   return res;
 #endif
 }
 
+static const uint32_t thunk_code_end[] = {
+  0x7d8903a6, /* mtctr r12 */
+  0x4e800420, /* bctr */
+};
+
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
 #if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
   ppc64_redirect_func_desc (ctx, thunk, to);
 #else
-  static const uint32_t global_entry_end[] = {
-    0x7d8903a6, /* mtctr r12 */
-    0x4e800420, /* bctr */
-  };
   VARR (uint8_t) * code;
 
   VARR_CREATE (uint8_t, code, 256);
   ppc64_gen_address (code, 12, to);
-  push_insns (code, global_entry_end, sizeof (global_entry_end));
+  push_insns (code, thunk_code_end, sizeof (thunk_code_end));
+  mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0 && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
 #endif
@@ -527,19 +533,75 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   return res;
 }
 
+static void redirect_bb_thunk (MIR_context_t ctx, VARR (uint8_t) *code, void *start, void *to) {
+  int64_t offset = (uint8_t *) to - (uint8_t *) start;
+  mir_assert ((offset & 0x3) == 0);
+  VARR_TRUNC (uint8_t, code, 0);
+  if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0) { /* just jump */
+    uint32_t insn = (PPC_JUMP_OPCODE << (32 - 6)) /* jump opcode */ | (((offset / 4) & 0xffffff) << 2);
+    push_insn (code, insn);
+  } else {
+    ppc64_gen_address (code, 12, to); /* r12 = to */
+    push_insns (code, thunk_code_end, sizeof (thunk_code_end));
+    mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0 && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+  }
+  _MIR_change_code (ctx, start, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+}
+
+/* r11=<bb_version>; jump handler  ??? mutex free */
+void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
+  void *res;
+  size_t offset;
+  VARR (uint8_t) * code;
+
+  VARR_CREATE (uint8_t, code, 64);
+  ppc64_gen_address (code, 11, bb_version); /* x11 = bb_version */
+  offset = VARR_LENGTH (uint8_t, code);
+  for (int i = 0; i < max_thunk_len / 4; i++) push_insn (code, TARGET_NOP);
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  redirect_bb_thunk (ctx, code, (uint8_t *) res + offset, handler);
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("bb thunk:", 0, res, offset + VARR_LENGTH (uint8_t, code));
+#endif
+  VARR_DESTROY (uint8_t, code);
+  return res;
+}
+
+/* change to jump to */
+void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
+  size_t i, offset;
+  VARR (uint8_t) * code;
+  uint32_t opcode, *insns = (uint32_t *) thunk;
+
+  /* find jump code offset (see ppc64_gen_address): */
+  for (i = 0; i <= 5; i++) {
+    if ((opcode = insns[i] >> 26) == PPC_JUMP_OPCODE) break; /* uncond branch */
+    if ((opcode == LIS_OPCODE || opcode == XOR_OPCODE) /* (lis|xor) r12, ... */
+	&& ((insns[i] >> 21) & 0x1f) == 12)
+      break;
+  }
+  mir_assert (i <= 5);
+  offset = i * 4;
+  VARR_CREATE (uint8_t, code, 64);
+  redirect_bb_thunk (ctx, code, (char *) thunk + offset, to);
+  VARR_DESTROY (uint8_t, code);
+}
+
 /* Brief: save lr (r1+16); update r1, save all param regs (r1+header+64);
           allocate and form minimal wrapper stack frame (param area = 8*8);
           r3 = call hook_address (ctx, called_func); r12=r3
           restore params regs (r1+header+64),  r1, lr (r1+16); ctr=r12; b *ctr */
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
-  static uint32_t prologue[] = {
+  static const uint32_t prologue[] = {
     0x7c0802a6, /* mflr r0 */
     0xf8010010, /* std  r0,16(r1) */
   };
-  static uint32_t epilogue[] = {
+  static const uint32_t epilogue[] = {
     0xe8010010, /* ld   r0,16(r1) */
     0x7c0803a6, /* mtlr r0 */
   };
+
   int frame_size = PPC64_STACK_HEADER_SIZE + 8 * 8 + 13 * 8 + 8 * 8;
   VARR (uint8_t) * code;
   void *res;
@@ -567,6 +629,56 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   push_insn (code, (31 << 26) | (467 << 1) | (12 << 21) | (9 << 16)); /* mctr 12 */
   push_insn (code, (19 << 26) | (528 << 1) | (20 << 21));             /* bcctr */
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+  VARR_DESTROY (uint8_t, code);
+  return res;
+}
+
+/* save all clobbered regs but r11 and r12; r11 = call hook_address (data, r11); restore regs; br r11
+   r11 is a generator temp reg which is not used across bb borders. */
+void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
+  static const uint32_t prologue[] = {
+    0x7d8802a6, /* mflr r12 */
+    0xf9810010, /* std  r12,16(r1) */
+  };
+  static const uint32_t epilogue[] = {
+    0xe9810010, /* ld   r12,16(r1) */
+    0x7d8803a6, /* mtlr r12 */
+  };
+  int frame_size = PPC64_STACK_HEADER_SIZE + 14 * 8 + 14 * 8 + 8 * 8;
+  void *res;
+  VARR (uint8_t) * code;
+
+  VARR_CREATE (uint8_t, code, 256);
+  push_insns (code, prologue, sizeof (prologue));
+  /* stdu r1,n(r1): header + 14(gp regs, r{1,2,11} space alloc is not used) + 14(fp args) + 8(param area): */
+  if (frame_size % 16 != 0) frame_size += 8;
+  ppc64_gen_stdu (code, -frame_size);
+  ppc64_gen_st (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64, MIR_T_I64);
+  for (unsigned reg = R2_HARD_REG; reg <= R10_HARD_REG; reg++) /* ld rn,dispn(r1) : */
+    ppc64_gen_st (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + reg * 8 + 64, MIR_T_I64);
+  ppc64_gen_st (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64, MIR_T_I64);
+  for (unsigned reg = 0; reg <= F13_HARD_REG - F0_HARD_REG; reg++) /* lfd fn,dispn(r1) : */
+    ppc64_gen_st (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + (reg + 14) * 8 + 64, MIR_T_D);
+  ppc64_gen_address (code, 3, data); /* r3 = data */
+  ppc64_gen_mov (code, 4, 11); /* r4 = r11 */
+  ppc64_gen_address (code, 12, hook_address); /* r12 = hook addres */
+  ppc64_gen_jump (code, 12, TRUE); /* call r12 */
+  ppc64_gen_mov (code, 11, 3); /* r11 = r3 */
+  ppc64_gen_ld (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64, MIR_T_I64);
+  for (unsigned reg = R2_HARD_REG; reg <= R10_HARD_REG; reg++) /* ld rn,dispn(r1) : */
+    ppc64_gen_ld (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + reg * 8 + 64, MIR_T_I64);
+  ppc64_gen_ld (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64, MIR_T_I64);
+  for (unsigned reg = 0; reg <= F13_HARD_REG - F0_HARD_REG; reg++) /* lfd fn,dispn(r1) : */
+    ppc64_gen_ld (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + (reg + 14) * 8 + 64, MIR_T_D);
+  ppc64_gen_addi (code, 1, 1, frame_size);
+  push_insns (code, epilogue, sizeof (epilogue));
+  push_insn (code, (31 << 26) | (467 << 1) | (11 << 21) | (9 << 16)); /* mctr 11 */
+  push_insn (code, (19 << 26) | (528 << 1) | (20 << 21));             /* bcctr */
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("bb wrapper:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res;
 }

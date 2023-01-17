@@ -7520,7 +7520,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
   if (debug_file != NULL) {
     fprintf (debug_file, "BBs for lazy code generation:\n");
     for (size_t i = 0; i < n_bbs; i++) {
-      fprintf (debug_file, "  BB%lu:\n", (long unsigned) i);
+      fprintf (debug_file, "  BBStub%lx:\n", (long unsigned) &bb_stubs[i]);
       for (insn = bb_stubs[i].first_insn;; insn = DLIST_NEXT (MIR_insn_t, insn)) {
         MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         if (insn == bb_stubs[i].last_insn) break;
@@ -8024,7 +8024,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   target_setup_succ_bb_version_data (gen_ctx, addr);
   DEBUG (1, {
     _MIR_dump_code (NULL, 0, addr, code_len);
-    fprintf (debug_file, "BB code size = %lu:\n", (unsigned long) code_len);
+    fprintf (debug_file, "BBStub%lx code size = %lu:\n", (unsigned long) bb_stub, (unsigned long) code_len);
   });
   target_redirect_bb_origin_branch (gen_ctx, &bb_version->target_data, addr);
   _MIR_replace_bb_thunk (ctx, bb_version->addr, addr);

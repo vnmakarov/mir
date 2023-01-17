@@ -291,7 +291,7 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
       && n <= 8) {
     for (i = 0; i < n; i++) {
       assert (!param_decl->reg_p);
-      reg_var = get_reg_var (c2m_ctx, type, gen_get_indexed_name (c2m_ctx, name, i));
+      reg_var = get_reg_var (c2m_ctx, type, gen_get_indexed_name (c2m_ctx, name, i), NULL);
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type),
                                      MIR_new_mem_op (ctx, type,
