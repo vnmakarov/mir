@@ -89,7 +89,7 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
       || !reg_aggregate_p (c2m_ctx, arg_type))
     return FALSE;
   assert (!param_decl->reg_p);
-  reg_var = get_reg_var (c2m_ctx, MIR_T_I64, name);
+  reg_var = get_reg_var (c2m_ctx, MIR_T_I64, name, NULL);
   param_op = MIR_new_reg_op (ctx, reg_var.reg);
   gen_multiple_load_store (c2m_ctx, arg_type, &param_op,
                            MIR_new_mem_op (ctx, MIR_T_UNDEF, param_decl->offset,
