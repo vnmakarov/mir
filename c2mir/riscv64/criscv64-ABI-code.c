@@ -431,7 +431,7 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
       assert (!param_decl->reg_p);
       type = members[0].type;
       reg_var = get_reg_var (c2m_ctx, promote_mir_int_type (type),
-                             gen_get_indexed_name (c2m_ctx, name, 0));
+                             gen_get_indexed_name (c2m_ctx, name, 0), NULL);
       MIR_append_insn (ctx, curr_func,
                        MIR_new_insn (ctx, tp_mov (type),
                                      MIR_new_mem_op (ctx, type,
@@ -442,7 +442,7 @@ static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct ty
       if (n == 2) {
         type = members[1].type;
         reg_var = get_reg_var (c2m_ctx, promote_mir_int_type (type),
-                               gen_get_indexed_name (c2m_ctx, name, 1));
+                               gen_get_indexed_name (c2m_ctx, name, 1), NULL);
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, tp_mov (type),
                                        MIR_new_mem_op (ctx, type,
