@@ -5921,6 +5921,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       VARR_SET (MIR_reg_t, breg_renumber, i, best_loc);
       start_mem_loc = best_loc + slots_num;
       DEBUG (2, {
+        breg = reg2breg (gen_ctx, reg);
         fprintf (debug_file, " Assigning to addressable %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
                  MIR_reg_name (gen_ctx->ctx, reg, func), reg2var (gen_ctx, reg), i,
                  curr_breg_infos[breg].freq, (unsigned long) best_loc);
