@@ -3996,8 +3996,11 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         }
         MIR_insert_insn_after (ctx, func_item, call, new_insn);
       }
+      if (head_func_insn == new_called_func_top_alloca)
+	head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);
       MIR_remove_insn (ctx, func_item, new_called_func_top_alloca);
     }
+    if (head_func_insn == call) head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);
     MIR_remove_insn (ctx, func_item, call);
     next_func_insn = (prev_insn == NULL ? DLIST_HEAD (MIR_insn_t, func->insns)
                                         : DLIST_NEXT (MIR_insn_t, prev_insn));
