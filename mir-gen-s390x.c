@@ -2157,6 +2157,8 @@ static void add_consts (gen_ctx_t gen_ctx) {
   }
 }
 
+static void target_split_insns (gen_ctx_t gen_ctx) {}
+
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
   size_t i;

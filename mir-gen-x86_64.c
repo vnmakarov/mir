@@ -2525,6 +2525,8 @@ static uint8_t *translate_finish (gen_ctx_t gen_ctx, size_t *len) {
   return VARR_ADDR (uint8_t, result_code);
 }
 
+static void target_split_insns (gen_ctx_t gen_ctx) {}
+
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn;

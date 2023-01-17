@@ -2347,6 +2347,8 @@ static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   return find_insn_pattern_replacement (gen_ctx, insn, TRUE) != NULL;
 }
 
+static void target_split_insns (gen_ctx_t gen_ctx) {}
+
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
   size_t i;

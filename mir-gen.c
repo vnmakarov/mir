@@ -7362,8 +7362,9 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
   }
   target_make_prolog_epilog (gen_ctx, func_used_hard_regs, func_stack_slots_num);
+  target_split_insns (gen_ctx);
   DEBUG (2, {
-    fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog:\n");
+    fprintf (debug_file, "+++++++++++++MIR after forming prolog/epilog and insn splitting:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (machine_code_p) {
@@ -7895,7 +7896,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
   bb_stub_t branch_bb_stub, bb_stub = bb_version->bb_stub;
-  MIR_insn_t curr_insn, new_insn, next_insn, last_insn = bb_stub->last_insn;
+  MIR_insn_t curr_insn, new_insn, next_insn;
   void *addr;
   uint8_t *code;
   size_t code_len, nel;
@@ -7987,7 +7988,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     default: break;
     }
     target_bb_insn_translate (gen_ctx, curr_insn, NULL);
-    if (curr_insn == last_insn) break;
+    if (curr_insn == bb_stub->last_insn) break;
   }
   VARR_TRUNC (spot_attr_t, spot_attrs, 0);
   FOREACH_BITMAP_BIT (bi, nonzero_property_spots, nel) {
