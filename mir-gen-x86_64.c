@@ -1054,12 +1054,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     case MIR_DLE:
     case MIR_DGT:
     case MIR_DGE: {
-      /* We can access only 4 regs in setxx -- use ax as the result: */
-      MIR_op_t areg_op = _MIR_new_hard_reg_op (ctx, AX_HARD_REG);
-
-      new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], areg_op);
+      new_insn = MIR_new_insn (ctx, MIR_UEXT8, insn->ops[0], insn->ops[0]);
       gen_add_insn_after (gen_ctx, insn, new_insn);
-      insn->ops[0] = areg_op;
       /* Following conditional branches are changed to correctly process unordered numbers: */
       switch (code) {
       case MIR_FLT:
@@ -1349,6 +1345,7 @@ struct pattern {
      [0-9A-F]+ pairs of hexidecimal digits opcode
      r[0-2] = n-th operand in ModRM:reg
      R[0-2] = n-th operand in ModRM:rm with mod == 3
+     S[0-2] = n-th operand in ModRM:rm with mod == 3, 8-bit registers
      m[0-2] = n-th operand is mem
      mt = temp memory in red zone (-16(sp))
      mT = switch table memory (h11,r,8)
@@ -1419,14 +1416,14 @@ struct pattern {
   SHOP0 (ICODE, , X, CL_OP_CODE, I8_OP_CODE) \
   SHOP0 (ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
-/* cmp ...; setx r0; movzbl r0,r0: */
+/* cmp ...; setx r0: */
 #define CMP0(ICODE, SUFF, PREF, SETX)                                                            \
-  {ICODE##SUFF, "t r r", #PREF " 3B r1 R2;" SETX " R0;X 0F B6 r0 R0"},        /* cmp r1,r2;...*/ \
-    {ICODE##SUFF, "t r m3", #PREF " 3B r1 m2;" SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
-    {ICODE##SUFF, "t r i0", #PREF " 83 /7 R1 i2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "t r i2", #PREF " 81 /7 R1 I2;" SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "t m3 i0", #PREF " 83 /7 m1 i2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
-    {ICODE##SUFF, "t m3 i2", #PREF " 81 /7 m1 I2;" SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
+  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Y " SETX " S0"},        /* cmp r1,r2;...*/ \
+    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Y " SETX " S0"},     /* cmp r1,m2;...*/ \
+    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Y " SETX " S0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2; Y " SETX " S0"},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2; Y " SETX " S0"}, /* cmp m1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2; Y " SETX " S0"}, /* cmp m1,i2;...*/
 
 #define CMP(ICODE, SET_OPCODE)  \
   CMP0 (ICODE, , X, SET_OPCODE) \
@@ -1549,7 +1546,7 @@ static const struct pattern patterns[] = {
   {MIR_EXT16, "r m1", "X 0F BF r0 m1"},  /* movsx r0,m1 */
   {MIR_EXT32, "r r", "X 63 r0 R1"},      /* movsx r0,r1 */
   {MIR_EXT32, "r m2", "X 63 r0 m1"},     /* movsx r0,m1 */
-  {MIR_UEXT8, "r r", "X 0F B6 r0 R1"},   /* movzx r0,r1 */
+  {MIR_UEXT8, "r r", "Y 0F B6 r0 S1"},   /* movzx r0,r1 */
   {MIR_UEXT8, "r m0", "X 0F B6 r0 m1"},  /* movzx r0,m1 */
   {MIR_UEXT16, "r r", "X 0F B7 r0 R1"},  /* movzx r0,r1 */
   {MIR_UEXT16, "r m1", "X 0F B7 r0 m1"}, /* movzx r0,m1 */
@@ -2019,6 +2016,20 @@ static void setup_r (int *rex, int *r, int v) {
   *r = v;
 }
 
+static void setup_rm_byte (int *rex, int *high, int *r, int v) {
+  gen_assert ((rex == NULL || *rex < 0) && *r < 0 && v >= 0 && v <= MAX_HARD_REG);
+  if (v >= 16) v -= 16;
+  if (v >= 4) {
+    if (rex != NULL) *rex = 1;
+  }
+  if (v >= 8) {
+    if (high != NULL) *high = 1;
+    v -= 8;
+  }
+  *r = v;
+}
+
+
 static void setup_reg (int *rex_reg, int *reg, int v) { setup_r (rex_reg, reg, v); }
 
 static void setup_rm (int *rex_b, int *rm, int v) { setup_r (rex_b, rm, v); }
@@ -2221,14 +2232,18 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         break;
       case 'r':
       case 'R':
+      case 'S':
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '2');
         op = insn->ops[ch - '0'];
         gen_assert (op.mode == MIR_OP_HARD_REG);
         if (start_ch == 'r')
           setup_reg (&rex_r, &reg, op.u.hard_reg);
-        else {
+        else if (start_ch == 'R'){
           setup_rm (&rex_b, &rm, op.u.hard_reg);
+          setup_mod (&mod, 3);
+        } else if (start_ch == 'S') {
+          setup_rm_byte (&rex_0, &rex_b, &rm, op.u.hard_reg);
           setup_mod (&mod, 3);
         }
         break;
