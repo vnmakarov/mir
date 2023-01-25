@@ -68,4 +68,41 @@ static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
   return /*loc > MAX_HARD_REG && */ type == MIR_T_LD ? 2 : 1;
 }
 
+static inline void push_insn (VARR (uint8_t) * insn_varr, uint32_t insn) {
+  uint8_t *p = (uint8_t *) &insn;
+  for (size_t i = 0; i < 4; i++) VARR_PUSH (uint8_t, insn_varr, p[i]);
+}
+
 static const int PPC_JUMP_OPCODE = 18;
+
+#define LI_OPCODE 14
+#define LIS_OPCODE 15
+#define ORI_OPCODE 24
+#define ORIS_OPCODE 25
+#define XOR_OPCODE 31
+static inline void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int reg, void *p) {
+  uint64_t a = (uint64_t) p;
+  if ((a >> 32) == 0) {
+    if (((a >> 31) & 1) == 0) { /* lis r,0,Z2 */
+      push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
+    } else { /* xor r,r,r; oris r,r,Z2 */
+      push_insn (insn_varr, (XOR_OPCODE << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
+      push_insn (insn_varr, (ORIS_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
+    }
+  } else {
+    if ((a >> 47) != 0) {
+      /* lis r,0,Z0; [ori r,r,Z1]; rldicr r,r,32,31; [oris r,r,Z2]; [ori r,r,Z3]: */
+      push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | (a >> 48));
+      if (((a >> 32) & 0xffff) != 0)
+	push_insn (insn_varr, (ORI_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
+    } else {
+      /* li r,0,Z1; rldicr r,r,32,31; [oris r,r,Z2]; [ori r,r,Z3]: */
+      push_insn (insn_varr, (LI_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 32) & 0xffff));
+    }
+    push_insn (insn_varr, (30 << 26) | (reg << 21) | (reg << 16) | 0x07c6);
+    if (((a >> 16) & 0xffff) != 0)
+      push_insn (insn_varr, (ORIS_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
+  }
+  if ((a & 0xffff) != 0)
+    push_insn (insn_varr, (ORI_OPCODE << 26) | (reg << 21) | (reg << 16) | (a & 0xffff));
+}

@@ -45,11 +45,6 @@ static void *ppc64_publish_func_and_redirect (MIR_context_t ctx, VARR (uint8_t) 
   return res;
 }
 
-static void push_insn (VARR (uint8_t) * insn_varr, uint32_t insn) {
-  uint8_t *p = (uint8_t *) &insn;
-  for (size_t i = 0; i < 4; i++) VARR_PUSH (uint8_t, insn_varr, p[i]);
-}
-
 static void push_insns (VARR (uint8_t) * insn_varr, const uint32_t *pat, size_t pat_len) {
   uint8_t *p = (uint8_t *) pat;
   for (size_t i = 0; i < pat_len; i++) VARR_PUSH (uint8_t, insn_varr, p[i]);
@@ -99,27 +94,6 @@ static void ppc64_gen_st (VARR (uint8_t) * insn_varr, unsigned from, unsigned ba
 static void ppc64_gen_stdu (VARR (uint8_t) * insn_varr, int disp) {
   assert ((disp & 0x3) == 0);
   push_insn (insn_varr, 0xf8210001 | (disp & 0xfffc)); /* stdu 1, disp (1) */
-}
-
-#define LIS_OPCODE 15
-#define XOR_OPCODE 31
-static void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int reg, void *p) {
-  uint64_t a = (uint64_t) p;
-  if ((a >> 32) == 0) {
-    if (((a >> 31) & 1) == 0) { /* lis r,0,Z2 */
-      push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
-    } else { /* xor r,r,r; oris r,r,Z2 */
-      push_insn (insn_varr, (XOR_OPCODE << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
-      push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
-    }
-  } else {
-    /* lis r,0,Z0; ori r,r,Z1; rldicr r,r,32,31; oris r,r,Z2; ori r,r,Z3: */
-    push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | (a >> 48));
-    push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
-    push_insn (insn_varr, (30 << 26) | (reg << 21) | (reg << 16) | 0x07c6);
-    push_insn (insn_varr, (25 << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
-  }
-  push_insn (insn_varr, (24 << 26) | (reg << 21) | (reg << 16) | (a & 0xffff));
 }
 
 static void ppc64_gen_jump (VARR (uint8_t) * insn_varr, unsigned int reg, int call_p) {
@@ -199,7 +173,7 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
   void *res;
 
   VARR_CREATE (uint8_t, code, 128);
-  for (int i = 0; i < max_thunk_len; i++) push_insn (code, TARGET_NOP);
+  for (int i = 0; i < max_thunk_len / 4; i++) push_insn (code, TARGET_NOP);
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
   return res;
@@ -577,7 +551,7 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   /* find jump code offset (see ppc64_gen_address): */
   for (i = 0; i <= 5; i++) {
     if ((opcode = insns[i] >> 26) == PPC_JUMP_OPCODE) break; /* uncond branch */
-    if ((opcode == LIS_OPCODE || opcode == XOR_OPCODE) /* (lis|xor) r12, ... */
+    if ((opcode == LI_OPCODE || opcode == LIS_OPCODE || opcode == XOR_OPCODE) /* (li|lis|xor) r12, ... */
 	&& ((insns[i] >> 21) & 0x1f) == 12)
       break;
   }
@@ -637,12 +611,16 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
    r11 is a generator temp reg which is not used across bb borders. */
 void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   static const uint32_t prologue[] = {
+    0x7d800026, /* mfcr r12 */
+    0xf9810008, /* std r12,8(r1) */
     0x7d8802a6, /* mflr r12 */
     0xf9810010, /* std  r12,16(r1) */
   };
   static const uint32_t epilogue[] = {
-    0xe9810010, /* ld   r12,16(r1) */
+    0xe9810010, /* ld r12,16(r1) */
     0x7d8803a6, /* mtlr r12 */
+    0xe9810008, /* ld r12,8(r1) */
+    0x7d8ff120, /* mtcr r12 */
   };
   int frame_size = PPC64_STACK_HEADER_SIZE + 14 * 8 + 14 * 8 + 8 * 8;
   void *res;
@@ -677,7 +655,7 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("bb wrapper:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("bb wrapper:", 0, res, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;
