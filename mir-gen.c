@@ -3755,14 +3755,10 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
 
   DEBUG (2, {
     fprintf (debug_file, "  BB%lu is unreachable and removed\n", (unsigned long) bb->index);
-  });
+    });
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
     next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
     insn = bb_insn->insn;
-    DEBUG (2, {
-      fprintf (debug_file, "   ");
-      MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-    });
     gen_delete_insn (gen_ctx, insn);
     deleted_insns_num++;
   }
