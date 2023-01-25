@@ -501,10 +501,8 @@ static void *compile (void *arg) {
                               compiler->input.input_name, f);
     if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in mutex lock");
     compiler->busy_p = FALSE;
-    if (compiler->input.code_container != NULL) {
+    if (compiler->input.code_container != NULL)
       VARR_DESTROY (uint8_t, compiler->input.code_container);
-      compiler->input.code_container = NULL;
-    }
     if (error_p) result_code = 1;
     if (mir_cond_signal (&done_signal)) parallel_error ("error in cond signal");
     if (mir_mutex_unlock (&queue_mutex)) parallel_error ("error in mutex unlock");
@@ -710,7 +708,6 @@ int main (int argc, char *argv[], char *env[]) {
       }
     }
     curr_input.curr_char = 0;
-    curr_input.code_container = NULL;
     if (curr_input.code != NULL) { /* command line script: */
       if (i > 0) break;
       curr_input.input_name = COMMAND_LINE_SOURCE_NAME;
@@ -748,6 +745,7 @@ int main (int argc, char *argv[], char *env[]) {
         curr_input.code_len++; /* include zero byte */
         MIR_scan_string (main_ctx, (char *) curr_input.code);
       }
+      VARR_DESTROY (uint8_t, curr_input.code_container);
       if (!options.prepro_only_p && !options.syntax_only_p
           && ((bin_p && !options.object_p && options.asm_p)
               || (!bin_p && !options.asm_p && options.object_p))) {
@@ -765,10 +763,6 @@ int main (int argc, char *argv[], char *env[]) {
     } else {
       curr_input.options = options;
       send_to_compile (&curr_input);
-    }
-    if (curr_input.code_container != NULL) {
-      VARR_DESTROY (uint8_t, curr_input.code_container);
-      curr_input.code_container = NULL;
     }
     curr_input.code = NULL; /* no cmd line input anymore */
   }
