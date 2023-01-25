@@ -6865,7 +6865,7 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
   size_t iter, nops, i, curr_insn_num;
   MIR_op_t temp_op, *op_ref;
   MIR_reg_t early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int out_p, change_p, block_change_p;
+  int out_p, change_p, block_change_p, label_only_p;
   long insns_num = 0, deleted_insns_num = 0;
 
   hreg_refs_addr = VARR_ADDR (hreg_ref_t, hreg_refs);
@@ -6876,12 +6876,27 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
       block_change_p = FALSE;
       curr_bb_hreg_ref_age++;
       last_mem_ref_insn_num = 0; /* means undef */
+      label_only_p = TRUE;
       for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns), curr_insn_num = 1; bb_insn != NULL;
            bb_insn = next_bb_insn, curr_insn_num++) {
         next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
         insn = bb_insn->insn;
         nops = MIR_insn_nops (ctx, insn);
-        if (insn->code != MIR_LABEL) insns_num++;
+        if (insn->code == MIR_LABEL) {
+	  if (!label_only_p) {
+	    /* We can move insns with temp hard regs inside BB. It
+	       is important to remove labels inside BB as we use labels to find BBs for lazy BB
+	       generation and temp regs can be used between BBs in this generation mode. */
+	    DEBUG (2, {
+		fprintf (debug_file, "  Remove label inside BB ");
+		print_bb_insn (gen_ctx, bb_insn, TRUE);
+	      });
+	    gen_delete_insn (gen_ctx, insn);
+	  }
+	  continue;
+	}
+	label_only_p = FALSE;
+	insns_num++;
         DEBUG (2, {
           fprintf (debug_file, "  Processing ");
           print_bb_insn (gen_ctx, bb_insn, TRUE);
