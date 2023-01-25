@@ -2,6 +2,8 @@
    Copyright (C) 2020-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
+DEF_VARR (uint8_t);
+
 #include "mir-ppc64.h"
 
 #include <limits.h>
@@ -72,7 +74,6 @@ static MIR_insn_code_t get_ext_code (MIR_type_t type) {
 }
 
 DEF_VARR (int);
-DEF_VARR (uint8_t);
 DEF_VARR (uint64_t);
 
 struct insn_pattern_info {
@@ -82,8 +83,10 @@ struct insn_pattern_info {
 typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
+enum branch_type {BRCOND, JUMP, BCTR};
 struct label_ref {
-  int abs_addr_p, short_addr_p;
+  int abs_addr_p;
+  enum branch_type branch_type;
   size_t label_val_disp;
   union {
     MIR_label_t label;
@@ -2131,7 +2134,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           op = insn->ops[0];
           gen_assert (op.mode == MIR_OP_LABEL);
           lr.abs_addr_p = FALSE;
-          lr.short_addr_p = TRUE;
+          lr.branch_type = BRCOND;
           lr.label_val_disp = 0;
 	  if (jump_addrs == NULL)
 	    lr.u.label = op.u.label;
@@ -2156,7 +2159,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           --p;
           op = insn->ops[insn->code != MIR_CALL ? 0 : 1];
           gen_assert (op.mode == MIR_OP_LABEL);
-          lr.abs_addr_p = lr.short_addr_p = FALSE;
+          lr.abs_addr_p = FALSE;
+	  lr.branch_type = JUMP;
           lr.label_val_disp = 0;
 	  if (jump_addrs == NULL)
 	    lr.u.label = op.u.label;
@@ -2332,7 +2336,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   for (size_t i = 1; i < insn->nops; i++) {
     gen_assert (insn->ops[i].mode == MIR_OP_LABEL);
     lr.abs_addr_p = TRUE;
-    lr.short_addr_p = FALSE;
+    lr.branch_type = BCTR; /* the value does not matter */
     lr.label_val_disp = VARR_LENGTH (uint8_t, result_code);
     if (jump_addrs == NULL)
       lr.u.label = insn->ops[i].u.label;
@@ -2428,7 +2432,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
                    (int64_t) get_label_disp (gen_ctx, lr.u.label));
         VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
-      } else if (lr.short_addr_p) { /* 14-bit relative addressing */
+      } else if (lr.branch_type == BRCOND) { /* 14-bit relative addressing */
         int64_t offset = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
 
         gen_assert ((offset & 0x3) == 0);
@@ -2497,8 +2501,8 @@ static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
 }
 
 static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
-  /* add nop for possible conversion short branch to branch and jump */
-  if (short_bb_branch_p) put_uint32 (gen_ctx, TARGET_NOP);
+  /* add nops for possible conversion short branch or jump to branch and bctr */
+  for (int i = 0; i < (short_bb_branch_p ? 13 : 6); i++) put_uint32 (gen_ctx, TARGET_NOP);
   while (VARR_LENGTH (uint8_t, result_code) % 16 != 0) /* Align the pool */
     VARR_PUSH (uint8_t, result_code, 0);
   *len = VARR_LENGTH (uint8_t, result_code);
@@ -2510,28 +2514,40 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
   int64_t offset = (int64_t) addr - (int64_t) (base + lr->label_val_disp);
   int32_t rel32 = offset;
 
-  gen_assert ((offset & 0x3) == 0);
-  /* check max 24-bit offset with possible branch conversion (see offset - 8): */
-  if (lr->abs_addr_p || !((((offset < 0 ? -offset : offset) + 8) & ~(int64_t) 0x1ffffff) == 0)) {
-    fprintf (stderr, "too big offset (%lld) in setup_rel", (long long) offset);
-    exit (1);
-  }
+  gen_assert ((offset & 0x3) == 0 && !lr->abs_addr_p);
   /* ??? thread safe: */
   uint32_t *insn_ptr = (uint32_t *) (base + lr->label_val_disp), insn = *insn_ptr;
-  if (!lr->short_addr_p) {
-    insn = (insn & ~0x3ffffff) | (((offset / 4) & 0xffffff) << 2);
-  } else if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) == 0) { /* 14 bit offset */
-    insn = (insn & ~0xffff) | (((offset / 4) & 0x3fff) << 2);
-  } else {
-    insn = (insn & ~0xffff) | (2 << 2); /* skip jump */
-    uint32_t *nop_ptr = (uint32_t *) (base + lr->label_val_disp + 8);
-    gen_assert (TARGET_NOP == *nop_ptr || (*nop_ptr >> 26) == PPC_JUMP_OPCODE); /* nop or jump */
-    uint32_t jump_insn = (PPC_JUMP_OPCODE << (32 - 6)) /* jump opcode */ | ((((offset - 8) / 4) & 0xffffff) << 2);
-    _MIR_change_code (ctx, (uint8_t *) nop_ptr, (uint8_t *) &jump_insn, 4);
-    lr->short_addr_p = FALSE;
-    lr->label_val_disp += 8;
+  if (lr->branch_type == BRCOND) {
+    if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) == 0) { /* a valid branch offset */
+      insn = (insn & ~0xffff) | (((offset / 4) & 0x3fff) << 2);
+      _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+      return;
+    }
+    insn = (insn & ~0xffff) | (4 * 8); /* skip next jump and 6 nops for it */
+    _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+    insn = PPC_JUMP_OPCODE << (32 - 6);
+    insn_ptr += 8;
+    lr->branch_type = JUMP;
+    lr->label_val_disp += 4 * 8;
+    offset -= 4 * 8;
   }
-  _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+  if (lr->branch_type == JUMP) {
+    if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0) { /* a valid jump offset */
+      insn = (insn & ~0x3ffffff) | (((offset / 4) & 0xffffff) << 2);
+      _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+      return;
+    }
+    lr->branch_type = BCTR;
+  }
+  gen_assert (lr->branch_type == BCTR);
+  VARR_TRUNC (uint8_t, result_code, 0);
+  ppc64_gen_address (result_code, 12, addr); /* r12 = addr */
+  insn = 0x7d8903a6; /* mtctr r12 */
+  put_uint32 (gen_ctx, insn);
+  insn = 0x4e800420; /* bctr */
+  put_uint32 (gen_ctx, insn);
+  _MIR_change_code (ctx, (uint8_t *) insn_ptr, VARR_ADDR (uint8_t, result_code),
+		    VARR_LENGTH (uint8_t, result_code));
 }
 
 static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
