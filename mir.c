@@ -534,7 +534,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   func_regs_t func_regs = func->internal;
   MIR_module_t func_module;
   reg_desc_t rd, *rd_ref;
-  size_t i, rdn, tab_rdn;
+  size_t rdn, tab_rdn;
   int htab_res;
   MIR_reg_t hr;
 
@@ -594,7 +594,6 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
 
 static void func_regs_finish (MIR_context_t ctx, MIR_func_t func) {
   func_regs_t func_regs = func->internal;
-  char *name;
 
   VARR_DESTROY (reg_desc_t, func_regs->reg_descs);
   HTAB_DESTROY (size_t, func_regs->name2rdn_tab);
@@ -2934,7 +2933,6 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
   MIR_proto_t proto;
-  MIR_var_t var;
   MIR_data_t data;
   MIR_ref_data_t ref_data;
   MIR_expr_data_t expr_data;
@@ -3820,7 +3818,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   int non_top_alloca_p, func_top_alloca_used_p, called_func_top_alloca_used_p;
   int64_t alloca_size, alloca_align, max_func_top_alloca_align;
   int64_t init_func_top_alloca_size, curr_func_top_alloca_size, max_func_top_alloca_size;
-  size_t i, actual_nops, nargs, arg_num;
+  size_t i, nargs, arg_num;
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, temp_reg;

@@ -2235,7 +2235,6 @@ static void build_ssa (gen_ctx_t gen_ctx, int rename_p) {
   bb_t bb;
   bb_insn_t bb_insn, phi;
   size_t i, insns_num;
-  bitmap_iterator_t bi;
 
   gen_assert (VARR_LENGTH (bb_insn_t, arg_bb_insns) == 0
               && VARR_LENGTH (bb_insn_t, undef_insns) == 0);
@@ -4644,7 +4643,7 @@ static void dse (gen_ctx_t gen_ctx) {
 static int pressure_relief (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, before;
+  MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn, use;
   ssa_edge_t se;
   int moved_p = FALSE;
@@ -4709,7 +4708,7 @@ static void jump_opt (gen_ctx_t gen_ctx) {
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     edge_t e, out_e;
     bb_insn_t label_bb_insn, last_label_bb_insn, bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
-    MIR_insn_t insn, new_insn, next_insn, last_label;
+    MIR_insn_t insn, next_insn, last_label;
 
     next_bb = DLIST_NEXT (bb_t, bb);
     if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL

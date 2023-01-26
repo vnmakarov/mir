@@ -3690,7 +3690,6 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
         int res;
         size_t i, len;
         VARR (token_t) * arg;
-        const char *name;
 
         res = 0;
         if ((mc = try_param_macro_call (c2m_ctx, m, t)) != NULL) {
@@ -13332,7 +13331,6 @@ static void gen_mir_protos (c2m_ctx_t c2m_ctx) {
   node_t call, func, op1;
   struct type *type;
   struct func_type *func_type;
-  int jcall_p;
 
   curr_mir_proto_num = 0;
   HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq, NULL);
@@ -13970,7 +13968,6 @@ static int top_level_getc (c2m_ctx_t c2m_ctx) { return c_getc (c_getc_data); }
 int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func) (void *),
                    void *getc_data, const char *source_name, FILE *output_file) {
   struct c2m_ctx *c2m_ctx = *c2m_ctx_loc (ctx);
-  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   double start_time = real_usec_time ();
   node_t r;
   unsigned n_error_before;

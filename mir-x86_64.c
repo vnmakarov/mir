@@ -745,7 +745,7 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   res = _MIR_publish_code (ctx, pattern, sizeof (pattern));
   _MIR_update_code (ctx, res, 1, 2, bb_version);
   disp = (char *) handler - ((char *) res + sizeof (pattern));
-  _MIR_change_code (ctx, (char *) res + 11, (uint8_t *) &disp, 4);
+  _MIR_change_code (ctx, (uint8_t *) res + 11, (uint8_t *) &disp, 4);
   return res;
 }
 
@@ -753,9 +753,9 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
 void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   uint8_t op = 0xe9; /* jmpq */
   int32_t disp;
-  _MIR_change_code (ctx, (char *) thunk, &op, 1); /* jmpq <disp32> */
+  _MIR_change_code (ctx, (uint8_t *) thunk, &op, 1); /* jmpq <disp32> */
   disp = (char *) to - ((char *) thunk + 5);
-  _MIR_change_code (ctx, (char *) thunk + 1, (uint8_t *) &disp, 4);
+  _MIR_change_code (ctx, (uint8_t *) thunk + 1, (uint8_t *) &disp, 4);
 }
 
 static const uint8_t save_pat2[] = {
@@ -866,8 +866,6 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
     };
   size_t data_offset = 9, hook_offset = 19;
 #endif
-  static const uint8_t push_rax[] = {0x50, /*push   %rax */};
-  static const uint8_t pop_rax[] = {0x58, /*pop   %rax */};
   uint8_t *addr;
   VARR (uint8_t) * code;
   void *res;
