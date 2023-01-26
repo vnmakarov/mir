@@ -475,9 +475,8 @@ struct bb {
      optional exit bb.  There is always at least one edge.  */
   DLIST (out_edge_t) out_edges;
   DLIST (bb_insn_t) bb_insns;
-  unsigned char call_p; /* used in mem avail calculation, true if there is a call in BB */
-  unsigned char flag;   /* used in different calculation */
-  size_t freq;
+  unsigned char call_p;        /* used in mem avail calculation, true if there is a call in BB */
+  unsigned char flag;          /* used in different calculation */
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
   bitmap_t dom_in, dom_out;    /* additional var bitmaps */
   loop_node_t loop_node;
@@ -503,32 +502,10 @@ DEF_DLIST_CODE (loop_node_t, children_link);
 
 DEF_DLIST_LINK (func_cfg_t);
 
-typedef struct mv *mv_t;
-typedef mv_t dst_mv_t;
-typedef mv_t src_mv_t;
-
-DEF_DLIST_LINK (mv_t);
-DEF_DLIST_LINK (dst_mv_t);
-DEF_DLIST_LINK (src_mv_t);
-
-struct mv {
-  bb_insn_t bb_insn;
-  size_t freq;
-  DLIST_LINK (mv_t) mv_link;
-  DLIST_LINK (dst_mv_t) dst_link;
-  DLIST_LINK (src_mv_t) src_link;
-};
-
-DEF_DLIST (mv_t, mv_link);
-DEF_DLIST (dst_mv_t, dst_link);
-DEF_DLIST (src_mv_t, src_link);
-
 struct reg_info {
   long freq;
   /* The following members are defined and used only in RA */
   size_t live_length; /* # of program points where breg lives */
-  DLIST (dst_mv_t) dst_moves;
-  DLIST (src_mv_t) src_moves;
 };
 
 typedef struct reg_info reg_info_t;
@@ -545,12 +522,10 @@ typedef struct {
 
 struct func_cfg {
   MIR_reg_t min_reg, max_reg;
-  uint32_t non_conflicting_moves; /* # of moves with non-conflicting regs */
   uint32_t curr_bb_insn_index;
   VARR (reg_info_t) * breg_info; /* bregs */
   bitmap_t call_crossed_bregs;
   DLIST (bb_t) bbs;
-  DLIST (mv_t) used_moves, free_moves;
   loop_node_t root_loop_node;
 };
 
@@ -1368,22 +1343,6 @@ static void rename_op_reg (gen_ctx_t gen_ctx, MIR_op_t *op_ref, MIR_reg_t reg, M
   });
 }
 
-static mv_t get_free_move (gen_ctx_t gen_ctx) {
-  mv_t mv;
-
-  if ((mv = DLIST_HEAD (mv_t, curr_cfg->free_moves)) != NULL)
-    DLIST_REMOVE (mv_t, curr_cfg->free_moves, mv);
-  else
-    mv = gen_malloc (gen_ctx, sizeof (struct mv));
-  DLIST_APPEND (mv_t, curr_cfg->used_moves, mv);
-  return mv;
-}
-
-static void free_move (gen_ctx_t gen_ctx, mv_t mv) {
-  DLIST_REMOVE (mv_t, curr_cfg->used_moves, mv);
-  DLIST_APPEND (mv_t, curr_cfg->free_moves, mv);
-}
-
 static void update_tied_regs (gen_ctx_t gen_ctx, MIR_reg_t reg) {
   if (reg == 0 || MIR_reg_hard_reg_name (gen_ctx->ctx, reg, curr_func_item->u.func) == NULL) return;
   bitmap_set_bit_p (tied_regs, reg);
@@ -1402,12 +1361,9 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   bb_t bb, prev_bb, entry_bb, exit_bb, label_bb;
 
   DLIST_INIT (bb_t, curr_cfg->bbs);
-  DLIST_INIT (mv_t, curr_cfg->used_moves);
-  DLIST_INIT (mv_t, curr_cfg->free_moves);
   curr_cfg->curr_bb_insn_index = 0;
   curr_cfg->max_reg = 0;
   curr_cfg->min_reg = 0;
-  curr_cfg->non_conflicting_moves = 0;
   curr_cfg->root_loop_node = NULL;
   curr_bb_index = 0;
   for (i = 0; i < VARR_LENGTH (MIR_var_t, func->vars); i++) {
@@ -1505,7 +1461,6 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   bb_insn_t bb_insn;
   bb_t bb, next_bb;
-  mv_t mv, next_mv;
 
   gen_assert (curr_func_item->item_type == MIR_func_item && curr_func_item->data != NULL);
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
@@ -1521,14 +1476,6 @@ static void destroy_func_cfg (gen_ctx_t gen_ctx) {
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
     delete_bb (gen_ctx, bb);
-  }
-  for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
-    next_mv = DLIST_NEXT (mv_t, mv);
-    free (mv);
-  }
-  for (mv = DLIST_HEAD (mv_t, curr_cfg->free_moves); mv != NULL; mv = next_mv) {
-    next_mv = DLIST_NEXT (mv_t, mv);
-    free (mv);
   }
   VARR_DESTROY (reg_info_t, curr_cfg->breg_info);
   bitmap_destroy (curr_cfg->call_crossed_bregs);
@@ -4878,24 +4825,21 @@ static int int_var_type_p (gen_ctx_t gen_ctx, MIR_reg_t var) {
     MIR_reg_type (gen_ctx->ctx, var2reg (gen_ctx, var), curr_func_item->u.func));
 }
 
-static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn, int moves_p,
-                                         uint32_t *mvs_num) {
+static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_insn) {
   bb_t bb = get_insn_bb (gen_ctx, bb_tail_insn);
   MIR_insn_t insn;
   size_t niter, passed_mem_num, bb_freq;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int op_num, out_p, mem_p, int_p = FALSE;
   int bb_int_pressure, bb_fp_pressure;
-  mv_t mv;
   reg_info_t *breg_infos;
   insn_var_iterator_t insn_var_iter;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
-  gen_assert (!moves_p || optimize_level != 0);
   breg_infos = VARR_ADDR (reg_info_t, curr_cfg->breg_info);
   bb_freq = 1;
-  if (moves_p)
+  if (optimize_level != 0)
     for (int i = bb_loop_level (bb); i > 0; i--)
       if (bb_freq < SIZE_MAX / 8) bb_freq *= 5;
   bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
@@ -4957,43 +4901,21 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
       else if ((reg_args = ((insn_data_t) insn->data)->u.call_hard_reg_args) != NULL)
         bitmap_ior (bb->live_gen, bb->live_gen, reg_args);
     }
-    if (moves_p && move_p (insn)) {
-      mv = get_free_move (gen_ctx);
-      mv->bb_insn = insn->data;
-      mv->freq = bb_freq;
-      if (insn->ops[0].mode == MIR_OP_REG)
-        DLIST_APPEND (dst_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[0].u.reg)].dst_moves, mv);
-      if (insn->ops[1].mode == MIR_OP_REG)
-        DLIST_APPEND (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
-      (*mvs_num)++;
-      DEBUG (2, {
-        fprintf (debug_file, "  move with freq %10lu:", (unsigned long) mv->freq);
-        MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
-      });
-    }
   }
   return insn;
 }
 
-static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
+static void initiate_live_info (gen_ctx_t gen_ctx) {
   MIR_reg_t nregs, n;
-  mv_t mv, next_mv;
   reg_info_t ri;
-  uint32_t mvs_num = 0;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
-  for (mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = next_mv) {
-    next_mv = DLIST_NEXT (mv_t, mv);
-    free_move (gen_ctx, mv);
-  }
   VARR_TRUNC (reg_info_t, curr_cfg->breg_info, 0);
   nregs = get_nregs (gen_ctx);
   for (n = 0; n < nregs; n++) {
     ri.freq = 0;
     ri.live_length = 0;
-    DLIST_INIT (dst_mv_t, ri.dst_moves);
-    DLIST_INIT (src_mv_t, ri.src_moves);
     VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
   }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
@@ -5007,8 +4929,7 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   if (global_hard_regs != NULL)
     bitmap_copy (DLIST_EL (bb_t, curr_cfg->bbs, 1)->live_out, global_hard_regs); /* exit bb */
   for (MIR_insn_t tail = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns); tail != NULL;)
-    tail = initiate_bb_live_info (gen_ctx, tail, moves_p, &mvs_num);
-  if (moves_p) curr_cfg->non_conflicting_moves = mvs_num;
+    tail = initiate_bb_live_info (gen_ctx, tail);
 }
 
 static void update_bb_pressure (gen_ctx_t gen_ctx) {
@@ -5025,8 +4946,8 @@ static void update_bb_pressure (gen_ctx_t gen_ctx) {
   }
 }
 
-static void calculate_func_cfg_live_info (gen_ctx_t gen_ctx, int moves_p) {
-  initiate_live_info (gen_ctx, moves_p);
+static void calculate_func_cfg_live_info (gen_ctx_t gen_ctx) {
+  initiate_live_info (gen_ctx);
   solve_dataflow (gen_ctx, FALSE, live_con_func_0, live_con_func_n, live_trans_func);
   if (optimize_level != 0) update_bb_pressure (gen_ctx);
 }
@@ -5580,6 +5501,11 @@ static void fast_assign (gen_ctx_t gen_ctx) {
 
 /* Aggressive register coalescing */
 
+typedef struct mv {
+  bb_insn_t bb_insn;
+  size_t freq;
+} mv_t;
+
 DEF_VARR (mv_t);
 
 struct coalesce_ctx {
@@ -5599,8 +5525,8 @@ static int substitute_reg (gen_ctx_t gen_ctx, MIR_reg_t *reg) {
 }
 
 static int mv_freq_cmp (const void *v1p, const void *v2p) {
-  mv_t mv1 = *(mv_t const *) v1p;
-  mv_t mv2 = *(mv_t const *) v2p;
+  const mv_t *mv1 = (const mv_t *) v1p;
+  const mv_t *mv2 = (const mv_t *) v2p;
 
   if (mv1->freq < mv2->freq) return -1;
   if (mv1->freq > mv2->freq) return 1;
@@ -5651,16 +5577,24 @@ static void coalesce (gen_ctx_t gen_ctx) {
     VARR_PUSH (MIR_reg_t, first_coalesced_reg, i);
     VARR_PUSH (MIR_reg_t, next_coalesced_reg, i);
   }
-  for (mv_t mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = DLIST_NEXT (mv_t, mv)) {
-    MIR_insn_t insn = mv->bb_insn->insn;
-    if (insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG)
-      VARR_PUSH (mv_t, moves, mv);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      insn = bb_insn->insn;
+      if (move_p (insn) && insn->ops[0].mode == MIR_OP_REG && insn->ops[1].mode == MIR_OP_REG) {
+        mv.bb_insn = bb_insn;
+        mv.freq = 1;
+        for (int i = bb_loop_level (bb); i > 0; i--)
+          if (mv.freq < SIZE_MAX / 8) mv.freq *= 5;
+        VARR_PUSH (mv_t, moves, mv);
+      }
+    }
   }
   qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
   /* Coalesced moves, most frequently executed first. */
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
-    bb_insn = mv->bb_insn;
+    bb_insn = mv.bb_insn;
     insn = bb_insn->insn;
     dreg = insn->ops[0].u.reg;
     sreg = insn->ops[1].u.reg;
@@ -5669,7 +5603,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
       coalesced_moves++;
       DEBUG (2, {
         fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llud):", sreg, dreg,
-                 (unsigned long long) mv->freq);
+                 (unsigned long long) mv.freq);
         print_bb_insn (gen_ctx, bb_insn, TRUE);
       });
     } else {
@@ -5680,7 +5614,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
         coalesced_moves++;
         DEBUG (2, {
           fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llu):", sreg, dreg,
-                   (unsigned long long) mv->freq);
+                   (unsigned long long) mv.freq);
           print_bb_insn (gen_ctx, bb_insn, TRUE);
         });
         merge_regs (gen_ctx, sreg, dreg);
@@ -5695,15 +5629,12 @@ static void coalesce (gen_ctx_t gen_ctx) {
   }
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
-    bb_insn = mv->bb_insn;
+    bb_insn = mv.bb_insn;
     insn = bb_insn->insn;
     dreg = insn->ops[0].u.reg;
     sreg = insn->ops[1].u.reg;
     first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, sreg);
     if (first_reg != VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) continue;
-    DLIST_REMOVE (dst_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[0].u.reg)].dst_moves, mv);
-    DLIST_REMOVE (src_mv_t, breg_infos[reg2breg (gen_ctx, insn->ops[1].u.reg)].src_moves, mv);
-    free_move (gen_ctx, mv);
     DEBUG (2, {
       fprintf (debug_file, "Deleting coalesced move ");
       MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -6160,15 +6091,11 @@ static void rewrite (gen_ctx_t gen_ctx) {
   }
   DEBUG (1, {
     fprintf (debug_file,
-             "%5lu deleted RA noop moves out of %lu non-conflicting moves "
-             "(%.1f%%), "
-             "out of %lu all moves (%.1f%%), out of %lu all insns (%.1f%%)\n",
-             (unsigned long) deleted_movs_num, (unsigned long) curr_cfg->non_conflicting_moves,
-             curr_cfg->non_conflicting_moves == 0
-               ? 100.0
-               : deleted_movs_num * 100.0 / curr_cfg->non_conflicting_moves,
-             (unsigned long) movs_num, deleted_movs_num * 100.0 / movs_num,
-             (unsigned long) insns_num, deleted_movs_num * 100.0 / insns_num);
+             "%5lu deleted RA noop moves out of %lu all moves (%.1f%%), out of %lu all insns "
+             "(%.1f%%)\n",
+             (unsigned long) deleted_movs_num, (unsigned long) movs_num,
+             deleted_movs_num * 100.0 / movs_num, (unsigned long) insns_num,
+             deleted_movs_num * 100.0 / insns_num);
   });
   if (global_hard_regs != NULL) /* we should not save/restore hard regs used by globals */
     bitmap_and_compl (func_used_hard_regs, func_used_hard_regs, global_hard_regs);
@@ -7225,7 +7152,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (optimize_level != 0) build_loop_tree (gen_ctx);
-  calculate_func_cfg_live_info (gen_ctx, optimize_level != 0);
+  calculate_func_cfg_live_info (gen_ctx);
   DEBUG (2, {
     add_bb_insn_dead_vars (gen_ctx);
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
@@ -7247,7 +7174,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
   if (optimize_level >= 1) {
-    calculate_func_cfg_live_info (gen_ctx, FALSE);
+    calculate_func_cfg_live_info (gen_ctx);
     add_bb_insn_dead_vars (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR before combine:\n");
