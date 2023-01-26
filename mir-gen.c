@@ -1421,7 +1421,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   insn = DLIST_HEAD (MIR_insn_t, func->insns);
   /* To deal with special cases like adding insns before call in
      machinize or moving invariant out of loop: */
-  MIR_prepend_insn (ctx, curr_func_item, MIR_new_label (ctx));
+  MIR_prepend_insn (ctx, curr_func_item, _MIR_new_label (ctx));
   insn = DLIST_HEAD (MIR_insn_t, func->insns);
   bb = create_bb (gen_ctx, NULL);
   add_bb (gen_ctx, bb);
@@ -1626,7 +1626,7 @@ static MIR_insn_t get_insn_label (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   MIR_insn_t label;
 
   if (insn->code == MIR_LABEL) return insn;
-  label = MIR_new_label (ctx);
+  label = _MIR_new_label (ctx);
   MIR_insert_insn_before (ctx, curr_func_item, insn, label);
   add_new_bb_insn (gen_ctx, label, ((bb_insn_t) insn->data)->bb, FALSE);
   return label;
@@ -2149,9 +2149,9 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, int sep, size_t 
   sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   if (hard_reg_name == NULL) {
-    new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
+    new_reg = _MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name));
   } else {
-    new_reg = MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name);
+    new_reg = _MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name);
     bitmap_set_bit_p (tied_regs, new_reg);
   }
   update_min_max_reg (gen_ctx, new_reg);

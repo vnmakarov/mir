@@ -1431,6 +1431,23 @@ MIR_reg_t MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_
   return new_func_reg (ctx, func, type, name, hard_reg_name);
 }
 
+/* Two parallel version functions for the generator: */
+MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                             const char *name) {
+  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
+  MIR_reg_t reg = MIR_new_func_reg (ctx, func, type, name);
+  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
+  return reg;
+}
+
+MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                    const char *name, const char *hard_reg_name) {
+  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
+  MIR_reg_t reg = MIR_new_global_func_reg (ctx, func, type, name, hard_reg_name);
+  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
+  return reg;
+}
+
 static reg_desc_t *find_rd_by_name (MIR_context_t ctx, const char *name, MIR_func_t func) {
   func_regs_t func_regs = func->internal;
   size_t rdn, temp_rdn;
@@ -2237,6 +2254,13 @@ static MIR_insn_t create_label (MIR_context_t ctx, int64_t label_num) {
 }
 
 MIR_insn_t MIR_new_label (MIR_context_t ctx) { return create_label (ctx, ++curr_label_num); }
+
+MIR_insn_t _MIR_new_label (MIR_context_t ctx) {
+  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
+  MIR_insn_t label = MIR_new_label (ctx);
+  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
+  return label;
+}
 
 void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn) { free (insn); }
 
@@ -3997,7 +4021,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
         MIR_insert_insn_after (ctx, func_item, call, new_insn);
       }
       if (head_func_insn == new_called_func_top_alloca)
-	head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);
+        head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);
       MIR_remove_insn (ctx, func_item, new_called_func_top_alloca);
     }
     if (head_func_insn == call) head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);

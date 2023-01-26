@@ -345,7 +345,7 @@ typedef struct MIR_func {
   void *machine_code;             /* address of generated machine code or NULL */
   void *call_addr; /* address to call the function, it can be the same as machine_code */
   void *internal;  /* internal data structure */
-} * MIR_func_t;
+} *MIR_func_t;
 
 typedef struct MIR_proto {
   const char *name;
@@ -353,7 +353,7 @@ typedef struct MIR_proto {
   MIR_type_t *res_types;   /* != MIR_T_UNDEF */
   char vararg_p;           /* flag of variable number of arguments */
   VARR (MIR_var_t) * args; /* args name can be NULL */
-} * MIR_proto_t;
+} *MIR_proto_t;
 
 typedef struct MIR_data {
   const char *name; /* can be NULL */
@@ -363,25 +363,25 @@ typedef struct MIR_data {
     long double d; /* for alignment of temporary literals */
     uint8_t els[1];
   } u;
-} * MIR_data_t;
+} *MIR_data_t;
 
 typedef struct MIR_ref_data {
   const char *name;    /* can be NULL */
   MIR_item_t ref_item; /* base */
   int64_t disp;        /* disp relative to base */
   void *load_addr;
-} * MIR_ref_data_t;
+} *MIR_ref_data_t;
 
 typedef struct MIR_expr_data {
   const char *name;     /* can be NULL */
   MIR_item_t expr_item; /* a special function can be called during linking */
   void *load_addr;
-} * MIR_expr_data_t;
+} *MIR_expr_data_t;
 
 typedef struct MIR_bss {
   const char *name; /* can be NULL */
   uint64_t len;
-} * MIR_bss_t;
+} *MIR_bss_t;
 
 typedef struct MIR_module *MIR_module_t;
 
@@ -654,6 +654,11 @@ extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
 extern void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
+extern MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                    const char *name);
+extern MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+                                           const char *name, const char *hard_reg_name);
+extern MIR_insn_t _MIR_new_label (MIR_context_t ctx);
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
