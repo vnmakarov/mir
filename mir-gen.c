@@ -526,9 +526,6 @@ DEF_DLIST (src_mv_t, src_link);
 struct reg_info {
   long freq;
   /* The following members are defined and used only in RA */
-  long thread_freq; /* thread accumulated freq, defined for first thread breg */
-  /* first/next breg of the same thread, MIR_MAX_REG_NUM is end mark  */
-  MIR_reg_t thread_first, thread_next;
   size_t live_length; /* # of program points where breg lives */
   DLIST (dst_mv_t) dst_moves;
   DLIST (src_mv_t) src_moves;
@@ -3755,7 +3752,7 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
 
   DEBUG (2, {
     fprintf (debug_file, "  BB%lu is unreachable and removed\n", (unsigned long) bb->index);
-    });
+  });
   for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
     next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
     insn = bb_insn->insn;
@@ -4993,10 +4990,8 @@ static void initiate_live_info (gen_ctx_t gen_ctx, int moves_p) {
   VARR_TRUNC (reg_info_t, curr_cfg->breg_info, 0);
   nregs = get_nregs (gen_ctx);
   for (n = 0; n < nregs; n++) {
-    ri.freq = ri.thread_freq = 0;
+    ri.freq = 0;
     ri.live_length = 0;
-    ri.thread_first = n;
-    ri.thread_next = MIR_MAX_REG_NUM;
     DLIST_INIT (dst_mv_t, ri.dst_moves);
     DLIST_INIT (src_mv_t, ri.src_moves);
     VARR_PUSH (reg_info_t, curr_cfg->breg_info, ri);
@@ -5773,40 +5768,10 @@ static void finish_coalesce (gen_ctx_t gen_ctx) {
 
 /* Priority RA */
 
-static void process_move_to_form_thread (gen_ctx_t gen_ctx, mv_t mv) {
-  MIR_op_t op1 = mv->bb_insn->insn->ops[0], op2 = mv->bb_insn->insn->ops[1];
-  MIR_reg_t breg1, breg2, breg1_first, breg2_first, last;
-
-  if (op1.mode != MIR_OP_REG || op2.mode != MIR_OP_REG) return;
-  breg1 = reg2breg (gen_ctx, op1.u.reg);
-  breg2 = reg2breg (gen_ctx, op2.u.reg);
-  breg1_first = curr_breg_infos[breg1].thread_first;
-  breg2_first = curr_breg_infos[breg2].thread_first;
-  if (breg1_first != breg2_first) {
-    for (last = breg2_first; curr_breg_infos[last].thread_next != MIR_MAX_REG_NUM;
-         last = curr_breg_infos[last].thread_next)
-      curr_breg_infos[last].thread_first = breg1_first;
-    curr_breg_infos[last].thread_first = breg1_first;
-    curr_breg_infos[last].thread_next = curr_breg_infos[breg1_first].thread_next;
-    curr_breg_infos[breg1_first].thread_next = breg2_first;
-    if (curr_breg_infos[breg1_first].thread_freq
-        < LONG_MAX - curr_breg_infos[breg2_first].thread_freq)
-      curr_breg_infos[breg1_first].thread_freq += curr_breg_infos[breg2_first].thread_freq;
-    else
-      curr_breg_infos[breg1_first].thread_freq = LONG_MAX;
-  }
-  if (curr_breg_infos[breg1_first].thread_freq < 2 * mv->freq)
-    curr_breg_infos[breg1_first].thread_freq = 0;
-  else
-    curr_breg_infos[breg1_first].thread_freq -= 2 * mv->freq;
-  gen_assert (curr_breg_infos[breg1_first].thread_freq >= 0);
-}
-
 static int breg_info_compare_func (const void *a1, const void *a2) {
   const breg_info_t *breg_info1 = (const breg_info_t *) a1, *breg_info2 = (const breg_info_t *) a2;
   MIR_reg_t breg1 = breg_info1->breg, breg2 = breg_info2->breg;
   reg_info_t *breg_infos = breg_info1->breg_infos;
-  MIR_reg_t t1 = breg_infos[breg1].thread_first, t2 = breg_infos[breg2].thread_first;
   long diff;
 
   gen_assert (breg_infos == breg_info2->breg_infos);
@@ -5815,9 +5780,7 @@ static int breg_info_compare_func (const void *a1, const void *a2) {
   } else if (breg_info2->tied_reg_p) {
     return 1;
   }
-  if ((diff = breg_infos[t2].thread_freq - breg_infos[t1].thread_freq) != 0) return diff;
-  if (t1 < t2) return -1;
-  if (t2 < t1) return 1;
+  if ((diff = breg_infos[breg2].freq - breg_infos[breg1].freq) != 0) return diff;
   if (breg_infos[breg2].live_length < breg_infos[breg1].live_length) return -1;
   if (breg_infos[breg1].live_length < breg_infos[breg2].live_length) return 1;
   return breg1 < breg2 ? -1 : 1; /* make sort stable */
@@ -5893,10 +5856,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   VARR_TRUNC (MIR_reg_t, breg_renumber, 0);
   for (i = 0; i < nregs; i++) {
     VARR_PUSH (MIR_reg_t, breg_renumber, MIR_NON_HARD_REG);
-    curr_breg_infos[i].thread_freq = curr_breg_infos[i].freq;
   }
-  for (mv_t mv = DLIST_HEAD (mv_t, curr_cfg->used_moves); mv != NULL; mv = DLIST_NEXT (mv_t, mv))
-    process_move_to_form_thread (gen_ctx, mv);
   /* min_reg, max_reg for func */
   VARR_TRUNC (breg_info_t, sorted_bregs, 0);
   breg_info.breg_infos = curr_breg_infos;
@@ -6035,15 +5995,9 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       }
     }
     DEBUG (2, {
-      MIR_reg_t thread_breg = curr_breg_infos[breg].thread_first;
-
-      fprintf (debug_file,
-               " Assigning to %s:var=%3u, breg=%3u (freq %-3ld), thread breg=%3u (freq %-3ld) "
-               "-- "
-               "%lu\n",
+      fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
                MIR_reg_name (gen_ctx->ctx, reg, func), reg2var (gen_ctx, reg), breg,
-               curr_breg_infos[breg].freq, thread_breg, curr_breg_infos[thread_breg].thread_freq,
-               (unsigned long) best_loc);
+               curr_breg_infos[breg].freq, (unsigned long) best_loc);
     });
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
