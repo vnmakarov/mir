@@ -6837,20 +6837,20 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
         insn = bb_insn->insn;
         nops = MIR_insn_nops (ctx, insn);
         if (insn->code == MIR_LABEL) {
-	  if (!label_only_p) {
-	    /* We can move insns with temp hard regs inside BB. It
-	       is important to remove labels inside BB as we use labels to find BBs for lazy BB
-	       generation and temp regs can be used between BBs in this generation mode. */
-	    DEBUG (2, {
-		fprintf (debug_file, "  Remove label inside BB ");
-		print_bb_insn (gen_ctx, bb_insn, TRUE);
-	      });
-	    gen_delete_insn (gen_ctx, insn);
-	  }
-	  continue;
-	}
-	label_only_p = FALSE;
-	insns_num++;
+          if (!label_only_p) {
+            /* We can move insns with temp hard regs inside BB. It
+               is important to remove labels inside BB as we use labels to find BBs for lazy BB
+               generation and temp regs can be used between BBs in this generation mode. */
+            DEBUG (2, {
+              fprintf (debug_file, "  Remove label inside BB ");
+              print_bb_insn (gen_ctx, bb_insn, TRUE);
+            });
+            gen_delete_insn (gen_ctx, insn);
+          }
+          continue;
+        }
+        label_only_p = FALSE;
+        insns_num++;
         DEBUG (2, {
           fprintf (debug_file, "  Processing ");
           print_bb_insn (gen_ctx, bb_insn, TRUE);
@@ -7990,7 +7990,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   target_setup_succ_bb_version_data (gen_ctx, addr);
   DEBUG (1, {
     _MIR_dump_code (NULL, 0, addr, code_len);
-    fprintf (debug_file, "BBStub%lx code size = %lu:\n", (unsigned long) bb_stub, (unsigned long) code_len);
+    fprintf (debug_file, "BBStub%lx code size = %lu:\n", (unsigned long) bb_stub,
+             (unsigned long) code_len);
   });
   target_redirect_bb_origin_branch (gen_ctx, &bb_version->target_data, addr);
   _MIR_replace_bb_thunk (ctx, bb_version->addr, addr);
