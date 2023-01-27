@@ -5804,8 +5804,11 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       gen_assert (hard_reg >= 0 && hard_reg <= MAX_HARD_REG
                   && target_locs_num (hard_reg, type) == 1);
       VARR_SET (MIR_reg_t, breg_renumber, breg, hard_reg);
+#ifndef NDEBUG
       for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-        for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], hard_reg);
+        for (j = lr->start; j <= lr->finish; j++)
+          gen_assert (bitmap_bit_p (used_locs_addr[j], hard_reg));
+#endif
       if (hard_reg_name == NULL) setup_used_hard_regs (gen_ctx, type, hard_reg);
       DEBUG (2, {
         fprintf (debug_file, " Assigning to global %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
