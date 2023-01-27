@@ -5710,7 +5710,7 @@ static int breg_info_compare_func (const void *a1, const void *a2) {
   return breg1 < breg2 ? -1 : 1; /* make sort stable */
 }
 
-static MIR_reg_t get_hard_reg (gen_ctx_t gen_ctx, MIR_reg_t type) {
+static MIR_reg_t get_hard_reg (gen_ctx_t gen_ctx, MIR_reg_t type, bitmap_t pseudo_conflict_locs) {
   MIR_reg_t loc, curr_loc, best_loc = MIR_NON_HARD_REG;
   int n, k, slots_num, best_saved_p = FALSE;
 
@@ -5720,13 +5720,14 @@ static MIR_reg_t get_hard_reg (gen_ctx_t gen_ctx, MIR_reg_t type) {
 #else
     loc = n;
 #endif
-    if (bitmap_bit_p (conflict_locs, loc)) continue;
+    if (bitmap_bit_p (pseudo_conflict_locs, loc)) continue;
     if (!target_hard_reg_type_ok_p (loc, type) || target_fixed_hard_reg_p (loc)) continue;
     if ((slots_num = target_locs_num (loc, type)) > 1) {
       if (target_nth_loc (loc, type, slots_num - 1) > MAX_HARD_REG) break;
       for (k = slots_num - 1; k > 0; k--) {
         curr_loc = target_nth_loc (loc, type, k);
-        if (target_fixed_hard_reg_p (curr_loc) || bitmap_bit_p (conflict_locs, curr_loc)) break;
+        if (target_fixed_hard_reg_p (curr_loc) || bitmap_bit_p (pseudo_conflict_locs, curr_loc))
+          break;
       }
       if (k > 0) continue;
     }
@@ -5756,7 +5757,7 @@ static MIR_reg_t get_new_stack_slot (gen_ctx_t gen_ctx, MIR_reg_t type, int *slo
 }
 
 static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_mem_loc, MIR_type_t type,
-                                int *slots_num_ref) {
+                                bitmap_t pseudo_conflict_locs, int *slots_num_ref) {
   MIR_reg_t loc, curr_loc, best_loc = MIR_NON_HARD_REG;
   int k, slots_num = 1;
   for (loc = start_mem_loc; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
@@ -5764,7 +5765,7 @@ static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_mem_loc, MIR_
     if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
     for (k = 0; k < slots_num; k++) {
       curr_loc = target_nth_loc (loc, type, k);
-      if (bitmap_bit_p (conflict_locs, curr_loc)) break;
+      if (bitmap_bit_p (pseudo_conflict_locs, curr_loc)) break;
     }
     if (k < slots_num) continue;
     if ((loc - MAX_HARD_REG - 1) % slots_num != 0)
@@ -5873,11 +5874,11 @@ static void quality_assign (gen_ctx_t gen_ctx) {
         bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
     if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
-    best_loc = get_hard_reg (gen_ctx, type);
+    best_loc = get_hard_reg (gen_ctx, type, conflict_locs);
     if (best_loc != MIR_NON_HARD_REG) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
     } else {
-      best_loc = get_stack_loc (gen_ctx, start_mem_loc, type, &slots_num);
+      best_loc = get_stack_loc (gen_ctx, start_mem_loc, type, conflict_locs, &slots_num);
     }
     DEBUG (2, {
       fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
