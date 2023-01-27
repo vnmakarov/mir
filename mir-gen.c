@@ -5726,6 +5726,27 @@ static MIR_reg_t get_new_stack_slot (gen_ctx_t gen_ctx, MIR_reg_t type, int *slo
   return best_loc;
 }
 
+static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_mem_loc, MIR_type_t type,
+                                int *slots_num_ref) {
+  MIR_reg_t loc, curr_loc, best_loc = MIR_NON_HARD_REG;
+  int k, slots_num = 1;
+  for (loc = start_mem_loc; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
+    slots_num = target_locs_num (loc, type);
+    if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
+    for (k = 0; k < slots_num; k++) {
+      curr_loc = target_nth_loc (loc, type, k);
+      if (bitmap_bit_p (conflict_locs, curr_loc)) break;
+    }
+    if (k < slots_num) continue;
+    if ((loc - MAX_HARD_REG - 1) % slots_num != 0)
+      continue; /* we align stack slots according to the type size */
+    if (best_loc == MIR_NON_HARD_REG) best_loc = loc;
+  }
+  if (best_loc == MIR_NON_HARD_REG) best_loc = get_new_stack_slot (gen_ctx, type, &slots_num);
+  *slots_num_ref = slots_num;
+  return best_loc;
+}
+
 static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t loc, curr_loc, best_loc, start_mem_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
@@ -5851,23 +5872,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     if (best_loc != MIR_NON_HARD_REG) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
     } else {
-      for (loc = start_mem_loc; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
-        slots_num = target_locs_num (loc, type);
-        if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
-        for (k = 0; k < slots_num; k++) {
-          curr_loc = target_nth_loc (loc, type, k);
-          if (bitmap_bit_p (conflict_locs, curr_loc)) break;
-        }
-        if (k < slots_num) continue;
-        if ((loc - MAX_HARD_REG - 1) % slots_num != 0)
-          continue; /* we align stack slots according to the type size */
-        if (best_loc == MIR_NON_HARD_REG) {
-          best_loc = loc;
-        }
-      }
-      if (best_loc == MIR_NON_HARD_REG) { /* Add stack slot ??? */
-        best_loc = get_new_stack_slot (gen_ctx, type, &slots_num);
-      }
+      best_loc = get_stack_loc (gen_ctx, start_mem_loc, type, &slots_num);
     }
     DEBUG (2, {
       fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
