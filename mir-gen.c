@@ -4991,7 +4991,11 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
 typedef struct live_range *live_range_t; /* vars */
 
 struct live_range {
-  int start, finish;
+  /* when live range was formed, true means a range from one BB border to
+     another one w/o refrences in between: */
+  unsigned bb_border_p : 1;
+  unsigned start : 31;
+  int finish;
   live_range_t next;
 };
 
@@ -5012,12 +5016,14 @@ struct lr_ctx {
 #define var_live_ranges gen_ctx->lr_ctx->var_live_ranges
 #define point_map gen_ctx->lr_ctx->point_map
 
-static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish,
-                                       live_range_t next) {
+static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish, live_range_t next,
+                                       int bb_border_p) {
   live_range_t lr = gen_malloc (gen_ctx, sizeof (struct live_range));
 
+  gen_assert (start >= 0 && start < (1ul << 31));
   gen_assert (finish < 0 || start <= finish);
-  lr->start = start;
+  lr->bb_border_p = bb_border_p;
+  lr->start = (unsigned) start;
   lr->finish = finish;
   lr->next = next;
   return lr;
@@ -5032,27 +5038,29 @@ static void destroy_live_range (live_range_t lr) {
   }
 }
 
-static inline int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
+static inline int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point, int bb_border_p) {
   live_range_t lr;
 
   if (bitmap_clear_bit_p (live_vars, var)) {
     lr = VARR_GET (live_range_t, var_live_ranges, var);
+    if (!bb_border_p) lr->bb_border_p = FALSE;
     lr->finish = point;
   } else { /* insn with unused result: result still needs a register */
     VARR_SET (live_range_t, var_live_ranges, var,
               create_live_range (gen_ctx, point, point,
-                                 VARR_GET (live_range_t, var_live_ranges, var)));
+                                 VARR_GET (live_range_t, var_live_ranges, var), bb_border_p));
   }
   return TRUE;
 }
 
-static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point) {
+static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point, int bb_border_p) {
   live_range_t lr;
 
   if (!bitmap_set_bit_p (live_vars, var)) return FALSE;
   if ((lr = VARR_GET (live_range_t, var_live_ranges, var)) == NULL
       || (lr->finish != point && lr->finish + 1 != point))
-    VARR_SET (live_range_t, var_live_ranges, var, create_live_range (gen_ctx, point, -1, lr));
+    VARR_SET (live_range_t, var_live_ranges, var,
+              create_live_range (gen_ctx, point, -1, lr, bb_border_p));
   return TRUE;
 }
 
@@ -5071,7 +5079,8 @@ static void print_live_ranges (gen_ctx_t gen_ctx) {
                MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, i), curr_func_item->u.func)),
                MIR_reg_name (ctx, var2reg (gen_ctx, i), curr_func_item->u.func));
     fprintf (debug_file, ":");
-    for (; lr != NULL; lr = lr->next) fprintf (debug_file, " [%d..%d]", lr->start, lr->finish);
+    for (; lr != NULL; lr = lr->next)
+      fprintf (debug_file, " %c[%d..%d]", lr->bb_border_p ? 'b' : ' ', lr->start, lr->finish);
     fprintf (debug_file, "\n");
   }
 }
@@ -5081,15 +5090,16 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   size_t p;
   long int n;
   live_range_t lr, prev_lr, next_lr;
-  int born_p, dead_p, prev_dead_p;
+  int start, born_p, dead_p, prev_dead_p;
   bitmap_iterator_t bi;
 
   bitmap_clear (born_vars);
   bitmap_clear (dead_vars);
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next) {
-      gen_assert (lr->start <= lr->finish);
-      bitmap_set_bit_p (born_vars, lr->start);
+      start = lr->start;
+      gen_assert (start <= lr->finish);
+      bitmap_set_bit_p (born_vars, start);
       bitmap_set_bit_p (dead_vars, lr->finish);
     }
   }
@@ -5121,9 +5131,9 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i), prev_lr = NULL; lr != NULL;
          lr = next_lr) {
       next_lr = lr->next;
-      lr->start = VARR_GET (int, point_map, lr->start);
+      lr->start = VARR_GET (int, point_map, (int) lr->start);
       lr->finish = VARR_GET (int, point_map, lr->finish);
-      if (prev_lr == NULL || prev_lr->start > lr->finish + 1) {
+      if (prev_lr == NULL || (int) prev_lr->start > lr->finish + 1) {
         prev_lr = lr;
         continue;
       }
@@ -5148,14 +5158,14 @@ static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
   if (r2 == NULL) return r1;
   for (first = last = NULL; r1 != NULL && r2 != NULL;) {
     if (r1->start < r2->start) SWAP (r1, r2, temp);
-    if (r1->start == r2->finish + 1) {
+    if ((int) r1->start == r2->finish + 1) {
       /* Joint ranges: merge r1 and r2 into r1.  */
       r1->start = r2->start;
       temp = r2;
       r2 = r2->next;
       free (temp);
     } else {
-      gen_assert (r2->finish + 1 < r1->start);
+      gen_assert (r2->finish + 1 < (int) r1->start);
       /* Add r1 to the result.  */
       if (first == NULL) {
         first = last = r1;
@@ -5185,9 +5195,9 @@ static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
 static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
   /* Remember the live ranges are always kept ordered.	*/
   while (r1 != NULL && r2 != NULL) {
-    if (r1->start > r2->finish)
+    if ((int) r1->start > r2->finish)
       r1 = r1->next;
-    else if (r2->start > r1->finish)
+    else if ((int) r2->start > r1->finish)
       r2 = r2->next;
     else
       return TRUE;
@@ -5195,75 +5205,91 @@ static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
   return FALSE;
 }
 
-static void build_live_ranges (gen_ctx_t gen_ctx) {
+static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb) {
   MIR_insn_t insn;
-  MIR_reg_t var, nvars, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  size_t i, nel, passed_mem_num;
+  MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
+  size_t nel, passed_mem_num;
   int op_num, incr_p, out_p, mem_p;
   bitmap_iterator_t bi;
   insn_var_iterator_t insn_var_iter;
+
+  DEBUG (2, {
+    fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point);
+  });
+  bitmap_clear (live_vars);
+  if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+      make_var_live (gen_ctx, nel, curr_point, TRUE);
+    }
+  for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+       bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
+    insn = bb_insn->insn;
+    DEBUG (2, {
+      fprintf (debug_file, "  p%-5d", curr_point);
+      print_bb_insn (gen_ctx, bb_insn, TRUE);
+    });
+    incr_p = FALSE;
+    FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+      if (out_p) incr_p |= make_var_dead (gen_ctx, var, curr_point, FALSE);
+    }
+    if (MIR_call_code_p (insn->code)) {
+      if (incr_p) curr_point++;
+      incr_p = FALSE;
+      FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
+        make_var_dead (gen_ctx, nel, curr_point, FALSE);
+        incr_p = TRUE;
+      }
+      FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+        make_var_live (gen_ctx, nel, curr_point, FALSE);
+      }
+      FOREACH_BITMAP_BIT (bi, live_vars, nel) {
+        MIR_reg_t breg;
+
+        if (!var_is_reg_p (nel)) continue;
+        breg = reg2breg (gen_ctx, var2reg (gen_ctx, nel));
+        bitmap_set_bit_p (curr_cfg->call_crossed_bregs, breg);
+      }
+    }
+    if (incr_p) curr_point++;
+    incr_p = FALSE;
+    FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
+      if (!out_p) incr_p |= make_var_live (gen_ctx, var, curr_point, FALSE);
+    }
+    target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
+                                          &early_clobbered_hard_reg2);
+    if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
+      incr_p |= make_var_live (gen_ctx, early_clobbered_hard_reg1, curr_point, FALSE);
+      incr_p |= make_var_dead (gen_ctx, early_clobbered_hard_reg1, curr_point, FALSE);
+    }
+    if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
+      incr_p |= make_var_live (gen_ctx, early_clobbered_hard_reg2, curr_point, FALSE);
+      incr_p |= make_var_dead (gen_ctx, early_clobbered_hard_reg2, curr_point, FALSE);
+    }
+    if (incr_p) curr_point++;
+  }
+  gen_assert (bitmap_equal_p (live_vars, bb->live_in));
+  FOREACH_BITMAP_BIT (bi, bb->live_in, nel) { make_var_dead (gen_ctx, nel, curr_point, TRUE); }
+  if (!bitmap_empty_p (bb->live_in)) curr_point++;
+}
+
+static void build_live_ranges (gen_ctx_t gen_ctx) {
+  size_t i;
+  MIR_reg_t nvars;
+  bb_t bb;
 
   curr_point = 0;
   nvars = get_nvars (gen_ctx);
   gen_assert (VARR_LENGTH (live_range_t, var_live_ranges) == 0);
   for (i = 0; i < nvars; i++) VARR_PUSH (live_range_t, var_live_ranges, NULL);
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    DEBUG (2, {
-      fprintf (debug_file, "  ------BB%u end: point=%d\n", (unsigned) bb->index, curr_point);
-    });
-    bitmap_clear (live_vars);
-    if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
-        make_var_live (gen_ctx, nel, curr_point);
-      }
-    for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
-      insn = bb_insn->insn;
-      DEBUG (2, {
-        fprintf (debug_file, "  p%-5d", curr_point);
-        print_bb_insn (gen_ctx, bb_insn, TRUE);
-      });
-      incr_p = FALSE;
-      FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (out_p) incr_p |= make_var_dead (gen_ctx, var, curr_point);
-      }
-      if (MIR_call_code_p (insn->code)) {
-        if (incr_p) curr_point++;
-        incr_p = FALSE;
-        FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
-          make_var_dead (gen_ctx, nel, curr_point);
-          incr_p = TRUE;
-        }
-        FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
-          make_var_live (gen_ctx, nel, curr_point);
-        }
-        FOREACH_BITMAP_BIT (bi, live_vars, nel) {
-          MIR_reg_t breg;
-
-          if (!var_is_reg_p (nel)) continue;
-          breg = reg2breg (gen_ctx, var2reg (gen_ctx, nel));
-          bitmap_set_bit_p (curr_cfg->call_crossed_bregs, breg);
-        }
-      }
-      if (incr_p) curr_point++;
-      incr_p = FALSE;
-      FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p, passed_mem_num) {
-        if (!out_p) incr_p |= make_var_live (gen_ctx, var, curr_point);
-      }
-      target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
-                                            &early_clobbered_hard_reg2);
-      if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG) {
-        incr_p |= make_var_live (gen_ctx, early_clobbered_hard_reg1, curr_point);
-        incr_p |= make_var_dead (gen_ctx, early_clobbered_hard_reg1, curr_point);
-      }
-      if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG) {
-        incr_p |= make_var_live (gen_ctx, early_clobbered_hard_reg2, curr_point);
-        incr_p |= make_var_dead (gen_ctx, early_clobbered_hard_reg2, curr_point);
-      }
-      if (incr_p) curr_point++;
-    }
-    gen_assert (bitmap_equal_p (live_vars, bb->live_in));
-    FOREACH_BITMAP_BIT (bi, bb->live_in, nel) { make_var_dead (gen_ctx, nel, curr_point); }
-    if (!bitmap_empty_p (bb->live_in)) curr_point++;
+  if (optimize_level <= 1) {
+    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+      process_bb_ranges (gen_ctx, bb);
+  } else { /* arrange BBs in PO (post order) for more compact ranges: */
+    VARR_TRUNC (bb_t, worklist, 0);
+    for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+      VARR_PUSH (bb_t, worklist, bb);
+    qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb), post_cmp);
+    for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++)
+      process_bb_ranges (gen_ctx, VARR_GET (bb_t, worklist, i));
   }
   DEBUG (2, { print_live_ranges (gen_ctx); });
   shrink_live_ranges (gen_ctx);
@@ -5821,7 +5847,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_PUSH (breg_info_t, sorted_bregs, breg_info);
     var = reg2var (gen_ctx, reg);
     for (length = 0, lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      length += lr->finish - lr->start + 1;
+      length += lr->finish - (int) lr->start + 1;
     curr_breg_infos[i].live_length = length;
   }
   for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, used_locs); n++)
@@ -5840,7 +5866,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
   for (i = 0; i <= MAX_HARD_REG; i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
+      for (j = (int) lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
   }
   bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
@@ -5856,7 +5882,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       VARR_SET (MIR_reg_t, breg_renumber, breg, hard_reg);
 #ifndef NDEBUG
       for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-        for (j = lr->start; j <= lr->finish; j++)
+        for (j = (int) lr->start; j <= lr->finish; j++)
           gen_assert (bitmap_bit_p (used_locs_addr[j], hard_reg));
 #endif
       if (hard_reg_name == NULL) setup_used_hard_regs (gen_ctx, type, hard_reg);
@@ -5870,7 +5896,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     var = reg2var (gen_ctx, reg);
     bitmap_clear (conflict_locs);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++)
+      for (j = (int) lr->start; j <= lr->finish; j++)
         bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
     if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
@@ -5888,7 +5914,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++)
+      for (j = (int) lr->start; j <= lr->finish; j++)
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
