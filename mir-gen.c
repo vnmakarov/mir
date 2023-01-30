@@ -1612,7 +1612,7 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
   }
   res = FALSE;
   last_orig_bound = VARR_LENGTH (bb_t, worklist);
-  size = 0;
+  orig_size = size = 0;
   while ((len = VARR_LENGTH (bb_t, worklist)) != 0) {
     if (last_orig_bound > len) {
       last_orig_bound = len;
@@ -2483,6 +2483,8 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
     if (!addr_eliminable_p (gen_ctx, bb_insn, NULL))
       bitmap_set_bit_p (addr_regs, insn->ops[1].u.reg);
   }
+  addr_insn = NULL; /* to remove warning */
+  addr_reg = 0;     /* to remove warning */
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       insn = bb_insn->insn;
@@ -2575,7 +2577,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
         }
       } else if (!bitmap_bit_p (addr_regs, insn->ops[1].u.reg)) {
         /* addr a, p: change reg mem to reg */
-        int res = addr_eliminable_p (gen_ctx, bb_insn, temp_bb_insns);
+        MIR_UNUSED int res = addr_eliminable_p (gen_ctx, bb_insn, temp_bb_insns);
         se = insn->ops[1].data;
         gen_assert (res);
         while (VARR_LENGTH (bb_insn_t, temp_bb_insns) != 0) {
@@ -3587,7 +3589,7 @@ static void remove_edge_phi_ops (gen_ctx_t gen_ctx, edge_t e) {
   }
 }
 
-static void remove_dest_phi_ops (gen_ctx_t gen_ctx, bb_t bb) {
+static void MIR_UNUSED remove_dest_phi_ops (gen_ctx_t gen_ctx, bb_t bb) {
   for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
     remove_edge_phi_ops (gen_ctx, e);
 }
