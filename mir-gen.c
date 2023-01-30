@@ -5005,16 +5005,16 @@ DEF_VARR (live_range_t);
 
 struct lr_ctx {
   int curr_point;
-  bitmap_t live_vars, born_vars, dead_vars, born_or_dead_vars;
+  bitmap_t live_vars, points_with_born_vars, points_with_dead_vars, points_with_born_or_dead_vars;
   VARR (live_range_t) * var_live_ranges;
   VARR (int) * point_map;
 };
 
 #define curr_point gen_ctx->lr_ctx->curr_point
 #define live_vars gen_ctx->lr_ctx->live_vars
-#define born_vars gen_ctx->lr_ctx->born_vars
-#define dead_vars gen_ctx->lr_ctx->dead_vars
-#define born_or_dead_vars gen_ctx->lr_ctx->born_or_dead_vars
+#define points_with_born_vars gen_ctx->lr_ctx->points_with_born_vars
+#define points_with_dead_vars gen_ctx->lr_ctx->points_with_dead_vars
+#define points_with_born_or_dead_vars gen_ctx->lr_ctx->points_with_born_or_dead_vars
 #define var_live_ranges gen_ctx->lr_ctx->var_live_ranges
 #define point_map gen_ctx->lr_ctx->point_map
 
@@ -5024,7 +5024,7 @@ static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish,
 
   gen_assert (start >= 0 && start < (1ul << 31));
   gen_assert (finish < 0 || start <= finish);
-  lr->bb_border_p = bb_border_p;
+  lr->bb_border_p = optimize_level >= 2 && bb_border_p; /* ignore the flag on O0 and O1 */
   lr->start = (unsigned) start;
   lr->finish = finish;
   lr->next = next;
@@ -5060,7 +5060,8 @@ static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point, in
 
   if (!bitmap_set_bit_p (live_vars, var)) return FALSE;
   if ((lr = VARR_GET (live_range_t, var_live_ranges, var)) == NULL
-      || (lr->finish != point && lr->finish + 1 != point))
+      /* don't combine ranges with bb_border flags */
+      || lr->bb_border_p || bb_border_p || (lr->finish != point && lr->finish + 1 != point))
     VARR_SET (live_range_t, var_live_ranges, var,
               create_live_range (gen_ctx, point, -1, lr, bb_border_p));
   return TRUE;
@@ -5095,25 +5096,25 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   int start, born_p, dead_p, prev_dead_p;
   bitmap_iterator_t bi;
 
-  bitmap_clear (born_vars);
-  bitmap_clear (dead_vars);
+  bitmap_clear (points_with_born_vars);
+  bitmap_clear (points_with_dead_vars);
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next) {
       start = lr->start;
       gen_assert (start <= lr->finish);
-      bitmap_set_bit_p (born_vars, start);
-      bitmap_set_bit_p (dead_vars, lr->finish);
+      bitmap_set_bit_p (points_with_born_vars, start);
+      bitmap_set_bit_p (points_with_dead_vars, lr->finish);
     }
   }
 
   VARR_TRUNC (int, point_map, 0);
   for (size_t i = 0; i <= curr_point; i++) VARR_PUSH (int, point_map, 0);
-  bitmap_ior (born_or_dead_vars, born_vars, dead_vars);
+  bitmap_ior (points_with_born_or_dead_vars, points_with_born_vars, points_with_dead_vars);
   n = -1;
   prev_dead_p = TRUE;
-  FOREACH_BITMAP_BIT (bi, born_or_dead_vars, p) {
-    born_p = bitmap_bit_p (born_vars, p);
-    dead_p = bitmap_bit_p (dead_vars, p);
+  FOREACH_BITMAP_BIT (bi, points_with_born_or_dead_vars, p) {
+    born_p = bitmap_bit_p (points_with_born_vars, p);
+    dead_p = bitmap_bit_p (points_with_dead_vars, p);
     assert (born_p || dead_p);
     if (!prev_dead_p || !born_p) /* 1st point is always a born */
       VARR_SET (int, point_map, p, n);
@@ -5319,18 +5320,18 @@ static void init_live_ranges (gen_ctx_t gen_ctx) {
   VARR_CREATE (live_range_t, var_live_ranges, 0);
   VARR_CREATE (int, point_map, 1024);
   live_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  born_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-  born_or_dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  points_with_born_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  points_with_dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+  points_with_born_or_dead_vars = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
 }
 
 static void finish_live_ranges (gen_ctx_t gen_ctx) {
   VARR_DESTROY (live_range_t, var_live_ranges);
   VARR_DESTROY (int, point_map);
   bitmap_destroy (live_vars);
-  bitmap_destroy (born_vars);
-  bitmap_destroy (dead_vars);
-  bitmap_destroy (born_or_dead_vars);
+  bitmap_destroy (points_with_born_vars);
+  bitmap_destroy (points_with_dead_vars);
+  bitmap_destroy (points_with_born_or_dead_vars);
   free (gen_ctx->lr_ctx);
   gen_ctx->lr_ctx = NULL;
 }
