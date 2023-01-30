@@ -18,11 +18,11 @@
     -----
        |
        V
-    ------                                                                    --------
-   |Build |    --------    ------     -------     -------     -----------    |Generate|
-   |Live  |-->|Coalesce|->|Assign|-->|Rewrite|-->|Combine|-->| Dead Code |-->|Machine |--> Machine
-   |Ranges|    --------    ------     -------     -------    |Elimination|   | Insns  |     Insns
-    ------                                                    -----------     --------
+    ------                                                               --------
+   |Build |    --------    -------------     -------     -----------    |Generate|
+   |Live  |-->|Coalesce|->|Reg Allocator|-->|Combine|-->| Dead Code |-->|Machine |--> Machine
+   |Ranges|    --------    -------------     -------    |Elimination|   | Insns  |     Insns
+    ------                                               -----------     --------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
@@ -39,8 +39,8 @@
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
    Coalesce: Aggressive register coalescing
-   Assign: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
-   Rewrite: Transform MIR according to the assign using reserved hard regs.
+   Register Allocator: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
+                       Output is MIR containing only hard regs and hard reg memory
    Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
    Dead code elimination: Removing insns with unused outputs.  Only for -O1 and above.
    Generate machine insns: Machine-dependent code (e.g. in
@@ -5894,25 +5894,6 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   }
 }
 
-static void assign (gen_ctx_t gen_ctx) {
-  MIR_reg_t i, reg, nregs = get_nregs (gen_ctx);
-
-  if (optimize_level == 0)
-    fast_assign (gen_ctx);
-  else
-    quality_assign (gen_ctx);
-  DEBUG (2, {
-    fprintf (debug_file, "+++++++++++++Disposition after assignment:");
-    for (i = 0; i < nregs; i++) {
-      if (i % 8 == 0) fprintf (debug_file, "\n");
-      reg = breg2reg (gen_ctx, i);
-      fprintf (debug_file, " %3u=>%-2u", reg2var (gen_ctx, reg),
-               VARR_GET (MIR_reg_t, breg_renumber, i));
-    }
-    fprintf (debug_file, "\n");
-  });
-}
-
 static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg, MIR_reg_t base_reg,
                              MIR_op_mode_t data_mode, int first_p, MIR_insn_t insn, int out_p) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -6112,6 +6093,26 @@ static void rewrite (gen_ctx_t gen_ctx) {
   });
   if (global_hard_regs != NULL) /* we should not save/restore hard regs used by globals */
     bitmap_and_compl (func_used_hard_regs, func_used_hard_regs, global_hard_regs);
+}
+
+static void reg_alloc (gen_ctx_t gen_ctx) {
+  MIR_reg_t i, reg, nregs = get_nregs (gen_ctx);
+
+  if (optimize_level == 0)
+    fast_assign (gen_ctx);
+  else
+    quality_assign (gen_ctx);
+  DEBUG (2, {
+    fprintf (debug_file, "+++++++++++++Disposition after assignment:");
+    for (i = 0; i < nregs; i++) {
+      if (i % 8 == 0) fprintf (debug_file, "\n");
+      reg = breg2reg (gen_ctx, i);
+      fprintf (debug_file, " %3u=>%-2u", reg2var (gen_ctx, reg),
+               VARR_GET (MIR_reg_t, breg_renumber, i));
+    }
+    fprintf (debug_file, "\n");
+  });
+  rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
 }
 
 static void init_ra (gen_ctx_t gen_ctx) {
@@ -7180,10 +7181,9 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
   }
-  assign (gen_ctx);
-  rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
+  reg_alloc (gen_ctx);
   DEBUG (2, {
-    fprintf (debug_file, "+++++++++++++MIR after rewrite:\n");
+    fprintf (debug_file, "+++++++++++++MIR after RA:\n");
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
   });
   if (optimize_level >= 1) {
