@@ -5010,8 +5010,8 @@ static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int start_b
 
   gen_assert (start >= 0 && start < (1 << 30));
   gen_assert (finish < 0 || (start <= finish && finish < (1 << 30)));
-  lr->start_bb_border_p = start_bb_border_p;
-  lr->finish_bb_border_p = finish_bb_border_p;
+  lr->start_bb_border_p = optimize_level >= 2 && start_bb_border_p;
+  lr->finish_bb_border_p = optimize_level >= 2 && finish_bb_border_p;
   lr->start = start;
   lr->finish = finish;
   lr->next = next;
