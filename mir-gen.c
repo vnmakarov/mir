@@ -4993,11 +4993,12 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
 typedef struct live_range *live_range_t; /* vars */
 
 struct live_range {
-  /* when live range was formed, true means a range from one BB border to
-     another one w/o refrences in between: */
-  unsigned bb_border_p : 1;
-  unsigned start : 31;
-  int finish;
+  /* Flags that the corresponding point is BB order (start is a BB end and finish is a BB start).
+     We generates live ranges in a way that if there is only one flag set, another point
+     corresponds to one reference closest to the BB border. */
+  int start_bb_border_p : 1, finish_bb_border_p : 1;
+  int start : 31, finish : 31;
+  /* to smaller start and finish, but still this start can be equal to the next finish: */
   live_range_t next;
 };
 
@@ -5018,14 +5019,15 @@ struct lr_ctx {
 #define var_live_ranges gen_ctx->lr_ctx->var_live_ranges
 #define point_map gen_ctx->lr_ctx->point_map
 
-static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int finish, live_range_t next,
-                                       int bb_border_p) {
+static live_range_t create_live_range (gen_ctx_t gen_ctx, int start, int start_bb_border_p,
+                                       int finish, int finish_bb_border_p, live_range_t next) {
   live_range_t lr = gen_malloc (gen_ctx, sizeof (struct live_range));
 
-  gen_assert (start >= 0 && start < (1ul << 31));
-  gen_assert (finish < 0 || start <= finish);
-  lr->bb_border_p = optimize_level >= 2 && bb_border_p; /* ignore the flag on O0 and O1 */
-  lr->start = (unsigned) start;
+  gen_assert (start >= 0 && start < (1 << 30));
+  gen_assert (finish < 0 || (start <= finish && finish < (1 << 30)));
+  lr->start_bb_border_p = start_bb_border_p;
+  lr->finish_bb_border_p = finish_bb_border_p;
+  lr->start = start;
   lr->finish = finish;
   lr->next = next;
   return lr;
@@ -5043,14 +5045,27 @@ static void destroy_live_range (live_range_t lr) {
 static inline int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point, int bb_border_p) {
   live_range_t lr;
 
-  if (bitmap_clear_bit_p (live_vars, var)) {
-    lr = VARR_GET (live_range_t, var_live_ranges, var);
-    if (!bb_border_p) lr->bb_border_p = FALSE;
-    lr->finish = point;
-  } else { /* insn with unused result: result still needs a register */
+  lr = VARR_GET (live_range_t, var_live_ranges, var);
+  if (!bitmap_clear_bit_p (live_vars, var)) {
+    /* insn with unused result: result still needs a hard register */
+    gen_assert (!bb_border_p);
     VARR_SET (live_range_t, var_live_ranges, var,
-              create_live_range (gen_ctx, point, point,
-                                 VARR_GET (live_range_t, var_live_ranges, var), bb_border_p));
+              create_live_range (gen_ctx, point, FALSE, point, FALSE, lr));
+    return TRUE;
+  }
+  gen_assert (lr != NULL);
+  if (bb_border_p && !lr->start_bb_border_p) {
+    gen_assert (!lr->finish_bb_border_p);
+    if (lr->finish < 0) { /* only one use in the range */
+      lr->finish = point;
+      lr->finish_bb_border_p = bb_border_p;
+    } else { /* create new live range to have one reference */
+      VARR_SET (live_range_t, var_live_ranges, var,
+                create_live_range (gen_ctx, lr->finish, FALSE, point, bb_border_p, lr));
+    }
+  } else {
+    lr->finish_bb_border_p = bb_border_p;
+    lr->finish = point;
   }
   return TRUE;
 }
@@ -5058,17 +5073,38 @@ static inline int make_var_dead (gen_ctx_t gen_ctx, MIR_reg_t var, int point, in
 static inline int make_var_live (gen_ctx_t gen_ctx, MIR_reg_t var, int point, int bb_border_p) {
   live_range_t lr;
 
-  if (!bitmap_set_bit_p (live_vars, var)) return FALSE;
-  if ((lr = VARR_GET (live_range_t, var_live_ranges, var)) == NULL
-      /* don't combine ranges with bb_border flags */
-      || lr->bb_border_p || bb_border_p || (lr->finish != point && lr->finish + 1 != point))
+  lr = VARR_GET (live_range_t, var_live_ranges, var);
+  if (bitmap_set_bit_p (live_vars, var)) {
+    /* Start living at bb end or from the current insn */
     VARR_SET (live_range_t, var_live_ranges, var,
-              create_live_range (gen_ctx, point, -1, lr, bb_border_p));
-  return TRUE;
+              create_live_range (gen_ctx, point, bb_border_p, -1, FALSE, lr));
+    return TRUE;
+  }
+  /* already lives at bb end or in already processed insn */
+  gen_assert (lr != NULL && !bb_border_p);
+  if (!lr->start_bb_border_p) { /* extend current live range */
+    lr->finish = point;
+  } else { /* live range from bb end to 1st use: finish this range to have only one use */
+    gen_assert (!lr->finish_bb_border_p);
+    lr->finish = point;
+    VARR_SET (live_range_t, var_live_ranges, var,
+              create_live_range (gen_ctx, point, FALSE, -1, FALSE, lr));
+  }
+  return FALSE;
 }
 
 #if !MIR_NO_GEN_DEBUG
-static void print_live_ranges (gen_ctx_t gen_ctx) {
+static void print_live_range (gen_ctx_t gen_ctx, live_range_t lr) {
+  fprintf (debug_file, " [%c%d..%c%d]", lr->start_bb_border_p ? 'b' : ' ', lr->start,
+           lr->finish_bb_border_p ? 'b' : ' ', lr->finish);
+}
+
+static void print_live_ranges (gen_ctx_t gen_ctx, live_range_t lr) {
+  for (; lr != NULL; lr = lr->next) print_live_range (gen_ctx, lr);
+  fprintf (debug_file, "\n");
+}
+
+static void print_all_live_ranges (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   live_range_t lr;
 
@@ -5082,9 +5118,7 @@ static void print_live_ranges (gen_ctx_t gen_ctx) {
                MIR_type_str (ctx, MIR_reg_type (ctx, var2reg (gen_ctx, i), curr_func_item->u.func)),
                MIR_reg_name (ctx, var2reg (gen_ctx, i), curr_func_item->u.func));
     fprintf (debug_file, ":");
-    for (; lr != NULL; lr = lr->next)
-      fprintf (debug_file, " %c[%d..%d]", lr->bb_border_p ? 'b' : ' ', lr->start, lr->finish);
-    fprintf (debug_file, "\n");
+    print_live_ranges (gen_ctx, lr);
   }
 }
 #endif
@@ -5093,16 +5127,15 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   size_t p;
   long int n;
   live_range_t lr, prev_lr, next_lr;
-  int start, born_p, dead_p, prev_dead_p;
+  int born_p, dead_p, prev_dead_p;
   bitmap_iterator_t bi;
 
   bitmap_clear (points_with_born_vars);
   bitmap_clear (points_with_dead_vars);
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next) {
-      start = lr->start;
-      gen_assert (start <= lr->finish);
-      bitmap_set_bit_p (points_with_born_vars, start);
+      gen_assert (lr->start <= lr->finish);
+      bitmap_set_bit_p (points_with_born_vars, lr->start);
       bitmap_set_bit_p (points_with_dead_vars, lr->finish);
     }
   }
@@ -5134,12 +5167,17 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i), prev_lr = NULL; lr != NULL;
          lr = next_lr) {
       next_lr = lr->next;
-      lr->start = VARR_GET (int, point_map, (int) lr->start);
+      lr->start = VARR_GET (int, point_map, lr->start);
       lr->finish = VARR_GET (int, point_map, lr->finish);
-      if (prev_lr == NULL || (int) prev_lr->start > lr->finish + 1) {
+      if (prev_lr == NULL || (prev_lr->start_bb_border_p != prev_lr->finish_bb_border_p)
+          || (lr->start_bb_border_p != lr->finish_bb_border_p)
+          || (prev_lr->start_bb_border_p != lr->start_bb_border_p)
+          || (prev_lr->start != lr->finish && prev_lr->start != lr->finish + 1)) {
         prev_lr = lr;
         continue;
       }
+      gen_assert (prev_lr->start_bb_border_p == lr->start_bb_border_p
+                  && prev_lr->finish_bb_border_p == lr->finish_bb_border_p);
       prev_lr->start = lr->start;
       prev_lr->next = next_lr;
       free (lr);
@@ -5147,28 +5185,45 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   }
   DEBUG (2, {
     fprintf (debug_file, "Ranges after the compression:\n");
-    print_live_ranges (gen_ctx);
+    print_all_live_ranges (gen_ctx);
   });
 }
 
 /* Merge *non-intersected* ranges R1 and R2 and returns the result. The function maintains the
    order of ranges and tries to minimize size of the result range list.  Ranges R1 and R2 may not
    be used after the call.  */
-static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
+static live_range_t merge_live_ranges (gen_ctx_t gen_ctx, live_range_t r1, live_range_t r2) {
   live_range_t first, last, temp;
 
   if (r1 == NULL) return r2;
   if (r2 == NULL) return r1;
+  DEBUG (3, {
+    fprintf (debug_file, "  Merging range:");
+    print_live_ranges (gen_ctx, r1);
+    fprintf (debug_file, "      and range:");
+    print_live_ranges (gen_ctx, r2);
+  });
   for (first = last = NULL; r1 != NULL && r2 != NULL;) {
     if (r1->start < r2->start) SWAP (r1, r2, temp);
-    if ((int) r1->start == r2->finish + 1) {
+    if (r1->start == r2->finish + 1
+        && r1->start_bb_border_p == r2->finish_bb_border_p
+        /* merge inside bb or whole bb ranges */
+        && (!r1->finish_bb_border_p || (r1->finish_bb_border_p && r2->start_bb_border_p))) {
       /* Joint ranges: merge r1 and r2 into r1.  */
+      DEBUG (4, {
+        fprintf (debug_file, "        merging");
+        print_live_range (gen_ctx, r1);
+        fprintf (debug_file, " and");
+        print_live_range (gen_ctx, r2);
+        fprintf (debug_file, "\n");
+      });
       r1->start = r2->start;
+      r1->start_bb_border_p = r2->start_bb_border_p;
       temp = r2;
       r2 = r2->next;
       free (temp);
     } else {
-      gen_assert (r2->finish + 1 < (int) r1->start);
+      gen_assert (r2->finish + 1 < r1->start);
       /* Add r1 to the result.  */
       if (first == NULL) {
         first = last = r1;
@@ -5191,6 +5246,10 @@ static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
     else
       last->next = r2;
   }
+  DEBUG (3, {
+    fprintf (debug_file, "    result: ");
+    print_live_ranges (gen_ctx, first);
+  });
   return first;
 }
 
@@ -5198,9 +5257,9 @@ static live_range_t merge_live_ranges (live_range_t r1, live_range_t r2) {
 static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
   /* Remember the live ranges are always kept ordered.	*/
   while (r1 != NULL && r2 != NULL) {
-    if ((int) r1->start > r2->finish)
+    if (r1->start > r2->finish)
       r1 = r1->next;
-    else if ((int) r2->start > r1->finish)
+    else if (r2->start > r1->finish)
       r2 = r2->next;
     else
       return TRUE;
@@ -5294,7 +5353,7 @@ static void build_live_ranges (gen_ctx_t gen_ctx) {
     for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++)
       process_bb_ranges (gen_ctx, VARR_GET (bb_t, worklist, i));
   }
-  DEBUG (2, { print_live_ranges (gen_ctx); });
+  DEBUG (2, { print_all_live_ranges (gen_ctx); });
   shrink_live_ranges (gen_ctx);
 }
 
@@ -5586,7 +5645,7 @@ static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
   live_range_t list = VARR_GET (live_range_t, var_live_ranges, first_var);
   live_range_t list2 = VARR_GET (live_range_t, var_live_ranges, first2_var);
   VARR_SET (live_range_t, var_live_ranges, first2_var, NULL);
-  VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (list, list2));
+  VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (gen_ctx, list, list2));
 }
 
 static void coalesce (gen_ctx_t gen_ctx) {
@@ -5696,9 +5755,12 @@ static void coalesce (gen_ctx_t gen_ctx) {
   }
   DEBUG (1, {
     int moves_num = (int) VARR_LENGTH (mv_t, moves);
-    if (coalesced_moves != 0)
+    if (coalesced_moves != 0) {
       fprintf (debug_file, "Coalesced Moves = %d out of %d moves (%.1f%%)\n", coalesced_moves,
                moves_num, 100.0 * coalesced_moves / moves_num);
+      fprintf (debug_file, "Ranges after the coalescing:\n");
+      print_all_live_ranges (gen_ctx);
+    }
   });
 }
 
@@ -5850,7 +5912,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_PUSH (breg_info_t, sorted_bregs, breg_info);
     var = reg2var (gen_ctx, reg);
     for (length = 0, lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      length += lr->finish - (int) lr->start + 1;
+      length += lr->finish - lr->start + 1;
     curr_breg_infos[i].live_length = length;
   }
   for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, used_locs); n++)
@@ -5869,7 +5931,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
   for (i = 0; i <= MAX_HARD_REG; i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
-      for (j = (int) lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
+      for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
   }
   bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
@@ -5885,7 +5947,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       VARR_SET (MIR_reg_t, breg_renumber, breg, hard_reg);
 #ifndef NDEBUG
       for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-        for (j = (int) lr->start; j <= lr->finish; j++)
+        for (j = lr->start; j <= lr->finish; j++)
           gen_assert (bitmap_bit_p (used_locs_addr[j], hard_reg));
 #endif
       if (hard_reg_name == NULL) setup_used_hard_regs (gen_ctx, type, hard_reg);
@@ -5899,7 +5961,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     var = reg2var (gen_ctx, reg);
     bitmap_clear (conflict_locs);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      for (j = (int) lr->start; j <= lr->finish; j++)
+      for (j = lr->start; j <= lr->finish; j++)
         bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
     if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
@@ -5917,7 +5979,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      for (j = (int) lr->start; j <= lr->finish; j++)
+      for (j = lr->start; j <= lr->finish; j++)
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
   }
