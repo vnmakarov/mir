@@ -5397,17 +5397,20 @@ DEF_VARR (MIR_reg_t);
 struct ra_ctx {
   VARR (MIR_reg_t) * breg_renumber;
   VARR (breg_info_t) * sorted_bregs;
-  VARR (bitmap_t) * used_locs; /* indexed by bb or point */
+  VARR (bitmap_t) * used_locs, *busy_used_locs; /* indexed by bb or point */
   VARR (bitmap_t) * var_bbs;
-  bitmap_t conflict_locs;
+  bitmap_t conflict_locs1, conflict_locs2, conflict_locs3;
   reg_info_t *curr_breg_infos;
 };
 
 #define breg_renumber gen_ctx->ra_ctx->breg_renumber
 #define sorted_bregs gen_ctx->ra_ctx->sorted_bregs
 #define used_locs gen_ctx->ra_ctx->used_locs
+#define busy_used_locs gen_ctx->ra_ctx->busy_used_locs
 #define var_bbs gen_ctx->ra_ctx->var_bbs
-#define conflict_locs gen_ctx->ra_ctx->conflict_locs
+#define conflict_locs1 gen_ctx->ra_ctx->conflict_locs1
+#define conflict_locs2 gen_ctx->ra_ctx->conflict_locs2
+#define conflict_locs3 gen_ctx->ra_ctx->conflict_locs3
 #define curr_breg_infos gen_ctx->ra_ctx->curr_breg_infos
 
 /* New Page */
@@ -5442,6 +5445,7 @@ static void fast_assign (gen_ctx_t gen_ctx) {
   size_t nel;
   bitmap_iterator_t bi;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
+  bitmap_t conflict_locs = conflict_locs1;
 
   func_stack_slots_num = 0;
   if (nregs == 0) return;
@@ -5786,34 +5790,98 @@ static int breg_info_compare_func (const void *a1, const void *a2) {
   return breg1 < breg2 ? -1 : 1; /* make sort stable */
 }
 
-static MIR_reg_t get_hard_reg (gen_ctx_t gen_ctx, MIR_reg_t type, bitmap_t pseudo_conflict_locs) {
-  MIR_reg_t loc, curr_loc, best_loc = MIR_NON_HARD_REG;
-  int n, k, slots_num, best_saved_p = FALSE;
+static int hreg_in_bitmap_p (int hreg, MIR_type_t type, int nregs, bitmap_t bm) {
+  for (int i = 0; i < nregs; i++)
+    if (bitmap_bit_p (bm, target_nth_loc (hreg, type, i))) return TRUE;
+  return FALSE;
+}
 
+static void process_hole_bounds (gen_ctx_t gen_ctx, int hreg, MIR_type_t type, int nregs,
+                                 live_range_t lr, void (*f) (int, void *), void *data) {
+  gen_assert (lr != NULL);
+  bitmap_t *busy_locs = VARR_ADDR (bitmap_t, busy_used_locs);
+  int i, left_bound, right_bound = (int) VARR_LENGTH (bitmap_t, busy_used_locs);
+  live_range_t next_lr;
+  for (; lr != NULL; lr = next_lr) {
+    next_lr = lr->next;
+    left_bound = next_lr != NULL next_lr->finish ? -1;
+    for (i = lr->start - 1; i > left_bound && !hreg_in_bitmap_p (hreg, type, nregs, busy_locs[i]);
+         i--)
+      f (i, data);
+    for (i = lr->finish + 1; i < right_bound && !hreg_in_bitmap_p (hreg, type, nregs, busy_locs[i]);
+         i++)
+      f (i, data);
+    right_bound = lr->start;
+  }
+}
+
+static void update_hole_size (int point, void *data) {
+  int *size = data;
+  (*size)++;
+}
+
+static int get_hole_size (gen_ctx_t gen_ctx, int hreg, MIR_type_t type, int nregs,
+                          live_range_t lr) {
+  int size = 0;
+  if (lr == NULL) return 0;
+  process_hole_bounds (gen_ctx, hreg, type, nregs, lr, update_hole_size, &size);
+  return size;
+}
+
+struct update_hole_data {
+  gen_ctx_t gen_ctx;
+  int hreg, nregs;
+  MIR_type_t type;
+};
+
+static void update_hole_bound_used_locs (int point, void *data) {
+  struct update_hole_data *hole_data = data;
+  gen_ctx_t gen_ctx = hole_data->gen_ctx;
+  bitmap_t *locs = VARR_ADDR (bitmap_t, used_locs);
+  for (int i = 0; i < hole_data->nregs; i++)
+    bitmap_clear_bit_p (locs[point], target_nth_loc (hole_data->hreg, hole_data->type, i));
+}
+
+static void clear_used_locs (gen_ctx_t gen_ctx, int hreg, MIR_type_t type, live_range_t start_lr) {
+  int nregs = target_locs_num (hreg, type);
+  struct update_hole_data data = {gen_ctx, hreg, nregs, type};
+  bitmap_t *locs = VARR_ADDR (bitmap_t, used_locs);
+  process_hole_bounds (gen_ctx, hreg, type, nregs, start_lr, update_hole_bound_used_locs, &data);
+  for (live_range_t lr = start_lr; lr != NULL; lr = lr->next)
+    for (int p = lr->start; p <= lr->finish; p++)
+      for (int n = 0; n < nregs; n++) bitmap_clear_bit_p (locs[p], target_nth_loc (hreg, type, n));
+}
+
+static MIR_reg_t get_hard_reg (gen_ctx_t gen_ctx, MIR_reg_t type, bitmap_t conflict_locs,
+                               live_range_t lr) {
+  MIR_reg_t hreg, curr_hreg, best_hreg = MIR_NON_HARD_REG;
+  int n, k, nregs, best_saved_p = FALSE, hole_size, best_hole_size = 0;
   for (n = 0; n <= MAX_HARD_REG; n++) {
 #ifdef TARGET_HARD_REG_ALLOC_ORDER
-    loc = TARGET_HARD_REG_ALLOC_ORDER (n);
+    hreg = TARGET_HARD_REG_ALLOC_ORDER (n);
 #else
-    loc = n;
+    hreg = n;
 #endif
-    if (bitmap_bit_p (pseudo_conflict_locs, loc)) continue;
-    if (!target_hard_reg_type_ok_p (loc, type) || target_fixed_hard_reg_p (loc)) continue;
-    if ((slots_num = target_locs_num (loc, type)) > 1) {
-      if (target_nth_loc (loc, type, slots_num - 1) > MAX_HARD_REG) break;
-      for (k = slots_num - 1; k > 0; k--) {
-        curr_loc = target_nth_loc (loc, type, k);
-        if (target_fixed_hard_reg_p (curr_loc) || bitmap_bit_p (pseudo_conflict_locs, curr_loc))
-          break;
+    if (bitmap_bit_p (conflict_locs, hreg)) continue;
+    if (!target_hard_reg_type_ok_p (hreg, type) || target_fixed_hard_reg_p (hreg)) continue;
+    if ((nregs = target_locs_num (hreg, type)) > 1) {
+      if (target_nth_loc (hreg, type, nregs - 1) > MAX_HARD_REG) break;
+      for (k = nregs - 1; k > 0; k--) {
+        curr_hreg = target_nth_loc (hreg, type, k);
+        if (target_fixed_hard_reg_p (curr_hreg) || bitmap_bit_p (conflict_locs, curr_hreg)) break;
       }
       if (k > 0) continue;
     }
-    if (best_loc == MIR_NON_HARD_REG
-        || (best_saved_p && bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], loc))) {
-      best_saved_p = !bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], loc);
-      best_loc = loc;
+    if (best_hreg == MIR_NON_HARD_REG
+        || (hole_size = get_hole_size (gen_ctx, hreg, type, nregs, lr)) > best_hole_size
+        || (hole_size == best_hole_size && best_saved_p
+            && bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hreg))) {
+      best_hreg = hreg;
+      best_hole_size = hole_size;
+      best_saved_p = !bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hreg);
     }
   }
-  return best_loc;
+  return best_hreg;
 }
 
 static MIR_reg_t get_new_stack_slot (gen_ctx_t gen_ctx, MIR_reg_t type, int *slots_num_ref) {
@@ -5833,7 +5901,7 @@ static MIR_reg_t get_new_stack_slot (gen_ctx_t gen_ctx, MIR_reg_t type, int *slo
 }
 
 static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_mem_loc, MIR_type_t type,
-                                bitmap_t pseudo_conflict_locs, int *slots_num_ref) {
+                                bitmap_t conflict_locs, int *slots_num_ref) {
   MIR_reg_t loc, curr_loc, best_loc = MIR_NON_HARD_REG;
   int k, slots_num = 1;
   for (loc = start_mem_loc; loc <= func_stack_slots_num + MAX_HARD_REG; loc++) {
@@ -5841,7 +5909,7 @@ static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_mem_loc, MIR_
     if (target_nth_loc (loc, type, slots_num - 1) > func_stack_slots_num + MAX_HARD_REG) break;
     for (k = 0; k < slots_num; k++) {
       curr_loc = target_nth_loc (loc, type, k);
-      if (bitmap_bit_p (pseudo_conflict_locs, curr_loc)) break;
+      if (bitmap_bit_p (conflict_locs, curr_loc)) break;
     }
     if (k < slots_num) continue;
     if ((loc - MAX_HARD_REG - 1) % slots_num != 0)
@@ -5858,14 +5926,17 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t best_loc, start_mem_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
   int slots_num;
-  int j, k;
-  live_range_t lr;
+  int j, k, busy_p, simple_loc_update_p, reserve_only_busy_p;
+  live_range_t start_lr, lr;
   bitmap_t bm;
   size_t length;
-  bitmap_t *used_locs_addr;
+  bitmap_t *used_locs_addr, *busy_used_locs_addr;
   breg_info_t breg_info;
   MIR_func_t func = curr_func_item->u.func;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
+  const int simplified_p = TRUE || optimize_level < 2; /* temporarily switch off advanced RA */
+  bitmap_t conflict_locs = conflict_locs1, busy_conflict_locs = conflict_locs2;
+  bitmap_t busy_pseudo_points_conflict_locs = conflict_locs3;
 
   func_stack_slots_num = 0;
   if (nregs == 0) return;
@@ -5901,22 +5972,35 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     curr_breg_infos[i].live_length = length;
   }
   for (size_t n = 0; n <= curr_point && n < VARR_LENGTH (bitmap_t, used_locs); n++)
-    if (global_hard_regs == NULL)
+    if (global_hard_regs == NULL) {
       bitmap_clear (VARR_GET (bitmap_t, used_locs, n));
-    else
+      if (!simplified_p) bitmap_clear (VARR_GET (bitmap_t, busy_used_locs, n));
+    } else {
       bitmap_copy (VARR_GET (bitmap_t, used_locs, n), global_hard_regs);
+      if (!simplified_p) bitmap_copy (VARR_GET (bitmap_t, busy_used_locs, n), global_hard_regs);
+    }
   while (VARR_LENGTH (bitmap_t, used_locs) <= curr_point) {
     bm = bitmap_create2 (MAX_HARD_REG + 1);
     if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
     VARR_PUSH (bitmap_t, used_locs, bm);
+    if (!simplified_p) {
+      bm = bitmap_create2 (MAX_HARD_REG + 1);
+      if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
+      VARR_PUSH (bitmap_t, busy_used_locs, bm);
+    }
   }
   nregs = VARR_LENGTH (breg_info_t, sorted_bregs);
   qsort (VARR_ADDR (breg_info_t, sorted_bregs), nregs, sizeof (breg_info_t),
          breg_info_compare_func);
   used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
+  busy_used_locs_addr = VARR_ADDR (bitmap_t, busy_used_locs);
+  // ??? hard reg splitting
   for (i = 0; i <= MAX_HARD_REG; i++) {
     for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++) bitmap_set_bit_p (used_locs_addr[j], i);
+      for (j = lr->start; j <= lr->finish; j++) {
+        bitmap_set_bit_p (used_locs_addr[j], i);
+        if (!simplified_p) bitmap_set_bit_p (busy_used_locs_addr[j], i);
+      }
   }
   bitmap_clear (func_used_hard_regs);
   for (i = 0; i < nregs; i++) { /* hard reg and stack slot assignment */
@@ -5945,14 +6029,35 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     }
     var = reg2var (gen_ctx, reg);
     bitmap_clear (conflict_locs);
-    for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
-      for (j = lr->start; j <= lr->finish; j++)
+    bitmap_clear (busy_conflict_locs);
+    bitmap_clear (busy_pseudo_points_conflict_locs);
+    start_lr = VARR_GET (live_range_t, var_live_ranges, var);
+    for (lr = start_lr; lr != NULL; lr = lr->next) {
+      busy_p = !(simplified_p && lr->start_bb_border_p && lr->finish_bb_border_p);
+      for (j = lr->start; j <= lr->finish; j++) {
         bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
-    if (bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
+        if (simplified_p) continue;
+        bitmap_ior (busy_conflict_locs, busy_conflict_locs, busy_used_locs_addr[j]);
+        if (busy_p)
+          bitmap_ior (busy_pseudo_points_conflict_locs, busy_pseudo_points_conflict_locs,
+                      used_locs_addr[j]);
+      }
+    }
+    if (simplified_p && bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
-    best_loc = get_hard_reg (gen_ctx, type, conflict_locs);
-    if (best_loc != MIR_NON_HARD_REG) {
+    reserve_only_busy_p = FALSE;
+    if ((best_loc = get_hard_reg (gen_ctx, type, conflict_locs, NULL)) != MIR_NON_HARD_REG) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
+    } else if (!simplified_p
+               && ((best_loc = get_hard_reg (gen_ctx, type, busy_conflict_locs, start_lr))
+                   != MIR_NON_HARD_REG)) { /* try to use holes in already allocated pseudos: */
+      setup_used_hard_regs (gen_ctx, type, best_loc);
+      clear_used_locs (gen_ctx, best_loc, type, start_lr);
+    } else if (!simplified_p
+               && (best_loc = get_hard_reg (gen_ctx, type, busy_pseudo_points_conflict_locs, NULL))
+                    != MIR_NON_HARD_REG) { /* try to spill regs in holes of this pseudo: */
+      setup_used_hard_regs (gen_ctx, type, best_loc);
+      reserve_only_busy_p = TRUE;
     } else {
       best_loc = get_stack_loc (gen_ctx, start_mem_loc, type, conflict_locs, &slots_num);
     }
@@ -5963,10 +6068,17 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     });
     VARR_SET (MIR_reg_t, breg_renumber, breg, best_loc);
     slots_num = target_locs_num (best_loc, type);
-    for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
+    simple_loc_update_p = simplified_p || best_loc > MAX_HARD_REG;
+    for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next) {
+      if (!reserve_only_busy_p || !lr->start_bb_border_p || !lr->finish_bb_border_p)
+        for (j = lr->start; j <= lr->finish; j++)
+          for (k = 0; k < slots_num; k++)
+            bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
+      if (simple_loc_update_p || !lr->start_bb_border_p || !lr->finish_bb_border_p) continue;
       for (j = lr->start; j <= lr->finish; j++)
         for (k = 0; k < slots_num; k++)
-          bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
+          bitmap_set_bit_p (busy_used_locs_addr[j], target_nth_loc (best_loc, type, k));
+    }
   }
 }
 
@@ -6197,7 +6309,9 @@ static void init_ra (gen_ctx_t gen_ctx) {
   VARR_CREATE (breg_info_t, sorted_bregs, 0);
   VARR_CREATE (bitmap_t, used_locs, 0);
   VARR_CREATE (bitmap_t, var_bbs, 0);
-  conflict_locs = bitmap_create2 (3 * MAX_HARD_REG / 2);
+  conflict_locs1 = bitmap_create2 (3 * MAX_HARD_REG / 2);
+  conflict_locs2 = bitmap_create2 (3 * MAX_HARD_REG / 2);
+  conflict_locs3 = bitmap_create2 (3 * MAX_HARD_REG / 2);
 }
 
 static void finish_ra (gen_ctx_t gen_ctx) {
@@ -6207,7 +6321,9 @@ static void finish_ra (gen_ctx_t gen_ctx) {
   VARR_DESTROY (bitmap_t, used_locs);
   while (VARR_LENGTH (bitmap_t, var_bbs) != 0) bitmap_destroy (VARR_POP (bitmap_t, var_bbs));
   VARR_DESTROY (bitmap_t, var_bbs);
-  bitmap_destroy (conflict_locs);
+  bitmap_destroy (conflict_locs1);
+  bitmap_destroy (conflict_locs2);
+  bitmap_destroy (conflict_locs3);
   free (gen_ctx->ra_ctx);
   gen_ctx->ra_ctx = NULL;
 }
