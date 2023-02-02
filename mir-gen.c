@@ -5804,7 +5804,7 @@ static void process_hole_bounds (gen_ctx_t gen_ctx, int hreg, MIR_type_t type, i
   live_range_t next_lr;
   for (; lr != NULL; lr = next_lr) {
     next_lr = lr->next;
-    left_bound = next_lr != NULL next_lr->finish ? -1;
+    left_bound = next_lr != NULL ? next_lr->finish : -1;
     for (i = lr->start - 1; i > left_bound && !hreg_in_bitmap_p (hreg, type, nregs, busy_locs[i]);
          i--)
       f (i, data);
