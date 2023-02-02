@@ -213,6 +213,38 @@ static inline size_t bitmap_bit_count (const_bitmap_t bm) {
   return count;
 }
 
+/* Return min bit number in BM.  Return 0 for empty bitmap.  */
+static inline size_t bitmap_bit_min (const_bitmap_t bm) {
+  size_t i, len = VARR_LENGTH (bitmap_el_t, bm);
+  bitmap_el_t el, *addr = VARR_ADDR (bitmap_el_t, bm);
+  int count;
+
+  for (i = 0; i < len; i++) {
+    if ((el = addr[i]) != 0) {
+      for (count = 0; el != 0; el >>= 1, count++)
+        if (el & 1) return i * BITMAP_WORD_BITS + count;
+    }
+  }
+  return 0;
+}
+
+/* Return max bit number in BM.  Return 0 for empty bitmap.  */
+static inline size_t bitmap_bit_max (const_bitmap_t bm) {
+  size_t i, len = VARR_LENGTH (bitmap_el_t, bm);
+  bitmap_el_t el, *addr = VARR_ADDR (bitmap_el_t, bm);
+  int count;
+
+  if (len == 0) return 0;
+  for (i = len - 1;; i--) {
+    if ((el = addr[i]) != 0) {
+      for (count = BITMAP_WORD_BITS - 1; count >= 0; count--)
+        if ((el >> count) & 1) return i * BITMAP_WORD_BITS + count;
+    }
+    if (i == 0) break;
+  }
+  return 0;
+}
+
 static inline int bitmap_op2 (bitmap_t dst, const_bitmap_t src1, const_bitmap_t src2,
                               bitmap_el_t (*op) (bitmap_el_t, bitmap_el_t)) {
   size_t i, len, bound, src1_len, src2_len;
