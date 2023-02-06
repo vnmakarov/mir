@@ -5952,6 +5952,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   breg_info_t breg_info;
   MIR_func_t func = curr_func_item->u.func;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
+  const char *msg;
   const int simplified_p = TRUE || optimize_level < 2; /* temporarily switch off advanced RA */
   bitmap_t conflict_locs = conflict_locs1, busy_conflict_locs = conflict_locs2;
   bitmap_t busy_pseudo_points_conflict_locs = conflict_locs3;
@@ -6064,6 +6065,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     if (simplified_p && bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
     reserve_only_busy_p = FALSE;
+    msg = "";
     if ((best_loc = get_hard_reg (gen_ctx, type, conflict_locs, NULL)) != MIR_NON_HARD_REG) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
     } else if (!simplified_p
@@ -6071,16 +6073,18 @@ static void quality_assign (gen_ctx_t gen_ctx) {
                    != MIR_NON_HARD_REG)) { /* try to use holes in already allocated pseudos: */
       setup_used_hard_regs (gen_ctx, type, best_loc);
       clear_used_locs (gen_ctx, best_loc, type, start_lr);
+      msg = "(with splitting live ranges of other regs)";
     } else if (!simplified_p
                && (best_loc = get_hard_reg (gen_ctx, type, busy_pseudo_points_conflict_locs, NULL))
                     != MIR_NON_HARD_REG) { /* try to spill regs in holes of this pseudo: */
+      msg = "(with splitting reg live range)";
       setup_used_hard_regs (gen_ctx, type, best_loc);
       reserve_only_busy_p = TRUE;
     } else {
       best_loc = get_stack_loc (gen_ctx, start_mem_loc, type, conflict_locs, &slots_num);
     }
     DEBUG (2, {
-      fprintf (debug_file, " Assigning to %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n",
+      fprintf (debug_file, " Assigning %s to %s:var=%3u, breg=%3u (freq %-3ld) -- %lu\n", msg,
                MIR_reg_name (gen_ctx->ctx, reg, func), reg2var (gen_ctx, reg), breg,
                curr_breg_infos[breg].freq, (unsigned long) best_loc);
     });
@@ -6496,6 +6500,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
             || !bitmap_set_bit_p (marked_hregs, hreg))
           continue;
         DEBUG (2, {
+          MIR_context_t ctx = gen_ctx->ctx;
           fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu\n", reg,
                    MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
                    MIR_reg_name (ctx, reg, curr_func_item->u.func), hreg,
