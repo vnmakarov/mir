@@ -1154,8 +1154,11 @@ static void output_out_edges (gen_ctx_t gen_ctx, bb_t bb) {
   fprintf (debug_file, "\n");
 }
 
-static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int var_p) {
+/* When print_name_p, treat as reg bitmap if REG_P, var bitmap otherwise. */
+static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int print_name_p,
+                           int reg_p) {
   MIR_context_t ctx = gen_ctx->ctx;
+  MIR_reg_t reg;
   size_t nel;
   bitmap_iterator_t bi;
 
@@ -1163,11 +1166,13 @@ static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int
   fprintf (debug_file, "%s", head);
   FOREACH_BITMAP_BIT (bi, bm, nel) {
     fprintf (debug_file, " %3lu", (unsigned long) nel);
-    if (var_p && var_is_reg_p (nel))
+    if (print_name_p) {
+      reg = reg_p ? (MIR_reg_t) nel : var_is_reg_p (nel) ? var2reg (gen_ctx, nel) : 0;
+      if (reg == 0) continue;
       fprintf (debug_file, "(%s:%s)",
-               MIR_type_str (ctx,
-                             MIR_reg_type (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func)),
-               MIR_reg_name (ctx, var2reg (gen_ctx, nel), curr_func_item->u.func));
+               MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
+               MIR_reg_name (ctx, reg, curr_func_item->u.func));
+    }
   }
   fprintf (debug_file, "\n");
 }
@@ -3078,7 +3083,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
       if (insn->ops[0].mode == MIR_OP_MEM || insn->ops[1].mode == MIR_OP_MEM)
         update_mem_availability (gen_ctx, bb->gen, bb_insn);
     }
-    DEBUG (2, { output_bitmap (gen_ctx, "   Mem availabilty gen:", bb->gen, FALSE); });
+    DEBUG (2, { output_bitmap (gen_ctx, "   Mem availabilty gen:", bb->gen, FALSE, FALSE); });
   }
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     bitmap_set_bit_range_p (bb->mem_av_out, 0, VARR_LENGTH (mem_expr_t, mem_exprs));
@@ -3087,8 +3092,8 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
     fprintf (debug_file, "BB mem availability in/out:\n");
     for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
       fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index);
-      output_bitmap (gen_ctx, "    mem av in:", bb->mem_av_in, FALSE);
-      output_bitmap (gen_ctx, "    mem av out:", bb->mem_av_out, FALSE);
+      output_bitmap (gen_ctx, "    mem av in:", bb->mem_av_in, FALSE, FALSE);
+      output_bitmap (gen_ctx, "    mem av out:", bb->mem_av_out, FALSE, FALSE);
     }
   });
 }
@@ -4561,10 +4566,10 @@ static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
 
 static void print_mem_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
   fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
-  output_bitmap (gen_ctx, "   Mem live in:", bb->mem_live_in, FALSE);
-  output_bitmap (gen_ctx, "   Mem live out:", bb->mem_live_out, FALSE);
-  output_bitmap (gen_ctx, "   Mem live gen:", bb->mem_live_gen, FALSE);
-  output_bitmap (gen_ctx, "   Mem live kill:", bb->mem_live_kill, FALSE);
+  output_bitmap (gen_ctx, "   Mem live in:", bb->mem_live_in, FALSE, FALSE);
+  output_bitmap (gen_ctx, "   Mem live out:", bb->mem_live_out, FALSE, FALSE);
+  output_bitmap (gen_ctx, "   Mem live gen:", bb->mem_live_gen, FALSE, FALSE);
+  output_bitmap (gen_ctx, "   Mem live kill:", bb->mem_live_kill, FALSE, FALSE);
 }
 
 static void calculate_mem_live_info (gen_ctx_t gen_ctx) {
@@ -5353,10 +5358,10 @@ static void destroy_func_live_ranges (gen_ctx_t gen_ctx) {
 
 #if !MIR_NO_GEN_DEBUG
 static void output_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
-  output_bitmap (gen_ctx, "  live_in:", bb->live_in, TRUE);
-  output_bitmap (gen_ctx, "  live_out:", bb->live_out, TRUE);
-  output_bitmap (gen_ctx, "  live_gen:", bb->live_gen, TRUE);
-  output_bitmap (gen_ctx, "  live_kill:", bb->live_kill, TRUE);
+  output_bitmap (gen_ctx, "  live_in:", bb->live_in, TRUE, FALSE);
+  output_bitmap (gen_ctx, "  live_out:", bb->live_out, TRUE, FALSE);
+  output_bitmap (gen_ctx, "  live_gen:", bb->live_gen, TRUE, FALSE);
+  output_bitmap (gen_ctx, "  live_kill:", bb->live_kill, TRUE, FALSE);
 }
 #endif
 
@@ -6481,6 +6486,13 @@ static void rewrite (gen_ctx_t gen_ctx) {
             || (hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) > MAX_HARD_REG
             || !bitmap_set_bit_p (marked_hregs, hreg))
           continue;
+        DEBUG (2, {
+          fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu", reg,
+                   MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
+                   MIR_reg_name (ctx, reg, curr_func_item->u.func), hreg,
+                   (unsigned long) bb->index);
+          print_bb_insn (gen_ctx, insn->data, FALSE);
+        });
         bitmap_set_bit_p (bb->spill_gen, reg);
       }
       bitmap_clear (bb->spill_kill);
@@ -6566,6 +6578,15 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
   }
 }
 
+#if !MIR_NO_GEN_DEBUG
+static void output_bb_spill_info (gen_ctx_t gen_ctx, bb_t bb) {
+  output_bitmap (gen_ctx, "  spill_in:", bb->spill_in, TRUE, TRUE);
+  output_bitmap (gen_ctx, "  spill_out:", bb->spill_out, TRUE, TRUE);
+  output_bitmap (gen_ctx, "  spill_gen:", bb->spill_gen, TRUE, TRUE);
+  output_bitmap (gen_ctx, "  spill_kill:", bb->spill_kill, TRUE, TRUE);
+}
+#endif
+
 static void reg_alloc (gen_ctx_t gen_ctx) {
   MIR_reg_t i, reg, nregs = get_nregs (gen_ctx);
   const int simplified_p = TRUE || optimize_level < 2; /* temporarily switch off advanced RA */
@@ -6587,6 +6608,10 @@ static void reg_alloc (gen_ctx_t gen_ctx) {
   rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
   if (!simplified_p) {
     solve_dataflow (gen_ctx, FALSE, spill_con_func_0, spill_con_func_n, spill_trans_func);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++Spill info:");
+      print_CFG (gen_ctx, TRUE, FALSE, FALSE, FALSE, output_bb_spill_info);
+    });
     split (gen_ctx);
   }
 }
