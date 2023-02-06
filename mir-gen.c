@@ -6153,6 +6153,15 @@ static MIR_reg_t add_ld_st (gen_ctx_t gen_ctx, MIR_op_t *mem_op, int addr_reg_p,
   } else {
     new_insns[n++] = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
   }
+  DEBUG (2, {
+    fprintf (debug_file, "    Adding %s insn ", after_p ? "after" : "before");
+    MIR_output_insn (ctx, debug_file, anchor, curr_func_item->u.func, FALSE);
+    fprintf (debug_file, ":\n");
+    for (size_t i = 0; i < n; i++) {
+      fprintf (debug_file, "      ");
+      MIR_output_insn (ctx, debug_file, new_insns[i], curr_func_item->u.func, TRUE);
+    }
+  });
   if (after_p) {
     for (size_t i = 0, j = n - 1; i < j; i++, j--) { /* reverse for subsequent correct insertion: */
       new_insn = new_insns[i];
@@ -6487,7 +6496,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
             || !bitmap_set_bit_p (marked_hregs, hreg))
           continue;
         DEBUG (2, {
-          fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu", reg,
+          fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu\n", reg,
                    MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
                    MIR_reg_name (ctx, reg, curr_func_item->u.func), hreg,
                    (unsigned long) bb->index);
@@ -6549,14 +6558,14 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     FOREACH_BITMAP_BIT (bi, bb->spill_out, nel) {
-      int found_p;
+      int found_p, after_p;
       edge_t e;
       MIR_insn_t head_insn, tail_insn;
       MIR_reg_t reg = nel;
       if (!bitmap_bit_p (bb->spill_in, reg)) { /* put (slot<-hr) at bb end: */
         tail_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn;
-        spill_restore_reg (gen_ctx, reg, base_reg, tail_insn,
-                           !MIR_any_branch_code_p (tail_insn->code), FALSE);
+        after_p = !MIR_any_branch_code_p (tail_insn->code);
+        spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, FALSE);
       }
       found_p = FALSE;
       for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
@@ -6571,8 +6580,8 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
       for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
         if (!bitmap_bit_p (e->src->spill_out, reg)) { /* put (slot<-hr) at e->src end: */
           tail_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)->insn;
-          spill_restore_reg (gen_ctx, reg, base_reg, tail_insn,
-                             !MIR_any_branch_code_p (tail_insn->code), FALSE);
+          after_p = !MIR_any_branch_code_p (tail_insn->code);
+          spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, FALSE);
         }
     }
   }
