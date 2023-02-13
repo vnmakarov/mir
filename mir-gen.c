@@ -5199,7 +5199,8 @@ static live_range_t merge_live_ranges (gen_ctx_t gen_ctx, live_range_t r1, live_
     if (r1->start == r2->finish + 1
         && r1->start_bb_border_p == r2->finish_bb_border_p
         /* merge inside bb or whole bb ranges */
-        && (!r1->finish_bb_border_p || (r1->finish_bb_border_p && r2->start_bb_border_p))) {
+        && (!r1->finish_bb_border_p || (r1->finish_bb_border_p && r2->start_bb_border_p))
+        && (r2->next == NULL || r2->finish != r2->next->start)) {
       /* Joint ranges: merge r1 and r2 into r1.  */
       DEBUG (4, {
         fprintf (debug_file, "        merging");
@@ -5214,7 +5215,7 @@ static live_range_t merge_live_ranges (gen_ctx_t gen_ctx, live_range_t r1, live_
       r2 = r2->next;
       free (temp);
     } else {
-      gen_assert (r2->finish + 1 < r1->start);
+      gen_assert (r2->finish <= r1->start);
       /* Add r1 to the result.  */
       if (first == NULL) {
         first = last = r1;
@@ -5357,9 +5358,13 @@ static void destroy_func_live_ranges (gen_ctx_t gen_ctx) {
 }
 
 #if !MIR_NO_GEN_DEBUG
-static void output_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
+static void output_bb_border_live_info (gen_ctx_t gen_ctx, bb_t bb) {
   output_bitmap (gen_ctx, "  live_in:", bb->live_in, TRUE, FALSE);
   output_bitmap (gen_ctx, "  live_out:", bb->live_out, TRUE, FALSE);
+}
+
+static void output_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
+  output_bb_border_live_info (gen_ctx, bb);
   output_bitmap (gen_ctx, "  live_gen:", bb->live_gen, TRUE, FALSE);
   output_bitmap (gen_ctx, "  live_kill:", bb->live_kill, TRUE, FALSE);
 }
@@ -5634,7 +5639,9 @@ static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
 
   first = VARR_GET (MIR_reg_t, first_coalesced_reg, reg1);
   if ((first2 = VARR_GET (MIR_reg_t, first_coalesced_reg, reg2)) == first) return;
-  if (MIR_reg_hard_reg_name (gen_ctx->ctx, first2, curr_func_item->u.func) != NULL) {
+  if (MIR_reg_hard_reg_name (gen_ctx->ctx, first2, curr_func_item->u.func) != NULL
+      || (MIR_reg_hard_reg_name (gen_ctx->ctx, first, curr_func_item->u.func) == NULL
+          && first2 < first)) {
     SWAP (first, first2, temp);
     SWAP (reg1, reg2, temp);
   }
@@ -5655,10 +5662,32 @@ static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
   VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (gen_ctx, list, list2));
 }
 
+static void update_bitmap_after_coalescing (gen_ctx_t gen_ctx, bitmap_t bm) {
+  MIR_reg_t var, reg, first_reg;
+  size_t nel;
+  bitmap_iterator_t bi;
+
+  bitmap_clear (temp_bitmap);
+  bitmap_clear (temp_bitmap2);
+  FOREACH_BITMAP_BIT (bi, bm, nel) {
+    var = nel;
+    if (!var_is_reg_p (var)) continue;
+    reg = var2reg (gen_ctx, var);
+    if ((first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, reg)) == reg) continue;
+    bitmap_set_bit_p (temp_bitmap, var);
+    bitmap_set_bit_p (temp_bitmap2, reg2var (gen_ctx, first_reg));
+  }
+  bitmap_ior_and_compl (bm, temp_bitmap2, bm, temp_bitmap);
+}
+
+#define live_in in
+#define live_out out
+
 static void coalesce (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_reg_t reg, sreg, dreg, first_reg, sreg_var, dreg_var;
-  MIR_insn_t insn, next_insn;
+  MIR_reg_t reg, sreg, dreg, first_reg, first_sreg, first_dreg, sreg_var, dreg_var;
+  MIR_insn_t insn, new_insn, next_insn;
+  bb_t bb;
   bb_insn_t bb_insn;
   mv_t mv;
   size_t nops;
@@ -5692,8 +5721,9 @@ static void coalesce (gen_ctx_t gen_ctx) {
     insn = bb_insn->insn;
     dreg = insn->ops[0].u.reg;
     sreg = insn->ops[1].u.reg;
-    if (VARR_GET (MIR_reg_t, first_coalesced_reg, sreg)
-        == VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) {
+    first_sreg = VARR_GET (MIR_reg_t, first_coalesced_reg, sreg);
+    first_dreg = VARR_GET (MIR_reg_t, first_coalesced_reg, dreg);
+    if (first_sreg == first_dreg) {
       coalesced_moves++;
       DEBUG (2, {
         fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llud):", sreg, dreg,
@@ -5701,10 +5731,12 @@ static void coalesce (gen_ctx_t gen_ctx) {
         print_bb_insn (gen_ctx, bb_insn, TRUE);
       });
     } else {
-      sreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, sreg));
-      dreg_var = reg2var (gen_ctx, VARR_GET (MIR_reg_t, first_coalesced_reg, dreg));
+      sreg_var = reg2var (gen_ctx, first_sreg);
+      dreg_var = reg2var (gen_ctx, first_dreg);
       if (!live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, sreg_var),
-                                   VARR_GET (live_range_t, var_live_ranges, dreg_var))) {
+                                   VARR_GET (live_range_t, var_live_ranges, dreg_var))
+          && (MIR_reg_hard_reg_name (ctx, first_sreg, curr_func_item->u.func) == NULL
+              || MIR_reg_hard_reg_name (ctx, first_dreg, curr_func_item->u.func) == NULL)) {
         coalesced_moves++;
         DEBUG (2, {
           fprintf (debug_file, "      Coalescing move r%d-r%d (freq=%llu):", sreg, dreg,
@@ -5724,11 +5756,22 @@ static void coalesce (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
     bb_insn = mv.bb_insn;
+    bb = bb_insn->bb;
     insn = bb_insn->insn;
     dreg = insn->ops[0].u.reg;
     sreg = insn->ops[1].u.reg;
     first_reg = VARR_GET (MIR_reg_t, first_coalesced_reg, sreg);
     if (first_reg != VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) continue;
+    if (DLIST_TAIL (bb_insn_t, bb->bb_insns) == bb_insn
+        && DLIST_HEAD (bb_insn_t, bb->bb_insns) == bb_insn) { /* bb is becoming empty */
+      new_insn = _MIR_new_label (ctx);
+      MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+      add_new_bb_insn (gen_ctx, new_insn, bb, FALSE);
+      DEBUG (2, {
+        fprintf (debug_file, "Adding label for becoming empty BB ");
+        MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
+      });
+    }
     DEBUG (2, {
       fprintf (debug_file, "Deleting coalesced move ");
       MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
@@ -5760,6 +5803,11 @@ static void coalesce (gen_ctx_t gen_ctx) {
           dv->var = reg2var (gen_ctx, first_reg);
       }
   }
+  /* Update live_in & live_out */
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    update_bitmap_after_coalescing (gen_ctx, bb->live_in);
+    update_bitmap_after_coalescing (gen_ctx, bb->live_out);
+  }
   DEBUG (1, {
     int moves_num = (int) VARR_LENGTH (mv_t, moves);
     if (coalesced_moves != 0) {
@@ -5770,6 +5818,8 @@ static void coalesce (gen_ctx_t gen_ctx) {
     }
   });
 }
+#undef live_in
+#undef live_out
 
 static void init_coalesce (gen_ctx_t gen_ctx) {
   gen_ctx->coalesce_ctx = gen_malloc (gen_ctx, sizeof (struct coalesce_ctx));
@@ -5944,7 +5994,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_reg_t best_loc, start_mem_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
   MIR_type_t type;
   int slots_num;
-  int j, k, busy_p, simple_loc_update_p, reserve_only_busy_p;
+  int j, k, busy_p, simple_loc_update_p, reserve_only_busy_p, reserve_always_busy_p;
   live_range_t start_lr, lr;
   bitmap_t bm;
   size_t length;
@@ -6064,7 +6114,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     }
     if (simplified_p && bitmap_bit_p (curr_cfg->call_crossed_bregs, breg))
       bitmap_ior (conflict_locs, conflict_locs, call_used_hard_regs[type]);
-    reserve_only_busy_p = FALSE;
+    reserve_only_busy_p = reserve_always_busy_p = FALSE;
     msg = "";
     if ((best_loc = get_hard_reg (gen_ctx, type, conflict_locs, NULL)) != MIR_NON_HARD_REG) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
@@ -6074,6 +6124,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
       setup_used_hard_regs (gen_ctx, type, best_loc);
       clear_used_locs (gen_ctx, best_loc, type, start_lr);
       msg = "(with splitting live ranges of other regs)";
+      reserve_always_busy_p = TRUE;
     } else if (!simplified_p
                && (best_loc = get_hard_reg (gen_ctx, type, busy_pseudo_points_conflict_locs, NULL))
                     != MIR_NON_HARD_REG) { /* try to spill regs in holes of this pseudo: */
@@ -6092,11 +6143,13 @@ static void quality_assign (gen_ctx_t gen_ctx) {
     slots_num = target_locs_num (best_loc, type);
     simple_loc_update_p = simplified_p || best_loc > MAX_HARD_REG;
     for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next) {
-      if (!reserve_only_busy_p || !lr->start_bb_border_p || !lr->finish_bb_border_p)
+      if (!reserve_only_busy_p || !(lr->start_bb_border_p && lr->finish_bb_border_p))
         for (j = lr->start; j <= lr->finish; j++)
           for (k = 0; k < slots_num; k++)
             bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (best_loc, type, k));
-      if (simple_loc_update_p || !lr->start_bb_border_p || !lr->finish_bb_border_p) continue;
+      if (!reserve_always_busy_p
+          && (simple_loc_update_p || (lr->start_bb_border_p && lr->finish_bb_border_p)))
+        continue;
       for (j = lr->start; j <= lr->finish; j++)
         for (k = 0; k < slots_num; k++)
           bitmap_set_bit_p (busy_used_locs_addr[j], target_nth_loc (best_loc, type, k));
@@ -6158,7 +6211,11 @@ static MIR_reg_t add_ld_st (gen_ctx_t gen_ctx, MIR_op_t *mem_op, int addr_reg_p,
     new_insns[n++] = MIR_new_insn (ctx, code, *mem_op, hard_reg_op);
   }
   DEBUG (2, {
+    bb_t bb = get_insn_bb (gen_ctx, anchor);
     fprintf (debug_file, "    Adding %s insn ", after_p ? "after" : "before");
+    if (optimize_level != 0)
+      fprintf (debug_file, " (in BB %lu, level %d) ", (unsigned long) bb->index,
+               bb_loop_level (bb));
     MIR_output_insn (ctx, debug_file, anchor, curr_func_item->u.func, FALSE);
     fprintf (debug_file, ":\n");
     for (size_t i = 0; i < n; i++) {
@@ -6213,25 +6270,22 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
 
 #define live_in in
 #define live_out out
-
-#define spill_gen gen   /* pseudo regs should be spilled the whole BB */
+#define spill_gen gen   /* pseudo regs fully spilled in BB, for them spill_kill is false */
 #define spill_kill kill /* pseudo regs referenced in the BB and should use assigned hreg */
 
-static void update_live_and_kill (gen_ctx_t gen_ctx, MIR_reg_t var, int out_p, bb_t bb,
-                                  bitmap_t live) {
+static void update_live (gen_ctx_t gen_ctx, MIR_reg_t var, int out_p, bitmap_t live) {
   if (out_p) {
     bitmap_clear_bit_p (live, var);
   } else {
     bitmap_set_bit_p (live, var);
   }
-  if (var_is_reg_p (var)) bitmap_set_bit_p (bb->spill_kill, var2reg (gen_ctx, var));
 }
 
 static int get_spill_mem_loc (gen_ctx_t gen_ctx, MIR_reg_t reg) {
   MIR_context_t ctx = gen_ctx->ctx;
   int slots_num;
   MIR_type_t type;
-  MIR_reg_t slot;
+  MIR_reg_t var, slot;
   live_range_t lr;
   bitmap_t conflict_locs = conflict_locs1;
   bitmap_t *used_locs_addr = VARR_ADDR (bitmap_t, used_locs);
@@ -6239,14 +6293,18 @@ static int get_spill_mem_loc (gen_ctx_t gen_ctx, MIR_reg_t reg) {
   gen_assert (reg != 0 && reg < VARR_LENGTH (spill_cache_el_t, spill_cache));
   if (spill_cache_addr[reg].age == spill_cache_age) return spill_cache_addr[reg].slot;
   bitmap_clear (conflict_locs);
-  for (lr = VARR_GET (live_range_t, var_live_ranges, reg2var (gen_ctx, reg)); lr != NULL;
-       lr = lr->next)
+  var = reg2var (gen_ctx, reg);
+  for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
     for (int j = lr->start; j <= lr->finish; j++)
       bitmap_ior (conflict_locs, conflict_locs, used_locs_addr[j]);
   type = MIR_reg_type (ctx, reg, curr_func_item->u.func);
   spill_cache_addr[reg].slot = slot
     = get_stack_loc (gen_ctx, MAX_HARD_REG + 1, type, conflict_locs, &slots_num);
   spill_cache_addr[reg].age = spill_cache_age;
+  for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
+    for (int j = lr->start; j <= lr->finish; j++)
+      for (int k = 0; k < slots_num; k++)
+        bitmap_set_bit_p (used_locs_addr[j], target_nth_loc (slot, type, k));
   return slot;
 }
 
@@ -6265,13 +6323,14 @@ static void spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t base_
   MIR_reg_t hard_reg = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (gen_ctx, reg));
   gen_assert (hard_reg <= MAX_HARD_REG);
   mem_loc = get_spill_mem_loc (gen_ctx, reg);
+  DEBUG (2, { fprintf (debug_file, "    %s r%d:", restore_p ? "Restore" : "Spill", reg); });
   add_ld_st (gen_ctx, &mem_op, FALSE, mem_loc, base_reg, data_mode, hard_reg, !restore_p,
-             TEMP_INT_HARD_REG1, anchor, restore_p);
+             TEMP_INT_HARD_REG1, anchor, after_p);
 }
 
 struct rewrite_data {
   bb_t bb;
-  bitmap_t live, regs_to_save, referenced_regs;
+  bitmap_t live, regs_to_save;
 };
 
 static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
@@ -6295,7 +6354,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
     for (i = 0; i < nops; i++) {
       op = &insn->ops[i];
       data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
-      if (!out_p == (niter != 0)) continue; /* Process outputs first */
+      if (!out_p == (niter == 0)) continue; /* Process outputs first */
       DEBUG (2, {
         if (out_p)
           out_op = *op; /* we don't care about multiple call outputs here */
@@ -6305,8 +6364,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
       switch (op->mode) {
       case MIR_OP_HARD_REG: {
         bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg);
-        if (data != NULL)
-          update_live_and_kill (gen_ctx, op->u.hard_reg, out_p, data->bb, data->live);
+        if (data != NULL) update_live (gen_ctx, op->u.hard_reg, out_p, data->live);
         break;
       }
       case MIR_OP_HARD_REG_MEM:
@@ -6316,9 +6374,9 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
           bitmap_set_bit_p (func_used_hard_regs, op->u.hard_reg_mem.index);
         if (data != NULL) {
           if (op->u.hard_reg_mem.base != MIR_NON_HARD_REG)
-            update_live_and_kill (gen_ctx, op->u.hard_reg_mem.base, FALSE, data->bb, data->live);
+            update_live (gen_ctx, op->u.hard_reg_mem.base, FALSE, data->live);
           if (op->u.hard_reg_mem.index != MIR_NON_HARD_REG)
-            update_live_and_kill (gen_ctx, op->u.hard_reg_mem.index, FALSE, data->bb, data->live);
+            update_live (gen_ctx, op->u.hard_reg_mem.index, FALSE, data->live);
         }
         break;
       case MIR_OP_REG:
@@ -6331,7 +6389,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
                                          : MIR_OP_INT;
         }
         if (data != NULL) {
-          update_live_and_kill (gen_ctx, reg2var (gen_ctx, op->u.reg), out_p, data->bb, data->live);
+          update_live (gen_ctx, reg2var (gen_ctx, op->u.reg), out_p, data->live);
           if (bitmap_clear_bit_p (data->regs_to_save, op->u.reg)) /* put (slot<-hr) after insn */
             spill_restore_reg (gen_ctx, op->u.reg, base_reg, insn, TRUE, FALSE);
         }
@@ -6348,14 +6406,12 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
       case MIR_OP_MEM:
         if (data != NULL) {
           if (op->u.mem.base != 0) {
-            update_live_and_kill (gen_ctx, reg2var (gen_ctx, op->u.mem.base), FALSE, data->bb,
-                                  data->live);
+            update_live (gen_ctx, reg2var (gen_ctx, op->u.mem.base), FALSE, data->live);
             if (bitmap_clear_bit_p (data->regs_to_save, op->u.mem.base)) /* put (slot<-hr) after */
               spill_restore_reg (gen_ctx, op->u.mem.base, base_reg, insn, TRUE, FALSE);
           }
           if (op->u.mem.index != 0) {
-            update_live_and_kill (gen_ctx, reg2var (gen_ctx, op->u.mem.index), FALSE, data->bb,
-                                  data->live);
+            update_live (gen_ctx, reg2var (gen_ctx, op->u.mem.index), FALSE, data->live);
             if (bitmap_clear_bit_p (data->regs_to_save, op->u.mem.index)) /* put (slot<-hr) after */
               spill_restore_reg (gen_ctx, op->u.mem.index, base_reg, insn, TRUE, FALSE);
           }
@@ -6382,25 +6438,25 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
       target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
                                             &early_clobbered_hard_reg2);
       if (early_clobbered_hard_reg1 != MIR_NON_HARD_REG)
-        update_live_and_kill (gen_ctx, early_clobbered_hard_reg1, TRUE, data->bb, data->live);
+        update_live (gen_ctx, early_clobbered_hard_reg1, TRUE, data->live);
       if (early_clobbered_hard_reg2 != MIR_NON_HARD_REG)
-        update_live_and_kill (gen_ctx, early_clobbered_hard_reg2, TRUE, data->bb, data->live);
+        update_live (gen_ctx, early_clobbered_hard_reg2, TRUE, data->live);
       if (MIR_call_code_p (insn->code)) {
         size_t nel;
         bb_insn_t bb_insn = insn->data;
         bitmap_iterator_t bi;
         FOREACH_BITMAP_BIT (bi, call_used_hard_regs[MIR_T_UNDEF], nel) {
-          update_live_and_kill (gen_ctx, nel, TRUE, data->bb, data->live);
+          update_live (gen_ctx, nel, TRUE, data->live);
         }
         FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
-          update_live_and_kill (gen_ctx, nel, FALSE, data->bb, data->live);
+          update_live (gen_ctx, nel, FALSE, data->live);
         }
         FOREACH_BITMAP_BIT (bi, data->live, nel) {
           MIR_reg_t reg = nel;
           if (!var_is_reg_p (reg)) continue;
           reg = var2reg (gen_ctx, reg);
           MIR_reg_t loc = VARR_GET (MIR_reg_t, breg_renumber, reg2breg (gen_ctx, reg));
-          if (loc >= MAX_HARD_REG || !bitmap_bit_p (data->bb->spill_gen, reg)) continue;
+          if (loc >= MAX_HARD_REG || bitmap_bit_p (data->bb->spill_kill, reg)) continue;
           MIR_type_t type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
           int nregs = target_locs_num (loc, type);
           if (hreg_in_bitmap_p (loc, type, nregs, call_used_hard_regs[MIR_T_UNDEF])
@@ -6439,8 +6495,37 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
   return deleted_movs_num;
 }
 
+static int mark_spill (gen_ctx_t gen_ctx, bb_t bb, MIR_reg_t reg) {
+  int added_p = FALSE;
+  MIR_reg_t var = reg2var (gen_ctx, reg);
+  VARR_TRUNC (bb_t, worklist, 0);
+  VARR_PUSH (bb_t, worklist, bb);
+  while (VARR_LENGTH (bb_t, worklist) != 0) {
+    edge_t e;
+    bb_t bb = VARR_POP (bb_t, worklist);
+    if (bitmap_bit_p (bb->spill_kill, reg) || !bitmap_set_bit_p (bb->spill_gen, reg))
+      continue; /* not spilled in whole bb or already processed */
+    added_p = TRUE;
+    DEBUG (2, {
+      MIR_context_t ctx = gen_ctx->ctx;
+      MIR_reg_t breg = reg2breg (gen_ctx, reg);
+      MIR_reg_t hreg = VARR_GET (MIR_reg_t, breg_renumber, breg);
+      fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu\n", reg,
+               MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
+               MIR_reg_name (ctx, reg, curr_func_item->u.func), hreg, (unsigned long) bb->index);
+    });
+    for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
+      gen_assert (bitmap_bit_p (e->src->live_out, var)); /* see live dataflow */
+      VARR_PUSH (bb_t, worklist, e->src);
+    }
+    for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
+      if (bitmap_bit_p (e->dst->live_in, var)) VARR_PUSH (bb_t, worklist, e->dst);
+  }
+  return added_p;
+}
+
 static void rewrite (gen_ctx_t gen_ctx) {
-  MIR_insn_t insn, next_insn;
+  MIR_insn_t insn, next_insn, head_insn;
   MIR_reg_t base_reg = target_get_stack_slot_base_reg (gen_ctx);
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   bitmap_t global_hard_regs
@@ -6460,7 +6545,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
     MIR_reg_t var, reg, breg, hreg;
     bb_insn_t prev_bb_insn;
     bitmap_t live = temp_bitmap, regs_to_save = temp_bitmap2;
-    bitmap_t referenced_regs = temp_bitmap3, marked_hregs = temp_bitmap4;
+    bitmap_t marked_hregs = temp_bitmap3;
     bitmap_iterator_t bi;
     size_t nel;
     insn_var_iterator_t iter;
@@ -6470,46 +6555,48 @@ static void rewrite (gen_ctx_t gen_ctx) {
     while (VARR_LENGTH (spill_cache_el_t, spill_cache) <= curr_cfg->max_reg)
       VARR_PUSH (spill_cache_el_t, spill_cache, spill_cache_el);
     for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-      bitmap_copy (live, bb->live_out);
-      bitmap_clear (referenced_regs);
+      bitmap_clear (bb->spill_gen);
+      bitmap_clear (bb->spill_kill);
       for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
            bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
         FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num, out_p, mem_p) {
-          if (var_is_reg_p (var)) bitmap_set_bit_p (referenced_regs, var2reg (gen_ctx, var));
+          if (var_is_reg_p (var)) bitmap_set_bit_p (bb->spill_kill, var2reg (gen_ctx, var));
         }
-      struct rewrite_data data = {bb, live, regs_to_save, referenced_regs};
-      bitmap_clear (bb->spill_gen);
-      FOREACH_BITMAP_BIT (bi, live, nel) {
+    }
+    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+      bitmap_clear (marked_hregs);
+#if 0
+      FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
         var = nel;
-        if ((hreg = var) <= MAX_HARD_REG) {
-          bitmap_set_bit_p (marked_hregs, hreg);
-        } else {
-          reg = var2reg (gen_ctx, var);
-          breg = reg2breg (gen_ctx, reg);
-          if (bitmap_bit_p (referenced_regs, reg)
-              && (hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) <= MAX_HARD_REG)
-            bitmap_set_bit_p (marked_hregs, hreg);
-        }
-      }
-      FOREACH_BITMAP_BIT (bi, live, nel) {
-        if ((var = nel) <= MAX_HARD_REG) continue;
+        if (!var_is_reg_p (var)) continue;
         reg = var2reg (gen_ctx, var);
         breg = reg2breg (gen_ctx, reg);
-        if (bitmap_bit_p (referenced_regs, reg)
-            || (hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) > MAX_HARD_REG
-            || !bitmap_set_bit_p (marked_hregs, hreg))
-          continue;
-        DEBUG (2, {
-          MIR_context_t ctx = gen_ctx->ctx;
-          fprintf (debug_file, "    Marking r%d(%s:%s) assigned to hr%d spilled in BB%lu\n", reg,
-                   MIR_type_str (ctx, MIR_reg_type (ctx, reg, curr_func_item->u.func)),
-                   MIR_reg_name (ctx, reg, curr_func_item->u.func), hreg,
-                   (unsigned long) bb->index);
-          print_bb_insn (gen_ctx, insn->data, FALSE);
-        });
-        bitmap_set_bit_p (bb->spill_gen, reg);
+        if (bitmap_bit_p (bb->spill_kill, reg)
+            && (hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) <= MAX_HARD_REG)
+          bitmap_set_bit_p (marked_hregs, hreg);
       }
-      bitmap_clear (bb->spill_kill);
+#endif
+      FOREACH_BITMAP_BIT (bi, bb->spill_kill, nel) {
+        reg = nel;
+        breg = reg2breg (gen_ctx, reg);
+        if ((hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) <= MAX_HARD_REG)
+          bitmap_set_bit_p (marked_hregs, hreg);
+      }
+      FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+        var = nel;
+        if (!var_is_reg_p (var)) continue;
+        reg = var2reg (gen_ctx, var);
+        breg = reg2breg (gen_ctx, reg);
+        if (bitmap_bit_p (bb->spill_kill, reg)
+            || (hreg = VARR_GET (MIR_reg_t, breg_renumber, breg)) > MAX_HARD_REG
+            || !bitmap_bit_p (marked_hregs, hreg))
+          continue;
+        mark_spill (gen_ctx, bb, reg);
+      }
+    }
+    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+      struct rewrite_data data = {bb, live, regs_to_save};
+      bitmap_copy (live, bb->live_out);
       bitmap_clear (regs_to_save);
       for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
            bb_insn = prev_bb_insn) {
@@ -6519,8 +6606,18 @@ static void rewrite (gen_ctx_t gen_ctx) {
         insns_num++;
         if (move_code_p (insn->code)) movs_num++;
       }
-      gen_assert (bitmap_equal_p (live, bb->live_in));
-      bitmap_ior (bb->spill_gen, bb->spill_gen, regs_to_save);
+#ifndef NDEBUG
+      /* We still can non-equal live and bb->live_in if we coalesced a dead move.  Building live
+         info from the scratch is costly, so we will use inaccurate but safe live info in RA.  */
+      bitmap_and_compl (live, live, bb->live_in);
+      gen_assert (bitmap_empty_p (live));
+#endif
+      FOREACH_BITMAP_BIT (bi, regs_to_save, nel) {
+        reg = nel;
+        if (mark_spill (gen_ctx, bb, reg)) continue;
+        head_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
+        spill_restore_reg (gen_ctx, reg, base_reg, head_insn, head_insn->code == MIR_LABEL, FALSE);
+      }
     }
   }
   DEBUG (1, {
@@ -6535,25 +6632,50 @@ static void rewrite (gen_ctx_t gen_ctx) {
     bitmap_and_compl (func_used_hard_regs, func_used_hard_regs, global_hard_regs);
 }
 
-#undef live_in
-#undef live_out
-
-#define spill_in in   /* pseudo regs which should spill at given bb start */
-#define spill_out out /* pseudo regs which should spill at given bb end */
-
-static void spill_con_func_0 (bb_t bb) {}
-
-static int spill_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
-  edge_t e;
-  int change_p = FALSE;
-
-  for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
-    change_p |= bitmap_ior (bb->spill_out, bb->spill_out, e->dst->spill_in);
-  return change_p;
+/* Return true if we need to put spill code for REG in given BB (IN_BB_P) or in predecessors. */
+static int get_spill_place (gen_ctx_t gen_ctx, MIR_reg_t reg, bb_t bb, int bb_level, int *in_bb_p) {
+  int level, pred_level = 0, no_spill_code_p = TRUE, all_p = TRUE;
+  gen_assert (bitmap_bit_p (bb->spill_gen, reg));
+  for (edge_t e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+    if (bitmap_bit_p (e->src->spill_gen, reg)) {
+      all_p = FALSE;
+    } else {
+      level = bb_loop_level (e->src);
+      pred_level = no_spill_code_p ? level : pred_level < level ? level : pred_level;
+      no_spill_code_p = FALSE;
+    }
+  *in_bb_p = bb_level < pred_level || (bb_level == pred_level && all_p);
+  return !no_spill_code_p;
 }
 
-static int spill_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
-  return bitmap_ior_and_compl (bb->spill_in, bb->spill_gen, bb->spill_out, bb->spill_kill);
+static int insn_contains_hreg_p (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t hreg,
+                                 int hregs_num) {
+  return TRUE;
+}
+
+/* Return true if we need to put restore code for REG in given BB (IN_BB_P) or in successors. */
+static int get_restore_place (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_type_t type, int hreg, bb_t bb,
+                              int bb_level, int *in_bb_p) {
+  int level, succ_level = 0, force_succ_p, no_spill_code_p = TRUE, all_p = TRUE;
+  MIR_insn_t tail_insn;
+  edge_t e;
+  gen_assert (bitmap_bit_p (bb->spill_gen, reg));
+  no_spill_code_p = all_p = TRUE;
+  for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
+    if (!bitmap_bit_p (e->dst->live_in, reg)) continue;
+    if (bitmap_bit_p (e->dst->spill_gen, reg)) {
+      all_p = FALSE;
+    } else {
+      level = bb_loop_level (e->dst);
+      succ_level = no_spill_code_p ? level : succ_level < level ? level : succ_level;
+      no_spill_code_p = FALSE;
+    }
+  }
+  tail_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn;
+  force_succ_p = (tail_insn != NULL && MIR_any_branch_code_p (tail_insn->code)
+                  && insn_contains_hreg_p (gen_ctx, tail_insn, hreg, target_locs_num (hreg, type)));
+  *in_bb_p = !force_succ_p && (bb_level < succ_level || (bb_level == succ_level && all_p));
+  return !no_spill_code_p;
 }
 
 static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns */
@@ -6562,40 +6684,85 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
   MIR_reg_t base_reg = target_get_stack_slot_base_reg (gen_ctx);
 
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    FOREACH_BITMAP_BIT (bi, bb->spill_out, nel) {
-      int found_p, after_p;
-      edge_t e;
+    if (bitmap_empty_p (bb->spill_gen)) continue;
+    int bb_level = bb_loop_level (bb);
+    DEBUG (2, {
+      fprintf (debug_file, " Process BB%lu(level %d) for splitting\n", (unsigned long) bb->index,
+               bb_level);
+    });
+    FOREACH_BITMAP_BIT (bi, bb->spill_gen, nel) {
+      int after_p, in_bb_p;
+      edge_t e, e2;
+      bb_insn_t head_bb_insn, tail_bb_insn;
       MIR_insn_t head_insn, tail_insn;
-      MIR_reg_t reg = nel;
-      if (!bitmap_bit_p (bb->spill_in, reg)) { /* put (slot<-hr) at bb end: */
-        tail_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn;
-        after_p = !MIR_any_branch_code_p (tail_insn->code);
-        spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, FALSE);
-      }
-      found_p = FALSE;
-      for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
-        if (!bitmap_bit_p (bb->spill_in, reg) && bitmap_bit_p (e->src->spill_out, reg)) {
-          found_p = TRUE;
-          break;
-        }
-      if (!found_p) continue;
-      /* put (hr <- slot) at bb start: */
-      head_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
-      spill_restore_reg (gen_ctx, reg, base_reg, head_insn, head_insn->code == MIR_LABEL, TRUE);
-      for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
-        if (!bitmap_bit_p (e->src->spill_out, reg)) { /* put (slot<-hr) at e->src end: */
+      MIR_reg_t var, reg = nel, breg = reg2breg (gen_ctx, reg);
+      MIR_type_t type = MIR_reg_type (gen_ctx->ctx, reg, curr_func_item->u.func);
+      MIR_reg_t hreg = VARR_GET (MIR_reg_t, breg_renumber, breg);
+
+      gen_assert (!bitmap_bit_p (bb->spill_kill, reg)); /* should be fully spilled in BB */
+      /* process BB predecessors: */
+      if (!get_spill_place (gen_ctx, reg, bb, bb_level, &in_bb_p)) { /* spill closer to entry */
+      } else if (in_bb_p) {
+        /* put (slot<-hr) at bb start: */
+        head_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn;
+        spill_restore_reg (gen_ctx, reg, base_reg, head_insn, head_insn->code == MIR_LABEL, FALSE);
+      } else { /* put (slot<-hr) at the end of pred: */
+        for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
+          if (bitmap_bit_p (e->src->spill_gen, reg)) continue;
+          for (e2 = DLIST_HEAD (out_edge_t, e->src->out_edges); e2 != NULL;
+               e2 = DLIST_NEXT (out_edge_t, e2))
+            if (bitmap_bit_p (e2->dst->spill_gen, reg)
+                && get_spill_place (gen_ctx, reg, e2->dst, bb_level, &in_bb_p) && !in_bb_p)
+              break;
+          gen_assert (e2 != NULL);
+          if (e != e2) continue; /* this is not the first reg spill in e->src */
           tail_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)->insn;
-          after_p = !MIR_any_branch_code_p (tail_insn->code);
+          after_p = tail_insn == NULL || !MIR_any_branch_code_p (tail_insn->code);
           spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, FALSE);
         }
+      }
+      /* process BB successors: */
+      var = reg2var (gen_ctx, reg);
+      if (!bitmap_bit_p (bb->live_out, var)) continue;
+      if (!get_restore_place (gen_ctx, reg, type, hreg, bb, bb_level, &in_bb_p))
+        continue; /* put restore code somewhere closer to exit */
+      if (in_bb_p) {
+        /* put (hr<-slot) at bb end: */
+        tail_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn;
+        after_p = tail_insn == NULL || !MIR_any_branch_code_p (tail_insn->code);
+        spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, TRUE);
+      } else { /* put (hr<-slot) at succ start and add compensating save code at pred of succ: */
+        for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
+             e = DLIST_NEXT (out_edge_t, e)) {
+          if (bitmap_bit_p (e->dst->spill_gen, reg)) continue;
+          for (e2 = DLIST_HEAD (in_edge_t, e->dst->in_edges); e2 != NULL;
+               e2 = DLIST_NEXT (in_edge_t, e2))
+            if (bitmap_bit_p (e2->src->spill_gen, reg) && bitmap_bit_p (e2->src->live_out, var)
+                && get_restore_place (gen_ctx, reg, type, hreg, e2->src, bb_level, &in_bb_p)
+                && !in_bb_p)
+              break;
+          gen_assert (e2 != NULL);
+          if (e != e2) continue; /* this is not the first reg restore in e->dst */
+          head_insn = DLIST_HEAD (bb_insn_t, e->dst->bb_insns)->insn;
+          spill_restore_reg (gen_ctx, reg, base_reg, head_insn, head_insn->code == MIR_LABEL, TRUE);
+          for (e2 = DLIST_HEAD (in_edge_t, e->dst->in_edges); e2 != NULL;
+               e2 = DLIST_NEXT (in_edge_t, e2)) { /* add compensating (slot<-hr) */
+            if (bitmap_bit_p (e2->src->spill_gen, reg) || !bitmap_bit_p (e2->src->live_out, var))
+              continue;
+            tail_insn = DLIST_TAIL (bb_insn_t, e2->src->bb_insns)->insn;
+            after_p = tail_insn == NULL || !MIR_any_branch_code_p (tail_insn->code);
+            spill_restore_reg (gen_ctx, reg, base_reg, tail_insn, after_p, FALSE);
+          }
+        }
+      }
     }
   }
 }
 
 #if !MIR_NO_GEN_DEBUG
 static void output_bb_spill_info (gen_ctx_t gen_ctx, bb_t bb) {
-  output_bitmap (gen_ctx, "  spill_in:", bb->spill_in, TRUE, TRUE);
-  output_bitmap (gen_ctx, "  spill_out:", bb->spill_out, TRUE, TRUE);
+  output_bitmap (gen_ctx, "  live_in:", bb->live_in, TRUE, FALSE);
+  output_bitmap (gen_ctx, "  live_out:", bb->live_out, TRUE, FALSE);
   output_bitmap (gen_ctx, "  spill_gen:", bb->spill_gen, TRUE, TRUE);
   output_bitmap (gen_ctx, "  spill_kill:", bb->spill_kill, TRUE, TRUE);
 }
@@ -6619,9 +6786,8 @@ static void reg_alloc (gen_ctx_t gen_ctx) {
     }
     fprintf (debug_file, "\n");
   });
-  rewrite (gen_ctx); /* After rewrite the BB live info is still valid */
+  rewrite (gen_ctx); /* After rewrite the BB live info is invalid as it is used for spill info */
   if (!simplified_p) {
-    solve_dataflow (gen_ctx, FALSE, spill_con_func_0, spill_con_func_n, spill_trans_func);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++Spill info:");
       print_CFG (gen_ctx, TRUE, FALSE, FALSE, FALSE, output_bb_spill_info);
@@ -6630,8 +6796,8 @@ static void reg_alloc (gen_ctx_t gen_ctx) {
   }
 }
 
-#undef spill_in
-#undef spill_out
+#undef live_in
+#undef live_out
 #undef spill_gen
 #undef spill_kill
 
@@ -6640,6 +6806,7 @@ static void init_ra (gen_ctx_t gen_ctx) {
   VARR_CREATE (MIR_reg_t, breg_renumber, 0);
   VARR_CREATE (breg_info_t, sorted_bregs, 0);
   VARR_CREATE (bitmap_t, used_locs, 0);
+  VARR_CREATE (bitmap_t, busy_used_locs, 0);
   VARR_CREATE (bitmap_t, var_bbs, 0);
   VARR_CREATE (spill_cache_el_t, spill_cache, 0);
   spill_cache_age = 0;
@@ -6653,6 +6820,9 @@ static void finish_ra (gen_ctx_t gen_ctx) {
   VARR_DESTROY (breg_info_t, sorted_bregs);
   while (VARR_LENGTH (bitmap_t, used_locs) != 0) bitmap_destroy (VARR_POP (bitmap_t, used_locs));
   VARR_DESTROY (bitmap_t, used_locs);
+  while (VARR_LENGTH (bitmap_t, busy_used_locs) != 0)
+    bitmap_destroy (VARR_POP (bitmap_t, busy_used_locs));
+  VARR_DESTROY (bitmap_t, busy_used_locs);
   while (VARR_LENGTH (bitmap_t, var_bbs) != 0) bitmap_destroy (VARR_POP (bitmap_t, var_bbs));
   VARR_DESTROY (bitmap_t, var_bbs);
   VARR_DESTROY (spill_cache_el_t, spill_cache);
@@ -7702,7 +7872,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     coalesce (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after coalescing:\n");
-      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, output_bb_border_live_info);
     });
   }
   reg_alloc (gen_ctx);
