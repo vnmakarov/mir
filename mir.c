@@ -4016,6 +4016,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     }
     if (head_func_insn == call) head_func_insn = DLIST_NEXT (MIR_insn_t, head_func_insn);
     MIR_remove_insn (ctx, func_item, call);
+    if (head_func_insn == call) head_func_insn = DLIST_HEAD (MIR_insn_t, func->insns);
     next_func_insn = (prev_insn == NULL ? DLIST_HEAD (MIR_insn_t, func->insns)
                                         : DLIST_NEXT (MIR_insn_t, prev_insn));
   }
