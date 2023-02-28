@@ -23,18 +23,14 @@ enum {
 #undef REP_SEP
 
 static const char *const target_hard_reg_names[] = {
-  "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
-  "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
-  "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23",
-  "r24", "r25", "r26", "r27", "r28", "r29", "r30", "r31",
-  "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7",
-  "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15",
-  "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23",
-  "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31",
-  "lr",
+  "r0",  "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",  "r8",  "r9",  "r10", "r11", "r12",
+  "r13", "r14", "r15", "r16", "r17", "r18", "r19", "r20", "r21", "r22", "r23", "r24", "r25",
+  "r26", "r27", "r28", "r29", "r30", "r31", "f0",  "f1",  "f2",  "f3",  "f4",  "f5",  "f6",
+  "f7",  "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19",
+  "f20", "f21", "f22", "f23", "f24", "f25", "f26", "f27", "f28", "f29", "f30", "f31", "lr",
 };
 
-static const MIR_reg_t MAX_HARD_REG = LR_HARD_REG;
+#define MAX_HARD_REG LR_HARD_REG;
 static const MIR_reg_t SP_HARD_REG = R1_HARD_REG;
 static const MIR_reg_t FP_HARD_REG = R31_HARD_REG;
 
@@ -86,7 +82,8 @@ static inline void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int r
     if (((a >> 31) & 1) == 0) { /* lis r,0,Z2 */
       push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 16) & 0xffff));
     } else { /* xor r,r,r; oris r,r,Z2 */
-      push_insn (insn_varr, (XOR_OPCODE << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
+      push_insn (insn_varr,
+                 (XOR_OPCODE << 26) | (316 << 1) | (reg << 21) | (reg << 16) | (reg << 11));
       push_insn (insn_varr, (ORIS_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 16) & 0xffff));
     }
   } else {
@@ -94,7 +91,8 @@ static inline void ppc64_gen_address (VARR (uint8_t) * insn_varr, unsigned int r
       /* lis r,0,Z0; [ori r,r,Z1]; rldicr r,r,32,31; [oris r,r,Z2]; [ori r,r,Z3]: */
       push_insn (insn_varr, (LIS_OPCODE << 26) | (reg << 21) | (0 << 16) | (a >> 48));
       if (((a >> 32) & 0xffff) != 0)
-	push_insn (insn_varr, (ORI_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
+        push_insn (insn_varr,
+                   (ORI_OPCODE << 26) | (reg << 21) | (reg << 16) | ((a >> 32) & 0xffff));
     } else {
       /* li r,0,Z1; rldicr r,r,32,31; [oris r,r,Z2]; [ori r,r,Z3]: */
       push_insn (insn_varr, (LI_OPCODE << 26) | (reg << 21) | (0 << 16) | ((a >> 32) & 0xffff));

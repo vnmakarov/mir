@@ -16,12 +16,12 @@ enum {
 #undef REP_SEP
 
 static const char *const target_hard_reg_names[] = {
-  "r0",  "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",  "r8",  "r9",  "r10", "r11", "r12",
-  "r13", "r14", "r15",  "f0",  "f1",  "f2",  "f3",  "f4",  "f5",  "f6",
-  "f7",  "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
+  "r0",  "r1",  "r2",  "r3",  "r4",  "r5",  "r6",  "r7",  "r8",  "r9",  "r10",
+  "r11", "r12", "r13", "r14", "r15", "f0",  "f1",  "f2",  "f3",  "f4",  "f5",
+  "f6",  "f7",  "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
 };
 
-static const MIR_reg_t MAX_HARD_REG = F15_HARD_REG;
+#define MAX_HARD_REG F15_HARD_REG;
 static const MIR_reg_t SP_HARD_REG = R15_HARD_REG;
 static const MIR_reg_t FP_HARD_REG = R11_HARD_REG;
 

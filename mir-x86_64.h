@@ -23,7 +23,7 @@ static const char *const target_hard_reg_names[] = {
   "xmm11", "xmm12", "xmm13", "xmm14", "xmm15", "st0",  "st1",
 };
 
-static const MIR_reg_t MAX_HARD_REG = ST1_HARD_REG;
+#define MAX_HARD_REG ST1_HARD_REG
 
 /* Hard regs not used in machinized code, preferably call used ones. */
 static const MIR_reg_t TEMP_INT_HARD_REG1 = R10_HARD_REG, TEMP_INT_HARD_REG2 = R11_HARD_REG;
