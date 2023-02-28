@@ -267,6 +267,8 @@ struct gen_ctx {
 #define spot_attrs gen_ctx->spot_attrs
 #define spot2attr gen_ctx->spot2attr
 
+#define LOOP_COST_FACTOR 5
+
 typedef struct bb_version *bb_version_t;
 
 struct func_or_bb {
@@ -4996,7 +4998,7 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
   bb_freq = 1;
   if (optimize_level != 0 && freq_p)
     for (int i = bb_loop_level (bb); i > 0; i--)
-      if (bb_freq < SIZE_MAX / 8) bb_freq *= 5;
+      if (bb_freq < SIZE_MAX / 8) bb_freq *= LOOP_COST_FACTOR;
   bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
   for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
        insn = DLIST_PREV (MIR_insn_t, insn)) {
@@ -5971,7 +5973,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
         mv.bb_insn = bb_insn;
         mv.freq = 1;
         for (int i = bb_loop_level (bb); i > 0; i--)
-          if (mv.freq < SIZE_MAX / 8) mv.freq *= 5;
+          if (mv.freq < SIZE_MAX / 8) mv.freq *= LOOP_COST_FACTOR;
         VARR_PUSH (mv_t, moves, mv);
         bitmap_set_bit_p (move_vars, reg2var (gen_ctx, insn->ops[0].u.reg));
         bitmap_set_bit_p (move_vars, reg2var (gen_ctx, insn->ops[1].u.reg));
@@ -6228,26 +6230,27 @@ static int availabe_hreg_p (gen_ctx_t gen_ctx, int hreg, MIR_reg_t type, int nre
 
 /* Return cost spill of given lr */
 static int gap_lr_spill_cost (gen_ctx_t gen_ctx, live_range_t lr) {
+  int cost_factor = LOOP_COST_FACTOR / 2;
   bitmap_clear (temp_bitmap);
   for (lr_bb_t lr_bb = lr->lr_bb; lr_bb != NULL; lr_bb = lr_bb->next)
     bitmap_set_bit_p (temp_bitmap, lr_bb->bb->index);
   int cost = 0;
   for (lr_bb_t lr_bb = lr->lr_bb; lr_bb != NULL; lr_bb = lr_bb->next) {
     bb_t bb = lr_bb->bb;
-    int level, max_level, bb_level = bb_loop_level (bb);
+    int level, max_level, bb_level = bb_loop_level (bb) + 1;
     edge_t e;
     max_level = -1;
     for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
       if (!bitmap_bit_p (temp_bitmap, e->dst->index)
-          && (level = bb_loop_level (e->dst)) > max_level)
+          && (level = bb_loop_level (e->dst) + 1) > max_level)
         max_level = level;
-    if (max_level >= 0) cost += (max_level < bb_level ? max_level : bb_level) + 1;
+    if (max_level >= 0) cost += (max_level < bb_level ? max_level : bb_level) * cost_factor;
     max_level = -1;
     for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
       if (!bitmap_bit_p (temp_bitmap, e->src->index)
-          && (level = bb_loop_level (e->src)) > max_level)
+          && (level = bb_loop_level (e->src) + 1) > max_level)
         max_level = level;
-    if (max_level >= 0) cost += (max_level < bb_level ? max_level : bb_level) + 1;
+    if (max_level >= 0) cost += (max_level < bb_level ? max_level : bb_level) * cost_factor;
   }
   return cost;
 }
@@ -6316,14 +6319,14 @@ static MIR_reg_t get_hard_reg_with_split (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_
       if (k > 0) continue;
     }
     VARR_TRUNC (lr_gap_t, curr_gaps, 0);
-    profit = gap_size = 0;
+    profit = curr_breg_infos[reg2breg (gen_ctx, reg)].freq;
+    gap_size = 0;
     for (lr = start_lr; lr != NULL; lr = lr->next) {
       if (availabe_hreg_p (gen_ctx, hreg, type, nregs, all_locs, lr)) {
-        profit += lr->ref_cost;
       } else if (availabe_hreg_p (gen_ctx, hreg, type, nregs, busy_locs, lr)) {
         /* spill other pseudo regs in their gap */
         find_lr_gaps (gen_ctx, lr, hreg, type, nregs, &cost, curr_gaps);
-        profit += lr->ref_cost - cost;
+        profit -= cost;
         gap_size += (lr->finish - lr->start + 1);
       } else if (lr->lr_bb == NULL) { /* not a gap */
         break;
@@ -6334,7 +6337,7 @@ static MIR_reg_t get_hard_reg_with_split (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_
         VARR_PUSH (lr_gap_t, curr_gaps, lr_gap);
       }
     }
-    if (lr != NULL || 0 && profit < 0) continue;
+    if (lr != NULL || profit < 0) continue;
     clobbered_p = bitmap_bit_p (call_used_hard_regs[MIR_T_UNDEF], hreg);
     if (best_hreg == MIR_NON_HARD_REG || profit > best_profit
         || (profit == best_profit && best_saved_p && clobbered_p)
