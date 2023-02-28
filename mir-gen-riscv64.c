@@ -715,7 +715,7 @@ struct insn_pattern_info {
 typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
-enum branch_type {BRANCH, JAL, AUIPC_JALR};
+enum branch_type { BRANCH, JAL, AUIPC_JALR };
 struct label_ref {
   int abs_addr_p;
   enum branch_type branch_type;
@@ -2671,31 +2671,29 @@ static void target_split_insns (gen_ctx_t gen_ctx) {
 
     if (insn->ops[0].mode == MIR_OP_HARD_REG) {
       gen_assert (insn->ops[0].u.hard_reg + 1 < F0_HARD_REG
-		  && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
+                  && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
       op = insn->ops[1];
       op.u.hard_reg_mem.type = MIR_T_I64;
       next_insn = gen_mov (gen_ctx, insn, MIR_MOV, insn->ops[0], op);
       op.u.hard_reg_mem.disp += 8;
-      gen_mov (gen_ctx, insn, MIR_MOV,
-	       _MIR_new_hard_reg_op (ctx, insn->ops[0].u.hard_reg + 1), op);
+      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_hard_reg_op (ctx, insn->ops[0].u.hard_reg + 1), op);
       gen_delete_insn (gen_ctx, insn);
     } else if (insn->ops[1].mode == MIR_OP_HARD_REG) {
       gen_assert (insn->ops[1].u.hard_reg + 1 < F0_HARD_REG
-		  && insn->ops[0].mode == MIR_OP_HARD_REG_MEM);
+                  && insn->ops[0].mode == MIR_OP_HARD_REG_MEM);
       op = insn->ops[0];
       op.u.hard_reg_mem.type = MIR_T_I64;
       next_insn = gen_mov (gen_ctx, insn, MIR_MOV, op, insn->ops[1]);
       op.u.hard_reg_mem.disp += 8;
-      gen_mov (gen_ctx, insn, MIR_MOV, op,
-	       _MIR_new_hard_reg_op (ctx, insn->ops[1].u.hard_reg + 1));
+      gen_mov (gen_ctx, insn, MIR_MOV, op, _MIR_new_hard_reg_op (ctx, insn->ops[1].u.hard_reg + 1));
       gen_delete_insn (gen_ctx, insn);
     } else {
       gen_assert (insn->ops[0].mode == MIR_OP_HARD_REG_MEM
-		  && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
+                  && insn->ops[1].mode == MIR_OP_HARD_REG_MEM);
       op = insn->ops[1];
       op.u.hard_reg_mem.type = MIR_T_D;
-      next_insn = gen_mov (gen_ctx, insn, MIR_DMOV,
-			   _MIR_new_hard_reg_op (ctx, TEMP_DOUBLE_HARD_REG1), op);
+      next_insn
+        = gen_mov (gen_ctx, insn, MIR_DMOV, _MIR_new_hard_reg_op (ctx, TEMP_DOUBLE_HARD_REG1), op);
       op.u.hard_reg_mem.disp += 8;
       gen_mov (gen_ctx, insn, MIR_DMOV, _MIR_new_hard_reg_op (ctx, TEMP_DOUBLE_HARD_REG2), op);
       op = insn->ops[0];
@@ -2759,7 +2757,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         bin_insn = 0x6f | get_j_format_imm (offset);
         put_uint64 (gen_ctx, bin_insn, 4);
       } else {
-	gen_assert (lr.branch_type != AUIPC_JALR);
+        gen_assert (lr.branch_type != AUIPC_JALR);
         *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
           |= (lr.branch_type == BRANCH ? get_b_format_imm (offset) : get_j_format_imm (offset));
       }
@@ -2811,7 +2809,7 @@ static void target_bb_translate_start (gen_ctx_t gen_ctx) {
 static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void **jump_addrs) {
   MIR_insn_t cont_insn;
   const char *replacement;
-  
+
   if (insn->code == MIR_LABEL) return;
   replacement = find_insn_pattern_replacement (gen_ctx, insn);
   gen_assert (replacement != NULL);
@@ -2869,7 +2867,8 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
   }
   if (lr->branch_type == AUIPC_JALR) {
     uint32_t carry = (offset & 0x800) << 1;
-    insn = 0x17 | (TEMP_INT_HARD_REG1 << 7) | (((uint32_t) offset + carry) & 0xfffff000); /* auipc t5 */
+    insn = 0x17 | (TEMP_INT_HARD_REG1 << 7)
+           | (((uint32_t) offset + carry) & 0xfffff000); /* auipc t5 */
     _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
     insn = 0x67 | (TEMP_INT_HARD_REG1 << 15) | ((offset & 0xfff) << 20); /* lalr t5 */
     insn_ptr += 1;

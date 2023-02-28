@@ -1417,7 +1417,7 @@ struct pattern {
   SHOP0 (ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
 /* cmp ...; setx r0: */
-#define CMP0(ICODE, SUFF, PREF, SETX)                                                            \
+#define CMP0(ICODE, SUFF, PREF, SETX)                                                 \
   {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Y " SETX " S0"},        /* cmp r1,r2;...*/ \
     {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Y " SETX " S0"},     /* cmp r1,m2;...*/ \
     {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Y " SETX " S0"},  /* cmp r1,i2;...*/ \
@@ -2029,7 +2029,6 @@ static void setup_rm_byte (int *rex, int *high, int *r, int v) {
   *r = v;
 }
 
-
 static void setup_reg (int *rex_reg, int *reg, int v) { setup_r (rex_reg, reg, v); }
 
 static void setup_rm (int *rex_b, int *rm, int v) { setup_r (rex_b, rm, v); }
@@ -2239,7 +2238,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (op.mode == MIR_OP_HARD_REG);
         if (start_ch == 'r')
           setup_reg (&rex_r, &reg, op.u.hard_reg);
-        else if (start_ch == 'R'){
+        else if (start_ch == 'R') {
           setup_rm (&rex_b, &rm, op.u.hard_reg);
           setup_mod (&mod, 3);
         } else if (start_ch == 'S') {

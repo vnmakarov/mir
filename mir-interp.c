@@ -42,7 +42,7 @@ typedef struct func_desc {
   MIR_reg_t nregs;
   MIR_item_t func_item;
   MIR_val_t code[1];
-} * func_desc_t;
+} *func_desc_t;
 
 static void update_max_nreg (MIR_reg_t reg, MIR_reg_t *max_nreg) {
   if (*max_nreg < reg) *max_nreg = reg;

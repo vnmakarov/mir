@@ -83,7 +83,7 @@ struct insn_pattern_info {
 typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
-enum branch_type {BRCOND, JUMP, BCTR};
+enum branch_type { BRCOND, JUMP, BCTR };
 struct label_ref {
   int abs_addr_p;
   enum branch_type branch_type;
@@ -1801,7 +1801,8 @@ static void set_int64 (uint8_t *addr, int64_t v) { *(int64_t *) addr = v; }
 
 static int64_t get_int64 (uint8_t *addr) { return *(int64_t *) addr; }
 
-static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement, void **jump_addrs) {
+static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement,
+                      void **jump_addrs) {
   MIR_context_t ctx = gen_ctx->ctx;
   size_t nops = MIR_insn_nops (ctx, insn);
   size_t offset;
@@ -2136,10 +2137,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           lr.abs_addr_p = FALSE;
           lr.branch_type = BRCOND;
           lr.label_val_disp = 0;
-	  if (jump_addrs == NULL)
-	    lr.u.label = op.u.label;
-	  else
-	    lr.u.jump_addr = jump_addrs[0];
+          if (jump_addrs == NULL)
+            lr.u.label = op.u.label;
+          else
+            lr.u.jump_addr = jump_addrs[0];
           label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
           VARR_PUSH (label_ref_t, label_refs, lr);
         }
@@ -2160,12 +2161,12 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           op = insn->ops[insn->code != MIR_CALL ? 0 : 1];
           gen_assert (op.mode == MIR_OP_LABEL);
           lr.abs_addr_p = FALSE;
-	  lr.branch_type = JUMP;
+          lr.branch_type = JUMP;
           lr.label_val_disp = 0;
-	  if (jump_addrs == NULL)
-	    lr.u.label = op.u.label;
-	  else
-	    lr.u.jump_addr = jump_addrs[0];
+          if (jump_addrs == NULL)
+            lr.u.label = op.u.label;
+          else
+            lr.u.jump_addr = jump_addrs[0];
           label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
           VARR_PUSH (label_ref_t, label_refs, lr);
         }
@@ -2355,10 +2356,11 @@ static void target_split_insns (gen_ctx_t gen_ctx) {
   for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     MIR_insn_code_t code = insn->code;
-    
+
     if ((code != MIR_RSH && code != MIR_LSH && code != MIR_URSH && code != MIR_RSHS
-	 && code != MIR_LSHS && code != MIR_URSHS)
-	|| (insn->ops[2].mode != MIR_OP_INT && insn->ops[2].mode != MIR_OP_UINT)) continue;
+         && code != MIR_LSHS && code != MIR_URSHS)
+        || (insn->ops[2].mode != MIR_OP_INT && insn->ops[2].mode != MIR_OP_UINT))
+      continue;
     if (insn->ops[2].u.i == 0) {
       gen_mov (gen_ctx, insn, MIR_MOV, insn->ops[0], insn->ops[1]);
       MIR_insn_t old_insn = insn;
@@ -2366,21 +2368,21 @@ static void target_split_insns (gen_ctx_t gen_ctx) {
       gen_delete_insn (gen_ctx, old_insn);
     } else {
       if (insn->ops[2].mode == MIR_OP_INT && insn->ops[2].u.i < 0) {
-	switch (code) {
-	case MIR_RSH: insn->code = MIR_LSH; break;
-	case MIR_URSH: insn->code = MIR_LSH; break;
-	case MIR_LSH: insn->code = MIR_RSH; break;
-	case MIR_RSHS: insn->code = MIR_LSHS; break;
-	case MIR_URSHS: insn->code = MIR_LSHS; break;
-	case MIR_LSHS: insn->code = MIR_RSHS; break;
-	default: gen_assert (FALSE); break;
-	}
-	insn->ops[2].u.i = -insn->ops[2].u.i;
+        switch (code) {
+        case MIR_RSH: insn->code = MIR_LSH; break;
+        case MIR_URSH: insn->code = MIR_LSH; break;
+        case MIR_LSH: insn->code = MIR_RSH; break;
+        case MIR_RSHS: insn->code = MIR_LSHS; break;
+        case MIR_URSHS: insn->code = MIR_LSHS; break;
+        case MIR_LSHS: insn->code = MIR_RSHS; break;
+        default: gen_assert (FALSE); break;
+        }
+        insn->ops[2].u.i = -insn->ops[2].u.i;
       }
       if (code == MIR_RSH || code == MIR_LSH || code == MIR_URSH) {
-	if (insn->ops[2].u.i > 64) insn->ops[2].u.i = 64;
+        if (insn->ops[2].u.i > 64) insn->ops[2].u.i = 64;
       } else if (insn->ops[2].u.i > 32) {
-	insn->ops[2].u.i = 32;
+        insn->ops[2].u.i = 32;
       }
     }
   }
@@ -2433,7 +2435,8 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
                    (int64_t) get_label_disp (gen_ctx, lr.u.label));
         VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
       } else if (lr.branch_type == BRCOND) { /* 14-bit relative addressing */
-        int64_t offset = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
+        int64_t offset
+          = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
 
         gen_assert ((offset & 0x3) == 0);
         if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x7fff) != 0) {
@@ -2443,7 +2446,8 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
             |= ((offset / 4) & 0x3fff) << 2;
         }
       } else { /* 24-bit relative address */
-        int64_t offset = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
+        int64_t offset
+          = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
         gen_assert ((offset & 0x3) == 0
                     && ((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0);
         *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
@@ -2542,12 +2546,12 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
   gen_assert (lr->branch_type == BCTR);
   VARR_TRUNC (uint8_t, result_code, 0);
   ppc64_gen_address (result_code, 12, addr); /* r12 = addr */
-  insn = 0x7d8903a6; /* mtctr r12 */
+  insn = 0x7d8903a6;                         /* mtctr r12 */
   put_uint32 (gen_ctx, insn);
   insn = 0x4e800420; /* bctr */
   put_uint32 (gen_ctx, insn);
   _MIR_change_code (ctx, (uint8_t *) insn_ptr, VARR_ADDR (uint8_t, result_code),
-		    VARR_LENGTH (uint8_t, result_code));
+                    VARR_LENGTH (uint8_t, result_code));
 }
 
 static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
