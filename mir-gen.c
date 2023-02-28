@@ -6579,8 +6579,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
    anchor. If addr_reg_p, hard_reg can be chaned by temp_hard_reg.  */
 static MIR_reg_t add_ld_st (gen_ctx_t gen_ctx, MIR_op_t *mem_op, int addr_reg_p, MIR_reg_t loc,
                             MIR_reg_t base_reg, MIR_op_mode_t data_mode, MIR_reg_t hard_reg,
-                            int st_p, MIR_reg_t temp_hard_reg, MIR_insn_t anchor, int after_p,
-                            MIR_insn_t *last_added_insn) {
+                            int st_p, MIR_reg_t temp_hard_reg, MIR_insn_t anchor, int after_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_disp_t offset;
   MIR_insn_code_t code;
@@ -6643,7 +6642,6 @@ static MIR_reg_t add_ld_st (gen_ctx_t gen_ctx, MIR_op_t *mem_op, int addr_reg_p,
       MIR_output_insn (ctx, debug_file, new_insns[i], curr_func_item->u.func, TRUE);
     }
   });
-  if (last_added_insn != NULL) *last_added_insn = n == 0 ? NULL : new_insns[n - 1];
   if (after_p) {
     for (size_t i = 0, j = n - 1; i < j; i++, j--) { /* reverse for subsequent correct insertion: */
       new_insn = new_insns[i];
@@ -6686,7 +6684,7 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   MIR_reg_t temp_hard_reg
     = (first_p && !out_p) || (out_p && !first_p) ? TEMP_INT_HARD_REG1 : TEMP_INT_HARD_REG2;
   return add_ld_st (gen_ctx, mem_op, addr_reg_p, loc, base_reg, data_mode,
-                    get_temp_hard_reg (type, first_p), out_p, temp_hard_reg, insn, out_p, NULL);
+                    get_temp_hard_reg (type, first_p), out_p, temp_hard_reg, insn, out_p);
 }
 
 static void update_live (gen_ctx_t gen_ctx, MIR_reg_t var, int out_p, bitmap_t live) {
@@ -6726,12 +6724,11 @@ static int get_spill_mem_loc (gen_ctx_t gen_ctx, MIR_reg_t reg) {
 
 /* Add spill or restore (restore_p) of pseudo (reg) assigned to hard reg and
    put the insns after anchor.  Use base_reg to address the stack lot.  */
-static MIR_insn_t spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t base_reg,
-                                     MIR_insn_t anchor, int after_p, int restore_p) {
+static void spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t base_reg,
+                               MIR_insn_t anchor, int after_p, int restore_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t mem_loc;
   MIR_op_t mem_op;
-  MIR_insn_t last_added_insn;
   MIR_type_t type = MIR_reg_type (ctx, reg, curr_func_item->u.func);
   MIR_op_mode_t data_mode = (type == MIR_T_F    ? MIR_OP_FLOAT
                              : type == MIR_T_D  ? MIR_OP_DOUBLE
@@ -6742,8 +6739,7 @@ static MIR_insn_t spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t
   mem_loc = get_spill_mem_loc (gen_ctx, reg);
   DEBUG (2, { fprintf (debug_file, "    %s r%d:", restore_p ? "Restore" : "Spill", reg); });
   add_ld_st (gen_ctx, &mem_op, FALSE, mem_loc, base_reg, data_mode, hard_reg, !restore_p,
-             TEMP_INT_HARD_REG1, anchor, after_p, &last_added_insn);
-  return last_added_insn;
+             TEMP_INT_HARD_REG1, anchor, after_p);
 }
 
 struct rewrite_data {
