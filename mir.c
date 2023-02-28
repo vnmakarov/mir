@@ -2903,14 +2903,6 @@ static void output_func_proto (MIR_context_t ctx, FILE *f, size_t nres, MIR_type
   fprintf (f, "\n");
 }
 
-static void output_var (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_type_t var_type,
-                        const char *var_name) {
-  fprintf (f, "%s:%s", MIR_type_str (ctx, var_type), var_name);
-  MIR_reg_t reg = MIR_reg (ctx, var_name, func);
-  const char *hard_reg_name = MIR_reg_hard_reg_name (ctx, reg, func);
-  if (hard_reg_name != NULL) fprintf (f, ":%s", hard_reg_name);
-}
-
 static void output_vars (MIR_context_t ctx, FILE *f, MIR_func_t func, VARR (MIR_var_t) * vars,
                          size_t start, size_t vars_num, const char *prefix) {
   if (vars == NULL || vars_num == 0) return;
@@ -3361,7 +3353,7 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_op_t reg_op, ret_reg_op;
   MIR_func_t func = func_item->u.func;
   MIR_type_t *res_types = func->res_types;
-  MIR_insn_t ret_label, insn, last_ret_insn;
+  MIR_insn_t ret_label = NULL, insn, last_ret_insn;
   VARR (MIR_insn_t) *ret_insns = temp_insns;
   VARR (MIR_op_t) *ret_ops = temp_ops;
 
@@ -3822,7 +3814,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_type_t type, *res_types;
   MIR_var_t var;
   MIR_reg_t ret_reg, temp_reg;
-  MIR_insn_t func_top_alloca, called_func_top_alloca, new_called_func_top_alloca;
+  MIR_insn_t func_top_alloca, called_func_top_alloca, new_called_func_top_alloca = NULL;
   MIR_insn_t func_insn, head_func_insn, next_func_insn;
   MIR_insn_t call, insn, prev_insn, new_insn, ret_insn, anchor, stop_insn;
   MIR_item_t called_func_item;

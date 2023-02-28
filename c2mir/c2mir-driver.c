@@ -36,11 +36,13 @@ static lib_t std_libs[]
 static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
 #if defined(__x86_64__)
-static lib_t std_libs[]
-  = {{"/lib64/libc.so.6", NULL},           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
-     {"/lib64/libm.so.6", NULL},           {"/lib/x86_64-linux-gnu/libm.so.6", NULL},
-     {"/usr/lib64/libpthread.so.0", NULL}, {"/lib/x86_64-linux-gnu/libpthread.so.0", NULL},
-     {"/usr/lib/libc.so", NULL}};
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
+                           {"/lib64/libm.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libm.so.6", NULL},
+                           {"/usr/lib64/libpthread.so.0", NULL},
+                           {"/lib/x86_64-linux-gnu/libpthread.so.0", NULL},
+                           {"/usr/lib/libc.so", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #elif (__aarch64__)
 static lib_t std_libs[]
@@ -439,10 +441,12 @@ static FILE *get_output_file_from_parts (const char **result_file_name, const ch
   return get_output_file (*result_file_name);
 }
 
+#if MIR_PARALLEL_GEN
 static void parallel_error (const char *message) {
   fprintf (stderr, "%s -- good bye\n", message);
   exit (1);
 }
+#endif
 
 static MIR_context_t main_ctx;
 
@@ -562,8 +566,8 @@ static void finish_compilers (void) {
   }
 }
 
-static void signal_compilers_to_finish (int cancel_p) {
 #if MIR_PARALLEL_GEN
+static void signal_compilers_to_finish (int cancel_p) {
   if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in mutex lock");
   if (cancel_p) {
     inputs_start = 0;
@@ -573,8 +577,8 @@ static void signal_compilers_to_finish (int cancel_p) {
   VARR_PUSH (input_t, inputs_to_compile, curr_input);
   if (mir_cond_broadcast (&compile_signal)) parallel_error ("error in cond broadcast");
   if (mir_mutex_unlock (&queue_mutex)) parallel_error ("error in mutex unlock");
-#endif
 }
+#endif
 
 static void send_to_compile (input_t *input) {
   if (input == NULL) { /* finish compilation */
@@ -601,6 +605,8 @@ static void send_to_compile (input_t *input) {
   if (mir_mutex_unlock (&queue_mutex)) parallel_error ("error in c2m mutex unlock");
 #endif
 }
+
+#if MIR_PARALLEL_GEN
 
 static void move_modules_main_context (MIR_context_t ctx) {
   MIR_module_t module, next_module;
@@ -635,6 +641,7 @@ static void sort_modules (MIR_context_t ctx) {
     DLIST_APPEND (MIR_module_t, *list, VARR_GET (MIR_module_t, modules, i));
   VARR_DESTROY (MIR_module_t, modules);
 }
+#endif
 
 int main (int argc, char *argv[], char *env[]) {
   int i, bin_p;

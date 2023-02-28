@@ -910,7 +910,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   code_t pc, ops, code;
   void *jmpi_val; /* where label thunk execution result will be: */
-  int signed_overflow_p, unsigned_overflow_p;
+  int signed_overflow_p = FALSE, unsigned_overflow_p = FALSE; /* to avoid uninitialized warnings */
 
 #if MIR_INTERP_TRACE
   MIR_full_insn_code_t trace_insn_code;

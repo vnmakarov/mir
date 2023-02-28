@@ -4355,7 +4355,7 @@ static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos, node_t *asm_part) {
 D (declaration) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
   int typedef_p;
-  node_t op, list, decl, spec, r, attrs, asm_part;
+  node_t op, list, decl, spec, r, attrs, asm_part = NULL;
   pos_t pos, last_pos;
 
   if (C (T_STATIC_ASSERT)) {
@@ -10323,6 +10323,7 @@ static MIR_alias_t get_type_alias (c2m_ctx_t c2m_ctx, struct type *type) {
   case TM_STRUCT:
   case TM_ARR:
   case TM_FUNC: return 0;
+  default: break;
   }
   VARR_TRUNC (node_t, node_stack, 0);
   VARR_TRUNC (char, temp_string, 0);
