@@ -1468,9 +1468,16 @@ struct pattern {
   {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " l0"},       /*test r0,r0;jxx rel32*/ \
     {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel32*/
 
-#define BR(ICODE, LONG_JMP_OPCODE)  \
-  BR0 (ICODE, , X, LONG_JMP_OPCODE) \
-  BR0 (ICODE, S, Y, LONG_JMP_OPCODE)
+#define BR1(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
+  {ICODE##SUFF, "l m0", #PREF " 80 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmpb m0,$0;jxx rel32*/   \
+    {ICODE##SUFF, "l m1", "66 " #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmpw m0,$0;...*/ \
+    {ICODE##SUFF, "l m2", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"},       /*cmpl m0,$0;...*/
+
+#define BR(ICODE, LONG_JMP_OPCODE)   \
+  BR0 (ICODE, , X, LONG_JMP_OPCODE)  \
+  BR0 (ICODE, S, Y, LONG_JMP_OPCODE) \
+  BR1 (ICODE, , Y, LONG_JMP_OPCODE)  \
+  BR1 (ICODE, S, Y, LONG_JMP_OPCODE)
 
 #define BCMP0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
   {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " l0"},        /*cmp r0,r1;jxx rel32*/ \
