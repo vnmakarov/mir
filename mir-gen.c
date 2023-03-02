@@ -6389,6 +6389,8 @@ static MIR_reg_t get_stack_loc (gen_ctx_t gen_ctx, MIR_reg_t start_loc, MIR_type
   return best_loc;
 }
 
+#define ONLY_SIMPLIFIED_RA FALSE
+
 static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t best_loc, i, reg, breg, var, nregs = get_nregs (gen_ctx);
@@ -6403,7 +6405,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
   MIR_func_t func = curr_func_item->u.func;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
   const char *msg;
-  const int simplified_p = optimize_level < 2; /* temporarily switch off advanced RA */
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
   bitmap_t conflict_locs = conflict_locs1, spill_lr_starts = temp_bitmap2;
 
   func_stack_slots_num = 0;
@@ -6922,7 +6924,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
-  const int simplified_p = optimize_level < 2; /* temporarily switch off advanced RA */
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
 
   if (simplified_p) {
     for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
@@ -7216,7 +7218,7 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
 
 static void reg_alloc (gen_ctx_t gen_ctx) {
   MIR_reg_t i, reg, nregs = get_nregs (gen_ctx);
-  const int simplified_p = optimize_level < 2; /* temporarily switch off advanced RA */
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
 
   if (optimize_level == 0)
     fast_assign (gen_ctx);
