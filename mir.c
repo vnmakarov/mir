@@ -2078,7 +2078,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
   MIR_insn_t insn;
   MIR_proto_t proto;
   size_t args_start, narg, i = 0, expected_nops = insn_code_nops (ctx, code);
-  mir_assert (ops != NULL);
+  mir_assert (nops == 0 || ops != NULL);
 
   if (!MIR_call_code_p (code) && code != MIR_UNSPEC && code != MIR_USE && code != MIR_PHI
       && code != MIR_RET && code != MIR_SWITCH && nops != expected_nops) {
