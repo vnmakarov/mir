@@ -8898,10 +8898,10 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   if (bb_version->n_attrs != 0) max_spot = bb_version->attrs[bb_version->n_attrs - 1].spot;
   VARR_TRUNC (target_bb_version_t, target_succ_bb_versions, 0);
   target_bb_translate_start (gen_ctx);
-  skip_p = FALSE;
   for (curr_insn = bb_stub->first_insn;; curr_insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, curr_insn);
     if (MIR_any_branch_code_p (curr_insn->code)) break;
+    skip_p = FALSE;
     switch (curr_insn->code) {
     case MIR_USE: skip_p = TRUE; break;
     case MIR_PRSET:
