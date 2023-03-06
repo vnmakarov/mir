@@ -21,7 +21,7 @@ static const char *const target_hard_reg_names[] = {
   "f6",  "f7",  "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
 };
 
-#define MAX_HARD_REG F15_HARD_REG;
+#define MAX_HARD_REG F15_HARD_REG
 static const MIR_reg_t SP_HARD_REG = R15_HARD_REG;
 static const MIR_reg_t FP_HARD_REG = R11_HARD_REG;
 
