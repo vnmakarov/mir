@@ -6820,7 +6820,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
                                            MIR_OP_INT, FALSE, insn, FALSE);
           gen_assert (op->u.var_mem.base != MIR_NON_VAR); /* we can always use GP regs */
         }
-        gen_assert (op->u.var_mem.index == MIR_NON_VAR);
+        gen_assert (op->u.var_mem.index == MIR_NON_VAR || op->u.var_mem.index <= MAX_HARD_REG);
         break;
       default: /* do nothing */ break;
       }

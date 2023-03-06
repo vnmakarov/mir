@@ -703,7 +703,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
 /* r9=<bb_version>; (b|br) handler  ??? mutex free */
 void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   /* maximal size thunk -- see _MIR_redirect_thunk */
-  int pat[5] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
+  uint32_t pat[5] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
   void *res;
   size_t offset;
   VARR (uint8_t) * code;
