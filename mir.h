@@ -651,9 +651,6 @@ extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
 extern void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn);
-extern int _MIR_var_is_reg_p (MIR_reg_t var);
-extern MIR_reg_t _MIR_reg2var (MIR_reg_t reg);
-extern MIR_reg_t _MIR_var2reg (MIR_reg_t var);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
 extern MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
