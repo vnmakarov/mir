@@ -2771,7 +2771,6 @@ static void output_reg (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_reg_t r
 static void output_hard_reg (FILE *f, MIR_reg_t hreg) { fprintf (f, "hr%u", hreg); }
 
 static int var_is_reg_p (MIR_reg_t var);
-static MIR_reg_t reg2var (MIR_reg_t reg);
 static MIR_reg_t var2reg (MIR_reg_t var);
 static void output_var (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_reg_t var) {
   var_is_reg_p (var) ? output_reg (ctx, f, func, var2reg (var)) : output_hard_reg (f, var);
@@ -6720,7 +6719,6 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
 #endif
 
 static int var_is_reg_p (MIR_reg_t var) { return var > MAX_HARD_REG; }
-static MIR_reg_t reg2var (MIR_reg_t reg) { return reg == 0 ? MIR_NON_VAR : reg + MAX_HARD_REG; }
 static MIR_reg_t var2reg (MIR_reg_t var) {
   mir_assert (var_is_reg_p (var));
   return var == MIR_NON_VAR ? 0 : var - MAX_HARD_REG;
