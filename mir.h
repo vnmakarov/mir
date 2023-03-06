@@ -232,7 +232,7 @@ typedef int64_t MIR_disp_t; /* Address displacement in memory */
 typedef uint32_t MIR_reg_t;
 
 #define MIR_MAX_REG_NUM UINT32_MAX
-#define MIR_NON_HARD_REG MIR_MAX_REG_NUM
+#define MIR_NON_VAR MIR_MAX_REG_NUM
 
 /* Immediate in immediate moves.  */
 typedef union {
@@ -245,10 +245,9 @@ typedef union {
 
 typedef uint32_t MIR_alias_t; /* unique number of alias name */
 
-/* Memory: mem:type[base + index * scale + disp].  It also can be
-   memory with hard regs but such memory used only internally.  An
-   integer type memory value expands to int64_t value when the insn is
-   executed.  */
+/* Memory: mem:type[base + index * scale + disp].  It also can be memory with vars
+   (regs and hard regs) but such memory used only internally.  An integer type memory
+   value expands to int64_t value when the insn is executed.  */
 typedef struct {
   MIR_type_t type : 8;
   MIR_scale_t scale;
@@ -256,7 +255,7 @@ typedef struct {
   MIR_alias_t nonalias; /* 0 for ignoring, memory with the same nonalias is not aliased */
   /* Used internally: mem operand with the same nonzero nloc always refers to the same memory */
   uint32_t nloc;
-  /* 0 and MIR_NON_HARD_REG means no reg for correspondingly for memory and hard reg memory. */
+  /* 0 and MIR_NON_VAR means no reg for correspondingly for memory and var memory. */
   MIR_reg_t base, index;
   MIR_disp_t disp;
 } MIR_mem_t;
@@ -269,8 +268,8 @@ typedef const char *MIR_name_t;
 
 /* Operand mode */
 typedef enum {
-  REP8 (OP_EL, UNDEF, REG, HARD_REG, INT, UINT, FLOAT, DOUBLE, LDOUBLE),
-  REP6 (OP_EL, REF, STR, MEM, HARD_REG_MEM, LABEL, BOUND),
+  REP8 (OP_EL, UNDEF, REG, VAR, INT, UINT, FLOAT, DOUBLE, LDOUBLE),
+  REP6 (OP_EL, REF, STR, MEM, VAR_MEM, LABEL, BOUND),
 } MIR_op_mode_t;
 
 typedef struct MIR_item *MIR_item_t;
@@ -291,7 +290,7 @@ typedef struct {
   MIR_op_mode_t value_mode : 8;
   union {
     MIR_reg_t reg;
-    MIR_reg_t hard_reg; /* Used only internally */
+    MIR_reg_t var; /* Used only internally */
     int64_t i;
     uint64_t u;
     float f;
@@ -300,7 +299,7 @@ typedef struct {
     MIR_item_t ref; /* non-export/non-forward after simplification */
     MIR_str_t str;
     MIR_mem_t mem;
-    MIR_mem_t hard_reg_mem; /* Used only internally */
+    MIR_mem_t var_mem; /* Used only internally */
     MIR_label_t label;
   } u;
 } MIR_op_t;
@@ -652,6 +651,9 @@ extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
 extern void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn);
+extern int _MIR_var_is_reg_p (MIR_reg_t var);
+extern MIR_reg_t _MIR_reg2var (MIR_reg_t reg);
+extern MIR_reg_t _MIR_var2reg (MIR_reg_t var);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
 extern MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
@@ -672,13 +674,13 @@ extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff,
                                      size_t buff_len);
 
-extern MIR_op_t _MIR_new_hard_reg_op (MIR_context_t ctx, MIR_reg_t hard_reg);
+extern MIR_op_t _MIR_new_var_op (MIR_context_t ctx, MIR_reg_t var);
 
-extern MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                          MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale);
-extern MIR_op_t _MIR_new_alias_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                                MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
-                                                MIR_alias_t alias, MIR_alias_t no_alias);
+extern MIR_op_t _MIR_new_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                     MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale);
+extern MIR_op_t _MIR_new_alias_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                           MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                           MIR_alias_t alias, MIR_alias_t no_alias);
 
 extern MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const char *name,
                                       size_t nres, MIR_type_t *res_types, size_t nargs, ...);

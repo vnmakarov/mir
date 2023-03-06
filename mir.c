@@ -552,7 +552,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
     MIR_get_error_func (ctx) (MIR_repeated_decl_error, "Repeated reg declaration %s", name);
   }
   if (hard_reg_name != NULL) {
-    if ((hr = _MIR_get_hard_reg (ctx, hard_reg_name)) == MIR_NON_HARD_REG) {
+    if ((hr = _MIR_get_hard_reg (ctx, hard_reg_name)) == MIR_NON_VAR) {
       MIR_get_error_func (ctx) (MIR_hard_reg_error, "unknown hard reg %s", hard_reg_name);
     } else if (!target_hard_reg_type_ok_p (hr, type)) {
       MIR_get_error_func (ctx) (MIR_hard_reg_error,
@@ -931,7 +931,7 @@ const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp) {
 static const char *mode_str (MIR_op_mode_t mode) {
   switch (mode) {
   case MIR_OP_REG: return "reg";
-  case MIR_OP_HARD_REG: return "hard_reg";
+  case MIR_OP_VAR: return "var";
   case MIR_OP_INT: return "int";
   case MIR_OP_UINT: return "uint";
   case MIR_OP_FLOAT: return "float";
@@ -940,7 +940,7 @@ static const char *mode_str (MIR_op_mode_t mode) {
   case MIR_OP_REF: return "ref";
   case MIR_OP_STR: return "str";
   case MIR_OP_MEM: return "mem";
-  case MIR_OP_HARD_REG_MEM: return "hard_reg_mem";
+  case MIR_OP_VAR_MEM: return "var_mem";
   case MIR_OP_LABEL: return "label";
   case MIR_OP_BOUND: return "bound";
   case MIR_OP_UNDEF: return "undef";
@@ -1630,8 +1630,8 @@ void MIR_finish_func (MIR_context_t ctx) {
         }
         mode = type2mode (insn->ops[i].u.mem.type);
         break;
-      case MIR_OP_HARD_REG:
-      case MIR_OP_HARD_REG_MEM:
+      case MIR_OP_VAR:
+      case MIR_OP_VAR_MEM:
         expr_p = FALSE;
         mode = expected_mode;
         mir_assert (FALSE); /* Should not be here */
@@ -1649,7 +1649,7 @@ void MIR_finish_func (MIR_context_t ctx) {
               || (code == MIR_VA_END && i == 1))) { /* a special case: va_list as undef type mem */
         insn->ops[i].value_mode = expected_mode;
       } else if (expected_mode == MIR_OP_REG) {
-        if (insn->ops[i].mode != MIR_OP_REG && insn->ops[i].mode != MIR_OP_HARD_REG)
+        if (insn->ops[i].mode != MIR_OP_REG && insn->ops[i].mode != MIR_OP_VAR)
           MIR_get_error_func (
             ctx) (MIR_op_mode_error,
                   "func %s: in instruction '%s': expected reg for operand #%d. Got '%s'", func_name,
@@ -2341,11 +2341,11 @@ MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg) {
   return op;
 }
 
-MIR_op_t _MIR_new_hard_reg_op (MIR_context_t ctx, MIR_reg_t hard_reg) { /* used only internally */
+MIR_op_t _MIR_new_var_op (MIR_context_t ctx, MIR_reg_t var) { /* used only internally */
   MIR_op_t op;
 
-  init_op (&op, MIR_OP_HARD_REG);
-  op.u.hard_reg = hard_reg;
+  init_op (&op, MIR_OP_VAR);
+  op.u.var = var;
   return op;
 }
 
@@ -2439,32 +2439,32 @@ MIR_op_t MIR_new_alias_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t di
   return new_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
 }
 
-static MIR_op_t new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                     MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
-                                     MIR_alias_t alias, MIR_alias_t nonalias) {
+static MIR_op_t new_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+                                MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
+                                MIR_alias_t nonalias) {
   MIR_op_t op;
 
-  init_op (&op, MIR_OP_HARD_REG_MEM);
-  op.u.hard_reg_mem.type = type;
-  op.u.hard_reg_mem.disp = disp;
-  op.u.hard_reg_mem.base = base;
-  op.u.hard_reg_mem.index = index;
-  op.u.hard_reg_mem.scale = scale;
-  op.u.hard_reg_mem.nloc = 0;
-  op.u.hard_reg_mem.alias = alias;
-  op.u.hard_reg_mem.nonalias = nonalias;
+  init_op (&op, MIR_OP_VAR_MEM);
+  op.u.var_mem.type = type;
+  op.u.var_mem.disp = disp;
+  op.u.var_mem.base = base;
+  op.u.var_mem.index = index;
+  op.u.var_mem.scale = scale;
+  op.u.var_mem.nloc = 0;
+  op.u.var_mem.alias = alias;
+  op.u.var_mem.nonalias = nonalias;
   return op;
 }
 
-MIR_op_t _MIR_new_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                   MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale) {
-  return new_hard_reg_mem_op (ctx, type, disp, base, index, scale, 0, 0);
+MIR_op_t _MIR_new_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
+                              MIR_reg_t index, MIR_scale_t scale) {
+  return new_var_mem_op (ctx, type, disp, base, index, scale, 0, 0);
 }
 
-MIR_op_t _MIR_new_alias_hard_reg_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
-                                         MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
-                                         MIR_alias_t alias, MIR_alias_t nonalias) {
-  return new_hard_reg_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
+MIR_op_t _MIR_new_alias_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp,
+                                    MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                    MIR_alias_t alias, MIR_alias_t nonalias) {
+  return new_var_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
 }
 
 MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label) {
@@ -2479,7 +2479,7 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
   if (op1.mode != op2.mode) return FALSE;
   switch (op1.mode) {
   case MIR_OP_REG: return op1.u.reg == op2.u.reg;
-  case MIR_OP_HARD_REG: return op1.u.hard_reg == op2.u.hard_reg;
+  case MIR_OP_VAR: return op1.u.var == op2.u.var;
   case MIR_OP_INT: return op1.u.i == op2.u.i;
   case MIR_OP_UINT: return op1.u.u == op2.u.u;
   case MIR_OP_FLOAT: return op1.u.f == op2.u.f;
@@ -2495,13 +2495,11 @@ int MIR_op_eq_p (MIR_context_t ctx, MIR_op_t op1, MIR_op_t op2) {
     return (op1.u.mem.type == op2.u.mem.type && op1.u.mem.disp == op2.u.mem.disp
             && op1.u.mem.base == op2.u.mem.base && op1.u.mem.index == op2.u.mem.index
             && (op1.u.mem.index == 0 || op1.u.mem.scale == op2.u.mem.scale));
-  case MIR_OP_HARD_REG_MEM:
-    return (op1.u.hard_reg_mem.type == op2.u.hard_reg_mem.type
-            && op1.u.hard_reg_mem.disp == op2.u.hard_reg_mem.disp
-            && op1.u.hard_reg_mem.base == op2.u.hard_reg_mem.base
-            && op1.u.hard_reg_mem.index == op2.u.hard_reg_mem.index
-            && (op1.u.hard_reg_mem.index == MIR_NON_HARD_REG
-                || op1.u.hard_reg_mem.scale == op2.u.hard_reg_mem.scale));
+  case MIR_OP_VAR_MEM:
+    return (op1.u.var_mem.type == op2.u.var_mem.type && op1.u.var_mem.disp == op2.u.var_mem.disp
+            && op1.u.var_mem.base == op2.u.var_mem.base
+            && op1.u.var_mem.index == op2.u.var_mem.index
+            && (op1.u.var_mem.index == MIR_NON_VAR || op1.u.var_mem.scale == op2.u.var_mem.scale));
   case MIR_OP_LABEL: return op1.u.label == op2.u.label;
   default: mir_assert (FALSE); /* we should not have other operands here */
   }
@@ -2512,7 +2510,7 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
   h = mir_hash_step (h, (uint64_t) op.mode);
   switch (op.mode) {
   case MIR_OP_REG: return mir_hash_step (h, (uint64_t) op.u.reg);
-  case MIR_OP_HARD_REG: return mir_hash_step (h, (uint64_t) op.u.hard_reg);
+  case MIR_OP_VAR: return mir_hash_step (h, (uint64_t) op.u.var);
   case MIR_OP_INT: return mir_hash_step (h, (uint64_t) op.u.i);
   case MIR_OP_UINT: return mir_hash_step (h, (uint64_t) op.u.u);
   case MIR_OP_FLOAT: {
@@ -2546,13 +2544,12 @@ htab_hash_t MIR_op_hash_step (MIR_context_t ctx, htab_hash_t h, MIR_op_t op) {
     h = mir_hash_step (h, (uint64_t) op.u.mem.index);
     if (op.u.mem.index != 0) h = mir_hash_step (h, (uint64_t) op.u.mem.scale);
     break;
-  case MIR_OP_HARD_REG_MEM:
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.type);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.disp);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.base);
-    h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.index);
-    if (op.u.hard_reg_mem.index != MIR_NON_HARD_REG)
-      h = mir_hash_step (h, (uint64_t) op.u.hard_reg_mem.scale);
+  case MIR_OP_VAR_MEM:
+    h = mir_hash_step (h, (uint64_t) op.u.var_mem.type);
+    h = mir_hash_step (h, (uint64_t) op.u.var_mem.disp);
+    h = mir_hash_step (h, (uint64_t) op.u.var_mem.base);
+    h = mir_hash_step (h, (uint64_t) op.u.var_mem.index);
+    if (op.u.var_mem.index != MIR_NON_VAR) h = mir_hash_step (h, (uint64_t) op.u.var_mem.scale);
     break;
   case MIR_OP_LABEL: return mir_hash_step (h, (uint64_t) op.u.label);
   default: mir_assert (FALSE); /* we should not have other operands here */
@@ -2771,7 +2768,12 @@ static void output_reg (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_reg_t r
   fprintf (f, "%s", MIR_reg_name (ctx, reg, func));
 }
 
-static void output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg); }
+static void output_hard_reg (FILE *f, MIR_reg_t hreg) { fprintf (f, "hr%u", hreg); }
+
+static void output_var (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_reg_t var) {
+  _MIR_var_is_reg_p (var) ? output_reg (ctx, f, func, _MIR_var2reg (var))
+                          : output_hard_reg (f, var);
+}
 
 static void output_label (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_label_t label);
 
@@ -2804,15 +2806,15 @@ static void out_str (FILE *f, MIR_str_t str) {
 void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
   switch (op.mode) {
   case MIR_OP_REG: output_reg (ctx, f, func, op.u.reg); break;
-  case MIR_OP_HARD_REG: output_hard_reg (f, op.u.hard_reg); break;
+  case MIR_OP_VAR: output_var (ctx, f, func, op.u.var); break;
   case MIR_OP_INT: fprintf (f, "%" PRId64, op.u.i); break;
   case MIR_OP_UINT: fprintf (f, "%" PRIu64, op.u.u); break;
   case MIR_OP_FLOAT: fprintf (f, "%.*ef", FLT_MANT_DIG, op.u.f); break;
   case MIR_OP_DOUBLE: fprintf (f, "%.*e", DBL_MANT_DIG, op.u.d); break;
   case MIR_OP_LDOUBLE: fprintf (f, "%.*LeL", LDBL_MANT_DIG, op.u.ld); break;
   case MIR_OP_MEM:
-  case MIR_OP_HARD_REG_MEM: {
-    MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_HARD_REG;
+  case MIR_OP_VAR_MEM: {
+    MIR_reg_t no_reg = op.mode == MIR_OP_MEM ? 0 : MIR_NON_VAR;
 
     output_type (ctx, f, op.u.mem.type);
     fprintf (f, ":");
@@ -2820,18 +2822,11 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
       output_disp (f, op.u.mem.disp);
     if (op.u.mem.base != no_reg || op.u.mem.index != no_reg) {
       fprintf (f, "(");
-      if (op.u.mem.base != no_reg) {
-        if (op.mode == MIR_OP_MEM)
-          output_reg (ctx, f, func, op.u.mem.base);
-        else
-          output_hard_reg (f, op.u.hard_reg_mem.base);
-      }
+      if (op.u.mem.base != no_reg)
+        (op.mode == MIR_OP_MEM ? output_reg : output_var) (ctx, f, func, op.u.mem.base);
       if (op.u.mem.index != no_reg) {
         fprintf (f, ", ");
-        if (op.mode == MIR_OP_MEM)
-          output_reg (ctx, f, func, op.u.mem.index);
-        else
-          output_hard_reg (f, op.u.hard_reg_mem.index);
+        (op.mode == MIR_OP_MEM ? output_reg : output_var) (ctx, f, func, op.u.mem.index);
         if (op.u.mem.scale != 1) {
           fprintf (f, ", ");
           output_scale (f, op.u.mem.scale);
@@ -3232,7 +3227,7 @@ static void simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
     *op = new_op;
     break;
   case MIR_OP_REG:
-  case MIR_OP_HARD_REG:
+  case MIR_OP_VAR:
   case MIR_OP_LABEL: break; /* Do nothing */
   case MIR_OP_MEM: {
     MIR_reg_t addr_reg = 0;
@@ -6721,6 +6716,13 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
 #else
 #error "undefined or unsupported generation target"
 #endif
+
+int _MIR_var_is_reg_p (MIR_reg_t var) { return var > MAX_HARD_REG; }
+MIR_reg_t _MIR_reg2var (MIR_reg_t reg) { return reg == 0 ? MIR_NON_VAR : reg + MAX_HARD_REG; }
+MIR_reg_t _MIR_var2reg (MIR_reg_t var) {
+  mir_assert (_MIR_var_is_reg_p (var));
+  return var == MIR_NON_VAR ? 0 : var - MAX_HARD_REG;
+}
 
 struct hard_reg_desc {
   const char *name;
