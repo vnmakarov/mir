@@ -9,9 +9,9 @@ static char stdarg_str[]
     "\n"
 #if defined(__APPLE__)
     "typedef __darwin_va_list va_list;\n"
-#elif defined(_WIN32)
+#elif defined(__WIN32)
     "typedef char *va_list;\n"
-#elif defined(__GNU_LIBRARY__)
+#else
     "typedef struct {\n"
     "  unsigned int gp_offset;\n"
     "  unsigned int fp_offset;\n"
@@ -20,14 +20,14 @@ static char stdarg_str[]
     "} va_list[1];\n"
 #endif
     "\n"
-#if defined(_WIN32)
+#if defined(__WIN32)
     "#define va_start(ap, param) __va_start (ap, param)\n"
 #else
     "#define va_start(ap, param) __builtin_va_start (ap)\n"
 #endif
     "#define va_arg(ap, type) __builtin_va_arg(ap, (type *) 0)\n"
     "#define va_end(ap) 0\n"
-#if defined(__APPLE__) || defined(_WIN32)
+#if defined(__APPLE__) || defined(__WIN32)
     "#define va_copy(dest, src) ((dest) = (src))\n"
 #else
     "#define va_copy(dest, src) ((dest)[0] = (src)[0])\n"
