@@ -47,8 +47,8 @@ static const MIR_reg_t TEMP_INT_HARD_REG1 = T5_HARD_REG, TEMP_INT_HARD_REG2 = T6
 static const MIR_reg_t TEMP_FLOAT_HARD_REG1 = FT10_HARD_REG, TEMP_FLOAT_HARD_REG2 = FT11_HARD_REG;
 static const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = FT10_HARD_REG, TEMP_DOUBLE_HARD_REG2 = FT11_HARD_REG;
 /* we use only builtins for long double ops: */
-static const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_HARD_REG;
-static const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = MIR_NON_HARD_REG;
+static const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = MIR_NON_VAR;
+static const MIR_reg_t TEMP_LDOUBLE_HARD_REG2 = MIR_NON_VAR;
 
 static inline int target_hard_reg_type_ok_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
