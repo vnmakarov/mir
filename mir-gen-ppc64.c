@@ -756,8 +756,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       /* don't use immediate in ADD as treg_op can become r0: */
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, treg_op, treg_op2);
       gen_add_insn_before (gen_ctx, insn, new_insn);
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1),
-               treg_op);
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1), treg_op);
       gen_delete_insn (gen_ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (gen_ctx, insn);

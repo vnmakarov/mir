@@ -359,7 +359,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
           if (int_arg_num < 8) {
             new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, A0_HARD_REG + int_arg_num),
                                      _MIR_new_var_mem_op (ctx, MIR_T_I64, n * 8, arg_op.u.mem.base,
-                                                     MIR_NON_VAR, 1));
+                                                          MIR_NON_VAR, 1));
             gen_add_insn_before (gen_ctx, call_insn, new_insn);
             setup_call_hard_reg_args (gen_ctx, call_insn, A0_HARD_REG + int_arg_num);
             int_arg_num++;
@@ -367,7 +367,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
             treg_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
             new_insn = MIR_new_insn (ctx, MIR_MOV, treg_op,
                                      _MIR_new_var_mem_op (ctx, MIR_T_I64, n * 8, arg_op.u.mem.base,
-                                                     MIR_NON_VAR, 1));
+                                                          MIR_NON_VAR, 1));
             gen_add_insn_before (gen_ctx, call_insn, new_insn);
             mem_op = _MIR_new_var_mem_op (ctx, MIR_T_I64, mem_size, SP_HARD_REG, MIR_NON_VAR, 1);
             new_insn = MIR_new_insn (ctx, MIR_MOV, mem_op, treg_op);
@@ -828,7 +828,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
           MIR_disp_t disp = 8;
           if (arg_reg_num < 7) {
             gen_mov (gen_ctx, anchor, mov_code2,
-                     _MIR_new_var_mem_op (ctx, mem_type2, disp, i + MAX_HARD_REG + 1, MIR_NON_VAR, 1),
+                     _MIR_new_var_mem_op (ctx, mem_type2, disp, i + MAX_HARD_REG + 1, MIR_NON_VAR,
+                                          1),
                      _MIR_new_var_op (ctx, base_arg_reg + arg_reg_num + 1));
           } else {
             if (!block_arg_func_p) { /* t0 = prev sp */
@@ -840,7 +841,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
             gen_mov (gen_ctx, anchor, mov_code2, treg_op,
                      _MIR_new_var_mem_op (ctx, mem_type2, mem_size, T0_HARD_REG, MIR_NON_VAR, 1));
             gen_mov (gen_ctx, anchor, mov_code2,
-                     _MIR_new_var_mem_op (ctx, mem_type2, disp, i + MAX_HARD_REG + 1, MIR_NON_VAR, 1),
+                     _MIR_new_var_mem_op (ctx, mem_type2, disp, i + MAX_HARD_REG + 1, MIR_NON_VAR,
+                                          1),
                      treg_op);
             mem_size += 8;
           }
@@ -1015,8 +1017,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                            MIR_new_int_op (ctx,
                                                            ((uint64_t) non_vararg_int_args_num - 8)
                                                              * 8)));
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1),
-               prev_sp_op);
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1), prev_sp_op);
       gen_delete_insn (gen_ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (gen_ctx, insn);

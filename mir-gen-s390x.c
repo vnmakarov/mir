@@ -684,7 +684,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       set_prev_sp_reg (gen_ctx, anchor, &prev_sp_set_p, &prev_sp_reg);
       gen_mov (gen_ctx, anchor, type == MIR_T_F ? MIR_FMOV : MIR_DMOV, arg_var_op,
                _MIR_new_var_mem_op (ctx, type, disp + (type == MIR_T_F ? 4 : 0), prev_sp_reg,
-                               MIR_NON_VAR, 1));
+                                    MIR_NON_VAR, 1));
       disp += 8;
     } else if (int_arg_num < 5) { /* (ld)mov arg, arg_hard_reg */
       if (type != MIR_T_LD)
@@ -809,23 +809,25 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       va_reg = va_op.u.var;
       /* Insns can be not simplified as soon as they match a machine insn.  */
       /* mem64[va_reg] = gpr_val; mem64[va_reg + 8] = fpr_val */
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1),
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1),
                MIR_new_int_op (ctx, gpr_val));
       next_insn = DLIST_PREV (MIR_insn_t, insn);
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, va_reg, MIR_NON_VAR, 1),
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, va_reg, MIR_NON_VAR, 1),
                MIR_new_int_op (ctx, fpr_val));
       /* reg_save_area: treg = mem64[sp]; mem64[va_reg+24] = treg: */
       gen_mov (gen_ctx, insn, MIR_MOV, treg_op,
                _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_VAR, 1));
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 24, va_reg, MIR_NON_VAR, 1),
-               treg_op);
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 24, va_reg, MIR_NON_VAR, 1), treg_op);
       /* overflow_arg_area_reg: treg = treg_op+S390X_STACK_HEADER_SIZE + disp;
          mem64[va_reg+16] = treg: */
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, treg_op,
                                MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + disp));
       gen_add_insn_before (gen_ctx, insn, new_insn);
-      gen_mov (gen_ctx, insn, MIR_MOV, _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, va_reg, MIR_NON_VAR, 1),
-               treg_op);
+      gen_mov (gen_ctx, insn, MIR_MOV,
+               _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, va_reg, MIR_NON_VAR, 1), treg_op);
       gen_delete_insn (gen_ctx, insn);
     } else if (code == MIR_VA_END) { /* do nothing */
       gen_delete_insn (gen_ctx, insn);
