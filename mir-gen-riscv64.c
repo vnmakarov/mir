@@ -1191,10 +1191,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= <small aggr save area size> */
   }
   /* Epilogue: */
-  anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  /* It might be infinite loop after CCP with dead code elimination: */
-  if (anchor->code == MIR_JMP) return;
-  assert (anchor->code == MIR_RET);
+  for (anchor = DLIST_TAIL (MIR_insn_t, func->insns); anchor != NULL;
+       anchor = DLIST_PREV (MIR_insn_t, anchor))
+    if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
+  if (anchor == NULL) return;
   /* Restoring hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
   base_reg = get_base_reg_offset_for_saved_regs (gen_ctx, anchor, &offset);
@@ -2702,7 +2702,7 @@ static void target_split_insns (gen_ctx_t gen_ctx) {
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
   size_t i;
-  MIR_insn_t insn, cont_insn;
+  MIR_insn_t insn;
   const char *replacement;
 
   gen_assert (curr_func_item->item_type == MIR_func_item);
@@ -2800,7 +2800,6 @@ static void target_bb_translate_start (gen_ctx_t gen_ctx) {
 }
 
 static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void **jump_addrs) {
-  MIR_insn_t cont_insn;
   const char *replacement;
 
   if (insn->code == MIR_LABEL) return;
@@ -2829,7 +2828,6 @@ static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
 static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *addr) {
   MIR_context_t ctx = gen_ctx->ctx;
   int64_t offset = (int64_t) addr - (int64_t) (base + lr->label_val_disp);
-  int32_t rel32 = offset;
 
   gen_assert ((offset & 0x1) == 0);
   /* check max 32-bit offset with possible branch conversion (see offset - 3): */

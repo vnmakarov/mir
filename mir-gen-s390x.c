@@ -943,10 +943,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       fsave (gen_ctx, anchor, start_saved_fregs_offset + (n++) * 8, i);
   gen_mov (gen_ctx, anchor, MIR_MOV, r11_reg_op, r15_reg_op); /* r11 = r15 */
   /* Epilogue: */
-  anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  /* It might be infinite loop after CCP with dead code elimination: */
-  if (anchor->code == MIR_JMP) return;
-  gen_assert (anchor->code == MIR_RET);
+  for (anchor = DLIST_TAIL (MIR_insn_t, func->insns); anchor != NULL;
+       anchor = DLIST_PREV (MIR_insn_t, anchor))
+    if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
+  if (anchor == NULL) return;
   /* Restoring fp hard registers: */
   for (n = 0, i = F0_HARD_REG; i <= MAX_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i))

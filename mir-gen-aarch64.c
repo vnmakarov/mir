@@ -1141,13 +1141,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     gen_add_insn_before (gen_ctx, anchor, new_insn); /* sp -= <small aggr save area size> */
   }
   /* Epilogue: */
-  anchor = DLIST_TAIL (MIR_insn_t, func->insns);
-  if (anchor->code == MIR_JMP) {
-    if ((anchor = DLIST_PREV (MIR_insn_t, anchor)) == NULL || anchor->code != MIR_RET)
-      /* It might be infinite loop after CCP with dead code elimination: */
-      return;
-  }
-  assert (anchor->code == MIR_RET);
+  for (anchor = DLIST_TAIL (MIR_insn_t, func->insns); anchor != NULL;
+       anchor = DLIST_PREV (MIR_insn_t, anchor))
+    if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
+  if (anchor == NULL) return;
   /* Restoring hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
   for (i = 0; i <= MAX_HARD_REG; i++)
