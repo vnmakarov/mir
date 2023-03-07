@@ -566,7 +566,7 @@ c2mir-gen-test3: $(BUILD_DIR)/c2m$(EXE)
 .PHONY: c2mir-bootstrap c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test c2mir-bootstrap-test3
 .PHONY: c2mir-parallel-bootstrap-test c2mir-bootstrap-test4 c2mir-bootstrap-test5
 
-c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-bb-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test
+c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test c2mir-bootstrap-bb-test
 
 c2mir-bootstrap-test0: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with -O0 '... '
