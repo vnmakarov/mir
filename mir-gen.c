@@ -8005,7 +8005,7 @@ static int reachable_bo_exists_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
 }
 
 static void dead_code_elimination (gen_ctx_t gen_ctx) {
-  MIR_insn_t insn;
+  MIR_insn_t insn, nop_insn;
   bb_insn_t bb_insn, prev_bb_insn;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   int op_num, out_p, reg_def_p, dead_p, mem_p;
@@ -8041,6 +8041,16 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
           fprintf (debug_file, "  Removing dead insn %-5lu", (unsigned long) bb_insn->index);
           MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
         });
+        if (DLIST_HEAD (bb_insn_t, bb->bb_insns) == DLIST_TAIL (bb_insn_t, bb->bb_insns)) {
+          gen_assert (bb_insn == DLIST_HEAD (bb_insn_t, bb->bb_insns));
+          nop_insn = MIR_new_insn_arr (gen_ctx->ctx, MIR_USE, 0, NULL);
+          DEBUG (2, {
+            fprintf (debug_file,
+                     "  Adding nop to keep bb%lu non-empty: ", (unsigned long) bb->index);
+            MIR_output_insn (gen_ctx->ctx, debug_file, nop_insn, curr_func_item->u.func, TRUE);
+          });
+          gen_add_insn_after (gen_ctx, insn, nop_insn);
+        }
         gen_delete_insn (gen_ctx, insn);
         dead_insns_num++;
         continue;
