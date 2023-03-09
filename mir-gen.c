@@ -582,13 +582,13 @@ static void clear_bb_insn_dead_vars (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   }
 }
 
-static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t hr) {
+static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t var) {
   dead_var_t dv, next_dv;
 
-  gen_assert (hr <= MAX_HARD_REG);
+  gen_assert (var != MIR_NON_VAR);
   for (dv = DLIST_HEAD (dead_var_t, bb_insn->insn_dead_vars); dv != NULL; dv = next_dv) {
     next_dv = DLIST_NEXT (dead_var_t, dv);
-    if (dv->var != hr) continue;
+    if (dv->var != var) continue;
     DLIST_REMOVE (dead_var_t, bb_insn->insn_dead_vars, dv);
     free_dead_var (gen_ctx, dv);
   }
