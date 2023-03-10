@@ -5746,6 +5746,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
   size_t nops;
   int coalesced_moves = 0, change_p;
 
+  gen_assert (optimize_level > 0);
   VARR_TRUNC (mv_t, moves, 0);
   VARR_TRUNC (MIR_reg_t, first_coalesced_reg, 0);
   VARR_TRUNC (MIR_reg_t, next_coalesced_reg, 0);
@@ -6465,6 +6466,7 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
   int out_p, change_p, block_change_p, label_only_p;
   long insns_num = 0, deleted_insns_num = 0;
 
+  gen_assert (optimize_level > 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     do {
       DEBUG (2, { fprintf (debug_file, "Processing bb%lu\n", (unsigned long) bb->index); });
@@ -6645,6 +6647,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
 
+  gen_assert (optimize_level > 0);
   DEBUG (2, { fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
   live = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
