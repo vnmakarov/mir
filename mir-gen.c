@@ -5124,6 +5124,7 @@ static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
   bitmap_t live;
   insn_var_iterator_t insn_var_iter;
 
+  gen_assert (optimize_level > 0); /* we need bb insns to keep dead var info */
   live = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     bitmap_copy (live, bb->live_out);
@@ -8464,7 +8465,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   }
   calculate_func_cfg_live_info (gen_ctx, TRUE);
   DEBUG (2, {
-    add_bb_insn_dead_vars (gen_ctx);
+    if (optimize_level > 0) add_bb_insn_dead_vars (gen_ctx);
     fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
     print_loop_tree (gen_ctx, TRUE);
     print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
