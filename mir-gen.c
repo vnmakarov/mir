@@ -18,11 +18,11 @@
     -----
        |
        V
-    ------                                                               --------
-   |Build |    --------    -------------     -------     -----------    |Generate|
-   |Live  |-->|Coalesce|->|Reg Allocator|-->|Combine|-->| Dead Code |-->|Machine |--> Machine
-   |Ranges|    --------    -------------     -------    |Elimination|   | Insns  |     Insns
-    ------                                               -----------     --------
+    ------                                                                      --------
+   |Build |    --------     -------     -----     ---     -------     -----    |Generate|
+   |Live  |-->|Coalesce|-->|Combine|-->| DCE |-->|RA |-->|Combine|-->| DCE |-->|Machine |--> Machine
+   |Ranges|    --------     -------     -----     ---     -------     -----    | Insns  |     Insns
+    ------                                                                      --------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
@@ -39,10 +39,16 @@
    Building Live Info: Calculating live in and live out for the basic blocks.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
    Coalesce: Aggressive register coalescing
-   Register Allocator: Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
-                       Output is MIR containing only hard regs and hard reg memory
-   Combine (code selection): Merging data-depended insns into one.  Only for -O1 and above.
-   Dead code elimination: Removing insns with unused outputs.  Only for -O1 and above.
+   Register Allocator (RA): Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
+                            Output is MIR containing only hard regs and hard reg memory
+   Combine: Code selection by merging data-depended insns into one.
+            1st pass is done on vars to improve RA for fewer regs and
+                to combine more as we have no spilled regs,
+            2nd pass (can be optional for 3-op RISC targets) on hard regs to combine new RA
+                live range splitting insns (r=slot;bcmp r => bcmp slot) and combining 2 ops
+                (before RA: p1=mem;add p2,p0,p1,dead p1
+                 after RA: hr1=mem; add hr0,hr0,hr1 -> add hr0,mem  when p2 and p0 got hr0)
+   Dead code elimination (DCE): Removing insns with unused outputs.  Only for -O1 and above.
    Generate machine insns: Machine-dependent code (e.g. in
                            mir-gen-x86_64.c) creating machine insns. Always.
 
