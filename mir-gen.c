@@ -3424,18 +3424,27 @@ static mem_expr_t add_mem_insn (gen_ctx_t gen_ctx, MIR_insn_t mem_insn) {
   return e;
 }
 
+static MIR_type_t mode2type (MIR_op_mode_t mode) {
+  return (mode == MIR_OP_FLOAT     ? MIR_T_F
+          : mode == MIR_OP_DOUBLE  ? MIR_T_D
+          : mode == MIR_OP_LDOUBLE ? MIR_T_LD
+                                   : MIR_T_I64);
+}
+
+static MIR_op_mode_t type2mode (MIR_type_t type) {
+  return (type == MIR_T_F    ? MIR_OP_FLOAT
+          : type == MIR_T_D  ? MIR_OP_DOUBLE
+          : type == MIR_T_LD ? MIR_OP_LDOUBLE
+                             : MIR_OP_INT);
+}
+
 static MIR_reg_t get_expr_temp_reg (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t *temp_reg) {
   int out_p;
   MIR_op_mode_t mode;
 
   if (*temp_reg != MIR_NON_VAR) return *temp_reg;
   mode = MIR_insn_op_mode (gen_ctx->ctx, insn, 0, &out_p);
-  *temp_reg = gen_new_temp_reg (gen_ctx,
-                                mode == MIR_OP_FLOAT     ? MIR_T_F
-                                : mode == MIR_OP_DOUBLE  ? MIR_T_D
-                                : mode == MIR_OP_LDOUBLE ? MIR_T_LD
-                                                         : MIR_T_I64,
-                                curr_func_item->u.func);
+  *temp_reg = gen_new_temp_reg (gen_ctx, mode2type (mode), curr_func_item->u.func);
   return *temp_reg;
 }
 
@@ -6577,20 +6586,11 @@ static MIR_reg_t add_ld_st (gen_ctx_t gen_ctx, MIR_op_t *mem_op, int addr_reg_p,
   MIR_op_t hard_reg_op;
   size_t n;
 
-  if (data_mode == MIR_OP_INT) {
-    type = MIR_T_I64;
-    code = MIR_MOV;
-  } else if (data_mode == MIR_OP_FLOAT) {
-    type = MIR_T_F;
-    code = MIR_FMOV;
-  } else if (data_mode == MIR_OP_DOUBLE) {
-    type = MIR_T_D;
-    code = MIR_DMOV;
-  } else {
-    gen_assert (data_mode == MIR_OP_LDOUBLE);
-    type = MIR_T_LD;
-    code = MIR_LDMOV;
-  }
+  type = mode2type (data_mode);
+  code = (type == MIR_T_I64 ? MIR_MOV
+          : type == MIR_T_F ? MIR_FMOV
+          : type == MIR_T_D ? MIR_DMOV
+                            : MIR_LDMOV);
   if (!addr_reg_p) setup_used_hard_regs (gen_ctx, type, hard_reg);
   offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
   n = 0;
@@ -6718,10 +6718,7 @@ static void spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t base_
   MIR_reg_t mem_loc;
   MIR_op_t mem_op;
   MIR_type_t type = MIR_reg_type (ctx, reg - MAX_HARD_REG, curr_func_item->u.func);
-  MIR_op_mode_t data_mode = (type == MIR_T_F    ? MIR_OP_FLOAT
-                             : type == MIR_T_D  ? MIR_OP_DOUBLE
-                             : type == MIR_T_LD ? MIR_OP_LDOUBLE
-                                                : MIR_OP_INT);
+  MIR_op_mode_t data_mode = type2mode (type);
   MIR_reg_t hard_reg = VARR_GET (MIR_reg_t, reg_renumber, reg);
   gen_assert (hard_reg <= MAX_HARD_REG);
   mem_loc = get_spill_mem_loc (gen_ctx, reg);
