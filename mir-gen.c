@@ -5501,7 +5501,8 @@ static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
 #define spill_gen gen   /* pseudo regs fully spilled in BB */
 #define spill_kill kill /* pseudo regs referenced in the BB */
 
-static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, bitmap_t coalesce_vars) {
+static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, MIR_insn_t start_insn,
+                               MIR_insn_t tail_insn, bitmap_t coalesce_vars) {
   MIR_insn_t insn;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
   size_t nel;
@@ -5517,12 +5518,10 @@ static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, bitmap_t coalesce_var
   if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
       make_var_live (gen_ctx, nel, curr_point, FALSE, coalesce_vars);
     }
-  for (bb_insn_t bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-       bb_insn = DLIST_PREV (bb_insn_t, bb_insn)) {
-    insn = bb_insn->insn;
+  for (MIR_insn_t insn = tail_insn;; insn = DLIST_PREV (MIR_insn_t, insn)) {
     DEBUG (2, {
       fprintf (debug_file, "  p%-5d", curr_point);
-      print_bb_insn (gen_ctx, bb_insn, TRUE);
+      MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
     });
     incr_p = FALSE;
     FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p) {
@@ -5535,7 +5534,9 @@ static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, bitmap_t coalesce_var
         make_var_dead (gen_ctx, nel, curr_point, TRUE, coalesce_vars);
         incr_p = TRUE;
       }
-      FOREACH_BITMAP_BIT (bi, bb_insn->call_hard_reg_args, nel) {
+      bitmap_t args = (optimize_level > 0 ? ((bb_insn_t) insn->data)->call_hard_reg_args
+                                          : ((insn_data_t) insn->data)->u.call_hard_reg_args);
+      FOREACH_BITMAP_BIT (bi, args, nel) {
         make_var_live (gen_ctx, nel, curr_point, TRUE, coalesce_vars);
       }
       FOREACH_BITMAP_BIT (bi, live_vars, nel) {
@@ -5564,6 +5565,7 @@ static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, bitmap_t coalesce_var
       }
     }
     if (incr_p) curr_point++;
+    if (insn == start_insn) break;
   }
 #ifndef NDEBUG
   if (coalesce_vars == NULL) {
@@ -5594,22 +5596,35 @@ static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, bitmap_t coalesce_var
 static void build_live_ranges (gen_ctx_t gen_ctx, bitmap_t coalesce_vars) {
   size_t i;
   MIR_reg_t max_var;
+  MIR_insn_t insn, next_insn, head_insn;
   bb_t bb;
 
   curr_point = 0;
   max_var = get_max_var (gen_ctx);
   gen_assert (VARR_LENGTH (live_range_t, var_live_ranges) == 0);
   for (i = 0; i <= max_var; i++) VARR_PUSH (live_range_t, var_live_ranges, NULL);
-  if (optimize_level <= 1) {
-    for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-      process_bb_ranges (gen_ctx, bb, coalesce_vars);
-  } else { /* arrange BBs in PO (post order) for more compact ranges: */
+  if (optimize_level == 0) {
+    for (head_insn = insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+         insn = next_insn) {
+      next_insn = DLIST_NEXT (MIR_insn_t, insn);
+      bb = get_insn_bb (gen_ctx, head_insn);
+      if (next_insn == NULL || bb != get_insn_bb (gen_ctx, next_insn)) {
+        process_bb_ranges (gen_ctx, bb, head_insn, insn, coalesce_vars);
+        head_insn = next_insn;
+      }
+    }
+  } else {
     VARR_TRUNC (bb_t, worklist, 0);
     for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
       VARR_PUSH (bb_t, worklist, bb);
-    qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb), post_cmp);
-    for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++)
-      process_bb_ranges (gen_ctx, VARR_GET (bb_t, worklist, i), coalesce_vars);
+    if (optimize_level <= 1) /* arrange BBs in PO (post order) for more compact ranges: */
+      qsort (VARR_ADDR (bb_t, worklist), VARR_LENGTH (bb_t, worklist), sizeof (bb), post_cmp);
+    for (i = 0; i < VARR_LENGTH (bb_t, worklist); i++) {
+      bb = VARR_GET (bb_t, worklist, i);
+      if (DLIST_HEAD (bb_insn_t, bb->bb_insns) == NULL) continue;
+      process_bb_ranges (gen_ctx, bb, DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn,
+                         DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn, coalesce_vars);
+    }
   }
   DEBUG (2, { print_all_live_ranges (gen_ctx); });
   shrink_live_ranges (gen_ctx);
@@ -6077,8 +6092,8 @@ static void coalesce (gen_ctx_t gen_ctx) {
           dv->var = first_reg;
       }
   }
-  /* Just updating live_in and live_out will give safe but inaccurate info for complicated cases: so
-     rebuild live info after coalescing.  */
+  /* Just updating live_in and live_out will give safe but inaccurate info for complicated cases:
+     so rebuild live info after coalescing.  */
   DEBUG (1, {
     int moves_num = (int) VARR_LENGTH (mv_t, moves);
     if (coalesced_moves != 0) {
