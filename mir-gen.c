@@ -6774,6 +6774,29 @@ struct rewrite_data {
   bitmap_t live, regs_to_save;
 };
 
+#define MAX_INSN_RELOAD_MEM_OPS 2
+static int try_spilled_reg_mem (gen_ctx_t gen_ctx, MIR_insn_t insn, int nop, MIR_reg_t loc,
+                                MIR_reg_t base_reg) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_op_t *op = &insn->ops[nop];
+  MIR_type_t type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
+  MIR_disp_t offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
+  if (!target_valid_mem_offset_p (gen_ctx, type, offset)) return FALSE;
+  MIR_reg_t reg = op->u.var;
+  MIR_op_t saved_op = *op;
+  MIR_op_t mem_op = _MIR_new_var_mem_op (ctx, type, offset, base_reg, MIR_NON_VAR, 0);
+  int n = 0, op_nums[MAX_INSN_RELOAD_MEM_OPS];
+  for (int i = nop; i < (int) insn->nops; i++)
+    if (insn->ops[i].mode == MIR_OP_VAR && insn->ops[i].u.var == reg) {
+      insn->ops[i] = mem_op;
+      gen_assert (n < MAX_INSN_RELOAD_MEM_OPS);
+      op_nums[n++] = i;
+    }
+  if (target_insn_ok_p (gen_ctx, insn)) return TRUE;
+  for (int i = 0; i < n; i++) insn->ops[op_nums[i]] = saved_op;
+  return FALSE;
+}
+
 static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
                          struct rewrite_data *data) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -6907,23 +6930,9 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
                                        : MIR_OP_INT;
       }
       MIR_reg_t loc = VARR_GET (MIR_reg_t, reg_renumber, op->u.var);
-      if (insn->code != MIR_ADDR && i == 0 && loc > MAX_HARD_REG) {
-        MIR_type_t type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
-        MIR_disp_t offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
-        if (target_valid_mem_offset_p (gen_ctx, type, offset)) {
-          MIR_reg_t reg = op->u.var;
-          MIR_op_t saved_op = *op;
-          MIR_op_t mem_op = _MIR_new_var_mem_op (ctx, type, offset, base_reg, MIR_NON_VAR, 0);
-          int n = 0, ops[10];
-          for (int j = i; j < (int) nops; j++)
-            if (insn->ops[j].mode == MIR_OP_VAR && insn->ops[j].u.var == reg) {
-              insn->ops[j] = mem_op;
-              ops[n++] = j;
-            }
-          if (target_insn_ok_p (gen_ctx, insn)) break;
-          for (int j = 0; j < n; j++) insn->ops[ops[j]] = saved_op;
-        }
-      }
+      if (insn->code != MIR_ADDR && i == 0 && loc > MAX_HARD_REG
+          && try_spilled_reg_mem (gen_ctx, insn, i, loc, base_reg))
+        break;
       rld_num = 0;
       if (VARR_GET (MIR_reg_t, reg_renumber, op->u.var) > MAX_HARD_REG)
         rld_num = out_p ? rld_out_num++ : rld_in_num++;
