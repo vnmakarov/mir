@@ -6483,7 +6483,7 @@ static void quality_assign (gen_ctx_t gen_ctx) {
                   && target_locs_num (hard_reg, type) == 1);
       VARR_SET (MIR_reg_t, reg_renumber, reg, hard_reg);
 #ifndef NDEBUG
-      for (lr = VARR_GET (live_range_t, var_live_ranges, var); lr != NULL; lr = lr->next)
+      for (lr = VARR_GET (live_range_t, var_live_ranges, reg); lr != NULL; lr = lr->next)
         for (j = lr->start; j <= lr->finish; j++)
           gen_assert (bitmap_bit_p (used_locs_addr[j], hard_reg));
 #endif
