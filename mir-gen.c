@@ -6727,6 +6727,48 @@ static void spill_restore_reg (gen_ctx_t gen_ctx, MIR_reg_t reg, MIR_reg_t base_
              TEMP_INT_HARD_REG1, anchor, after_p);
 }
 
+static void reload_addr (gen_ctx_t gen_ctx, MIR_insn_t insn, int in_mem_op_num, int out_mem_op_num,
+                         MIR_reg_t base_reg) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_op_t mem_op, temp_op1, temp_op2, *ops = insn->ops;
+  gen_assert (in_mem_op_num >= 0 || out_mem_op_num >= 0);
+  int op_num = out_mem_op_num >= 0 ? out_mem_op_num : in_mem_op_num;
+  MIR_reg_t base = ops[op_num].u.var_mem.base, index = ops[op_num].u.var_mem.index;
+  MIR_insn_t new_insn;
+  gen_assert (in_mem_op_num < 0 || out_mem_op_num < 0
+              || MIR_op_eq_p (ctx, ops[in_mem_op_num], ops[out_mem_op_num]));
+  add_ld_st (gen_ctx, &mem_op, FALSE, VARR_GET (MIR_reg_t, reg_renumber, base), base_reg,
+             MIR_OP_INT, TEMP_INT_HARD_REG1, FALSE, TEMP_INT_HARD_REG1, insn, FALSE);
+  add_ld_st (gen_ctx, &mem_op, FALSE, VARR_GET (MIR_reg_t, reg_renumber, index), base_reg,
+             MIR_OP_INT, TEMP_INT_HARD_REG2, FALSE, TEMP_INT_HARD_REG2, insn, FALSE);
+  temp_op1 = _MIR_new_var_op (ctx, TEMP_INT_HARD_REG1);
+  temp_op2 = _MIR_new_var_op (ctx, TEMP_INT_HARD_REG2);
+  if (ops[op_num].u.var_mem.scale != 1) {
+    new_insn = MIR_new_insn (ctx, MIR_LSH, temp_op2, temp_op2,
+                             MIR_new_int_op (ctx, int_log2 (ops[op_num].u.var_mem.scale)));
+    gen_add_insn_before (gen_ctx, insn, new_insn);
+    /* continuation of debug output in add_ld_st: */
+    DEBUG (2, {
+      fprintf (debug_file, "      ");
+      MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
+    });
+  }
+  new_insn = MIR_new_insn (ctx, MIR_ADD, temp_op1, temp_op1, temp_op2);
+  gen_add_insn_before (gen_ctx, insn, new_insn);
+  DEBUG (2, {
+    fprintf (debug_file, "      ");
+    MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
+  });
+  if (out_mem_op_num >= 0) {
+    ops[out_mem_op_num].u.var_mem.base = TEMP_INT_HARD_REG1;
+    ops[out_mem_op_num].u.var_mem.index = MIR_NON_VAR;
+  }
+  if (in_mem_op_num >= 0) {
+    ops[in_mem_op_num].u.var_mem.base = TEMP_INT_HARD_REG1;
+    ops[in_mem_op_num].u.var_mem.index = MIR_NON_VAR;
+  }
+}
+
 struct rewrite_data {
   bb_t bb;
   bitmap_t live, regs_to_save;
@@ -6744,48 +6786,31 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
 #endif
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg, reg;
-  int out_p, first_in_p;
+  int out_p, call_p, addr_reload_p, rld_in_num, rld_out_num, rld_num, out_mem_op_num, in_mem_op_num;
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   nops = MIR_insn_nops (ctx, insn);
-  first_in_p = TRUE;
+  out_mem_op_num = in_mem_op_num = -1;
+  rld_in_num = 0;
   for (int niter = 0; niter <= 1; niter++) {
     for (i = 0; i < nops; i++) {
       op = &insn->ops[i];
       data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
-      if (!out_p == (niter == 0)) continue; /* Process outputs first */
-      DEBUG (2, {
-        if (out_p)
-          out_op = *op; /* we don't care about multiple call outputs here */
-        else
-          in_op = *op;
-      });
+      if (niter == 0 && (!out_p || op->mode == MIR_OP_VAR_MEM)) continue;
+      if (niter == 1 && (out_p && op->mode != MIR_OP_VAR_MEM)) continue;
       switch (op->mode) {
       case MIR_OP_VAR:
         if (op->u.var <= MAX_HARD_REG) {
           bitmap_set_bit_p (func_used_hard_regs, op->u.var);
           if (data != NULL) update_live (gen_ctx, op->u.var, out_p, data->live);
-          break;
-        }
-        if (data_mode == MIR_OP_VAR) {
-          gen_assert (insn->code == MIR_USE || (insn->code == MIR_ADDR && i == 1));
-          type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
-          data_mode = type == MIR_T_F    ? MIR_OP_FLOAT
-                      : type == MIR_T_D  ? MIR_OP_DOUBLE
-                      : type == MIR_T_LD ? MIR_OP_LDOUBLE
-                                         : MIR_OP_INT;
-        }
-        if (data != NULL) {
-          update_live (gen_ctx, op->u.var, out_p, data->live);
-          if (bitmap_clear_bit_p (data->regs_to_save, op->u.var)) /* put (slot<-hr) after insn */
-            spill_restore_reg (gen_ctx, op->u.var, base_reg, insn, TRUE, FALSE);
-        }
-        hard_reg = change_reg (gen_ctx, &mem_op, op->u.var, base_reg, data_mode,
-                               out_p || first_in_p, insn, out_p);
-        if (!out_p) first_in_p = FALSE;
-        if (hard_reg == MIR_NON_VAR) {
-          *op = mem_op;
         } else {
-          op->u.var = hard_reg;
+          if (!out_p && VARR_GET (MIR_reg_t, reg_renumber, op->u.var) > MAX_HARD_REG
+              && mode2type (data_mode) == MIR_T_I64)
+            rld_in_num++;
+          if (data != NULL) {
+            update_live (gen_ctx, op->u.var, out_p, data->live);
+            if (bitmap_clear_bit_p (data->regs_to_save, op->u.var)) /* put (slot<-hr) after insn */
+              spill_restore_reg (gen_ctx, op->u.var, base_reg, insn, TRUE, FALSE);
+          }
         }
         break;
       case MIR_OP_VAR_MEM:
@@ -6793,6 +6818,12 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
           bitmap_set_bit_p (func_used_hard_regs, op->u.var_mem.base);
         if (op->u.var_mem.index <= MAX_HARD_REG)
           bitmap_set_bit_p (func_used_hard_regs, op->u.var_mem.index);
+        if (op->u.var_mem.base != MIR_NON_VAR && op->u.var_mem.index != MIR_NON_VAR
+            && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.base) > MAX_HARD_REG
+            && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.index) > MAX_HARD_REG) {
+          out_p ? (out_mem_op_num = (int) i) : (in_mem_op_num = (int) i);
+          rld_in_num += 2;
+        }
         if (data != NULL) {
           if (op->u.var_mem.base != MIR_NON_VAR) {
             update_live (gen_ctx, op->u.var_mem.base, FALSE, data->live);
@@ -6811,13 +6842,6 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
             }
           }
         }
-        /* Always second for mov MEM[R2], R1 or mov R1, MEM[R2]. */
-        if (op->u.var_mem.base > MAX_HARD_REG && op->u.var_mem.base != MIR_NON_VAR) {
-          op->u.var_mem.base = change_reg (gen_ctx, &mem_op, op->u.var_mem.base, base_reg,
-                                           MIR_OP_INT, FALSE, insn, FALSE);
-          gen_assert (op->u.var_mem.base != MIR_NON_VAR); /* we can always use GP regs */
-        }
-        gen_assert (op->u.var_mem.index == MIR_NON_VAR || op->u.var_mem.index <= MAX_HARD_REG);
         break;
       default: /* do nothing */ break;
       }
@@ -6853,6 +6877,87 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
             spill_restore_reg (gen_ctx, reg, base_reg, insn, TRUE, TRUE);
         }
       }
+    }
+  }
+  addr_reload_p = rld_in_num > 2;
+  rld_in_num = rld_out_num = 0;
+  if (addr_reload_p) { /* not enough 2 temp int hard regs: address reload: */
+    reload_addr (gen_ctx, insn, in_mem_op_num, out_mem_op_num, base_reg);
+    rld_in_num = 1;
+  }
+  call_p = MIR_call_code_p (insn->code);
+  for (i = 0; i < nops; i++) {
+    op = &insn->ops[i];
+    data_mode = MIR_insn_op_mode (ctx, insn, i, &out_p);
+    DEBUG (2, {
+      if (out_p)
+        out_op = *op; /* we don't care about multiple call outputs here */
+      else
+        in_op = *op;
+    });
+    switch (op->mode) {
+    case MIR_OP_VAR:
+      if (op->u.var <= MAX_HARD_REG) break;
+      if (data_mode == MIR_OP_VAR) {
+        gen_assert (insn->code == MIR_USE || (insn->code == MIR_ADDR && i == 1));
+        type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
+        data_mode = type == MIR_T_F    ? MIR_OP_FLOAT
+                    : type == MIR_T_D  ? MIR_OP_DOUBLE
+                    : type == MIR_T_LD ? MIR_OP_LDOUBLE
+                                       : MIR_OP_INT;
+      }
+      MIR_reg_t loc = VARR_GET (MIR_reg_t, reg_renumber, op->u.var);
+      if (insn->code != MIR_ADDR && i == 0 && loc > MAX_HARD_REG) {
+        MIR_type_t type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
+        MIR_disp_t offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
+        if (target_valid_mem_offset_p (gen_ctx, type, offset)) {
+          MIR_reg_t reg = op->u.var;
+          MIR_op_t saved_op = *op;
+          MIR_op_t mem_op = _MIR_new_var_mem_op (ctx, type, offset, base_reg, MIR_NON_VAR, 0);
+          int n = 0, ops[10];
+          for (int j = i; j < (int) nops; j++)
+            if (insn->ops[j].mode == MIR_OP_VAR && insn->ops[j].u.var == reg) {
+              insn->ops[j] = mem_op;
+              ops[n++] = j;
+            }
+          if (target_insn_ok_p (gen_ctx, insn)) break;
+          for (int j = 0; j < n; j++) insn->ops[ops[j]] = saved_op;
+        }
+      }
+      rld_num = 0;
+      if (VARR_GET (MIR_reg_t, reg_renumber, op->u.var) > MAX_HARD_REG)
+        rld_num = out_p ? rld_out_num++ : rld_in_num++;
+      gen_assert (rld_num <= 2);
+      hard_reg
+        = change_reg (gen_ctx, &mem_op, op->u.var, base_reg, data_mode, rld_num == 0, insn, out_p);
+      if (hard_reg == MIR_NON_VAR) { /* we don't use hard regs for this type reg (e.g. ldouble) */
+        *op = mem_op;
+      } else {
+        op->u.var = hard_reg;
+      }
+      break;
+    case MIR_OP_VAR_MEM:
+      if (call_p && MIR_blk_type_p (op->u.var_mem.type)) break;
+      if (op->u.var_mem.base > MAX_HARD_REG && op->u.var_mem.base != MIR_NON_VAR) {
+        if (VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.base) > MAX_HARD_REG
+            && (!call_p || !MIR_blk_type_p (op->u.var_mem.type)))
+          rld_in_num++;
+        gen_assert (rld_in_num <= 2);
+        op->u.var_mem.base = change_reg (gen_ctx, &mem_op, op->u.var_mem.base, base_reg, MIR_OP_INT,
+                                         rld_in_num <= 1, insn, FALSE);
+        gen_assert (op->u.var_mem.base != MIR_NON_VAR); /* we can always use GP regs */
+      }
+      if (op->u.var_mem.index > MAX_HARD_REG && op->u.var_mem.index != MIR_NON_VAR) {
+        if (VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.index) > MAX_HARD_REG
+            && (!call_p || !MIR_blk_type_p (op->u.var_mem.type)))
+          rld_in_num++;
+        gen_assert (rld_in_num <= 2);
+        op->u.var_mem.index = change_reg (gen_ctx, &mem_op, op->u.var_mem.index, base_reg,
+                                          MIR_OP_INT, rld_in_num <= 1, insn, FALSE);
+        gen_assert (op->u.var_mem.index != MIR_NON_VAR); /* we can always use GP regs */
+      }
+      break;
+    default: /* do nothing */ break;
     }
   }
   insns_num++;
