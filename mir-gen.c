@@ -8024,7 +8024,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
       FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p) {
         if (!out_p) continue;
         reg_def_p = TRUE;
-        if (bitmap_clear_bit_p (live, var)) dead_p = FALSE;
+        if (bitmap_clear_bit_p (live, var) || bitmap_bit_p (addr_regs, var)) dead_p = FALSE;
       }
       if (!reg_def_p) dead_p = FALSE;
       if (dead_p && !MIR_call_code_p (insn->code) && insn->code != MIR_RET && insn->code != MIR_JRET
@@ -8309,6 +8309,24 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, output_bb_border_live_info);
     });
   }
+  if (optimize_level >= 1) {
+    calculate_func_cfg_live_info (gen_ctx, FALSE);
+    add_bb_insn_dead_vars (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR before 1st combine:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, output_bb_live_info);
+    });
+    combine (gen_ctx, machine_code_p); /* After combine the BB live info is still valid */
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after 1st combine:\n");
+      print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
+    });
+    dead_code_elimination (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after 1st combine:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
+    });
+  }
   calculate_func_cfg_live_info (gen_ctx, TRUE);
   DEBUG (2, {
     add_bb_insn_dead_vars (gen_ctx);
@@ -8325,17 +8343,17 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     add_bb_insn_dead_vars (gen_ctx);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR before combine:\n");
+      fprintf (debug_file, "+++++++++++++MIR before 2nd combine:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, output_bb_live_info);
     });
     combine (gen_ctx, machine_code_p); /* After combine the BB live info is still valid */
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after combine:\n");
+      fprintf (debug_file, "+++++++++++++MIR after 2nd combine:\n");
       print_CFG (gen_ctx, FALSE, FALSE, TRUE, FALSE, NULL);
     });
     dead_code_elimination (gen_ctx);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after combine:\n");
+      fprintf (debug_file, "+++++++++++++MIR after dead code elimination after 2nd combine:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
     });
   }
