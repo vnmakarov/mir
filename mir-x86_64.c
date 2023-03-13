@@ -152,25 +152,43 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
 
 void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
 
+static const uint8_t short_jmp_pattern[] = {
+  0xe9, 0, 0, 0, 0,         /* 0x0: jmp rel32 */
+  0,    0, 0, 0, 0, 0, 0, 0 /* 0x5: abs address holder */
+};
+static const uint8_t long_jmp_pattern[] = {
+  0x49, 0xbb, 0,    0, 0, 0, 0, 0, 0, 0, /* 0x0: movabsq 0, r11 */
+  0x41, 0xff, 0xe3,                      /* 0xa: jmpq   *%r11 */
+};
+
 /* r11=<address to go to>; jump *r11  */
 void *_MIR_get_thunk (MIR_context_t ctx) {
   void *res;
-  static const uint8_t pattern[] = {
-    0x49, 0xbb, 0,    0, 0, 0, 0, 0, 0, 0, /* 0x0: movabsq 0, r11 */
-    0x41, 0xff, 0xe3,                      /* 0xa: jmpq   *%r11 */
-  };
-  res = _MIR_publish_code (ctx, pattern, sizeof (pattern));
+  assert (sizeof (short_jmp_pattern) == sizeof (long_jmp_pattern));
+  res = _MIR_publish_code (ctx, short_jmp_pattern, sizeof (short_jmp_pattern));
   return res;
 }
 
 void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk) {
   void *addr;
-  memcpy ((char *) &addr, (char *) thunk + 2, sizeof (addr));
+  int short_p = *(unsigned char *) thunk == 0xe9;
+  memcpy ((char *) &addr, (char *) thunk + (short_p ? 5 : 2), sizeof (addr));
   return addr;
 }
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
-  _MIR_update_code (ctx, thunk, 1, 2, to);
+  int64_t disp = (char *) to - ((char *) thunk + 5);
+  int short_p = INT32_MIN <= disp && disp <= INT32_MAX;
+  uint8_t pattern[sizeof (short_jmp_pattern)];
+  if (short_p) {
+    memcpy (pattern, short_jmp_pattern, sizeof (short_jmp_pattern));
+    memcpy (pattern + 1, &disp, 4); /* little endian */
+    memcpy (pattern + 5, &to, 8);
+  } else {
+    memcpy (pattern, long_jmp_pattern, sizeof (long_jmp_pattern));
+    memcpy (pattern + 2, &to, 8);
+  }
+  _MIR_change_code (ctx, thunk, pattern, sizeof (short_jmp_pattern));
 }
 
 static const uint8_t save_pat[] = {
