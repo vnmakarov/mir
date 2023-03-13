@@ -138,7 +138,7 @@ EOF
     fi
   fi
   run "c2m -eg" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
-  run "c2m -eb" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eg $arg" "$expect_out" "$inputf" $first
+  run "c2m -eb" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -eb $arg" "$expect_out" "$inputf" $first
   #  run "c2m -ei" "" "./c2m -I$srcdir/c-benchmarks -I. $bench.c -ei $arg" "$expect_out" "$inputf"
   rm -f ./a.out
 }
