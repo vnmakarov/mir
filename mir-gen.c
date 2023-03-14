@@ -4810,6 +4810,7 @@ static int pressure_relief (gen_ctx_t gen_ctx) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_insn_t insn;
   bb_insn_t bb_insn, next_bb_insn, use;
+  loop_node_t loop;
   ssa_edge_t se;
   int moved_p = FALSE;
 
@@ -4824,6 +4825,11 @@ static int pressure_relief (gen_ctx_t gen_ctx) {
           || (se = insn->ops[0].data) == NULL || se->next_use != NULL || (use = se->use)->bb == bb
           || use->insn->code == MIR_PHI)
         continue;
+      if ((loop = use->bb->loop_node) != NULL) {
+        for (loop = loop->parent; loop != NULL; loop = loop->parent)
+          if (loop == bb->loop_node->parent) break;
+        if (loop != NULL) continue; /* avoid move into a loop */
+      }
       /* One use in another BB: move closer */
       DEBUG (2, {
         fprintf (debug_file, "  Move insn %-5lu", (unsigned long) bb_insn->index);
