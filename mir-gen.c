@@ -880,6 +880,10 @@ static void delete_bb (gen_ctx_t gen_ctx, bb_t bb) {
     next_e = DLIST_NEXT (in_edge_t, e);
     delete_edge (e);
   }
+  if (bb->loop_node != NULL) {
+    DLIST_REMOVE (loop_node_t, bb->loop_node->parent->children, bb->loop_node);
+    free (bb->loop_node);
+  }
   DLIST_REMOVE (bb_t, curr_cfg->bbs, bb);
   bitmap_destroy (bb->in);
   bitmap_destroy (bb->out);
@@ -8689,13 +8693,13 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (void_ptr_t, succ_bb_addrs, 16);
     VARR_CREATE (spot_attr_t, spot_attrs, 32);
     VARR_CREATE (spot_attr_t, spot2attr, 32);
+    temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+    temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
+    temp_bitmap3 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     init_dead_vars (gen_ctx);
     init_data_flow (gen_ctx);
     init_ssa (gen_ctx);
     init_gvn (gen_ctx);
-    temp_bitmap = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-    temp_bitmap2 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
-    temp_bitmap3 = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
     init_live_ranges (gen_ctx);
     init_coalesce (gen_ctx);
     init_ra (gen_ctx);
@@ -8742,9 +8746,6 @@ void MIR_gen_finish (MIR_context_t ctx) {
     finish_data_flow (gen_ctx);
     finish_ssa (gen_ctx);
     finish_gvn (gen_ctx);
-    bitmap_destroy (temp_bitmap);
-    bitmap_destroy (temp_bitmap2);
-    bitmap_destroy (temp_bitmap3);
     finish_live_ranges (gen_ctx);
     finish_coalesce (gen_ctx);
     finish_ra (gen_ctx);
@@ -8758,6 +8759,9 @@ void MIR_gen_finish (MIR_context_t ctx) {
     target_finish (gen_ctx);
     finish_dead_vars (gen_ctx);
     free (gen_ctx->data_flow_ctx);
+    bitmap_destroy (temp_bitmap);
+    bitmap_destroy (temp_bitmap2);
+    bitmap_destroy (temp_bitmap3);
     VARR_DESTROY (MIR_op_t, temp_ops);
     VARR_DESTROY (bb_insn_t, temp_bb_insns);
     VARR_DESTROY (bb_insn_t, temp_bb_insns2);
