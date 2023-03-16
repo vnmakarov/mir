@@ -499,6 +499,7 @@ struct loop_node {
   bb_t bb;        /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
+  bb_t preheader; /* used in LICM */
   DLIST (loop_node_t) children;
   DLIST_LINK (loop_node_t) children_link;
   int max_int_pressure, max_fp_pressure;
@@ -4803,6 +4804,176 @@ static void dse (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
+/* Loop invariant motion */
+
+static edge_t find_loop_entry_edge (gen_ctx_t gen_ctx, bb_t loop_entry) {
+  edge_t e, entry_e = NULL;
+  bb_insn_t head, tail;
+
+  for (e = DLIST_HEAD (in_edge_t, loop_entry->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e)) {
+    if (e->back_edge_p) continue;
+    if (entry_e != NULL) return NULL;
+    entry_e = e;
+  }
+  if (entry_e == NULL) return NULL; /* unreachable loop */
+  tail = DLIST_TAIL (bb_insn_t, entry_e->src->bb_insns);
+  head = DLIST_HEAD (bb_insn_t, entry_e->dst->bb_insns);
+  if (tail != NULL && head != NULL && DLIST_NEXT (MIR_insn_t, tail->insn) != head->insn)
+    return NULL; /* not fall through */
+  return entry_e;
+}
+
+static void create_preheader_from_edge (gen_ctx_t gen_ctx, edge_t e, loop_node_t loop) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_t new_bb = create_bb (gen_ctx, NULL);
+  loop_node_t bb_loop_node = create_loop_node (gen_ctx, new_bb), parent = loop->parent;
+
+  add_new_bb (gen_ctx, new_bb);
+  DLIST_REMOVE (bb_t, curr_cfg->bbs, new_bb);
+  DLIST_INSERT_BEFORE (bb_t, curr_cfg->bbs, e->dst, new_bb); /* insert before loop entry */
+  create_edge (gen_ctx, e->src, new_bb, TRUE, FALSE); /* fall through should be the 1st edge */
+  create_edge (gen_ctx, new_bb, e->dst, TRUE, FALSE);
+  delete_edge (e);
+  gen_assert (parent != NULL);
+  DLIST_APPEND (loop_node_t, parent->children, bb_loop_node);
+  bb_loop_node->parent = parent;
+  loop->preheader = new_bb;
+}
+
+static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
+  bb_insn_t bb_insn;
+  edge_t e;
+
+  for (loop_node_t node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) licm_add_loop_preheaders (gen_ctx, node); /* process sub-loops */
+  if (loop == curr_cfg->root_loop_node) return;
+  loop->preheader = NULL;
+  if ((e = find_loop_entry_edge (gen_ctx, loop->entry->bb)) == NULL) return;
+  if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
+      || !MIR_any_branch_code_p (bb_insn->insn->code))
+    loop->preheader = e->src; /* The preheader already exists */
+  else
+    create_preheader_from_edge (gen_ctx, e, loop);
+}
+
+static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t insn = bb_insn->insn;
+  bb_t bb = bb_insn->bb;
+  loop_node_t curr_loop;
+  int op_num, out_p, mem_p;
+  MIR_reg_t var;
+  ssa_edge_t se;
+  insn_var_iterator_t iter;
+
+  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
+      || insn->code == MIR_LABEL || MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA
+      || insn->code == MIR_BSTART || insn->code == MIR_BEND || insn->code == MIR_VA_START
+      || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END
+      || (insn->code == MIR_MOV
+          && (insn->ops[1].mode != MIR_OP_REF
+              || ((insn->ops[1].u.ref->item_type == MIR_data_item
+                       && insn->ops[1].u.ref->u.data->name != NULL
+                       && _MIR_reserved_ref_name_p (ctx, insn->ops[1].u.ref->u.data->name)
+                     ? (uint64_t) insn->ops[1].u.ref->u.data->u.els
+                     : (uint64_t) insn->ops[1].u.ref->addr)
+                  >> 32)
+                   != 0)))
+    return FALSE;
+  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
+    if (mem_p) return FALSE;
+    if (out_p) continue;
+    se = insn->ops[op_num].data;
+    gen_assert (se != NULL);
+    bb_insn = se->def;
+    bb = bb_insn->bb;
+    for (curr_loop = loop->parent; curr_loop != NULL; curr_loop = curr_loop->parent)
+      if (curr_loop == bb->loop_node) break;
+    if (curr_loop == NULL) return FALSE;
+  }
+  return TRUE;
+}
+
+static void licm_move_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, bb_t to, bb_insn_t before) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_t bb = bb_insn->bb;
+  MIR_insn_t insn = bb_insn->insn;
+
+  gen_assert (before != NULL);
+  DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
+  DLIST_APPEND (bb_insn_t, to->bb_insns, bb_insn);
+  bb_insn->bb = to;
+  DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, insn);
+  MIR_insert_insn_before (ctx, curr_func_item, before->insn, insn);
+}
+
+static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
+  MIR_insn_t insn;
+  bb_insn_t bb_insn;
+  loop_node_t node;
+  int subloop_p = FALSE, move_p = FALSE, op_num, out_p, mem_p;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+  bitmap_t loop_invariant_bb_insn_bitmap = temp_bitmap;
+  VARR (bb_insn_t) *loop_invariant_bb_insns = temp_bb_insns;
+
+  for (node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) {
+      subloop_p = TRUE;
+      if (loop_licm (gen_ctx, node)) move_p = TRUE; /* process sub-loops first */
+    }
+  if (curr_cfg->root_loop_node == loop || loop->preheader == NULL || subloop_p)
+    return move_p; /* e.g. root or unreachable root */
+  DEBUG (2, {
+    fprintf (debug_file, "Processing Loop%3lu for loop invariant motion:\n",
+             (unsigned long) loop->index);
+  });
+  VARR_TRUNC (bb_insn_t, loop_invariant_bb_insns, 0);
+  bitmap_clear (loop_invariant_bb_insn_bitmap);
+  for (node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node)) {
+    if (node->bb == NULL) continue; /* skip subloops */
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, node->bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+      if (loop_invariant_p (gen_ctx, loop, bb_insn))
+        VARR_PUSH (bb_insn_t, loop_invariant_bb_insns, bb_insn);
+  }
+  while (VARR_LENGTH (bb_insn_t, loop_invariant_bb_insns) != 0) {
+    bb_insn = VARR_POP (bb_insn_t, loop_invariant_bb_insns);
+    insn = bb_insn->insn;
+    DEBUG (2, {
+      fprintf (debug_file, "  Move invariant ");
+      print_bb_insn (gen_ctx, bb_insn, FALSE);
+    });
+    move_p = TRUE;
+    licm_move_insn (gen_ctx, bb_insn, loop->preheader,
+                    DLIST_HEAD (bb_insn_t, loop->entry->bb->bb_insns));
+    FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
+      if (!out_p) continue;
+      for (ssa_edge_t se = insn->ops[op_num].data; se != NULL; se = se->next_use) {
+        if (loop_invariant_p (gen_ctx, loop, se->use)
+            && bitmap_set_bit_p (loop_invariant_bb_insn_bitmap, se->use->index))
+          VARR_PUSH (bb_insn_t, loop_invariant_bb_insns, se->use);
+      }
+    }
+  }
+  return move_p;
+}
+
+static int licm (gen_ctx_t gen_ctx) {
+  loop_node_t node;
+  for (node = DLIST_HEAD (loop_node_t, curr_cfg->root_loop_node->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) break;
+  if (node == NULL) return FALSE; /* no loops */
+  licm_add_loop_preheaders (gen_ctx, curr_cfg->root_loop_node);
+  return loop_licm (gen_ctx, curr_cfg->root_loop_node);
+}
+
+/* New Page */
+
 /* Pressure relief */
 
 static int pressure_relief (gen_ctx_t gen_ctx) {
@@ -8239,6 +8410,16 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
+  if (optimize_level >= 1) {
+    build_loop_tree (gen_ctx);
+    DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
+  }
+  if (optimize_level >= 2 && licm (gen_ctx)) {
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after loop invariant motion:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
+  }
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++GVN:\n"); });
     gvn (gen_ctx);
@@ -8300,7 +8481,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (optimize_level >= 1) {
-    build_loop_tree (gen_ctx);
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     DEBUG (2, {
       add_bb_insn_dead_vars (gen_ctx);
