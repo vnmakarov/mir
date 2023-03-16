@@ -4850,13 +4850,18 @@ static void create_preheader_from_edge (gen_ctx_t gen_ctx, edge_t e, loop_node_t
 }
 
 static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
+  int subloop_p = FALSE;
   bb_insn_t bb_insn;
   edge_t e;
 
   for (loop_node_t node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
-    if (node->bb == NULL) licm_add_loop_preheaders (gen_ctx, node); /* process sub-loops */
-  if (loop == curr_cfg->root_loop_node) return;
+    if (node->bb == NULL) {
+      subloop_p = TRUE;
+      licm_add_loop_preheaders (gen_ctx, node); /* process sub-loops */
+    }
+  /* See loop_licm where we process only the nested loops: */
+  if (subloop_p || loop == curr_cfg->root_loop_node) return;
   loop->preheader = NULL;
   if ((e = find_loop_entry_edge (gen_ctx, loop->entry->bb)) == NULL) return;
   if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
