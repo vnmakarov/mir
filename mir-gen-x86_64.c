@@ -1808,13 +1808,9 @@ static void patterns_init (gen_ctx_t gen_ctx) {
   info_addr[prev_code].num = n - info_addr[prev_code].start;
 }
 
-static int64_t int_value (MIR_context_t ctx, MIR_op_t *op) {
+static int64_t int_value (gen_ctx_t gen_ctx, MIR_op_t *op) {
   gen_assert (op->mode == MIR_OP_REF || op->mode == MIR_OP_INT || op->mode == MIR_OP_UINT);
-  return (op->mode != MIR_OP_REF ? op->u.i
-          : op->u.ref->item_type == MIR_data_item && op->u.ref->u.data->name != NULL
-              && _MIR_reserved_ref_name_p (ctx, op->u.ref->u.data->name)
-            ? (int64_t) (uint64_t) op->u.ref->u.data->u.els
-            : (int64_t) (uint64_t) op->u.ref->addr);
+  return (op->mode != MIR_OP_REF ? op->u.i : (int64_t) get_ref_value (gen_ctx, op));
 }
 
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
@@ -1861,7 +1857,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT && op.mode != MIR_OP_REF) return FALSE;
       ch = *++p;
       gen_assert ('0' <= ch && ch <= '3');
-      int64_t n = int_value (ctx, &op);
+      int64_t n = int_value (gen_ctx, &op);
       if ((ch == '0' && !int8_p (n)) || (ch == '1' && !int16_p (n)) || (ch == '2' && !int32_p (n)))
         return FALSE;
       break;
@@ -2302,7 +2298,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
             gen_assert (op2.mode == MIR_OP_INT || op2.mode == MIR_OP_UINT
                         || op2.mode == MIR_OP_REF);
             mem.index = MIR_NON_VAR;
-            mem.disp = int_value (ctx, &op2);
+            mem.disp = int_value (gen_ctx, &op2);
           }
         } else if (ch == 'd') {
           mem.base = op.u.var;
@@ -2330,7 +2326,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert ('0' <= ch && ch <= '7');
         op = insn->ops[ch - '0'];
         gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_REF);
-        int64_t n = int_value (ctx, &op);
+        int64_t n = int_value (gen_ctx, &op);
         if (start_ch == 'i') {
           gen_assert (int8_p (n));
           imm8 = (uint8_t) n;
