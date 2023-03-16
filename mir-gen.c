@@ -115,6 +115,7 @@ static void gen_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn);
 static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_t insn);
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn);
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg);
+static uint64_t get_ref_value (gen_ctx_t gen_ctx, MIR_op_t *ref_op);
 
 #define SWAP(v1, v2, temp) \
   do {                     \
@@ -781,6 +782,14 @@ static size_t get_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   gen_assert (insn->code == MIR_LABEL);
   return (optimize_level == 0 ? ((insn_data_t) insn->data)->u.label_disp
                               : ((bb_insn_t) insn->data)->label_disp);
+}
+
+static uint64_t get_ref_value (gen_ctx_t gen_ctx, MIR_op_t *ref_op) {
+  gen_assert (ref_op->mode == MIR_OP_REF);
+  return (ref_op->u.ref->item_type == MIR_data_item && ref_op->u.ref->u.data->name != NULL
+              && _MIR_reserved_ref_name_p (gen_ctx->ctx, ref_op->u.ref->u.data->name)
+            ? (uint64_t) ref_op->u.ref->u.data->u.els
+            : (uint64_t) ref_op->u.ref->addr);
 }
 
 static void setup_used_hard_regs (gen_ctx_t gen_ctx, MIR_type_t type, MIR_reg_t hard_reg) {
@@ -4873,13 +4882,7 @@ static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_i
       || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END
       || (insn->code == MIR_MOV
           && (insn->ops[1].mode != MIR_OP_REF
-              || ((insn->ops[1].u.ref->item_type == MIR_data_item
-                       && insn->ops[1].u.ref->u.data->name != NULL
-                       && _MIR_reserved_ref_name_p (ctx, insn->ops[1].u.ref->u.data->name)
-                     ? (uint64_t) insn->ops[1].u.ref->u.data->u.els
-                     : (uint64_t) insn->ops[1].u.ref->addr)
-                  >> 32)
-                   != 0)))
+              || (get_ref_value (gen_ctx, &insn->ops[1]) >> 32) != 0)))
     return FALSE;
   FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
     if (mem_p) return FALSE;
