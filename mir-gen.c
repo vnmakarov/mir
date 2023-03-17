@@ -891,6 +891,7 @@ static void delete_bb (gen_ctx_t gen_ctx, bb_t bb) {
     delete_edge (e);
   }
   if (bb->loop_node != NULL) {
+    if (bb->loop_node->parent->entry == bb->loop_node) bb->loop_node->parent->entry = NULL;
     DLIST_REMOVE (loop_node_t, bb->loop_node->parent->children, bb->loop_node);
     free (bb->loop_node);
   }
@@ -1084,6 +1085,7 @@ static loop_node_t create_loop_node (gen_ctx_t gen_ctx, bb_t bb) {
   if (bb != NULL) bb->loop_node = loop_node;
   loop_node->parent = NULL;
   loop_node->entry = NULL;
+  loop_node->preheader = NULL;
   loop_node->max_int_pressure = loop_node->max_fp_pressure = 0;
   DLIST_INIT (loop_node_t, loop_node->children);
   return loop_node;
@@ -1439,10 +1441,13 @@ static void print_loop_subtree (gen_ctx_t gen_ctx, loop_node_t root, int level, 
   }
   fprintf (debug_file, "Loop%3lu (pressure: int=%d, fp=%d)", (unsigned long) root->index,
            root->max_int_pressure, root->max_fp_pressure);
-  if (curr_cfg->root_loop_node == root)
+  if (curr_cfg->root_loop_node == root || root->entry == NULL)
     fprintf (debug_file, ":\n");
-  else
+  else {
+    if (root->preheader != NULL)
+      fprintf (debug_file, " (preheader - bb%lu)", (unsigned long) root->preheader->index);
     fprintf (debug_file, " (entry - bb%lu):\n", (unsigned long) root->entry->bb->index);
+  }
   for (loop_node_t node = DLIST_HEAD (loop_node_t, root->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
     print_loop_subtree (gen_ctx, node, level + 1, bb_p);
@@ -3866,6 +3871,7 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
   bb_insn_t bb_insn, next_bb_insn;
   long deleted_insns_num = 0;
 
+  gen_assert (bb->index != 2);
   DEBUG (2, {
     fprintf (debug_file, "  BB%lu is unreachable and removed\n", (unsigned long) bb->index);
   });
@@ -3884,6 +3890,7 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
   bb_t next_bb, bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
 
   if (bb == NULL) return 0;
+  gen_assert (bb->index == 2);
   bitmap_clear (temp_bitmap);
   VARR_TRUNC (bb_t, worklist, 0);
   VARR_PUSH (bb_t, worklist, bb);
@@ -4932,7 +4939,7 @@ static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
       subloop_p = TRUE;
       if (loop_licm (gen_ctx, node)) move_p = TRUE; /* process sub-loops first */
     }
-  if (curr_cfg->root_loop_node == loop || loop->preheader == NULL || subloop_p)
+  if (subloop_p || curr_cfg->root_loop_node == loop || loop->preheader == NULL)
     return move_p; /* e.g. root or unreachable root */
   DEBUG (2, {
     fprintf (debug_file, "Processing Loop%3lu for loop invariant motion:\n",
@@ -5061,7 +5068,8 @@ static void jump_opt (gen_ctx_t gen_ctx) {
     MIR_insn_t insn, next_insn, last_label;
 
     next_bb = DLIST_NEXT (bb_t, bb);
-    if ((e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
+    if (bb->index != 2 /* BB2 will be used for machinize */
+        && (e = DLIST_HEAD (in_edge_t, bb->in_edges)) != NULL && DLIST_NEXT (in_edge_t, e) == NULL
         && (bb_insn == NULL
             || ((insn = bb_insn->insn)->code == MIR_LABEL && DLIST_NEXT (bb_insn_t, bb_insn) == NULL
                 && DLIST_PREV (bb_insn_t, bb_insn) == NULL
