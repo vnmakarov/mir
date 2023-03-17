@@ -1739,7 +1739,8 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
 
   *hr1 = *hr2 = MIR_NON_VAR;
   if (code == MIR_DIV || code == MIR_UDIV || code == MIR_DIVS || code == MIR_UDIVS
-      || code == MIR_MOD || code == MIR_UMOD || code == MIR_MODS || code == MIR_UMODS) {
+      || code == MIR_MOD || code == MIR_UMOD || code == MIR_MODS || code == MIR_UMODS
+      || code == MIR_UMULO || code == MIR_UMULOS) {
     *hr1 = DX_HARD_REG;
   } else if (code == MIR_FEQ || code == MIR_FNE || code == MIR_DEQ || code == MIR_DNE
              || code == MIR_LDEQ || code == MIR_LDNE) {
