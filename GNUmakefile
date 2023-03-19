@@ -350,6 +350,9 @@ clean-mir-tests: clean-mir-utility-tests clean-mir-interp-tests clean-mir-gen-te
 simplify-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/simplify.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/simplify-test $(LDLIBS) && $(BUILD_DIR)/simplify-test$(EXE)
 
+hello-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/hello.c
+	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/hello-test $(LDLIBS) && $(BUILD_DIR)/hello-test$(EXE)
+
 scan-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/scan-test.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/scan-test $(LDLIBS) && $(BUILD_DIR)/scan-test$(EXE)
 
@@ -358,6 +361,7 @@ io-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/io.c
 
 clean-mir-utility-tests:
 	$(RM) $(BUILD_DIR)/run-test$(EXE) $(BUILD_DIR)/simplify-test$(EXE)
+	$(RM) $(BUILD_DIR)/hello-test$(EXE)
 	$(RM) $(BUILD_DIR)/scan-test$(EXE) $(BUILD_DIR)/io-test$(EXE)
 
 # ------------------ MIR interp tests --------------------------
