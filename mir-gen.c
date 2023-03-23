@@ -3072,7 +3072,7 @@ typedef struct expr {
   MIR_insn_t insn;
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} *expr_t;
+} * expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -3082,7 +3082,7 @@ typedef struct mem_expr {
   uint32_t mem_num;   /* the memory expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant load/store */
   struct mem_expr *next;
-} *mem_expr_t;
+} * mem_expr_t;
 
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
@@ -7736,6 +7736,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
         if (op->u.var_mem.index <= MAX_HARD_REG)
           bitmap_set_bit_p (func_used_hard_regs, op->u.var_mem.index);
         if (op->u.var_mem.base != MIR_NON_VAR && op->u.var_mem.index != MIR_NON_VAR
+            && op->u.var_mem.base > MAX_HARD_REG && op->u.var_mem.index > MAX_HARD_REG
             && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.base) > MAX_HARD_REG
             && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.index) > MAX_HARD_REG) {
           out_p ? (out_mem_op_num = (int) i) : (in_mem_op_num = (int) i);
