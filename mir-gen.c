@@ -3072,7 +3072,7 @@ typedef struct expr {
   MIR_insn_t insn;
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} * expr_t;
+} *expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -3082,7 +3082,7 @@ typedef struct mem_expr {
   uint32_t mem_num;   /* the memory expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant load/store */
   struct mem_expr *next;
-} * mem_expr_t;
+} *mem_expr_t;
 
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
@@ -7703,7 +7703,8 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
 #endif
   MIR_op_mode_t data_mode;
   MIR_reg_t hard_reg, reg;
-  int out_p, call_p, addr_reload_p, rld_in_num, rld_out_num, rld_num, out_mem_op_num, in_mem_op_num;
+  int out_p, call_p, addr_reload_p;
+  int rld_in_num, rld_out_num, rld_num, out_mem_op_num, in_mem_op_num, other_mem_op_num;
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   nops = MIR_insn_nops (ctx, insn);
   out_mem_op_num = in_mem_op_num = -1;
@@ -7739,8 +7740,20 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
             && op->u.var_mem.base > MAX_HARD_REG && op->u.var_mem.index > MAX_HARD_REG
             && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.base) > MAX_HARD_REG
             && VARR_GET (MIR_reg_t, reg_renumber, op->u.var_mem.index) > MAX_HARD_REG) {
-          out_p ? (out_mem_op_num = (int) i) : (in_mem_op_num = (int) i);
-          rld_in_num += 2;
+          other_mem_op_num = -1;
+          if (out_p) {
+            gen_assert (out_mem_op_num < 0);
+            out_mem_op_num = (int) i;
+            if (in_mem_op_num >= 0) other_mem_op_num = in_mem_op_num;
+          } else {
+            gen_assert (in_mem_op_num < 0);
+            in_mem_op_num = (int) i;
+            if (out_mem_op_num >= 0) other_mem_op_num = out_mem_op_num;
+          }
+          if (other_mem_op_num < 0
+              || op->u.var_mem.base != insn->ops[other_mem_op_num].u.var_mem.base
+              || op->u.var_mem.index != insn->ops[other_mem_op_num].u.var_mem.index)
+            rld_in_num += 2;
         }
         if (data != NULL) {
           if (op->u.var_mem.base != MIR_NON_VAR) {
