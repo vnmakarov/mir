@@ -1276,18 +1276,14 @@ static void output_bitmap (gen_ctx_t gen_ctx, const char *head, bitmap_t bm, int
   fprintf (debug_file, "\n");
 }
 
-static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from);
-static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_p) {
+static void print_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, int newln_p) {
   MIR_context_t ctx = gen_ctx->ctx;
-  MIR_op_t op;
-  int first_p;
   int flag;
-  size_t nel;
-  bitmap_iterator_t bi;
+  MIR_op_t op;
 
-  MIR_output_insn (ctx, debug_file, bb_insn->insn, curr_func_item->u.func, FALSE);
-  for (size_t i = 0; i < bb_insn->insn->nops; i++) {
-    op = bb_insn->insn->ops[i];
+  MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, FALSE);
+  for (size_t i = 0; i < insn->nops; i++) {
+    op = insn->ops[i];
     if (op.mode == MIR_OP_VAR_MEM && op.u.var_mem.nloc != 0) {
       flag = VARR_GET (mem_attr_t, mem_attrs, op.u.var_mem.nloc).alloca_flag;
       fprintf (debug_file, " # m%lu%s", (unsigned long) op.u.var_mem.nloc,
@@ -1297,6 +1293,18 @@ static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_
                                                    : "u");
     }
   }
+  if (newln_p) fprintf (debug_file, "\n");
+}
+
+static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from);
+static void print_bb_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, int with_notes_p) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_op_t op;
+  int first_p;
+  size_t nel;
+  bitmap_iterator_t bi;
+
+  print_insn (gen_ctx, bb_insn->insn, FALSE);
   fprintf (debug_file, " # indexes: ");
   for (size_t i = 0; i < bb_insn->insn->nops; i++) {
     if (i != 0) fprintf (debug_file, ",");
