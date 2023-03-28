@@ -2077,8 +2077,8 @@ static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
   }
 }
 
-static void add_ssa_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
-                          int use_op_num) {
+static ssa_edge_t add_ssa_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
+                                int use_op_num) {
   MIR_op_t *op_ref;
   ssa_edge_t ssa_edge = gen_malloc (gen_ctx, sizeof (struct ssa_edge));
 
@@ -2095,6 +2095,7 @@ static void add_ssa_edge (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_i
   if (ssa_edge->next_use != NULL) ssa_edge->next_use->prev_use = ssa_edge;
   ssa_edge->prev_use = NULL;
   op_ref->data = ssa_edge;
+  return ssa_edge;
 }
 
 static void remove_ssa_edge (gen_ctx_t gen_ctx, ssa_edge_t ssa_edge) {
@@ -8402,7 +8403,7 @@ static void dead_code_elimination (gen_ctx_t gen_ctx) {
 
 /* SSA dead code elimination */
 
-static int dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+static int ssa_dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   MIR_insn_t insn = bb_insn->insn;
   int op_num, out_p, mem_p, output_exists_p = FALSE;
   MIR_reg_t var;
@@ -8441,7 +8442,7 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
-      if (dead_insn_p (gen_ctx, bb_insn)) VARR_PUSH (bb_insn_t, temp_bb_insns, bb_insn);
+      if (ssa_dead_insn_p (gen_ctx, bb_insn)) VARR_PUSH (bb_insn_t, temp_bb_insns, bb_insn);
   while (VARR_LENGTH (bb_insn_t, temp_bb_insns) != 0) {
     bb_insn = VARR_POP (bb_insn_t, temp_bb_insns);
     insn = bb_insn->insn;
@@ -8454,7 +8455,7 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
       if ((ssa_edge = insn->ops[op_num].data) == NULL) continue;
       def = ssa_edge->def;
       remove_ssa_edge (gen_ctx, ssa_edge);
-      if (dead_insn_p (gen_ctx, def)) VARR_PUSH (bb_insn_t, temp_bb_insns, def);
+      if (ssa_dead_insn_p (gen_ctx, def)) VARR_PUSH (bb_insn_t, temp_bb_insns, def);
     }
     gen_delete_insn (gen_ctx, insn);
     dead_insns_num++;
