@@ -2190,6 +2190,18 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
       process_insn_inputs_for_ssa_def_use_repr (gen_ctx, bb_insn);
 }
 
+static void ssa_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  int op_num, out_p, mem_p;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+
+  gen_assert (def_use_repr_p);  // ??remove !def_use_repr as we dont use it at all
+  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
+    if (insn->ops[op_num].data != NULL) remove_ssa_edge (gen_ctx, insn->ops[op_num].data);
+  }
+  gen_delete_insn (gen_ctx, insn);
+}
+
 static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t old_reg, int sep, size_t index) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
