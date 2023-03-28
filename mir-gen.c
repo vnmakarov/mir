@@ -1855,7 +1855,6 @@ DEF_VARR (size_t);
 DEF_VARR (char);
 
 struct ssa_ctx {
-  int def_use_repr_p; /* flag of def_use_chains */
   /* Different fake insns: defining undef, initial arg values. They are not in insn lists. */
   VARR (bb_insn_t) * arg_bb_insns, *undef_insns;
   VARR (bb_insn_t) * phis, *deleted_phis;
@@ -1866,7 +1865,6 @@ struct ssa_ctx {
   VARR (char) * reg_name;
 };
 
-#define def_use_repr_p gen_ctx->ssa_ctx->def_use_repr_p
 #define arg_bb_insns gen_ctx->ssa_ctx->arg_bb_insns
 #define undef_insns gen_ctx->ssa_ctx->undef_insns
 #define phis gen_ctx->ssa_ctx->phis
@@ -2062,8 +2060,6 @@ static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
 
   if (op_data == NULL) {
     fprintf (debug_file, "_");
-  } else if (!def_use_repr_p) {
-    fprintf (debug_file, "%d", ((bb_insn_t) op_data)->index);
   } else if ((se = op_data)->def != from) {
     fprintf (debug_file, "%d", se->def->index);
   } else {
@@ -2182,8 +2178,6 @@ static void process_insn_inputs_for_ssa_def_use_repr (gen_ctx_t gen_ctx, bb_insn
 static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
   bb_insn_t bb_insn;
 
-  if (def_use_repr_p) return;
-  def_use_repr_p = TRUE;
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
@@ -2195,7 +2189,6 @@ static void ssa_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   MIR_reg_t var;
   insn_var_iterator_t iter;
 
-  gen_assert (def_use_repr_p);  // ??remove !def_use_repr as we dont use it at all
   FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
     if (insn->ops[op_num].data != NULL) remove_ssa_edge (gen_ctx, insn->ops[op_num].data);
   }
@@ -2360,7 +2353,6 @@ static void build_ssa (gen_ctx_t gen_ctx, int rename_p) {
 
   gen_assert (VARR_LENGTH (bb_insn_t, arg_bb_insns) == 0
               && VARR_LENGTH (bb_insn_t, undef_insns) == 0);
-  def_use_repr_p = FALSE;
   HTAB_CLEAR (def_tab_el_t, def_tab);
   VARR_TRUNC (bb_t, worklist, 0);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -2483,11 +2475,7 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
-        if (insn->ops[op_num].data == NULL) continue;
-        if (!def_use_repr_p)
-          insn->ops[op_num].data = NULL;
-        else
-          remove_ssa_edge (gen_ctx, insn->ops[op_num].data);
+        if (insn->ops[op_num].data != NULL) remove_ssa_edge (gen_ctx, insn->ops[op_num].data);
       }
     }
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
@@ -4963,7 +4951,6 @@ static int pressure_relief (gen_ctx_t gen_ctx) {
   int moved_p = FALSE;
 
   DEBUG (2, { fprintf (debug_file, "+++++++++++++Pressure Relief:\n"); });
-  gen_assert (def_use_repr_p);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
@@ -8442,7 +8429,6 @@ static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
   long dead_insns_num = 0;
 
   DEBUG (2, { fprintf (debug_file, "+++++++++++++Dead code elimination:\n"); });
-  gen_assert (def_use_repr_p);
   VARR_TRUNC (bb_insn_t, temp_bb_insns, 0);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
