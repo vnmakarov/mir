@@ -66,9 +66,8 @@ static const int spill_space_size = 32;
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {
   /* see possible patterns */
   MIR_FADD,  MIR_DADD,  MIR_LDADD, MIR_SUB,   MIR_SUBS,  MIR_FSUB,   MIR_DSUB,
-  MIR_LDSUB, MIR_MUL,   MIR_MULS,  MIR_FMUL,  MIR_DMUL,  MIR_LDMUL,  MIR_DIV,
-  MIR_DIVS,  MIR_UDIV,  MIR_FDIV,  MIR_DDIV,  MIR_LDDIV, MIR_MOD,    MIR_MODS,
-  MIR_UMOD,  MIR_UMODS, MIR_AND,   MIR_ANDS,  MIR_OR,    MIR_ORS,    MIR_XOR,
+  MIR_LDSUB, MIR_MUL,   MIR_MULS,  MIR_FMUL,  MIR_DMUL,  MIR_LDMUL,  MIR_FDIV,
+  MIR_DDIV,  MIR_LDDIV, MIR_AND,   MIR_ANDS,  MIR_OR,    MIR_ORS,    MIR_XOR,
   MIR_XORS,  MIR_LSH,   MIR_LSHS,  MIR_RSH,   MIR_RSHS,  MIR_URSH,   MIR_URSHS,
   MIR_NEG,   MIR_NEGS,  MIR_FNEG,  MIR_DNEG,  MIR_LDNEG, MIR_ADDO,   MIR_ADDOS,
   MIR_SUBO,  MIR_SUBOS, MIR_MULO,  MIR_MULOS, MIR_UMULO, MIR_UMULOS, MIR_INSN_BOUND,
@@ -1814,7 +1813,8 @@ static int64_t int_value (gen_ctx_t gen_ctx, MIR_op_t *op) {
   return (op->mode != MIR_OP_REF ? op->u.i : (int64_t) get_ref_value (gen_ctx, op));
 }
 
-static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
+static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn,
+                            int strict_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   int nop, n;
   size_t nops = MIR_insn_nops (ctx, insn);
@@ -1830,10 +1830,16 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     if (MIR_call_code_p (insn->code) && nop >= nops) return FALSE;
     gen_assert (nop < nops);
     op = insn->ops[nop];
+    if (op.mode == MIR_OP_VAR_MEM) {
+      if (op.u.var_mem.index != MIR_NON_VAR && op.u.var_mem.scale != 1 && op.u.var_mem.scale != 2
+          && op.u.var_mem.scale != 4 && op.u.var_mem.scale != 8)
+        return FALSE;
+      if (!int32_p (op.u.var_mem.disp)) return FALSE;
+    }
     switch (start_ch = *p) {
     case 'X': break;
     case 'r':
-      if (op.mode != MIR_OP_VAR) return FALSE;
+      if (op.mode != MIR_OP_VAR && (strict_p || op.mode != MIR_OP_VAR_MEM)) return FALSE;
       break;
     case 't':
       if (op.mode != MIR_OP_VAR || !(AX_HARD_REG <= op.u.var && op.u.var <= BX_HARD_REG))
@@ -1878,7 +1884,6 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       MIR_type_t type, type2, type3 = MIR_T_BOUND;
       int u_p, s_p;
 
-      if (op.mode != MIR_OP_VAR_MEM) return FALSE;
       u_p = s_p = TRUE;
       ch = *++p;
       switch (ch) {
@@ -1924,6 +1929,9 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
 #endif
         }
       }
+      /* LD pseudos always get memory: */
+      if (type == MIR_T_LD && op.mode == MIR_OP_VAR && op.u.var > MAX_HARD_REG) break;
+      if (op.mode != MIR_OP_VAR_MEM) return FALSE;
       if (op.u.var_mem.type != type && op.u.var_mem.type != type2 && op.u.var_mem.type != type3)
         return FALSE;
       if (op.u.var_mem.index != MIR_NON_VAR && op.u.var_mem.scale != 1 && op.u.var_mem.scale != 2
@@ -1949,6 +1957,9 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       gen_assert (n < nop);
       original = insn->ops[n];
       mode = op.mode;
+      if (!strict_p && (mode == MIR_OP_VAR || mode == MIR_OP_VAR_MEM)
+          && (original.mode == MIR_OP_VAR || original.mode == MIR_OP_VAR_MEM))
+        break;
       if (mode == MIR_OP_UINT) mode = MIR_OP_INT;
       if (original.mode != mode && (original.mode != MIR_OP_UINT || mode != MIR_OP_INT))
         return FALSE;
@@ -1967,11 +1978,13 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         return FALSE;
       else if (mode == MIR_OP_LABEL && op.u.label != original.u.label)
         return FALSE;
-      else if (mode == MIR_OP_VAR_MEM && op.u.var_mem.type != original.u.var_mem.type
-               && op.u.var_mem.scale != original.u.var_mem.scale
-               && op.u.var_mem.base != original.u.var_mem.base
-               && op.u.var_mem.index != original.u.var_mem.index
-               && op.u.var_mem.disp != original.u.var_mem.disp)
+      else if (mode == MIR_OP_VAR_MEM
+               && (op.u.var_mem.type != original.u.var_mem.type
+                   || op.u.var_mem.disp != original.u.var_mem.disp
+                   || op.u.var_mem.base != original.u.var_mem.base
+                   || op.u.var_mem.index != original.u.var_mem.index
+                   || (op.u.var_mem.index != MIR_NON_VAR
+                       && op.u.var_mem.scale != original.u.var_mem.scale)))
         return FALSE;
       break;
     default: gen_assert (FALSE);
@@ -1981,14 +1994,15 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
   return TRUE;
 }
 
-static const char *find_insn_pattern_replacement (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+static const char *find_insn_pattern_replacement (gen_ctx_t gen_ctx, MIR_insn_t insn,
+                                                  int strict_p) {
   int i;
   const struct pattern *pat;
   insn_pattern_info_t info = VARR_GET (insn_pattern_info_t, insn_pattern_info, insn->code);
 
   for (i = 0; i < info.num; i++) {
     pat = &patterns[VARR_GET (int, pattern_indexes, info.start + i)];
-    if (pattern_match_p (gen_ctx, pat, insn)) return pat->replacement;
+    if (pattern_match_p (gen_ctx, pat, insn, strict_p)) return pat->replacement;
   }
   return NULL;
 }
@@ -2484,8 +2498,8 @@ static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
   return long_jump_opcode[1] - 0x10;
 }
 
-static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  return find_insn_pattern_replacement (gen_ctx, insn) != NULL;
+static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn, int strict_p) {
+  return find_insn_pattern_replacement (gen_ctx, insn, strict_p) != NULL;
 }
 
 static void translate_init (gen_ctx_t gen_ctx) {
@@ -2538,7 +2552,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
     if (insn->code == MIR_LABEL) {
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else if (insn->code != MIR_USE) {
-      replacement = find_insn_pattern_replacement (gen_ctx, insn);
+      replacement = find_insn_pattern_replacement (gen_ctx, insn, TRUE);
       if (replacement == NULL) {
         fprintf (stderr, "%d: fatal failure in matching insn:", gen_ctx->gen_num);
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
@@ -2584,7 +2598,7 @@ static void target_bb_translate_start (gen_ctx_t gen_ctx) {
 static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void **jump_addrs) {
   const char *replacement;
   if (insn->code == MIR_LABEL) return;
-  replacement = find_insn_pattern_replacement (gen_ctx, insn);
+  replacement = find_insn_pattern_replacement (gen_ctx, insn, TRUE);
   gen_assert (replacement != NULL);
   out_insn (gen_ctx, insn, replacement, jump_addrs);
 }
@@ -2687,7 +2701,7 @@ static void target_init (gen_ctx_t gen_ctx) {
   _MIR_register_unspec_insn (gen_ctx->ctx, MOVDQA_CODE, "movdqa", 1, &res, 1, FALSE, args);
   patterns_init (gen_ctx);
   temp_jump = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, NULL));
-  temp_jump_replacement = find_insn_pattern_replacement (gen_ctx, temp_jump);
+  temp_jump_replacement = find_insn_pattern_replacement (gen_ctx, temp_jump, TRUE);
 }
 
 static void target_finish (gen_ctx_t gen_ctx) {
