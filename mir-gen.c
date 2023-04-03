@@ -8131,7 +8131,7 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
   bitmap_clear (vars_bitmap);
   for (i = 0; i < nops; i++) {
     MIR_insn_op_mode (ctx, insn, i, &out_p);
-    if (out_p && insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
+    if (out_p || insn->ops[i].mode == MIR_OP_VAR_MEM) continue;
     combine_process_op (gen_ctx, &insn->ops[i], bb_insn);
   }
 
@@ -8181,99 +8181,20 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
   while (VARR_LENGTH (MIR_reg_t, insn_vars) != 0) {
     var = VARR_POP (MIR_reg_t, insn_vars);
     if ((def_insn = get_uptodate_def_insn (gen_ctx, var)) == NULL) continue;
+    if (!move_code_p (def_insn->code)) continue;
     insn_var_change_p = FALSE;
     for (i = 0; i < nops; i++) { /* Change all var occurences: */
       op_ref = &insn->ops[i];
       op_change_p = FALSE;
       MIR_insn_op_mode (ctx, insn, i, &out_p);
       if (!out_p && op_ref->mode == MIR_OP_VAR && op_ref->u.var == var) {
-        if (!move_code_p (def_insn->code)) break;
         /* It is not safe to substitute if there is another use after def insn before
            the current as we delete def insn after substitution. */
         insn->ops[i] = def_insn->ops[1];
         insn_var_change_p = op_change_p = TRUE;
-      } else if (op_ref->mode == MIR_OP_VAR_MEM) {
-        src_op_ref = &def_insn->ops[1];
-        if (op_ref->u.var_mem.index == var) {
-          mem_reg_change_p = FALSE;
-          if (src_op_ref->mode != MIR_OP_VAR) {
-          } else if (def_insn->code == MIR_MOV) { /* index = r */
-            insn->ops[i].u.var_mem.index = src_op_ref->u.var;
-            mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-          } else if (def_insn->code == MIR_ADD
-                     || def_insn->code == MIR_SUB) { /* index = r +- const */
-            gen_assert (src_op_ref->u.var != MIR_NON_VAR);
-            if ((src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT) {
-              insn->ops[i].u.var_mem.index = src_op_ref->u.var;
-              insn->ops[i].u.var_mem.disp
-                += ((def_insn->code == MIR_ADD ? src_op2_ref->u.i : -src_op2_ref->u.i)
-                    * insn->ops[i].u.var_mem.scale);
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            }
-          } else if ((def_insn->code == MIR_MUL || def_insn->code == MIR_LSH)
-                     && op_ref->u.var_mem.scale >= 1 && op_ref->u.var_mem.scale <= MIR_MAX_SCALE
-                     && (src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT) {
-            scale = def_insn->code == MIR_MUL ? src_op2_ref->u.i : power2 (src_op2_ref->u.i);
-            if (scale >= 1 && scale <= MIR_MAX_SCALE
-                && insn->ops[i].u.var_mem.scale * scale <= MIR_MAX_SCALE) {
-              /* index = r * const */
-              gen_assert (src_op_ref->u.var != MIR_NON_VAR);
-              insn->ops[i].u.var_mem.index = src_op_ref->u.var;
-              insn->ops[i].u.var_mem.scale *= scale;
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            }
-          }
-          if (!mem_reg_change_p) break;
-        }
-        if (op_ref->u.var_mem.base == var) {
-          mem_reg_change_p = FALSE;
-          op_ref = &insn->ops[i];
-          if (def_insn->code == MIR_MOV) {
-            if (src_op_ref->mode == MIR_OP_VAR) { /* base = r */
-              insn->ops[i].u.var_mem.base = src_op_ref->u.var;
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            } else if (src_op_ref->mode == MIR_OP_INT) { /* base = const */
-              if (insn->ops[i].u.var_mem.scale != 1) {
-                insn->ops[i].u.var_mem.base = MIR_NON_VAR;
-              } else {
-                insn->ops[i].u.var_mem.base = insn->ops[i].u.var_mem.index;
-                insn->ops[i].u.var_mem.index = MIR_NON_VAR;
-              }
-              insn->ops[i].u.var_mem.disp += src_op_ref->u.i;
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            }
-          } else if (src_op_ref->mode != MIR_OP_VAR) { /* Can do nothing */
-            ;
-          } else if (def_insn->code == MIR_ADD || def_insn->code == MIR_SUB) {
-            gen_assert (src_op_ref->u.var != MIR_NON_VAR);
-            src_op2_ref = &def_insn->ops[2];
-            if (def_insn->code == MIR_ADD && src_op2_ref->mode == MIR_OP_VAR
-                && op_ref->u.var_mem.index == MIR_NON_VAR) { /* base = r1 + r2 */
-              insn->ops[i].u.var_mem.base = src_op_ref->u.var;
-              insn->ops[i].u.var_mem.index = src_op2_ref->u.var;
-              insn->ops[i].u.var_mem.scale = 1;
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            } else if (src_op2_ref->mode == MIR_OP_INT) { /* base = r +- const */
-              insn->ops[i].u.var_mem.base = src_op_ref->u.var;
-              insn->ops[i].u.var_mem.disp
-                += (def_insn->code == MIR_ADD ? src_op2_ref->u.i : -src_op2_ref->u.i);
-              mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-            }
-          } else if (def_insn->code == MIR_MUL && op_ref->u.var_mem.index == MIR_NON_VAR
-                     && (src_op2_ref = &def_insn->ops[2])->mode == MIR_OP_INT
-                     && src_op2_ref->u.i >= 1
-                     && src_op2_ref->u.i <= MIR_MAX_SCALE) { /* base = r * const */
-            gen_assert (src_op_ref->u.var != MIR_NON_VAR && src_op2_ref->u.i != 1);
-            insn->ops[i].u.var_mem.base = MIR_NON_VAR;
-            insn->ops[i].u.var_mem.index = src_op_ref->u.var;
-            insn->ops[i].u.var_mem.scale = src_op2_ref->u.i;
-            mem_reg_change_p = op_change_p = insn_var_change_p = TRUE;
-          }
-          if (!mem_reg_change_p) {
-            if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i); /* index was changed */
-            break;
-          }
-        }
+      } else {
+        gen_assert (op_ref->mode != MIR_OP_VAR_MEM
+                    || (op_ref->u.var_mem.base != var && op_ref->u.var_mem.index != var));
       }
       if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i);
     }
