@@ -6457,7 +6457,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
     if (code == MIR_LABEL || code == MIR_ADDR || code == MIR_USE) continue;
     if (bitmap_bit_p (insn_to_consider, code) && !MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1]))
       add_inout_reloads (gen_ctx, insn);
-    if (target_insn_ok_p (gen_ctx, insn, TRUE)) continue;
+    if (target_insn_ok_p (gen_ctx, insn)) continue;
     int change_p = FALSE;
     for (i = 0; i < insn->nops; i++) { /* try to change one non-dup mem op to reg */
       if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
@@ -6471,7 +6471,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
         type_regs[type] = gen_new_temp_reg (gen_ctx, type, curr_func_item->u.func);
       mem_op = insn->ops[i];
       insn->ops[i] = _MIR_new_var_op (ctx, type_regs[type]);
-      if (target_insn_ok_p (gen_ctx, insn, TRUE)) {
+      if (target_insn_ok_p (gen_ctx, insn)) {
         add_reload (gen_ctx, insn, &mem_op, &insn->ops[i], type, out_p);
         type_regs[type] = MIR_NON_VAR;
         break;
@@ -6481,7 +6481,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
     if (i < insn->nops) continue;
     if (bitmap_bit_p (insn_to_consider, code) && insn->ops[0].mode == MIR_OP_VAR_MEM) {
       add_inout_reloads (gen_ctx, insn);
-      if (target_insn_ok_p (gen_ctx, insn, TRUE)) continue;
+      if (target_insn_ok_p (gen_ctx, insn)) continue;
     }
     for (i = 0; i < insn->nops; i++) { /* change all non-dup mem ops to pseudo */
       if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
@@ -6495,7 +6495,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
       insn->ops[i] = _MIR_new_var_op (ctx, temp_reg);
       add_reload (gen_ctx, insn, &mem_op, &insn->ops[i], type, out_p);
     }
-    gen_assert (target_insn_ok_p (gen_ctx, insn, TRUE));
+    gen_assert (target_insn_ok_p (gen_ctx, insn));
   }
 }
 
@@ -7291,7 +7291,7 @@ static int try_spilled_reg_mem (gen_ctx_t gen_ctx, MIR_insn_t insn, int nop, MIR
       gen_assert (n < MAX_INSN_RELOAD_MEM_OPS);
       op_nums[n++] = i;
     }
-  if (target_insn_ok_p (gen_ctx, insn, TRUE)) return TRUE;
+  if (target_insn_ok_p (gen_ctx, insn)) return TRUE;
   for (int i = 0; i < n; i++) insn->ops[op_nums[i]] = saved_op;
   return FALSE;
 }
@@ -8154,7 +8154,7 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
             || (insn->ops[0].u.var_mem.base != var && insn->ops[0].u.var_mem.index != var))) {
       saved_op = def_insn->ops[0];
       def_insn->ops[0] = insn->ops[0];
-      success_p = target_insn_ok_p (gen_ctx, def_insn, TRUE);
+      success_p = target_insn_ok_p (gen_ctx, def_insn);
       def_insn->ops[0] = saved_op;
       if (!success_p) return FALSE;
       gen_move_insn_before (gen_ctx, insn, def_insn);
@@ -8278,7 +8278,7 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
       if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i);
     }
     if (insn_var_change_p) {
-      if ((success_p = i >= nops && target_insn_ok_p (gen_ctx, insn, TRUE))) insn_change_p = TRUE;
+      if ((success_p = i >= nops && target_insn_ok_p (gen_ctx, insn))) insn_change_p = TRUE;
       while (VARR_LENGTH (size_t, changed_op_numbers)) {
         i = VARR_POP (size_t, changed_op_numbers);
         if (success_p)
@@ -8364,7 +8364,7 @@ static MIR_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
     return NULL;
   new_insn = MIR_new_insn (ctx, code, insn->ops[0], def_insn->ops[1], def_insn->ops[2]);
   MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
-  if (!target_insn_ok_p (gen_ctx, new_insn, TRUE)) {
+  if (!target_insn_ok_p (gen_ctx, new_insn)) {
     MIR_remove_insn (ctx, curr_func_item, new_insn);
     return NULL;
   } else {
@@ -8412,7 +8412,7 @@ static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *dele
     /* [u]ext<n> b,a; ... [u]ext<m> c,b -> [u]ext<m> c,a when <m> <= <n>: */
     saved_op = insn->ops[1];
     insn->ops[1] = def_insn->ops[1];
-    if (!target_insn_ok_p (gen_ctx, insn, TRUE)) {
+    if (!target_insn_ok_p (gen_ctx, insn)) {
       insn->ops[1] = saved_op;
       return NULL;
     }
@@ -8427,7 +8427,7 @@ static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *dele
     saved_op = insn->ops[1];
     insn->ops[1] = def_insn->ops[1];
     insn->code = def_insn->code;
-    ok_p = target_insn_ok_p (gen_ctx, insn, TRUE);
+    ok_p = target_insn_ok_p (gen_ctx, insn);
     insn->ops[1] = saved_op;
     insn->code = code;
     if (!ok_p) return NULL;
