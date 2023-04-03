@@ -2511,6 +2511,15 @@ static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
   return long_jump_opcode[1] - 0x10;
 }
 
+static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+  if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
+  if (op_ref->u.var_mem.index != MIR_NON_VAR && op_ref->u.var_mem.scale != 1
+      && op_ref->u.var_mem.scale != 2 && op_ref->u.var_mem.scale != 4
+      && op_ref->u.var_mem.scale != 8)
+    return FALSE;
+  return int32_p (op_ref->u.var_mem.disp);
+}
+
 static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn, int strict_p) {
   return find_insn_pattern_replacement (gen_ctx, insn, strict_p) != NULL;
 }
