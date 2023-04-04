@@ -197,7 +197,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     nargs = VARR_LENGTH (MIR_var_t, proto->args);
     arg_vars = VARR_ADDR (MIR_var_t, proto->args);
   }
-  if (call_insn->ops[1].mode != MIR_OP_VAR) {
+  if (call_insn->ops[1].mode != MIR_OP_VAR && call_insn->ops[1].mode != MIR_OP_REF) {
     temp_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
     new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op, call_insn->ops[1]);
     call_insn->ops[1] = temp_op;
@@ -597,6 +597,7 @@ typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
 struct const_ref {
+  int call_p;            /* flag that constant from call insn */
   size_t pc;             /* where rel32 address should be in code */
   size_t next_insn_disp; /* displacement of the next insn */
   size_t const_num;
@@ -1357,11 +1358,12 @@ struct pattern {
      i[0-2] - n-th operand in byte immediate (should be imm of type i8)
      I[0-2] - n-th operand in 4 byte immediate (should be imm of type i32)
      J[0-2] - n-th operand in 8 byte immediate
-     P[0-2] - n-th operand in 8 byte address
+     P[0-2] - n-th operand is 64-bit call address in memory pool
      T     - absolute 8-byte switch table address
      l[0-2] - n-th operand-label in 32-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
+     +h<one hex digit> - lower 3-bit part of opcode used for 0-15 hard reg operand
      c<value> - address of 32-bit or 64-bit constant in memory pool (we keep always 64-bit
                 in memory pool. x86_64 is LE)
      h<one or two hex digits> - hardware register with given number in reg of ModRM:reg;
@@ -1725,6 +1727,7 @@ static const struct pattern patterns[] = {
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
   {MIR_LDBNE, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A l0; 0F 85 l0"},
 
+  {MIR_CALL, "X i3 $", "FF /2 P1"},  /* call *rel32(rip)  */
   {MIR_CALL, "X r $", "Y FF /2 R1"}, /* call *r1 */
   {MIR_RET, "$", "C3"},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
@@ -2167,13 +2170,14 @@ static size_t add_to_const_pool (struct gen_ctx *gen_ctx, uint64_t v) {
   return len;
 }
 
-static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *rm,
-                           int64_t *disp32) {
+static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *rm, int64_t *disp32,
+                           int call_p) {
   const_ref_t cr;
   size_t n;
 
   n = add_to_const_pool (gen_ctx, v);
   setup_rip_rel_addr (0, mod, rm, disp32);
+  cr.call_p = call_p;
   cr.pc = 0;
   cr.next_insn_disp = 0;
   cr.const_num = n;
@@ -2371,6 +2375,17 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         VARR_PUSH (label_ref_t, label_refs, lr);
         break;
       }
+      case 'P': {
+        ch = *++p;
+        gen_assert ('0' <= ch && ch <= '7');
+        op_ref = &insn->ops[ch - '0'];
+        gen_assert (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT
+                    || op_ref->mode == MIR_OP_REF);
+        uint64_t v = (uint64_t) int_value (gen_ctx, op_ref);
+        gen_assert (const_ref_num < 0 && disp32 < 0);
+        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, TRUE);
+        break;
+      }
       case '/':
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '7');
@@ -2378,16 +2393,23 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         break;
       case '+':
         ch = *++p;
-        gen_assert ('0' <= ch && ch <= '2');
-        op_ref = &insn->ops[ch - '0'];
-        gen_assert (op_ref->mode == MIR_OP_VAR);
-        setup_reg (&rex_b, &lb, op_ref->u.var);
+        if (ch == 'h') {
+          ch = *++p;
+          v = hex_value (*p++);
+          gen_assert (v >= 0);
+        } else {
+          gen_assert ('0' <= ch && ch <= '2');
+          op_ref = &insn->ops[ch - '0'];
+          gen_assert (op_ref->mode == MIR_OP_VAR);
+          v = op_ref->u.var;
+        }
+        setup_reg (&rex_b, &lb, v);
         break;
       case 'c':
         ++p;
         v = read_hex (&p);
         gen_assert (const_ref_num < 0 && disp32 < 0);
-        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32);
+        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, FALSE);
         break;
       case 'h':
         ++p;
@@ -2570,6 +2592,22 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   return translate_finish (gen_ctx, len);
 }
 
+static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  /* changing calls to rel32 calls: */
+  for (size_t i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) {
+    const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
+    if (!cr.call_p) continue;
+    gen_assert (base[cr.pc - 2] == 0xff && base[cr.pc - 1] == 0x15);
+    uint64_t v = VARR_GET (uint64_t, const_pool, cr.const_num);
+    int64_t off = (int64_t) v - (int64_t) (base + cr.next_insn_disp);
+    if (!int32_p (off)) continue;
+    uint8_t rel_call[] = {0x40, 0xe8, 0, 0, 0, 0}; /* rex call rel32 */
+    set_int64 (rel_call + 2, off, 4);
+    _MIR_change_code (ctx, (uint8_t *) base + cr.pc - 2, (uint8_t *) rel_call, 6);
+  }
+}
+
 static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   MIR_code_reloc_t reloc;
 
@@ -2581,6 +2619,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   }
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
+  change_calls (gen_ctx, base);
 }
 
 struct target_bb_version {
@@ -2652,6 +2691,7 @@ static void target_bb_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
       setup_rel32 (gen_ctx, &lr, base, lr.u.jump_addr);
     }
   }
+  change_calls (gen_ctx, base);
   VARR_TRUNC (MIR_code_reloc_t, relocs, 0);
   for (size_t i = 0; i < VARR_LENGTH (uint64_t, abs_address_locs); i++) {
     reloc.offset = VARR_GET (uint64_t, abs_address_locs, i);
