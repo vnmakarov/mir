@@ -3009,18 +3009,40 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         continue;
       }
       w2 = get_ext_params (def_insn->code, &sign2_p);
-      if (w2 != 0 && sign_p == sign2_p && w2 <= w) { /* ext a,...; ext b,... */
+      if (w2 != 0 && w <= w2) {
+        /* [u]ext2<w2> b,a; ...[u]ext1<w> c,b -> [u]ext1<w> c,a when <w> <= <w2>: */
         DEBUG (2, {
           fprintf (debug_file, "    Change code of insn %lu: before",
                    (unsigned long) bb_insn->index);
           MIR_output_insn (ctx, debug_file, insn, func, FALSE);
         });
-        insn->code = MIR_MOV;
+        insn->ops[1].u.var = def_insn->ops[1].u.var;
+        remove_ssa_edge (gen_ctx, se);
+        se = def_insn->ops[1].data;
+        add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, 1);
         DEBUG (2, {
           fprintf (debug_file, "    after ");
           print_bb_insn (gen_ctx, bb_insn, FALSE);
         });
-        next_bb_insn = bb_insn; /* process the new move */
+        next_bb_insn = bb_insn; /* process ext again */
+        continue;
+      } else if (w2 != 0 && w2 < w && (sign_p || !sign2_p)) { /* exclude ext<w2>, uext<w> pair */
+        /* [u]ext1<w2> b,a; .. [u]ext<w> c,b -> .. [u]ext1<w2> c,a */
+        DEBUG (2, {
+          fprintf (debug_file, "    Change code of insn %lu: before",
+                   (unsigned long) bb_insn->index);
+          MIR_output_insn (ctx, debug_file, insn, func, FALSE);
+        });
+        insn->code = def_insn->code;
+        insn->ops[1].u.var = def_insn->ops[1].u.var;
+        remove_ssa_edge (gen_ctx, se);
+        se = def_insn->ops[1].data;
+        add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, 1);
+        DEBUG (2, {
+          fprintf (debug_file, "    after ");
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        next_bb_insn = bb_insn; /* process ext again */
         continue;
       }
       if (!sign_p && (def_insn->code == MIR_AND || def_insn->code == MIR_ANDS)) {
