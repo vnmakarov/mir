@@ -116,6 +116,7 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn);
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg);
 static uint64_t get_ref_value (gen_ctx_t gen_ctx, const MIR_op_t *ref_op);
+static int64_t gen_int_log2 (int64_t i);
 
 #define SWAP(v1, v2, temp) \
   do {                     \
@@ -2774,7 +2775,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
 
 /* Copy propagation */
 
-static int64_t int_log2 (int64_t i) {
+static int64_t gen_int_log2 (int64_t i) {
   int64_t n;
 
   if (i <= 0) return -1;
@@ -2790,7 +2791,7 @@ static int power2_int_op (ssa_edge_t se, MIR_op_t **op_ref) {
   if (se->def->insn->code != MIR_MOV) return -1;
   *op_ref = op = &se->def->insn->ops[1];
   if (op->mode != MIR_OP_INT && op->mode != MIR_OP_UINT) return -1;
-  return int_log2 (op->u.i);
+  return gen_int_log2 (op->u.i);
 }
 
 static MIR_insn_t transform_mul_div (gen_ctx_t gen_ctx, MIR_insn_t insn) {
@@ -3095,7 +3096,7 @@ typedef struct expr {
   MIR_insn_t insn;
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} *expr_t;
+} * expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -3105,7 +3106,7 @@ typedef struct mem_expr {
   uint32_t mem_num;   /* the memory expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant load/store */
   struct mem_expr *next;
-} *mem_expr_t;
+} * mem_expr_t;
 
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
@@ -5229,7 +5230,7 @@ static int addr_info_ok_p (gen_ctx_t gen_ctx, addr_info_t *addr) {
 
 static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *temp_op_ref,
                           addr_info_t *addr_info) {
-  int temp_int, stop_base_p = FALSE, stop_index_p = TRUE;
+  int temp_int, stop_base_p = FALSE, stop_index_p = TRUE, temp_stop_index_p;
   int64_t c;
   addr_info_t temp_addr_info;
 
@@ -5244,6 +5245,7 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
   addr_info->index = NULL;
   for (int change_p = FALSE;;) {
     temp_addr_info = *addr_info;
+    temp_stop_index_p = stop_index_p;
     if (!stop_base_p) {
       if (var_plus_const (addr_info->base->data, &addr_info->base, &c)) {
         addr_info->disp += c;
@@ -5264,6 +5266,7 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
       continue;
     }
     *addr_info = temp_addr_info;
+    stop_index_p = temp_stop_index_p;
     stop_base_p = TRUE;
     if (stop_index_p) return change_p;
     if (var_plus_const (addr_info->index->data, &addr_info->index, &c)) {
@@ -7349,7 +7352,7 @@ static void reload_addr (gen_ctx_t gen_ctx, MIR_insn_t insn, int in_mem_op_num, 
   temp_op2 = _MIR_new_var_op (ctx, TEMP_INT_HARD_REG2);
   if (ops[op_num].u.var_mem.scale != 1) {
     new_insn = MIR_new_insn (ctx, MIR_LSH, temp_op2, temp_op2,
-                             MIR_new_int_op (ctx, int_log2 (ops[op_num].u.var_mem.scale)));
+                             MIR_new_int_op (ctx, gen_int_log2 (ops[op_num].u.var_mem.scale)));
     gen_add_insn_before (gen_ctx, insn, new_insn);
     /* continuation of debug output in add_ld_st: */
     DEBUG (2, {
