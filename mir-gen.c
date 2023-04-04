@@ -4883,6 +4883,16 @@ static int ssa_dead_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   return FALSE;
 }
 
+static int ssa_delete_insn_if_dead_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  if (!ssa_dead_insn_p (gen_ctx, bb_insn)) return FALSE;
+  DEBUG (2, {
+    fprintf (debug_file, "  deleting now dead insn ");
+    print_bb_insn (gen_ctx, bb_insn, FALSE);
+  });
+  ssa_delete_insn (gen_ctx, bb_insn->insn);
+  return TRUE;
+}
+
 static void ssa_dead_code_elimination (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, def;
@@ -5129,12 +5139,10 @@ static int pressure_relief (gen_ctx_t gen_ctx) {
 /* New Page */
 
 /* SSA insn combining is done on conventional SSA (to work with move insns) in reverse insn order.
-   It is the last SSA pass as it makes ssa edges unreachable from uses (when mem[base,index] case).
-   Advantages in comparison with combining after RA:
-     o insn reverse order processing avoids overcombining prev insns as in the forward case:
-       b=mem[x]; a=b+c; d = mem[a] => ... a=mem[x]+c; d = mem[a] (can not be combined)
-     o no artificial dependencies on a hard reg assigned to different regs
-     o no missed dependencies on spilled regs */
+   We combine addresses and cmp and branch case.  Copy prop before permits to ignore moves for
+   combining. It is the last SSA pass as it makes ssa edges unreachable from uses (in
+   mem[base,index] case). Advantages in comparison with combining after RA: o no artificial
+   dependencies on a hard reg assigned to different regs o no missed dependencies on spilled regs */
 
 typedef struct addr_info {
   MIR_type_t type;
@@ -5144,17 +5152,14 @@ typedef struct addr_info {
 } addr_info_t;
 
 static int get_int_const (MIR_op_t *op_ref, int64_t *c) {
-  for (int iter = 0; iter < 10; iter++) {
-    if (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT) {
-      *c = op_ref->u.i;
-      return TRUE;
-    }
-    if (op_ref->mode != MIR_OP_VAR) return FALSE;
+  if (op_ref->mode == MIR_OP_VAR) {
     ssa_edge_t se = op_ref->data;
     if (se == NULL || se->def->insn->code != MIR_MOV) return FALSE;
     op_ref = &se->def->insn->ops[1];
   }
-  return FALSE;
+  if (op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) return FALSE;
+  *c = op_ref->u.i;
+  return TRUE;
 }
 
 static int var_plus_const (ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
@@ -5277,11 +5282,92 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
   }
 }
 
-static void ssa_addr_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
+static MIR_insn_code_t get_combined_br_code (int true_p, MIR_insn_code_t cmp_code) {
+  switch (cmp_code) {
+  case MIR_EQ: return true_p ? MIR_BEQ : MIR_BNE;
+  case MIR_EQS: return true_p ? MIR_BEQS : MIR_BNES;
+  case MIR_NE: return true_p ? MIR_BNE : MIR_BEQ;
+  case MIR_NES: return true_p ? MIR_BNES : MIR_BEQS;
+  case MIR_LT: return true_p ? MIR_BLT : MIR_BGE;
+  case MIR_LTS: return true_p ? MIR_BLTS : MIR_BGES;
+  case MIR_ULT: return true_p ? MIR_UBLT : MIR_UBGE;
+  case MIR_ULTS: return true_p ? MIR_UBLTS : MIR_UBGES;
+  case MIR_LE: return true_p ? MIR_BLE : MIR_BGT;
+  case MIR_LES: return true_p ? MIR_BLES : MIR_BGTS;
+  case MIR_ULE: return true_p ? MIR_UBLE : MIR_UBGT;
+  case MIR_ULES: return true_p ? MIR_UBLES : MIR_UBGTS;
+  case MIR_GT: return true_p ? MIR_BGT : MIR_BLE;
+  case MIR_GTS: return true_p ? MIR_BGTS : MIR_BLES;
+  case MIR_UGT: return true_p ? MIR_UBGT : MIR_UBLE;
+  case MIR_UGTS: return true_p ? MIR_UBGTS : MIR_UBLES;
+  case MIR_GE: return true_p ? MIR_BGE : MIR_BLT;
+  case MIR_GES: return true_p ? MIR_BGES : MIR_BLTS;
+  case MIR_UGE: return true_p ? MIR_UBGE : MIR_UBLT;
+  case MIR_UGES:
+    return true_p ? MIR_UBGES : MIR_UBLTS;
+    /* Cannot revert in the false case for IEEE754: */
+  case MIR_FEQ: return true_p ? MIR_FBEQ : MIR_INSN_BOUND;
+  case MIR_DEQ: return true_p ? MIR_DBEQ : MIR_INSN_BOUND;
+  case MIR_LDEQ: return true_p ? MIR_LDBEQ : MIR_INSN_BOUND;
+  case MIR_FNE: return true_p ? MIR_FBNE : MIR_INSN_BOUND;
+  case MIR_DNE: return true_p ? MIR_DBNE : MIR_INSN_BOUND;
+  case MIR_LDNE: return true_p ? MIR_LDBNE : MIR_INSN_BOUND;
+  case MIR_FLT: return true_p ? MIR_FBLT : MIR_INSN_BOUND;
+  case MIR_DLT: return true_p ? MIR_DBLT : MIR_INSN_BOUND;
+  case MIR_LDLT: return true_p ? MIR_LDBLT : MIR_INSN_BOUND;
+  case MIR_FLE: return true_p ? MIR_FBLE : MIR_INSN_BOUND;
+  case MIR_DLE: return true_p ? MIR_DBLE : MIR_INSN_BOUND;
+  case MIR_LDLE: return true_p ? MIR_LDBLE : MIR_INSN_BOUND;
+  case MIR_FGT: return true_p ? MIR_FBGT : MIR_INSN_BOUND;
+  case MIR_DGT: return true_p ? MIR_DBGT : MIR_INSN_BOUND;
+  case MIR_LDGT: return true_p ? MIR_LDBGT : MIR_INSN_BOUND;
+  case MIR_FGE: return true_p ? MIR_FBGE : MIR_INSN_BOUND;
+  case MIR_DGE: return true_p ? MIR_DBGE : MIR_INSN_BOUND;
+  case MIR_LDGE: return true_p ? MIR_LDBGE : MIR_INSN_BOUND;
+  default: return MIR_INSN_BOUND;
+  }
+}
+
+static bb_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t def_insn, new_insn, insn = bb_insn->insn;
+  bb_t bb = bb_insn->bb;
+  bb_insn_t def_bb_insn;
+  ssa_edge_t se;
+  MIR_insn_code_t code = insn->code;
+  MIR_op_t *op_ref;
+
+  if (code != MIR_BT && code != MIR_BF && code != MIR_BTS && code != MIR_BFS) return NULL;
+  op_ref = &insn->ops[1];
+  if (op_ref->mode != MIR_OP_VAR || (se = op_ref->data) == NULL) return NULL;
+  def_bb_insn = se->def;
+  def_insn = def_bb_insn->insn;
+  if ((code = get_combined_br_code (code == MIR_BT || code == MIR_BTS, def_insn->code))
+      == MIR_INSN_BOUND)
+    return NULL;
+  new_insn = MIR_new_insn (ctx, code, insn->ops[0], def_insn->ops[1], def_insn->ops[2]);
+  new_insn->ops[1].data = new_insn->ops[2].data = NULL;
+  /* don't use gen_add_insn_before as it checks adding branch after branch: */
+  MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+  ssa_delete_insn (gen_ctx, insn);
+  bb_insn = add_new_bb_insn (gen_ctx, new_insn, bb, TRUE);
+  se = def_insn->ops[1].data;
+  if (se != NULL) add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, 1);
+  se = def_insn->ops[2].data;
+  if (se != NULL) add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, 2);
+  DEBUG (2, {
+    fprintf (debug_file, "      changing to ");
+    print_bb_insn (gen_ctx, bb_insn, TRUE);
+  });
+  ssa_delete_insn_if_dead_p (gen_ctx, def_bb_insn);
+  return bb_insn;
+}
+
+static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_op_t temp_op;
   MIR_insn_t insn;
-  bb_insn_t bb_insn, prev_bb_insn;
+  bb_insn_t bb_insn, prev_bb_insn, new_bb_insn;
   ssa_edge_t se;
   addr_info_t addr_info;
 
@@ -5290,20 +5376,17 @@ static void ssa_addr_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
     for (bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = prev_bb_insn) {
       prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
-      if (ssa_dead_insn_p (gen_ctx, bb_insn)) {
-        /* not all insn is deleted if we use addr defs from other bbs */
-        DEBUG (2, {
-          fprintf (debug_file, "  deleting now dead insn ");
-          print_bb_insn (gen_ctx, bb_insn, FALSE);
-        });
-        ssa_delete_insn (gen_ctx, insn);
-        continue;
-      }
+      /* not all insn is deleted if we use addr defs from other bbs */
+      if (ssa_delete_insn_if_dead_p (gen_ctx, bb_insn)) continue;
       if (insn->code == MIR_LABEL || MIR_call_code_p (insn->code)) continue;
       DEBUG (2, {
-        fprintf (debug_file, "  combining addr in ");
+        fprintf (debug_file, "  combining insn ");
         print_bb_insn (gen_ctx, bb_insn, FALSE);
       });
+      if ((new_bb_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL) {
+        bb_insn = new_bb_insn;
+        prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
+      }
       for (size_t i = 0; i < insn->nops; i++) {
         if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
         if (!update_addr_p (gen_ctx, &insn->ops[i], &temp_op, &addr_info)) continue;
@@ -5922,8 +6005,8 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   });
 }
 
-/* Merge *non-intersected* ranges R1 and R2 *without live range bb info* and returns the result. The
-   function maintains the order of ranges and tries to minimize size of the result range list.
+/* Merge *non-intersected* ranges R1 and R2 *without live range bb info* and returns the result.
+   The function maintains the order of ranges and tries to minimize size of the result range list.
    Ranges R1 and R2 may not be used after the call.  */
 static live_range_t merge_live_ranges (gen_ctx_t gen_ctx, live_range_t r1, live_range_t r2) {
   live_range_t first, last, temp;
@@ -8242,117 +8325,20 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
   return insn_change_p;
 }
 
-static MIR_insn_code_t get_combined_br_code (int true_p, MIR_insn_code_t cmp_code) {
-  switch (cmp_code) {
-  case MIR_EQ: return true_p ? MIR_BEQ : MIR_BNE;
-  case MIR_EQS: return true_p ? MIR_BEQS : MIR_BNES;
-  case MIR_NE: return true_p ? MIR_BNE : MIR_BEQ;
-  case MIR_NES: return true_p ? MIR_BNES : MIR_BEQS;
-  case MIR_LT: return true_p ? MIR_BLT : MIR_BGE;
-  case MIR_LTS: return true_p ? MIR_BLTS : MIR_BGES;
-  case MIR_ULT: return true_p ? MIR_UBLT : MIR_UBGE;
-  case MIR_ULTS: return true_p ? MIR_UBLTS : MIR_UBGES;
-  case MIR_LE: return true_p ? MIR_BLE : MIR_BGT;
-  case MIR_LES: return true_p ? MIR_BLES : MIR_BGTS;
-  case MIR_ULE: return true_p ? MIR_UBLE : MIR_UBGT;
-  case MIR_ULES: return true_p ? MIR_UBLES : MIR_UBGTS;
-  case MIR_GT: return true_p ? MIR_BGT : MIR_BLE;
-  case MIR_GTS: return true_p ? MIR_BGTS : MIR_BLES;
-  case MIR_UGT: return true_p ? MIR_UBGT : MIR_UBLE;
-  case MIR_UGTS: return true_p ? MIR_UBGTS : MIR_UBLES;
-  case MIR_GE: return true_p ? MIR_BGE : MIR_BLT;
-  case MIR_GES: return true_p ? MIR_BGES : MIR_BLTS;
-  case MIR_UGE: return true_p ? MIR_UBGE : MIR_UBLT;
-  case MIR_UGES:
-    return true_p ? MIR_UBGES : MIR_UBLTS;
-    /* Cannot revert in the false case for IEEE754: */
-  case MIR_FEQ: return true_p ? MIR_FBEQ : MIR_INSN_BOUND;
-  case MIR_DEQ: return true_p ? MIR_DBEQ : MIR_INSN_BOUND;
-  case MIR_LDEQ: return true_p ? MIR_LDBEQ : MIR_INSN_BOUND;
-  case MIR_FNE: return true_p ? MIR_FBNE : MIR_INSN_BOUND;
-  case MIR_DNE: return true_p ? MIR_DBNE : MIR_INSN_BOUND;
-  case MIR_LDNE: return true_p ? MIR_LDBNE : MIR_INSN_BOUND;
-  case MIR_FLT: return true_p ? MIR_FBLT : MIR_INSN_BOUND;
-  case MIR_DLT: return true_p ? MIR_DBLT : MIR_INSN_BOUND;
-  case MIR_LDLT: return true_p ? MIR_LDBLT : MIR_INSN_BOUND;
-  case MIR_FLE: return true_p ? MIR_FBLE : MIR_INSN_BOUND;
-  case MIR_DLE: return true_p ? MIR_DBLE : MIR_INSN_BOUND;
-  case MIR_LDLE: return true_p ? MIR_LDBLE : MIR_INSN_BOUND;
-  case MIR_FGT: return true_p ? MIR_FBGT : MIR_INSN_BOUND;
-  case MIR_DGT: return true_p ? MIR_DBGT : MIR_INSN_BOUND;
-  case MIR_LDGT: return true_p ? MIR_LDBGT : MIR_INSN_BOUND;
-  case MIR_FGE: return true_p ? MIR_FBGE : MIR_INSN_BOUND;
-  case MIR_DGE: return true_p ? MIR_DBGE : MIR_INSN_BOUND;
-  case MIR_LDGE: return true_p ? MIR_LDBGE : MIR_INSN_BOUND;
-  default: return MIR_INSN_BOUND;
-  }
-}
-
-static MIR_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
-                                          long *deleted_insns_num) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  MIR_insn_t def_insn, new_insn, insn = bb_insn->insn;
-  MIR_insn_code_t code = insn->code;
-  MIR_op_t op;
-
-  if (code != MIR_BT && code != MIR_BF && code != MIR_BTS && code != MIR_BFS) return NULL;
-  op = insn->ops[1];
-  if (op.mode != MIR_OP_VAR || !safe_var_substitution_p (gen_ctx, op.u.var, bb_insn)) return NULL;
-  def_insn = var_refs_addr[op.u.var].insn;
-  if ((code = get_combined_br_code (code == MIR_BT || code == MIR_BTS, def_insn->code))
-      == MIR_INSN_BOUND)
-    return NULL;
-  if (obsolete_op_p (gen_ctx, def_insn->ops[1], var_refs_addr[op.u.var].insn_num)
-      || obsolete_op_p (gen_ctx, def_insn->ops[2], var_refs_addr[op.u.var].insn_num))
-    return NULL;
-  new_insn = MIR_new_insn (ctx, code, insn->ops[0], def_insn->ops[1], def_insn->ops[2]);
-  MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
-  if (!target_insn_ok_p (gen_ctx, new_insn)) {
-    MIR_remove_insn (ctx, curr_func_item, new_insn);
-    return NULL;
-  } else {
-    MIR_remove_insn (ctx, curr_func_item, insn);
-    new_insn->data = bb_insn;
-    bb_insn->insn = new_insn;
-    DEBUG (2, {
-      fprintf (debug_file, "      changing to ");
-      print_bb_insn (gen_ctx, bb_insn, TRUE);
-    });
-    if (combine_delete_insn (gen_ctx, def_insn, bb_insn)) (*deleted_insns_num)++;
-    return new_insn;
-  }
-}
-
 static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *deleted_insns_num) {
   MIR_insn_t def_insn, insn = bb_insn->insn;
   MIR_insn_code_t code = insn->code;
   MIR_op_t op, saved_op;
-  int size, size2, sign_p = FALSE, sign2_p = FALSE, ok_p;
+  int w, w2, sign_p = FALSE, sign2_p = FALSE, ok_p;
 
-  switch (code) {
-  case MIR_EXT8: sign2_p = TRUE;
-  case MIR_UEXT8: size2 = 1; break;
-  case MIR_EXT16: sign2_p = TRUE;
-  case MIR_UEXT16: size2 = 2; break;
-  case MIR_EXT32: sign2_p = TRUE;
-  case MIR_UEXT32: size2 = 3; break;
-  default: return NULL;
-  }
+  if ((w = get_ext_params (code, &sign_p)) == 0) return NULL;
   op = insn->ops[1];
   if (op.mode != MIR_OP_VAR || !safe_var_substitution_p (gen_ctx, op.u.var, bb_insn)) return NULL;
   def_insn = var_refs_addr[op.u.var].insn;
-  switch (def_insn->code) {
-  case MIR_EXT8: sign_p = TRUE;
-  case MIR_UEXT8: size = 1; break;
-  case MIR_EXT16: sign_p = TRUE;
-  case MIR_UEXT16: size = 2; break;
-  case MIR_EXT32: sign_p = TRUE;
-  case MIR_UEXT32: size = 3; break;
-  default: return NULL;
-  }
+  if ((w2 = get_ext_params (def_insn->code, &sign2_p)) == 0) return NULL;
   if (obsolete_op_p (gen_ctx, def_insn->ops[1], var_refs_addr[op.u.var].insn_num)) return NULL;
-  if (size2 <= size) {
-    /* [u]ext<n> b,a; ... [u]ext<m> c,b -> [u]ext<m> c,a when <m> <= <n>: */
+  if (w <= w2) {
+    /* [u]ext<w2> b,a; ... [u]ext<w> c,b -> [u]ext<w> c,a when <w> <= <w2>: */
     saved_op = insn->ops[1];
     insn->ops[1] = def_insn->ops[1];
     if (!target_insn_ok_p (gen_ctx, insn)) {
@@ -8365,8 +8351,8 @@ static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *dele
     });
     if (combine_delete_insn (gen_ctx, def_insn, bb_insn)) (*deleted_insns_num)++;
     return insn;
-  } else if (sign_p == sign2_p && size < size2) {
-    /* [u]ext b,a; .. [u]ext2 c,b -> [[u]ext b,a;] .. [u]ext c,a */
+  } else if (w2 < w && (sign_p || !sign2_p)) { /* exclude ext<w2>, uext<w> pair */
+    /* [u]ext<w2> b,a; .. [u]ext<w> c,b -> [[u]ext<w2> b,a;] .. [u]ext<w2> c,a */
     saved_op = insn->ops[1];
     insn->ops[1] = def_insn->ops[1];
     insn->code = def_insn->code;
@@ -8496,9 +8482,8 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
           last_mem_ref_insn_num = curr_insn_num; /* Change memory */
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
-        } else if ((new_insn = combine_branch_and_cmp (gen_ctx, bb_insn, &deleted_insns_num))
-                     != NULL
-                   || (new_insn = combine_exts (gen_ctx, bb_insn, &deleted_insns_num)) != NULL) {
+        } else if ((new_insn = combine_exts (gen_ctx, bb_insn, &deleted_insns_num)) != NULL) {
+          /* ssa ext removal is not enough as we can add ext insns in machinize for args and rets */
           bb_insn = new_insn->data;
           insn = new_insn;
           nops = MIR_insn_nops (ctx, insn);
@@ -8805,9 +8790,9 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
-    ssa_addr_combine (gen_ctx);
+    ssa_combine (gen_ctx);
     DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after ssa addr combine:\n");
+      fprintf (debug_file, "+++++++++++++MIR after ssa combine:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
     undo_build_ssa (gen_ctx);
