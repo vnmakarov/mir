@@ -739,10 +739,10 @@ static size_t get_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn) {
 
 static uint64_t get_ref_value (gen_ctx_t gen_ctx, const MIR_op_t *ref_op) {
   gen_assert (ref_op->mode == MIR_OP_REF);
-  return (ref_op->u.ref->item_type == MIR_data_item && ref_op->u.ref->u.data->name != NULL
-              && _MIR_reserved_ref_name_p (gen_ctx->ctx, ref_op->u.ref->u.data->name)
-            ? (uint64_t) ref_op->u.ref->u.data->u.els
-            : (uint64_t) ref_op->u.ref->addr);
+  if (ref_op->u.ref->item_type == MIR_data_item && ref_op->u.ref->u.data->name != NULL
+      && _MIR_reserved_ref_name_p (gen_ctx->ctx, ref_op->u.ref->u.data->name))
+    return (uint64_t) ref_op->u.ref->u.data->u.els;
+  return (uint64_t) ref_op->u.ref->addr;
 }
 
 static void setup_used_hard_regs (gen_ctx_t gen_ctx, MIR_type_t type, MIR_reg_t hard_reg) {
@@ -3096,7 +3096,7 @@ typedef struct expr {
   MIR_insn_t insn;
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} * expr_t;
+} *expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -3106,7 +3106,7 @@ typedef struct mem_expr {
   uint32_t mem_num;   /* the memory expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant load/store */
   struct mem_expr *next;
-} * mem_expr_t;
+} *mem_expr_t;
 
 DEF_VARR (mem_expr_t);
 DEF_HTAB (mem_expr_t);
