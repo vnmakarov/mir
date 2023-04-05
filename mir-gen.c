@@ -2,57 +2,63 @@
    Copyright (C) 2018-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* Optimization pipeline:                                 ---------------
-                                                         | Global Value  |
-           ----------     -----------     -----------    | Numbering,    |    ------------
-   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Constant      |-->| Copy       |
-           ----------     -----------     -----------    | Propagation,  |   | Propagation|
-                                                         | Redundant Load|    ------------
-                                                         | Elimination   |         |
-                                                          ---------------          |
+/* Optimization pipeline:
+                                                          ---------------     ------------
+           ----------     -----------     -----------    | Address       |   | Block      |
+   MIR -->| Simplify |-->| Build CFG |-->| Build SSA |-->| Transformation|-->| Cloning    |
+           ----------     -----------     -----------     ---------------     ------------
+                                                                                   |
                                                                                    V
-    -----     -------                   ----     --------     -----------     -----------
-   |Build|   |Finding|    ---------    |Jump|   | Out of |   |Dead Code  |   |Dead Store |
-   |Live |<--| Loops |<--|Machinize|<--|opts|<--| SSA    |<--|Elimination|<--|Elimination|
-   |Info |    -------     ---------     ----     --------     -----------     -----------
-    -----
-       |
-       V
-    ------                                                                      --------
-   |Build |    --------     -------     -----     ---     -------     -----    |Generate|
-   |Live  |-->|Coalesce|-->|Combine|-->| DCE |-->|RA |-->|Combine|-->| DCE |-->|Machine |--> Machine
-   |Ranges|    --------     -------     -----     ---     -------     -----    | Insns  |     Insns
-    ------                                                                      --------
+      ------------      ------------      ---------------------------       --------------
+     |Dead Store  |    | Copy       |	 | Global Value Numbering,   |     |Loop Invariant|
+     |Elimination |<---| Propagation|<---| Constant Propagation,     |<----|   Motion     |
+      ------------      ------------ 	 | Redundat Load Elimination |      --------------
+           |                               ---------------------------
+           V
+      -----------     --------     -------     ------     ----                   -------
+     |Dead Code  |   |Register|   | SSA   |   |Out of|   |Jump|    ---------    | Build |
+     |Elimination|-->|Pressure|-->|Combine|-->|  SSA |-->|Opts|-->|Machinize|-->| Live  |
+      -----------    | Relief |    -------     ------     ----     ---------    | Info  |
+                      --------                                                   -------
+                                                                                    |
+                                                                                    V
+                  --------                           ----------                  ------
+                 |Generate|    -----     -------    |Register  |    --------    |Build |
+     Machine <---|Machine |<--| DCE |<--|Combine|<--|Allocator |<--|Coalesce|<--|Live  |
+      Insns      | Insns  |    -----     -------     ----------     --------    |Ranges|
+                  --------	                                                 ------
 
    Simplify: Lowering MIR (in mir.c).  Always.
-   Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Only for -O1 and above.
+   Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Always.
    Build SSA: Building Single Static Assignment Form by adding phi nodes and SSA edges
+              (for -O2 and above).
+   Address Transformation: Optional pass to remove or change ADDR insns (for -O2 and above).
+   Block Cloning: Cloning insns and BBs to improve hot path optimization opportunities
+                  (for -O2 and above).
+   Loop invariant motion (LICM): Moving invarinat insns out of loop (for -O2 and above).
    Global Value Numbering: Removing redundant insns through GVN.  This includes constant
-                           propagation and redundant load eliminations.  Only for -O2 and above.
+                           propagation and redundant load eliminations (for -O2 and above).
    Copy Propagation: SSA copy propagation and removing redundant extension insns
-   Dead code elimination: Removing insns with unused outputs.  Only for -O2 and above.
-   Out of SSA: Making conventional SSA and removing phi nodes and SSA edges
+                     (for -O2 and above).
+   Dead store elimination: Removing redundant stores (for -O2 and above).
+   Dead code elimination: Removing insns with unused outputs (for -O2 and above).
+   Pressure relief: Moving insns to decrease register pressure (for -O2 and above).
+   SSA combine: Combining addresses and cmp and branch pairs (for -O2 and above).
+   Out of SSA: Making conventional SSA and removing phi nodes and SSA edges (for -O2 and above).
+   Jump optimizations: Different optimizations on jumps and branches (for -O2 and above).
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
-   Finding Loops: Building loop tree which is used in subsequent register allocation.
-                  Only for -O1 and above.
-   Building Live Info: Calculating live in and live out for the basic blocks.
+   Building Live Info: Calculating live in and live out for the basic blocks.  Always.
    Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
    Coalesce: Aggressive register coalescing
-   Register Allocator (RA): Fast RA for -O0 or Priority-based linear scan RA for -O1 and above.
-                            Output is MIR containing only hard regs and hard reg memory
-   Combine: Code selection by merging data-depended insns into one.
-            1st pass is done on vars to improve RA for fewer regs and
-                to combine more as we have no spilled regs,
-            2nd pass (can be optional for 3-op RISC targets) on hard regs to combine new RA
-                live range splitting insns (r=slot;bcmp r => bcmp slot) and combining 2 ops
-                (before RA: p1=mem;add p2,p0,p1,dead p1
-                 after RA: hr1=mem; add hr0,hr0,hr1 -> add hr0,mem  when p2 and p0 got hr0)
-   Dead code elimination (DCE): Removing insns with unused outputs.  Only for -O1 and above.
-   Generate machine insns: Machine-dependent code (e.g. in
-                           mir-gen-x86_64.c) creating machine insns. Always.
+   Register Allocator (RA): Priority-based linear scan RA (always) with live range splitting
+                            (for -O2 and above).
+   Combine: Code selection by merging data-depended insns into one (for -O2 and above).
+   Dead code elimination (DCE): Removing insns with unused outputs (for -O1 and above).
+   Generate machine insns: Machine-dependent code (e.g. in mir-gen-x86_64.c) creating
+                           machine insns. Always.
 
-   -O0 is 2 times faster than -O1 but generates much slower code.
+   -O0 and -O1 are 2-3 times faster than -O2 but generate considerably slower code.
 
    Terminology:
    reg - MIR (pseudo-)register (their numbers are in MIR_OP_VAR and MIR_OP_VAR_MEM > MAX_HARD_REG)
