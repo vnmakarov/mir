@@ -735,7 +735,6 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   return res;
 }
 
-/* push all clobbered but r10, r11, and 2int regs, call *r10; restore all regs but r10;goto *r10 */
 void *_MIR_get_wrapper_end (MIR_context_t ctx) {
 #ifndef _WIN32
   static const uint8_t wrap_end[] = {
@@ -831,136 +830,124 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   _MIR_change_code (ctx, (uint8_t *) thunk + 1, (uint8_t *) &disp, 4);
 }
 
-/* save 2 int arg regs; 1st arg = r10; 2nd arg = data, r10 = hook_address; goto
-   wrap end. r10 is a generator temp reg which is not used across bb borders. */
-void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
+static const uint8_t save_pat2[] = {
 #ifndef _WIN32
-  static const uint8_t start_pat[] = {
-    0x56,                                  /*push   %rsi			   */
-    0x57,                                  /*push   %rdi			   */
-    0x4c, 0x89, 0xd6,                      /* mov %r10,%rsi */
-    0x48, 0xbf, 0,    0, 0, 0, 0, 0, 0, 0, /* movabs data,%rdi */
-    0x49, 0xba, 0,    0, 0, 0, 0, 0, 0, 0, /* movabs <hook_address>,%r10 */
-    0xe9, 0,    0,    0, 0,                /* 0x0: jmp rel32 */
-  };
-  size_t data_offset = 7, hook_offset = 17, rel32_offset = 26;
+  0x48, 0x81, 0xec, 0x80, 0,    0,    0, /*sub    $0x80,%rsp		   */
+  0xf3, 0x0f, 0x7f, 0x04, 0x24,          /*movdqu %xmm0,(%rsp)		   */
+  0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,    /*movdqu %xmm1,0x10(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x54, 0x24, 0x20,    /*movdqu %xmm2,0x20(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x5c, 0x24, 0x30,    /*movdqu %xmm3,0x30(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x64, 0x24, 0x40,    /*movdqu %xmm4,0x40(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x6c, 0x24, 0x50,    /*movdqu %xmm5,0x50(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x74, 0x24, 0x60,    /*movdqu %xmm6,0x60(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x7c, 0x24, 0x70,    /*movdqu %xmm7,0x70(%rsp)	   */
+  0x41, 0x51,                            /*push   %r9			   */
+  0x41, 0x50,                            /*push   %r8			   */
+  0x51,                                  /*push   %rcx			   */
+  0x52,                                  /*push   %rdx			   */
+  0x56,                                  /*push   %rsi			   */
+  0x57,                                  /*push   %rdi			   */
 #else
-  static const uint8_t start_pat[] = {
-    0x48, 0x89, 0x4c, 0x24, 0x08,                /*mov  %rcx,0x08(%rsp) */
-    0x48, 0x89, 0x54, 0x24, 0x10,                /*mov  %rdx,0x10(%rsp) */
-    0x4c, 0x89, 0xd2,                            /* mov %r10,%rdx   */
-    0x48, 0xb9, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs data,%rcx           */
-    0x49, 0xba, 0,    0,    0,    0, 0, 0, 0, 0, /* movabs <hook_address>,%r10*/
-    0xe9, 0,    0,    0,    0,                   /* 0x0: jmp rel32 */
+  0x48, 0x89, 0x4c, 0x24, 0x08,          /*mov  %rcx,0x08(%rsp) */
+  0x48, 0x89, 0x54, 0x24, 0x10,          /*mov  %rdx,0x10(%rsp) */
+  0x4c, 0x89, 0x44, 0x24, 0x18,          /*mov  %r8, 0x18(%rsp) */
+  0x4c, 0x89, 0x4c, 0x24, 0x20,          /*mov  %r9, 0x20(%rsp) */
+  0x48, 0x81, 0xec, 0x80, 0,    0,    0, /*sub    $0x60,%rsp		   */
+  0xf3, 0x0f, 0x7f, 0x04, 0x24,          /*movdqu %xmm0,(%rsp)		   */
+  0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,    /*movdqu %xmm1,0x10(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x54, 0x24, 0x20,    /*movdqu %xmm2,0x20(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x5c, 0x24, 0x30,    /*movdqu %xmm3,0x30(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x64, 0x24, 0x40,    /*movdqu %xmm4,0x40(%rsp)	   */
+  0xf3, 0x0f, 0x7f, 0x6c, 0x24, 0x50,    /*movdqu %xmm5,0x50(%rsp)	   */
+#endif
+  0x50,       /*push   %rax			   */
+  0x41, 0x53, /*push   %r11			   */
+};
+
+static const uint8_t restore_pat2[] = {
+  0x41, 0x5b, /*pop    %r11			   */
+  0x58,       /*pop    %rax			   */
+#ifndef _WIN32
+  0x5f,                                  /*pop    %rdi			   */
+  0x5e,                                  /*pop    %rsi			   */
+  0x5a,                                  /*pop    %rdx			   */
+  0x59,                                  /*pop    %rcx			   */
+  0x41, 0x58,                            /*pop    %r8			   */
+  0x41, 0x59,                            /*pop    %r9			   */
+  0xf3, 0x0f, 0x6f, 0x04, 0x24,          /*movdqu (%rsp),%xmm0		   */
+  0xf3, 0x0f, 0x6f, 0x4c, 0x24, 0x10,    /*movdqu 0x10(%rsp),%xmm1	   */
+  0xf3, 0x0f, 0x6f, 0x54, 0x24, 0x20,    /*movdqu 0x20(%rsp),%xmm2	   */
+  0xf3, 0x0f, 0x6f, 0x5c, 0x24, 0x30,    /*movdqu 0x30(%rsp),%xmm3	   */
+  0xf3, 0x0f, 0x6f, 0x64, 0x24, 0x40,    /*movdqu 0x40(%rsp),%xmm4	   */
+  0xf3, 0x0f, 0x6f, 0x6c, 0x24, 0x50,    /*movdqu 0x50(%rsp),%xmm5	   */
+  0xf3, 0x0f, 0x6f, 0x74, 0x24, 0x60,    /*movdqu 0x60(%rsp),%xmm6	   */
+  0xf3, 0x0f, 0x6f, 0x7c, 0x24, 0x70,    /*movdqu 0x70(%rsp),%xmm7	   */
+  0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x80,%rsp		   */
+#else
+  0xf3, 0x0f, 0x6f, 0x04, 0x24,          /*movdqu (%rsp),%xmm0		   */
+  0xf3, 0x0f, 0x6f, 0x4c, 0x24, 0x10,    /*movdqu 0x10(%rsp),%xmm1	   */
+  0xf3, 0x0f, 0x6f, 0x54, 0x24, 0x20,    /*movdqu 0x20(%rsp),%xmm2	   */
+  0xf3, 0x0f, 0x6f, 0x5c, 0x24, 0x30,    /*movdqu 0x30(%rsp),%xmm3	   */
+  0xf3, 0x0f, 0x6f, 0x64, 0x24, 0x40,    /*movdqu 0x40(%rsp),%xmm4	   */
+  0xf3, 0x0f, 0x6f, 0x6c, 0x24, 0x50,    /*movdqu 0x50(%rsp),%xmm5	   */
+  0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x60,%rsp		   */
+  0x48, 0x8b, 0x4c, 0x24, 0x08,          /*mov  0x08(%rsp),%rcx */
+  0x48, 0x8b, 0x54, 0x24, 0x10,          /*mov  0x10(%rsp),%rdx */
+  0x4c, 0x8b, 0x44, 0x24, 0x18,          /*mov  0x18(%rsp),%r8  */
+  0x4c, 0x8b, 0x4c, 0x24, 0x20,          /*mov  0x20(%rsp),%r9  */
+#endif
+};
+
+/* save all clobbered regs but 10; r10 = call hook_address (data, r10); restore regs; jmp *r10
+   r10 is a generator temp reg which is not used across bb borders. */
+void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
+  static const uint8_t wrap_end[] = {
+    0x41, 0xff, 0xe2, /*jmpq   *%r10			   */
   };
-  size_t data_offset = 10, hook_offset = 20, rel32_offset = 29;
+  static const uint8_t call_pat[] =
+#ifndef _WIN32
+    {
+      0x4c, 0x89, 0xd6,                         /* mov %r10,%rsi */
+      0x48, 0xbf, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs data,%rdi */
+      0x49, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs <hook_address>,%r10 */
+      0x48, 0x89, 0xe2,                         /* mov    %rsp,%rdx */
+      0x48, 0x83, 0xe2, 0x0f,                   /* and    $0xf,%rdx */
+      0x74, 0x07,                               /* je     10 <l> */
+      0x52,                                     /* push   %rdx */
+      0x41, 0xff, 0xd2,                         /* callq  *%r10 */
+      0x5a,                                     /* pop    %rdx */
+      0xeb, 0x03,                               /* jmp    13 <l2> */
+      0x41, 0xff, 0xd2,                         /* l: callq  *%r10 */
+      0x49, 0x89, 0xc2,                         /* l2:mov %rax,%r10 */
+    };
+  size_t data_offset = 5, hook_offset = 15;
+#else
+    {
+      0x55,                                     /* push %rbp */
+      0x48, 0x89, 0xe5,                         /* mov %rsp,%rbp */
+      0x4c, 0x89, 0xd2,                         /* mov %r10,%rdx   */
+      0x48, 0xb9, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs data,%rcx           */
+      0x49, 0xba, 0,    0,    0, 0, 0, 0, 0, 0, /* movabs <hook_address>,%r10*/
+      0x50,                                     /* push   %rax               */
+      0x48, 0x83, 0xec, 0x28,                   /* sub    40,%rsp            */
+      0x41, 0xff, 0xd2,       /* callq  *%r10       ???align for unaligned sp       */
+      0x49, 0x89, 0xc2,       /* mov    %rax,%r10          */
+      0x48, 0x83, 0xc4, 0x28, /* add    40,%rsp            */
+      0x58,                   /* pop    %rax               */
+      0x5d,                   /* pop %rbp */
+    };
+  size_t data_offset = 9, hook_offset = 19;
 #endif
   uint8_t *addr;
   VARR (uint8_t) * code;
   void *res;
 
   VARR_CREATE (uint8_t, code, 128);
-  addr = push_insns (code, start_pat, sizeof (start_pat));
+  push_insns (code, save_pat2, sizeof (save_pat2));
+  addr = push_insns (code, call_pat, sizeof (call_pat));
   memcpy (addr + data_offset, &data, sizeof (void *));
   memcpy (addr + hook_offset, &hook_address, sizeof (void *));
-  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
-  VARR_DESTROY (uint8_t, code);
-  int64_t off = (uint8_t *) bb_wrapper_end_addr - ((uint8_t *) res + rel32_offset + 4);
-  assert (INT32_MIN <= off && off <= INT32_MAX);
-  _MIR_change_code (ctx, (uint8_t *) res + rel32_offset, (uint8_t *) &off, 4); /* LE */
-  return res;
-}
-
-/* save all clobbered regs but 10 and 2 int args; r10 = call *r10; restore all regs but r10;
-   jmp *r10. r10 is a generator temp reg which is not used across bb borders. */
-void *_MIR_get_bb_wrapper_end (MIR_context_t ctx) {
-#ifndef _WIN32
-  static const uint8_t wrap_end[] = {
-    0x48, 0x81, 0xec, 0x80, 0,    0,    0, /*sub    $0x80,%rsp		   */
-    0xf3, 0x0f, 0x7f, 0x04, 0x24,          /*movdqu %xmm0,(%rsp)		   */
-    0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,    /*movdqu %xmm1,0x10(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x54, 0x24, 0x20,    /*movdqu %xmm2,0x20(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x5c, 0x24, 0x30,    /*movdqu %xmm3,0x30(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x64, 0x24, 0x40,    /*movdqu %xmm4,0x40(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x6c, 0x24, 0x50,    /*movdqu %xmm5,0x50(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x74, 0x24, 0x60,    /*movdqu %xmm6,0x60(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x7c, 0x24, 0x70,    /*movdqu %xmm7,0x70(%rsp)	   */
-    0x41, 0x51,                            /*push   %r9			   */
-    0x41, 0x50,                            /*push   %r8			   */
-    0x51,                                  /*push   %rcx			   */
-    0x52,                                  /*push   %rdx			   */
-    0x50,                                  /*push   %rax			   */
-    0x41, 0x53,                            /*push   %r11			   */
-    0x48, 0x89, 0xe2,                      /* mov    %rsp,%rdx */
-    0x48, 0x83, 0xe2, 0x0f,                /* and    $0xf,%rdx */
-    0x74, 0x07,                            /* je     10 <l> */
-    0x52,                                  /* push   %rdx */
-    0x41, 0xff, 0xd2,                      /* callq  *%r10 */
-    0x5a,                                  /* pop    %rdx */
-    0xeb, 0x03,                            /* jmp    13 <l2> */
-    0x41, 0xff, 0xd2,                      /* l: callq  *%r10 */
-    0x49, 0x89, 0xc2,                      /* l2:mov %rax,%r10 */
-    0x41, 0x5b,                            /*pop    %r11			   */
-    0x58,                                  /*pop    %rax			   */
-    0x5a,                                  /*pop    %rdx			   */
-    0x59,                                  /*pop    %rcx			   */
-    0x41, 0x58,                            /*pop    %r8			   */
-    0x41, 0x59,                            /*pop    %r9			   */
-    0xf3, 0x0f, 0x6f, 0x04, 0x24,          /*movdqu (%rsp),%xmm0		   */
-    0xf3, 0x0f, 0x6f, 0x4c, 0x24, 0x10,    /*movdqu 0x10(%rsp),%xmm1	   */
-    0xf3, 0x0f, 0x6f, 0x54, 0x24, 0x20,    /*movdqu 0x20(%rsp),%xmm2	   */
-    0xf3, 0x0f, 0x6f, 0x5c, 0x24, 0x30,    /*movdqu 0x30(%rsp),%xmm3	   */
-    0xf3, 0x0f, 0x6f, 0x64, 0x24, 0x40,    /*movdqu 0x40(%rsp),%xmm4	   */
-    0xf3, 0x0f, 0x6f, 0x6c, 0x24, 0x50,    /*movdqu 0x50(%rsp),%xmm5	   */
-    0xf3, 0x0f, 0x6f, 0x74, 0x24, 0x60,    /*movdqu 0x60(%rsp),%xmm6	   */
-    0xf3, 0x0f, 0x6f, 0x7c, 0x24, 0x70,    /*movdqu 0x70(%rsp),%xmm7	   */
-    0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x80,%rsp		   */
-    0x5f,                                  /*pop    %rdi			   */
-    0x5e,                                  /*pop    %rsi			   */
-    0x41, 0xff, 0xe2,                      /*jmpq   *%r10			   */
-  };
-#else
-  static const uint8_t wrap_end[] = {
-    0x4c, 0x89, 0x44, 0x24, 0x18,          /*mov  %r8, 0x18(%rsp) */
-    0x4c, 0x89, 0x4c, 0x24, 0x20,          /*mov  %r9, 0x20(%rsp) */
-    0x48, 0x81, 0xec, 0x80, 0,    0,    0, /*sub    $0x60,%rsp		   */
-    0xf3, 0x0f, 0x7f, 0x04, 0x24,          /*movdqu %xmm0,(%rsp)		   */
-    0xf3, 0x0f, 0x7f, 0x4c, 0x24, 0x10,    /*movdqu %xmm1,0x10(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x54, 0x24, 0x20,    /*movdqu %xmm2,0x20(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x5c, 0x24, 0x30,    /*movdqu %xmm3,0x30(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x64, 0x24, 0x40,    /*movdqu %xmm4,0x40(%rsp)	   */
-    0xf3, 0x0f, 0x7f, 0x6c, 0x24, 0x50,    /*movdqu %xmm5,0x50(%rsp)	   */
-    0x50,                                  /*push   %rax			   */
-    0x41, 0x53,                            /*push   %r11			   */
-    0x55,                                  /* push %rbp */
-    0x48, 0x89, 0xe5,                      /* mov %rsp,%rbp */
-    0x50,                                  /* push   %rax               */
-    0x48, 0x83, 0xec, 0x28,                /* sub    40,%rsp            */
-    0x41, 0xff, 0xd2,                      /* callq  *%r10 ???align for unaligned sp   */
-    0x49, 0x89, 0xc2,                      /* mov    %rax,%r10          */
-    0x48, 0x83, 0xc4, 0x28,                /* add    40,%rsp            */
-    0x58,                                  /* pop    %rax               */
-    0x5d,                                  /* pop %rbp */
-    0x41, 0x5b,                            /*pop    %r11			   */
-    0x58,                                  /*pop    %rax			   */
-    0xf3, 0x0f, 0x6f, 0x04, 0x24,          /*movdqu (%rsp),%xmm0		   */
-    0xf3, 0x0f, 0x6f, 0x4c, 0x24, 0x10,    /*movdqu 0x10(%rsp),%xmm1	   */
-    0xf3, 0x0f, 0x6f, 0x54, 0x24, 0x20,    /*movdqu 0x20(%rsp),%xmm2	   */
-    0xf3, 0x0f, 0x6f, 0x5c, 0x24, 0x30,    /*movdqu 0x30(%rsp),%xmm3	   */
-    0xf3, 0x0f, 0x6f, 0x64, 0x24, 0x40,    /*movdqu 0x40(%rsp),%xmm4	   */
-    0xf3, 0x0f, 0x6f, 0x6c, 0x24, 0x50,    /*movdqu 0x50(%rsp),%xmm5	   */
-    0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x60,%rsp		   */
-    0x4c, 0x8b, 0x44, 0x24, 0x18,          /*mov  0x18(%rsp),%r8  */
-    0x4c, 0x8b, 0x4c, 0x24, 0x20,          /*mov  0x20(%rsp),%r9  */
-    0x48, 0x8b, 0x4c, 0x24, 0x08,          /*mov  0x08(%rsp),%rcx */
-    0x48, 0x8b, 0x54, 0x24, 0x10,          /*mov  0x10(%rsp),%rdx */
-    0x41, 0xff, 0xe2,                      /*jmpq   *%r10			   */
-  };
-#endif
-  VARR (uint8_t) * code;
-  void *res;
-
-  VARR_CREATE (uint8_t, code, 128);
+  push_insns (code, restore_pat2, sizeof (restore_pat2));
   push_insns (code, wrap_end, sizeof (wrap_end));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);

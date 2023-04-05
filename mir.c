@@ -56,8 +56,8 @@ struct MIR_context {
   struct scan_ctx *scan_ctx;
   struct hard_reg_ctx *hard_reg_ctx;
   struct interp_ctx *interp_ctx;
-  void *setjmp_addr; /* used in interpreter to call setjmp directly not from a shim and FFI */
-  void *wrapper_end_addr, *bb_wrapper_end_addr; /* used by generator */
+  void *setjmp_addr;      /* used in interpreter to call setjmp directly not from a shim and FFI */
+  void *wrapper_end_addr; /* used by generator */
 };
 
 #define ctx_mutex ctx->ctx_mutex
@@ -76,7 +76,6 @@ struct MIR_context {
 #define temp_ops ctx->temp_ops
 #define setjmp_addr ctx->setjmp_addr
 #define wrapper_end_addr ctx->wrapper_end_addr
-#define bb_wrapper_end_addr ctx->bb_wrapper_end_addr
 
 static void util_error (MIR_context_t ctx, const char *message);
 #define MIR_VARR_ERROR util_error
@@ -755,7 +754,6 @@ MIR_context_t _MIR_init (void) {
   setjmp_addr = NULL;
   code_init (ctx);
   wrapper_end_addr = _MIR_get_wrapper_end (ctx); /* should be after code_init */
-  bb_wrapper_end_addr = _MIR_get_bb_wrapper_end (ctx);
   hard_reg_name_init (ctx);
   interp_init (ctx);
   return ctx;

@@ -554,4 +554,3 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
 }
 
 void *_MIR_get_wrapper_end (MIR_context_t ctx) { return NULL; }
-void *_MIR_get_bb_wrapper_end (MIR_context_t ctx) { return NULL; }
