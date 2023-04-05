@@ -2336,6 +2336,18 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   }
 }
 
+static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
+  if (op_ref->u.var_mem.index == MIR_NON_VAR && int16_p (op_ref->u.var_mem.disp)) return TRUE;
+  size_t size = _MIR_type_size (ctx, op_ref->u.var_mem.type);
+  if (op_ref->u.var_mem.index != MIR_NON_VAR && op_ref->u.var_mem.disp == 0
+      && op_ref->u.var_mem.scale == size) return TRUE;
+  if (op_ref->u.var_mem.index == MIR_NON_VAR && op_ref->u.var_mem.disp % 4 == 0
+      && (size == 4 || size == 8) && int16_p (op_ref->u.var_mem.disp)) return TRUE;
+  return FALSE;
+}
+
 static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   return find_insn_pattern_replacement (gen_ctx, insn, TRUE) != NULL;
 }
