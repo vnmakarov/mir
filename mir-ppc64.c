@@ -194,7 +194,8 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   VARR_CREATE (uint8_t, code, 256);
   ppc64_gen_address (code, 12, to);
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
-  mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0 && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+  mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
+              && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
 #endif
@@ -507,17 +508,19 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   return res;
 }
 
-static void redirect_bb_thunk (MIR_context_t ctx, VARR (uint8_t) *code, void *start, void *to) {
+static void redirect_bb_thunk (MIR_context_t ctx, VARR (uint8_t) * code, void *start, void *to) {
   int64_t offset = (uint8_t *) to - (uint8_t *) start;
   mir_assert ((offset & 0x3) == 0);
   VARR_TRUNC (uint8_t, code, 0);
   if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0) { /* just jump */
-    uint32_t insn = (PPC_JUMP_OPCODE << (32 - 6)) /* jump opcode */ | (((offset / 4) & 0xffffff) << 2);
+    uint32_t insn
+      = (PPC_JUMP_OPCODE << (32 - 6)) /* jump opcode */ | (((offset / 4) & 0xffffff) << 2);
     push_insn (code, insn);
   } else {
     ppc64_gen_address (code, 12, to); /* r12 = to */
     push_insns (code, thunk_code_end, sizeof (thunk_code_end));
-    mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0 && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+    mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
+                && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
   }
   _MIR_change_code (ctx, start, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 }
@@ -551,8 +554,9 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   /* find jump code offset (see ppc64_gen_address): */
   for (i = 0; i <= 5; i++) {
     if ((opcode = insns[i] >> 26) == PPC_JUMP_OPCODE) break; /* uncond branch */
-    if ((opcode == LI_OPCODE || opcode == LIS_OPCODE || opcode == XOR_OPCODE) /* (li|lis|xor) r12, ... */
-	&& ((insns[i] >> 21) & 0x1f) == 12)
+    if ((opcode == LI_OPCODE || opcode == LIS_OPCODE
+         || opcode == XOR_OPCODE) /* (li|lis|xor) r12, ... */
+        && ((insns[i] >> 21) & 0x1f) == 12)
       break;
   }
   mir_assert (i <= 5);
@@ -607,8 +611,8 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   return res;
 }
 
-/* save all clobbered regs but r11 and r12; r11 = call hook_address (data, r11); restore regs; br r11
-   r11 is a generator temp reg which is not used across bb borders. */
+/* save all clobbered regs but r11 and r12; r11 = call hook_address (data, r11); restore regs; br
+   r11 r11 is a generator temp reg which is not used across bb borders. */
 void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   static const uint32_t prologue[] = {
     0x7d800026, /* mfcr r12 */
@@ -628,24 +632,29 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
 
   VARR_CREATE (uint8_t, code, 256);
   push_insns (code, prologue, sizeof (prologue));
-  /* stdu r1,n(r1): header + 14(gp regs, r{1,2,11} space alloc is not used) + 14(fp args) + 8(param area): */
+  /* stdu r1,n(r1): header + 14(gp regs, r{1,2,11} space alloc is not used) + 14(fp args) + 8(param
+   * area): */
   if (frame_size % 16 != 0) frame_size += 8;
   ppc64_gen_stdu (code, -frame_size);
-  ppc64_gen_st (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64, MIR_T_I64);
+  ppc64_gen_st (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64,
+                MIR_T_I64);
   for (unsigned reg = R2_HARD_REG; reg <= R10_HARD_REG; reg++) /* ld rn,dispn(r1) : */
     ppc64_gen_st (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + reg * 8 + 64, MIR_T_I64);
-  ppc64_gen_st (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64, MIR_T_I64);
+  ppc64_gen_st (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64,
+                MIR_T_I64);
   for (unsigned reg = 0; reg <= F13_HARD_REG - F0_HARD_REG; reg++) /* lfd fn,dispn(r1) : */
     ppc64_gen_st (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + (reg + 14) * 8 + 64, MIR_T_D);
-  ppc64_gen_address (code, 3, data); /* r3 = data */
-  ppc64_gen_mov (code, 4, 11); /* r4 = r11 */
+  ppc64_gen_address (code, 3, data);          /* r3 = data */
+  ppc64_gen_mov (code, 4, 11);                /* r4 = r11 */
   ppc64_gen_address (code, 12, hook_address); /* r12 = hook addres */
-  ppc64_gen_jump (code, 12, TRUE); /* call r12 */
-  ppc64_gen_mov (code, 11, 3); /* r11 = r3 */
-  ppc64_gen_ld (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64, MIR_T_I64);
+  ppc64_gen_jump (code, 12, TRUE);            /* call r12 */
+  ppc64_gen_mov (code, 11, 3);                /* r11 = r3 */
+  ppc64_gen_ld (code, R0_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R0_HARD_REG * 8 + 64,
+                MIR_T_I64);
   for (unsigned reg = R2_HARD_REG; reg <= R10_HARD_REG; reg++) /* ld rn,dispn(r1) : */
     ppc64_gen_ld (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + reg * 8 + 64, MIR_T_I64);
-  ppc64_gen_ld (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64, MIR_T_I64);
+  ppc64_gen_ld (code, R13_HARD_REG, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + R13_HARD_REG * 8 + 64,
+                MIR_T_I64);
   for (unsigned reg = 0; reg <= F13_HARD_REG - F0_HARD_REG; reg++) /* lfd fn,dispn(r1) : */
     ppc64_gen_ld (code, reg, SP_HARD_REG, PPC64_STACK_HEADER_SIZE + (reg + 14) * 8 + 64, MIR_T_D);
   ppc64_gen_addi (code, 1, 1, frame_size);
@@ -660,3 +669,6 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   VARR_DESTROY (uint8_t, code);
   return res;
 }
+
+void *_MIR_get_wrapper_end (MIR_context_t ctx) { return NULL; }
+void *_MIR_get_bb_wrapper_end (MIR_context_t ctx) { return NULL; }
