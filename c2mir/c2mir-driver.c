@@ -337,7 +337,8 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -o file -- put output code into given file\n");
       fprintf (stderr, "  -On -- use given optimization level in MIR-generator\n");
       fprintf (stderr, "  -p[n] -- use given parallelism level in C2MIR and MIR-generator\n");
-      fprintf (stderr, "  -ei -- execute code in the interpreter\n");
+      fprintf (stderr, "  -ei -- execute code in the interpreter with given options\n");
+      fprintf (stderr, "         (all trailing args are passed to the program)\n");
       fprintf (stderr, "  -eg -- execute code generated with given options\n");
       fprintf (stderr, "  -el -- execute code lazily generated code with given options\n");
       exit (0);
