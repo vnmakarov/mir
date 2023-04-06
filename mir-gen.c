@@ -6609,7 +6609,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
       insn->ops[i] = _MIR_new_var_op (ctx, temp_reg);
       add_reload (gen_ctx, insn, &mem_op, &insn->ops[i], type, out_p);
     }
-    gen_assert (target_insn_ok_p (gen_ctx, insn));
+    /* target_insn_ok_p still can return FALSE here for insn which will be converted to builtin */
   }
 }
 
