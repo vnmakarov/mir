@@ -2069,11 +2069,12 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         return FALSE;
       else if (mode == MIR_OP_LABEL && op.u.label != original.u.label)
         return FALSE;
-      else if (mode == MIR_OP_VAR_MEM && op.u.var_mem.type != original.u.var_mem.type
-               && op.u.var_mem.scale != original.u.var_mem.scale
-               && op.u.var_mem.base != original.u.var_mem.base
-               && op.u.var_mem.index != original.u.var_mem.index
-               && op.u.var_mem.disp != original.u.var_mem.disp)
+      else if (mode == MIR_OP_VAR_MEM
+               && (op.u.var_mem.type != original.u.var_mem.type
+                   || op.u.var_mem.scale != original.u.var_mem.scale
+                   || op.u.var_mem.base != original.u.var_mem.base
+                   || op.u.var_mem.index != original.u.var_mem.index
+                   || op.u.var_mem.disp != original.u.var_mem.disp))
         return FALSE;
       break;
     default: gen_assert (FALSE);
@@ -2625,6 +2626,15 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     VARR_PUSH (label_ref_t, label_refs, lr);
     put_uint64 (gen_ctx, 0, 8);
   }
+}
+
+static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+  if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
+  if (op_ref->u.var_mem.index == MIR_NON_VAR && op_ref->u.var_mem.disp >= -(1 << 11)
+      && op_ref->u.var_mem.disp < (1 << 11)
+      && (op_ref->u.var_mem.type != MIR_T_LD || op_ref->u.var_mem.disp + 8 < (1 << 11)))
+    return TRUE;
+  return FALSE;
 }
 
 static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
