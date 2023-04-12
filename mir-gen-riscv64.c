@@ -738,7 +738,7 @@ DEF_VARR (const_ref_t);
 DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
-  unsigned char alloca_p, block_arg_func_p, leaf_p, short_bb_branch_p;
+  unsigned char alloca_p, block_arg_func_p, leaf_p, add_nops;
   uint32_t non_vararg_int_args_num;
   size_t small_aggregate_save_area;
   MIR_insn_t temp_jump;
@@ -755,7 +755,7 @@ struct target_ctx {
 #define alloca_p gen_ctx->target_ctx->alloca_p
 #define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
-#define short_bb_branch_p gen_ctx->target_ctx->short_bb_branch_p
+#define add_nops gen_ctx->target_ctx->add_nops
 #define non_vararg_int_args_num gen_ctx->target_ctx->non_vararg_int_args_num
 #define small_aggregate_save_area gen_ctx->target_ctx->small_aggregate_save_area
 #define temp_jump gen_ctx->target_ctx->temp_jump
@@ -2802,7 +2802,7 @@ static void target_init_bb_version_data (target_bb_version_t data) {
 }
 
 static void target_bb_translate_start (gen_ctx_t gen_ctx) {
-  short_bb_branch_p = FALSE;
+  add_nops = 0;
   VARR_TRUNC (uint8_t, result_code, 0);
   VARR_TRUNC (label_ref_t, label_refs, 0);
   VARR_TRUNC (const_ref_t, const_refs, 0);
@@ -2816,7 +2816,7 @@ static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void *
   replacement = find_insn_pattern_replacement (gen_ctx, insn);
   gen_assert (replacement != NULL);
   out_insn (gen_ctx, insn, replacement, jump_addrs);
-  if (MIR_branch_code_p (insn->code) && insn->code != MIR_JMP) short_bb_branch_p = TRUE;
+  if (MIR_branch_code_p (insn->code)) add_nops = insn->code == MIR_JMP ? 1 : 3;
 }
 
 static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
@@ -2824,10 +2824,8 @@ static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
 }
 
 static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
-  /* add nop for possible conversion short branch to branch and jump */
-  if (short_bb_branch_p) { /* add nops for conversion jmp->lui+jalr and br->jmp|lui+jalr */
-    for (int i = 0; i < 3; i++) put_uint64 (gen_ctx, TARGET_NOP, 4);
-  }
+  /* add nops for conversion jmp->lui+jalr and br->jmp|lui+jalr */
+  for (int i = 0; i < add_nops; i++) put_uint64 (gen_ctx, TARGET_NOP, 4);
   while (VARR_LENGTH (uint8_t, result_code) % 8 != 0) /* Align the pool */
     VARR_PUSH (uint8_t, result_code, 0);
   add_consts (gen_ctx);
