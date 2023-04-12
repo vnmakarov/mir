@@ -5395,6 +5395,7 @@ static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
       if ((new_bb_insn = combine_branch_and_cmp (gen_ctx, bb_insn)) != NULL) {
         bb_insn = new_bb_insn;
         prev_bb_insn = DLIST_PREV (bb_insn_t, bb_insn);
+        insn = bb_insn->insn;
       }
       for (size_t i = 0; i < insn->nops; i++) {
         if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
