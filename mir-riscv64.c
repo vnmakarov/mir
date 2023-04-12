@@ -122,39 +122,46 @@ static uint8_t *push_insns (VARR (uint8_t) * insn_varr, const void *pat, size_t 
   return VARR_ADDR (uint8_t, insn_varr) + VARR_LENGTH (uint8_t, insn_varr) - pat_len;
 }
 
-#define MAX_THUNK_SIZE 6 /* in insns */
+#define MAX_JUMP_CODE 6 /* in insns */
 /* Possible combinations: jal (20-bits); auipc+jalr (32-bits); auipc+ld+jalr+64-bit abs address: */
 void *_MIR_get_thunk (MIR_context_t ctx) {
-  static const uint32_t call_pat[MAX_THUNK_SIZE] = {
+  static const uint32_t call_pat[MAX_JUMP_CODE] = {
     /* max 3-insns and aligned abs addr */
     TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP,
   };
   return _MIR_publish_code (ctx, (uint8_t *) call_pat, sizeof (call_pat));
 }
 
-static void redirect_thunk (MIR_context_t ctx, void *thunk, void *to, int temp_hard_reg) {
-  uint32_t insns[6];
-  uint64_t offset = (uint8_t *) to - (uint8_t *) thunk;
-
+static int get_jump_code (uint32_t *insns, void *to, int64_t offset, int temp_hard_reg) {
   assert ((offset & 1) == 0 && 0 <= temp_hard_reg && temp_hard_reg < 32);
   if (-(1 << 20) <= offset && offset < (1 << 20)) {
     insns[0] = 0x6f | get_j_format_imm (offset); /* jal */
-    _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, 4);
+    insns[1] = TARGET_NOP; /* size should be aligned to 8 */
+    return 8;
   } else if (-(1l << 31) <= offset && offset < (1 << 31)) {
     insns[0] = 0x17 | (temp_hard_reg << 7) | ((offset & 0xfffff000) << 12); /* auipc t */
     insns[1] = 0x67 | (temp_hard_reg << 15) | (offset & 0xfff);             /* jalr t */
-    _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, 8);
+    return 8;
   } else {
     insns[0] = 0x17 | (temp_hard_reg << 7); /* auipc t,0x0 */
     insns[1]
       = 0x0003003 | (16 << 20) | (temp_hard_reg << 7) | (temp_hard_reg << 15); /* ld t,16(t) */
     insns[2] = 0x67 | (temp_hard_reg << 15);                                   /* jalr t */
     *(void **) &insns[4] = to;
-    _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, sizeof (insns));
+    return 24;
   }
+}
+
+static void redirect_thunk (MIR_context_t ctx, void *thunk, void *to, int temp_hard_reg) {
+  uint32_t insns[MAX_JUMP_CODE];
+  uint64_t offset = (uint8_t *) to - (uint8_t *) thunk;
+  int len = get_jump_code (insns, to, offset, temp_hard_reg);
+  
+  assert (len <= MAX_JUMP_CODE * 4);
+  _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, len);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("thunk", 0, thunk, MAX_THUNK_SIZE * 4);
+    _MIR_dump_code ("thunk", 0, thunk, len);
 #endif
 }
 
@@ -820,9 +827,50 @@ static const uint32_t restore_insns[] = {
 };
 #endif
 
+/* set t0 to [ctx,called_func,hook_address]; jump wrapp_end */
+void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
+  static const uint32_t set_pat[] = {
+    0x00000297, /* auipc t0,0x0 */
+    0x00028293, /* addi	t0,t0,0 */
+  };
+  uint8_t *base_addr, *res_code;
+  size_t offset = 0;
+  VARR (uint8_t) * code;
+  uint32_t insns[MAX_JUMP_CODE];
+  int len = 64; /* initial len */
+   
+  mir_mutex_lock (&code_mutex);
+  VARR_CREATE (uint8_t, code, 128);
+  for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
+    base_addr = _MIR_get_new_code_addr (ctx, len);
+    if (base_addr == NULL) break;
+    VARR_TRUNC (uint8_t, code, 0);
+    push_insns (code, set_pat, sizeof (set_pat));
+    len = get_jump_code (insns, wrapper_end_addr,
+			 (uint8_t *) wrapper_end_addr - base_addr - sizeof (set_pat), T1_HARD_REG);
+    push_insns (code, insns, len);
+    offset = VARR_LENGTH (uint8_t, code);
+    assert (offset % 8 == 0);
+    push_insns (code, &ctx, sizeof (ctx));
+    push_insns (code, &called_func, sizeof (called_func));
+    push_insns (code, &hook_address, sizeof (hook_address));
+    ((uint32_t *) (VARR_ADDR (uint8_t, code)))[1] |= get_i_format_imm (offset);
+    len = VARR_LENGTH (uint8_t, code);
+    res_code = _MIR_publish_code_by_addr (ctx, base_addr, VARR_ADDR (uint8_t, code), len);
+    if (res_code != NULL) break;
+  }
+  mir_mutex_unlock (&code_mutex);
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("wrapper:", 0, res_code, VARR_LENGTH (uint8_t, code));
+#endif
+  VARR_DESTROY (uint8_t, code);
+  return res_code;
+}
+
 /* Save regs ra,a0-a7,fa0-fa7;
    a0 = call hook_address (ctx, called_func); t0=a0; restore regs; br t0 */
-void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
+void *_MIR_get_wrapper_end (MIR_context_t ctx) {
   static const uint32_t jmp_insn = 0x00028067; /* jalr zero,0(t0) */
 #if __riscv_compressed
   static const uint16_t sub_sp = 0x7175;     /* c.addi16sp sp,-144 */
@@ -836,19 +884,17 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   static const uint32_t restore_ra = 0x00013083; /* ld ra,0(sp) */
 #endif
   static const uint32_t call_pat[] = {
-    0x00000297, /* auipc t0,0x0 */
     0x0002b503, /* ld a0,0(t0) */
     0x0002b583, /* ld a1,0(t0) */
     0x0002b603, /* ld a2,0(t0) */
     0x000600e7, /* jalr ra,0(a2) */
     0x00050293, /* mv t0,a0 */
   };
+  size_t args_start;
   uint8_t *res_code;
-  size_t args_start, offset;
   VARR (uint8_t) * code;
 
   VARR_CREATE (uint8_t, code, 128);
-  VARR_TRUNC (uint8_t, code, 0);
   push_insns (code, &sub_sp, sizeof (sub_sp));
   push_insns (code, &save_ra, sizeof (save_ra));
   push_insns (code, save_insns, sizeof (save_insns));
@@ -858,15 +904,14 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   push_insns (code, restore_insns, sizeof (restore_insns));
   push_insns (code, &add_sp, sizeof (add_sp));
   push_insns (code, &jmp_insn, sizeof (jmp_insn));
-  while (VARR_LENGTH (uint8_t, code) % 8 != 0) VARR_PUSH (uint8_t, code, 0); /* align */
-  offset = VARR_LENGTH (uint8_t, code) - args_start;
-  push_insns (code, &ctx, sizeof (ctx));
-  push_insns (code, &called_func, sizeof (called_func));
-  push_insns (code, &hook_address, sizeof (hook_address));
-  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[1] |= get_i_format_imm (offset);
-  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[2] |= get_i_format_imm (offset + 8);
-  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[3] |= get_i_format_imm (offset + 16);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[0] |= get_i_format_imm (0);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[1] |= get_i_format_imm (8);
+  ((uint32_t *) (VARR_ADDR (uint8_t, code) + args_start))[2] |= get_i_format_imm (16);
   res_code = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("wrapper end:", 0, res_code, VARR_LENGTH (uint8_t, code));
+#endif
   VARR_DESTROY (uint8_t, code);
   return res_code;
 }
@@ -1036,9 +1081,9 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   VARR (uint8_t) * code;
 
   VARR_CREATE (uint8_t, code, 64);
-  assert (MAX_THUNK_SIZE == 6);
+  assert (MAX_JUMP_CODE == 6);
   push_insns (code, pat, sizeof (pat));
-  for (int i = 0; i < MAX_THUNK_SIZE + 2; i++)
+  for (int i = 0; i < MAX_JUMP_CODE + 2; i++)
     push_insns (code, &nop, 4); /* for max branch and 2 for bb_version */
   *(void **) (VARR_ADDR (uint8_t, code) + 32) = bb_version;
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
@@ -1110,5 +1155,3 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   VARR_DESTROY (uint8_t, code);
   return res_code;
 }
-
-void *_MIR_get_wrapper_end (MIR_context_t ctx) { return NULL; }
