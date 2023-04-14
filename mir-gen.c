@@ -2157,17 +2157,6 @@ static void change_ssa_edge_list_def (ssa_edge_t list, bb_insn_t new_bb_insn,
   }
 }
 
-static ssa_edge_t merge_ssa_edge_lists (ssa_edge_t list1, ssa_edge_t list2) {
-  ssa_edge_t se;
-  if (list1 == NULL) return list2;
-  if (list2 == NULL) return list1;
-  for (se = list1;; se = se->next_use)
-    if (se->next_use == NULL) break;
-  se->next_use = list2;
-  list2->prev_use = se;
-  return list1;
-}
-
 static void redirect_def (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_insn_t by, int def_use_ssa_p) {
 #ifndef NDEBUG
   int out_p, by_out_p;
