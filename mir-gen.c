@@ -2169,13 +2169,14 @@ static ssa_edge_t merge_ssa_edge_lists (ssa_edge_t list1, ssa_edge_t list2) {
 }
 
 static void redirect_def (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_insn_t by, int def_use_ssa_p) {
+#ifndef NDEBUG
   int out_p, by_out_p;
-
   MIR_insn_op_mode (gen_ctx->ctx, insn, 0, &out_p);
   MIR_insn_op_mode (gen_ctx->ctx, by, 0, &by_out_p);
   gen_assert (insn->ops[0].mode == MIR_OP_VAR && by->ops[0].mode == MIR_OP_VAR
               && (def_use_ssa_p || insn->ops[0].u.var == by->ops[0].u.var)
               && !MIR_call_code_p (insn->code) && out_p && by_out_p);
+#endif
   by->ops[0].data = insn->ops[0].data;
   insn->ops[0].data = NULL; /* make redundant insn having no uses */
   change_ssa_edge_list_def (by->ops[0].data, by->data, 0, insn->ops[0].u.var, by->ops[0].u.var);
