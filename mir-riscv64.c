@@ -136,7 +136,7 @@ static int get_jump_code (uint32_t *insns, void *to, int64_t offset, int temp_ha
   assert ((offset & 1) == 0 && 0 <= temp_hard_reg && temp_hard_reg < 32);
   if (-(1 << 20) <= offset && offset < (1 << 20)) {
     insns[0] = 0x6f | get_j_format_imm (offset); /* jal */
-    insns[1] = TARGET_NOP; /* size should be aligned to 8 */
+    insns[1] = TARGET_NOP;                       /* size should be aligned to 8 */
     return 8;
   } else if (-(1l << 31) <= offset && offset < (1 << 31)) {
     insns[0] = 0x17 | (temp_hard_reg << 7) | ((offset & 0xfffff000) << 12); /* auipc t */
@@ -156,7 +156,7 @@ static void redirect_thunk (MIR_context_t ctx, void *thunk, void *to, int temp_h
   uint32_t insns[MAX_JUMP_CODE];
   uint64_t offset = (uint8_t *) to - (uint8_t *) thunk;
   int len = get_jump_code (insns, to, offset, temp_hard_reg);
-  
+
   assert (len <= MAX_JUMP_CODE * 4);
   _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, len);
 #if 0
@@ -838,7 +838,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   VARR (uint8_t) * code;
   uint32_t insns[MAX_JUMP_CODE];
   int len = 64; /* initial len */
-   
+
   mir_mutex_lock (&code_mutex);
   VARR_CREATE (uint8_t, code, 128);
   for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
@@ -847,7 +847,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     VARR_TRUNC (uint8_t, code, 0);
     push_insns (code, set_pat, sizeof (set_pat));
     len = get_jump_code (insns, wrapper_end_addr,
-			 (uint8_t *) wrapper_end_addr - base_addr - sizeof (set_pat), T1_HARD_REG);
+                         (uint8_t *) wrapper_end_addr - base_addr - sizeof (set_pat), T1_HARD_REG);
     push_insns (code, insns, len);
     offset = VARR_LENGTH (uint8_t, code);
     assert (offset % 8 == 0);
