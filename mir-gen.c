@@ -1928,7 +1928,6 @@ static bb_insn_t get_fake_insn (gen_ctx_t gen_ctx, VARR (bb_insn_t) * fake_insns
 
 static int fake_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
   return bb_insn->bb->index == 0; /* enter bb */
-  ;
 }
 
 static bb_insn_t redundant_phi_def (gen_ctx_t gen_ctx, bb_insn_t phi, int *def_op_num_ref) {
@@ -2225,13 +2224,7 @@ static void make_ssa_def_use_repr (gen_ctx_t gen_ctx) {
 }
 
 static void ssa_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  int op_num, out_p, mem_p;
-  MIR_reg_t var;
-  insn_var_iterator_t iter;
-
-  FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
-    if (insn->ops[op_num].data != NULL) remove_ssa_edge (gen_ctx, insn->ops[op_num].data);
-  }
+  remove_insn_ssa_edges (gen_ctx, insn);
   gen_delete_insn (gen_ctx, insn);
 }
 
@@ -2501,12 +2494,13 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
     }
 }
 
-static void free_bb_insns (gen_ctx_t gen_ctx, VARR (bb_insn_t) * bb_insns) {
+static void free_fake_bb_insns (gen_ctx_t gen_ctx, VARR (bb_insn_t) * bb_insns) {
   bb_insn_t bb_insn;
 
   while (VARR_LENGTH (bb_insn_t, bb_insns) != 0)
     if ((bb_insn = VARR_POP (bb_insn_t, bb_insns)) != NULL) {  // ??? specialized free funcs
-      free (bb_insn->insn);
+      remove_insn_ssa_edges (gen_ctx, bb_insn->insn);
+      free (bb_insn->insn); /* we can not use gen_delete as the insn not in the list */
       free (bb_insn);
     }
 }
@@ -2520,12 +2514,14 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   insn_var_iterator_t iter;
 
+  free_fake_bb_insns (gen_ctx, arg_bb_insns);
+  free_fake_bb_insns (gen_ctx, undef_insns);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
-        if (out_p) { /* all sse after ssa combine available onlt from defs */
+        if (out_p) { /* all sse after ssa combine available only from defs */
           for (se = insn->ops[op_num].data; se != NULL; se = next_se) {
             next_se = se->next_use;
             free_ssa_edge (gen_ctx, se);
@@ -2539,8 +2535,6 @@ static void undo_build_ssa (gen_ctx_t gen_ctx) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if (bb_insn->insn->code == MIR_PHI) gen_delete_insn (gen_ctx, bb_insn->insn);
     }
-  free_bb_insns (gen_ctx, arg_bb_insns);
-  free_bb_insns (gen_ctx, undef_insns);
 }
 
 static void init_ssa (gen_ctx_t gen_ctx) {
@@ -2660,8 +2654,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
           fprintf (debug_file, "  deleting phi for pseudo transformed into memory ");
           print_bb_insn (gen_ctx, insn->data, TRUE);
         });
-        remove_insn_ssa_edges (gen_ctx, insn);
-        gen_delete_insn (gen_ctx, insn);
+        ssa_delete_insn (gen_ctx, insn);
       } else if (insn->code == MIR_USE) {
         int change_p = FALSE;
         /* we keep conventional SSA -- do nothing */
@@ -2771,8 +2764,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
           fprintf (debug_file, "  deleting ");
           print_bb_insn (gen_ctx, insn->data, TRUE);
         });
-        remove_insn_ssa_edges (gen_ctx, insn);
-        gen_delete_insn (gen_ctx, insn);
+        ssa_delete_insn (gen_ctx, insn);
       }
     }
 }
@@ -2890,8 +2882,7 @@ static MIR_insn_t transform_mul_div (gen_ctx_t gen_ctx, MIR_insn_t insn) {
     fprintf (debug_file, "        and deleting ");
     print_bb_insn (gen_ctx, insn->data, TRUE);
   });
-  remove_insn_ssa_edges (gen_ctx, insn);
-  gen_delete_insn (gen_ctx, insn);
+  ssa_delete_insn (gen_ctx, insn);
   return new_insns[n - 1];
 }
 
@@ -3081,8 +3072,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
         insn->ops[0].data = NULL;
         change_ssa_edge_list_def (new_insn->ops[0].data, new_insn->data, 0, MIR_NON_VAR,
                                   MIR_NON_VAR); /* r */
-        remove_insn_ssa_edges (gen_ctx, insn);
-        gen_delete_insn (gen_ctx, insn);
+        ssa_delete_insn (gen_ctx, insn);
         DEBUG (2, {
           fprintf (debug_file, " on ");
           MIR_output_insn (ctx, debug_file, mov_insn, func, FALSE);
@@ -4344,8 +4334,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               });
               bitmap_clear_bit_p (curr_available_mem, bb_insn->mem_index);
               bitmap_set_bit_p (removed_mem, bb_insn->mem_index);
-              remove_insn_ssa_edges (gen_ctx, insn);
-              gen_delete_insn (gen_ctx, insn);
+              ssa_delete_insn (gen_ctx, insn);
               continue;
             }
           }
@@ -4465,8 +4454,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
               MIR_output_insn (ctx, debug_file, insn, curr_func_item->u.func, TRUE);
               fprintf (debug_file, "\n");
             });
-            remove_insn_ssa_edges (gen_ctx, insn);
-            gen_delete_insn (gen_ctx, insn);
+            ssa_delete_insn (gen_ctx, insn);
             edge_t edge = DLIST_EL (out_edge_t, bb->out_edges, 1);
             remove_edge_phi_ops (gen_ctx, edge);
             edge->dst->flag = TRUE; /* to recalculate dst mem_av_in */
@@ -4830,9 +4818,7 @@ static void dse (gen_ctx_t gen_ctx) {
               fprintf (debug_file, "Removing dead store ");
               print_bb_insn (gen_ctx, bb_insn, FALSE);
             });
-            remove_ssa_edge (gen_ctx, insn->ops[0].data);
-            remove_ssa_edge (gen_ctx, insn->ops[1].data);
-            gen_delete_insn (gen_ctx, insn);
+            ssa_delete_insn (gen_ctx, insn);
             dead_stores_num++;
           }
         }
