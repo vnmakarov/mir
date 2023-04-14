@@ -3311,6 +3311,18 @@ static int multi_out_insn_p (MIR_insn_t insn) {
   return insn->ops[0].u.ref->u.proto->nres > 1;
 }
 
+static MIR_type_t canonic_mem_type (MIR_type_t type) {
+  switch (type) {
+  case MIR_T_U64: return MIR_T_I64;
+#ifdef MIR_PTR32
+  case MIR_T_P: return MIR_T_I32;
+#else
+  case MIR_T_P: return MIR_T_I64;
+#endif
+  default: return type;
+  }
+}
+
 static int expr_eq (expr_t e1, expr_t e2, void *arg) {
   gen_ctx_t gen_ctx = arg;
   MIR_context_t ctx = gen_ctx->ctx;
@@ -3336,6 +3348,10 @@ static int expr_eq (expr_t e1, expr_t e2, void *arg) {
             /* we can not be sure what definition we use in multi-output insn: */
             || multi_out_insn_p (ssa_edge1->def->insn) || multi_out_insn_p (ssa_edge2->def->insn)))
       return FALSE;
+    if (insn1->ops[i].mode == MIR_OP_VAR_MEM && insn2->ops[i].mode == MIR_OP_VAR_MEM
+        && canonic_mem_type (insn1->ops[i].u.var_mem.type)
+             != canonic_mem_type (insn2->ops[i].u.var_mem.type))
+      return FALSE;
   }
   return TRUE;
 }
@@ -3358,6 +3374,10 @@ static htab_hash_t expr_hash (expr_t e, void *arg) {
     if ((ssa_edge = e->insn->ops[i].data) != NULL) {
       h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val_const_p);
       h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
+      if (e->insn->ops[i].mode == MIR_OP_VAR_MEM) {
+        gen_assert (e->insn->ops[i].u.var_mem.disp == 0);
+        h = mir_hash_step (h, (uint64_t) canonic_mem_type (e->insn->ops[i].u.var_mem.type));
+      }
     }
   }
   return mir_hash_finish (h);
@@ -3401,21 +3421,6 @@ static expr_t add_expr (gen_ctx_t gen_ctx, MIR_insn_t insn, int replace_p) {
   return e;
 }
 
-static MIR_type_t canonic_type (MIR_type_t type) {
-  switch (type) {
-  case MIR_T_U8: return MIR_T_I8;
-  case MIR_T_U16: return MIR_T_I16;
-  case MIR_T_U32: return MIR_T_I32;
-  case MIR_T_U64: return MIR_T_I64;
-#ifdef MIR_PTR32
-  case MIR_T_P: return MIR_T_I32;
-#else
-  case MIR_T_P: return MIR_T_I64;
-#endif
-  default: return type;
-  }
-}
-
 static int mem_expr_eq (mem_expr_t e1, mem_expr_t e2, void *arg) {
   MIR_insn_t st1 = e1->insn, st2 = e2->insn;
   MIR_op_t *op_ref1 = &st1->ops[0], *op_ref2 = &st2->ops[0];
@@ -3430,7 +3435,8 @@ static int mem_expr_eq (mem_expr_t e1, mem_expr_t e2, void *arg) {
   return (ssa_edge1 != NULL && ssa_edge2 != NULL
           && ssa_edge1->def->gvn_val_const_p == ssa_edge2->def->gvn_val_const_p
           && ssa_edge1->def->gvn_val == ssa_edge2->def->gvn_val
-          && canonic_type (op_ref1->u.var_mem.type) == canonic_type (op_ref2->u.var_mem.type)
+          && canonic_mem_type (op_ref1->u.var_mem.type)
+               == canonic_mem_type (op_ref2->u.var_mem.type)
           && op_ref1->u.var_mem.alias == op_ref2->u.var_mem.alias
           && op_ref1->u.var_mem.nonalias == op_ref2->u.var_mem.nonalias);
 }
@@ -3448,7 +3454,7 @@ static htab_hash_t mem_expr_hash (mem_expr_t e, void *arg) {
     h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val_const_p);
     h = mir_hash_step (h, (uint64_t) ssa_edge->def->gvn_val);
   }
-  h = mir_hash_step (h, (uint64_t) canonic_type (op_ref->u.var_mem.type));
+  h = mir_hash_step (h, (uint64_t) canonic_mem_type (op_ref->u.var_mem.type));
   h = mir_hash_step (h, (uint64_t) op_ref->u.var_mem.alias);
   h = mir_hash_step (h, (uint64_t) op_ref->u.var_mem.nonalias);
   return mir_hash_finish (h);
@@ -5148,8 +5154,9 @@ static int pressure_relief (gen_ctx_t gen_ctx) {
 /* SSA insn combining is done on conventional SSA (to work with move insns) in reverse insn order.
    We combine addresses and cmp and branch case.  Copy prop before permits to ignore moves for
    combining. It is the last SSA pass as it makes ssa edges unreachable from uses (in
-   mem[base,index] case). Advantages in comparison with combining after RA: o no artificial
-   dependencies on a hard reg assigned to different regs o no missed dependencies on spilled regs */
+   mem[base,index] case). Advantages in comparison with combining after RA:
+     o no artificial dependencies on a hard reg assigned to different regs
+     o no missed dependencies on spilled regs */
 
 typedef struct addr_info {
   MIR_type_t type;
@@ -8494,7 +8501,7 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
         } else if (code == MIR_RET) {
           /* ret is transformed in machinize and should be not modified after that */
         } else if ((new_insn = combine_exts (gen_ctx, bb_insn, &deleted_insns_num)) != NULL) {
-          /* ssa ext removal is not enough as we can add ext insns in machinize for args and rets */
+          /* ssa ext removal is not enough as we can add ext insn in machinize for args and rets */
           bb_insn = new_insn->data;
           insn = new_insn;
           nops = MIR_insn_nops (ctx, insn);
