@@ -905,11 +905,14 @@ static code_t call_insn_execute (MIR_context_t ctx, code_t pc, MIR_val_t *bp, co
   return pc;
 }
 
+static int64_t addr_offset8, addr_offset16, addr_offset32;
+
 static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *bp,
                            MIR_val_t *results) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   code_t pc, ops, code;
   void *jmpi_val; /* where label thunk execution result will be: */
+  int64_t offset;
   int signed_overflow_p = FALSE, unsigned_overflow_p = FALSE; /* to avoid uninitialized warnings */
 
 #if MIR_INTERP_TRACE
@@ -940,7 +943,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP6 (LAB_EL, MIR_I2F, MIR_I2D, MIR_I2LD, MIR_UI2F, MIR_UI2D, MIR_UI2LD);
     REP8 (LAB_EL, MIR_F2I, MIR_D2I, MIR_LD2I, MIR_F2D, MIR_F2LD, MIR_D2F, MIR_D2LD, MIR_LD2F);
     REP6 (LAB_EL, MIR_LD2D, MIR_NEG, MIR_NEGS, MIR_FNEG, MIR_DNEG, MIR_LDNEG);
-    REP3 (LAB_EL, MIR_ADDR, MIR_ADD, MIR_ADDS);
+    REP6 (LAB_EL, MIR_ADDR, MIR_ADDR8, MIR_ADDR16, MIR_ADDR32, MIR_ADD, MIR_ADDS);
     REP8 (LAB_EL, MIR_FADD, MIR_DADD, MIR_LDADD, MIR_SUB, MIR_SUBS, MIR_FSUB, MIR_DSUB, MIR_LDSUB);
     REP8 (LAB_EL, MIR_MUL, MIR_MULS, MIR_FMUL, MIR_DMUL, MIR_LDMUL, MIR_DIV, MIR_DIVS, MIR_UDIV);
     REP8 (LAB_EL, MIR_UDIVS, MIR_FDIV, MIR_DDIV, MIR_LDDIV, MIR_MOD, MIR_MODS, MIR_UMOD, MIR_UMODS);
@@ -1158,11 +1161,26 @@ L_jmpi_finish : { /* jmpi thunk return */
   SCASE (MIR_DNEG, 2, DOP2 (-));
   SCASE (MIR_LDNEG, 2, LDOP2 (-));
 
-  CASE (MIR_ADDR, 2) {
+  CASE (MIR_ADDR8, 2) {
+    offset = addr_offset8;
+    goto common_addr;
+  }
+  CASE (MIR_ADDR16, 2) {
+    offset = addr_offset16;
+    goto common_addr;
+  }
+  CASE (MIR_ADDR32, 2) {
+    offset = addr_offset32;
+    goto common_addr;
+  }
+  CASE (MIR_ADDR, 2)
+  offset = 0;
+common_addr:;
+  {
     int64_t *r = get_iop (bp, ops);
     void **p = get_aop (bp, ops + 1);
 
-    *r = (int64_t) p;
+    *r = (int64_t) p + offset;
     END_INSN;
   }
 
@@ -1745,6 +1763,9 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
 static void interp_init (MIR_context_t ctx) {
   struct interp_ctx *interp_ctx;
 
+  addr_offset8 = _MIR_addr_offset (ctx, MIR_ADDR8);
+  addr_offset16 = _MIR_addr_offset (ctx, MIR_ADDR16);
+  addr_offset32 = _MIR_addr_offset (ctx, MIR_ADDR32);
   if ((interp_ctx = ctx->interp_ctx = malloc (sizeof (struct interp_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
 #if DIRECT_THREADED_DISPATCH
