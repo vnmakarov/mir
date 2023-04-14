@@ -175,7 +175,10 @@ static const struct insn_desc insn_descs[] = {
   {MIR_FNEG, "fneg", {MIR_OP_FLOAT | OUT_FLAG, MIR_OP_FLOAT, MIR_OP_BOUND}},
   {MIR_DNEG, "dneg", {MIR_OP_DOUBLE | OUT_FLAG, MIR_OP_DOUBLE, MIR_OP_BOUND}},
   {MIR_LDNEG, "ldneg", {MIR_OP_LDOUBLE | OUT_FLAG, MIR_OP_LDOUBLE, MIR_OP_BOUND}},
-  {MIR_ADDR, "addr", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}}, /* MIR_OP_REG! */
+  {MIR_ADDR, "addr", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}},     /* MIR_OP_REG! */
+  {MIR_ADDR8, "addr8", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}},   /* MIR_OP_REG! */
+  {MIR_ADDR16, "addr16", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}}, /* MIR_OP_REG! */
+  {MIR_ADDR32, "addr32", {MIR_OP_INT | OUT_FLAG, MIR_OP_REG, MIR_OP_BOUND}}, /* MIR_OP_REG! */
   {MIR_ADD, "add", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_ADDS, "adds", {MIR_OP_INT | OUT_FLAG, MIR_OP_INT, MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_FADD, "fadd", {MIR_OP_FLOAT | OUT_FLAG, MIR_OP_FLOAT, MIR_OP_FLOAT, MIR_OP_BOUND}},
@@ -352,6 +355,12 @@ static MIR_op_mode_t type2mode (MIR_type_t type) {
           : type == MIR_T_D   ? MIR_OP_DOUBLE
           : type == MIR_T_LD  ? MIR_OP_LDOUBLE
                               : MIR_OP_INT);
+}
+
+int64_t _MIR_addr_offset (MIR_context_t ctx, MIR_insn_code_t code) {
+  int v = 1;
+  if (code == MIR_ADDR || *(char *) &v != 0) return 0;
+  return code == MIR_ADDR8 ? 7 : code == MIR_ADDR16 ? 6 : 4;
 }
 
 /* New Page */
@@ -1990,7 +1999,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
     *out_p = FALSE;
     /* should be already checked in MIR_finish_func */
     return nop == 0 && code != MIR_RET ? MIR_OP_INT : insn->ops[nop].mode;
-  } else if (code == MIR_ADDR) {
+  } else if (MIR_addr_code_p (code)) {
     *out_p = nop == 0;
     return nop == 0 ? MIR_OP_INT : insn->ops[nop].mode;
   } else if (code == MIR_PHI) {

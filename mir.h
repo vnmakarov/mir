@@ -131,7 +131,7 @@ typedef enum {
   REP3 (INSN_EL, F2I, D2I, LD2I),    /* Float or (long) double to integer conversion */
   REP6 (INSN_EL, F2D, F2LD, D2F, D2LD, LD2F, LD2D), /* Float, (long) double conversions */
   REP5 (INSN_EL, NEG, NEGS, FNEG, DNEG, LDNEG),     /* Changing sign */
-  INSN_EL (ADDR),                                   /* taking reg address */
+  REP4 (INSN_EL, ADDR, ADDR8, ADDR16, ADDR32), /* reg addr in natural mode or given integer mode */
   /* 3 operand insn: */
   REP5 (INSN_EL, ADD, ADDS, FADD, DADD, LDADD),              /* Addition */
   REP5 (INSN_EL, SUB, SUBS, FSUB, DSUB, LDSUB),              /* Subtraction */
@@ -480,6 +480,10 @@ static inline int MIR_any_branch_code_p (MIR_insn_code_t code) {
   return (MIR_branch_code_p (code) || code == MIR_SWITCH);
 }
 
+static inline int MIR_addr_code_p (MIR_insn_code_t code) {
+  return (code == MIR_ADDR || code == MIR_ADDR8 || code == MIR_ADDR16 || code == MIR_ADDR32);
+}
+
 static inline int MIR_overflow_insn_code_p (MIR_insn_code_t code) {
   return (code == MIR_ADDO || code == MIR_ADDOS || code == MIR_SUBO || code == MIR_SUBOS
           || code == MIR_MULO || code == MIR_MULOS || code == MIR_UMULO || code == MIR_UMULOS);
@@ -650,6 +654,7 @@ extern MIR_context_t _MIR_init (void);
 extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
+extern int64_t _MIR_addr_offset (MIR_context_t ctx, MIR_insn_code_t code);
 extern void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
