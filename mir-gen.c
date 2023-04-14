@@ -1504,7 +1504,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   addr_insn_p = FALSE;
   for (ret_insn = NULL; insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
-    if (insn->code == MIR_ADDR) {
+    if (MIR_addr_code_p (insn->code)) {
       addr_insn_p = TRUE;
       bitmap_set_bit_p (addr_regs, insn->ops[1].u.reg + MAX_HARD_REG);
     } else if (insn->code == MIR_RET) {
@@ -2345,7 +2345,7 @@ static void rename_regs (gen_ctx_t gen_ctx) {
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) { /* clear all ssa edge flags */
       insn = bb_insn->insn;
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
-        if (out_p || var <= MAX_HARD_REG || insn->code == MIR_ADDR) continue;
+        if (out_p || var <= MAX_HARD_REG || MIR_addr_code_p (insn->code)) continue;
         ssa_edge = insn->ops[op_num].data;
         ssa_edge->flag = FALSE;
       }
@@ -2580,7 +2580,7 @@ static int collect_addr_uses (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
                               VARR (bb_insn_t) * bb_mem_insns) {
   int res = TRUE;
 
-  gen_assert (bb_insn->insn->code == MIR_ADDR || move_p (bb_insn->insn));
+  gen_assert (MIR_addr_code_p (bb_insn->insn->code) || move_p (bb_insn->insn));
   for (ssa_edge_t se = bb_insn->insn->ops[0].data; se != NULL; se = se->next_use) {
     if (se->use->insn->ops[se->use_op_num].mode == MIR_OP_VAR_MEM) {
       gen_assert (move_code_p (se->use->insn->code) && se->use_op_num <= 1);
@@ -2632,7 +2632,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
-      if (bb_insn->insn->code == MIR_ADDR) {
+      if (MIR_addr_code_p (bb_insn->insn->code)) {
         VARR_PUSH (bb_insn_t, temp_bb_insns, bb_insn);
       } else if (move_p (bb_insn->insn)) {
         gen_assert (bb_insn->insn->ops[1].data != NULL);
@@ -2642,7 +2642,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
   for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, temp_bb_insns); i++) {
     bb_insn = VARR_GET (bb_insn_t, temp_bb_insns, i);
     insn = bb_insn->insn;
-    gen_assert (insn->code == MIR_ADDR && insn->ops[0].mode == MIR_OP_VAR
+    gen_assert (MIR_addr_code_p (insn->code) && insn->ops[0].mode == MIR_OP_VAR
                 && insn->ops[1].mode == MIR_OP_VAR);
     if (!addr_eliminable_p (gen_ctx, bb_insn, NULL))
       bitmap_set_bit_p (addr_regs, insn->ops[1].u.var);
@@ -2680,7 +2680,7 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
             print_bb_insn (gen_ctx, insn->data, TRUE);
           });
         }
-      } else if (insn->code != MIR_ADDR) { /* change reg to memory */
+      } else if (!MIR_addr_code_p (insn->code)) { /* change reg to memory */
         MIR_reg_t prev_reg = 0;
         FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
           gen_assert (var > MAX_HARD_REG);
@@ -2938,7 +2938,7 @@ static void copy_prop (gen_ctx_t gen_ctx) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       insn = bb_insn->insn;
-      if (insn->code == MIR_ADDR) {
+      if (MIR_addr_code_p (insn->code)) {
         continue; /* no input reg propagation */
       }
       FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
@@ -4524,7 +4524,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
       print_bb_insn_value (gen_ctx, bb_insn);
       if (e == NULL || e->insn == insn || (imm_move_p (insn) && insn->ops[1].mode != MIR_OP_REF))
         continue;
-      if (insn->code == MIR_ADDR) {
+      if (MIR_addr_code_p (insn->code)) {
         continue;
       } else if ((insn->code == MIR_ADD || insn->code == MIR_SUB)
                  && (se = insn->ops[0].data) != NULL && se->next_use == NULL
@@ -6569,7 +6569,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     code = insn->code;
-    if (code == MIR_LABEL || code == MIR_ADDR || code == MIR_USE) continue;
+    if (code == MIR_LABEL || MIR_addr_code_p (code) || code == MIR_USE) continue;
     if (bitmap_bit_p (insn_to_consider, code) && !MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1]))
       add_inout_reloads (gen_ctx, insn);
     if (target_insn_ok_p (gen_ctx, insn)) continue;
@@ -7284,7 +7284,7 @@ static MIR_reg_t change_reg (gen_ctx_t gen_ctx, MIR_op_t *mem_op, MIR_reg_t reg,
   MIR_reg_t temp_addr_hreg
     = (out_p || type != MIR_T_I64 ? get_reload_hreg (gen_ctx, MIR_NON_VAR, MIR_T_I64, out_p)
                                   : reload_hreg);
-  gen_assert (insn->code != MIR_ADDR);
+  gen_assert (!MIR_addr_code_p (insn->code));
   return add_ld_st (gen_ctx, mem_op, loc, base_reg, data_mode, reload_hreg, out_p, temp_addr_hreg,
                     insn, out_p);
 }
@@ -7417,7 +7417,7 @@ static void transform_addr (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_r
   MIR_type_t type;
   MIR_disp_t offset;
   MIR_insn_t new_insn1, new_insn2;
-  gen_assert (insn->code == MIR_ADDR);
+  gen_assert (MIR_addr_code_p (insn->code));
   gen_assert (insn->ops[1].mode == MIR_OP_VAR);
   reg = insn->ops[1].u.reg;
   gen_assert (reg > MAX_HARD_REG && reg != MIR_NON_VAR);
@@ -7427,7 +7427,7 @@ static void transform_addr (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_r
   offset = target_get_stack_slot_offset (gen_ctx, type, loc - MAX_HARD_REG - 1);
   temp_hard_reg = get_reload_hreg (gen_ctx, MIR_NON_VAR, MIR_T_I64, FALSE);
   new_insn1 = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, temp_hard_reg),
-                            MIR_new_int_op (ctx, offset));
+                            MIR_new_int_op (ctx, offset + _MIR_addr_offset (ctx, insn->code)));
   new_insn2 = MIR_new_insn (ctx, MIR_ADD, _MIR_new_var_op (ctx, temp_hard_reg),
                             _MIR_new_var_op (ctx, temp_hard_reg), _MIR_new_var_op (ctx, base_reg));
   DEBUG (2, {
@@ -7579,7 +7579,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
     get_reload_hreg (gen_ctx, MIR_NON_VAR, MIR_T_I64,
                      FALSE); /* reserve the 1st int temp hard reg */
   }
-  if (insn->code == MIR_ADDR) transform_addr (gen_ctx, insn, base_reg);
+  if (MIR_addr_code_p (insn->code)) transform_addr (gen_ctx, insn, base_reg);
   call_p = MIR_call_code_p (insn->code);
   for (i = 0; i < nops; i++) {
     op = &insn->ops[i];
@@ -7594,7 +7594,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
     case MIR_OP_VAR:
       if (op->u.var <= MAX_HARD_REG) break;
       if (data_mode == MIR_OP_VAR) {
-        gen_assert (insn->code == MIR_USE || (insn->code == MIR_ADDR && i == 1));
+        gen_assert (insn->code == MIR_USE || (MIR_addr_code_p (insn->code) && i == 1));
         type = MIR_reg_type (ctx, op->u.var - MAX_HARD_REG, curr_func_item->u.func);
         data_mode = type == MIR_T_F    ? MIR_OP_FLOAT
                     : type == MIR_T_D  ? MIR_OP_DOUBLE
@@ -7602,7 +7602,7 @@ static int rewrite_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, MIR_reg_t base_reg,
                                        : MIR_OP_INT;
       }
       MIR_reg_t loc = VARR_GET (MIR_reg_t, reg_renumber, op->u.var);
-      if (insn->code != MIR_ADDR && i == 0 && loc > MAX_HARD_REG
+      if (!MIR_addr_code_p (insn->code) && i == 0 && loc > MAX_HARD_REG
           && try_spilled_reg_mem (gen_ctx, insn, i, loc, base_reg))
         break;
       hard_reg = change_reg (gen_ctx, &mem_op, op->u.var, base_reg, data_mode, insn, out_p);
