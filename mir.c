@@ -1995,20 +1995,20 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   *out_p = FALSE; /* to remove unitialized warning */
   if (nop >= nops) return MIR_OP_BOUND;
   mir_assert (out_p != NULL);
-  if (code == MIR_RET || code == MIR_SWITCH) {
-    *out_p = FALSE;
+  switch (code) {
+  case MIR_RET:
+  case MIR_SWITCH:
     /* should be already checked in MIR_finish_func */
     return nop == 0 && code != MIR_RET ? MIR_OP_INT : insn->ops[nop].mode;
-  } else if (MIR_addr_code_p (code)) {
-    *out_p = nop == 0;
-    return nop == 0 ? MIR_OP_INT : insn->ops[nop].mode;
-  } else if (code == MIR_PHI) {
-    *out_p = nop == 0;
-    return insn->ops[nop].mode;
-  } else if (code == MIR_USE) {
-    *out_p = FALSE;
-    return insn->ops[nop].mode;
-  } else if (MIR_call_code_p (code) || code == MIR_UNSPEC) {
+  case MIR_ADDR:
+  case MIR_ADDR8:
+  case MIR_ADDR16:
+  case MIR_ADDR32: *out_p = nop == 0; return nop == 0 ? MIR_OP_INT : insn->ops[nop].mode;
+  case MIR_PHI: *out_p = nop == 0; return insn->ops[nop].mode;
+  case MIR_USE: return insn->ops[nop].mode;
+  case MIR_CALL:
+  case MIR_INLINE:
+  case MIR_UNSPEC: {
     MIR_op_t proto_op;
     MIR_proto_t proto;
     size_t args_start;
@@ -2035,9 +2035,12 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
       return type2mode (proto->res_types[nop - args_start]);
     return type2mode (VARR_GET (MIR_var_t, proto->args, nop - args_start - proto->nres).type);
   }
-  mode = insn_descs[code].op_modes[nop];
-  *out_p = (mode & OUT_FLAG) != 0;
-  return *out_p ? mode ^ OUT_FLAG : mode;
+  default:
+    mode = insn_descs[code].op_modes[nop];
+    if ((mode & OUT_FLAG) == 0) return mode;
+    *out_p = TRUE;
+    return mode ^ OUT_FLAG;
+  }
 }
 
 static MIR_insn_t create_insn (MIR_context_t ctx, size_t nops, MIR_insn_code_t code) {
