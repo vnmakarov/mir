@@ -566,7 +566,7 @@ c2mir-gen-test3: $(BUILD_DIR)/c2m$(EXE)
 .PHONY: c2mir-bootstrap c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test c2mir-bootstrap-test3
 .PHONY: c2mir-parallel-bootstrap-test c2mir-bootstrap-test4 c2mir-bootstrap-test5
 
-c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test c2mir-bootstrap-bb-test
+c2mir-bootstrap: c2mir-bootstrap-test c2mir-bootstrap-test0 c2mir-bootstrap-test1 c2mir-bootstrap-test3 c2mir-parallel-bootstrap-test c2mir-bb-bootstrap-test
 
 c2mir-bootstrap-test0: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) echo -n +++++++ C2MIR Bootstrap lazy func test with -O0 '... '
@@ -598,7 +598,7 @@ c2mir-bootstrap-test: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) cmp $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir && echo Passed || echo FAIL
 	$(Q) rm -rf $(BUILD_DIR)/1o2.bmir $(BUILD_DIR)/2o2.bmir
 
-c2mir-bootstrap-bb-test: $(BUILD_DIR)/c2m$(EXE)
+c2mir-bb-bootstrap-test: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) echo -n +++++++ C2MIR Bootstrap lazy bb test with default optimize level '... '
 	$(Q) $(BUILD_DIR)/c2m$(EXE) -w $(C2M_BOOTSTRAP_FLAGS) -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
 	                    $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -o $(BUILD_DIR)/1o2.bmir
