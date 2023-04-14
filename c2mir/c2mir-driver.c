@@ -598,6 +598,7 @@ static void send_to_compile (input_t *input) {
                                        input->input_name, options.asm_p ? ".mir" : ".bmir"));
   if (!c2mir_compile (main_ctx, &input->options, t_getc, input, input->input_name, f))
     result_code = 1;
+  if (input->code_container != NULL) VARR_DESTROY (uint8_t, input->code_container);
 #else
   if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in c2m mutex lock");
   VARR_PUSH (input_t, inputs_to_compile, *input);
@@ -715,10 +716,11 @@ int main (int argc, char *argv[], char *env[]) {
       }
     }
     curr_input.curr_char = 0;
+    curr_input.code_container = NULL;
     if (curr_input.code != NULL) { /* command line script: */
       if (i > 0) break;
       curr_input.input_name = COMMAND_LINE_SOURCE_NAME;
-    } else { /* stdin input or files give on the command line: */
+    } else { /* stdin input or files given on the command line: */
       int c;
       FILE *f;
 
@@ -752,7 +754,6 @@ int main (int argc, char *argv[], char *env[]) {
         curr_input.code_len++; /* include zero byte */
         MIR_scan_string (main_ctx, (char *) curr_input.code);
       }
-      VARR_DESTROY (uint8_t, curr_input.code_container);
       if (!options.prepro_only_p && !options.syntax_only_p
           && ((bin_p && !options.object_p && options.asm_p)
               || (!bin_p && !options.asm_p && options.object_p))) {
