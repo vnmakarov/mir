@@ -8,7 +8,7 @@
 
 /* All BLK type values and RBLK args are always passed by address.  */
 
-#if 0 && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #error "s390x works only in BE mode"
 #endif
 
@@ -450,6 +450,33 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
 void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_address) {
   VARR (uint8_t) * code;
   void *res;
+  /* 16b offset -- 6b:lalr r8; 6b:lg r9,24(r8); 2b: bcr r9; 2b align: */
+  uint64_t lalr = ((0xc0l << 40) | ((uint64_t) 8 << 36) | (16 / 2)) << 16;
+
+  VARR_CREATE (uint8_t, code, 128);
+  push_insns (code, (uint8_t *) &lalr, 6);
+  s390x_gen_ld (code, 9, 8, 24, MIR_T_I64);                    /* lg 9,24(8) */
+  s390x_gen_jump (code, 9, FALSE);                             /* bcr 9 */
+  for (size_t i = 0; i < 2; i++) VARR_PUSH (uint8_t, code, 0); /* align */
+  push_insns (code, (uint8_t *) &ctx, 8);
+  push_insns (code, (uint8_t *) &called_func, 8);
+  push_insns (code, (uint8_t *) &hook_address, 8);
+  push_insns (code, (uint8_t *) &wrapper_end_addr, 8);
+  res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+#if 0
+  if (getenv ("MIR_code_dump") != NULL)
+    _MIR_dump_code ("func wrapper:", 0, res, VARR_LENGTH (uint8_t, code));
+#endif
+  VARR_DESTROY (uint8_t, code);
+  return res;
+}
+
+/* Brief: save r14 (r15+120); save all param regs r2-r6 (r15+16),f0,f2,f4,f6 (r15+128);
+   update r15; allocate and form minimal wrapper stack frame (S390X_STACK_HEADER_SIZE);
+   r2 = call hook_address (ctx, called_func); r1=r2; restore all params regs, r15, r14; bcr r1 */
+void *_MIR_get_wrapper_end (MIR_context_t ctx) {
+  VARR (uint8_t) * code;
+  void *res;
 
   VARR_CREATE (uint8_t, code, 128);
   s390x_gen_st (code, 14, 15, 112, MIR_T_I64); /* stg 14,112(r15) */
@@ -458,7 +485,9 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     s390x_gen_st (code, reg, 15, reg * 4 + 128, MIR_T_D);
   /* r15 -= frame_size: */
   s390x_gen_addi (code, 15, 15, -S390X_STACK_HEADER_SIZE);
-  s390x_gen_3addrs (code, 2, ctx, 3, called_func, 4, hook_address);
+  s390x_gen_ld (code, 2, 8, 0, MIR_T_I64);  /* lg 1,0(8) */
+  s390x_gen_ld (code, 3, 8, 8, MIR_T_I64);  /* lg 2,8(8) */
+  s390x_gen_ld (code, 4, 8, 16, MIR_T_I64); /* lg 3,16(8) */
   s390x_gen_jump (code, 4, TRUE);
   s390x_gen_mov (code, 1, 2);
   s390x_gen_addi (code, 15, 15, S390X_STACK_HEADER_SIZE);
@@ -470,7 +499,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("func wrapper:", 0, res, VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("func wrapper end:", 0, res, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;
@@ -552,5 +581,3 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   VARR_DESTROY (uint8_t, code);
   return res;
 }
-
-void *_MIR_get_wrapper_end (MIR_context_t ctx) { return NULL; }
