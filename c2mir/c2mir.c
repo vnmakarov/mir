@@ -12350,8 +12350,18 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     type = ((struct expr *) r->attr)->type;
     t = get_mir_type (c2m_ctx, type);
     if (op1.mir_op.mode == MIR_OP_REG && type->mode == TM_PTR && scalar_type_p (type->u.ptr_type)) {
+      MIR_insn_code_t code;
       res = get_new_temp (c2m_ctx, t);
-      emit2 (c2m_ctx, MIR_ADDR, res.mir_op, MIR_new_reg_op (ctx, op1.mir_op.u.reg));
+      switch (get_mir_type (c2m_ctx, type->u.ptr_type)) {
+      case MIR_T_I8:
+      case MIR_T_U8: code = MIR_ADDR8; break;
+      case MIR_T_I16:
+      case MIR_T_U16: code = MIR_ADDR16; break;
+      case MIR_T_I32:
+      case MIR_T_U32: code = MIR_ADDR32; break;
+      default: code = MIR_ADDR; break;
+      }
+      emit2 (c2m_ctx, code, res.mir_op, MIR_new_reg_op (ctx, op1.mir_op.u.reg));
       break;
     } else if (op1.mir_op.mode == MIR_OP_REG || op1.mir_op.mode == MIR_OP_REF
                || op1.mir_op.mode == MIR_OP_STR) { /* array or func */
