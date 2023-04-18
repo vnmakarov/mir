@@ -1061,7 +1061,9 @@ static int process_loop (gen_ctx_t gen_ctx, bb_t entry_bb) {
   for (e = DLIST_HEAD (in_edge_t, entry_bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
     if (e->back_edge_p && e->src != entry_bb) {
       loop_node = top_loop_node (e->src);
-      if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)) continue;
+      if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)
+          || (e->src->pre == 0 && e->src->rpost == 0))
+        continue; /* processed or unreachable */
       VARR_PUSH (loop_node_t, loop_nodes, loop_node);
       VARR_PUSH (loop_node_t, queue_nodes, loop_node);
     }
@@ -1073,7 +1075,9 @@ static int process_loop (gen_ctx_t gen_ctx, bb_t entry_bb) {
     for (e = DLIST_HEAD (in_edge_t, queue_bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
       if (e->src != entry_bb) {
         loop_node = top_loop_node (e->src);
-        if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)) continue;
+        if (!bitmap_set_bit_p (temp_bitmap, loop_node->index)
+            || (e->src->pre == 0 && e->src->rpost == 0))
+          continue; /* processed or unreachable */
         VARR_PUSH (loop_node_t, loop_nodes, loop_node);
         VARR_PUSH (loop_node_t, queue_nodes, loop_node);
       }
