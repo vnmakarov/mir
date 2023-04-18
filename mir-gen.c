@@ -459,7 +459,10 @@ struct loop_node {
   bb_t bb;        /* NULL for internal tree node  */
   loop_node_t entry;
   loop_node_t parent;
-  bb_t preheader; /* used in LICM */
+  union {                       /* used in LICM */
+    loop_node_t preheader;      /* used for non-bb loop it is loop node of preheader bb */
+    loop_node_t preheader_loop; /* used for preheader bb it is the loop node */
+  } u;
   DLIST (loop_node_t) children;
   DLIST_LINK (loop_node_t) children_link;
   int max_int_pressure, max_fp_pressure;
@@ -852,6 +855,8 @@ static void delete_bb (gen_ctx_t gen_ctx, bb_t bb) {
   if (bb->loop_node != NULL) {
     if (bb->loop_node->parent->entry == bb->loop_node) bb->loop_node->parent->entry = NULL;
     DLIST_REMOVE (loop_node_t, bb->loop_node->parent->children, bb->loop_node);
+    if (bb->loop_node->u.preheader_loop != NULL)
+      bb->loop_node->u.preheader_loop->u.preheader = NULL;
     free (bb->loop_node);
   }
   DLIST_REMOVE (bb_t, curr_cfg->bbs, bb);
@@ -1044,7 +1049,7 @@ static loop_node_t create_loop_node (gen_ctx_t gen_ctx, bb_t bb) {
   if (bb != NULL) bb->loop_node = loop_node;
   loop_node->parent = NULL;
   loop_node->entry = NULL;
-  loop_node->preheader = NULL;
+  loop_node->u.preheader = NULL;
   loop_node->max_int_pressure = loop_node->max_fp_pressure = 0;
   DLIST_INIT (loop_node_t, loop_node->children);
   return loop_node;
@@ -1151,6 +1156,7 @@ static void destroy_loop_tree (gen_ctx_t gen_ctx, loop_node_t root) {
   loop_node_t node, next;
 
   if (root->bb != NULL) {
+    root->u.preheader_loop = NULL;
     root->bb->loop_node = NULL;
   } else {
     for (node = DLIST_HEAD (loop_node_t, root->children); node != NULL; node = next) {
@@ -1406,8 +1412,12 @@ static void print_loop_subtree (gen_ctx_t gen_ctx, loop_node_t root, int level, 
   for (int i = 0; i < 2 * level + 2; i++) fprintf (debug_file, " ");
   if (root->bb != NULL) {
     gen_assert (DLIST_HEAD (loop_node_t, root->children) == NULL);
-    fprintf (debug_file, "BB%-3lu (pressure: int=%d, fp=%d)\n", (unsigned long) root->bb->index,
+    fprintf (debug_file, "BB%-3lu (pressure: int=%d, fp=%d)", (unsigned long) root->bb->index,
              root->max_int_pressure, root->max_fp_pressure);
+    if (root->bb != NULL && root->u.preheader_loop != NULL)
+      fprintf (debug_file, " (loop of the preheader - loop%lu)",
+               (unsigned long) root->u.preheader_loop->index);
+    fprintf (debug_file, "\n");
     return;
   }
   fprintf (debug_file, "Loop%3lu (pressure: int=%d, fp=%d)", (unsigned long) root->index,
@@ -1415,8 +1425,8 @@ static void print_loop_subtree (gen_ctx_t gen_ctx, loop_node_t root, int level, 
   if (curr_cfg->root_loop_node == root || root->entry == NULL)
     fprintf (debug_file, ":\n");
   else {
-    if (root->preheader != NULL)
-      fprintf (debug_file, " (preheader - bb%lu)", (unsigned long) root->preheader->index);
+    if (root->bb == NULL && root->u.preheader != NULL)
+      fprintf (debug_file, " (preheader - bb%lu)", (unsigned long) root->u.preheader->bb->index);
     fprintf (debug_file, " (entry - bb%lu):\n", (unsigned long) root->entry->bb->index);
   }
   for (loop_node_t node = DLIST_HEAD (loop_node_t, root->children); node != NULL;
@@ -4977,13 +4987,15 @@ static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
     }
   /* See loop_licm where we process only the nested loops: */
   if (subloop_p || loop == curr_cfg->root_loop_node) return;
-  loop->preheader = NULL;
+  loop->u.preheader = NULL;
   if ((e = find_loop_entry_edge (gen_ctx, loop->entry->bb)) == NULL) return;
   if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
-      || !MIR_any_branch_code_p (bb_insn->insn->code))
-    loop->preheader = e->src; /* The preheader already exists */
-  else
+      || !MIR_any_branch_code_p (bb_insn->insn->code)) {
+    loop->u.preheader = e->src->loop_node;      /* The preheader already exists */
+    e->src->loop_node->u.preheader_loop = loop; /* The preheader already exists */
+  } else {
     create_preheader_from_edge (gen_ctx, e, loop);
+  }
 }
 
 static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_insn) {
@@ -5046,7 +5058,7 @@ static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
       subloop_p = TRUE;
       if (loop_licm (gen_ctx, node)) move_p = TRUE; /* process sub-loops first */
     }
-  if (subloop_p || curr_cfg->root_loop_node == loop || loop->preheader == NULL)
+  if (subloop_p || curr_cfg->root_loop_node == loop || loop->u.preheader == NULL)
     return move_p; /* e.g. root or unreachable root */
   DEBUG (2, {
     fprintf (debug_file, "Processing Loop%3lu for loop invariant motion:\n",
@@ -5070,7 +5082,7 @@ static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
       print_bb_insn (gen_ctx, bb_insn, FALSE);
     });
     move_p = TRUE;
-    licm_move_insn (gen_ctx, bb_insn, loop->preheader,
+    licm_move_insn (gen_ctx, bb_insn, loop->u.preheader->bb,
                     DLIST_HEAD (bb_insn_t, loop->entry->bb->bb_insns));
     FOREACH_INSN_VAR (gen_ctx, iter, insn, var, op_num, out_p, mem_p) {
       if (!out_p) continue;
