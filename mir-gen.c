@@ -3907,11 +3907,10 @@ static long remove_bb (gen_ctx_t gen_ctx, bb_t bb) {
   return deleted_insns_num;
 }
 
-static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
-  long deleted_insns_num = 0;
-  bb_t next_bb, bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
+static void mark_unreachable_bbs (gen_ctx_t gen_ctx) {
+  bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2);
 
-  if (bb == NULL) return 0;
+  if (bb == NULL) return;
   gen_assert (bb->index == 2);
   bitmap_clear (temp_bitmap);
   VARR_TRUNC (bb_t, worklist, 0);
@@ -3923,6 +3922,13 @@ static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
          e = DLIST_NEXT (out_edge_t, e))
       if (bitmap_set_bit_p (temp_bitmap, e->dst->index)) VARR_PUSH (bb_t, worklist, e->dst);
   }
+}
+
+static long remove_unreachable_bbs (gen_ctx_t gen_ctx) {
+  long deleted_insns_num = 0;
+  bb_t next_bb;
+
+  mark_unreachable_bbs (gen_ctx);
   for (bb_t bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     next_bb = DLIST_NEXT (bb_t, bb);
     if (!bitmap_bit_p (temp_bitmap, bb->index)) deleted_insns_num += remove_bb (gen_ctx, bb);
