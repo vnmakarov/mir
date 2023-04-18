@@ -8758,16 +8758,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, TRUE, NULL);
     });
   }
-  if (optimize_level >= 1) {
-    build_loop_tree (gen_ctx);
-    DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
-  }
-  if (optimize_level >= 2 && licm (gen_ctx)) {
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after loop invariant motion:\n");
-      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
-    });
-  }
   if (optimize_level >= 2) {
     DEBUG (2, { fprintf (debug_file, "+++++++++++++GVN:\n"); });
     gvn (gen_ctx);
@@ -8799,6 +8789,18 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
       fprintf (debug_file, "+++++++++++++MIR after dead code elimination:\n");
       print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
     });
+  }
+  if (optimize_level >= 2) {
+    build_loop_tree (gen_ctx);
+    DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
+    if (licm (gen_ctx)) {
+      DEBUG (2, {
+        fprintf (debug_file, "+++++++++++++MIR after loop invariant motion:\n");
+        print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+      });
+    }
+    destroy_loop_tree (gen_ctx, curr_cfg->root_loop_node);
+    curr_cfg->root_loop_node = NULL;
   }
   if (optimize_level >= 2 && pressure_relief (gen_ctx)) {
     DEBUG (2, {
@@ -8841,6 +8843,8 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     print_CFG (gen_ctx, FALSE, FALSE, TRUE, TRUE, NULL);
   });
   if (optimize_level >= 1) {
+    build_loop_tree (gen_ctx);
+    DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     DEBUG (2, {
       add_bb_insn_dead_vars (gen_ctx);
