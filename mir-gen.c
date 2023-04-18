@@ -4959,19 +4959,25 @@ static edge_t find_loop_entry_edge (gen_ctx_t gen_ctx, bb_t loop_entry) {
 }
 
 static void create_preheader_from_edge (gen_ctx_t gen_ctx, edge_t e, loop_node_t loop) {
-  bb_t new_bb = create_bb (gen_ctx, NULL);
+  bb_t new_bb = create_bb (gen_ctx, NULL), prev_bb;
   loop_node_t bb_loop_node = create_loop_node (gen_ctx, new_bb), parent = loop->parent;
 
   add_new_bb (gen_ctx, new_bb);
   DLIST_REMOVE (bb_t, curr_cfg->bbs, new_bb);
   DLIST_INSERT_BEFORE (bb_t, curr_cfg->bbs, e->dst, new_bb); /* insert before loop entry */
+  gen_assert (parent != NULL);
+  if ((prev_bb = DLIST_PREV (bb_t, e->dst)) != NULL && prev_bb->loop_node->parent == parent)
+    DLIST_INSERT_AFTER (loop_node_t, parent->children, prev_bb->loop_node, bb_loop_node);
+  else if (e->src->loop_node->parent == parent)
+    DLIST_INSERT_AFTER (loop_node_t, parent->children, e->src->loop_node, bb_loop_node);
+  else
+    DLIST_APPEND (loop_node_t, parent->children, bb_loop_node);
+  bb_loop_node->parent = parent;
+  bb_loop_node->u.preheader_loop = loop;
+  loop->u.preheader = bb_loop_node;
   create_edge (gen_ctx, e->src, new_bb, TRUE, FALSE); /* fall through should be the 1st edge */
   create_edge (gen_ctx, new_bb, e->dst, TRUE, FALSE);
   delete_edge (e);
-  gen_assert (parent != NULL);
-  DLIST_APPEND (loop_node_t, parent->children, bb_loop_node);
-  bb_loop_node->parent = parent;
-  loop->preheader = new_bb;
 }
 
 static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
