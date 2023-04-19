@@ -2821,6 +2821,7 @@ static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void *
 
 static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
   out_insn (gen_ctx, temp_jump, temp_jump_replacement, jump_addrs);
+  put_uint64 (gen_ctx, TARGET_NOP, 4); /* add space for transformation to auipc;jar */
 }
 
 static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
@@ -2869,7 +2870,7 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
     insn = 0x17 | (TEMP_INT_HARD_REG1 << 7)
            | (((uint32_t) offset + carry) & 0xfffff000); /* auipc t5 */
     _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
-    insn = 0x67 | (TEMP_INT_HARD_REG1 << 15) | ((offset & 0xfff) << 20); /* lalr t5 */
+    insn = 0x67 | (TEMP_INT_HARD_REG1 << 15) | ((offset & 0xfff) << 20); /* jr t5 */
     insn_ptr += 1;
   }
   _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
