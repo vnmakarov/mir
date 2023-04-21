@@ -312,16 +312,16 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (i >= start) { /* put arg value in saved blk/ld value area: */
         if (type == MIR_T_LD) {
           mem_op = _MIR_new_var_mem_op (ctx, MIR_T_LD, blk_ld_value_disp + S390X_STACK_HEADER_SIZE,
-                                        FP_HARD_REG, MIR_NON_VAR, 1);
+                                        SP_HARD_REG, MIR_NON_VAR, 1);
           gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
         } else {
           qwords = (arg_op.u.mem.disp + 7) / 8;
-          gen_blk_mov (gen_ctx, call_insn, S390X_STACK_HEADER_SIZE + blk_ld_value_disp, FP_HARD_REG,
+          gen_blk_mov (gen_ctx, call_insn, S390X_STACK_HEADER_SIZE + blk_ld_value_disp, SP_HARD_REG,
                        0, arg_op.u.mem.base, qwords, n_iregs);
         }
       }
       arg_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
-      new_insn = MIR_new_insn (ctx, MIR_ADD, arg_op, _MIR_new_var_op (ctx, FP_HARD_REG),
+      new_insn = MIR_new_insn (ctx, MIR_ADD, arg_op, _MIR_new_var_op (ctx, SP_HARD_REG),
                                MIR_new_int_op (ctx, S390X_STACK_HEADER_SIZE + blk_ld_value_disp));
       gen_add_insn_before (gen_ctx, call_insn, new_insn);
       blk_ld_value_disp += type == MIR_T_LD ? 16 : qwords * 8;
@@ -373,7 +373,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       new_insn_code = MIR_LDMOV;
       call_res_op = ret_val_op
         = _MIR_new_var_mem_op (ctx, MIR_T_LD, S390X_STACK_HEADER_SIZE + blk_ld_value_disp,
-                               FP_HARD_REG, MIR_NON_VAR, 1);
+                               SP_HARD_REG, MIR_NON_VAR, 1);
       if (n_iregs < 5) { /* use it as a call result to keep assignment to ld_n_iregs: */
         call_res_op
           = _MIR_new_var_mem_op (ctx, MIR_T_LD, 0, R2_HARD_REG + ld_n_iregs, MIR_NON_VAR, 1);
@@ -1060,7 +1060,7 @@ struct pattern {
      sD<number> - displacement ([20..31]) used as shift
      SD<number> - displacement (low part [20..31], high part [32..39]) used as shift
      T - switch table displacement
-     Q - stack header + param_area
+     Q - stack header + param_area + block param area
   */
   const char *replacement;
 };
@@ -1403,7 +1403,7 @@ static const struct pattern patterns[] = {
   {MIR_CALL, "X r $", "0d* h14 R1"}, /* basr h14,r0 */
   {MIR_RET, "$", "07* ma15 H14"},    /* bcr m15,14 */
 
-/* sgr h15,r0; lg h0,(h15,r0); stg h0,0(h15); lay r0,160+param_area_size(h15): */
+/* sgr h15,r0; lg h0,(h15,r0); stg h0,0(h15); lay r0,160+param_area_size+blkparamsize(h15): */
 #define ALLOCA_END "; b909 h15 R0; e3:04 h0 hs15 x0; e3:24 h0 hs15; e3:71 r0 Q hs15"
 
   /* la r0,7(r1);nill r0,0xfff8; ... : */
@@ -2008,7 +2008,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         switch_table_addr_p = TRUE;
         break;
       case 'Q': {
-        int64_t size = S390X_STACK_HEADER_SIZE + param_save_area_size;
+        int64_t size = S390X_STACK_HEADER_SIZE + param_save_area_size + blk_ld_value_save_area_size;
         gen_assert (d < 0 && dh < 0 && int20_p (size));
         d = (size) &0xfff;
         dh = ((size) >> 12) & 0xff;
