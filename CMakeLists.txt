@@ -5,7 +5,9 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("MIR")
 
-set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+if(NOT DEFINED CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+endif()
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
