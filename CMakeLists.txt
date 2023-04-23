@@ -51,6 +51,9 @@ target_link_libraries(mir_static PRIVATE mir)
 
 # ------------------ LIBMIR SO --------------------
 add_library(mir_shared SHARED)
+if(WIN32)
+  set_target_properties(mir_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
 target_link_libraries(mir_shared PRIVATE mir)
 
 # ------------------ C2M --------------------------
