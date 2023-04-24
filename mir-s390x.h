@@ -28,7 +28,7 @@ static const MIR_reg_t FP_HARD_REG = R11_HARD_REG;
 static int target_locs_num (MIR_reg_t loc, MIR_type_t type) { return type == MIR_T_LD ? 2 : 1; }
 
 /* Hard regs not used in machinized code and for passing args, preferably call saved ones. */
-static const MIR_reg_t TEMP_INT_HARD_REG1 = R8_HARD_REG, TEMP_INT_HARD_REG2 = R9_HARD_REG;
+static const MIR_reg_t TEMP_INT_HARD_REG1 = R1_HARD_REG, TEMP_INT_HARD_REG2 = R9_HARD_REG;
 static const MIR_reg_t TEMP_FLOAT_HARD_REG1 = F8_HARD_REG, TEMP_FLOAT_HARD_REG2 = F10_HARD_REG;
 static const MIR_reg_t TEMP_DOUBLE_HARD_REG1 = F8_HARD_REG, TEMP_DOUBLE_HARD_REG2 = F10_HARD_REG;
 static const MIR_reg_t TEMP_LDOUBLE_HARD_REG1 = F8_HARD_REG;  //???
