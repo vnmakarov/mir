@@ -1334,7 +1334,8 @@ struct pattern {
      mf - memory of float
      md - memory of double
      mld - memory of long double
-     l - label which can be present by 32-bit
+     L - label which can be present by 32-bit
+     l - label which can be present by 8-bit
      [0-9] - an operand matching n-th operand (n should be less than given operand number)
 
      Remember we have no float or (long) double immediate at this stage. They are represented by
@@ -1361,7 +1362,8 @@ struct pattern {
      J[0-2] - n-th operand in 8 byte immediate
      P[0-2] - n-th operand is 64-bit call address in memory pool
      T     - absolute 8-byte switch table address
-     l[0-2] - n-th operand-label in 32-bit
+     L[0-2] - n-th operand-label in 32-bit
+     l[0-2] - n-th operand-label in 8-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
      +[0-2] - lower 3-bit part of opcode used for n-th reg operand
      +h<one hex digit> - lower 3-bit part of opcode used for 0-15 hard reg operand
@@ -1470,14 +1472,29 @@ struct pattern {
   /*fld m2;fld m1;xor %eax,%eax;fcomip st,st(1);fstp %st;setx az; mov %rax,r0:  */ \
   {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF F1; DD D8; " SET_OPCODE " H0;X 8B r0 H0"},
 
+#define BRS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                \
+  {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" SHORT_JMP_OPCODE " l0"},       /*test r0,r0;jxx rel8*/ \
+    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel8*/
+
+#define BRS1(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                 \
+  {ICODE##SUFF, "l m0", #PREF " 80 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmpb m0,$0;jxx rel8*/    \
+    {ICODE##SUFF, "l m1", "66 " #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmpw m0,$0;...*/ \
+    {ICODE##SUFF, "l m2", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"},       /*cmpl m0,$0;...*/
+
+#define BRS(ICODE, SHORT_JMP_OPCODE)   \
+  BRS0 (ICODE, , X, SHORT_JMP_OPCODE)  \
+  BRS0 (ICODE, S, Y, SHORT_JMP_OPCODE) \
+  BRS1 (ICODE, , Y, SHORT_JMP_OPCODE)  \
+  BRS1 (ICODE, S, Y, SHORT_JMP_OPCODE)
+
 #define BR0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " l0"},       /*test r0,r0;jxx rel32*/ \
-    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel32*/
+  {ICODE##SUFF, "L r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " L0"},       /*test r0,r0;jxx rel32*/ \
+    {ICODE##SUFF, "L m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmp m0,$0;jxx rel32*/
 
 #define BR1(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "l m0", #PREF " 80 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmpb m0,$0;jxx rel32*/   \
-    {ICODE##SUFF, "l m1", "66 " #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"}, /*cmpw m0,$0;...*/ \
-    {ICODE##SUFF, "l m2", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " l0"},       /*cmpl m0,$0;...*/
+  {ICODE##SUFF, "L m0", #PREF " 80 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmpb m0,$0;jxx rel32*/   \
+    {ICODE##SUFF, "L m1", "66 " #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmpw m0,$0;...*/ \
+    {ICODE##SUFF, "L m2", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"},       /*cmpl m0,$0;...*/
 
 #define BR(ICODE, LONG_JMP_OPCODE)   \
   BR0 (ICODE, , X, LONG_JMP_OPCODE)  \
@@ -1485,27 +1502,39 @@ struct pattern {
   BR1 (ICODE, , Y, LONG_JMP_OPCODE)  \
   BR1 (ICODE, S, Y, LONG_JMP_OPCODE)
 
+#define BCMPS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                \
+  {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" SHORT_JMP_OPCODE " l0"},        /*cmp r0,r1;jxx rel8*/ \
+    {ICODE##SUFF, "l r m3", #PREF " 3B r1 m2;" SHORT_JMP_OPCODE " l0"},     /*cmp r0,m1;jxx rel8*/ \
+    {ICODE##SUFF, "l r i0", #PREF " 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel8*/ \
+    {ICODE##SUFF, "l r i2", #PREF " 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel8*/ \
+    {ICODE##SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel8*/ \
+    {ICODE##SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel8*/
+
+#define BCMPS(ICODE, SHORT_JMP_OPCODE)  \
+  BCMPS0 (ICODE, , X, SHORT_JMP_OPCODE) \
+  BCMPS0 (ICODE, S, Y, SHORT_JMP_OPCODE)
+
 #define BCMP0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " l0"},        /*cmp r0,r1;jxx rel32*/ \
-    {ICODE##SUFF, "l r m3", #PREF " 3B r1 m2;" LONG_JMP_OPCODE " l0"},     /*cmp r0,m1;jxx rel8*/  \
-    {ICODE##SUFF, "l r i0", #PREF " 83 /7 R1 i2;" LONG_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "l r i2", #PREF " 81 /7 R1 I2;" LONG_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;" LONG_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;" LONG_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel32*/
+  {ICODE##SUFF, "L r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " L0"},        /*cmp r0,r1;jxx rel32*/ \
+    {ICODE##SUFF, "L r m3", #PREF " 3B r1 m2;" LONG_JMP_OPCODE " L0"},     /*cmp r0,m1;jxx rel32*/ \
+    {ICODE##SUFF, "L r i0", #PREF " 83 /7 R1 i2;" LONG_JMP_OPCODE " L0"},  /*cmp r0,i1;jxx rel32*/ \
+    {ICODE##SUFF, "L r i2", #PREF " 81 /7 R1 I2;" LONG_JMP_OPCODE " L0"},  /*cmp r0,i1;jxx rel32*/ \
+    {ICODE##SUFF, "L m3 i0", #PREF " 83 /7 m1 i2;" LONG_JMP_OPCODE " L0"}, /*cmp m0,i1;jxx rel32*/ \
+    {ICODE##SUFF, "L m3 i2", #PREF " 81 /7 m1 I2;" LONG_JMP_OPCODE " L0"}, /*cmp m0,i1;jxx rel32*/
 
 #define BCMP(ICODE, LONG_JMP_OPCODE)  \
   BCMP0 (ICODE, , X, LONG_JMP_OPCODE) \
   BCMP0 (ICODE, S, Y, LONG_JMP_OPCODE)
 
 #define FBCMP(ICODE, LONG_JMP_OPCODE) \
-  {ICODE, "l r r", "Y 0F 2E r1 R2;" LONG_JMP_OPCODE " l0"}, /* ucomiss r0,r1;jxx rel32*/
+  {ICODE, "L r r", "Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomiss r0,r1;jxx rel32*/
 
 #define DBCMP(ICODE, LONG_JMP_OPCODE) \
-  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" LONG_JMP_OPCODE " l0"}, /* ucomisd r0,r1;jxx rel32*/
+  {ICODE, "L r r", "66 Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomisd r0,r1;jxx rel32*/
 
 #define LDBCMP(ICODE, LONG_JMP_OPCODE)                    \
   /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel32*/ \
-  {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " l0"},
+  {ICODE, "L mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " L0"},
 
 static struct pattern patterns[] = {
   {MIR_MOV, "r z", "Y 33 r0 R0"},      /* xor r0,r0 -- 32 bit xor */
@@ -1706,18 +1735,25 @@ static struct pattern patterns[] = {
   FCMP (MIR_FGT, "0F 97") DCMP (MIR_DGT, "0F 97") LDCMP (MIR_LDGT, "0F 97") /*6*/
   FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93") LDCMP (MIR_LDGE, "0F 93") /*7*/
 
-  {MIR_JMP, "l", "E9 l0"}, /* 32-bit offset jmp */
+  {MIR_JMP, "L", "E9 L0"}, /* 32-bit offset jmp */
 
   /* movq TableAddress,r11; mov (r11,r,8),r11; jmp *r11; TableContent */
   {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3"},
 
+  BRS (MIR_BT, "75") BRS (MIR_BF, "74")     /* short branches */
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
 
-  {MIR_BO, "l", "0F 80 l0"},  /* 32-bit offset jmp on signed overflow */
-  {MIR_UBO, "l", "0F 82 l0"}, /* 32-bit offset jmp on unsigned overflow */
+  {MIR_BO, "L", "0F 80 L0"},  /* 32-bit offset jmp on signed overflow */
+  {MIR_UBO, "L", "0F 82 L0"}, /* 32-bit offset jmp on unsigned overflow */
 
-  {MIR_BNO, "l", "0F 81 l0"},  /* 32-bit offset jmp on signed non-overflow */
-  {MIR_UBNO, "l", "0F 83 l0"}, /* 32-bit offset jmp on unsigned non-overflow */
+  {MIR_BNO, "L", "0F 81 L0"},  /* 32-bit offset jmp on signed non-overflow */
+  {MIR_UBNO, "L", "0F 83 L0"}, /* 32-bit offset jmp on unsigned non-overflow */
+
+  BCMPS (MIR_BEQ, "74") BCMPS (MIR_BNE, "75")  /* 1. int compare and branch */
+  BCMPS (MIR_BLT, "7C") BCMPS (MIR_UBLT, "72") /* 2. int compare and branch */
+  BCMPS (MIR_BLE, "7E") BCMPS (MIR_UBLE, "76") /* 3. int compare and branch */
+  BCMPS (MIR_BGT, "7F") BCMPS (MIR_UBGT, "77") /* 4. int compare and branch */
+  BCMPS (MIR_BGE, "7D") BCMPS (MIR_UBGE, "73") /* 5. int compare and branch */
 
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE, "0F 85")  /* 1. int compare and branch */
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") /* 2. int compare and branch */
@@ -1735,15 +1771,15 @@ static struct pattern patterns[] = {
   LDBCMP (MIR_LDBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") /* 5. fp cmp and branch */
   DBCMP (MIR_DBGE, "0F 83") LDBCMP (MIR_LDBGE, "0F 83") /* 6. fp cmp and branch */
 
-  {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 l0"},    /* ucomiss r0,r1;jp L;je rel32 L: */
-  {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 l0"}, /* ucomisd r0,r1;jp L;je rel32 L: */
+  {MIR_FBEQ, "L r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 L0"},    /* ucomiss r0,r1;jp L;je rel32 L: */
+  {MIR_DBEQ, "L r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 L0"}, /* ucomisd r0,r1;jp L;je rel32 L: */
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp L;je rel32 L: */
-  {MIR_LDBEQ, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 l0"},
+  {MIR_LDBEQ, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 L0"},
 
-  {MIR_FBNE, "l r r", "Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
-  {MIR_DBNE, "l r r", "66 Y 0F 2E r1 R2; 0F 8A l0; 0F 85 l0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  {MIR_FBNE, "L r r", "Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
+  {MIR_DBNE, "L r r", "66 Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
-  {MIR_LDBNE, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A l0; 0F 85 l0"},
+  {MIR_LDBNE, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A L0; 0F 85 L0"},
 
   {MIR_CALL, "X i3 $", "FF /2 P1"},  /* call *rel32(rip)  */
   {MIR_CALL, "X r $", "Y FF /2 R1"}, /* call *r1 */
@@ -1973,9 +2009,15 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (!int32_p (op_ref->u.var_mem.disp)) return FALSE;
       break;
     }
+    case 'L': break;
     case 'l':
       if (op_ref->mode != MIR_OP_LABEL) return FALSE;
-      break;
+      if (!try_short_jump_p) return FALSE; /* we are in size estimation mode */
+      int64_t disp = ((int64_t) get_label_disp (gen_ctx, op_ref->u.label)
+                      - (int64_t) VARR_LENGTH (uint8_t, result_code));
+      disp = disp < 0 ? disp - 6 : disp - 3; /* 3/6 bytes for short/long branch */
+      if (-128 <= disp && disp < 128) break;
+      return FALSE;
     case '0':
     case '1':
     case '2':
@@ -2563,7 +2605,16 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         switch_table_addr_p = TRUE;
         break;
       }
-      case 'l': {
+      case 'l':
+        gen_assert (disp32 < 0 && disp8 < 0);
+        lr.short_p = TRUE;
+        disp8 = 0;
+        goto label_rest;
+      case 'L':
+        gen_assert (disp32 < 0 && disp8 < 0);
+        lr.short_p = FALSE;
+        disp32 = 0; /* To reserve the space */
+      label_rest:
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '2');
         op_ref = &insn->ops[ch - '0'];
@@ -2574,12 +2625,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           lr.u.label = op_ref->u.label;
         else
           lr.u.jump_addr = jump_addrs[0];
-        gen_assert (label_ref_num < 0 && disp32 < 0);
-        disp32 = 0; /* To reserve the space */
+        gen_assert (label_ref_num < 0);
         label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
         VARR_PUSH (label_ref_t, label_refs, lr);
         break;
-      }
       case 'P': {
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '7');
