@@ -1526,12 +1526,18 @@ struct pattern {
   BCMP0 (ICODE, , X, LONG_JMP_OPCODE) \
   BCMP0 (ICODE, S, Y, LONG_JMP_OPCODE)
 
+#define FBCMPS(ICODE, SHORT_JMP_OPCODE) \
+  {ICODE, "l r r", "Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0"}, /* ucomiss r0,r1;jxx rel8*/
+#define DBCMPS(ICODE, SHORT_JMP_OPCODE) \
+  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0"}, /* ucomisd r0,r1;jxx rel8*/
+#define LDBCMPS(ICODE, SHORT_JMP_OPCODE)                 \
+  /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel8*/ \
+  {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " SHORT_JMP_OPCODE " l0"},
+
 #define FBCMP(ICODE, LONG_JMP_OPCODE) \
   {ICODE, "L r r", "Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomiss r0,r1;jxx rel32*/
-
 #define DBCMP(ICODE, LONG_JMP_OPCODE) \
   {ICODE, "L r r", "66 Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomisd r0,r1;jxx rel32*/
-
 #define LDBCMP(ICODE, LONG_JMP_OPCODE)                    \
   /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel32*/ \
   {ICODE, "L mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " L0"},
@@ -1736,6 +1742,7 @@ static struct pattern patterns[] = {
   FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93") LDCMP (MIR_LDGE, "0F 93") /*7*/
 
   {MIR_JMP, "L", "E9 L0"}, /* 32-bit offset jmp */
+  {MIR_JMP, "l", "EB l0"}, /* 8-bit offset jmp */
 
   /* movq TableAddress,r11; mov (r11,r,8),r11; jmp *r11; TableContent */
   {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3"},
@@ -1743,9 +1750,13 @@ static struct pattern patterns[] = {
   BRS (MIR_BT, "75") BRS (MIR_BF, "74")     /* short branches */
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
 
-  {MIR_BO, "L", "0F 80 L0"},  /* 32-bit offset jmp on signed overflow */
-  {MIR_UBO, "L", "0F 82 L0"}, /* 32-bit offset jmp on unsigned overflow */
+  {MIR_BO, "l", "70 l0"},   /* 8-bit offset jmp on signed overflow */
+  {MIR_UBO, "l", "72 l0"},  /* 8-bit offset jmp on unsigned overflow */
+  {MIR_BNO, "l", "71 l0"},  /* 8-bit offset jmp on signed non-overflow */
+  {MIR_UBNO, "l", "73 l0"}, /* 8-bit offset jmp on unsigned non-overflow */
 
+  {MIR_BO, "L", "0F 80 L0"},   /* 32-bit offset jmp on signed overflow */
+  {MIR_UBO, "L", "0F 82 L0"},  /* 32-bit offset jmp on unsigned overflow */
   {MIR_BNO, "L", "0F 81 L0"},  /* 32-bit offset jmp on signed non-overflow */
   {MIR_UBNO, "L", "0F 83 L0"}, /* 32-bit offset jmp on unsigned non-overflow */
 
@@ -1767,15 +1778,24 @@ static struct pattern patterns[] = {
   DBCMP (MIR_DBLE, "0F 86") LDBCMP (MIR_LDBLE, "0F 86") /* 3. fp cmp and branch */
 #endif
 
-  FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87")   /* 4. fp cmp and branch */
-  LDBCMP (MIR_LDBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") /* 5. fp cmp and branch */
-  DBCMP (MIR_DBGE, "0F 83") LDBCMP (MIR_LDBGE, "0F 83") /* 6. fp cmp and branch */
+  FBCMPS (MIR_FBGT, "77") DBCMPS (MIR_DBGT, "77")   /* fp cmp and short branch */
+  LDBCMPS (MIR_LDBGT, "77") FBCMPS (MIR_FBGE, "73") /* fp cmp and short branch */
+  DBCMPS (MIR_DBGE, "73") LDBCMPS (MIR_LDBGE, "73") /* fp cmp and short branch */
+
+  FBCMP (MIR_FBGT, "0F 87") DBCMP (MIR_DBGT, "0F 87")   /* fp cmp and branch */
+  LDBCMP (MIR_LDBGT, "0F 87") FBCMP (MIR_FBGE, "0F 83") /* fp cmp and branch */
+  DBCMP (MIR_DBGE, "0F 83") LDBCMP (MIR_LDBGE, "0F 83") /* fp cmp and branch */
+
+  /* we don't have short branch patterns for NE as the label will be in two branches: */
+  {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v2; 74 l0"},    /* ucomiss r0,r1;jp l;je rel32 l: */
+  {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v2; 74 l0"}, /* ucomisd r0,r1;jp l;je rel32 l: */
+  /* fld m2;fld m1;fucomip st,st1;fstp st;jp l;je rel32 l: */
+  {MIR_LDBEQ, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v2; 74 l0"},
 
   {MIR_FBEQ, "L r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 L0"},    /* ucomiss r0,r1;jp L;je rel32 L: */
   {MIR_DBEQ, "L r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 L0"}, /* ucomisd r0,r1;jp L;je rel32 L: */
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp L;je rel32 L: */
   {MIR_LDBEQ, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 L0"},
-
   {MIR_FBNE, "L r r", "Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
   {MIR_DBNE, "L r r", "66 Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
