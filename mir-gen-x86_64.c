@@ -1608,13 +1608,13 @@ static const struct pattern patterns[] = {
   {MIR_LDNEG, "mld mld", "DB /5 m1; D9 E0; DB /7 m0"},  /* fld m1; fchs; fstp m0 */
 
   {MIR_ADD, "r 0 c1", "X FF /0 R0"},          /* inc r */
-  {MIR_ADDS, "r 0 c1", "FF /0 R0"},           /* inc r */
+  {MIR_ADDS, "r 0 c1", "Y FF /0 R0"},         /* inc r */
   {MIR_ADD, "m3 0 c1", "X FF /0 m0"},         /* inc mem */
-  {MIR_ADDS, "m2 0 c1", "FF /0 m0"},          /* inc mem */
+  {MIR_ADDS, "m2 0 c1", "Y FF /0 m0"},        /* inc mem */
   {MIR_ADD, "r 0 c-1", "X FF /1 R0"},         /* dec r */
-  {MIR_ADDS, "r 0 c-1", "FF /1 R0"},          /* dec r */
+  {MIR_ADDS, "r 0 c-1", "Y FF /1 R0"},        /* dec r */
   {MIR_ADD, "m3 0 c-1", "X FF /1 m0"},        /* dec mem */
-  {MIR_ADDS, "m2 0 c-1", "FF /1 m0"},         /* dec mem */
+  {MIR_ADDS, "m2 0 c-1", "Y FF /1 m0"},       /* dec mem */
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0") /* x86_64 int additions */
 
   {MIR_ADD, "r r r", "X 8D r0 ap"},   /* lea r0,(r1,r2)*/
@@ -1623,13 +1623,13 @@ static const struct pattern patterns[] = {
   {MIR_ADDS, "r r i2", "Y 8D r0 ap"}, /* lea r0,i2(r1)*/
 
   {MIR_SUB, "r 0 c1", "X FF /1 R0"},          /* dec r */
-  {MIR_SUBS, "r 0 c1", "FF /1 R0"},           /* dec r */
+  {MIR_SUBS, "r 0 c1", "Y FF /1 R0"},         /* dec r */
   {MIR_SUB, "m3 0 c1", "X FF /1 m0"},         /* dec mem */
-  {MIR_SUBS, "m2 0 c1", "FF /1 m0"},          /* dec mem */
+  {MIR_SUBS, "m2 0 c1", "Y FF /1 m0"},        /* dec mem */
   {MIR_SUB, "r 0 c-1", "X FF /0 R0"},         /* inc r */
-  {MIR_SUBS, "r 0 c-1", "FF /0 R0"},          /* inc r */
+  {MIR_SUBS, "r 0 c-1", "Y FF /0 R0"},        /* inc r */
   {MIR_SUB, "m3 0 c-1", "X FF /0 m0"},        /* inc mem */
-  {MIR_SUBS, "m2 0 c-1", "FF /0 m0"},         /* inc mem */
+  {MIR_SUBS, "m2 0 c-1", "Y FF /0 m0"},       /* inc mem */
   IOP (MIR_SUB, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions */
 
   IOP (MIR_ADDO, "03", "01", "83 /0", "81 /0") /* x86_64 int additions with ovfl flag */
