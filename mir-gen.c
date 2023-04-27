@@ -5204,29 +5204,34 @@ typedef struct addr_info {
   MIR_scale_t scale;
 } addr_info_t;
 
-static int get_int_const (MIR_op_t *op_ref, int64_t *c) {
+static int get_int_const (gen_ctx_t gen_ctx, MIR_op_t *op_ref, int64_t *c) {
   if (op_ref->mode == MIR_OP_VAR) {
     ssa_edge_t se = op_ref->data;
     if (se == NULL || se->def->insn->code != MIR_MOV) return FALSE;
     op_ref = &se->def->insn->ops[1];
   }
-  if (op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) return FALSE;
-  *c = op_ref->u.i;
+  if (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT) {
+    *c = op_ref->u.i;
+  } else if (op_ref->mode == MIR_OP_REF) {
+    *c = get_ref_value (gen_ctx, op_ref);
+  } else {
+    return FALSE;
+  }
   return TRUE;
 }
 
-static int var_plus_const (ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
+static int var_plus_const (gen_ctx_t gen_ctx, ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
   if (se == NULL) return FALSE; /* e.g. for arg */
   MIR_insn_t insn = se->def->insn;
   *c = 0;
   if (insn->code == MIR_MOV && insn->ops[1].mode == MIR_OP_VAR) {
     *var_op_ref = &insn->ops[1];
   } else if ((insn->code == MIR_ADD || insn->code == MIR_SUB) && insn->ops[1].mode == MIR_OP_VAR
-             && get_int_const (&insn->ops[2], c)) {
+             && get_int_const (gen_ctx, &insn->ops[2], c)) {
     *var_op_ref = &insn->ops[1];
     if (insn->code == MIR_SUB) *c = -*c;
   } else if (insn->code == MIR_ADD && insn->ops[2].mode == MIR_OP_VAR
-             && get_int_const (&insn->ops[1], c)) {
+             && get_int_const (gen_ctx, &insn->ops[1], c)) {
     *var_op_ref = &insn->ops[2];
   } else {
     return FALSE;
@@ -5234,13 +5239,13 @@ static int var_plus_const (ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
   return TRUE;
 }
 
-static int var_mult_const (ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
+static int var_mult_const (gen_ctx_t gen_ctx, ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
   if (se == NULL) return FALSE; /* e.g. for arg */
   MIR_insn_t insn = se->def->insn;
   MIR_op_t *res_ref = NULL;
   *c = 0;
   if ((insn->code == MIR_MUL || insn->code == MIR_LSH) && insn->ops[1].mode == MIR_OP_VAR
-      && get_int_const (&insn->ops[2], c)) {
+      && get_int_const (gen_ctx, &insn->ops[2], c)) {
     res_ref = &insn->ops[1];
     if (insn->code == MIR_LSH) {
       if (*c < 0 || *c >= sizeof (int64_t) * 8)
@@ -5249,7 +5254,7 @@ static int var_mult_const (ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
         *c = 1lu << *c;
     }
   } else if (insn->code == MIR_MUL && insn->ops[2].mode == MIR_OP_VAR
-             && get_int_const (&insn->ops[1], c)) {
+             && get_int_const (gen_ctx, &insn->ops[1], c)) {
     res_ref = &insn->ops[2];
   }
   if (res_ref != NULL && (*c < 0 || *c > MIR_MAX_SCALE)) res_ref = NULL;
@@ -5299,10 +5304,10 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
     temp_addr_info = *addr_info;
     temp_stop_index_p = stop_index_p;
     if (!stop_base_p) {
-      if (var_plus_const (addr_info->base->data, &addr_info->base, &c)) {
+      if (var_plus_const (gen_ctx, addr_info->base->data, &addr_info->base, &c)) {
         addr_info->disp += c;
       } else if (addr_info->scale == 1
-                 && var_mult_const (addr_info->base->data, &addr_info->base, &c)) {
+                 && var_mult_const (gen_ctx, addr_info->base->data, &addr_info->base, &c)) {
         if (c != 1) {
           SWAP (addr_info->base, addr_info->index, temp_op_ref);
           SWAP (stop_base_p, stop_index_p, temp_int);
@@ -5321,9 +5326,9 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
     stop_index_p = temp_stop_index_p;
     stop_base_p = TRUE;
     if (stop_index_p) return change_p;
-    if (var_plus_const (addr_info->index->data, &addr_info->index, &c)) {
+    if (var_plus_const (gen_ctx, addr_info->index->data, &addr_info->index, &c)) {
       addr_info->disp += c * addr_info->scale;
-    } else if (var_mult_const (addr_info->index->data, &addr_info->index, &c)) {
+    } else if (var_mult_const (gen_ctx, addr_info->index->data, &addr_info->index, &c)) {
       addr_info->scale *= c;
     } else {
       gen_assert (addr_info->base != NULL || addr_info->scale != 1);
