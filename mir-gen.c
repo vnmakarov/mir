@@ -741,7 +741,7 @@ static int gen_nested_loop_label_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   if (bb->loop_node == NULL) return FALSE;
   loop_node_t node, parent = bb->loop_node->parent;
   if (parent->entry == NULL || parent->entry->bb != bb) return FALSE;
-  for (loop_node_t node = DLIST_HEAD (loop_node_t, parent->children); node != NULL;
+  for (node = DLIST_HEAD (loop_node_t, parent->children); node != NULL;
        node = DLIST_NEXT (loop_node_t, node))
     if (node->bb == NULL) return FALSE; /* subloop */
   return TRUE;
@@ -2679,7 +2679,6 @@ static void transform_addrs (gen_ctx_t gen_ctx) {
   MIR_reg_t var, reg, addr_reg, new_reg;
   MIR_insn_t insn, addr_insn, new_insn;
   bb_insn_t bb_insn, next_bb_insn;
-  insn_var_iterator_t iter;
   ssa_edge_t se;
   MIR_func_t func = curr_func_item->u.func;
 
@@ -5456,7 +5455,6 @@ static bb_insn_t combine_branch_and_cmp (gen_ctx_t gen_ctx, bb_insn_t bb_insn) {
 }
 
 static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
-  MIR_context_t ctx = gen_ctx->ctx;
   MIR_op_t temp_op;
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn, new_bb_insn;
@@ -6699,8 +6697,8 @@ static void finish_coalesce (gen_ctx_t gen_ctx) {
 
 /* New page */
 
-static void add_reload (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *op1, MIR_op_t *op2,
-                        MIR_type_t type, int to_p) {
+static void add_reload (gen_ctx_t gen_ctx, MIR_insn_t anchor, const MIR_op_t *op1,
+                        const MIR_op_t *op2, MIR_type_t type, int to_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t new_insn;
   MIR_insn_code_t move_code = get_move_code (type);
@@ -6746,7 +6744,7 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
   MIR_func_t func;
   MIR_insn_t insn, next_insn;
   MIR_insn_code_t code;
-  MIR_op_t temp_op, mem_op;
+  MIR_op_t mem_op, *mem_op_ref;
   MIR_op_mode_t mode;
   MIR_type_t type;
   MIR_reg_t temp_reg, type_regs[MIR_T_BOUND];
@@ -6765,7 +6763,6 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
     if (bitmap_bit_p (insn_to_consider, code) && !MIR_op_eq_p (ctx, insn->ops[0], insn->ops[1]))
       add_inout_reloads (gen_ctx, insn);
     if (target_insn_ok_p (gen_ctx, insn)) continue;
-    int change_p = FALSE;
     for (i = 0; i < insn->nops; i++) { /* try to change one non-dup mem op to reg */
       if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
       if (bitmap_bit_p (insn_to_consider, code) && (i == 0 || i == 1)) continue;
@@ -6773,7 +6770,6 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
       type = mode2type (mode);
       /* we don't use hard regs for this type: */
       if (get_temp_hard_reg (type, TRUE) == MIR_NON_VAR) continue;
-      change_p = TRUE;
       if (type_regs[type] == MIR_NON_VAR)
         type_regs[type] = gen_new_temp_reg (gen_ctx, type, curr_func_item->u.func);
       mem_op = insn->ops[i];
@@ -6798,9 +6794,9 @@ static void make_io_dup_op_insns (gen_ctx_t gen_ctx) {
       /* we don't use hard regs for this type: */
       if (get_temp_hard_reg (type, TRUE) == MIR_NON_VAR) continue;
       temp_reg = gen_new_temp_reg (gen_ctx, type, curr_func_item->u.func);
-      mem_op = insn->ops[i];
+      mem_op_ref = &insn->ops[i];
       insn->ops[i] = _MIR_new_var_op (ctx, temp_reg);
-      add_reload (gen_ctx, insn, &mem_op, &insn->ops[i], type, out_p);
+      add_reload (gen_ctx, insn, mem_op_ref, &insn->ops[i], type, out_p);
     }
     /* target_insn_ok_p still can return FALSE here for insn which will be converted to builtin */
   }
@@ -8427,10 +8423,9 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
   bb_insn_t bb_insn = *bb_insn_ref;
   MIR_insn_t insn = bb_insn->insn, def_insn;
   size_t i, nops = insn->nops;
-  int out_p, insn_change_p, insn_var_change_p, op_change_p, mem_reg_change_p, success_p;
-  MIR_op_t *op_ref, *src_op_ref, *src_op2_ref, saved_op;
+  int out_p, insn_change_p, insn_var_change_p, op_change_p, success_p;
+  MIR_op_t *op_ref, saved_op;
   MIR_reg_t var, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
-  int64_t scale;
 
   if (nops == 0) return FALSE;
   VARR_TRUNC (MIR_op_t, last_right_ops, 0);
@@ -8531,15 +8526,15 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
 static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *deleted_insns_num) {
   MIR_insn_t def_insn, insn = bb_insn->insn;
   MIR_insn_code_t code = insn->code;
-  MIR_op_t op, saved_op;
+  MIR_op_t *op, saved_op;
   int w, w2, sign_p = FALSE, sign2_p = FALSE, ok_p;
 
   if ((w = get_ext_params (code, &sign_p)) == 0) return NULL;
-  op = insn->ops[1];
-  if (op.mode != MIR_OP_VAR || !safe_var_substitution_p (gen_ctx, op.u.var, bb_insn)) return NULL;
-  def_insn = var_refs_addr[op.u.var].insn;
+  op = &insn->ops[1];
+  if (op->mode != MIR_OP_VAR || !safe_var_substitution_p (gen_ctx, op->u.var, bb_insn)) return NULL;
+  def_insn = var_refs_addr[op->u.var].insn;
   if ((w2 = get_ext_params (def_insn->code, &sign2_p)) == 0) return NULL;
-  if (obsolete_op_p (gen_ctx, def_insn->ops[1], var_refs_addr[op.u.var].insn_num)) return NULL;
+  if (obsolete_op_p (gen_ctx, def_insn->ops[1], var_refs_addr[op->u.var].insn_num)) return NULL;
   if (w <= w2) {
     /* [u]ext<w2> b,a; ... [u]ext<w> c,b -> [u]ext<w> c,a when <w> <= <w2>: */
     saved_op = insn->ops[1];

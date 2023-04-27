@@ -1885,7 +1885,7 @@ static int64_t int_value (gen_ctx_t gen_ctx, const MIR_op_t *op) {
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn,
                             int try_short_jump_p) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop, n;
+  int nop;
   size_t nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
@@ -2265,23 +2265,19 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *r
 }
 
 static int get_max_insn_size (gen_ctx_t gen_ctx, const char *replacement) {
-  MIR_context_t ctx = gen_ctx->ctx;
   const char *p, *insn_str;
   int size = 0;
 
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, start_ch;
-    int d1, d2;
     int opcode0_p = FALSE, opcode1_p = FALSE, opcode2_p = FALSE;
     int rex_p = FALSE, modrm_p = FALSE, addr_p = FALSE, prefix_p = FALSE;
     int disp8_p = FALSE, imm8_p = FALSE, disp32_p = FALSE, imm32_p = FALSE, imm64_p = FALSE;
     int switch_table_addr_p = FALSE;
-    uint64_t v;
 
     for (p = insn_str; (ch = *p) != '\0' && ch != ';'; p++) {
-      if ((d1 = hex_value (ch = *p)) >= 0) {
-        d2 = hex_value (ch = *++p);
-        gen_assert (d2 >= 0);
+      if (hex_value (ch = *p) >= 0) {
+        hex_value (ch = *++p);
         if (!opcode0_p)
           opcode0_p = TRUE;
         else if (!opcode1_p)
@@ -2385,31 +2381,27 @@ static int get_max_insn_size (gen_ctx_t gen_ctx, const char *replacement) {
         break;
       case 'c':  // ???
         ++p;
-        v = read_hex (&p);
+        read_hex (&p);
         gen_assert (!disp32_p);
         disp32_p = TRUE;
         break;
       case 'h':
         ++p;
-        v = read_hex (&p);
-        gen_assert (v <= 31);
+        read_hex (&p);
         modrm_p = TRUE;
         break;
       case 'H':
         ++p;
-        v = read_hex (&p);
-        gen_assert (v <= 31);
+        read_hex (&p);
         modrm_p = TRUE;
         break;
       case 'v':
       case 'V':
         ++p;
-        v = read_hex (&p);
+        read_hex (&p);
         if (start_ch == 'v') {
-          gen_assert (uint8_p (v));
           imm8_p = TRUE;
         } else {
-          gen_assert (uint32_p (v));
           imm32_p = TRUE;
         }
         break;
@@ -2874,7 +2866,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         int padn = LOOP_ALIGN - (int) (VARR_LENGTH (uint8_t, result_code) % LOOP_ALIGN);
         if (padn == LOOP_ALIGN) padn = 0;
         gen_assert (padn < sizeof (nops) / sizeof (char *));
-        if (padn != 0) VARR_PUSH_ARR (uint8_t, result_code, nops[padn], padn);
+        if (padn != 0) VARR_PUSH_ARR (uint8_t, result_code, (uint8_t *) nops[padn], padn);
       }
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else if (insn->code != MIR_USE) {
