@@ -79,10 +79,12 @@ EOF
   first=first
   if gcc $tempc >/dev/null 2>&1; then
       run "gcc -O2" "gcc -std=c99 -O2 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
-      run "gcc -O0" "gcc -std=c99 -O0 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      if test x$short != xshort; then
+	 run "gcc -O0" "gcc -std=c99 -O0 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf"
+      fi
       first=
   fi
-  if clang $tempc >/dev/null 2>&1; then
+  if test x$short != xshort && clang $tempc >/dev/null 2>&1; then
       run "clang -O2" "clang -std=c99 -O2 -I$srcdir/c-benchmarks -I. $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
