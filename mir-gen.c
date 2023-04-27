@@ -9002,15 +9002,9 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     build_loop_tree (gen_ctx);
     DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
   }
-  if (optimize_level >= 2) {
-    consider_move_vars_only (gen_ctx);
+  if (optimize_level >= 2 && consider_move_vars_only (gen_ctx)) {
     calculate_func_cfg_live_info (gen_ctx, FALSE);
-    DEBUG (2, {
-      add_bb_insn_dead_vars (gen_ctx);
-      fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
-      print_loop_tree (gen_ctx, TRUE);
-      print_CFG (gen_ctx, TRUE, TRUE, FALSE, FALSE, output_bb_live_info);
-    });
+    print_live_info (gen_ctx, "Live info before coalesce", TRUE, FALSE);
     coalesce (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after coalescing:\n");
@@ -9019,12 +9013,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   }
   consider_all_live_vars (gen_ctx);
   calculate_func_cfg_live_info (gen_ctx, TRUE);
-  DEBUG (2, {
-    if (optimize_level > 0) add_bb_insn_dead_vars (gen_ctx);
-    fprintf (debug_file, "+++++++++++++MIR after building live_info:\n");
-    print_loop_tree (gen_ctx, TRUE);
-    print_CFG (gen_ctx, TRUE, TRUE, TRUE, FALSE, output_bb_live_info);
-  });
+  print_live_info (gen_ctx, "Live info before RA", optimize_level > 0, TRUE);
   reg_alloc (gen_ctx);
   DEBUG (2, {
     fprintf (debug_file, "+++++++++++++MIR after RA:\n");
@@ -9034,10 +9023,7 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     consider_all_live_vars (gen_ctx);
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     add_bb_insn_dead_vars (gen_ctx);
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR before combine:\n");
-      print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, output_bb_live_info);
-    });
+    print_live_info (gen_ctx, "Live info before combine", FALSE, FALSE);
     combine (gen_ctx, machine_code_p); /* After combine the BB live info is still valid */
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after combine:\n");
