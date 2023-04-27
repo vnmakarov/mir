@@ -2035,7 +2035,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if (!try_short_jump_p) return FALSE; /* we are in size estimation mode */
       int64_t disp = ((int64_t) get_label_disp (gen_ctx, op_ref->u.label)
                       - (int64_t) VARR_LENGTH (uint8_t, result_code));
-      disp = disp < 0 ? disp - 6 : disp - 3; /* 3/6 bytes for short/long branch */
+      /* short->long (+1 for long jump prefix +3 for offset), minimal jump is 2 bytes: */
+      disp = disp < 0 ? disp - (pat->max_insn_size + 4) : disp - 2;
       if (-128 <= disp && disp < 128) break;
       return FALSE;
     case '0':
