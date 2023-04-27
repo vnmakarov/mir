@@ -5837,7 +5837,8 @@ static void collect_scan_var (gen_ctx_t gen_ctx, MIR_reg_t var) {
   VARR_SET (int, var_to_scan_var_map, var, scan_vars_num++);
 }
 
-static void consider_move_vars_only (gen_ctx_t gen_ctx) {
+static int consider_move_vars_only (gen_ctx_t gen_ctx) {
+  int found_p = FALSE;
   VARR_TRUNC (int, var_to_scan_var_map, 0);
   VARR_TRUNC (MIR_reg_t, scan_var_to_var_map, 0);
   bitmap_clear (temp_bitmap);
@@ -5847,20 +5848,28 @@ static void consider_move_vars_only (gen_ctx_t gen_ctx) {
     if (move_p (insn)) {
       collect_scan_var (gen_ctx, insn->ops[0].u.var);
       collect_scan_var (gen_ctx, insn->ops[1].u.var);
+      found_p = TRUE;
     }
+  return found_p;
 }
 
-static void consider_phi_vars_only (gen_ctx_t gen_ctx) {
+static int consider_phi_vars_only (gen_ctx_t gen_ctx) {
+  int found_p = FALSE;
   VARR_TRUNC (int, var_to_scan_var_map, 0);
   VARR_TRUNC (MIR_reg_t, scan_var_to_var_map, 0);
   bitmap_clear (temp_bitmap);
   scan_vars_num = 0;
-  for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-       insn = DLIST_NEXT (MIR_insn_t, insn)) {
-    if (insn->code != MIR_PHI) continue;
-    for (int i = 0; i < insn->nops; i++)
-      if (insn->ops[i].mode == MIR_OP_VAR) collect_scan_var (gen_ctx, insn->ops[i].u.var);
-  }
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      MIR_insn_t insn = bb_insn->insn;
+      if (insn->code == MIR_LABEL) continue;
+      if (insn->code != MIR_PHI) break;
+      for (int i = 0; i < insn->nops; i++)
+        if (insn->ops[i].mode == MIR_OP_VAR) collect_scan_var (gen_ctx, insn->ops[i].u.var);
+      found_p = TRUE;
+    }
+  return found_p;
 }
 
 static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
@@ -6227,6 +6236,11 @@ static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
 #define spill_gen gen   /* pseudo regs fully spilled in BB */
 #define spill_kill kill /* pseudo regs referenced in the BB */
 
+static int var_live_ranges_intersect_p (gen_ctx_t gen_ctx, MIR_reg_t var1, MIR_reg_t var2) {
+  return live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, var1),
+                                 VARR_GET (live_range_t, var_live_ranges, var2));
+}
+
 static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, MIR_insn_t start_insn,
                                MIR_insn_t tail_insn) {
   MIR_reg_t var, reg, early_clobbered_hard_reg1, early_clobbered_hard_reg2;
@@ -6248,6 +6262,14 @@ static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, MIR_insn_t start_insn
       fprintf (debug_file, "  p%-5d", curr_point);
       MIR_output_insn (gen_ctx->ctx, debug_file, insn, curr_func_item->u.func, TRUE);
     });
+    if (insn->code == MIR_PHI) {
+      if ((scan_var = var_to_scan_var (gen_ctx, insn->ops[0].u.var)) >= 0) {
+        make_var_dead (gen_ctx, insn->ops[0].u.var, scan_var, curr_point, TRUE);
+        curr_point++;
+      }
+      if (insn == start_insn) break;
+      continue;
+    }
     incr_p = FALSE;
     FOREACH_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num, out_p, mem_p) {
       if ((scan_var = var_to_scan_var (gen_ctx, var)) < 0) continue;
@@ -6523,8 +6545,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
     } else {
       sreg_var = first_sreg;
       dreg_var = first_dreg;
-      if (!live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, sreg_var),
-                                   VARR_GET (live_range_t, var_live_ranges, dreg_var))
+      if (!var_live_ranges_intersect_p (gen_ctx, sreg_var, dreg_var)
           && (MIR_reg_hard_reg_name (ctx, first_sreg - MAX_HARD_REG, curr_func_item->u.func) == NULL
               || MIR_reg_hard_reg_name (ctx, first_dreg, curr_func_item->u.func) == NULL)) {
         coalesced_moves++;
