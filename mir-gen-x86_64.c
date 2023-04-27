@@ -2846,6 +2846,19 @@ static uint8_t *translate_finish (gen_ctx_t gen_ctx, size_t *len) {
 
 static void target_split_insns (gen_ctx_t gen_ctx) {}
 
+#define LOOP_ALIGN 8
+
+static const char *nops[] = {
+  "",
+  "\x90" /* 1:nop */,
+  "\x66\x90", /* 2: xchg ax,ax */
+  "\x0f\x1f\xc0" /* 3:nopl eax */,
+  "\x48\x0f\x1f\xc0" /* 4:nop rax */,
+  "\x0f\x1f\x44\x00\x00" /* 5: nopl 0x0(%rax,%rax,1) */,
+  "\x66\x0f\x1f\x44\x00\x00" /* 6: nopw   0x0(%rax,%rax,1) */,
+  "\x0f\x1f\x80\x00\x00\x00\x00" /* 7: nopl 0x0(%rax) */,
+};
+
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_t insn;
@@ -2859,6 +2872,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
+      if (gen_nested_loop_label_p (gen_ctx, insn)) curr_size += LOOP_ALIGN;
       set_label_disp (gen_ctx, insn, curr_size); /* estimation */
     } else if (insn->code != MIR_USE) {
       ind = find_insn_pattern (gen_ctx, insn, &max_insn_size);
@@ -2875,6 +2889,12 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   for (n = 0, insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn)) {
     if (insn->code == MIR_LABEL) {
+      if (gen_nested_loop_label_p (gen_ctx, insn)) {
+        int padn = LOOP_ALIGN - (int) (VARR_LENGTH (uint8_t, result_code) % LOOP_ALIGN);
+        if (padn == LOOP_ALIGN) padn = 0;
+        gen_assert (padn < sizeof (nops) / sizeof (char *));
+        if (padn != 0) VARR_PUSH_ARR (uint8_t, result_code, nops[padn], padn);
+      }
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else if (insn->code != MIR_USE) {
       ind = VARR_GET (int, insn_pattern_indexes, n++);

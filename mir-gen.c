@@ -113,6 +113,7 @@ static void varr_error (const char *message) { util_error (NULL, message); }
 /* Functions used by target dependent code: */
 static void *gen_malloc (gen_ctx_t gen_ctx, size_t size);
 static MIR_reg_t gen_new_temp_reg (gen_ctx_t gen_ctx, MIR_type_t type, MIR_func_t func);
+static int gen_nested_loop_label_p (gen_ctx_t gen_ctx, MIR_insn_t insn);
 static void set_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn, size_t disp);
 static size_t get_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn);
 static void create_new_bb_insns (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_t after,
@@ -731,6 +732,19 @@ static void MIR_UNUSED setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t c
   if ((insn_data = call_insn->data)->u.call_hard_reg_args == NULL)
     insn_data->u.call_hard_reg_args = (void *) bitmap_create2 (MAX_HARD_REG + 1);
   bitmap_set_bit_p (insn_data->u.call_hard_reg_args, hard_reg);
+}
+
+static int gen_nested_loop_label_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  gen_assert (insn->code == MIR_LABEL);
+  if (optimize_level <= 1) return FALSE;
+  bb_t bb = get_insn_bb (gen_ctx, insn);
+  if (bb->loop_node == NULL) return FALSE;
+  loop_node_t node, parent = bb->loop_node->parent;
+  if (parent->entry == NULL || parent->entry->bb != bb) return FALSE;
+  for (loop_node_t node = DLIST_HEAD (loop_node_t, parent->children); node != NULL;
+       node = DLIST_NEXT (loop_node_t, node))
+    if (node->bb == NULL) return FALSE; /* subloop */
+  return TRUE;
 }
 
 static void set_label_disp (gen_ctx_t gen_ctx, MIR_insn_t insn, size_t disp) {
