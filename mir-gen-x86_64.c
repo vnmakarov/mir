@@ -1785,7 +1785,7 @@ static struct pattern patterns[] = {
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
   {MIR_LDBNE, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A L0; 0F 85 L0"},
 
-  {MIR_CALL, "i3 $", "FF /2 P1"},    /* call *rel32(rip)  */
+  {MIR_CALL, "X i3 $", "FF /2 P1"},  /* call *rel32(rip)  */
   {MIR_CALL, "X r $", "Y FF /2 R1"}, /* call *r1 */
   {MIR_RET, "$", "C3"},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
