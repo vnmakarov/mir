@@ -5591,6 +5591,7 @@ DEF_VARR (live_range_t);
 DEF_VARR (MIR_reg_t);
 
 struct lr_ctx {
+  int ssa_live_info_p;                    /* TRUE if found PHIs */
   int scan_vars_num;                      /* vars considered for live analysis: 0 means all vars */
   VARR (int) * var_to_scan_var_map;       /* if var is less than the map size: its live_var or -1 */
   VARR (MIR_reg_t) * scan_var_to_var_map; /* of size scan_vars_num */
@@ -5603,6 +5604,7 @@ struct lr_ctx {
   VARR (int) * point_map;
 };
 
+#define ssa_live_info_p gen_ctx->lr_ctx->ssa_live_info_p
 #define scan_vars_num gen_ctx->lr_ctx->scan_vars_num
 #define var_to_scan_var_map gen_ctx->lr_ctx->var_to_scan_var_map
 #define scan_var_to_var_map gen_ctx->lr_ctx->scan_var_to_var_map
@@ -5633,11 +5635,31 @@ static MIR_reg_t scan_var_to_var (gen_ctx_t gen_ctx, int scan_var) {
 static void live_con_func_0 (bb_t bb) {}
 
 static int live_con_func_n (gen_ctx_t gen_ctx, bb_t bb) {
-  edge_t e;
-  int change_p = FALSE;
+  MIR_op_t *op_ref;
+  bb_insn_t bb_insn;
+  edge_t e, e2;
+  int n, change_p = FALSE;
 
-  for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e))
+  for (e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL; e = DLIST_NEXT (out_edge_t, e)) {
     change_p |= bitmap_ior (bb->live_out, bb->live_out, e->dst->live_in);
+    if (ssa_live_info_p) {
+      for (bb_insn = DLIST_HEAD (bb_insn_t, e->dst->bb_insns); bb_insn != NULL;
+           bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+        if (bb_insn->insn->code != MIR_LABEL) break;
+      if (bb_insn == NULL || bb_insn->insn->code != MIR_PHI) continue; /* no phis in dst */
+      for (n = 1, e2 = DLIST_HEAD (in_edge_t, e->dst->in_edges); e2 != NULL;
+           e2 = DLIST_NEXT (in_edge_t, e2), n++)
+        if (e2 == e) break;
+      gen_assert (e2 == e);
+      for (;;) {
+        op_ref = &bb_insn->insn->ops[n];
+        if (op_ref->mode == MIR_OP_VAR)
+          change_p |= bitmap_set_bit_p (bb->live_out, var_to_scan_var (gen_ctx, op_ref->u.var));
+        if ((bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) == NULL || bb_insn->insn->code != MIR_PHI)
+          break;
+      }
+    }
+  }
   return change_p;
 }
 
@@ -5687,6 +5709,15 @@ static MIR_insn_t initiate_bb_live_info (gen_ctx_t gen_ctx, MIR_insn_t bb_tail_i
   bb->max_int_pressure = bb_int_pressure = bb->max_fp_pressure = bb_fp_pressure = 0;
   for (insn = bb_tail_insn; insn != NULL && get_insn_bb (gen_ctx, insn) == bb;
        insn = DLIST_PREV (MIR_insn_t, insn)) {
+    if (insn->code == MIR_PHI) {
+      ssa_live_info_p = TRUE;
+      var = insn->ops[0].u.var;
+      if ((scan_var = var_to_scan_var (gen_ctx, var)) < 0) continue;
+      if (bitmap_clear_bit_p (bb->live_gen, scan_var) && optimize_level != 0)
+        (int_var_type_p (gen_ctx, var) ? bb_int_pressure-- : bb_fp_pressure--);
+      bitmap_set_bit_p (bb->live_kill, scan_var);
+      continue;
+    }
     if (MIR_call_code_p (insn->code) && scan_vars_num == 0) {
       bitmap_ior (bb->live_kill, bb->live_kill, call_used_hard_regs[MIR_T_UNDEF]);
       if (global_hard_regs != NULL)
@@ -5791,6 +5822,7 @@ static void update_bb_pressure (gen_ctx_t gen_ctx) {
 }
 
 static void calculate_func_cfg_live_info (gen_ctx_t gen_ctx, int freq_p) {
+  ssa_live_info_p = FALSE;
   initiate_live_info (gen_ctx, freq_p);
   solve_dataflow (gen_ctx, FALSE, live_con_func_0, live_con_func_n, live_trans_func);
   if (optimize_level != 0) update_bb_pressure (gen_ctx);
@@ -5887,6 +5919,15 @@ static void output_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
   output_bitmap (gen_ctx, "  live_kill:", bb->live_kill, TRUE, map);
 }
 #endif
+
+static void print_live_info (gen_ctx_t gen_ctx, const char *title, int dead_var_p, int pressure_p) {
+  DEBUG (2, {
+    if (dead_var_p) add_bb_insn_dead_vars (gen_ctx);
+    fprintf (debug_file, "+++++++++++++%s:\n", title);
+    print_loop_tree (gen_ctx, TRUE);
+    print_CFG (gen_ctx, TRUE, pressure_p, TRUE, TRUE, output_bb_live_info);
+  });
+}
 
 #undef live_kill
 #undef live_gen
