@@ -2437,32 +2437,48 @@ static void build_ssa (gen_ctx_t gen_ctx, int rename_p) {
   }
 }
 
-static void make_conventional_ssa (gen_ctx_t gen_ctx) {
+static int var_live_ranges_intersect_p (gen_ctx_t gen_ctx, MIR_reg_t var1, MIR_reg_t var2);
+
+static int conflict_phi_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  gen_assert (insn->code == MIR_PHI);
+  MIR_reg_t dest_var = insn->ops[0].u.var;
+  for (size_t i = 1; i < insn->nops; i++)
+    if (insn->ops[i].mode == MIR_OP_VAR
+        && var_live_ranges_intersect_p (gen_ctx, dest_var, insn->ops[i].u.var))
+      return TRUE;
+  return FALSE;
+}
+
+static void build_live_ranges (gen_ctx_t gen_ctx);
+static void free_func_live_ranges (gen_ctx_t gen_ctx);
+static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_type_t type;
-  MIR_reg_t reg, new_reg;
+  MIR_reg_t var, dest_var;
   MIR_insn_code_t move_code;
   MIR_insn_t insn, new_insn;
   bb_t bb, prev_bb;
   bb_insn_t bb_insn, next_bb_insn, tail, new_bb_insn, after;
   edge_t e;
   ssa_edge_t se;
+
+  build_live_ranges (gen_ctx);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
       if ((insn = bb_insn->insn)->code == MIR_LABEL) continue;
       if (insn->code != MIR_PHI) break;
       gen_assert (insn->ops[0].mode == MIR_OP_VAR && insn->ops[0].u.var > MAX_HARD_REG);
-      reg = insn->ops[0].u.var;
-      type = MIR_reg_type (gen_ctx->ctx, reg - MAX_HARD_REG, curr_func_item->u.func);
+      dest_var = var = insn->ops[0].u.var;
+      type = MIR_reg_type (gen_ctx->ctx, var - MAX_HARD_REG, curr_func_item->u.func);
       move_code = get_move_code (type);
-      new_reg = get_new_ssa_reg (gen_ctx, reg, '%', TRUE);
-      gen_assert (new_reg != MIR_NON_VAR);
+      if (conflict_phi_p (gen_ctx, insn)) dest_var = get_new_ssa_reg (gen_ctx, var, '%', TRUE);
+      gen_assert (dest_var != MIR_NON_VAR);
       e = DLIST_HEAD (in_edge_t, bb->in_edges);
       for (size_t i = 1; i < insn->nops; i++) {
         se = insn->ops[i].data;
         insn->ops[i].data = NULL;
-        new_insn = MIR_new_insn (ctx, move_code, _MIR_new_var_op (ctx, new_reg), insn->ops[i]);
+        new_insn = MIR_new_insn (ctx, move_code, _MIR_new_var_op (ctx, dest_var), insn->ops[i]);
         if ((tail = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL) {
           for (prev_bb = DLIST_PREV (bb_t, e->src), after = NULL;
                prev_bb != NULL && (after = DLIST_TAIL (bb_insn_t, prev_bb->bb_insns)) == NULL;
@@ -2477,11 +2493,11 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
         } else if (MIR_any_branch_code_p (tail->insn->code)) {
           gen_add_insn_before (gen_ctx, tail->insn, new_insn);
           for (size_t j = 0; j < tail->insn->nops; j++) {
-            /* remove a conflict: we have new_reg = p; b ..p.. => new_reg = p; b .. new_reg .. */
+            /* remove a conflict: we have dest_var = p; b ..p.. => dest_var = p; b .. dest_var .. */
             if (tail->insn->ops[j].mode != MIR_OP_VAR
                 || tail->insn->ops[j].u.var != new_insn->ops[1].u.var)
               continue;
-            tail->insn->ops[j].u.var = new_reg;
+            tail->insn->ops[j].u.var = dest_var;
             remove_ssa_edge (gen_ctx, tail->insn->ops[j].data);
             add_ssa_edge (gen_ctx, new_insn->data, 0, tail, j);
           }
@@ -2493,18 +2509,19 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
         se->use_op_num = 1;
         add_ssa_edge (gen_ctx, new_insn->data, 0, bb_insn, i);
         insn->ops[i].mode = MIR_OP_VAR;
-        insn->ops[i].u.var = new_reg;
+        insn->ops[i].u.var = dest_var;
         e = DLIST_NEXT (in_edge_t, e);
       }
+      if (dest_var == var) continue;
       for (se = insn->ops[0].data; se != NULL; se = se->next_use)
         if (se->use->bb != bb) break;
       if (se == NULL) { /* we should do this only after adding moves at the end of bbs */
         /* r=phi(...), all r uses in the same bb: change new_r = phi(...) and all uses by new_r */
-        insn->ops[0].u.var = new_reg;
-        change_ssa_edge_list_def (insn->ops[0].data, bb_insn, 0, reg, new_reg);
+        insn->ops[0].u.var = dest_var;
+        change_ssa_edge_list_def (insn->ops[0].data, bb_insn, 0, var, dest_var);
       } else {
-        new_insn = MIR_new_insn (ctx, move_code, _MIR_new_var_op (ctx, reg),
-                                 _MIR_new_var_op (ctx, new_reg));
+        new_insn = MIR_new_insn (ctx, move_code, _MIR_new_var_op (ctx, var),
+                                 _MIR_new_var_op (ctx, dest_var));
         gen_add_insn_after (gen_ctx, insn, new_insn);
         new_insn->ops[0].data = insn->ops[0].data;
         insn->ops[0] = new_insn->ops[1];
@@ -2513,6 +2530,7 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) {
         add_ssa_edge (gen_ctx, bb_insn, 0, new_insn->data, 1);
       }
     }
+  free_func_live_ranges (gen_ctx);
 }
 
 static void free_fake_bb_insns (gen_ctx_t gen_ctx, VARR (bb_insn_t) * bb_insns) {
@@ -8943,11 +8961,15 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
   }
   if (optimize_level >= 2) {
-    make_conventional_ssa (gen_ctx);
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
-      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
-    });
+    if (consider_phi_vars_only (gen_ctx)) {
+      calculate_func_cfg_live_info (gen_ctx, FALSE);
+      print_live_info (gen_ctx, "Live info before conventional SSA transformation", TRUE, FALSE);
+      make_conventional_ssa (gen_ctx);
+      DEBUG (2, {
+        fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
+        print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+      });
+    }
     ssa_combine (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after ssa combine:\n");
