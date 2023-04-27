@@ -2420,7 +2420,7 @@ static int get_max_insn_size (gen_ctx_t gen_ctx, const char *replacement) {
     if (imm8_p) size++;
     if (imm32_p) size += 4;
     if (imm64_p) size += 8;
-    if (switch_table_addr_p) size + -8;
+    if (switch_table_addr_p) size += 8;
     if (ch == '\0') break;
   }
   return size;
