@@ -54,14 +54,20 @@ run () {
     if test $? != 0; then echo "$2": FAIL; cat $errf; return 1; fi
   fi
   if test x$inputf = x; then inputf=/dev/null;fi
-  if (time -p $program < $inputf) >$temp 2>$temp2; then ok=y;fi
+  if (time -p $program < $inputf) >$temp 2>$temp2; then
+      ok=y
+      if test x$short == xshort; then
+        (time -p $program < $inputf) >$temp 2>>$temp2
+        (time -p $program < $inputf) >$temp 2>>$temp2
+      fi
+  fi
   if test x$ok = x;then echo $program: FAILED; return 1; fi
   if test x$expect_out != x && ! cmp $expect_out $temp; then
     echo Unexpected output:
     diff -up $expect_out $temp
     return 1
   fi
-  secs=`egrep 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t//`
+  secs=`egrep 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t// | sort -n | head -1`
   if test x$flag != x;then base_time=$secs;fi
   print_time "$title" $secs
 }
