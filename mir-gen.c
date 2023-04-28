@@ -6593,7 +6593,8 @@ static void coalesce (gen_ctx_t gen_ctx) {
       dreg_var = first_dreg;
       if (!var_live_ranges_intersect_p (gen_ctx, sreg_var, dreg_var)
           && (MIR_reg_hard_reg_name (ctx, first_sreg - MAX_HARD_REG, curr_func_item->u.func) == NULL
-              || MIR_reg_hard_reg_name (ctx, first_dreg, curr_func_item->u.func) == NULL)) {
+              || MIR_reg_hard_reg_name (ctx, first_dreg - MAX_HARD_REG, curr_func_item->u.func)
+                   == NULL)) {
         coalesced_moves++;
         DEBUG (2, {
           fprintf (debug_file, "Coalescing move r%d-r%d (freq=%llu):", sreg, dreg,
