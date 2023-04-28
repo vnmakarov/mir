@@ -6672,8 +6672,6 @@ static void coalesce (gen_ctx_t gen_ctx) {
     if (coalesced_moves != 0) {
       fprintf (debug_file, "Coalesced Moves = %d out of %d moves (%.1f%%)\n", coalesced_moves,
                moves_num, 100.0 * coalesced_moves / moves_num);
-      fprintf (debug_file, "Ranges after the coalescing:\n");
-      print_all_live_ranges (gen_ctx);
     }
   });
   free_func_live_ranges (gen_ctx);
