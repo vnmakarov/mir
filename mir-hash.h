@@ -45,7 +45,7 @@ static inline uint64_t mir_get_key_part (const uint8_t *v, size_t len, int relax
   return tail;
 }
 
-static const uint64_t p1 = 0X65862b62bdf5ef4d, p2 = 0X288eea216831e6a7;
+static const uint64_t mir_hash_p1 = 0X65862b62bdf5ef4d, mir_hash_p2 = 0X288eea216831e6a7;
 static inline uint64_t mir_mum (uint64_t v, uint64_t c, int relax_p) {
   if (relax_p) {
 #if defined(__SIZEOF_INT128__)
@@ -58,8 +58,8 @@ static inline uint64_t mir_mum (uint64_t v, uint64_t c, int relax_p) {
 }
 
 static inline uint64_t mir_round (uint64_t state, uint64_t v, int relax_p) {
-  state ^= mir_mum (v, p1, relax_p);
-  return state ^ mir_mum (state, p2, relax_p);
+  state ^= mir_mum (v, mir_hash_p1, relax_p);
+  return state ^ mir_mum (state, mir_hash_p2, relax_p);
 }
 
 static inline uint64_t mir_hash_1 (const void *key, size_t len, uint64_t seed, int relax_p) {
@@ -67,15 +67,15 @@ static inline uint64_t mir_hash_1 (const void *key, size_t len, uint64_t seed, i
   uint64_t r = seed + len;
 
   for (; len >= 16; len -= 16, v += 16) {
-    r ^= mir_mum (mir_get_key_part (v, 8, relax_p), p1, relax_p);
-    r ^= mir_mum (mir_get_key_part (v + 8, 8, relax_p), p2, relax_p);
-    r ^= mir_mum (r, p1, relax_p);
+    r ^= mir_mum (mir_get_key_part (v, 8, relax_p), mir_hash_p1, relax_p);
+    r ^= mir_mum (mir_get_key_part (v + 8, 8, relax_p), mir_hash_p2, relax_p);
+    r ^= mir_mum (r, mir_hash_p1, relax_p);
   }
   if (len >= 8) {
-    r ^= mir_mum (mir_get_key_part (v, 8, relax_p), p1, relax_p);
+    r ^= mir_mum (mir_get_key_part (v, 8, relax_p), mir_hash_p1, relax_p);
     len -= 8, v += 8;
   }
-  if (len != 0) r ^= mir_mum (mir_get_key_part (v, len, relax_p), p2, relax_p);
+  if (len != 0) r ^= mir_mum (mir_get_key_part (v, len, relax_p), mir_hash_p2, relax_p);
   return mir_round (r, r, relax_p);
 }
 
