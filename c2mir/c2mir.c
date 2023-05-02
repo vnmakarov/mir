@@ -1538,8 +1538,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
     case '}': return new_token (c2m_ctx, cs->pos, "}", curr_c, N_IGNORE);
     case ']': return new_token (c2m_ctx, cs->pos, "]", curr_c, N_IGNORE);
     case EOF: {
-      pos_t pos = cs->pos;
-
+      pos = cs->pos;
       assert (eof_s != cs);
       if (eof_s != NULL) free_stream (eof_s);
       if (cs->f != stdin && cs->f != NULL) {
@@ -2642,7 +2641,7 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
     }
   }
   if (VARR_LENGTH (token_arr_t, args) > params_len) {
-    token_arr_t arg = VARR_GET (token_arr_t, args, params_len);
+    arg = VARR_GET (token_arr_t, args, params_len);
     if (VARR_LENGTH (token_t, arg) != 0) t = VARR_GET (token_t, arg, 0);
     while (VARR_LENGTH (token_arr_t, args) > params_len) {
       temp_arr = VARR_POP (token_arr_t, args);
@@ -6526,17 +6525,17 @@ static node_t skip_struct_scopes (node_t scope) {
 }
 static void check (c2m_ctx_t c2m_ctx, node_t node, node_t context);
 
-static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t decl) {
+static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t decl_node) {
   check_ctx_t check_ctx = c2m_ctx->check_ctx;
   int n_sc = 0, sign = 0, size = 0, func_p = FALSE;
   struct decl_spec *res;
   struct type *type;
 
   if (r->attr != NULL) return *(struct decl_spec *) r->attr;
-  if (decl->code == N_FUNC_DEF) {
+  if (decl_node->code == N_FUNC_DEF) {
     func_p = TRUE;
-  } else if (decl->code == N_SPEC_DECL) {
-    node_t declarator = NL_EL (decl->u.ops, 1);
+  } else if (decl_node->code == N_SPEC_DECL) {
+    node_t declarator = NL_EL (decl_node->u.ops, 1);
     node_t list = NL_EL (declarator->u.ops, 1);
 
     func_p = list != NULL && NL_HEAD (list->u.ops) != NULL && NL_HEAD (list->u.ops)->code == N_FUNC;
@@ -6714,39 +6713,39 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
     case N_STRUCT:
     case N_UNION: {
       int new_scope_p;
-      node_t res, id = NL_HEAD (n->u.ops);
+      node_t res_tag_type, id = NL_HEAD (n->u.ops);
       node_t decl_list = NL_NEXT (id);
       node_t saved_unnamed_anon_struct_union_member = curr_unnamed_anon_struct_union_member;
 
       set_type_pos_node (type, n);
-      res = process_tag (c2m_ctx, n, id, decl_list);
+      res_tag_type = process_tag (c2m_ctx, n, id, decl_list);
       check_type_duplication (c2m_ctx, type, n, n->code == N_STRUCT ? "struct" : "union", size,
                               sign);
       type->mode = n->code == N_STRUCT ? TM_STRUCT : TM_UNION;
-      type->u.tag_type = res;
-      new_scope_p = (id->code != N_IGNORE || decl->code != N_MEMBER
-                     || NL_EL (decl->u.ops, 1)->code != N_IGNORE);
+      type->u.tag_type = res_tag_type;
+      new_scope_p = (id->code != N_IGNORE || decl_node->code != N_MEMBER
+                     || NL_EL (decl_node->u.ops, 1)->code != N_IGNORE);
       type->unnamed_anon_struct_union_member_type_p = !new_scope_p;
-      curr_unnamed_anon_struct_union_member = new_scope_p ? NULL : decl;
+      curr_unnamed_anon_struct_union_member = new_scope_p ? NULL : decl_node;
       if (decl_list->code != N_IGNORE) {
-        if (new_scope_p) create_node_scope (c2m_ctx, res);
+        if (new_scope_p) create_node_scope (c2m_ctx, res_tag_type);
         check (c2m_ctx, decl_list, n);
         if (new_scope_p) finish_scope (c2m_ctx);
-        if (res != n) make_type_complete (c2m_ctx, type); /* recalculate size */
+        if (res_tag_type != n) make_type_complete (c2m_ctx, type); /* recalculate size */
       }
       curr_unnamed_anon_struct_union_member = saved_unnamed_anon_struct_union_member;
       break;
     }
     case N_ENUM: {
-      node_t res, id = NL_HEAD (n->u.ops);
+      node_t res_tag_type, id = NL_HEAD (n->u.ops);
       node_t enum_list = NL_NEXT (id);
       node_t enum_const_scope = skip_struct_scopes (curr_scope);
 
       set_type_pos_node (type, n);
-      res = process_tag (c2m_ctx, n, id, enum_list);
+      res_tag_type = process_tag (c2m_ctx, n, id, enum_list);
       check_type_duplication (c2m_ctx, type, n, "enum", size, sign);
       type->mode = TM_ENUM;
-      type->u.tag_type = res;
+      type->u.tag_type = res_tag_type;
       if (enum_list->code == N_IGNORE) {
         if (incomplete_type_p (c2m_ctx, type))
           error (c2m_ctx, POS (n), "enum storage size is unknown");
@@ -6759,7 +6758,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         n->attr = enum_type = reg_malloc (c2m_ctx, sizeof (struct enum_type));
         enum_type->enum_basic_type = TP_INT;                                           // ???
         for (node_t en = NL_HEAD (enum_list->u.ops); en != NULL; en = NL_NEXT (en)) {  // ??? id
-          node_t id, const_expr;
+          node_t const_expr;
           symbol_t sym;
           struct enum_value *enum_value;
 
@@ -6820,12 +6819,12 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
       node_t el;
       int align = -1;
 
-      if (decl->code == N_FUNC_DEF) {
+      if (decl_node->code == N_FUNC_DEF) {
         error (c2m_ctx, POS (n), "_Alignas for function");
-      } else if (decl->code == N_MEMBER && (el = NL_EL (decl->u.ops, 3)) != NULL
+      } else if (decl_node->code == N_MEMBER && (el = NL_EL (decl_node->u.ops, 3)) != NULL
                  && el->code != N_IGNORE) {
         error (c2m_ctx, POS (n), "_Alignas for a bit-field");
-      } else if (decl->code == N_SPEC_DECL && in_params_p) {
+      } else if (decl_node->code == N_SPEC_DECL && in_params_p) {
         error (c2m_ctx, POS (n), "_Alignas for a function parameter");
       } else {
         node_t op = NL_HEAD (n->u.ops);
@@ -7464,16 +7463,17 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
   case N_DEREF:
   case N_ADDR: {
     node_t op = NL_HEAD (r->u.ops);
-    struct expr *e = op->attr;
+    struct expr *op_e = op->attr;
 
     if (!check_const_addr_p (c2m_ctx, op, base, offset, deref)) return FALSE;
     if (r->code == N_ADDR
-        && (e->type->mode == TM_ARR || (e->type->mode == TM_PTR && e->type->arr_type != NULL))) {
+        && (op_e->type->mode == TM_ARR
+            || (op_e->type->mode == TM_PTR && op_e->type->arr_type != NULL))) {
       if (*deref > 0) (*deref)--;
     } else if (op->code != N_ID
-               || (e->def_node->code != N_FUNC_DEF
-                   && (e->def_node->code != N_SPEC_DECL
-                       || ((decl_t) e->def_node->attr)->decl_spec.type->mode != TM_FUNC))) {
+               || (op_e->def_node->code != N_FUNC_DEF
+                   && (op_e->def_node->code != N_SPEC_DECL
+                       || ((decl_t) op_e->def_node->attr)->decl_spec.type->mode != TM_FUNC))) {
       r->code == N_DEREF ? (*deref)++ : (*deref)--;
     }
     return TRUE;
@@ -9544,7 +9544,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
           check (c2m_ctx, decl_node, r);
         }
       } else {
-        struct decl_spec decl_spec, *decl_spec_ptr;
+        struct decl_spec *decl_spec_ptr;
 
         decl_node = sym.def_node;
         assert (decl_node->code == N_SPEC_DECL);
@@ -9582,10 +9582,9 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     check (c2m_ctx, block, r);
     /* Process all gotos: */
     for (size_t i = 0; i < VARR_LENGTH (node_t, gotos); i++) {
-      symbol_t sym;
       node_t n = VARR_GET (node_t, gotos, i);
-      node_t id = NL_NEXT (NL_HEAD (n->u.ops));
 
+      id = NL_NEXT (NL_HEAD (n->u.ops));
       if (!symbol_find (c2m_ctx, S_LABEL, id, func_block_scope, &sym)) {
         error (c2m_ctx, POS (id), "undefined label %s", id->u.s.s);
       } else {
@@ -9682,11 +9681,11 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     node_t labels = NL_HEAD (r->u.ops);
     node_t expr = NL_NEXT (labels);
     node_t stmt = NL_NEXT (expr);
-    struct type t, *type;
+    struct type *type;
     struct switch_attr *switch_attr;
     case_t el;
     node_t case_expr, case_expr2, another_case_expr, another_case_expr2;
-    struct expr *e, *e2, *another_e, *another_e2;
+    struct expr *case_e, *case_e2, *another_case_e, *another_case_e2;
     int signed_p, skip_range_p;
 
     check_labels (c2m_ctx, labels, r);
@@ -9720,12 +9719,12 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         switch_attr->min_val_case = switch_attr->max_val_case = c;
         continue;
       }
-      e = NL_HEAD (c->case_node->u.ops)->attr;
-      e2 = NL_HEAD (switch_attr->min_val_case->case_node->u.ops)->attr;
-      if (signed_p ? e->u.i_val < e2->u.i_val : e->u.u_val < e2->u.u_val)
+      case_e = NL_HEAD (c->case_node->u.ops)->attr;
+      case_e2 = NL_HEAD (switch_attr->min_val_case->case_node->u.ops)->attr;
+      if (signed_p ? case_e->u.i_val < case_e2->u.i_val : case_e->u.u_val < case_e2->u.u_val)
         switch_attr->min_val_case = c;
-      e2 = NL_HEAD (switch_attr->max_val_case->case_node->u.ops)->attr;
-      if (signed_p ? e->u.i_val > e2->u.i_val : e->u.u_val > e2->u.u_val)
+      case_e2 = NL_HEAD (switch_attr->max_val_case->case_node->u.ops)->attr;
+      if (signed_p ? case_e->u.i_val > case_e2->u.i_val : case_e->u.u_val > case_e2->u.u_val)
         switch_attr->max_val_case = c;
     }
     HTAB_CLEAR (case_t, case_tab);
@@ -9736,8 +9735,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         continue;
       switch_attr->ranges_p = TRUE;
       case_expr = NL_HEAD (c->case_node->u.ops);
-      e = case_expr->attr;
-      e2 = case_expr2->attr;
+      case_e = case_expr->attr;
+      case_e2 = case_expr2->attr;
       skip_range_p = FALSE;
       for (case_t c2 = DLIST_HEAD (case_t, switch_attr->case_labels); c2 != NULL;
            c2 = DLIST_NEXT (case_t, c2)) {
@@ -9749,25 +9748,29 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         another_case_expr = NL_HEAD (c2->case_node->u.ops);
         another_case_expr2 = NL_EL (c2->case_node->u.ops, 1);
         if (skip_range_p && another_case_expr2 != NULL) continue;
-        another_e = another_case_expr->attr;
-        assert (another_e->const_p && integer_type_p (another_e->type));
+        another_case_e = another_case_expr->attr;
+        assert (another_case_e->const_p && integer_type_p (another_case_e->type));
         if (another_case_expr2 == NULL) {
-          if ((signed_p && e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val)
-              || (!signed_p && e->u.u_val <= another_e->u.u_val
-                  && another_e->u.u_val <= e2->u.u_val)) {
+          if ((signed_p && case_e->u.i_val <= another_case_e->u.i_val
+               && another_case_e->u.i_val <= case_e2->u.i_val)
+              || (!signed_p && case_e->u.u_val <= another_case_e->u.u_val
+                  && another_case_e->u.u_val <= case_e2->u.u_val)) {
             error (c2m_ctx, POS (c->case_node), "duplicate value in a range case");
             break;
           }
         } else {
-          another_e2 = another_case_expr2->attr;
-          assert (another_e2->const_p && integer_type_p (another_e2->type));
+          another_case_e2 = another_case_expr2->attr;
+          assert (another_case_e2->const_p && integer_type_p (another_case_e2->type));
           if ((signed_p
-               && ((e->u.i_val <= another_e->u.i_val && another_e->u.i_val <= e2->u.i_val)
-                   || (e->u.i_val <= another_e2->u.i_val && another_e2->u.i_val <= e2->u.i_val)))
+               && ((case_e->u.i_val <= another_case_e->u.i_val
+                    && another_case_e->u.i_val <= case_e2->u.i_val)
+                   || (case_e->u.i_val <= another_case_e2->u.i_val
+                       && another_case_e2->u.i_val <= case_e2->u.i_val)))
               || (!signed_p
-                  && ((e->u.u_val <= another_e->u.u_val && another_e->u.u_val <= e2->u.u_val)
-                      || (e->u.u_val <= another_e2->u.u_val
-                          && another_e2->u.u_val <= e2->u.u_val)))) {
+                  && ((case_e->u.u_val <= another_case_e->u.u_val
+                       && another_case_e->u.u_val <= case_e2->u.u_val)
+                      || (case_e->u.u_val <= another_case_e2->u.u_val
+                          && another_case_e2->u.u_val <= case_e2->u.u_val)))) {
             error (c2m_ctx, POS (c->case_node), "duplicate value in a range case");
             break;
           }
@@ -9975,7 +9978,7 @@ static const char *RET_ADDR_NAME = "Ret_Addr";
 /* MIR var naming:
    {I|U|i|u|f|d}_<integer> -- temporary of I64, U64, I32, U32, F, D type
    {I|U|i|u|f|d}<scope_number>_<name> -- variable with of original <name> of the corresponding
-                                         type in scope with <scope_number>
+   type in scope with <scope_number>
 */
 
 #if MIR_PTR64
@@ -11848,21 +11851,21 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         start_offset = 0;
         el_size = data_size = _MIR_type_size (ctx, t);
         if (init_el.member_decl != NULL && init_el.member_decl->bit_offset >= 0) {
-          uint64_t u = 0;
+          uint64_t uval = 0;
 
           assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
           assert (init_el.member_decl->bit_offset % 8 == 0); /* first in the group of bitfields */
           start_offset = init_el.member_decl->bit_offset / 8;
-          add_bit_field (c2m_ctx, &u, val.mir_op.u.u, init_el.member_decl);
+          add_bit_field (c2m_ctx, &uval, val.mir_op.u.u, init_el.member_decl);
           for (; i + 1 < VARR_LENGTH (init_el_t, init_els); i++, init_el = next_init_el) {
             next_init_el = VARR_GET (init_el_t, init_els, i + 1);
             if (next_init_el.offset != init_el.offset) break;
             if (next_init_el.member_decl->bit_offset == init_el.member_decl->bit_offset) continue;
             val = val_gen (c2m_ctx, next_init_el.init);
             assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT);
-            add_bit_field (c2m_ctx, &u, val.mir_op.u.u, next_init_el.member_decl);
+            add_bit_field (c2m_ctx, &uval, val.mir_op.u.u, next_init_el.member_decl);
           }
-          val.mir_op.u.u = u;
+          val.mir_op.u.u = uval;
           if (i + 1 < VARR_LENGTH (init_el_t, init_els)
               && next_init_el.offset - init_el.offset < data_size)
             data_size = next_init_el.offset - init_el.offset;
@@ -12159,13 +12162,13 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   case N_GE: {
     struct type *type1 = ((struct expr *) NL_HEAD (r->u.ops)->attr)->type;
     struct type *type2 = ((struct expr *) NL_EL (r->u.ops, 1)->attr)->type;
-    struct type type, ptr_type = get_ptr_int_type (FALSE);
+    struct type type_s, ptr_type_s = get_ptr_int_type (FALSE);
 
-    type = arithmetic_conversion (type1->mode == TM_PTR ? &ptr_type : type1,
-                                  type2->mode == TM_PTR ? &ptr_type : type2);
-    set_type_layout (c2m_ctx, &type);
-    gen_cmp_op (c2m_ctx, r, &type, &op1, &op2, &res);
-    insn_code = get_mir_type_insn_code (c2m_ctx, &type, r);
+    type_s = arithmetic_conversion (type1->mode == TM_PTR ? &ptr_type_s : type1,
+                                    type2->mode == TM_PTR ? &ptr_type_s : type2);
+    set_type_layout (c2m_ctx, &type_s);
+    gen_cmp_op (c2m_ctx, r, &type_s, &op1, &op2, &res);
+    insn_code = get_mir_type_insn_code (c2m_ctx, &type_s, r);
     if (true_label == NULL) {
       emit3 (c2m_ctx, insn_code, res.mir_op, op1.mir_op, op2.mir_op);
     } else {
@@ -12178,8 +12181,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   }
   case N_POST_INC:
   case N_POST_DEC: {
-    struct type *type = ((struct expr *) r->attr)->type2;
-
+    type = ((struct expr *) r->attr)->type2;
     t = get_mir_type (c2m_ctx, type);
     var = gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL, NULL);
     op1 = force_val (c2m_ctx, var, FALSE);
@@ -12199,8 +12201,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   }
   case N_INC:
   case N_DEC: {
-    struct type *type = ((struct expr *) r->attr)->type2;
-
+    type = ((struct expr *) r->attr)->type2;
     t = get_mir_type (c2m_ctx, type);
     var = gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL, NULL);
     val = promote (c2m_ctx, force_val (c2m_ctx, var, FALSE), t, TRUE);
@@ -12293,11 +12294,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
   case N_IND: {
     MIR_type_t ind_t;
     node_t arr = NL_HEAD (r->u.ops);
-    struct type *type = ((struct expr *) r->attr)->type;
+    struct type *el_type = ((struct expr *) r->attr)->type;
     struct type *arr_type = ((struct expr *) arr->attr)->type;
-    mir_size_t size = type_size (c2m_ctx, type);
+    mir_size_t size = type_size (c2m_ctx, el_type);
 
-    t = get_mir_type (c2m_ctx, type);
+    t = get_mir_type (c2m_ctx, el_type);
     op1 = val_gen (c2m_ctx, arr);
     op2 = val_gen (c2m_ctx, NL_EL (r->u.ops, 1));
     ind_t = get_mir_type (c2m_ctx, ((struct expr *) NL_EL (r->u.ops, 1)->attr)->type);
@@ -12310,8 +12311,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       op2 = cast (c2m_ctx, op2, ind_t == MIR_T_I32 ? MIR_T_I64 : MIR_T_U64, FALSE);
     }
 #endif
-    if (type->mode == TM_PTR && type->arr_type != NULL) { /* elem is an array */
-      size = type_size (c2m_ctx, type->arr_type);
+    if (el_type->mode == TM_PTR && el_type->arr_type != NULL) { /* elem is an array */
+      size = type_size (c2m_ctx, el_type->arr_type);
     }
     if (arr_type->mode == TM_PTR && arr_type->arr_type != NULL) { /* indexing an array */
       op1 = force_reg_or_mem (c2m_ctx, op1, MIR_T_I64);
@@ -12324,7 +12325,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     res.decl = NULL;
     if (res.mir_op.mode == MIR_OP_REG)
       res.mir_op = MIR_new_alias_mem_op (ctx, t, 0, res.mir_op.u.reg, 0, 1,
-                                         get_type_alias (c2m_ctx, type), arr_type->antialias);
+                                         get_type_alias (c2m_ctx, el_type), arr_type->antialias);
     if (res.mir_op.u.mem.base == 0 && size == 1) {
       res.mir_op.u.mem.base = op2.mir_op.u.reg;
     } else if (res.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
@@ -12401,10 +12402,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         && type->u.ptr_type->mode == TM_FUNC && type->func_type_before_adjustment_p) {
       res = op1;
     } else {
-      struct expr *e = NL_HEAD (r->u.ops)->attr;
+      struct expr *op_e = NL_HEAD (r->u.ops)->attr;
       t = get_mir_type (c2m_ctx, type);
       op1.mir_op = MIR_new_alias_mem_op (ctx, t, 0, op1.mir_op.u.reg, 0, 1,
-                                         get_type_alias (c2m_ctx, type), e->type->antialias);
+                                         get_type_alias (c2m_ctx, type), op_e->type->antialias);
       res = new_op (NULL, op1.mir_op);
     }
     break;
@@ -12447,16 +12448,16 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     node_t cond = NL_HEAD (r->u.ops);
     node_t true_expr = NL_NEXT (cond);
     node_t false_expr = NL_NEXT (true_expr);
-    MIR_label_t true_label = MIR_new_label (ctx), false_label = MIR_new_label (ctx);
+    MIR_label_t cond_true_label = MIR_new_label (ctx), cond_false_label = MIR_new_label (ctx);
     MIR_label_t end_label = MIR_new_label (ctx);
-    struct type *type = ((struct expr *) r->attr)->type;
+    struct type *cond_res_type = ((struct expr *) r->attr)->type;
     op_t addr;
-    int void_p = void_type_p (type), cond_expect_res;
-    mir_size_t size = type_size (c2m_ctx, ((struct expr *) r->attr)->type);
+    int void_p = void_type_p (cond_res_type), cond_expect_res;
+    mir_size_t size = type_size (c2m_ctx, cond_res_type);
 
-    if (!void_p) t = get_mir_type (c2m_ctx, type);
-    gen (c2m_ctx, cond, true_label, false_label, FALSE, NULL, &cond_expect_res);
-    emit_label_insn_opt (c2m_ctx, true_label);
+    if (!void_p) t = get_mir_type (c2m_ctx, cond_res_type);
+    gen (c2m_ctx, cond, cond_true_label, cond_false_label, FALSE, NULL, &cond_expect_res);
+    emit_label_insn_opt (c2m_ctx, cond_true_label);
     op1 = gen (c2m_ctx, true_expr, NULL, NULL, !void_p && t != MIR_T_UNDEF, NULL, NULL);
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
@@ -12473,7 +12474,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
     }
     emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-    emit_label_insn_opt (c2m_ctx, false_label);
+    emit_label_insn_opt (c2m_ctx, cond_false_label);
     op1 = gen (c2m_ctx, false_expr, NULL, NULL, !void_p && t != MIR_T_UNDEF, NULL, NULL);
     if (!void_p) {
       if (t != MIR_T_UNDEF) {
@@ -12510,11 +12511,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     const char *global_name = NULL;
     char buff[50];
     node_t type_name = NL_HEAD (r->u.ops);
-    decl_t decl = type_name->attr;
     struct expr *expr = r->attr;
     MIR_module_t module = DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
     size_t init_start;
 
+    decl = type_name->attr;
     if (decl->scope == top_scope) {
       assert (decl->u.item == NULL);
       _MIR_get_temp_item_name (ctx, module, buff, sizeof (buff));
@@ -12551,7 +12552,6 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     size_t ops_start;
     struct expr *call_expr = r->attr, *func_expr;
     struct type *func_type = NULL; /* to remove an uninitialized warning */
-    struct type *type = call_expr->type;
     MIR_item_t proto_item;
     MIR_insn_t call_insn, label;
     mir_size_t saved_call_arg_area_offset_before_args, arg_area_offset;
@@ -12570,6 +12570,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     target_arg_info_t arg_info;
     int n, struct_p;
 
+    type = call_expr->type;
     if (add_overflow_p || sub_overflow_p || mul_overflow_p) {
       op1 = val_gen (c2m_ctx, NL_HEAD (args->u.ops));
       op2 = val_gen (c2m_ctx, NL_EL (args->u.ops, 1));
@@ -12870,8 +12871,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     node_t decls = NL_NEXT (declarator);
     node_t stmt = NL_NEXT (decls);
     struct node_scope *ns = stmt->attr;
-    decl_t param_decl, decl = r->attr;
-    struct type *decl_type = decl->decl_spec.type;
+    decl_t param_decl, func_decl = r->attr;
+    struct type *decl_type = func_decl->decl_spec.type;
     node_t first_param, param, param_declarator, param_id;
     struct type *param_type;
     MIR_insn_t insn;
@@ -12894,7 +12895,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                          VARR_ADDR (MIR_type_t, proto_info.ret_types),
                                          VARR_LENGTH (MIR_var_t, proto_info.arg_vars),
                                          VARR_ADDR (MIR_var_t, proto_info.arg_vars)));
-    decl->u.item = curr_func;
+    func_decl->u.item = curr_func;
     DLIST_INIT (MIR_insn_t, slow_code_part);
     if (ns->stack_var_p /* we can have empty struct only with size 0 and still need a frame: */
         || ns->size > 0) {
@@ -12968,7 +12969,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       DLIST_APPEND (MIR_insn_t, curr_func->u.func->insns, insn);
     }
     MIR_finish_func (ctx);
-    if (decl->decl_spec.linkage == N_EXTERN)
+    if (func_decl->decl_spec.linkage == N_EXTERN)
       MIR_new_export (ctx, NL_HEAD (declarator->u.ops)->u.s.s);
     finish_curr_func_reg_vars (c2m_ctx);
     break;

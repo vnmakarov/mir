@@ -654,8 +654,8 @@ int main (int argc, char *argv[], char *env[]) {
   VARR_CREATE (char_ptr_t, exec_argv, 32);
   VARR_CREATE (lib_t, cmdline_libs, 16);
   VARR_CREATE (char_ptr_t, lib_dirs, 16);
-  for (i = 0; i < sizeof (std_lib_dirs) / sizeof (char_ptr_t); i++)
-    VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[i]);
+  for (size_t n = 0; n < sizeof (std_lib_dirs) / sizeof (char_ptr_t); n++)
+    VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[n]);
   VARR_CREATE (input_t, inputs_to_compile, 32);
   options.prepro_output_file = NULL;
   init_options (argc, argv);
@@ -846,12 +846,12 @@ int main (int argc, char *argv[], char *env[]) {
         const char **fun_argv = VARR_ADDR (char_ptr_t, exec_argv);
 
         MIR_gen_init (main_ctx, n_gen);
-        for (int i = 0; i < n_gen; i++) {
+        for (int n = 0; n < n_gen; n++) {
           if (optimize_level >= 0)
-            MIR_gen_set_optimize_level (main_ctx, i, (unsigned) optimize_level);
+            MIR_gen_set_optimize_level (main_ctx, n, (unsigned) optimize_level);
           if (gen_debug_level >= 0) {
-            MIR_gen_set_debug_file (main_ctx, i, stderr);
-            MIR_gen_set_debug_level (main_ctx, i, gen_debug_level);
+            MIR_gen_set_debug_file (main_ctx, n, stderr);
+            MIR_gen_set_debug_level (main_ctx, n, gen_debug_level);
           }
         }
         MIR_link (main_ctx,
@@ -886,8 +886,8 @@ int main (int argc, char *argv[], char *env[]) {
   VARR_DESTROY (char_ptr_t, source_file_names);
   VARR_DESTROY (char_ptr_t, exec_argv);
   VARR_DESTROY (input_t, inputs_to_compile);
-  for (size_t i = 0; i < VARR_LENGTH (void_ptr_t, allocated); i++)
-    free (VARR_GET (void_ptr_t, allocated, i));
+  for (size_t n = 0; n < VARR_LENGTH (void_ptr_t, allocated); n++)
+    free (VARR_GET (void_ptr_t, allocated, n));
   VARR_DESTROY (void_ptr_t, allocated);
   return result_code;
 }
