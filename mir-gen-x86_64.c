@@ -853,8 +853,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       MIR_var_t var;
 
       assert (func->vararg_p && va_op.mode == MIR_OP_VAR);
-      for (uint32_t i = 0; i < func->nargs; i++) {
-        var = VARR_GET (MIR_var_t, func->vars, i);
+      for (uint32_t narg = 0; narg < func->nargs; narg++) {
+        var = VARR_GET (MIR_var_t, func->vars, narg);
         if (var.type == MIR_T_F || var.type == MIR_T_D) {
           fp_offset += 16;
           if (gp_offset >= 176) mem_offset += 8;
@@ -950,8 +950,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                      "Windows x86-64 doesn't support multiple return values");
 #endif
       assert (curr_func_item->u.func->nres == MIR_insn_nops (ctx, insn));
-      for (size_t i = 0; i < curr_func_item->u.func->nres; i++) {
-        res_type = curr_func_item->u.func->res_types[i];
+      for (size_t nres = 0; nres < curr_func_item->u.func->nres; nres++) {
+        res_type = curr_func_item->u.func->res_types[nres];
         if ((res_type == MIR_T_F || res_type == MIR_T_D) && n_xregs < 2) {
           new_insn_code = res_type == MIR_T_F ? MIR_FMOV : MIR_DMOV;
           ret_reg = n_xregs++ == 0 ? XMM0_HARD_REG : XMM1_HARD_REG;
@@ -967,9 +967,9 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                                        "x86-64 can not handle this combination of return values");
         }
         ret_reg_op = _MIR_new_var_op (ctx, ret_reg);
-        new_insn = MIR_new_insn (ctx, new_insn_code, ret_reg_op, insn->ops[i]);
+        new_insn = MIR_new_insn (ctx, new_insn_code, ret_reg_op, insn->ops[nres]);
         gen_add_insn_before (gen_ctx, insn, new_insn);
-        insn->ops[i] = ret_reg_op;
+        insn->ops[nres] = ret_reg_op;
       }
       break;
     }
@@ -1941,10 +1941,10 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         return FALSE;
       break;
     case 'c': {
-      uint64_t n;
+      uint64_t dec_val;
       p++;
-      n = read_dec (&p);
-      if ((op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) || op_ref->u.u != n)
+      dec_val = read_dec (&p);
+      if ((op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) || op_ref->u.u != dec_val)
         return FALSE;
       break;
     }

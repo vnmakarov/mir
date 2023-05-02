@@ -2664,8 +2664,8 @@ static int addr_eliminable_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
   if (bb_mem_insns != NULL) VARR_TRUNC (bb_insn_t, bb_mem_insns, 0);
   if (!collect_addr_uses (gen_ctx, bb_insn, bb_mem_insns)) res = FALSE;
   while (VARR_LENGTH (bb_insn_t, temp_bb_insns2) != 0) {
-    bb_insn_t bb_insn = VARR_POP (bb_insn_t, temp_bb_insns2);
-    if (!collect_addr_uses (gen_ctx, bb_insn, bb_mem_insns)) res = FALSE;
+    bb_insn_t copy_bb_insn = VARR_POP (bb_insn_t, temp_bb_insns2);
+    if (!collect_addr_uses (gen_ctx, copy_bb_insn, bb_mem_insns)) res = FALSE;
   }
   return res;
 }
@@ -6556,7 +6556,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
     VARR_PUSH (MIR_reg_t, first_coalesced_reg, i);
     VARR_PUSH (MIR_reg_t, next_coalesced_reg, i);
   }
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       insn = bb_insn->insn;
