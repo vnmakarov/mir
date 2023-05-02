@@ -4323,22 +4323,24 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
           print_bb_insn_value (gen_ctx, new_bb_copy_insn);
           new_insn2 = NULL;
           if (insn->code == MIR_ADDS || insn->code == MIR_SUBS) {
-            if ((int32_t) val + (int32_t) val2 == 0) {
+            if ((uint32_t) val + (uint32_t) val2 == 0) {
               new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], op);
             } else {
               temp_reg = gen_new_temp_reg (gen_ctx, MIR_T_I64, func);
-              new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, temp_reg),
-                                       MIR_new_int_op (ctx, (int32_t) val + (int32_t) val2));
+              new_insn
+                = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, temp_reg),
+                                MIR_new_int_op (ctx, (int32_t) ((uint32_t) val + (uint32_t) val2)));
               new_insn2
                 = MIR_new_insn (ctx, MIR_ADDS, insn->ops[0], op, _MIR_new_var_op (ctx, temp_reg));
             }
           } else {
-            if (val + val2 == 0) {
+            if ((uint64_t) val + (uint64_t) val2 == 0) {
               new_insn = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], op);
             } else {
               temp_reg = gen_new_temp_reg (gen_ctx, MIR_T_I64, func);
-              new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, temp_reg),
-                                       MIR_new_int_op (ctx, val + val2));
+              new_insn
+                = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, temp_reg),
+                                MIR_new_int_op (ctx, (int64_t) ((uint64_t) val + (uint64_t) val2)));
               new_insn2
                 = MIR_new_insn (ctx, MIR_ADD, insn->ops[0], op, _MIR_new_var_op (ctx, temp_reg));
             }
