@@ -3514,9 +3514,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
     }
     if (ext_code != MIR_INVALID_INSN) {
       MIR_reg_t reg = MIR_reg (ctx, var.name, func);
-      MIR_insn_t new_insn
-        = MIR_new_insn (ctx, ext_code, MIR_new_reg_op (ctx, reg), MIR_new_reg_op (ctx, reg));
-
+      new_insn = MIR_new_insn (ctx, ext_code, MIR_new_reg_op (ctx, reg), MIR_new_reg_op (ctx, reg));
       MIR_prepend_insn (ctx, func_item, new_insn);
     }
   }
@@ -5241,7 +5239,7 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
     *op = MIR_new_reg_op (ctx, to_reg (ctx, attr.u, func));
     break;
     REP4 (TAG_CASE, NAME1, NAME2, NAME3, NAME4) {
-      const char *name = to_str (ctx, attr.u).s;
+      name = to_str (ctx, attr.u).s;
       MIR_item_t item = item_tab_find (ctx, name, func->module);
 
       if (item == NULL) MIR_get_error_func (ctx) (MIR_binary_io_error, "not found item %s", name);
@@ -5622,8 +5620,8 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
       if (insn_code == MIR_UNSPEC || insn_code == MIR_USE || insn_code == MIR_PHI)
         MIR_get_error_func (ctx) (MIR_binary_io_error,
                                   "UNSPEC, USE, or PHI is not portable and can not be read");
-      for (uint64_t i = 0; i < VARR_LENGTH (uint64_t, insn_label_string_nums); i++) {
-        lab = to_lab (ctx, VARR_GET (uint64_t, insn_label_string_nums, i));
+      for (size_t j = 0; j < VARR_LENGTH (uint64_t, insn_label_string_nums); j++) {
+        lab = to_lab (ctx, VARR_GET (uint64_t, insn_label_string_nums, j));
         MIR_append_insn (ctx, func, lab);
       }
       nop = insn_code_nops (ctx, insn_code);
