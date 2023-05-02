@@ -214,6 +214,7 @@ struct gen_ctx {
   FILE *debug_file;
   int debug_level;
 #endif
+  VARR (void_ptr_t) * to_free;
   int addr_insn_p;    /* true if we have address insns in the input func */
   bitmap_t tied_regs; /* regs tied to hard reg */
   bitmap_t addr_regs; /* regs in addr insns as 2nd op */
@@ -251,6 +252,7 @@ struct gen_ctx {
 #define curr_func_item gen_ctx->curr_func_item
 #define debug_file gen_ctx->debug_file
 #define debug_level gen_ctx->debug_level
+#define to_free gen_ctx->to_free
 #define addr_insn_p gen_ctx->addr_insn_p
 #define tied_regs gen_ctx->tied_regs
 #define addr_regs gen_ctx->addr_regs
@@ -377,6 +379,12 @@ static void MIR_NO_RETURN util_error (gen_ctx_t gen_ctx, const char *message) {
 static void *gen_malloc (gen_ctx_t gen_ctx, size_t size) {
   void *res = malloc (size);
   if (res == NULL) util_error (gen_ctx, "no memory");
+  return res;
+}
+
+static void *gen_malloc_and_mark_to_free (gen_ctx_t gen_ctx, size_t size) {
+  void *res = gen_malloc (gen_ctx, size);
+  VARR_PUSH (void_ptr_t, to_free, res);
   return res;
 }
 
@@ -9237,8 +9245,9 @@ static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, uint32
     *addr = bb_version->addr;
     return bb_version;
   }
-  bb_version = gen_malloc (gen_ctx, sizeof (struct bb_version)
-                                      + (n_attrs <= 1 ? 0 : n_attrs) * sizeof (spot_attr_t));
+  bb_version = gen_malloc_and_mark_to_free (gen_ctx, sizeof (struct bb_version)
+                                                       + (n_attrs <= 1 ? 0 : n_attrs)
+                                                           * sizeof (spot_attr_t));
   target_init_bb_version_data (&bb_version->target_data);
   VARR_PUSH (target_bb_version_t, target_succ_bb_versions,
              call_p ? NULL : &bb_version->target_data);
@@ -9383,6 +9392,7 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     debug_file = NULL;
     debug_level = 100;
 #endif
+    VARR_CREATE (void_ptr_t, to_free, 0);
     addr_insn_p = FALSE;
     VARR_CREATE (MIR_op_t, temp_ops, 16);
     VARR_CREATE (bb_insn_t, temp_bb_insns, 16);
@@ -9475,6 +9485,8 @@ void MIR_gen_finish (MIR_context_t ctx) {
     VARR_DESTROY (void_ptr_t, succ_bb_addrs);
     VARR_DESTROY (spot_attr_t, spot_attrs);
     VARR_DESTROY (spot_attr_t, spot2attr);
+    while (VARR_LENGTH (void_ptr_t, to_free) != 0) free (VARR_POP (void_ptr_t, to_free));
+    VARR_DESTROY (void_ptr_t, to_free);
   }
   if (collect_bb_stat_p)
     fprintf (stderr, "Overall bbs num = %llu, generated bbs num = %llu\n",
