@@ -1768,6 +1768,8 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
         section_size += _MIR_type_size (ctx, expr_item->u.func->res_types[0]);
       } else
         break;
+    if (section_size % 8 != 0)
+      section_size += 8 - section_size % 8; /* we might use 64-bit copying of data */
     if ((item->addr = malloc (section_size)) == NULL) {
       name = MIR_item_name (ctx, item);
       MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory to allocate data/bss %s",
