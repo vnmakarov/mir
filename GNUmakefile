@@ -29,14 +29,18 @@ ifeq ($(OS),Windows_NT)
     CFLAGS += -fno-tree-sra
     COPTFLAGS = -O3 -DNDEBUG
     CDEBFLAGS =
+    CDEB2FLAGS = -Wall -Wextra -g3 -dwarf4 -fsanitize=address -fsanitize=undefined
     CFLAGS += $(COPTFLAGS)
     LDFLAGS=-Wl,--stack,8388608
+    LD2FLAGS= $(LDFLAGS)
     MIR_LIBS=-lm -lkernel32 -lpsapi
   else ifeq ($(CC),cl)
     COPTFLAGS = -O2 -DNDEBUG
     CDEBFLAGS = -Od -Z7
+    CDEB2FLAGS = $(CDEBFLAGS)
     CFLAGS += -nologo $(COPTFLAGS)
     LDFLAGS= -nologo -F 8388608
+    LD2FLAGS= $(LDFLAGS)
     MIR_LIBS=
     OBJO=-Fo:
     EXEO=-Fe:
@@ -71,10 +75,11 @@ else
   MIR_LIBS=-lm -ldl
   COPTFLAGS = -O3 -DNDEBUG
   CDEBFLAGS =
+  CDEB2FLAGS = -Wall -Wextra -Wshadow -g3 -fsanitize=address -fsanitize=undefined
+  LD2FLAGS =  -fsanitize=address -fsanitize=undefined
   CFLAGS += $(COPTFLAGS)
   CPPFLAGS = -I$(SRC_DIR)
   LDLIBS   = $(MIR_LIBS)
-
   COMPILE = $(CC) $(CPPFLAGS) -MMD -MP $(CFLAGS)
   LINK = $(CC) $(LDFLAGS)
   COMPILE_AND_LINK = $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS)
@@ -140,6 +145,10 @@ all: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
 debug: CFLAGS:=$(subst $(COPTFLAGS),$(CDEBFLAGS),$(CFLAGS))
 debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
+
+debug2: CFLAGS:=$(subst $(COPTFLAGS),$(CDEB2FLAGS),$(CFLAGS))
+debug2: LDFLAGS:=$(LD2FLAGS)
+debug2: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
 install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
