@@ -29,7 +29,7 @@ ifeq ($(OS),Windows_NT)
     CFLAGS += -fno-tree-sra
     COPTFLAGS = -O3 -DNDEBUG
     CDEBFLAGS =
-    CDEB2FLAGS = -Wall -Wextra -g3 -dwarf4 -fsanitize=address -fsanitize=undefined
+    CDEB2FLAGS = -Wall -Wextra -g3 -dwarf4 -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment
     CFLAGS += $(COPTFLAGS)
     LDFLAGS=-Wl,--stack,8388608
     LD2FLAGS= $(LDFLAGS)
@@ -75,8 +75,8 @@ else
   MIR_LIBS=-lm -ldl
   COPTFLAGS = -O3 -DNDEBUG
   CDEBFLAGS =
-  CDEB2FLAGS = -Wall -Wextra -Wshadow -g3 -fsanitize=address -fsanitize=undefined
-  LD2FLAGS =  -fsanitize=address -fsanitize=undefined
+  CDEB2FLAGS = -Wall -Wextra -Wshadow -g3 -fsanitize=address -fsanitize=undefined -fno-sanitize=alignment
+  LD2FLAGS =  -fsanitize=address -fsanitize=undefined  -fno-sanitize=alignment
   CFLAGS += $(COPTFLAGS)
   CPPFLAGS = -I$(SRC_DIR)
   LDLIBS   = $(MIR_LIBS)
