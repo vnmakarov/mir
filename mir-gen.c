@@ -2152,6 +2152,7 @@ static ssa_edge_t add_ssa_edge_1 (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_n
   ssa_edge_t ssa_edge = gen_malloc (gen_ctx, sizeof (struct ssa_edge));
 
   gen_assert (use_op_num >= 0 && def_op_num >= 0 && def_op_num < (1 << 16));
+  gen_assert (def->insn->code != MIR_CALL || def_op_num != 0);
   ssa_edge->flag = FALSE;
   ssa_edge->def = def;
   ssa_edge->def_op_num = def_op_num;
@@ -4312,8 +4313,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
           new_insn->ops[1].data = NULL;
           gen_add_insn_before (gen_ctx, def_insn, new_insn);
           new_bb_copy_insn = new_insn->data;
-          add_ssa_edge (gen_ctx, ((ssa_edge_t) def_insn->ops[1].data)->def, 0, new_bb_copy_insn, 1);
-          def_bb_insn = ((ssa_edge_t) def_insn->ops[1].data)->def; /* ops[1] def */
+          se = def_insn->ops[1].data;
+          def_bb_insn = se->def; /* ops[1] def */
+          add_ssa_edge (gen_ctx, def_bb_insn, se->def_op_num, new_bb_copy_insn, 1);
           copy_gvn_info (new_bb_copy_insn, def_bb_insn);
           DEBUG (2, {
             fprintf (debug_file, "  adding insn ");
