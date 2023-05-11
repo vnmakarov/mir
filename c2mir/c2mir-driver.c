@@ -756,6 +756,7 @@ int main (int argc, char *argv[], char *env[]) {
         curr_input.code_len++; /* include zero byte */
         MIR_scan_string (main_ctx, (char *) curr_input.code);
       }
+      if (curr_input.code_container != NULL) VARR_DESTROY (uint8_t, curr_input.code_container);
       if (!options.prepro_only_p && !options.syntax_only_p
           && ((bin_p && !options.object_p && options.asm_p)
               || (!bin_p && !options.asm_p && options.object_p))) {
