@@ -96,7 +96,8 @@ static void interp_init (MIR_context_t ctx);
 static void finish_func_interpretation (MIR_item_t func_item);
 static void interp_finish (MIR_context_t ctx);
 
-static void MIR_NO_RETURN default_error (enum MIR_error_type error_type, const char *format, ...) {
+static void MIR_NO_RETURN default_error (enum MIR_error_type error_type MIR_UNUSED,
+                                         const char *format, ...) {
   va_list ap;
 
   va_start (ap, format);
@@ -114,7 +115,7 @@ static void MIR_NO_RETURN MIR_UNUSED util_error (MIR_context_t ctx, const char *
 #define TEMP_REG_NAME_PREFIX "t"
 #define TEMP_ITEM_NAME_PREFIX ".lc"
 
-int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name) {
+int _MIR_reserved_ref_name_p (MIR_context_t ctx MIR_UNUSED, const char *name) {
   return strncmp (name, TEMP_ITEM_NAME_PREFIX, strlen (TEMP_ITEM_NAME_PREFIX)) == 0;
 }
 
@@ -357,7 +358,7 @@ static MIR_op_mode_t type2mode (MIR_type_t type) {
                               : MIR_OP_INT);
 }
 
-int64_t _MIR_addr_offset (MIR_context_t ctx, MIR_insn_code_t code) {
+int64_t _MIR_addr_offset (MIR_context_t ctx MIR_UNUSED, MIR_insn_code_t code) {
   int v = 1;
   if (code == MIR_ADDR || *(char *) &v != 0) return 0;
   return code == MIR_ADDR8 ? 7 : code == MIR_ADDR16 ? 6 : 4;
@@ -381,10 +382,10 @@ struct string_ctx {
 #define strings ctx->string_ctx->strings
 #define string_tab ctx->string_ctx->string_tab
 
-static htab_hash_t str_hash (string_t str, void *arg) {
+static htab_hash_t str_hash (string_t str, void *arg MIR_UNUSED) {
   return mir_hash (str.str.s, str.str.len, 0);
 }
-static int str_eq (string_t str1, string_t str2, void *arg) {
+static int str_eq (string_t str1, string_t str2, void *arg MIR_UNUSED) {
   return str1.str.len == str2.str.len && memcmp (str1.str.s, str2.str.s, str1.str.len) == 0;
 }
 
@@ -396,8 +397,8 @@ static void string_init (VARR (string_t) * *strs, HTAB (string_t) * *str_tab) {
   HTAB_CREATE (string_t, *str_tab, 1000, str_hash, str_eq, NULL);
 }
 
-static int string_find (VARR (string_t) * *strs, HTAB (string_t) * *str_tab, MIR_str_t str,
-                        string_t *s) {
+static int string_find (VARR (string_t) * *strs MIR_UNUSED, HTAB (string_t) * *str_tab,
+                        MIR_str_t str, string_t *s) {
   string_t string;
 
   string.str = str;
@@ -603,7 +604,7 @@ static MIR_reg_t create_func_reg (MIR_context_t ctx, MIR_func_t func, const char
   return reg;
 }
 
-static void func_regs_finish (MIR_context_t ctx, MIR_func_t func) {
+static void func_regs_finish (MIR_context_t ctx MIR_UNUSED, MIR_func_t func) {
   func_regs_t func_regs = func->internal;
 
   VARR_DESTROY (reg_desc_t, func_regs->reg_descs);
@@ -620,7 +621,7 @@ static void push_data (MIR_context_t ctx, uint8_t *els, size_t size) {
   for (size_t i = 0; i < size; i++) VARR_PUSH (uint8_t, temp_data, els[i]);
 }
 
-const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
+const char *MIR_item_name (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
   mir_assert (item != NULL);
   switch (item->item_type) {
   case MIR_func_item: return item->u.func->name;
@@ -636,7 +637,7 @@ const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
   }
 }
 
-MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item) {
+MIR_func_t MIR_get_item_func (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
   mir_assert (item != NULL);
   if (item->item_type == MIR_func_item) {
     return item->u.func;
@@ -664,12 +665,12 @@ void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atom
   error_func = func;
 }
 
-static htab_hash_t item_hash (MIR_item_t it, void *arg) {
+static htab_hash_t item_hash (MIR_item_t it, void *arg MIR_UNUSED) {
   return mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_init (28), (uint64_t) MIR_item_name (NULL, it)),
                    (uint64_t) it->module));
 }
-static int item_eq (MIR_item_t it1, MIR_item_t it2, void *arg) {
+static int item_eq (MIR_item_t it1, MIR_item_t it2, void *arg MIR_UNUSED) {
   return it1->module == it2->module && MIR_item_name (NULL, it1) == MIR_item_name (NULL, it2);
 }
 
@@ -1115,7 +1116,7 @@ static MIR_type_t canon_type (MIR_type_t type) {
   return type;
 }
 
-size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type) {
+size_t _MIR_type_size (MIR_context_t ctx MIR_UNUSED, MIR_type_t type) {
   switch (type) {
   case MIR_T_I8: return sizeof (int8_t);
   case MIR_T_U8: return sizeof (uint8_t);
@@ -1459,7 +1460,8 @@ MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type
   return reg;
 }
 
-static reg_desc_t *find_rd_by_name (MIR_context_t ctx, const char *name, MIR_func_t func) {
+static reg_desc_t *find_rd_by_name (MIR_context_t ctx MIR_UNUSED, const char *name,
+                                    MIR_func_t func) {
   func_regs_t func_regs = func->internal;
   size_t rdn, temp_rdn;
   reg_desc_t rd;
@@ -1972,7 +1974,7 @@ static size_t insn_code_nops (MIR_context_t ctx, MIR_insn_code_t code) { /* 0 fo
   return VARR_GET (size_t, insn_nops, code);
 }
 
-size_t MIR_insn_nops (MIR_context_t ctx, MIR_insn_t insn) {
+size_t MIR_insn_nops (MIR_context_t ctx MIR_UNUSED, MIR_insn_t insn) {
   mir_assert (insn != NULL);
   return insn->nops;
 }
@@ -2139,7 +2141,7 @@ MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nop
               ctx) (MIR_wrong_type_error,
                     "arg of %s is block type memory but param is not of block type",
                     code == MIR_UNSPEC ? "unspec" : "call");
-          } else if (VARR_GET (MIR_var_t, proto->args, narg).size != ops[i].u.mem.disp) {
+          } else if (VARR_GET (MIR_var_t, proto->args, narg).size != (size_t) ops[i].u.mem.disp) {
             MIR_get_error_func (
               ctx) (MIR_wrong_type_error,
                     "different sizes (%lu vs %lu) of arg and param block memory in %s insn",
@@ -2278,7 +2280,7 @@ MIR_insn_t _MIR_new_label (MIR_context_t ctx) {
   return label;
 }
 
-void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn) { free (insn); }
+void _MIR_free_insn (MIR_context_t ctx MIR_UNUSED, MIR_insn_t insn) { free (insn); }
 
 static MIR_reg_t new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func) {
   char reg_name[30];
@@ -2350,7 +2352,7 @@ static void init_op (MIR_op_t *op, MIR_op_mode_t mode) {
   op->data = NULL;
 }
 
-MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg) {
+MIR_op_t MIR_new_reg_op (MIR_context_t ctx MIR_UNUSED, MIR_reg_t reg) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_REG);
@@ -2358,7 +2360,7 @@ MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg) {
   return op;
 }
 
-MIR_op_t _MIR_new_var_op (MIR_context_t ctx, MIR_reg_t var) { /* used only internally */
+MIR_op_t _MIR_new_var_op (MIR_context_t ctx MIR_UNUSED, MIR_reg_t var) { /* used only internally */
   MIR_op_t op;
 
   init_op (&op, MIR_OP_VAR);
@@ -2366,7 +2368,7 @@ MIR_op_t _MIR_new_var_op (MIR_context_t ctx, MIR_reg_t var) { /* used only inter
   return op;
 }
 
-MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t i) {
+MIR_op_t MIR_new_int_op (MIR_context_t ctx MIR_UNUSED, int64_t i) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_INT);
@@ -2374,7 +2376,7 @@ MIR_op_t MIR_new_int_op (MIR_context_t ctx, int64_t i) {
   return op;
 }
 
-MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t u) {
+MIR_op_t MIR_new_uint_op (MIR_context_t ctx MIR_UNUSED, uint64_t u) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_UINT);
@@ -2382,7 +2384,7 @@ MIR_op_t MIR_new_uint_op (MIR_context_t ctx, uint64_t u) {
   return op;
 }
 
-MIR_op_t MIR_new_float_op (MIR_context_t ctx, float f) {
+MIR_op_t MIR_new_float_op (MIR_context_t ctx MIR_UNUSED, float f) {
   MIR_op_t op;
 
   mir_assert (sizeof (float) == 4); /* IEEE single */
@@ -2391,7 +2393,7 @@ MIR_op_t MIR_new_float_op (MIR_context_t ctx, float f) {
   return op;
 }
 
-MIR_op_t MIR_new_double_op (MIR_context_t ctx, double d) {
+MIR_op_t MIR_new_double_op (MIR_context_t ctx MIR_UNUSED, double d) {
   MIR_op_t op;
 
   mir_assert (sizeof (double) == 8); /* IEEE double */
@@ -2400,7 +2402,7 @@ MIR_op_t MIR_new_double_op (MIR_context_t ctx, double d) {
   return op;
 }
 
-MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double ld) {
+MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx MIR_UNUSED, long double ld) {
   MIR_op_t op;
 
 #if defined(_WIN32) || __SIZEOF_LONG_DOUBLE__ == 8
@@ -2412,7 +2414,7 @@ MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double ld) {
   return op;
 }
 
-MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item) {
+MIR_op_t MIR_new_ref_op (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_REF);
@@ -2428,8 +2430,8 @@ MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str) {
   return op;
 }
 
-static MIR_op_t new_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
-                            MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
+static MIR_op_t new_mem_op (MIR_context_t ctx MIR_UNUSED, MIR_type_t type, MIR_disp_t disp,
+                            MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
                             MIR_alias_t nonalias) {
   MIR_op_t op;
 
@@ -2456,9 +2458,9 @@ MIR_op_t MIR_new_alias_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t di
   return new_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
 }
 
-static MIR_op_t new_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp_t disp, MIR_reg_t base,
-                                MIR_reg_t index, MIR_scale_t scale, MIR_alias_t alias,
-                                MIR_alias_t nonalias) {
+static MIR_op_t new_var_mem_op (MIR_context_t ctx MIR_UNUSED, MIR_type_t type, MIR_disp_t disp,
+                                MIR_reg_t base, MIR_reg_t index, MIR_scale_t scale,
+                                MIR_alias_t alias, MIR_alias_t nonalias) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_VAR_MEM);
@@ -2484,7 +2486,7 @@ MIR_op_t _MIR_new_alias_var_mem_op (MIR_context_t ctx, MIR_type_t type, MIR_disp
   return new_var_mem_op (ctx, type, disp, base, index, scale, alias, nonalias);
 }
 
-MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label) {
+MIR_op_t MIR_new_label_op (MIR_context_t ctx MIR_UNUSED, MIR_label_t label) {
   MIR_op_t op;
 
   init_op (&op, MIR_OP_LABEL);
@@ -2606,7 +2608,7 @@ void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t
   DLIST_INSERT_BEFORE (MIR_insn_t, func_item->u.func->insns, before, insn);
 }
 
-static void store_labels_for_duplication (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
+static void store_labels_for_duplication (MIR_context_t ctx MIR_UNUSED, VARR (MIR_insn_t) * labels,
                                           VARR (MIR_insn_t) * branch_insns, MIR_insn_t insn,
                                           MIR_insn_t new_insn) {
   if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE) {
@@ -2618,7 +2620,7 @@ static void store_labels_for_duplication (MIR_context_t ctx, VARR (MIR_insn_t) *
   }
 }
 
-static void redirect_duplicated_labels (MIR_context_t ctx, VARR (MIR_insn_t) * labels,
+static void redirect_duplicated_labels (MIR_context_t ctx MIR_UNUSED, VARR (MIR_insn_t) * labels,
                                         VARR (MIR_insn_t) * branch_insns) {
   MIR_insn_t insn;
 
@@ -3151,7 +3153,8 @@ static MIR_reg_t vn_add_val (MIR_context_t ctx, MIR_func_t func, MIR_type_t type
   return val.reg;
 }
 
-void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff, size_t buff_len) {
+void _MIR_get_temp_item_name (MIR_context_t ctx MIR_UNUSED, MIR_module_t module, char *buff,
+                              size_t buff_len) {
   mir_assert (module != NULL);
   module->last_temp_item_num++;
   snprintf (buff, buff_len, "%s%u", TEMP_ITEM_NAME_PREFIX, (unsigned) module->last_temp_item_num);
@@ -3188,6 +3191,7 @@ static void simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
   switch (op->mode) {
   case MIR_OP_REF:
     if (keep_ref_p) break;
+    /* falls through */
   case MIR_OP_INT:
   case MIR_OP_UINT:
   case MIR_OP_FLOAT:
@@ -3422,7 +3426,8 @@ static void remove_unused_and_enumerate_labels (MIR_context_t ctx, MIR_item_t fu
     MIR_insn_t label = VARR_GET (MIR_insn_t, labels, i);
     int64_t label_num = label->ops[0].u.i;
 
-    if (label_num < VARR_LENGTH (uint8_t, temp_data) && VARR_GET (uint8_t, temp_data, label_num)) {
+    if (label_num < (int64_t) VARR_LENGTH (uint8_t, temp_data)
+        && VARR_GET (uint8_t, temp_data, label_num)) {
       label->ops[0] = MIR_new_int_op (ctx, new_label_num++);
       continue;
     }
@@ -3636,7 +3641,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
           label = last_label (insn->ops[n].u.label);
           if (label != insn->ops[n].u.label) insn->ops[n].u.label = label;
           label_num = label->ops[0].u.i;
-          while (label_num >= VARR_LENGTH (uint8_t, temp_data))
+          while (label_num >= (int64_t) VARR_LENGTH (uint8_t, temp_data))
             VARR_PUSH (uint8_t, temp_data, FALSE);
           VARR_SET (uint8_t, temp_data, label_num, TRUE);
         }
@@ -4288,7 +4293,7 @@ void _MIR_set_code (size_t prot_start, size_t prot_len, uint8_t *base, size_t nl
 }
 #endif
 
-static uint8_t *add_code (MIR_context_t ctx, code_holder_t *ch_ptr, const uint8_t *code,
+static uint8_t *add_code (MIR_context_t ctx MIR_UNUSED, code_holder_t *ch_ptr, const uint8_t *code,
                           size_t code_len) {
   uint8_t *mem = ch_ptr->free;
 
@@ -5257,8 +5262,9 @@ static int read_operand (MIR_context_t ctx, MIR_op_t *op, MIR_item_t func) {
     REP7 (TAG_CASE, ALIAS_MEM_DISP, ALIAS_MEM_BASE, ALIAS_MEM_INDEX, ALIAS_MEM_DISP_BASE,
           ALIAS_MEM_DISP_INDEX, ALIAS_MEM_BASE_INDEX, ALIAS_MEM_DISP_BASE_INDEX)
     alias_p = TRUE;
-    /* Fall through: */
-    REP7 (TAG_CASE, MEM_DISP, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX,
+    /* falls through */
+  case TAG_MEM_DISP:
+    REP6 (TAG_CASE, MEM_BASE, MEM_INDEX, MEM_DISP_BASE, MEM_DISP_INDEX, MEM_BASE_INDEX,
           MEM_DISP_BASE_INDEX)
     t = read_type (ctx, "wrong memory type");
     disp = (tag == TAG_MEM_DISP || tag == TAG_MEM_DISP_BASE || tag == TAG_MEM_DISP_INDEX
@@ -5702,10 +5708,10 @@ typedef struct insn_name {
   MIR_insn_code_t code;
 } insn_name_t;
 
-static int insn_name_eq (insn_name_t in1, insn_name_t in2, void *arg) {
+static int insn_name_eq (insn_name_t in1, insn_name_t in2, void *arg MIR_UNUSED) {
   return strcmp (in1.name, in2.name) == 0;
 }
-static htab_hash_t insn_name_hash (insn_name_t in, void *arg) {
+static htab_hash_t insn_name_hash (insn_name_t in, void *arg MIR_UNUSED) {
   return mir_hash (in.name, strlen (in.name), 0);
 }
 
@@ -5955,7 +5961,7 @@ static void unget_string_char (MIR_context_t ctx, int ch) {
   if (ch == '\n') curr_lno--;
 }
 
-int _MIR_name_char_p (MIR_context_t ctx, int ch, int first_p) {
+int _MIR_name_char_p (MIR_context_t ctx MIR_UNUSED, int ch, int first_p) {
   if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') return TRUE;
   return !first_p && isdigit (ch);
 }
@@ -5973,7 +5979,7 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
     case '#':
       while ((ch = get_char (ctx)) != '\n' && ch != EOF)
         ;
-      /* Fall through: */
+      /* falls through */
     case '\n': token->code = TC_NL; return;
     case '(': token->code = TC_LEFT_PAR; return;
     case ')': token->code = TC_RIGHT_PAR; return;
@@ -6021,8 +6027,8 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
                                                           : strtoull (repr, &end, base));
         }
         mir_assert (*end == '\0');
-        if (errno != 0)
-          ;
+        if (errno != 0) {
+        }
         return;
       } else {
         VARR_PUSH (char, temp_string, '\0');
@@ -6032,10 +6038,10 @@ static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_
   }
 }
 
-static int label_eq (label_desc_t l1, label_desc_t l2, void *arg) {
+static int label_eq (label_desc_t l1, label_desc_t l2, void *arg MIR_UNUSED) {
   return strcmp (l1.name, l2.name) == 0;
 }
-static htab_hash_t label_hash (label_desc_t l, void *arg) {
+static htab_hash_t label_hash (label_desc_t l, void *arg MIR_UNUSED) {
   return mir_hash (l.name, strlen (l.name), 0);
 }
 
@@ -6053,7 +6059,7 @@ static MIR_label_t create_label_desc (MIR_context_t ctx, const char *name) {
   return label;
 }
 
-static int func_reg_p (MIR_context_t ctx, MIR_func_t func, const char *name) {
+static int func_reg_p (MIR_context_t ctx MIR_UNUSED, MIR_func_t func, const char *name) {
   func_regs_t func_regs = func->internal;
   size_t rdn, tab_rdn;
   reg_desc_t rd;
@@ -6138,8 +6144,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   MIR_type_t type, data_type = MIR_T_BOUND;
   MIR_op_t op, *op_addr;
   MIR_label_t label;
-  size_t n;
-  int64_t i;
+  int64_t i, n;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
   int bss_p, ref_p, expr_p, string_p, global_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
@@ -6237,7 +6242,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       insn_code = el.code;
       if (insn_code == MIR_UNSPEC || insn_code == MIR_USE || insn_code == MIR_PHI)
         scan_error (ctx, "UNSPEC, USE, or PHI is not portable and can not be scanned", name);
-      for (n = 0; n < VARR_LENGTH (label_name_t, label_names); n++) {
+      for (n = 0; n < (int64_t) VARR_LENGTH (label_name_t, label_names); n++) {
         label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n));
         if (func != NULL) MIR_append_insn (ctx, func, label);
       }
@@ -6519,7 +6524,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       mir_assert (VARR_LENGTH (MIR_op_t, scan_insn_ops) == 0);
     } else if (global_p || local_p) {
       op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
-      n = VARR_LENGTH (MIR_op_t, scan_insn_ops);
+      n = (int64_t) VARR_LENGTH (MIR_op_t, scan_insn_ops);
       for (i = 0; i < n; i++) {
         if (op_addr[i].mode != MIR_OP_MEM || (const char *) op_addr[i].u.mem.disp == NULL)
           scan_error (ctx, "wrong local/global var");
@@ -6544,7 +6549,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         int64_t i64;
       } v;
 
-      n = VARR_LENGTH (MIR_op_t, scan_insn_ops);
+      n = (int64_t) VARR_LENGTH (MIR_op_t, scan_insn_ops);
       op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
       VARR_TRUNC (uint8_t, temp_data, 0);
       for (i = 0; i < n; i++) {
@@ -6753,10 +6758,10 @@ struct hard_reg_ctx {
 
 #define hard_reg_desc_tab ctx->hard_reg_ctx->hard_reg_desc_tab
 
-static htab_hash_t hard_reg_desc_hash (hard_reg_desc_t desc, void *arg) {
+static htab_hash_t hard_reg_desc_hash (hard_reg_desc_t desc, void *arg MIR_UNUSED) {
   return mir_hash (desc.name, strlen (desc.name), 0);
 }
-static int hard_reg_desc_eq (hard_reg_desc_t desc1, hard_reg_desc_t desc2, void *arg) {
+static int hard_reg_desc_eq (hard_reg_desc_t desc1, hard_reg_desc_t desc2, void *arg MIR_UNUSED) {
   return strcmp (desc1.name, desc2.name) == 0;
 }
 
@@ -6789,12 +6794,12 @@ int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name) {
   return tab_desc.num;
 }
 
-static const char *get_hard_reg_name (MIR_context_t ctx, int hard_reg) {
+static MIR_UNUSED const char *get_hard_reg_name (MIR_context_t ctx MIR_UNUSED, int hard_reg) {
   if (hard_reg > MAX_HARD_REG || target_fixed_hard_reg_p (hard_reg)) return NULL;
   return target_hard_reg_names[hard_reg];
 }
 
-void *_MIR_get_module_global_var_hard_regs (MIR_context_t ctx, MIR_module_t module) {
+void *_MIR_get_module_global_var_hard_regs (MIR_context_t ctx MIR_UNUSED, MIR_module_t module) {
   return module->data;
 }
 
