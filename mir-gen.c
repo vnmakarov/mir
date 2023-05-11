@@ -3604,7 +3604,7 @@ static void print_expr (gen_ctx_t gen_ctx, expr_t e, const char *title) {
 }
 #endif
 
-static int add_sub_const_insn_p (MIR_insn_t insn, int64_t *val) { /* check r1 = r0 +- const */
+static int add_sub_const_insn_p (gen_ctx_t gen_ctx, MIR_insn_t insn, int64_t *val) {
   ssa_edge_t ssa_edge;
   bb_insn_t def_bb_insn;
   // ??? , minimal gvn->val
@@ -3613,16 +3613,23 @@ static int add_sub_const_insn_p (MIR_insn_t insn, int64_t *val) { /* check r1 = 
     return FALSE;
   if ((ssa_edge = insn->ops[2].data) == NULL || !(def_bb_insn = ssa_edge->def)->gvn_val_const_p)
     return FALSE;
+  MIR_func_t func = curr_func_item->u.func;
+  if (insn->ops[1].mode == MIR_OP_VAR
+      && MIR_reg_hard_reg_name (gen_ctx->ctx, insn->ops[1].u.var - MAX_HARD_REG, func) != NULL)
+    return FALSE;
   *val = insn->code == MIR_SUB || insn->code == MIR_SUBS ? -def_bb_insn->gvn_val
                                                          : def_bb_insn->gvn_val;
   return TRUE;
 }
 
-static MIR_insn_t skip_moves (MIR_insn_t insn) {
+static MIR_insn_t skip_moves (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   ssa_edge_t se;
+  MIR_func_t func = curr_func_item->u.func;
 
   while (insn->code == MIR_MOV && insn->ops[1].mode == MIR_OP_VAR) {
-    if ((se = insn->ops[1].data) == NULL) return insn;
+    if ((se = insn->ops[1].data) == NULL
+        || MIR_reg_hard_reg_name (gen_ctx->ctx, insn->ops[1].u.var - MAX_HARD_REG, func) != NULL)
+      return insn;
     insn = se->def->insn;
   }
   return insn;
@@ -4300,9 +4307,9 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
             MIR_output_insn (ctx, debug_file, insn, func, TRUE);
           });
         }
-        if (add_sub_const_insn_p (insn, &val2) && (se = insn->ops[1].data) != NULL
-            && (def_insn = skip_moves (se->def->insn)) != NULL
-            && add_sub_const_insn_p (def_insn, &val)) {
+        if (add_sub_const_insn_p (gen_ctx, insn, &val2) && (se = insn->ops[1].data) != NULL
+            && (def_insn = skip_moves (gen_ctx, se->def->insn)) != NULL
+            && add_sub_const_insn_p (gen_ctx, def_insn, &val)) {
           /* r1=r0+const; ... r2=r1+const2 =>
              temp = r0; r1=r0+const; ... r2=r1+const2;r2=temp+(const+const2): */
           temp_reg = gen_new_temp_reg (gen_ctx, MIR_T_I64, func);
