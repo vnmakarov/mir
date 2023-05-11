@@ -5268,27 +5268,46 @@ static int get_int_const (gen_ctx_t gen_ctx, MIR_op_t *op_ref, int64_t *c) {
   return TRUE;
 }
 
-static int var_plus_const (gen_ctx_t gen_ctx, ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
+static int cycle_phi_p (bb_insn_t bb_insn) { /* we are not in pure SSA at this stage */
+  ssa_edge_t se;
+  if (bb_insn->insn->code != MIR_PHI) return FALSE;
+  for (size_t i = 1; i < bb_insn->insn->nops; i++)
+    if ((se = bb_insn->insn->ops[i].data) != NULL && se->def->bb == bb_insn->bb) return TRUE;
+  return FALSE;
+}
+
+static int var_plus_const (gen_ctx_t gen_ctx, ssa_edge_t se, bb_t from_bb, MIR_op_t **var_op_ref,
+                           int64_t *c) {
   if (se == NULL) return FALSE; /* e.g. for arg */
+  gen_assert (*var_op_ref != NULL && (*var_op_ref)->mode == MIR_OP_VAR);
+  MIR_reg_t reg = (*var_op_ref)->u.var - MAX_HARD_REG;
+  if (MIR_reg_hard_reg_name (gen_ctx->ctx, reg, curr_func_item->u.func) != NULL) return FALSE;
   MIR_insn_t insn = se->def->insn;
+  MIR_op_t *res_ref = NULL;
   *c = 0;
   if (insn->code == MIR_MOV && insn->ops[1].mode == MIR_OP_VAR) {
-    *var_op_ref = &insn->ops[1];
+    res_ref = &insn->ops[1];
   } else if ((insn->code == MIR_ADD || insn->code == MIR_SUB) && insn->ops[1].mode == MIR_OP_VAR
              && get_int_const (gen_ctx, &insn->ops[2], c)) {
-    *var_op_ref = &insn->ops[1];
+    res_ref = &insn->ops[1];
     if (insn->code == MIR_SUB) *c = -*c;
   } else if (insn->code == MIR_ADD && insn->ops[2].mode == MIR_OP_VAR
              && get_int_const (gen_ctx, &insn->ops[1], c)) {
-    *var_op_ref = &insn->ops[2];
+    res_ref = &insn->ops[2];
   } else {
     return FALSE;
   }
+  if ((se = res_ref->data) != NULL && se->def->bb != from_bb && cycle_phi_p (se->def)) return FALSE;
+  *var_op_ref = res_ref;
   return TRUE;
 }
 
-static int var_mult_const (gen_ctx_t gen_ctx, ssa_edge_t se, MIR_op_t **var_op_ref, int64_t *c) {
+static int var_mult_const (gen_ctx_t gen_ctx, ssa_edge_t se, bb_t from_bb, MIR_op_t **var_op_ref,
+                           int64_t *c) {
   if (se == NULL) return FALSE; /* e.g. for arg */
+  gen_assert (*var_op_ref != NULL && (*var_op_ref)->mode == MIR_OP_VAR);
+  MIR_reg_t reg = (*var_op_ref)->u.var - MAX_HARD_REG;
+  if (MIR_reg_hard_reg_name (gen_ctx->ctx, reg, curr_func_item->u.func) != NULL) return FALSE;
   MIR_insn_t insn = se->def->insn;
   MIR_op_t *res_ref = NULL;
   *c = 0;
@@ -5305,15 +5324,25 @@ static int var_mult_const (gen_ctx_t gen_ctx, ssa_edge_t se, MIR_op_t **var_op_r
              && get_int_const (gen_ctx, &insn->ops[1], c)) {
     res_ref = &insn->ops[2];
   }
-  if (res_ref != NULL && (*c < 0 || *c > MIR_MAX_SCALE)) res_ref = NULL;
-  if (res_ref != NULL) *var_op_ref = res_ref;
-  return res_ref != NULL;
+  if (res_ref == NULL) return FALSE;
+  if (*c < 0 || *c > MIR_MAX_SCALE) return FALSE;
+  if ((se = res_ref->data) != NULL && se->def->bb != from_bb && cycle_phi_p (se->def)) return FALSE;
+  *var_op_ref = res_ref;
+  return TRUE;
 }
 
-static int var_plus_var (ssa_edge_t se, MIR_op_t **var_op_ref1, MIR_op_t **var_op_ref2) {
+static int var_plus_var (gen_ctx_t gen_ctx, ssa_edge_t se, bb_t from_bb, MIR_op_t **var_op_ref1,
+                         MIR_op_t **var_op_ref2) {
   if (se == NULL) return FALSE; /* e.g. for arg */
+  gen_assert (*var_op_ref1 != NULL && (*var_op_ref1)->mode == MIR_OP_VAR && *var_op_ref2 == NULL);
+  MIR_reg_t reg = (*var_op_ref1)->u.var - MAX_HARD_REG;
+  if (MIR_reg_hard_reg_name (gen_ctx->ctx, reg, curr_func_item->u.func) != NULL) return FALSE;
   MIR_insn_t insn = se->def->insn;
   if (insn->code != MIR_ADD || insn->ops[1].mode != MIR_OP_VAR || insn->ops[2].mode != MIR_OP_VAR)
+    return FALSE;
+  if ((se = insn->ops[1].data) != NULL && se->def->bb != from_bb && cycle_phi_p (se->def))
+    return FALSE;
+  if ((se = insn->ops[2].data) != NULL && se->def->bb != from_bb && cycle_phi_p (se->def))
     return FALSE;
   *var_op_ref1 = &insn->ops[1];
   *var_op_ref2 = &insn->ops[2];
@@ -5333,8 +5362,8 @@ static int addr_info_ok_p (gen_ctx_t gen_ctx, addr_info_t *addr) {
   return target_memory_ok_p (gen_ctx, &mem_op);
 }
 
-static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *temp_op_ref,
-                          addr_info_t *addr_info) {
+static int update_addr_p (gen_ctx_t gen_ctx, bb_t from_bb, MIR_op_t *mem_op_ref,
+                          MIR_op_t *temp_op_ref, addr_info_t *addr_info) {
   int temp_int, stop_base_p = FALSE, stop_index_p = TRUE, temp_stop_index_p;
   int64_t c;
   addr_info_t temp_addr_info;
@@ -5352,17 +5381,19 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
     temp_addr_info = *addr_info;
     temp_stop_index_p = stop_index_p;
     if (!stop_base_p) {
-      if (var_plus_const (gen_ctx, addr_info->base->data, &addr_info->base, &c)) {
+      if (var_plus_const (gen_ctx, addr_info->base->data, from_bb, &addr_info->base, &c)) {
         addr_info->disp += c;
       } else if (addr_info->scale == 1
-                 && var_mult_const (gen_ctx, addr_info->base->data, &addr_info->base, &c)) {
+                 && var_mult_const (gen_ctx, addr_info->base->data, from_bb, &addr_info->base,
+                                    &c)) {
         if (c != 1) {
           SWAP (addr_info->base, addr_info->index, temp_op_ref);
           SWAP (stop_base_p, stop_index_p, temp_int);
           addr_info->scale = c;
         }
       } else if (addr_info->index == NULL
-                 && var_plus_var (addr_info->base->data, &addr_info->base, &addr_info->index)) {
+                 && var_plus_var (gen_ctx, addr_info->base->data, from_bb, &addr_info->base,
+                                  &addr_info->index)) {
         stop_index_p = FALSE;
       }
     }
@@ -5374,9 +5405,9 @@ static int update_addr_p (gen_ctx_t gen_ctx, MIR_op_t *mem_op_ref, MIR_op_t *tem
     stop_index_p = temp_stop_index_p;
     stop_base_p = TRUE;
     if (stop_index_p) return change_p;
-    if (var_plus_const (gen_ctx, addr_info->index->data, &addr_info->index, &c)) {
+    if (var_plus_const (gen_ctx, addr_info->index->data, from_bb, &addr_info->index, &c)) {
       addr_info->disp += c * addr_info->scale;
-    } else if (var_mult_const (gen_ctx, addr_info->index->data, &addr_info->index, &c)) {
+    } else if (var_mult_const (gen_ctx, addr_info->index->data, from_bb, &addr_info->index, &c)) {
       addr_info->scale *= c;
     } else {
       gen_assert (addr_info->base != NULL || addr_info->scale != 1);
@@ -5497,7 +5528,7 @@ static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
       }
       for (size_t i = 0; i < insn->nops; i++) {
         if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
-        if (!update_addr_p (gen_ctx, &insn->ops[i], &temp_op, &addr_info)) continue;
+        if (!update_addr_p (gen_ctx, bb, &insn->ops[i], &temp_op, &addr_info)) continue;
         remove_ssa_edge (gen_ctx, insn->ops[i].data);
         insn->ops[i].u.var_mem.disp = addr_info.disp;
         insn->ops[i].u.var_mem.base = insn->ops[i].u.var_mem.index = MIR_NON_VAR;
