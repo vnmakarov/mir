@@ -772,8 +772,6 @@ int main (int argc, char *argv[], char *env[]) {
       curr_input.options = options;
       send_to_compile (&curr_input);
     }
-    if (curr_input.code_container != NULL) VARR_DESTROY (uint8_t, curr_input.code_container);
-    curr_input.code_container = NULL;
     curr_input.code = NULL; /* no cmd line input anymore */
   }
   send_to_compile (NULL);
