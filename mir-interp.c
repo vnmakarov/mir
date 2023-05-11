@@ -124,7 +124,8 @@ static void get_icode (struct interp_ctx *interp_ctx, MIR_val_t *v, int code) {
 #endif
 }
 
-static void push_insn_start (struct interp_ctx *interp_ctx, int code, MIR_insn_t original_insn) {
+static void push_insn_start (struct interp_ctx *interp_ctx, int code,
+                             MIR_insn_t original_insn MIR_UNUSED) {
   MIR_val_t v;
 
   get_icode (interp_ctx, &v, code);
@@ -890,7 +891,7 @@ static code_t call_insn_execute (MIR_context_t ctx, code_t pc, MIR_val_t *bp, co
 
   if (VARR_EXPAND (MIR_val_t, arg_vals_varr, nops)) arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
 
-  for (size_t i = start; i < nops + 3; i++) arg_vals[i - start] = bp[get_i (ops + i)];
+  for (size_t i = start; i < (size_t) nops + 3; i++) arg_vals[i - start] = bp[get_i (ops + i)];
 
 #if MIR_INTERP_TRACE
   trace_insn_ident += 2;
@@ -1015,10 +1016,13 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     switch (insn_code) {
 #endif
 
-L_jmpi_finish : { /* jmpi thunk return */
-  pc = jmpi_val;
-  END_INSN;
-}
+#if 0
+    L_jmpi_finish :
+#endif
+  { /* jmpi thunk return */
+    pc = jmpi_val;
+    END_INSN;
+  }
 
   CASE (MIR_MOV, 2) {
     int64_t p, *r = get_2iops (bp, ops, &p);
@@ -1602,7 +1606,7 @@ static inline func_desc_t get_func_desc (MIR_item_t func_item) {
   return func_item->data;
 }
 
-static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg) {
+static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg MIR_UNUSED) {
   htab_hash_t h = mir_hash_step (mir_hash_init (0), i->nres);
   h = mir_hash_step (h, i->nargs);
   h = mir_hash_step (h, i->arg_vars_num);
@@ -1614,7 +1618,7 @@ static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg) {
   return mir_hash_finish (h);
 }
 
-static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg) {
+static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg MIR_UNUSED) {
   if (i1->nres != i2->nres || i1->nargs != i2->nargs || i1->arg_vars_num != i2->arg_vars_num)
     return FALSE;
   if (memcmp (i1->res_types, i2->res_types, sizeof (MIR_type_t) * i1->nres) != 0) return FALSE;
@@ -1627,11 +1631,11 @@ static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg) {
   return TRUE;
 }
 
-static void ff_interface_clear (ff_interface_t ffi, void *arg) { free (ffi); }
+static void ff_interface_clear (ff_interface_t ffi, void *arg MIR_UNUSED) { free (ffi); }
 
 static void *get_ff_interface (MIR_context_t ctx, size_t arg_vars_num, size_t nres,
                                MIR_type_t *res_types, size_t nargs, _MIR_arg_desc_t *arg_descs,
-                               int vararg_p) {
+                               int vararg_p MIR_UNUSED) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
   struct ff_interface ffi_s;
   ff_interface_t tab_ffi, ffi;

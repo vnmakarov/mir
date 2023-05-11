@@ -8,9 +8,11 @@
 
 static const MIR_reg_t FP_HARD_REG = BP_HARD_REG;
 
-static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
+static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type MIR_UNUSED, int n) {
+  return loc + n;
+}
 
-static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type MIR_UNUSED) {
   assert (hard_reg <= MAX_HARD_REG);
 #ifndef _WIN32
   return !(hard_reg == BX_HARD_REG || (hard_reg >= R12_HARD_REG && hard_reg <= R15_HARD_REG));
@@ -669,7 +671,8 @@ static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx) {
   return keep_fp_p ? FP_HARD_REG : SP_HARD_REG;
 }
 
-static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_type_t type MIR_UNUSED,
+                                      MIR_disp_t offset MIR_UNUSED) {
   return TRUE;
 }
 
@@ -1243,7 +1246,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   }
 #endif
   /* Saving callee saved hard registers: */
-  offset = keep_fp_p ? -bp_saved_reg_offset : stack_slots_size;
+  offset = keep_fp_p ? -bp_saved_reg_offset : (int64_t) stack_slots_size;
   base_reg = keep_fp_p ? FP_HARD_REG : SP_HARD_REG;
 #ifdef _WIN32
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
@@ -1271,7 +1274,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     if (anchor->code == MIR_RET || anchor->code == MIR_JRET) break;
   if (anchor == NULL) return;
   /* Restoring hard registers: */
-  offset = keep_fp_p ? -bp_saved_reg_offset : stack_slots_size;
+  offset = keep_fp_p ? -bp_saved_reg_offset : (int64_t) stack_slots_size;
 #ifdef _WIN32
   for (i = XMM0_HARD_REG; i <= XMM15_HARD_REG; i++)
     if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
@@ -1384,54 +1387,56 @@ struct pattern {
 // but not for FP (NAN) (simplify)
 // for FP cmp first operand should be always reg (machinize)
 
-#define IOP0(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)   \
-  {ICODE##SUFF, "r 0 r", "X " RRM_CODE " r0 R2"},       /* op r0,r2*/ \
-    {ICODE##SUFF, "r 0 m3", "X " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
-    {ICODE##SUFF, "m3 0 r", "X " MR_CODE " r2 m0"},     /* op m0,r2*/ \
-    {ICODE##SUFF, "r 0 i0", "X " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
-    {ICODE##SUFF, "m3 0 i0", "X " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
-    {ICODE##SUFF, "r 0 i2", "X " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
-    {ICODE##SUFF, "m3 0 i2", "X " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+#define IOP0(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)      \
+  {ICODE##SUFF, "r 0 r", "X " RRM_CODE " r0 R2", 0},       /* op r0,r2*/ \
+    {ICODE##SUFF, "r 0 m3", "X " RRM_CODE " r0 m2", 0},    /* op r0,m2*/ \
+    {ICODE##SUFF, "m3 0 r", "X " MR_CODE " r2 m0", 0},     /* op m0,r2*/ \
+    {ICODE##SUFF, "r 0 i0", "X " RMI8_CODE " R0 i2", 0},   /* op r0,i2*/ \
+    {ICODE##SUFF, "m3 0 i0", "X " RMI8_CODE " m0 i2", 0},  /* op m0,i2*/ \
+    {ICODE##SUFF, "r 0 i2", "X " RMI32_CODE " R0 I2", 0},  /* op r0,i2*/ \
+    {ICODE##SUFF, "m3 0 i2", "X " RMI32_CODE " m0 I2", 0}, /* op m0,i2*/
 
-#define IOP0S(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)  \
-  {ICODE##SUFF, "r 0 r", "Y " RRM_CODE " r0 R2"},       /* op r0,r2*/ \
-    {ICODE##SUFF, "r 0 m2", "Y " RRM_CODE " r0 m2"},    /* op r0,m2*/ \
-    {ICODE##SUFF, "m2 0 r", "Y " MR_CODE " r2 m0"},     /* op m0,r2*/ \
-    {ICODE##SUFF, "r 0 i0", "Y " RMI8_CODE " R0 i2"},   /* op r0,i2*/ \
-    {ICODE##SUFF, "m2 0 i0", "Y " RMI8_CODE " m0 i2"},  /* op m0,i2*/ \
-    {ICODE##SUFF, "r 0 i2", "Y " RMI32_CODE " R0 I2"},  /* op r0,i2*/ \
-    {ICODE##SUFF, "m2 0 i2", "Y " RMI32_CODE " m0 I2"}, /* op m0,i2*/
+#define IOP0S(ICODE, SUFF, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)     \
+  {ICODE##SUFF, "r 0 r", "Y " RRM_CODE " r0 R2", 0},       /* op r0,r2*/ \
+    {ICODE##SUFF, "r 0 m2", "Y " RRM_CODE " r0 m2", 0},    /* op r0,m2*/ \
+    {ICODE##SUFF, "m2 0 r", "Y " MR_CODE " r2 m0", 0},     /* op m0,r2*/ \
+    {ICODE##SUFF, "r 0 i0", "Y " RMI8_CODE " R0 i2", 0},   /* op r0,i2*/ \
+    {ICODE##SUFF, "m2 0 i0", "Y " RMI8_CODE " m0 i2", 0},  /* op m0,i2*/ \
+    {ICODE##SUFF, "r 0 i2", "Y " RMI32_CODE " R0 I2", 0},  /* op r0,i2*/ \
+    {ICODE##SUFF, "m2 0 i2", "Y " RMI32_CODE " m0 I2", 0}, /* op m0,i2*/
 
 #define IOP(ICODE, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE) \
   IOP0 (ICODE, , RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)   \
   IOP0S (ICODE, S, RRM_CODE, MR_CODE, RMI8_CODE, RMI32_CODE)
 
-#define FOP(ICODE, OP_CODE) {ICODE, "r 0 r", OP_CODE " r0 R2"}, {ICODE, "r 0 mf", OP_CODE " r0 m2"},
+#define FOP(ICODE, OP_CODE) \
+  {ICODE, "r 0 r", OP_CODE " r0 R2", 0}, {ICODE, "r 0 mf", OP_CODE " r0 m2", 0},
 
-#define DOP(ICODE, OP_CODE) {ICODE, "r 0 r", OP_CODE " r0 R2"}, {ICODE, "r 0 md", OP_CODE " r0 m2"},
+#define DOP(ICODE, OP_CODE) \
+  {ICODE, "r 0 r", OP_CODE " r0 R2", 0}, {ICODE, "r 0 md", OP_CODE " r0 m2", 0},
 
 #define LDOP(ICODE, OP_CODE)      \
   /* fld m1;fld m2;op;fstp m0: */ \
-  {ICODE, "mld mld mld", "DB /5 m1; DB /5 m2; " OP_CODE "; DB /7 m0"},
+  {ICODE, "mld mld mld", "DB /5 m1; DB /5 m2; " OP_CODE "; DB /7 m0", 0},
 
-#define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)                    \
-  {ICODE##SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0"},       /* sh r0,cl */ \
-    {ICODE##SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0"},    /* sh m0,cl */ \
-    {ICODE##SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
-    {ICODE##SUFF, "m3 0 i0", #PREF " " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
+#define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)                       \
+  {ICODE##SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0", 0},       /* sh r0,cl */ \
+    {ICODE##SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0", 0},    /* sh m0,cl */ \
+    {ICODE##SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2", 0},  /* sh r0,i2 */ \
+    {ICODE##SUFF, "m3 0 i0", #PREF " " I8_OP_CODE " m0 i2", 0}, /* sh m0,i2 */
 
 #define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)  \
   SHOP0 (ICODE, , X, CL_OP_CODE, I8_OP_CODE) \
   SHOP0 (ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
 
 /* cmp ...; setx r0: */
-#define CMP0(ICODE, SUFF, PREF, SETX)                                                 \
-  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Y " SETX " S0"},        /* cmp r1,r2;...*/ \
-    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Y " SETX " S0"},     /* cmp r1,m2;...*/ \
-    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Y " SETX " S0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2; Y " SETX " S0"},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2; Y " SETX " S0"}, /* cmp m1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2; Y " SETX " S0"}, /* cmp m1,i2;...*/
+#define CMP0(ICODE, SUFF, PREF, SETX)                                                    \
+  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Y " SETX " S0", 0},        /* cmp r1,r2;...*/ \
+    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Y " SETX " S0", 0},     /* cmp r1,m2;...*/ \
+    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Y " SETX " S0", 0},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2; Y " SETX " S0", 0},  /* cmp r1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2; Y " SETX " S0", 0}, /* cmp m1,i2;...*/ \
+    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2; Y " SETX " S0", 0}, /* cmp m1,i2;...*/
 
 #define CMP(ICODE, SET_OPCODE)  \
   CMP0 (ICODE, , X, SET_OPCODE) \
@@ -1440,46 +1445,48 @@ struct pattern {
 #define FEQ(ICODE, V, SET_OPCODE)                                                            \
   /*xor %eax,%eax;ucomiss r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
   {ICODE, "r r r",                                                                           \
-   "33 h0 H0; 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},         \
+   "33 h0 H0; 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0", 0},      \
     {ICODE, "r r md",                                                                        \
-     "33 h0 H0; 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
+     "33 h0 H0; 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0", 0},
 
 #define DEQ(ICODE, V, SET_OPCODE)                                                            \
   /*xor %eax,%eax;ucomisd r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
   {ICODE, "r r r",                                                                           \
-   "33 h0 H0; 66 Y 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},    \
+   "33 h0 H0; 66 Y 0F 2E r1 R2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0", 0}, \
     {ICODE, "r r md",                                                                        \
-     "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0"},
+     "33 h0 H0; 66 Y 0F 2E r1 m2; BA " V "; " SET_OPCODE " H0; X 0F 45 h0 H2; X 8B r0 H0", 0},
 
 #define LDEQ(ICODE, V, SET_OPCODE)                                     \
   /*fld m2;fld m1;xor %eax,%eax;fucomip st,st(1);fstp %st;mov V,%edx;  \
     set[n]p r0;cmovne %rdx,%rax;mov %rax,r0: */                        \
   {ICODE, "r mld mld",                                                 \
    "DB /5 m2; DB /5 m1; 33 h0 H0; DF E9; DD D8; BA " V "; " SET_OPCODE \
-   " H0; X 0F 45 h0 H2; X 8B r0 H0"},
+   " H0; X 0F 45 h0 H2; X 8B r0 H0",                                   \
+   0},
 
-#define FCMP(ICODE, SET_OPCODE)                                              \
-  /*xor %eax,%eax;ucomiss r1,r2;setx az; mov %rax,r0:  */                    \
-  {ICODE, "r r r", "33 h0 H0; Y 0F 2E r1 R2; " SET_OPCODE " H0;X 8B r0 H0"}, \
-    {ICODE, "r r mf", "33 h0 H0; Y 0F 2E r1 m2; " SET_OPCODE " H0;X 8B r0 H0"},
+#define FCMP(ICODE, SET_OPCODE)                                                 \
+  /*xor %eax,%eax;ucomiss r1,r2;setx az; mov %rax,r0:  */                       \
+  {ICODE, "r r r", "33 h0 H0; Y 0F 2E r1 R2; " SET_OPCODE " H0;X 8B r0 H0", 0}, \
+    {ICODE, "r r mf", "33 h0 H0; Y 0F 2E r1 m2; " SET_OPCODE " H0;X 8B r0 H0", 0},
 
-#define DCMP(ICODE, SET_OPCODE)                                                 \
-  /*xor %eax,%eax;ucomisd r1,r2;setx az; mov %rax,r0:  */                       \
-  {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2E r1 R2; " SET_OPCODE " H0;X 8B r0 H0"}, \
-    {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; " SET_OPCODE " H0;X 8B r0 H0"},
+#define DCMP(ICODE, SET_OPCODE)                                                    \
+  /*xor %eax,%eax;ucomisd r1,r2;setx az; mov %rax,r0:  */                          \
+  {ICODE, "r r r", "33 h0 H0; 66 Y 0F 2E r1 R2; " SET_OPCODE " H0;X 8B r0 H0", 0}, \
+    {ICODE, "r r md", "33 h0 H0; 66 Y 0F 2E r1 m2; " SET_OPCODE " H0;X 8B r0 H0", 0},
 
-#define LDCMP(ICODE, SET_OPCODE)                                                   \
-  /*fld m2;fld m1;xor %eax,%eax;fcomip st,st(1);fstp %st;setx az; mov %rax,r0:  */ \
-  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF F1; DD D8; " SET_OPCODE " H0;X 8B r0 H0"},
+#define LDCMP(ICODE, SET_OPCODE)                                                                   \
+  /*fld m2;fld m1;xor %eax,%eax;fcomip st,st(1);fstp %st;setx az; mov %rax,r0:  */                 \
+  {ICODE, "r mld mld", "DB /5 m2; DB /5 m1; 33 h0 H0; DF F1; DD D8; " SET_OPCODE " H0;X 8B r0 H0", \
+   0},
 
-#define BRS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                \
-  {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" SHORT_JMP_OPCODE " l0"},       /*test r0,r0;jxx rel8*/ \
-    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,$0;jxx rel8*/
+#define BRS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                             \
+  {ICODE##SUFF, "l r", #PREF " 85 r1 R1;" SHORT_JMP_OPCODE " l0", 0}, /*test r0,r0;jxx rel8*/ \
+    {ICODE##SUFF, "l m3", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,$0;jxx rel8*/
 
 #define BRS1(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                 \
-  {ICODE##SUFF, "l m0", #PREF " 80 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmpb m0,$0;jxx rel8*/    \
-    {ICODE##SUFF, "l m1", "66 " #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"}, /*cmpw m0,$0;...*/ \
-    {ICODE##SUFF, "l m2", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0"},       /*cmpl m0,$0;...*/
+  {ICODE##SUFF, "l m0", #PREF " 80 /7 m1 v0;" SHORT_JMP_OPCODE " l0", 0}, /*cmpb m0,$0;jxx rel8*/ \
+    {ICODE##SUFF, "l m1", "66 " #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0", 0}, /*cmpw ...*/    \
+    {ICODE##SUFF, "l m2", #PREF " 83 /7 m1 v0;" SHORT_JMP_OPCODE " l0", 0},       /*cmpl ...*/
 
 #define BRS(ICODE, SHORT_JMP_OPCODE)   \
   BRS0 (ICODE, , X, SHORT_JMP_OPCODE)  \
@@ -1487,14 +1494,14 @@ struct pattern {
   BRS1 (ICODE, , Y, SHORT_JMP_OPCODE)  \
   BRS1 (ICODE, S, Y, SHORT_JMP_OPCODE)
 
-#define BR0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "L r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " L0"},       /*test r0,r0;jxx rel32*/ \
-    {ICODE##SUFF, "L m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmp m0,$0;jxx rel32*/
+#define BR0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                               \
+  {ICODE##SUFF, "L r", #PREF " 85 r1 R1;" LONG_JMP_OPCODE " L0", 0}, /*test r0,r0;jxx rel32*/ \
+    {ICODE##SUFF, "L m3", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,$0;jxx rel32*/
 
-#define BR1(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "L m0", #PREF " 80 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmpb m0,$0;jxx rel32*/   \
-    {ICODE##SUFF, "L m1", "66 " #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"}, /*cmpw m0,$0;...*/ \
-    {ICODE##SUFF, "L m2", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0"},       /*cmpl m0,$0;...*/
+#define BR1(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                   \
+  {ICODE##SUFF, "L m0", #PREF " 80 /7 m1 v0;" LONG_JMP_OPCODE " L0", 0}, /*cmpb m0,$0;jxx rel32*/ \
+    {ICODE##SUFF, "L m1", "66 " #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0", 0}, /*cmpw ...*/     \
+    {ICODE##SUFF, "L m2", #PREF " 83 /7 m1 v0;" LONG_JMP_OPCODE " L0", 0},       /*cmpl ...*/
 
 #define BR(ICODE, LONG_JMP_OPCODE)   \
   BR0 (ICODE, , X, LONG_JMP_OPCODE)  \
@@ -1502,201 +1509,201 @@ struct pattern {
   BR1 (ICODE, , Y, LONG_JMP_OPCODE)  \
   BR1 (ICODE, S, Y, LONG_JMP_OPCODE)
 
-#define BCMPS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                                \
-  {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" SHORT_JMP_OPCODE " l0"},        /*cmp r0,r1;jxx rel8*/ \
-    {ICODE##SUFF, "l r m3", #PREF " 3B r1 m2;" SHORT_JMP_OPCODE " l0"},     /*cmp r0,m1;jxx rel8*/ \
-    {ICODE##SUFF, "l r i0", #PREF " 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel8*/ \
-    {ICODE##SUFF, "l r i2", #PREF " 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0"},  /*cmp r0,i1;jxx rel8*/ \
-    {ICODE##SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel8*/ \
-    {ICODE##SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0"}, /*cmp m0,i1;jxx rel8*/
+#define BCMPS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                               \
+  {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" SHORT_JMP_OPCODE " l0", 0},    /*cmp r0,r1;jxx rel8*/ \
+    {ICODE##SUFF, "l r m3", #PREF " 3B r1 m2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp r0,m1;...*/      \
+    {ICODE##SUFF, "l r i0", #PREF " 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/  \
+    {ICODE##SUFF, "l r i2", #PREF " 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/  \
+    {ICODE##SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/  \
+    {ICODE##SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/
 
 #define BCMPS(ICODE, SHORT_JMP_OPCODE)  \
   BCMPS0 (ICODE, , X, SHORT_JMP_OPCODE) \
   BCMPS0 (ICODE, S, Y, SHORT_JMP_OPCODE)
 
-#define BCMP0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                  \
-  {ICODE##SUFF, "L r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " L0"},        /*cmp r0,r1;jxx rel32*/ \
-    {ICODE##SUFF, "L r m3", #PREF " 3B r1 m2;" LONG_JMP_OPCODE " L0"},     /*cmp r0,m1;jxx rel32*/ \
-    {ICODE##SUFF, "L r i0", #PREF " 83 /7 R1 i2;" LONG_JMP_OPCODE " L0"},  /*cmp r0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "L r i2", #PREF " 81 /7 R1 I2;" LONG_JMP_OPCODE " L0"},  /*cmp r0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "L m3 i0", #PREF " 83 /7 m1 i2;" LONG_JMP_OPCODE " L0"}, /*cmp m0,i1;jxx rel32*/ \
-    {ICODE##SUFF, "L m3 i2", #PREF " 81 /7 m1 I2;" LONG_JMP_OPCODE " L0"}, /*cmp m0,i1;jxx rel32*/
+#define BCMP0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                 \
+  {ICODE##SUFF, "L r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " L0", 0},    /*cmp r0,r1;jxx rel32*/ \
+    {ICODE##SUFF, "L r m3", #PREF " 3B r1 m2;" LONG_JMP_OPCODE " L0", 0}, /*cmp r0,m1;...*/       \
+    {ICODE##SUFF, "L r i0", #PREF " 83 /7 R1 i2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/   \
+    {ICODE##SUFF, "L r i2", #PREF " 81 /7 R1 I2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/   \
+    {ICODE##SUFF, "L m3 i0", #PREF " 83 /7 m1 i2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/   \
+    {ICODE##SUFF, "L m3 i2", #PREF " 81 /7 m1 I2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/
 
 #define BCMP(ICODE, LONG_JMP_OPCODE)  \
   BCMP0 (ICODE, , X, LONG_JMP_OPCODE) \
   BCMP0 (ICODE, S, Y, LONG_JMP_OPCODE)
 
 #define FBCMPS(ICODE, SHORT_JMP_OPCODE) \
-  {ICODE, "l r r", "Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0"}, /* ucomiss r0,r1;jxx rel8*/
+  {ICODE, "l r r", "Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0", 0}, /* ucomiss r0,r1;jxx rel8*/
 #define DBCMPS(ICODE, SHORT_JMP_OPCODE) \
-  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0"}, /* ucomisd r0,r1;jxx rel8*/
+  {ICODE, "l r r", "66 Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0", 0}, /* ucomisd r0,r1;jxx rel8*/
 #define LDBCMPS(ICODE, SHORT_JMP_OPCODE)                 \
   /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel8*/ \
-  {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " SHORT_JMP_OPCODE " l0"},
+  {ICODE, "l mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " SHORT_JMP_OPCODE " l0", 0},
 
 #define FBCMP(ICODE, LONG_JMP_OPCODE) \
-  {ICODE, "L r r", "Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomiss r0,r1;jxx rel32*/
+  {ICODE, "L r r", "Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0", 0}, /* ucomiss r0,r1;jxx rel32*/
 #define DBCMP(ICODE, LONG_JMP_OPCODE) \
-  {ICODE, "L r r", "66 Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0"}, /* ucomisd r0,r1;jxx rel32*/
+  {ICODE, "L r r", "66 Y 0F 2E r1 R2;" LONG_JMP_OPCODE " L0", 0}, /* ucomisd r0,r1;jxx rel32*/
 #define LDBCMP(ICODE, LONG_JMP_OPCODE)                    \
   /* fld m2;fld m1; fcomip st,st(1); fstp st; jxx rel32*/ \
-  {ICODE, "L mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " L0"},
+  {ICODE, "L mld mld", "DB /5 m2; DB /5 m1; DF F1; DD D8; " LONG_JMP_OPCODE " L0", 0},
 
 static struct pattern patterns[] = {
-  {MIR_MOV, "r z", "Y 33 r0 R0"},      /* xor r0,r0 -- 32 bit xor */
-  {MIR_MOV, "r r", "X 8B r0 R1"},      /* mov r0,r1 */
-  {MIR_MOV, "r m3", "X 8B r0 m1"},     /* mov r0,m1 */
-  {MIR_MOV, "m3 r", "X 89 r1 m0"},     /* mov m0,r1 */
-  {MIR_MOV, "r i2", "X C7 /0 R0 I1"},  /* mov r0,i32 */
-  {MIR_MOV, "m3 i2", "X C7 /0 m0 I1"}, /* mov m0,i32 */
-  {MIR_MOV, "r i3", "X B8 +0 J1"},     /* mov r0,i64 */
+  {MIR_MOV, "r z", "Y 33 r0 R0", 0},      /* xor r0,r0 -- 32 bit xor */
+  {MIR_MOV, "r r", "X 8B r0 R1", 0},      /* mov r0,r1 */
+  {MIR_MOV, "r m3", "X 8B r0 m1", 0},     /* mov r0,m1 */
+  {MIR_MOV, "m3 r", "X 89 r1 m0", 0},     /* mov m0,r1 */
+  {MIR_MOV, "r i2", "X C7 /0 R0 I1", 0},  /* mov r0,i32 */
+  {MIR_MOV, "m3 i2", "X C7 /0 m0 I1", 0}, /* mov m0,i32 */
+  {MIR_MOV, "r i3", "X B8 +0 J1", 0},     /* mov r0,i64 */
 
-  {MIR_MOV, "m0 r", "Z 88 r1 m0"},    /* mov m0, r1 */
-  {MIR_MOV, "m1 r", "66 Y 89 r1 m0"}, /* mov m0, r1 */
-  {MIR_MOV, "m2 r", "Y 89 r1 m0"},    /* mov m0, r1 */
+  {MIR_MOV, "m0 r", "Z 88 r1 m0", 0},    /* mov m0, r1 */
+  {MIR_MOV, "m1 r", "66 Y 89 r1 m0", 0}, /* mov m0, r1 */
+  {MIR_MOV, "m2 r", "Y 89 r1 m0", 0},    /* mov m0, r1 */
 
-  {MIR_MOV, "r ms0", "X 0F BE r0 m1"}, /* movsx r0, m1 */
-  {MIR_MOV, "r ms1", "X 0F BF r0 m1"}, /* movsx r0, m1 */
-  {MIR_MOV, "r ms2", "X 63 r0 m1"},    /* movsx r0, m1 */
+  {MIR_MOV, "r ms0", "X 0F BE r0 m1", 0}, /* movsx r0, m1 */
+  {MIR_MOV, "r ms1", "X 0F BF r0 m1", 0}, /* movsx r0, m1 */
+  {MIR_MOV, "r ms2", "X 63 r0 m1", 0},    /* movsx r0, m1 */
 
-  {MIR_MOV, "r mu0", "X 0F B6 r0 m1"}, /* movzx r0, m1 */
-  {MIR_MOV, "r mu1", "X 0F B7 r0 m1"}, /* movzx r0, m1 */
-  {MIR_MOV, "r mu2", "Y 8B r0 m1"},    /* mov r0, m1 */
+  {MIR_MOV, "r mu0", "X 0F B6 r0 m1", 0}, /* movzx r0, m1 */
+  {MIR_MOV, "r mu1", "X 0F B7 r0 m1", 0}, /* movzx r0, m1 */
+  {MIR_MOV, "r mu2", "Y 8B r0 m1", 0},    /* mov r0, m1 */
 
-  {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1"}, /* mov m0,i8 */
-  {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1"}, /* mov m0,i32 */
+  {MIR_MOV, "m0 i0", "Y C6 /0 m0 i1", 0}, /* mov m0,i8 */
+  {MIR_MOV, "m2 i2", "Y C7 /0 m0 I1", 0}, /* mov m0,i32 */
 
-  {MIR_FMOV, "r r", "Y 0F 28 r0 R1"},     /* movaps r0,r1 */
-  {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1"}, /* movss r0,m32 */
-  {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0"}, /* movss r0,m32 */
+  {MIR_FMOV, "r r", "Y 0F 28 r0 R1", 0},     /* movaps r0,r1 */
+  {MIR_FMOV, "r mf", "F3 Y 0F 10 r0 m1", 0}, /* movss r0,m32 */
+  {MIR_FMOV, "mf r", "F3 Y 0F 11 r1 m0", 0}, /* movss r0,m32 */
 
-  {MIR_DMOV, "r r", "66 Y 0F 28 r0 R1"},  /* movapd r0,r1 */
-  {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1"}, /* movsd r0,m64 */
-  {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0"}, /* movsd m64,r0 */
+  {MIR_DMOV, "r r", "66 Y 0F 28 r0 R1", 0},  /* movapd r0,r1 */
+  {MIR_DMOV, "r md", "F2 Y 0F 10 r0 m1", 0}, /* movsd r0,m64 */
+  {MIR_DMOV, "md r", "F2 Y 0F 11 r1 m0", 0}, /* movsd m64,r0 */
 
-  {MIR_LDMOV, "mld h32", "DB /7 m0"},           /*only for ret and calls in given order: fstp m0 */
-  {MIR_LDMOV, "h32 mld", "DB /5 m1"},           /*only for ret and calls in given order: fld m1 */
-  {MIR_LDMOV, "mld h33", "D9 C9; DB /7 m0"},    /*only for ret and calls: fxch;fstp m0 */
-  {MIR_LDMOV, "h33 mld", "DB /5 m1; D9 C9"},    /*only for ret and calls: fld m1; fxch */
-  {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0"}, /* fld m1; fstp m0 */
+  {MIR_LDMOV, "mld h32", "DB /7 m0", 0},        /*only for ret and calls in given order: fstp m0 */
+  {MIR_LDMOV, "h32 mld", "DB /5 m1", 0},        /*only for ret and calls in given order: fld m1 */
+  {MIR_LDMOV, "mld h33", "D9 C9; DB /7 m0", 0}, /*only for ret and calls: fxch;fstp m0 */
+  {MIR_LDMOV, "h33 mld", "DB /5 m1; D9 C9", 0}, /*only for ret and calls: fld m1; fxch */
+  {MIR_LDMOV, "mld mld", "DB /5 m1; DB /7 m0", 0}, /* fld m1; fstp m0 */
 
 #define STR(c) #c
 #define STR_VAL(c) STR (c)
 
-  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r r", "66 Y 0F 6F r1 R2"},  /* movdqa r0,r1 */
-  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r md", "66 Y 0F 6F r1 m2"}, /* movdqa r0,m128 */
-  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " md r", "66 Y 0F 7F r2 m1"}, /* movdqa m128,r0 */
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r r", "66 Y 0F 6F r1 R2", 0},  /* movdqa r0,r1 */
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " r md", "66 Y 0F 6F r1 m2", 0}, /* movdqa r0,m128 */
+  {MIR_UNSPEC, "c" STR_VAL (MOVDQA_CODE) " md r", "66 Y 0F 7F r2 m1", 0}, /* movdqa m128,r0 */
 
-  {MIR_EXT8, "r r", "X 0F BE r0 R1"},    /* movsx r0,r1 */
-  {MIR_EXT8, "r m0", "X 0F BE r0 m1"},   /* movsx r0,m1 */
-  {MIR_EXT16, "r r", "X 0F BF r0 R1"},   /* movsx r0,r1 */
-  {MIR_EXT16, "r m1", "X 0F BF r0 m1"},  /* movsx r0,m1 */
-  {MIR_EXT32, "r r", "X 63 r0 R1"},      /* movsx r0,r1 */
-  {MIR_EXT32, "r m2", "X 63 r0 m1"},     /* movsx r0,m1 */
-  {MIR_UEXT8, "r r", "Y 0F B6 r0 S1"},   /* movzx r0,r1 */
-  {MIR_UEXT8, "r m0", "X 0F B6 r0 m1"},  /* movzx r0,m1 */
-  {MIR_UEXT16, "r r", "X 0F B7 r0 R1"},  /* movzx r0,r1 */
-  {MIR_UEXT16, "r m1", "X 0F B7 r0 m1"}, /* movzx r0,m1 */
-  {MIR_UEXT32, "r r", "Y 8B r0 R1"},     /* mov r0,r1 */
-  {MIR_UEXT32, "r m2", "Y 8B r0 m1"},    /* mov r0,m1 */
+  {MIR_EXT8, "r r", "X 0F BE r0 R1", 0},    /* movsx r0,r1 */
+  {MIR_EXT8, "r m0", "X 0F BE r0 m1", 0},   /* movsx r0,m1 */
+  {MIR_EXT16, "r r", "X 0F BF r0 R1", 0},   /* movsx r0,r1 */
+  {MIR_EXT16, "r m1", "X 0F BF r0 m1", 0},  /* movsx r0,m1 */
+  {MIR_EXT32, "r r", "X 63 r0 R1", 0},      /* movsx r0,r1 */
+  {MIR_EXT32, "r m2", "X 63 r0 m1", 0},     /* movsx r0,m1 */
+  {MIR_UEXT8, "r r", "Y 0F B6 r0 S1", 0},   /* movzx r0,r1 */
+  {MIR_UEXT8, "r m0", "X 0F B6 r0 m1", 0},  /* movzx r0,m1 */
+  {MIR_UEXT16, "r r", "X 0F B7 r0 R1", 0},  /* movzx r0,r1 */
+  {MIR_UEXT16, "r m1", "X 0F B7 r0 m1", 0}, /* movzx r0,m1 */
+  {MIR_UEXT32, "r r", "Y 8B r0 R1", 0},     /* mov r0,r1 */
+  {MIR_UEXT32, "r m2", "Y 8B r0 m1", 0},    /* mov r0,m1 */
 
-  {MIR_I2F, "r r", "F3 X 0F 2A r0 R1"},                  /* cvtsi2ss r0,r1 */
-  {MIR_I2F, "r mf", "F3 X 0F 2A r0 m1"},                 /* cvtsi2ss r0,m1 */
-  {MIR_I2D, "r r", "F2 X 0F 2A r0 R1"},                  /* cvtsi2sd r0,r1 */
-  {MIR_I2D, "r md", "F2 X 0F 2A r0 m1"},                 /* cvtsi2sd r0,m1 */
-  {MIR_I2LD, "mld r", "X 89 r1 mt; DF /5 mt; DB /7 m0"}, /*mov -16(sp),r1;fild -16(sp);fstp m0 */
+  {MIR_I2F, "r r", "F3 X 0F 2A r0 R1", 0},                  /* cvtsi2ss r0,r1 */
+  {MIR_I2F, "r mf", "F3 X 0F 2A r0 m1", 0},                 /* cvtsi2ss r0,m1 */
+  {MIR_I2D, "r r", "F2 X 0F 2A r0 R1", 0},                  /* cvtsi2sd r0,r1 */
+  {MIR_I2D, "r md", "F2 X 0F 2A r0 m1", 0},                 /* cvtsi2sd r0,m1 */
+  {MIR_I2LD, "mld r", "X 89 r1 mt; DF /5 mt; DB /7 m0", 0}, /*mov -16(sp),r1;fild -16(sp);fstp m0 */
 
-  {MIR_F2I, "r r", "F3 X 0F 2C r0 R1"},  /* cvttss2si r0,r1 */
-  {MIR_F2I, "r mf", "F3 X 0F 2C r0 m1"}, /* cvttss2si r0,m1 */
-  {MIR_D2I, "r r", "F2 X 0F 2C r0 R1"},  /* cvttsd2si r0,r1 */
-  {MIR_D2I, "r md", "F2 X 0F 2C r0 m1"}, /* cvttsd2si r0,m1 */
+  {MIR_F2I, "r r", "F3 X 0F 2C r0 R1", 0},  /* cvttss2si r0,r1 */
+  {MIR_F2I, "r mf", "F3 X 0F 2C r0 m1", 0}, /* cvttss2si r0,m1 */
+  {MIR_D2I, "r r", "F2 X 0F 2C r0 R1", 0},  /* cvttsd2si r0,r1 */
+  {MIR_D2I, "r md", "F2 X 0F 2C r0 m1", 0}, /* cvttsd2si r0,m1 */
 
-  {MIR_F2D, "r r", "F3 Y 0F 5A r0 R1"},  /* cvtss2sd r0,r1 */
-  {MIR_F2D, "r mf", "F3 Y 0F 5A r0 m1"}, /* cvtss2sd r0,m1 */
-                                         /* fld m1;fstpl -16(sp);movsd r0,-16(sp): */
-  {MIR_LD2D, "r mld", "DB /5 m1; DD /3 mt; F2 Y 0F 10 r0 mt"},
+  {MIR_F2D, "r r", "F3 Y 0F 5A r0 R1", 0},  /* cvtss2sd r0,r1 */
+  {MIR_F2D, "r mf", "F3 Y 0F 5A r0 m1", 0}, /* cvtss2sd r0,m1 */
+                                            /* fld m1;fstpl -16(sp);movsd r0,-16(sp): */
+  {MIR_LD2D, "r mld", "DB /5 m1; DD /3 mt; F2 Y 0F 10 r0 mt", 0},
 
-  {MIR_D2F, "r r", "F2 Y 0F 5A r0 R1"},  /* cvtsd2ss r0,r1 */
-  {MIR_D2F, "r md", "F2 Y 0F 5A r0 m1"}, /* cvtsd2ss r0,m1 */
+  {MIR_D2F, "r r", "F2 Y 0F 5A r0 R1", 0},  /* cvtsd2ss r0,r1 */
+  {MIR_D2F, "r md", "F2 Y 0F 5A r0 m1", 0}, /* cvtsd2ss r0,m1 */
   /* fld m1;fstps -16(sp);movss r0, -16(sp): */
-  {MIR_LD2F, "r mld", "DB /5 m1; D9 /3 mt; F3 Y 0F 10 r0 mt"},
+  {MIR_LD2F, "r mld", "DB /5 m1; D9 /3 mt; F3 Y 0F 10 r0 mt", 0},
 
   /* movss -16(sp), r1; flds -16(sp); fstp m0: */
-  {MIR_F2LD, "mld r", "F3 Y 0F 11 r1 mt; D9 /0 mt; DB /7 m0"},
-  {MIR_F2LD, "mld mf", "D9 /0 m1; DB /7 m0"}, /* flds m1; fstp m0 */
+  {MIR_F2LD, "mld r", "F3 Y 0F 11 r1 mt; D9 /0 mt; DB /7 m0", 0},
+  {MIR_F2LD, "mld mf", "D9 /0 m1; DB /7 m0", 0}, /* flds m1; fstp m0 */
   /* movsd -16(sp), r1; fldl -16(sp); fstp m0: */
-  {MIR_D2LD, "mld r", "F2 Y 0F 11 r1 mt; DD /0 mt; DB /7 m0"},
-  {MIR_D2LD, "mld md", "DD /0 m1; DB /7 m0"}, /* fldl m1; fstp m0 */
+  {MIR_D2LD, "mld r", "F2 Y 0F 11 r1 mt; DD /0 mt; DB /7 m0", 0},
+  {MIR_D2LD, "mld md", "DD /0 m1; DB /7 m0", 0}, /* fldl m1; fstp m0 */
 
   /* lea r0, 15(r1); and r0, r0, -16; sub sp, r0; mov r0, sp: */
-  {MIR_ALLOCA, "r r", "Y 8D r0 adF; X 81 /4 R0 VFFFFFFF0; X 2B h04 R0; X 8B r0 H04"},
-  {MIR_ALLOCA, "r i2", "X 81 /5 H04 I1; X 8B r0 H04"}, /* sub sp, i2; mov r0, sp */
+  {MIR_ALLOCA, "r r", "Y 8D r0 adF; X 81 /4 R0 VFFFFFFF0; X 2B h04 R0; X 8B r0 H04", 0},
+  {MIR_ALLOCA, "r i2", "X 81 /5 H04 I1; X 8B r0 H04", 0}, /* sub sp, i2; mov r0, sp */
 
-  {MIR_BSTART, "r", "X 8B r0 H4"}, /* r0 = sp */
-  {MIR_BEND, "r", "X 8B h4 R0"},   /* sp = r0 */
+  {MIR_BSTART, "r", "X 8B r0 H4", 0}, /* r0 = sp */
+  {MIR_BEND, "r", "X 8B h4 R0", 0},   /* sp = r0 */
 
-  {MIR_NEG, "r 0", "X F7 /3 R1"},   /* neg r0 */
-  {MIR_NEG, "m3 0", "X F7 /3 m1"},  /* neg m0 */
-  {MIR_NEGS, "r 0", "Y F7 /3 R1"},  /* neg r0 */
-  {MIR_NEGS, "m2 0", "Y F7 /3 m1"}, /* neg m0 */
+  {MIR_NEG, "r 0", "X F7 /3 R1", 0},   /* neg r0 */
+  {MIR_NEG, "m3 0", "X F7 /3 m1", 0},  /* neg m0 */
+  {MIR_NEGS, "r 0", "Y F7 /3 R1", 0},  /* neg r0 */
+  {MIR_NEGS, "m2 0", "Y F7 /3 m1", 0}, /* neg m0 */
 
-  {MIR_FNEG, "r 0", "Y 0F 57 r0 c0000000080000000"},    /* xorps r0,80000000 */
-  {MIR_DNEG, "r 0", "66 Y 0F 57 r0 c8000000000000000"}, /* xorpd r0,0x8000000000000000 */
-  {MIR_LDNEG, "mld mld", "DB /5 m1; D9 E0; DB /7 m0"},  /* fld m1; fchs; fstp m0 */
+  {MIR_FNEG, "r 0", "Y 0F 57 r0 c0000000080000000", 0},    /* xorps r0,80000000 */
+  {MIR_DNEG, "r 0", "66 Y 0F 57 r0 c8000000000000000", 0}, /* xorpd r0,0x8000000000000000 */
+  {MIR_LDNEG, "mld mld", "DB /5 m1; D9 E0; DB /7 m0", 0},  /* fld m1; fchs; fstp m0 */
 
   IOP (MIR_ADD, "03", "01", "83 /0", "81 /0") /* x86_64 int additions */
 
-  {MIR_ADD, "r r r", "X 8D r0 ap"},   /* lea r0,(r1,r2)*/
-  {MIR_ADD, "r r i2", "X 8D r0 ap"},  /* lea r0,i2(r1)*/
-  {MIR_ADDS, "r r r", "Y 8D r0 ap"},  /* lea r0,(r1,r2)*/
-  {MIR_ADDS, "r r i2", "Y 8D r0 ap"}, /* lea r0,i2(r1)*/
+  {MIR_ADD, "r r r", "X 8D r0 ap", 0},   /* lea r0,(r1,r2)*/
+  {MIR_ADD, "r r i2", "X 8D r0 ap", 0},  /* lea r0,i2(r1)*/
+  {MIR_ADDS, "r r r", "Y 8D r0 ap", 0},  /* lea r0,(r1,r2)*/
+  {MIR_ADDS, "r r i2", "Y 8D r0 ap", 0}, /* lea r0,i2(r1)*/
 
   IOP (MIR_SUB, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions */
 
   IOP (MIR_ADDO, "03", "01", "83 /0", "81 /0") /* x86_64 int additions with ovfl flag */
   IOP (MIR_SUBO, "2B", "29", "83 /5", "81 /5") /* x86_64 int subtractions with ovfl flag */
 
-#define IMULL(ICODE, ICODES)                                  \
-  {ICODE, "r 0 r", "X 0F AF r0 R2"},      /* imul r0,r1*/     \
-    {ICODE, "r 0 m3", "X 0F AF r0 m2"},   /* imul r0,m1*/     \
-    {ICODE, "r r i2", "X 69 r0 R1 I2"},   /* imul r0,r1,i32*/ \
-    {ICODE, "r m3 i2", "X 69 r0 m1 I2"},  /* imul r0,m1,i32*/ \
-    {ICODES, "r 0 r", "Y 0F AF r0 R2"},   /* imul r0,r1*/     \
-    {ICODES, "r 0 m2", "Y 0F AF r0 m2"},  /* imul r0,m1*/     \
-    {ICODES, "r r i2", "Y 69 r0 R1 I2"},  /* imul r0,r1,i32*/ \
-    {ICODES, "r m2 i2", "Y 69 r0 m1 I2"}, /* imul r0,m1,i32*/
+#define IMULL(ICODE, ICODES)                                     \
+  {ICODE, "r 0 r", "X 0F AF r0 R2", 0},      /* imul r0,r1*/     \
+    {ICODE, "r 0 m3", "X 0F AF r0 m2", 0},   /* imul r0,m1*/     \
+    {ICODE, "r r i2", "X 69 r0 R1 I2", 0},   /* imul r0,r1,i32*/ \
+    {ICODE, "r m3 i2", "X 69 r0 m1 I2", 0},  /* imul r0,m1,i32*/ \
+    {ICODES, "r 0 r", "Y 0F AF r0 R2", 0},   /* imul r0,r1*/     \
+    {ICODES, "r 0 m2", "Y 0F AF r0 m2", 0},  /* imul r0,m1*/     \
+    {ICODES, "r r i2", "Y 69 r0 R1 I2", 0},  /* imul r0,r1,i32*/ \
+    {ICODES, "r m2 i2", "Y 69 r0 m1 I2", 0}, /* imul r0,m1,i32*/
 
   IMULL (MIR_MUL, MIR_MULS)
 
-    {MIR_MUL, "r r s", "X 8D r0 ap"}, /* lea r0,(,r1,s2)*/
-  {MIR_MULS, "r r s", "Y 8D r0 ap"},  /* lea r0,(,r1,s2)*/
+    {MIR_MUL, "r r s", "X 8D r0 ap", 0}, /* lea r0,(,r1,s2)*/
+  {MIR_MULS, "r r s", "Y 8D r0 ap", 0},  /* lea r0,(,r1,s2)*/
 
   IMULL (MIR_MULO, MIR_MULOS)
 
-    {MIR_UMULO, "h0 0 r", "X F7 /4 R2"}, /* mul rax,r1*/
-  {MIR_UMULO, "h0 0 m3", "X F7 /4 m2"},  /* mul rax,m1*/
-  {MIR_UMULOS, "h0 0 r", "Y F7 /4 R2"},  /* mul rax,r1*/
-  {MIR_UMULOS, "h0 0 m2", "Y F7 /4 m2"}, /* mul rax,m1*/
+    {MIR_UMULO, "h0 0 r", "X F7 /4 R2", 0}, /* mul rax,r1*/
+  {MIR_UMULO, "h0 0 m3", "X F7 /4 m2", 0},  /* mul rax,m1*/
+  {MIR_UMULOS, "h0 0 r", "Y F7 /4 R2", 0},  /* mul rax,r1*/
+  {MIR_UMULOS, "h0 0 m2", "Y F7 /4 m2", 0}, /* mul rax,m1*/
 
-  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
-  {MIR_DIVS, "h0 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
-  {MIR_DIVS, "h0 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
+  {MIR_DIV, "h0 h0 r", "X 99; X F7 /7 R2", 0},  /* cqo; idiv r2*/
+  {MIR_DIV, "h0 h0 m3", "X 99; X F7 /7 m2", 0}, /* cqo; idiv m2*/
+  {MIR_DIVS, "h0 h0 r", "99; Y F7 /7 R2", 0},   /* cdq; idiv r2*/
+  {MIR_DIVS, "h0 h0 m2", "99; Y F7 /7 m2", 0},  /* cdq; idiv m2*/
 
-  {MIR_UDIV, "h0 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
-  {MIR_UDIV, "h0 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
-  {MIR_UDIVS, "h0 h0 r", "31 D2; Y F7 /6 R2"},  /* xorl edx,edx; div r2*/
-  {MIR_UDIVS, "h0 h0 m2", "31 D2; Y F7 /6 m2"}, /* xorl edx,edx; div m2*/
+  {MIR_UDIV, "h0 h0 r", "31 D2; X F7 /6 R2", 0},   /* xorl edx,edx; div r2*/
+  {MIR_UDIV, "h0 h0 m3", "31 D2; X F7 /6 m2", 0},  /* xorl edx,edx; div m2*/
+  {MIR_UDIVS, "h0 h0 r", "31 D2; Y F7 /6 R2", 0},  /* xorl edx,edx; div r2*/
+  {MIR_UDIVS, "h0 h0 m2", "31 D2; Y F7 /6 m2", 0}, /* xorl edx,edx; div m2*/
 
-  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2"},  /* cqo; idiv r2*/
-  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2"}, /* cqo; idiv m2*/
-  {MIR_MODS, "h2 h0 r", "99; Y F7 /7 R2"},   /* cdq; idiv r2*/
-  {MIR_MODS, "h2 h0 m2", "99; Y F7 /7 m2"},  /* cdq; idiv m2*/
+  {MIR_MOD, "h2 h0 r", "X 99; X F7 /7 R2", 0},  /* cqo; idiv r2*/
+  {MIR_MOD, "h2 h0 m3", "X 99; X F7 /7 m2", 0}, /* cqo; idiv m2*/
+  {MIR_MODS, "h2 h0 r", "99; Y F7 /7 R2", 0},   /* cdq; idiv r2*/
+  {MIR_MODS, "h2 h0 m2", "99; Y F7 /7 m2", 0},  /* cdq; idiv m2*/
 
-  {MIR_UMOD, "h2 h0 r", "31 D2; X F7 /6 R2"},   /* xorl edx,edx; div r2*/
-  {MIR_UMOD, "h2 h0 m3", "31 D2; X F7 /6 m2"},  /* xorl edx,edx; div m2*/
-  {MIR_UMODS, "h2 h0 r", "31 D2; Y F7 /6 R2"},  /* xorl edx,edx; div r2*/
-  {MIR_UMODS, "h2 h0 m2", "31 D2; Y F7 /6 m2"}, /* xorl edx,edx; div m2*/
+  {MIR_UMOD, "h2 h0 r", "31 D2; X F7 /6 R2", 0},   /* xorl edx,edx; div r2*/
+  {MIR_UMOD, "h2 h0 m3", "31 D2; X F7 /6 m2", 0},  /* xorl edx,edx; div m2*/
+  {MIR_UMODS, "h2 h0 r", "31 D2; Y F7 /6 R2", 0},  /* xorl edx,edx; div r2*/
+  {MIR_UMODS, "h2 h0 m2", "31 D2; Y F7 /6 m2", 0}, /* xorl edx,edx; div m2*/
 
   IOP (MIR_AND, "23", "21", "83 /4", "81 /4")                                            /*ands*/
   IOP (MIR_OR, "0B", "09", "83 /1", "81 /1") IOP (MIR_XOR, "33", "31", "83 /6", "81 /6") /*(x)ors*/
@@ -1725,24 +1732,24 @@ static struct pattern patterns[] = {
   FCMP (MIR_FGT, "0F 97") DCMP (MIR_DGT, "0F 97") LDCMP (MIR_LDGT, "0F 97") /*6*/
   FCMP (MIR_FGE, "0F 93") DCMP (MIR_DGE, "0F 93") LDCMP (MIR_LDGE, "0F 93") /*7*/
 
-  {MIR_JMP, "L", "E9 L0"}, /* 32-bit offset jmp */
-  {MIR_JMP, "l", "EB l0"}, /* 8-bit offset jmp */
+  {MIR_JMP, "L", "E9 L0", 0}, /* 32-bit offset jmp */
+  {MIR_JMP, "l", "EB l0", 0}, /* 8-bit offset jmp */
 
   /* movq TableAddress,r11; mov (r11,r,8),r11; jmp *r11; TableContent */
-  {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3"},
+  {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3", 0},
 
   BRS (MIR_BT, "75") BRS (MIR_BF, "74")     /* short branches */
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
 
-  {MIR_BO, "l", "70 l0"},   /* 8-bit offset jmp on signed overflow */
-  {MIR_UBO, "l", "72 l0"},  /* 8-bit offset jmp on unsigned overflow */
-  {MIR_BNO, "l", "71 l0"},  /* 8-bit offset jmp on signed non-overflow */
-  {MIR_UBNO, "l", "73 l0"}, /* 8-bit offset jmp on unsigned non-overflow */
+  {MIR_BO, "l", "70 l0", 0},   /* 8-bit offset jmp on signed overflow */
+  {MIR_UBO, "l", "72 l0", 0},  /* 8-bit offset jmp on unsigned overflow */
+  {MIR_BNO, "l", "71 l0", 0},  /* 8-bit offset jmp on signed non-overflow */
+  {MIR_UBNO, "l", "73 l0", 0}, /* 8-bit offset jmp on unsigned non-overflow */
 
-  {MIR_BO, "L", "0F 80 L0"},   /* 32-bit offset jmp on signed overflow */
-  {MIR_UBO, "L", "0F 82 L0"},  /* 32-bit offset jmp on unsigned overflow */
-  {MIR_BNO, "L", "0F 81 L0"},  /* 32-bit offset jmp on signed non-overflow */
-  {MIR_UBNO, "L", "0F 83 L0"}, /* 32-bit offset jmp on unsigned non-overflow */
+  {MIR_BO, "L", "0F 80 L0", 0},   /* 32-bit offset jmp on signed overflow */
+  {MIR_UBO, "L", "0F 82 L0", 0},  /* 32-bit offset jmp on unsigned overflow */
+  {MIR_BNO, "L", "0F 81 L0", 0},  /* 32-bit offset jmp on signed non-overflow */
+  {MIR_UBNO, "L", "0F 83 L0", 0}, /* 32-bit offset jmp on unsigned non-overflow */
 
   BCMPS (MIR_BEQ, "74") BCMPS (MIR_BNE, "75")  /* 1. int compare and branch */
   BCMPS (MIR_BLT, "7C") BCMPS (MIR_UBLT, "72") /* 2. int compare and branch */
@@ -1771,26 +1778,27 @@ static struct pattern patterns[] = {
   DBCMP (MIR_DBGE, "0F 83") LDBCMP (MIR_LDBGE, "0F 83") /* fp cmp and branch */
 
   /* we don't have short branch patterns for NE as the label will be in two branches: */
-  {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v2; 74 l0"},    /* ucomiss r0,r1;jp l;je rel32 l: */
-  {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v2; 74 l0"}, /* ucomisd r0,r1;jp l;je rel32 l: */
+  {MIR_FBEQ, "l r r", "Y 0F 2E r1 R2; 7A v2; 74 l0", 0},    /* ucomiss r0,r1;jp l;je rel32 l: */
+  {MIR_DBEQ, "l r r", "66 Y 0F 2E r1 R2; 7A v2; 74 l0", 0}, /* ucomisd r0,r1;jp l;je rel32 l: */
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp l;je rel32 l: */
-  {MIR_LDBEQ, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v2; 74 l0"},
+  {MIR_LDBEQ, "l mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v2; 74 l0", 0},
 
-  {MIR_FBEQ, "L r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 L0"},    /* ucomiss r0,r1;jp L;je rel32 L: */
-  {MIR_DBEQ, "L r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 L0"}, /* ucomisd r0,r1;jp L;je rel32 L: */
+  {MIR_FBEQ, "L r r", "Y 0F 2E r1 R2; 7A v6; 0F 84 L0", 0},    /* ucomiss r0,r1;jp L;je rel32 L: */
+  {MIR_DBEQ, "L r r", "66 Y 0F 2E r1 R2; 7A v6; 0F 84 L0", 0}, /* ucomisd r0,r1;jp L;je rel32 L: */
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp L;je rel32 L: */
-  {MIR_LDBEQ, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 L0"},
-  {MIR_FBNE, "L r r", "Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"},    /* ucomiss r0,r1;jp rel32;jne rel32*/
-  {MIR_DBNE, "L r r", "66 Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0"}, /* ucomisd r0,r1;jp rel32;jne rel32*/
+  {MIR_LDBEQ, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 7A v6; 0F 84 L0", 0},
+  {MIR_FBNE, "L r r", "Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0", 0}, /* ucomiss r0,r1;jp rel32;jne rel32*/
+  {MIR_DBNE, "L r r", "66 Y 0F 2E r1 R2; 0F 8A L0; 0F 85 L0",
+   0}, /* ucomisd r0,r1;jp rel32;jne rel32*/
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
-  {MIR_LDBNE, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A L0; 0F 85 L0"},
+  {MIR_LDBNE, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A L0; 0F 85 L0", 0},
 
-  {MIR_CALL, "X i3 $", "FF /2 P1"},  /* call *rel32(rip)  */
-  {MIR_CALL, "X r $", "Y FF /2 R1"}, /* call *r1 */
-  {MIR_RET, "$", "C3"},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
+  {MIR_CALL, "X i3 $", "FF /2 P1", 0},  /* call *rel32(rip)  */
+  {MIR_CALL, "X r $", "Y FF /2 R1", 0}, /* call *r1 */
+  {MIR_RET, "$", "C3", 0},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
-  {MIR_JCALL, "X r $", "Y FF /4 R1"}, /* jmp *r1 */
-  {MIR_JRET, "r $", "Y FF /4 R0"},    /* jmp *r1  */
+  {MIR_JCALL, "X r $", "Y FF /4 R1", 0}, /* jmp *r1 */
+  {MIR_JRET, "r $", "Y FF /4 R0", 0},    /* jmp *r1  */
 };
 
 static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
@@ -1885,8 +1893,7 @@ static int64_t int_value (gen_ctx_t gen_ctx, const MIR_op_t *op) {
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn,
                             int try_short_jump_p) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop;
-  size_t nops = MIR_insn_nops (ctx, insn);
+  size_t nop, nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
   MIR_op_mode_t mode;
@@ -1907,7 +1914,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       break;
     case 't':
       if (op_ref->mode != MIR_OP_VAR
-          || !(AX_HARD_REG <= op_ref->u.var && op_ref->u.var <= BX_HARD_REG))
+          || !(AX_HARD_REG == op_ref->u.var || op_ref->u.var == CX_HARD_REG
+               || op_ref->u.var == DX_HARD_REG || op_ref->u.var == BX_HARD_REG))
         return FALSE;
       break;
     case 'h':
@@ -1926,7 +1934,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if ((op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT) || op_ref->u.i != 0)
         return FALSE;
       break;
-    case 'i':
+    case 'i': {
       if (op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT && op_ref->mode != MIR_OP_REF)
         return FALSE;
       ch = *++p;
@@ -1935,6 +1943,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       if ((ch == '0' && !int8_p (n)) || (ch == '1' && !int16_p (n)) || (ch == '2' && !int32_p (n)))
         return FALSE;
       break;
+    }
     case 's':
       if ((op_ref->mode != MIR_OP_INT && op_ref->mode != MIR_OP_UINT)
           || (op_ref->u.i != 1 && op_ref->u.i != 2 && op_ref->u.i != 4 && op_ref->u.i != 8))
@@ -2029,8 +2038,8 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case '6':
     case '7':
     case '8':
-    case '9':
-      n = start_ch - '0';
+    case '9': {
+      size_t n = start_ch - '0';
       gen_assert (n < nop);
       original = insn->ops[n];
       mode = op_ref->mode;
@@ -2061,6 +2070,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
                        && op_ref->u.var_mem.scale != original.u.var_mem.scale)))
         return FALSE;
       break;
+    }
     default: gen_assert (FALSE);
     }
   }
@@ -2264,7 +2274,7 @@ static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *r
   return VARR_LENGTH (const_ref_t, const_refs) - 1;
 }
 
-static int get_max_insn_size (gen_ctx_t gen_ctx, const char *replacement) {
+static int get_max_insn_size (gen_ctx_t gen_ctx MIR_UNUSED, const char *replacement) {
   const char *p, *insn_str;
   int size = 0;
 
@@ -2623,36 +2633,37 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
         VARR_PUSH (label_ref_t, label_refs, lr);
         break;
-      case 'P': {
+      case 'P':
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '7');
         op_ref = &insn->ops[ch - '0'];
         gen_assert (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT
                     || op_ref->mode == MIR_OP_REF);
-        uint64_t v = (uint64_t) int_value (gen_ctx, op_ref);
+        v = (uint64_t) int_value (gen_ctx, op_ref);
         gen_assert (const_ref_num < 0 && disp32 < 0);
         const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, TRUE);
         break;
-      }
       case '/':
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '7');
         setup_reg (NULL, &reg, ch - '0');
         break;
-      case '+':
+      case '+': {
+        int hreg;
         ch = *++p;
         if (ch == 'h') {
           ch = *++p;
-          v = hex_value (*p++);
-          gen_assert (v >= 0);
+          hreg = hex_value (*p++);
+          gen_assert (hreg >= 0);
         } else {
           gen_assert ('0' <= ch && ch <= '2');
           op_ref = &insn->ops[ch - '0'];
           gen_assert (op_ref->mode == MIR_OP_VAR);
-          v = op_ref->u.var;
+          hreg = op_ref->u.var;
         }
-        setup_reg (&rex_b, &lb, v);
+        setup_reg (&rex_b, &lb, hreg);
         break;
+      }
       case 'c':
         ++p;
         v = read_hex (&p);
@@ -2764,7 +2775,7 @@ static uint8_t MIR_UNUSED get_short_jump_opcode (uint8_t *long_jump_opcode) {
   return long_jump_opcode[1] - 0x10;
 }
 
-static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+static int target_memory_ok_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_op_t *op_ref) {
   if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
   if (op_ref->u.var_mem.index != MIR_NON_VAR && op_ref->u.var_mem.scale != 1
       && op_ref->u.var_mem.scale != 2 && op_ref->u.var_mem.scale != 4
@@ -2817,11 +2828,11 @@ static uint8_t *translate_finish (gen_ctx_t gen_ctx, size_t *len) {
   return VARR_ADDR (uint8_t, result_code);
 }
 
-static void target_split_insns (gen_ctx_t gen_ctx) {}
+static void target_split_insns (gen_ctx_t gen_ctx MIR_UNUSED) {}
 
 #define LOOP_ALIGN 8
 
-static const char *nops[] = {
+static const char *nop_pats[] = {
   "",
   "\x90" /* 1:nop */,
   "\x66\x90", /* 2: xchg ax,ax */
@@ -2865,8 +2876,8 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
       if (gen_nested_loop_label_p (gen_ctx, insn)) {
         int padn = LOOP_ALIGN - (int) (VARR_LENGTH (uint8_t, result_code) % LOOP_ALIGN);
         if (padn == LOOP_ALIGN) padn = 0;
-        gen_assert (padn < sizeof (nops) / sizeof (char *));
-        if (padn != 0) VARR_PUSH_ARR (uint8_t, result_code, (uint8_t *) nops[padn], padn);
+        gen_assert ((size_t) padn < sizeof (nop_pats) / sizeof (char *));
+        if (padn != 0) VARR_PUSH_ARR (uint8_t, result_code, (uint8_t *) nop_pats[padn], padn);
       }
       set_label_disp (gen_ctx, insn, VARR_LENGTH (uint8_t, result_code));
     } else if (insn->code != MIR_USE) {
@@ -2875,14 +2886,14 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         ind = find_insn_pattern (gen_ctx, insn, NULL);
       gen_assert (ind >= 0);
 #ifndef NDEBUG
-      size_t len = VARR_LENGTH (uint8_t, result_code);
+      size_t len_before = VARR_LENGTH (uint8_t, result_code);
 #endif
       out_insn (gen_ctx, insn, patterns[ind].replacement, NULL);
 #ifndef NDEBUG
-      len = VARR_LENGTH (uint8_t, result_code) - len;
-      if (len > patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {
+      size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
+      if (insn_len > (size_t) patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {
         fprintf (stderr, "\"%s\" max size(%d) < real size(%d)\n", patterns[ind].replacement,
-                 patterns[ind].max_insn_size, (int) len);
+                 patterns[ind].max_insn_size, (int) insn_len);
         gen_assert (FALSE);
       }
 #endif

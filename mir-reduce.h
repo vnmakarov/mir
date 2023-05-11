@@ -121,7 +121,7 @@ static inline void _reduce_uint_write (struct reduce_data *data, uint32_t u) {
   int n;
 
   assert (u < (1 << 7 * 4));
-  for (n = 1; n <= 4 && u >= (1 << 7 * n); n++)
+  for (n = 1; n <= 4 && u >= (1u << 7 * n); n++)
     ;
   _reduce_put (data, (1 << (8 - n)) | ((u >> (n - 1) * 8) & 0xff)); /* tag */
   for (int i = 2; i <= n; i++) _reduce_put (data, (u >> (n - i) * 8) & 0xff);
@@ -145,13 +145,13 @@ static inline int64_t _reduce_uint_read (reduce_reader_t reader, void *aux_data)
 
 static inline void _reduce_hash_write (struct reduce_data *data, uint64_t h) {
   _reduce_put (data, 0); /* 0 tag */
-  for (int i = 0; i < sizeof (uint64_t); i++) _reduce_put (data, (h >> i * 8) & 0xff);
+  for (size_t i = 0; i < sizeof (uint64_t); i++) _reduce_put (data, (h >> i * 8) & 0xff);
 }
 
 static inline uint64_t _reduce_str2hash (const uint8_t *s) {
   uint64_t h = 0;
 
-  for (int i = 0; i < sizeof (uint64_t); i++) h |= (uint64_t) s[i] << i * 8;
+  for (size_t i = 0; i < sizeof (uint64_t); i++) h |= (uint64_t) s[i] << i * 8;
   return h;
 }
 
