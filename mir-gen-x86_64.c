@@ -1983,7 +1983,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         u_p = ch == 'u';
         s_p = ch == 's';
         ch = *++p;
-        /* Fall through: */
+        /* falls through */
       default:
         gen_assert ('0' <= ch && ch <= '3');
         if (ch == '0') {
