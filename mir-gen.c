@@ -626,6 +626,7 @@ static bb_insn_t create_bb_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, bb_t bb) {
   bb_insn->gvn_val = bb_insn->index;
   DLIST_INIT (dead_var_t, bb_insn->insn_dead_vars);
   if (MIR_call_code_p (insn->code)) bb_insn->call_hard_reg_args = bitmap_create2 (MAX_HARD_REG + 1);
+  bb_insn->label_disp = 0;
   return bb_insn;
 }
 
