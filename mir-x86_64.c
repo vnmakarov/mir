@@ -112,7 +112,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   va->overflow_arg_area += size / 8;
 }
 
-void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {
   struct x86_64_va_list *va = p;
   va_list *vap = a;
 
@@ -150,7 +150,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
 
 #endif
 
-void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
+void va_end_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p MIR_UNUSED) {}
 
 static const uint8_t short_jmp_pattern[] = {
   0xe9, 0, 0, 0, 0,         /* 0x0: jmp rel32 */
@@ -169,7 +169,7 @@ void *_MIR_get_thunk (MIR_context_t ctx) {
   return res;
 }
 
-void *_MIR_get_thunk_addr (MIR_context_t ctx, void *thunk) {
+void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
   void *addr;
   int short_p = *(unsigned char *) thunk == 0xe9;
   memcpy ((char *) &addr, (char *) thunk + (short_p ? 5 : 2), sizeof (addr));
@@ -379,7 +379,7 @@ static void gen_st80 (VARR (uint8_t) * insn_varr, uint32_t src_offset) {
    r10=mem[rbx,<offset>]; res_reg=mem[r10]; ...
    pop rbx; pop r12; ret. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num MIR_UNUSED) {
   static const uint8_t prolog[] = {
 #ifndef _WIN32
     0x41, 0x54,                   /* pushq %r12 */
