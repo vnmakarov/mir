@@ -34,7 +34,7 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
 }
 
 static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[MAX_QWORDS],
-                         int bit_field_p) {
+                         int bit_field_p MIR_UNUSED) {
   size_t size = type_size (c2m_ctx, type);
   int i, n_el_qwords, n_qwords = (size + 7) / 8;
   MIR_type_t mir_type;
@@ -114,7 +114,7 @@ typedef struct target_arg_info {
   int n_iregs, n_fregs;
 } target_arg_info_t;
 
-static void target_init_arg_vars (c2m_ctx_t c2m_ctx, target_arg_info_t *arg_info) {
+static void target_init_arg_vars (c2m_ctx_t c2m_ctx MIR_UNUSED, target_arg_info_t *arg_info) {
   arg_info->n_iregs = arg_info->n_fregs = 0;
 }
 
@@ -235,7 +235,7 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
 }
 
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
-                                           MIR_insn_t call, size_t call_ops_start) {
+                                           MIR_insn_t call MIR_UNUSED, size_t call_ops_start) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_type_t type;
@@ -401,7 +401,8 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
   }
 }
 
-static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
-                                  decl_t param_decl, target_arg_info_t *arg_info) {
+static int target_gen_gather_arg (c2m_ctx_t c2m_ctx MIR_UNUSED, const char *name MIR_UNUSED,
+                                  struct type *arg_type MIR_UNUSED, decl_t param_decl MIR_UNUSED,
+                                  target_arg_info_t *arg_info MIR_UNUSED) {
   return FALSE;
 }

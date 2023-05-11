@@ -152,12 +152,12 @@ DEF_VARR (macro_command_t);
 static VARR (macro_command_t) * macro_commands;
 
 static void close_std_libs (void) {
-  for (int i = 0; i < sizeof (std_libs) / sizeof (lib_t); i++)
+  for (size_t i = 0; i < sizeof (std_libs) / sizeof (lib_t); i++)
     if (std_libs[i].handler != NULL) dlclose (std_libs[i].handler);
 }
 
 static void open_std_libs (void) {
-  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+  for (size_t i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
     std_libs[i].handler = dlopen (std_libs[i].name, RTLD_LAZY);
 }
 
@@ -383,10 +383,10 @@ float __nan (void) {
 static void *import_resolver (const char *name) {
   void *handler, *sym = NULL;
 
-  for (int i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
+  for (size_t i = 0; i < sizeof (std_libs) / sizeof (struct lib); i++)
     if ((handler = std_libs[i].handler) != NULL && (sym = dlsym (handler, name)) != NULL) break;
   if (sym == NULL)
-    for (int i = 0; i < VARR_LENGTH (lib_t, cmdline_libs); i++)
+    for (size_t i = 0; i < VARR_LENGTH (lib_t, cmdline_libs); i++)
       if ((handler = VARR_GET (lib_t, cmdline_libs, i).handler) != NULL
           && (sym = dlsym (handler, name)) != NULL)
         break;
@@ -415,7 +415,7 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
-static int mir_read_func (MIR_context_t ctx) { return t_getc (&curr_input); }
+static int mir_read_func (MIR_context_t ctx MIR_UNUSED) { return t_getc (&curr_input); }
 
 static const char *get_file_name (const char *name, const char *suffix) {
   const char *res = strrchr (name, slash);
@@ -423,7 +423,7 @@ static const char *get_file_name (const char *name, const char *suffix) {
   if (res != NULL) name = res + 1;
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, name,
-                 (res = strrchr (name, '.')) == NULL ? strlen (name) : res - name);
+                 (res = strrchr (name, '.')) == NULL ? strlen (name) : (size_t) (res - name));
   VARR_PUSH_ARR (char, temp_string, suffix, strlen (suffix) + 1); /* including zero byte */
   return VARR_ADDR (char, temp_string);
 }
@@ -505,8 +505,10 @@ static void *compile (void *arg) {
                               compiler->input.input_name, f);
     if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in mutex lock");
     compiler->busy_p = FALSE;
-    if (compiler->input.code_container != NULL)
+    if (compiler->input.code_container != NULL) {
       VARR_DESTROY (uint8_t, compiler->input.code_container);
+      compiler->input.code_container = NULL;
+    }
     if (error_p) result_code = 1;
     if (mir_cond_signal (&done_signal)) parallel_error ("error in cond signal");
     if (mir_mutex_unlock (&queue_mutex)) parallel_error ("error in mutex unlock");
@@ -724,7 +726,7 @@ int main (int argc, char *argv[], char *env[]) {
       int c;
       FILE *f;
 
-      if (i >= VARR_LENGTH (char_ptr_t, source_file_names)) break;
+      if (i >= (int) VARR_LENGTH (char_ptr_t, source_file_names)) break;
       curr_input.input_name = VARR_GET (char_ptr_t, source_file_names, i);
       if (strcmp (curr_input.input_name, STDIN_SOURCE_NAME) == 0) {
         f = stdin;
@@ -790,7 +792,7 @@ int main (int argc, char *argv[], char *env[]) {
     double start_time;
 
 #if MIR_PARALLEL_GEN
-    for (int i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
+    for (i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
     sort_modules (main_ctx);
 #endif
     for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (main_ctx)); module != NULL;

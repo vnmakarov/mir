@@ -9540,7 +9540,7 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
   func_or_bb_t func_or_bb;
 
   if (func_item == NULL) { /* finish setting interfaces */
-    size_t i;
+    int i;
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     func_or_bb.func_p = func_or_bb.full_p = TRUE;
     func_or_bb.u.func_item = NULL;
