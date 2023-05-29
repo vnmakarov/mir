@@ -155,7 +155,6 @@ struct lr_ctx;
 struct coalesce_ctx;
 struct ra_ctx;
 struct combine_ctx;
-struct fg_ctx;
 
 typedef struct loop_node *loop_node_t;
 DEF_VARR (loop_node_t);
@@ -232,7 +231,6 @@ struct gen_ctx {
   struct coalesce_ctx *coalesce_ctx;
   struct ra_ctx *ra_ctx;
   struct combine_ctx *combine_ctx;
-  struct fg_ctx *fg_ctx;
   VARR (MIR_op_t) * temp_ops;
   VARR (bb_insn_t) * temp_bb_insns, *temp_bb_insns2;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
