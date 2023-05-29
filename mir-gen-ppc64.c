@@ -2,8 +2,6 @@
    Copyright (C) 2020-2023 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-DEF_VARR (uint8_t);
-
 #include "mir-ppc64.h"
 
 #include <limits.h>
@@ -73,9 +71,6 @@ static MIR_insn_code_t get_ext_code (MIR_type_t type) {
   }
 }
 
-DEF_VARR (int);
-DEF_VARR (uint64_t);
-
 struct insn_pattern_info {
   int start, num;
 };
@@ -96,8 +91,6 @@ struct label_ref {
 
 typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
-
-DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p, switch_p, short_bb_branch_p;
@@ -2342,9 +2335,11 @@ static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
   if (op_ref->u.var_mem.index == MIR_NON_VAR && int16_p (op_ref->u.var_mem.disp)) return TRUE;
   size_t size = _MIR_type_size (ctx, op_ref->u.var_mem.type);
   if (op_ref->u.var_mem.index != MIR_NON_VAR && op_ref->u.var_mem.disp == 0
-      && op_ref->u.var_mem.scale == size) return TRUE;
+      && op_ref->u.var_mem.scale == size)
+    return TRUE;
   if (op_ref->u.var_mem.index == MIR_NON_VAR && op_ref->u.var_mem.disp % 4 == 0
-      && (size == 4 || size == 8) && int16_p (op_ref->u.var_mem.disp)) return TRUE;
+      && (size == 4 || size == 8) && int16_p (op_ref->u.var_mem.disp))
+    return TRUE;
   return FALSE;
 }
 

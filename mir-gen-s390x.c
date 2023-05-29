@@ -70,10 +70,6 @@ static MIR_insn_code_t get_ext_code (MIR_type_t type) {
   }
 }
 
-DEF_VARR (int);
-DEF_VARR (uint8_t);
-DEF_VARR (uint64_t);
-
 struct insn_pattern_info {
   int start, num;
 };
@@ -100,8 +96,6 @@ struct label_ref {
 
 typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
-
-DEF_VARR (MIR_code_reloc_t);
 
 struct target_ctx {
   unsigned char alloca_p, leaf_p, stack_param_p, switch_p;

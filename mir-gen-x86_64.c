@@ -586,10 +586,6 @@ static void get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pr
   }
 }
 
-DEF_VARR (int);
-DEF_VARR (uint8_t);
-DEF_VARR (uint64_t);
-
 struct insn_pattern_info {
   int start, num;
 };
@@ -619,8 +615,6 @@ struct label_ref {
 
 typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
-
-DEF_VARR (MIR_code_reloc_t);
 
 #define MOVDQA_CODE 0
 

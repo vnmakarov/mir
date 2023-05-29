@@ -326,6 +326,11 @@ static inline struct all_gen_ctx **all_gen_ctx_loc (MIR_context_t ctx) {
   return (struct all_gen_ctx **) ctx;
 }
 
+DEF_VARR (int);
+DEF_VARR (uint8_t);
+DEF_VARR (uint64_t);
+DEF_VARR (MIR_code_reloc_t);
+
 #if defined(__x86_64__) || defined(_M_AMD64)
 #include "mir-gen-x86_64.c"
 #elif defined(__aarch64__)
