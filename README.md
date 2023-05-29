@@ -20,7 +20,7 @@
      other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64le/s390x/riscv64 Linux**
   
 ## MIR
-  * MIR is strongly typed
+  * MIR is strongly typed IR
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
   * [MIR.md](https://github.com/vnmakarov/mir/blob/master/MIR.md) contains detail description of MIR and its API.
     Here is a brief MIR description:
