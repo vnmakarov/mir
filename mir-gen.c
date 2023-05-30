@@ -1556,7 +1556,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_insn_t insn, next_insn, ret_insn, use_insn, new_insn, new_label, bo_insn;
   size_t i, nops;
-  MIR_op_t *op, temp_op1, temp_op2;
+  MIR_op_t *op, temp_op1, temp_op2, temp_op3;
   MIR_reg_t reg;
   MIR_var_t mir_var;
   bb_t bb, prev_bb, entry_bb, exit_bb, label_bb;
@@ -1608,7 +1608,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
     } else if (MIR_call_code_p (insn->code)) {
       bb->call_p = TRUE;
     } else {
-      switch (insn->code) {
+      switch (insn->code) { /* ??? should we copy result change before insn and bo */
 #if defined(TARGET_EXPAND_ADDOS) || defined(TARGET_EXPAND_UADDOS)
       case MIR_ADDOS:
       case MIR_SUBOS: bo_insn = find_bo (gen_ctx, insn);
@@ -1618,24 +1618,26 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
 #ifndef TARGET_EXPAND_ADDOS
         if (bo_insn->code == MIR_BO || bo_insn->code == MIR_BNO) break;
 #endif
-        next_insn = insn;
         insn->code = insn->code == MIR_ADDO ? MIR_ADDS : MIR_SUBS;
         if (bo_insn->code == MIR_UBO || bo_insn->code == MIR_UBNO) {
-          /* adds r,a1,a2; ublts r,a2,ov_label or subs r,a1,a2; ublts a1,res,ov_label */
+          /* t1=a1;adds r,t1,a2; ublts r,t1,ov_label or t1=a1;subs r,t1,a2; ublts t1,res,ov_label */
+          next_insn = new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op1, insn->ops[1]);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+          insn->ops[1] = temp_op1;
           new_insn
             = MIR_new_insn (ctx, bo_insn->code == MIR_UBO ? MIR_UBLTS : MIR_UBGES, bo_insn->ops[0],
-                            insn->code == MIR_ADDS ? insn->ops[0] : insn->ops[1],
-                            insn->code == MIR_ADDS ? insn->ops[2] : insn->ops[0]);
+                            insn->code == MIR_ADDS ? insn->ops[0] : temp_op1,
+                            insn->code == MIR_ADDS ? temp_op1 : insn->ops[0]);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
         } else {
-          /* (adds|subs) r,a1,a2; ext32 t1,a1; ext32 t2,a2; (add|sub) t1,t1,t2; ext32 t2,r;
+          /* ext32 t1,a1; ext32 t2,a2; (adds|subs) r,a1,a2; (add|sub) t1,t1,t2; ext32 t2,r;
              bne t1,t2,ov_lab */
           new_temp_op (gen_ctx, &temp_op1);
           new_temp_op (gen_ctx, &temp_op2);
-          new_insn = MIR_new_insn (ctx, MIR_EXT32, temp_op1, insn->ops[1]);
-          MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
+          next_insn = new_insn = MIR_new_insn (ctx, MIR_EXT32, temp_op1, insn->ops[1]);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
           new_insn = MIR_new_insn (ctx, MIR_EXT32, temp_op2, insn->ops[2]);
-          MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
           new_insn = MIR_new_insn (ctx, insn->code == MIR_ADDS ? MIR_ADD : MIR_SUB, temp_op1,
                                    temp_op1, temp_op2);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
@@ -1657,27 +1659,33 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
 #ifndef TARGET_EXPAND_ADDO
         if (bo_insn->code == MIR_BO || bo_insn->code == MIR_BNO) break;
 #endif
-        next_insn = insn;
         insn->code = insn->code == MIR_ADDO ? MIR_ADD : MIR_SUB;
         if (bo_insn->code == MIR_UBO || bo_insn->code == MIR_UBNO) {
-          /* add r,a1,a2; ublt r,a2,ov_label or sub r,a1,a2; bult a1,r,ov_lab */
-          new_insn
-            = MIR_new_insn (ctx, bo_insn->code == MIR_UBO ? MIR_UBLT : MIR_UBGE, bo_insn->ops[0],
-                            insn->code == MIR_ADD ? insn->ops[0] : insn->ops[1],
-                            insn->code == MIR_ADD ? insn->ops[2] : insn->ops[0]);
+          /* t1=a1;add r,t1,a2; ublt r,t1,ov_label or t1=a1;sub r,t1,a2; ublt t1,r,ov_lab */
+          next_insn = new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op1, insn->ops[1]);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+          insn->ops[1] = temp_op1;
+          new_insn = MIR_new_insn (ctx, bo_insn->code == MIR_UBO ? MIR_UBLT : MIR_UBGE,
+                                   bo_insn->ops[0], insn->code == MIR_ADD ? insn->ops[0] : temp_op1,
+                                   insn->code == MIR_ADD ? temp_op1 : insn->ops[0]);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
         } else {
-          /* (add|sub) r,a1,a2;(lt t1,r,a1|lt t1,a1,r1);lt t2,a2,0;bne t2,t1,ov_lab */
+          /* t1=a1;t2=a2;(add|sub) r,t1,t2;(lt t1,r,t1|lt t1,t1,r1);lt t2,t2,0;bne t2,t1,ov_lab */
           new_temp_op (gen_ctx, &temp_op1);
           new_temp_op (gen_ctx, &temp_op2);
+          new_temp_op (gen_ctx, &temp_op3);
+          next_insn = new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op1, insn->ops[1]);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+          new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op2, insn->ops[2]);
+          MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
           if (insn->code == MIR_ADDO)
-            new_insn = MIR_new_insn (ctx, MIR_LT, temp_op1, insn->ops[0], insn->ops[1]);
+            new_insn = MIR_new_insn (ctx, MIR_LT, temp_op1, insn->ops[0], temp_op1);
           else
-            new_insn = MIR_new_insn (ctx, MIR_LT, temp_op1, insn->ops[1], insn->ops[0]);
+            new_insn = MIR_new_insn (ctx, MIR_LT, temp_op1, temp_op1, insn->ops[0]);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
-          new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op2, MIR_new_int_op (ctx, 0));
+          new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op3, MIR_new_int_op (ctx, 0));
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
-          new_insn = MIR_new_insn (ctx, MIR_LT, temp_op2, insn->ops[2], temp_op2);
+          new_insn = MIR_new_insn (ctx, MIR_LT, temp_op2, temp_op2, temp_op3);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
           new_insn = MIR_new_insn (ctx, bo_insn->code == MIR_BO ? MIR_BNE : MIR_BEQ,
                                    bo_insn->ops[0], temp_op1, temp_op2);
@@ -1721,8 +1729,8 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
 #if defined(TARGET_EXPAND_MULO) || defined(TARGET_EXPAND_UMULO)
       case MIR_MULO:
       case MIR_UMULO:
-        /* mul r,a1,a2; ...; [u]bno: bf lab,a1; [u]div t,r,a1;bne lab,t,a2
-                             [u]bo: bf new_lab,a1; [u]div t,r,a1;bne lab,t,a2; new_lab: */
+        /* t1=a1;t2=t2;mul r,t1,t2;...; [u]bno: bf lab,t1;[u]div t1,r,t1;bne lab,t,t2
+                                        [u]bo: bf new_lab,t1;[u]div t1,r,t1;bne lab,t,t2;new_lab: */
         bo_insn = find_bo (gen_ctx, insn);
 #ifndef TARGET_EXPAND_UMULO
         if (bo_insn->code == MIR_UBO || bo_insn->code == MIR_UBNO) break;
@@ -1730,25 +1738,31 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
 #ifndef TARGET_EXPAND_MULO
         if (bo_insn->code == MIR_BO || bo_insn->code == MIR_BNO) break;
 #endif
-        next_insn = insn;
+        new_temp_op (gen_ctx, &temp_op1);
+        new_temp_op (gen_ctx, &temp_op2);
+        next_insn = new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op1, insn->ops[1]);
+        MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+        new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op2, insn->ops[2]);
+        MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
         insn->code = MIR_MUL;
+        insn->ops[1] = temp_op1;
+        insn->ops[2] = temp_op2;
         if (bo_insn->code == MIR_BNO || bo_insn->code == MIR_UBNO) {
-          new_insn = MIR_new_insn (ctx, MIR_BF, bo_insn->ops[0], insn->ops[1]);
+          new_insn = MIR_new_insn (ctx, MIR_BF, bo_insn->ops[0], temp_op1);
         } else {
           new_label = _MIR_new_label (ctx);
-          new_insn = MIR_new_insn (ctx, MIR_BF, MIR_new_label_op (ctx, new_label), insn->ops[1]);
+          new_insn = MIR_new_insn (ctx, MIR_BF, MIR_new_label_op (ctx, new_label), temp_op1);
         }
         MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
-        new_temp_op (gen_ctx, &temp_op1);
         new_insn
           = MIR_new_insn (ctx,
                           bo_insn->code == MIR_BO || bo_insn->code == MIR_BNO ? MIR_DIV : MIR_UDIV,
-                          temp_op1, insn->ops[0], insn->ops[1]);
+                          temp_op1, insn->ops[0], temp_op1);
         MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
         new_insn
           = MIR_new_insn (ctx,
                           bo_insn->code == MIR_BO || bo_insn->code == MIR_UBO ? MIR_BNE : MIR_BEQ,
-                          bo_insn->ops[0], temp_op1, insn->ops[2]);
+                          bo_insn->ops[0], temp_op1, temp_op2);
         MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
         if (bo_insn->code == MIR_BO || bo_insn->code == MIR_UBO)
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_label);
