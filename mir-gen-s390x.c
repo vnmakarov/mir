@@ -11,6 +11,15 @@ static void fancy_abort (int code) {
 #undef gen_assert
 #define gen_assert(c) fancy_abort (c)
 
+#define TARGET_EXPAND_ADDO
+#define TARGET_EXPAND_ADDOS
+#define TARGET_EXPAND_UADDO
+#define TARGET_EXPAND_UADDOS
+#define TARGET_EXPAND_MULO
+#define TARGET_EXPAND_MULOS
+#define TARGET_EXPAND_UMULO
+#define TARGET_EXPAND_UMULOS
+
 #include <limits.h>
 
 #include "mir-s390x.h"

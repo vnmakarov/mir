@@ -13,6 +13,15 @@ static void fancy_abort (int code) {
 #undef gen_assert
 #define gen_assert(c) fancy_abort (c)
 
+#define TARGET_EXPAND_ADDO
+#define TARGET_EXPAND_ADDOS
+#define TARGET_EXPAND_UADDO
+#define TARGET_EXPAND_UADDOS
+#define TARGET_EXPAND_MULO
+#define TARGET_EXPAND_MULOS
+#define TARGET_EXPAND_UMULO
+#define TARGET_EXPAND_UMULOS
+
 static const MIR_reg_t LINK_HARD_REG = LR_HARD_REG;
 
 static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
