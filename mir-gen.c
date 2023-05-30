@@ -1675,7 +1675,9 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
           else
             new_insn = MIR_new_insn (ctx, MIR_LT, temp_op1, insn->ops[1], insn->ops[0]);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
-          new_insn = MIR_new_insn (ctx, MIR_LT, temp_op2, insn->ops[2], MIR_new_int_op (ctx, 0));
+          new_insn = MIR_new_insn (ctx, MIR_MOV, temp_op2, MIR_new_int_op (ctx, 0));
+          MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
+          new_insn = MIR_new_insn (ctx, MIR_LT, temp_op2, insn->ops[2], temp_op2);
           MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
           new_insn = MIR_new_insn (ctx, bo_insn->code == MIR_BO ? MIR_BNE : MIR_BEQ,
                                    bo_insn->ops[0], temp_op1, temp_op2);
