@@ -11,8 +11,6 @@ static void fancy_abort (int code) {
 #undef gen_assert
 #define gen_assert(c) fancy_abort (c)
 
-#define TARGET_EXPAND_ADDO
-#define TARGET_EXPAND_ADDOS
 #define TARGET_EXPAND_UADDO
 #define TARGET_EXPAND_UADDOS
 #define TARGET_EXPAND_MULO
@@ -61,11 +59,11 @@ Originally SP(r15) and FP (r11) are the same but r15 can be changed by alloca */
 
 /* s390x has 3-ops insns */
 static const MIR_insn_code_t target_io_dup_op_insn_codes[]
-  = {MIR_ADD,  MIR_ADDS, MIR_FADD, MIR_DADD,      MIR_SUB,   MIR_SUBS,  MIR_FSUB, MIR_DSUB,
-     MIR_MUL,  MIR_MULS, MIR_FMUL, MIR_DMUL,      MIR_DIV,   MIR_DIVS,  MIR_UDIV, MIR_UDIVS,
-     MIR_FDIV, MIR_DDIV, MIR_MOD,  MIR_MODS,      MIR_UMOD,  MIR_UMODS, MIR_EQ,   MIR_EQS,
-     MIR_NE,   MIR_NES,  MIR_LSHS, MIR_RSHS,      MIR_URSHS, MIR_AND,   MIR_ANDS, MIR_OR,
-     MIR_ORS,  MIR_XOR,  MIR_XORS, MIR_INSN_BOUND};
+  = {MIR_ADD,   MIR_ADDS,  MIR_FADD, MIR_DADD,  MIR_SUB,  MIR_SUBS, MIR_SUBO, MIR_SUBOS,
+     MIR_ADDO,  MIR_ADDOS, MIR_FSUB, MIR_DSUB,  MIR_MUL,  MIR_MULS, MIR_FMUL, MIR_DMUL,
+     MIR_DIV,   MIR_DIVS,  MIR_UDIV, MIR_UDIVS, MIR_FDIV, MIR_DDIV, MIR_MOD,  MIR_MODS,
+     MIR_UMOD,  MIR_UMODS, MIR_EQ,   MIR_EQS,   MIR_NE,   MIR_NES,  MIR_LSHS, MIR_RSHS,
+     MIR_URSHS, MIR_AND,   MIR_ANDS, MIR_OR,    MIR_ORS,  MIR_XOR,  MIR_XORS, MIR_INSN_BOUND};
 
 static MIR_insn_code_t get_ext_code (MIR_type_t type) {
   switch (type) {
@@ -1172,6 +1170,20 @@ static const struct pattern patterns[] = {
   {MIR_SUB, "r 0 Ms2", "e3:19 r0 m"}, /* sgf r0,m */
   // ??? changing sub imm to add imm
 
+  {MIR_ADDOS, "r 0 r", "1a* r0 R2"},   /* ar r0,r1 */
+  {MIR_ADDOS, "r 0 m2", "5a r0 m"},    /* a r0,m */
+  {MIR_ADDO, "r 0 r", "b908 r0 R2"},   /* agr r0,r1 */
+  {MIR_ADDO, "r 0 M2", "e3:5a r0 m"},  /* ay r0,m */
+  {MIR_ADDO, "r 0 M3", "e3:08 r0 m"},  /* ag r0,m */
+  {MIR_ADDO, "r 0 Ms2", "e3:18 r0 m"}, /* agf r0,m */
+
+  {MIR_SUBOS, "r 0 r", "1b* r0 R2"},   /* sr r0,r1 */
+  {MIR_SUBOS, "r 0 m2", "5b r0 m"},    /* s r0,m */
+  {MIR_SUBO, "r 0 r", "b909 r0 R2"},   /* sgr r0,r1 */
+  {MIR_SUBO, "r 0 M2", "e3:5b r0 m"},  /* sy r0,m */
+  {MIR_SUBO, "r 0 M3", "e3:09 r0 m"},  /* sg r0,m */
+  {MIR_SUBO, "r 0 Ms2", "e3:19 r0 m"}, /* sgf r0,m */
+
   {MIR_FSUB, "r 0 r", "b30b r0 R2"},  /* sebr r0,r1*/
   {MIR_DSUB, "r 0 r", "b31b r0 R2"},  /* sdbr r0,r1*/
   {MIR_FSUB, "r 0 mf", "ed:0b r0 m"}, /* seb r,m*/
@@ -1341,11 +1353,14 @@ static const struct pattern patterns[] = {
           BCMPU (MIR_UBLT, MIR_UBLTS, 4) BCMPU (MIR_UBGT, MIR_UBGTS, 2)
             BCMPU (MIR_UBLE, MIR_UBLES, 12) BCMPU (MIR_UBGE, MIR_UBGES, 10)
 
-              {MIR_NEG, "r r", "b903 r0 R1"}, /* lcgr r0,r1 */
-  {MIR_NEGS, "r r", "13* r0 R1"},             /* lcr r0,r1 */
-  {MIR_FNEG, "r r", "b303 r0 R1"},            /* lcebr r0,r1 */
-  {MIR_DNEG, "r r", "b313 r0 R1"},            /* lcdbr r0,r1 */
-                                              // ldneg is a builtin
+              {MIR_BO, "L", SBRCL (1)}, /* jo l */
+  {MIR_BNO, "L", SBRCL (14)},           /* jno l */
+
+  {MIR_NEG, "r r", "b903 r0 R1"},  /* lcgr r0,r1 */
+  {MIR_NEGS, "r r", "13* r0 R1"},  /* lcr r0,r1 */
+  {MIR_FNEG, "r r", "b303 r0 R1"}, /* lcebr r0,r1 */
+  {MIR_DNEG, "r r", "b313 r0 R1"}, /* lcdbr r0,r1 */
+                                   // ldneg is a builtin
 
   {MIR_LSH, "r r r", "eb:0d r0 R1 s2"}, /* sllg r0,r2,b3 */
   {MIR_LSH, "r r D", "eb:0d r0 R1 mD"}, /* sllg r0,r2,d */
