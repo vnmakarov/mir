@@ -7824,8 +7824,7 @@ static void init_decl (c2m_ctx_t c2m_ctx, decl_t decl) {
 }
 
 static void create_decl (c2m_ctx_t c2m_ctx, node_t scope, node_t decl_node,
-                         struct decl_spec decl_spec, node_t width, node_t initializer,
-                         int param_p) {
+                         struct decl_spec decl_spec, node_t initializer, int param_p) {
   check_ctx_t check_ctx = c2m_ctx->check_ctx;
   int func_def_p = decl_node->code == N_FUNC_DEF, func_p = FALSE;
   node_t id = NULL; /* to remove an uninitialized warning */
@@ -9371,7 +9370,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
     }
     if (declarator->code != N_IGNORE) {
-      create_decl (c2m_ctx, curr_scope, r, decl_spec, NULL, initializer,
+      create_decl (c2m_ctx, curr_scope, r, decl_spec, initializer,
                    context != NULL && context->code == N_FUNC);
       decl_t decl = r->attr;
       const char *antialias = check_attrs (c2m_ctx, r, decl, attrs, TRUE);
@@ -9434,7 +9433,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     node_t unshared_specs = specs->code != N_SHARE ? specs : NL_HEAD (specs->u.ops);
     struct decl_spec decl_spec = check_decl_spec (c2m_ctx, unshared_specs, r);
 
-    create_decl (c2m_ctx, curr_scope, r, decl_spec, const_expr, NULL, FALSE);
+    create_decl (c2m_ctx, curr_scope, r, decl_spec, NULL, FALSE);
     type = ((decl_t) r->attr)->decl_spec.type;
     if (const_expr->code != N_IGNORE) {
       struct expr *cexpr;
@@ -9518,7 +9517,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     curr_switch = curr_loop = curr_loop_switch = NULL;
     curr_call_arg_area_offset = 0;
     VARR_TRUNC (decl_t, func_decls_for_allocation, 0);
-    create_decl (c2m_ctx, top_scope, r, decl_spec, NULL, NULL, FALSE);
+    create_decl (c2m_ctx, top_scope, r, decl_spec, NULL, FALSE);
     curr_scope = func_block_scope;
     check (c2m_ctx, declarations, r);
     /* Process parameter identifier list:  */
