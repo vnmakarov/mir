@@ -1538,12 +1538,12 @@ static void update_tied_regs (gen_ctx_t gen_ctx, MIR_reg_t reg) {
 
 static long remove_unreachable_bbs (gen_ctx_t gen_ctx);
 
-static void new_temp_op (gen_ctx_t gen_ctx, MIR_op_t *temp_op) {
+static void MIR_UNUSED new_temp_op (gen_ctx_t gen_ctx, MIR_op_t *temp_op) {
   MIR_context_t ctx = gen_ctx->ctx;
   *temp_op = MIR_new_reg_op (ctx, _MIR_new_temp_reg (ctx, MIR_T_I64, curr_func_item->u.func));
 }
 
-static MIR_insn_t find_bo (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+static MIR_insn_t MIR_UNUSED find_bo (gen_ctx_t gen_ctx MIR_UNUSED, MIR_insn_t insn) {
   for (; insn != NULL; insn = DLIST_NEXT (MIR_insn_t, insn))
     if (insn->code == MIR_BO || insn->code == MIR_BNO || insn->code == MIR_UBO
         || insn->code == MIR_UBNO)
@@ -1554,9 +1554,10 @@ static MIR_insn_t find_bo (gen_ctx_t gen_ctx, MIR_insn_t insn) {
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, next_insn, ret_insn, use_insn, new_insn, new_label, bo_insn;
+  MIR_insn_t insn, next_insn, ret_insn, use_insn;
+  MIR_insn_t new_insn MIR_UNUSED, new_label MIR_UNUSED, bo_insn MIR_UNUSED;
   size_t i, nops;
-  MIR_op_t *op, temp_op1, temp_op2, temp_op3;
+  MIR_op_t *op, temp_op1 MIR_UNUSED, temp_op2 MIR_UNUSED, temp_op3 MIR_UNUSED;
   MIR_reg_t reg;
   MIR_var_t mir_var;
   bb_t bb, prev_bb, entry_bb, exit_bb, label_bb;
@@ -7261,7 +7262,7 @@ static int gap_lr_spill_cost (gen_ctx_t gen_ctx, live_range_t lr) {
 }
 
 static void find_lr_gaps (gen_ctx_t gen_ctx, live_range_t for_lr, MIR_reg_t hreg, MIR_type_t type,
-                          int nregs, int *spill_cost, VARR (lr_gap_t) * lr_gaps) {
+                          int nregs MIR_UNUSED, int *spill_cost, VARR (lr_gap_t) * lr_gaps) {
   MIR_reg_t curr_hreg;
   int i, j, cont, slots_num = target_locs_num (hreg, type);
   int found_p MIR_UNUSED;
