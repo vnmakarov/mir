@@ -581,7 +581,9 @@ extern void MIR_read_with_func (MIR_context_t ctx, int (*const reader_func) (MIR
 #endif
 
 #if !MIR_NO_SCAN
+/** deprecated: use MIR_scan_string_s */
 extern void MIR_scan_string (MIR_context_t ctx, const char *str);
+extern void MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len);
 #endif
 
 extern MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name);
