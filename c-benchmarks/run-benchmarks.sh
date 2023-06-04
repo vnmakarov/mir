@@ -67,7 +67,7 @@ run () {
     diff -up $expect_out $temp
     return 1
   fi
-  secs=`egrep 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t// | sort -n | head -1`
+  secs=`grep -E 'user[ 	]*[0-9]' $temp2 | sed s/.*user// | sed s/\\t// | sort -n | head -1`
   if test x$flag != x;then base_time=$secs;fi
   print_time "$title" $secs
 }
@@ -122,7 +122,7 @@ EOF
       run "ccomp -O3" "ccomp -O3 $bench.c -lm" "./a.out $arg" "$expect_out" "$inputf" $first
       first=
   fi
-  if test x$short != xshort && ! fgrep setjmp.h $bench.c >/dev/null 2>&1; then
+  if test x$short != xshort && ! grep -F setjmp.h $bench.c >/dev/null 2>&1; then
     if emcc $tempc -s STANDALONE_WASM >/dev/null 2>&1 && wasmer run ./a.out.wasm >/dev/null 2>&1; then
       run "emcc/wasmer" "emcc -s STANDALONE_WASM -s TOTAL_MEMORY=200mb $bench.c" "wasmer run ./a.out.wasm -- $arg" "$expect_out" "$inputf" $first
     fi
@@ -152,9 +152,9 @@ EOF
 }
 
 start_bench_num=$1
-if echo $start_bench_num | egrep [0-9]+ >/dev/null; then
+if echo $start_bench_num | grep -E [0-9]+ >/dev/null; then
   shift
-elif test x$start_bench_num = x || (echo $start_bench_num | egrep -v [0-9]+ >/dev/null); then
+elif test x$start_bench_num = x || (echo $start_bench_num | grep -E -v [0-9]+ >/dev/null); then
   start_bench_num=0
 fi
 short=$1

@@ -10,8 +10,7 @@ ctest_dir=`dirname $0`
 execution_program=$1
 compiler=$2
 
-FGREP=fgrep
-EGREP=egrep
+GREP=grep
 
 ECHO=echo
 if test x$BASH_VERSION != x;then
@@ -36,16 +35,16 @@ fi
 
 runtest () {
 	t=$1
-	if test -f $t.mach && ! $EGREP "`uname -m`" $t.mach >/dev/null; then
+	if test -f $t.mach && ! $GREP -E "`uname -m`" $t.mach >/dev/null; then
 	    $ECHO $t: SKIPPED as used only for "`cat $t.mach`"; return 0;
 	fi
-	if test -f $t.opt && ! $EGREP -- "`cat $t.opt`" $execution_program >/dev/null; then
+	if test -f $t.opt && ! $GREP -E -- "`cat $t.opt`" $execution_program >/dev/null; then
 	    $ECHO $t: SKIPPED as used only for "`cat $t.opt`"; return 0;
 	fi
 	add_main=$2
 	all=`expr $all + 1`
 	$ECHO -n $t:
-	if test -f $t.disable && $FGREP "$ARCH" $t.disable >/dev/null 2>&1; then $ECHO Skipped; return; fi
+	if test -f $t.disable && $GREP -F "$ARCH" $t.disable >/dev/null 2>&1; then $ECHO Skipped; return; fi
 	if test -f $t.expectrc; then expect_code=`cat $t.expectrc`; else expect_code=0; fi
 	if test -f $t.expect; then expect_out=$t.expect; else expect_out=; fi
 	another_expect=`dirname $t`/`basename $t .c`.expect
@@ -85,8 +84,13 @@ do
 	   continue;
 	fi
 	for t in $ctest_dir/$dir/*.c;do
-	    if $ECHO $t|$EGREP '/add-[a-zA-Z0-9]+.c$' >/dev/null; then continue; fi
-	    if test -f $ctest_dir/$dir/add-`basename $t`;then add_main=$ctest_dir/$dir/add-`basename $t`;else add_main=;fi
+	    if $ECHO $t|$GREP -E '/add-[a-zA-Z0-9]+.c$' >/dev/null; then continue; fi
+	    if test -f $ctest_dir/$dir/add-`basename $t`;then add_main=$ctest_dir/$dir/add-`basename $t`
+	    elif test -f $ctest_dir/$dir/add-`basename $t .c`.mir;then
+		add_main=$ctest_dir/$dir/add-`basename $t .c`.mir
+	    else
+		add_main=
+	    fi
 	    runtest $t $add_main
 	done
 done
