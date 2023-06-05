@@ -9712,12 +9712,19 @@ void MIR_gen_finish (MIR_context_t ctx) {
 }
 
 void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
-  if (func_item == NULL) return; /* finish setting interfaces */
+  if (func_item == NULL) { /* finish setting interfaces */
+    target_relocate_funcs (ctx);
+    return;
+  }
   MIR_gen (ctx, 0, func_item);
 }
+
 void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 #if !MIR_PARALLEL_GEN
-  if (func_item == NULL) return; /* finish setting interfaces */
+  if (func_item == NULL) { /* finish setting interfaces */
+    target_relocate_funcs (ctx);
+    return;
+  }
   MIR_gen (ctx, 0, func_item);
 #else
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
@@ -9738,6 +9745,7 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
       if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
     }
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
+    target_relocate_funcs (*all_gen_ctx_loc (ctx));
   } else {
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     func_or_bb.func_p = func_or_bb.full_p = TRUE;
