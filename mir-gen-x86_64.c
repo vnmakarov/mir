@@ -618,6 +618,16 @@ DEF_VARR (label_ref_t);
 
 #define MOVDQA_CODE 0
 
+struct pattern;
+struct func_ref {
+  MIR_item_t code_func_item, ref_func_item; /* func where the ref is located and referenced func */
+  size_t ref_insn_offset;                   /* ref insn offset in code func */
+  struct pattern *pattern;                  /* pattern of the ref insn */
+};
+
+typedef struct func_ref func_ref_t;
+DEF_VARR (func_ref_t);
+
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p, keep_fp_p;
   int start_sp_from_bp_offset;
@@ -631,6 +641,7 @@ struct target_ctx {
   VARR (label_ref_t) * label_refs;
   VARR (uint64_t) * abs_address_locs;
   VARR (MIR_code_reloc_t) * relocs;
+  VARR (func_ref_t) * func_refs;
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
@@ -2430,12 +2441,24 @@ static int get_max_insn_size (gen_ctx_t gen_ctx MIR_UNUSED, const char *replacem
   return size;
 }
 
-static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacement,
-                      void **jump_addrs) {
+static void store_func_ref (gen_ctx_t gen_ctx, const MIR_op_t *op_ref, struct pattern *pattern) {
+  func_ref_t func_ref;
+
+  if (op_ref->mode != MIR_OP_REF || op_ref->u.ref->item_type != MIR_func_item) return;
+  if (op_ref->u.ref->u.func->redef_permitted_p) return;
+  func_ref.code_func_item = curr_func_item;
+  func_ref.ref_func_item = op_ref->u.ref;
+  func_ref.ref_insn_offset = VARR_LENGTH (uint8_t, result_code);
+  func_ref.pattern = pattern;
+  VARR_PUSH (func_ref_t, gen_ctx->target_ctx->func_refs, func_ref);
+}
+
+static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, struct pattern *pat, void **jump_addrs) {
   MIR_context_t ctx = gen_ctx->ctx;
   const char *p, *insn_str;
   label_ref_t lr;
   int switch_table_addr_start = -1;
+  const char *replacement = pat->replacement;
 
   if (insn->code == MIR_ALLOCA
       && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
@@ -2558,6 +2581,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
                         || op2.mode == MIR_OP_REF);
             mem.index = MIR_NON_VAR;
             mem.disp = int_value (gen_ctx, &op2);
+            store_func_ref (gen_ctx, &op2, pat);
           }
         } else if (ch == 'd') {
           mem.base = op_ref->u.var;
@@ -2586,6 +2610,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         op_ref = &insn->ops[ch - '0'];
         gen_assert (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT
                     || op_ref->mode == MIR_OP_REF);
+        store_func_ref (gen_ctx, op_ref, pat);
         int64_t n = int_value (gen_ctx, op_ref);
         if (start_ch == 'i') {
           gen_assert (int8_p (n));
@@ -2634,6 +2659,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         gen_assert (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT
                     || op_ref->mode == MIR_OP_REF);
         v = (uint64_t) int_value (gen_ctx, op_ref);
+        store_func_ref (gen_ctx, op_ref, pat);
         gen_assert (const_ref_num < 0 && disp32 < 0);
         const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, TRUE);
         break;
@@ -2882,7 +2908,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
 #ifndef NDEBUG
       size_t len_before = VARR_LENGTH (uint8_t, result_code);
 #endif
-      out_insn (gen_ctx, insn, patterns[ind].replacement, NULL);
+      out_insn (gen_ctx, insn, &patterns[ind], NULL);
 #ifndef NDEBUG
       size_t insn_len = VARR_LENGTH (uint8_t, result_code) - len_before;
       if (insn_len > (size_t) patterns[ind].max_insn_size && insn->code != MIR_SWITCH) {
@@ -2926,6 +2952,97 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   change_calls (gen_ctx, base);
 }
 
+static int func_ref_cmp (const void *a1, const void *a2) {
+  const func_ref_t *f1 = a1, *f2 = a2;
+  return f1->ref_func_item - f2->ref_func_item;
+}
+
+static int redirect_func_ref (MIR_context_t ctx, func_ref_t *func_ref, int check_only_p) {
+  gen_ctx_t gen_ctx = &(*all_gen_ctx_loc (ctx))->gen_ctx[0];
+  MIR_item_t ref_func_item = func_ref->ref_func_item;
+  MIR_func_t ref_func = ref_func_item->u.func;
+  uint8_t *ref_insn
+    = (uint8_t *) func_ref->code_func_item->u.func->machine_code + func_ref->ref_insn_offset;
+  struct pattern *pattern = func_ref->pattern;
+
+  if (pattern->code == MIR_CALL) {
+    int64_t disp64 = *(int32_t *) &ref_insn[2]; /* skip call prefix: addr from call */
+    int64_t disp64_before = disp64;
+    void *func_addr = ref_insn + 6 /* imm call insn length */ + disp64;
+    if (func_addr == ref_func_item->addr)
+      disp64 += (int64_t) ref_func->machine_code - (int64_t) ref_func_item->addr;
+    if (!int32_p (disp64)) return FALSE;
+    if (check_only_p) return TRUE;
+    int32_t disp32 = disp64;
+    DEBUG (2, {
+      fprintf (stderr, "Making direct call of %s at 0x%lx (disp: before=%ld, after=%ld)\n",
+               ref_func->name, (unsigned long) ref_insn, (long) disp64_before, (long) disp64);
+    });
+    _MIR_change_code (ctx, &ref_insn[2], (uint8_t *) &disp32, sizeof (int32_t));
+    return TRUE;
+  } else if (pattern->code == MIR_MOV && ref_insn[1] == 0xB8
+             && (ref_insn[0] & 0xf8) == 0x48) {              /* movabs */
+    uint64_t addr, addr_before = *(uint64_t *) &ref_insn[2]; /* skip rex + b8 */
+    if (check_only_p) return TRUE;
+    if ((void *) addr_before == ref_func_item->addr) addr = (uint64_t) ref_func->machine_code;
+    DEBUG (2, {
+      fprintf (stderr, "Making direct ref of func %s at 0x%lx (addr: before=%lu, after=%lu)\n",
+               ref_func->name, (unsigned long) ref_insn, (unsigned long) addr_before,
+               (unsigned long) addr);
+    });
+    _MIR_change_code (ctx, &ref_insn[2], (uint8_t *) &addr, sizeof (uint64_t));
+    return TRUE;
+  } else if (pattern->code == MIR_MOV) {
+    uint8_t *insn_wo_prefix = ref_insn;
+    if ((ref_insn[0] & 0xf8) == 0x40) insn_wo_prefix++;
+    if (insn_wo_prefix[0] == 0xB8) {                               /* mov32 */
+      int64_t addr, addr_before = *(int32_t *) &insn_wo_prefix[1]; /* skip b8 */
+      if ((void *) addr_before == ref_func_item->addr) addr = (int64_t) ref_func->machine_code;
+      if (!int32_p (addr)) return FALSE;
+      if (check_only_p) return TRUE;
+      DEBUG (2, {
+        fprintf (stderr,
+                 "Making direct 32-bit ref of func %s at 0x%lx (addr: before=%lu, after=%lu)\n",
+                 ref_func->name, (unsigned long) insn_wo_prefix, (unsigned long) addr_before,
+                 (unsigned long) addr);
+      });
+      _MIR_change_code (ctx, &insn_wo_prefix[1], (uint8_t *) &addr, sizeof (uint32_t));
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+static void target_relocate_funcs (MIR_context_t ctx) {
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
+  if (all_gen_ctx->gens_num > 1) { /* collect all func refs in zeroth gen_ctx */
+    for (int i = 1; i < all_gen_ctx->gens_num; i++)
+      while (VARR_LENGTH (func_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->func_refs) != 0)
+        VARR_PUSH (func_ref_t, gen_ctx->target_ctx->func_refs,
+                   VARR_POP (func_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->func_refs));
+  }
+  size_t len = VARR_LENGTH (func_ref_t, gen_ctx->target_ctx->func_refs);
+  func_ref_t *func_refs_addr = VARR_ADDR (func_ref_t, gen_ctx->target_ctx->func_refs);
+  if (len == 0) return;
+  qsort (func_refs_addr, len, sizeof (func_ref_t), func_ref_cmp);
+  for (size_t i = 0; i < len;) {
+    MIR_item_t ref_func_item = func_refs_addr[i].ref_func_item;
+    size_t j;
+    int ok_p = TRUE;
+
+    for (j = i; j < len && func_refs_addr[j].ref_func_item == ref_func_item; j++) {
+      if (redirect_func_ref (ctx, &func_refs_addr[j], TRUE)) continue;
+      ok_p = FALSE;
+    }
+    if (ok_p) {
+      for (j = i; j < len && func_refs_addr[j].ref_func_item == ref_func_item; j++)
+        redirect_func_ref (ctx, &func_refs_addr[j], FALSE);
+    }
+    i = j;
+  }
+}
+
 struct target_bb_version {
   uint8_t *base;
   label_ref_t branch_ref; /* label cand used for jump to this bb version */
@@ -2947,11 +3064,11 @@ static void target_bb_insn_translate (gen_ctx_t gen_ctx, MIR_insn_t insn, void *
   if (insn->code == MIR_LABEL) return;
   int ind = find_insn_pattern (gen_ctx, insn, &ind); /* &ind for no short jumps */
   gen_assert (ind >= 0);
-  out_insn (gen_ctx, insn, patterns[ind].replacement, jump_addrs);
+  out_insn (gen_ctx, insn, &patterns[ind], jump_addrs);
 }
 
 static void target_output_jump (gen_ctx_t gen_ctx, void **jump_addrs) {
-  out_insn (gen_ctx, temp_jump, patterns[temp_jump_pat_ind].replacement, jump_addrs);
+  out_insn (gen_ctx, temp_jump, &patterns[temp_jump_pat_ind], jump_addrs);
 }
 
 static uint8_t *target_bb_translate_finish (gen_ctx_t gen_ctx, size_t *len) {
@@ -3045,6 +3162,7 @@ static void target_init (gen_ctx_t gen_ctx) {
   VARR_CREATE (label_ref_t, label_refs, 0);
   VARR_CREATE (uint64_t, abs_address_locs, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, 0);
+  VARR_CREATE (func_ref_t, gen_ctx->target_ctx->func_refs, 0);
   MIR_type_t res = MIR_T_D;
   MIR_var_t args[] = {{MIR_T_D, "src", 0}};
   _MIR_register_unspec_insn (gen_ctx->ctx, MOVDQA_CODE, "movdqa", 1, &res, 1, FALSE, args);
@@ -3063,6 +3181,7 @@ static void target_finish (gen_ctx_t gen_ctx) {
   VARR_DESTROY (label_ref_t, label_refs);
   VARR_DESTROY (uint64_t, abs_address_locs);
   VARR_DESTROY (MIR_code_reloc_t, relocs);
+  VARR_DESTROY (func_ref_t, gen_ctx->target_ctx->func_refs);
   free (gen_ctx->target_ctx);
   gen_ctx->target_ctx = NULL;
 }
