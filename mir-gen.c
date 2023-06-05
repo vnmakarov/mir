@@ -5436,7 +5436,7 @@ static int get_int_const (gen_ctx_t gen_ctx, MIR_op_t *op_ref, int64_t *c) {
   }
   if (op_ref->mode == MIR_OP_INT || op_ref->mode == MIR_OP_UINT) {
     *c = op_ref->u.i;
-  } else if (op_ref->mode == MIR_OP_REF) {
+  } else if (op_ref->mode == MIR_OP_REF && op_ref->u.ref->item_type != MIR_func_item) {
     *c = get_ref_value (gen_ctx, op_ref);
   } else {
     return FALSE;
