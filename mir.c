@@ -34,6 +34,7 @@ struct MIR_context {
   mir_mutex_t ctx_mutex;
 #endif
   MIR_error_func_t error_func;
+  int func_redef_permission_p;        /* when true loaded func can be redfined lately */
   VARR (size_t) * insn_nops;          /* constant after initialization */
   VARR (MIR_proto_t) * unspec_protos; /* protos of unspec insns (set only during initialization) */
   VARR (char) * temp_string;
@@ -62,6 +63,7 @@ struct MIR_context {
 
 #define ctx_mutex ctx->ctx_mutex
 #define error_func ctx->error_func
+#define func_redef_permission_p ctx->func_redef_permission_p
 #define unspec_protos ctx->unspec_protos
 #define insn_nops ctx->insn_nops
 #define temp_string ctx->temp_string
@@ -663,6 +665,12 @@ MIR_error_func_t MIR_get_error_func (MIR_context_t ctx) { return error_func; }  
 
 void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atomic access
   error_func = func;
+}
+
+int MIR_get_func_redef_permission_p (MIR_context_t ctx) { return func_redef_permission_p; }
+
+void MIR_set_func_redef_permission_p (MIR_context_t ctx, int enable_p) {  // ?? atomic access
+  func_redef_permission_p = enable_p;
 }
 
 static htab_hash_t item_hash (MIR_item_t it, void *arg MIR_UNUSED) {
@@ -1342,6 +1350,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->global_vars = NULL;
   func->nargs = nargs;
   func->last_temp_num = 0;
+  func->redef_permitted_p = FALSE;
   func->vararg_p = vararg_p != 0;
   func->expr_p = func->jret_p = FALSE;
   func->n_inlines = 0;
@@ -1715,9 +1724,10 @@ void MIR_finish_module (MIR_context_t ctx) {
   curr_module = NULL;
 }
 
-static void setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_item_t def) {
+static int setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_item_t def) {
   MIR_item_t item, tab_item;
   MIR_module_t saved = curr_module;
+  int redef_p = FALSE;
 
   curr_module = &environment_module;
   /* Use import for proto representation: */
@@ -1725,6 +1735,7 @@ static void setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_i
   if ((tab_item = item_tab_find (ctx, MIR_item_name (ctx, item), &environment_module)) != item
       && tab_item != NULL) {
     free (item);
+    redef_p = TRUE;
   } else {
     HTAB_DO (MIR_item_t, module_item_tab, item, HTAB_INSERT, tab_item);
     DLIST_APPEND (MIR_item_t, environment_module.items, item);
@@ -1733,6 +1744,7 @@ static void setup_global (MIR_context_t ctx, const char *name, void *addr, MIR_i
   tab_item->addr = addr;
   tab_item->ref_def = def;
   curr_module = saved;
+  return redef_p;
 }
 
 static void undefined_interface (MIR_context_t ctx) {
@@ -1834,8 +1846,12 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
       mir_assert (first_item->item_type != MIR_export_item
                   && first_item->item_type != MIR_import_item
                   && first_item->item_type != MIR_forward_item);
-      setup_global (ctx, MIR_item_name (ctx, first_item), first_item->addr, first_item);
+      if (setup_global (ctx, MIR_item_name (ctx, first_item), first_item->addr, first_item)
+          && item->item_type == MIR_func_item && !item->u.func->redef_permitted_p)
+        MIR_get_error_func (ctx) (MIR_repeated_decl_error, "func %s is prohibited for redefinition",
+                                  item->u.func->name);
     }
+    if (item->item_type == MIR_func_item) item->u.func->redef_permitted_p = func_redef_permission_p;
   }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }

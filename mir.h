@@ -336,6 +336,7 @@ typedef struct MIR_func {
   DLIST (MIR_insn_t) insns, original_insns;
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
+  char redef_permitted_p;         /* flag that function can be redefined */
   char vararg_p;                  /* flag of variable number of arguments */
   char expr_p;                    /* flag of that the func can be used as a linker expression */
   char jret_p;                    /* flag of jcall/jret func, set up after MIR_func_finish */
@@ -547,6 +548,9 @@ extern void MIR_finish_module (MIR_context_t ctx);
 
 extern MIR_error_func_t MIR_get_error_func (MIR_context_t ctx);
 extern void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func);
+
+extern int MIR_get_func_redef_flag (MIR_context_t ctx);
+extern void MIR_set_func_redef_flag (MIR_context_t ctx, int flag_p);
 
 extern MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nops,
                                     MIR_op_t *ops);
