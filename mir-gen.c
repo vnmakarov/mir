@@ -9745,7 +9745,7 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
       if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
     }
     if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
-    target_relocate_funcs (*all_gen_ctx_loc (ctx));
+    target_relocate_funcs (ctx);
   } else {
     if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
     func_or_bb.func_p = func_or_bb.full_p = TRUE;
