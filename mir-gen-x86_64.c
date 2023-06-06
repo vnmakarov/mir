@@ -2970,18 +2970,27 @@ static void target_change_to_direct_calls (MIR_context_t ctx) {
     int32_t off = *(int32_t *) (call_addr + 2);
     int call32_p = FALSE;
     if (call_addr[0] == 0xff) { /* call *rel32(rip) */
-      uint8_t *addr_loc = call_addr + 6 + off;
+      addr_loc = call_addr + 6 + off;
       addr_before = (uint8_t *) *(uint64_t *) addr_loc;
       if (addr_before == addr) continue;
       _MIR_change_code (ctx, addr_loc, (uint8_t *) &addr, sizeof (uint64_t));
     } else { /* rex call rel32(rip) */
       gen_assert (call_addr[0] == 0x40);
-      uint8_t *addr_loc = call_addr + 2, *addr_before = call_addr + 6 + off;
-      if (addr_before == addr) continue;
+      addr_loc = call_addr;
+      addr_before = call_addr + 6 + off;
       int64_t new_off = addr - (call_addr + 6);
-      if (!int32_p (new_off)) continue;
+      if (addr_before == addr || !int32_p (new_off)) {
+        DEBUG (2, {
+          fprintf (stderr,
+                   "Failing to make direct 32-bit call of func %s at 0x%lx (addr: before=0x%lx, "
+                   "after=0x%lx)\n",
+                   ref_func->name, (unsigned long) addr_loc, (unsigned long) addr_before,
+                   (unsigned long) addr);
+        });
+        continue;
+      }
       off = new_off;
-      _MIR_change_code (ctx, addr_loc, (uint8_t *) &off, sizeof (uint32_t));
+      _MIR_change_code (ctx, addr_loc + 2, (uint8_t *) &off, sizeof (uint32_t));
       call32_p = TRUE;
     }
     DEBUG (2, {
