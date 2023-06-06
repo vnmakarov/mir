@@ -596,6 +596,7 @@ DEF_VARR (insn_pattern_info_t);
 
 struct const_ref {
   int call_p;            /* flag that constant from call insn */
+  MIR_item_t func_item;  /* non-null for constant representing reference to func item */
   size_t pc;             /* where rel32 address should be in code */
   size_t next_insn_disp; /* displacement of the next insn */
   size_t const_num;
@@ -618,6 +619,14 @@ DEF_VARR (label_ref_t);
 
 #define MOVDQA_CODE 0
 
+struct call_ref {
+  MIR_item_t ref_func_item; /* func where the ref is located and referenced func */
+  uint8_t *call_addr;       /* addr of rex call disp32(rip) or call *disp32(rip) */
+};
+
+typedef struct call_ref call_ref_t;
+DEF_VARR (call_ref_t);
+
 struct target_ctx {
   unsigned char alloca_p, block_arg_func_p, leaf_p, keep_fp_p;
   int start_sp_from_bp_offset;
@@ -631,6 +640,7 @@ struct target_ctx {
   VARR (label_ref_t) * label_refs;
   VARR (uint64_t) * abs_address_locs;
   VARR (MIR_code_reloc_t) * relocs;
+  VARR (call_ref_t) * call_refs;
 };
 
 #define alloca_p gen_ctx->target_ctx->alloca_p
@@ -2254,13 +2264,14 @@ static size_t add_to_const_pool (struct gen_ctx *gen_ctx, uint64_t v) {
 }
 
 static int setup_imm_addr (struct gen_ctx *gen_ctx, uint64_t v, int *mod, int *rm, int64_t *disp32,
-                           int call_p) {
+                           int call_p, MIR_item_t func_item) {
   const_ref_t cr;
   size_t n;
 
   n = add_to_const_pool (gen_ctx, v);
   setup_rip_rel_addr (0, mod, rm, disp32);
   cr.call_p = call_p;
+  cr.func_item = func_item;
   cr.pc = 0;
   cr.next_insn_disp = 0;
   cr.const_num = n;
@@ -2635,7 +2646,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
                     || op_ref->mode == MIR_OP_REF);
         v = (uint64_t) int_value (gen_ctx, op_ref);
         gen_assert (const_ref_num < 0 && disp32 < 0);
-        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, TRUE);
+        MIR_item_t func_item
+          = op_ref->mode != MIR_OP_REF || op_ref->u.ref->item_type != MIR_func_item ? NULL
+                                                                                    : op_ref->u.ref;
+        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, TRUE, func_item);
         break;
       case '/':
         ch = *++p;
@@ -2662,7 +2676,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         ++p;
         v = read_hex (&p);
         gen_assert (const_ref_num < 0 && disp32 < 0);
-        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, FALSE);
+        const_ref_num = setup_imm_addr (gen_ctx, v, &mod, &rm, &disp32, FALSE, NULL);
         break;
       case 'h':
         ++p;
@@ -2896,6 +2910,15 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   return translate_finish (gen_ctx, len);
 }
 
+static void store_call_ref (gen_ctx_t gen_ctx, MIR_item_t ref_func_item, uint8_t *call_addr) {
+  call_ref_t call_ref;
+
+  if (ref_func_item->u.func->redef_permitted_p) return;
+  call_ref.ref_func_item = ref_func_item;
+  call_ref.call_addr = call_addr;
+  VARR_PUSH (call_ref_t, gen_ctx->target_ctx->call_refs, call_ref);
+}
+
 static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
   MIR_context_t ctx = gen_ctx->ctx;
   /* changing calls to rel32 calls: */
@@ -2903,6 +2926,7 @@ static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
     const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
     if (!cr.call_p) continue;
     gen_assert (base[cr.pc - 2] == 0xff && base[cr.pc - 1] == 0x15);
+    if (cr.func_item != NULL) store_call_ref (gen_ctx, cr.func_item, (uint8_t *) base + cr.pc - 2);
     uint64_t v = VARR_GET (uint64_t, const_pool, cr.const_num);
     int64_t off = (int64_t) v - (int64_t) (base + cr.next_insn_disp);
     if (!int32_p (off)) continue;
@@ -2926,7 +2950,47 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   change_calls (gen_ctx, base);
 }
 
-static void target_relocate_funcs (MIR_context_t ctx) {}
+static void target_change_to_direct_calls (MIR_context_t ctx) {
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
+  if (all_gen_ctx->gens_num > 1) { /* collect all func refs in zeroth gen_ctx */
+    for (int i = 1; i < all_gen_ctx->gens_num; i++)
+      while (VARR_LENGTH (call_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->call_refs) != 0)
+        VARR_PUSH (call_ref_t, gen_ctx->target_ctx->call_refs,
+                   VARR_POP (call_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->call_refs));
+  }
+  size_t len = VARR_LENGTH (call_ref_t, gen_ctx->target_ctx->call_refs);
+  if (len == 0) return;
+  call_ref_t *call_refs_addr = VARR_ADDR (call_ref_t, gen_ctx->target_ctx->call_refs);
+  for (size_t i = 0; i < len; i++) {
+    MIR_item_t ref_func_item = call_refs_addr[i].ref_func_item;
+    MIR_func_t ref_func = ref_func_item->u.func;
+    uint8_t *addr_loc, *addr_before, *addr = ref_func->machine_code;
+    uint8_t *call_addr = call_refs_addr[i].call_addr;
+    int32_t off = *(int32_t *) (call_addr + 2);
+    if (call_addr[0] == 0xff) { /* call *rel32(rip) */
+      uint8_t *addr_loc = call_addr + 6 + off;
+      addr_before = (uint8_t *) *(uint64_t *) addr_loc;
+      if (addr_before == addr) continue;
+      _MIR_change_code (ctx, addr_loc, (uint8_t *) &addr, sizeof (uint64_t));
+    } else { /* rex call rel32(rip) */
+      gen_assert (call_addr[0] == 0x40);
+      uint8_t *addr_loc = call_addr + 2, *addr_before = call_addr + 6 + off;
+      if (addr_before == addr) continue;
+      int64_t new_off = addr - (call_addr + 6);
+      if (!int32_p (new_off)) continue;
+      off = new_off;
+      _MIR_change_code (ctx, addr_loc, (uint8_t *) &off, sizeof (uint32_t));
+    }
+    DEBUG (2, {
+      fprintf (stderr,
+               "Making direct 32-bit ref of func %s at 0x%lx (addr: before=0x%lx, after=0x%lx)\n",
+               ref_func->name, (unsigned long) addr_loc, (unsigned long) addr_before,
+               (unsigned long) addr);
+    });
+  }
+  VARR_TRUNC (call_ref_t, gen_ctx->target_ctx->call_refs, 0);
+}
 
 struct target_bb_version {
   uint8_t *base;
@@ -3047,6 +3111,7 @@ static void target_init (gen_ctx_t gen_ctx) {
   VARR_CREATE (label_ref_t, label_refs, 0);
   VARR_CREATE (uint64_t, abs_address_locs, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, 0);
+  VARR_CREATE (call_ref_t, gen_ctx->target_ctx->call_refs, 0);
   MIR_type_t res = MIR_T_D;
   MIR_var_t args[] = {{MIR_T_D, "src", 0}};
   _MIR_register_unspec_insn (gen_ctx->ctx, MOVDQA_CODE, "movdqa", 1, &res, 1, FALSE, args);
@@ -3065,6 +3130,7 @@ static void target_finish (gen_ctx_t gen_ctx) {
   VARR_DESTROY (label_ref_t, label_refs);
   VARR_DESTROY (uint64_t, abs_address_locs);
   VARR_DESTROY (MIR_code_reloc_t, relocs);
+  VARR_DESTROY (call_ref_t, gen_ctx->target_ctx->call_refs);
   free (gen_ctx->target_ctx);
   gen_ctx->target_ctx = NULL;
 }
