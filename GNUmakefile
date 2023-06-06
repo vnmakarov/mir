@@ -173,9 +173,17 @@ $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
 
 uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	$(RM) $(PREFIX)/mir.h $(PREFIX)/mir-dlist.h $(PREFIX)/mir-varr.h $(PREFIX)/mir-htab.h\
-		       $(PREFIX)/mir-gen.h $(PREFIX)/c2mir/c2mir.h
+	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-dlist.h $(PREFIX)/include/mir-varr.h $(PREFIX)/include/mir-htab.h\
+		       $(PREFIX)/include/mir-gen.h $(PREFIX)/include/c2mir.h
 	$(RM) $(PREFIX)/lib/libmir.$(LIBSUFF) $(PREFIX)/lib/$(SOLIB)
+ifeq ($(OS),Windows_NT)
+else
+    ifeq ($(UNAME_S),Darwin)
+	rm -f $(PREFIX)/lib/libmir.dylib
+    else
+	rm -f $(PREFIX)/lib/$(SONAME)
+    endif
+endif
 	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
