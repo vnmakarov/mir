@@ -2926,6 +2926,8 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   change_calls (gen_ctx, base);
 }
 
+static void target_relocate_funcs (MIR_context_t ctx) {}
+
 struct target_bb_version {
   uint8_t *base;
   label_ref_t branch_ref; /* label cand used for jump to this bb version */
