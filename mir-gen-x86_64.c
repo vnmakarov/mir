@@ -2968,6 +2968,7 @@ static void target_change_to_direct_calls (MIR_context_t ctx) {
     uint8_t *addr_loc, *addr_before, *addr = ref_func->machine_code;
     uint8_t *call_addr = call_refs_addr[i].call_addr;
     int32_t off = *(int32_t *) (call_addr + 2);
+    int call32_p = FALSE;
     if (call_addr[0] == 0xff) { /* call *rel32(rip) */
       uint8_t *addr_loc = call_addr + 6 + off;
       addr_before = (uint8_t *) *(uint64_t *) addr_loc;
@@ -2981,12 +2982,13 @@ static void target_change_to_direct_calls (MIR_context_t ctx) {
       if (!int32_p (new_off)) continue;
       off = new_off;
       _MIR_change_code (ctx, addr_loc, (uint8_t *) &off, sizeof (uint32_t));
+      call32_p = TRUE;
     }
     DEBUG (2, {
       fprintf (stderr,
-               "Making direct 32-bit ref of func %s at 0x%lx (addr: before=0x%lx, after=0x%lx)\n",
-               ref_func->name, (unsigned long) addr_loc, (unsigned long) addr_before,
-               (unsigned long) addr);
+               "Making direct %s-bit call of func %s at 0x%lx (addr: before=0x%lx, after=0x%lx)\n",
+               (call32_p ? "32" : "64"), ref_func->name, (unsigned long) addr_loc,
+               (unsigned long) addr_before, (unsigned long) addr);
     });
   }
   VARR_TRUNC (call_ref_t, gen_ctx->target_ctx->call_refs, 0);
