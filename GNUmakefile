@@ -88,7 +88,7 @@ endif
 API_VERSION=0
 MAJOR_VERSION=1
 MINOR_VERSION=0
-GITCOMMIT:= $(shell git log -1 --pretty='%h')
+GITCOMMIT:= $(shell git log -1 --pretty='%H')
 CFLAGS += -DGITCOMMIT=$(GITCOMMIT)
 
 ifeq ($(CC),cl)

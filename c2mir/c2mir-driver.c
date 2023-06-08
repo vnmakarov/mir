@@ -327,7 +327,6 @@ static void init_options (int argc, char *argv[]) {
     } else if (*argv[i] != '-') {
       VARR_PUSH (char_ptr_t, source_file_names, argv[i]);
     } else if (strcmp (argv[i], "-h") == 0) {
-      fprintf (stderr, "%s version commit=%s\n", argv[0], STRING (GITCOMMIT));
       fprintf (stderr,
                "Usage: %s options (-i | -s \"program\" | source files); where options are:\n",
                argv[0]);
@@ -349,6 +348,7 @@ static void init_options (int argc, char *argv[]) {
       fprintf (stderr, "  -eg -- execute code generated with given options\n");
       fprintf (stderr, "  -el -- execute code lazily generated code with given options\n");
       fprintf (stderr, "  -eb -- execute code lazily generated BB code with given options\n");
+      fprintf (stderr, "%s version commit=%s\n", argv[0], STRING (GITCOMMIT));
       exit (0);
     } else {
       fprintf (stderr, "unknown command line option %s (use -h for usage) -- goodbye\n", argv[i]);
