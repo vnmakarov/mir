@@ -86,8 +86,10 @@ else
 endif
 
 API_VERSION=0
-MAJOR_VERSION=0
-MINOR_VERSION=3
+MAJOR_VERSION=1
+MINOR_VERSION=0
+GITCOMMIT:= $(shell git log -1 --pretty='%h')
+CFLAGS += -DGITCOMMIT=$(GITCOMMIT)
 
 ifeq ($(CC),cl)
   OBJSUFF=obj

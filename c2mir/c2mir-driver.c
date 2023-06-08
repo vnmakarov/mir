@@ -226,6 +226,9 @@ static struct input curr_input;
 DEF_VARR (input_t);
 static VARR (input_t) * inputs_to_compile;
 
+#define STRINGIFY(v) #v
+#define STRING(v) STRINGIFY (v)
+
 static void init_options (int argc, char *argv[]) {
   int incl_p, ldir_p = FALSE; /* to remove an uninitialized warning */
 
@@ -324,6 +327,7 @@ static void init_options (int argc, char *argv[]) {
     } else if (*argv[i] != '-') {
       VARR_PUSH (char_ptr_t, source_file_names, argv[i]);
     } else if (strcmp (argv[i], "-h") == 0) {
+      fprintf (stderr, "%s version commit=%s\n", argv[0], STRING (GITCOMMIT));
       fprintf (stderr,
                "Usage: %s options (-i | -s \"program\" | source files); where options are:\n",
                argv[0]);
