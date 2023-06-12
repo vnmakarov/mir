@@ -1731,7 +1731,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       case MIR_MULO:
       case MIR_UMULO:
         /* t1=a1;t2=t2;mul r,t1,t2;...; [u]bno: bf lab,t1;[u]div t1,r,t1;bne lab,t,t2
-                                        [u]bo: bf new_lab,t1;[u]div t1,r,t1;bne lab,t,t2;new_lab: */
+           [u]bo: bf new_lab,t1;[u]div t1,r,t1;bne lab,t,t2;new_lab: */
         bo_insn = find_bo (gen_ctx, insn);
 #ifndef TARGET_EXPAND_UMULO
         if (bo_insn->code == MIR_UBO || bo_insn->code == MIR_UBNO) break;
