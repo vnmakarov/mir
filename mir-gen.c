@@ -2073,6 +2073,199 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
 
 /* New Page */
 
+static MIR_insn_code_t get_revert_branch_code (MIR_insn_code_t code) {
+  switch (code) {
+  case MIR_BEQ: return MIR_BNE;
+  case MIR_BEQS: return MIR_BNES;
+  case MIR_BNE: return MIR_BEQ;
+  case MIR_BNES: return MIR_BEQS;
+  case MIR_BLT: return MIR_BGE;
+  case MIR_BLTS: return MIR_BGES;
+  case MIR_UBLT: return MIR_UBGE;
+  case MIR_UBLTS: return MIR_UBGES;
+  case MIR_BLE: return MIR_BGT;
+  case MIR_BLES: return MIR_BGTS;
+  case MIR_UBLE: return MIR_UBGT;
+  case MIR_UBLES: return MIR_UBGTS;
+  case MIR_BGT: return MIR_BLE;
+  case MIR_BGTS: return MIR_BLES;
+  case MIR_UBGT: return MIR_UBLE;
+  case MIR_UBGTS: return MIR_UBLES;
+  case MIR_BGE: return MIR_BLT;
+  case MIR_BGES: return MIR_BLTS;
+  case MIR_UBGE: return MIR_UBLT;
+  case MIR_UBGES: return MIR_UBLTS;
+  default: return MIR_INSN_BOUND; /* Cannot revert FP branches for IEEE754: */
+  }
+}
+
+static MIR_insn_t get_bb_label (gen_ctx_t gen_ctx, bb_t bb) {
+  bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns);
+  gen_assert (bb_insn != NULL);
+  return get_insn_label (gen_ctx, bb_insn->insn);
+}
+
+static void form_trace (gen_ctx_t gen_ctx, VARR (bb_t) * trace) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_t start_bb = NULL, bb, next_bb, fall_bb, new_bb;
+  bb_insn_t bb_insn;
+  MIR_insn_t insn, new_insn, label;
+  MIR_insn_code_t code;
+  edge_t e, br_e, fall_e;
+  int flag;
+
+  DEBUG (2, {
+    fprintf (debug_file, "  Trace bbs:");
+    for (size_t i = 0; i < VARR_LENGTH (bb_t, trace); i++)
+      fprintf (debug_file, " %d", VARR_GET (bb_t, trace, i)->index);
+    fprintf (debug_file, "\n");
+  });
+  for (size_t i = 0; i < VARR_LENGTH (bb_t, trace); i++) {
+    /* trace contains all BBs except for entry and exit: */
+    bb = VARR_GET (bb_t, trace, i);
+    DEBUG (2, { fprintf (debug_file, "    BB%d:\n", bb->index); });
+    if (i == 0) start_bb = bb;
+    gen_assert (bb->index != 0 && bb->index != 1);
+    /* Reorder BBs and MIR insns: */
+    DLIST_REMOVE (bb_t, curr_cfg->bbs, bb);
+    DLIST_APPEND (bb_t, curr_cfg->bbs, bb);
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, bb_insn->insn);
+      DLIST_APPEND (MIR_insn_t, curr_func_item->u.func->insns, bb_insn->insn);
+    }
+    e = DLIST_HEAD (out_edge_t, bb->out_edges);
+    next_bb = i + 1 < VARR_LENGTH (bb_t, trace) ? VARR_GET (bb_t, trace, i + 1) : NULL;
+    bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns);
+    insn = bb_insn->insn;
+    gen_assert (bb_insn != NULL);
+    if (insn->code == MIR_SWITCH) continue; /* do nothing */
+    if (insn->code == MIR_JMP) {
+      if (e->dst == next_bb) { /* now jump to the next bb: remove jump */
+        gen_assert (DLIST_NEXT (out_edge_t, e) == NULL);
+        DEBUG (2, {
+          fprintf (debug_file, "      Remove jump to the next insn ");
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        gen_delete_insn (gen_ctx, insn);
+        e->fall_through_p = TRUE;
+      }
+      continue;
+    }
+    if (MIR_branch_code_p (bb_insn->insn->code)) {
+      edge_t br_e = DLIST_NEXT (out_edge_t, e);
+      fall_e = e;
+      gen_assert (fall_e->fall_through_p);
+      fall_bb = fall_e->dst;
+      if (fall_bb == next_bb) { /* now still fall-through: do nothing */
+        continue;
+      } else if (br_e->dst == next_bb
+                 && (code = get_revert_branch_code (bb_insn->insn->code)) != MIR_INSN_BOUND) {
+        /* now branch to the next bb: reverse branch and change target */
+        label = get_bb_label (gen_ctx, fall_bb);
+        DEBUG (2, {
+          fprintf (debug_file, "      Change branch ");
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        insn->code = code;
+        insn->ops[0] = MIR_new_label_op (ctx, label);
+        DEBUG (2, {
+          fprintf (debug_file, "        to branch ");
+          print_bb_insn (gen_ctx, bb_insn, FALSE);
+        });
+        SWAP (fall_e->fall_through_p, br_e->fall_through_p, flag);
+        DLIST_REMOVE (out_edge_t, bb->out_edges, br_e);
+        DLIST_PREPEND (out_edge_t, bb->out_edges, br_e); /* make new fallthrough edge a head */
+        continue;
+      }
+      /* two destinations are not the next bb or we can not change the branch insn */
+    } else if (e->dst->index < 2 || e->dst == next_bb) {
+      continue; /* target is exit bb or it is just fall through w/o branch: do nothing */
+    } else {    /* it was just fall through: now it is not */
+      fall_e = e;
+      gen_assert (fall_e->fall_through_p);
+      fall_bb = e->dst;
+    }
+    label = get_bb_label (gen_ctx, fall_bb);
+    new_insn = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, label));
+    MIR_append_insn (ctx, curr_func_item, new_insn);
+    new_bb = create_bb (gen_ctx, new_insn);
+    add_new_bb (gen_ctx, new_bb);
+    delete_edge (fall_e);
+    create_edge (gen_ctx, bb, new_bb, TRUE, FALSE);
+    create_edge (gen_ctx, new_bb, fall_bb, FALSE, TRUE);
+    DEBUG (2, {
+      fprintf (debug_file, "      Create bb%d and add jump ", new_bb->index);
+      print_bb_insn (gen_ctx, new_insn->data, FALSE);
+    });
+  }
+  gen_assert (start_bb == DLIST_EL (bb_t, curr_cfg->bbs, 2));
+}
+
+static const int bb_threshold = 10;
+static int bb_weight (bb_t bb) { return bb_threshold; }
+static int edge_probability (edge_t e) { return e->back_edge_p ? 10 : 1; }
+
+static void reorder_bbs (gen_ctx_t gen_ctx) {
+  bb_t curr_bb, next_bb;
+  edge_t e;
+  int prob, max_prob;
+  bitmap_t in_trace_p = temp_bitmap;
+  VARR (bb_t) *trace = worklist, *seeds = pending;
+
+  VARR_TRUNC (bb_t, seeds, 0);
+  VARR_PUSH (bb_t, seeds, DLIST_EL (bb_t, curr_cfg->bbs, 2));
+  VARR_TRUNC (bb_t, trace, 0);
+  bitmap_clear (in_trace_p);
+  while (VARR_LENGTH (bb_t, seeds) != 0) {
+    curr_bb = VARR_POP (bb_t, seeds);
+    DEBUG (2, { fprintf (debug_file, "  Seed bb%d\n", curr_bb->index); });
+    if (bitmap_bit_p (in_trace_p, curr_bb->index)) continue;
+    if (bb_weight (curr_bb) < bb_threshold) {
+      VARR_PUSH (bb_t, trace, curr_bb);
+      bitmap_set_bit_p (in_trace_p, curr_bb->index);
+      for (e = DLIST_HEAD (out_edge_t, curr_bb->out_edges); e != NULL;
+           e = DLIST_NEXT (out_edge_t, e)) {
+        if (e->dst->index < 2 || e->dst == next_bb || bitmap_bit_p (in_trace_p, e->dst->index))
+          continue;
+        VARR_PUSH (bb_t, seeds, e->dst);
+      }
+      continue;
+    }
+    for (;;) { /* start new trace */
+      VARR_PUSH (bb_t, trace, curr_bb);
+      bitmap_set_bit_p (in_trace_p, curr_bb->index);
+      DEBUG (2, { fprintf (debug_file, "    Add to trace bb%d\n", curr_bb->index); });
+      max_prob = -1;
+      next_bb = NULL;
+      for (e = DLIST_HEAD (out_edge_t, curr_bb->out_edges); e != NULL;
+           e = DLIST_NEXT (out_edge_t, e)) {
+        if (e->dst->index < 2 || bitmap_bit_p (in_trace_p, e->dst->index)) continue;
+        prob = edge_probability (e);
+        if (max_prob < prob || (max_prob == prob && e->fall_through_p)) {
+          next_bb = e->dst;
+          max_prob = prob;
+        }
+      }
+      for (e = DLIST_HEAD (out_edge_t, curr_bb->out_edges); e != NULL;
+           e = DLIST_NEXT (out_edge_t, e)) {
+        if (e->dst->index < 2 || e->dst == next_bb || bitmap_bit_p (in_trace_p, e->dst->index))
+          continue;
+        VARR_PUSH (bb_t, seeds, curr_bb);
+      }
+      if (next_bb == NULL) break;
+      if (bb_weight (next_bb) < bb_threshold) {
+        VARR_PUSH (bb_t, seeds, next_bb);
+        break;
+      }
+      curr_bb = next_bb;
+    }
+  }
+  form_trace (gen_ctx, trace);
+}
+
+/* New Page */
+
 /* Building SSA.  First we build optimized maximal SSA, then we minimize it
    getting minimal SSA for reducible CFGs. There are two SSA representations:
 
@@ -9130,6 +9323,13 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     /* do not clone bbs before addr transformation: it can prevent addr transformations */
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after cloning BBs:\n");
+      print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
+    });
+  }
+  if (0 && optimize_level >= 2) {
+    reorder_bbs (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after reordering BBs:\n");
       print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
     });
   }
