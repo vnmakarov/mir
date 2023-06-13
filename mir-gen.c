@@ -5988,25 +5988,6 @@ static int consider_move_vars_only (gen_ctx_t gen_ctx) {
   return found_p;
 }
 
-static int consider_phi_vars_only (gen_ctx_t gen_ctx) {
-  int found_p = FALSE;
-  VARR_TRUNC (int, var_to_scan_var_map, 0);
-  VARR_TRUNC (MIR_reg_t, scan_var_to_var_map, 0);
-  bitmap_clear (temp_bitmap);
-  scan_vars_num = 0;
-  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
-    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      MIR_insn_t insn = bb_insn->insn;
-      if (insn->code == MIR_LABEL) continue;
-      if (insn->code != MIR_PHI) break;
-      for (size_t i = 0; i < insn->nops; i++)
-        if (insn->ops[i].mode == MIR_OP_VAR) collect_scan_var (gen_ctx, insn->ops[i].u.var);
-      found_p = TRUE;
-    }
-  return found_p;
-}
-
 static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
   MIR_insn_t insn;
   bb_insn_t bb_insn, prev_bb_insn;
@@ -9173,13 +9154,11 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     });
   }
   if (optimize_level >= 2) {
-    if (consider_phi_vars_only (gen_ctx)) {
-      make_conventional_ssa (gen_ctx);
-      DEBUG (2, {
-        fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
-        print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
-      });
-    }
+    make_conventional_ssa (gen_ctx);
+    DEBUG (2, {
+      fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
+      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, NULL);
+    });
     ssa_combine (gen_ctx);
     DEBUG (2, {
       fprintf (debug_file, "+++++++++++++MIR after ssa combine:\n");
