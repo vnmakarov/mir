@@ -9266,12 +9266,15 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   destroy_func_cfg (gen_ctx);
   if (collect_bb_stat_p) {
 #if MIR_PARALLEL_GEN
-    if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+    if (all_gen_ctx->gens_num > 1 && mir_mutex_lock (&queue_mutex))
+      parallel_error (ctx, "error in mutex lock");
 #endif
     all_gen_ctx->overall_bbs_num += bbs_num;
 #if MIR_PARALLEL_GEN
-    if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
-    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+    if (all_gen_ctx->gens_num > 1) {
+      if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+      if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+    }
 #endif
   }
   if (!machine_code_p) return NULL;
@@ -9286,12 +9289,15 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   _MIR_restore_func_insns (ctx, func_item);
   /* ??? We should use atomic here but c2mir does not implement them yet.  */
 #if MIR_PARALLEL_GEN
-  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  if (all_gen_ctx->gens_num > 1 && mir_mutex_lock (&queue_mutex))
+    parallel_error (ctx, "error in mutex lock");
 #endif
   func_item->u.func->machine_code = machine_code;
 #if MIR_PARALLEL_GEN
-  if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
-  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  if (all_gen_ctx->gens_num > 1) {
+    if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  }
 #endif
   return func_item->addr;
 }
@@ -9475,14 +9481,10 @@ static void *func_generator (void *arg) {
         get_bb_version (gen_ctx, &((struct bb_stub *) func_or_bb.u.func_item->data)[0], 0, NULL,
                         TRUE, &addr);
         _MIR_redirect_thunk (ctx, func_or_bb.u.func_item->addr, addr);
-#if MIR_PARALLEL_GEN
         if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
-#endif
         func_or_bb.u.func_item->u.func->machine_code = addr; /* ??? done flag */
-#if MIR_PARALLEL_GEN
         if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
         if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
-#endif
       }
     } else {
       generate_bb_version_machine_code (gen_ctx, func_or_bb.u.bb_version);
@@ -9521,41 +9523,43 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
   all_gen_ctx->ctx = ctx;
   all_gen_ctx->gens_num = gens_num;
 #if MIR_PARALLEL_GEN
-  /* Create threads, mutex, and conditional for generators [1, gens_num): */
-  funcs_start = 0;
-  VARR_CREATE (func_or_bb_t, code_to_generate, 0);
-  if (mir_mutex_init (&queue_mutex, NULL) != 0) {
-    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread lock");
-  } else if (mir_cond_init (&generate_signal, NULL) != 0) {
-    mir_mutex_destroy (&queue_mutex);
-    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
-  } else if (mir_cond_init (&done_signal, NULL) != 0) {
-    mir_cond_destroy (&generate_signal);
-    mir_mutex_destroy (&queue_mutex);
-    (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
-  } else {
-    for (int i = 0; i < gens_num; i++) {
-      gen_ctx = &all_gen_ctx->gen_ctx[i];
-      gen_ctx->busy_p = FALSE;
-      gen_ctx->gen_num = i;
-      gen_ctx->all_gen_ctx = all_gen_ctx;
-      if (mir_thread_create (&gen_ctx->gen_thread, NULL, func_generator, gen_ctx) != 0) {
-        signal_threads_to_finish (all_gen_ctx);
-        for (int j = 0; j < i; j++) mir_thread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
-        mir_cond_destroy (&done_signal);
-        mir_cond_destroy (&generate_signal);
-        mir_mutex_destroy (&queue_mutex);
-        (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread");
+  if (gens_num > 1) {
+    /* Create threads, mutex, and conditional for generators [1, gens_num): */
+    funcs_start = 0;
+    VARR_CREATE (func_or_bb_t, code_to_generate, 0);
+    if (mir_mutex_init (&queue_mutex, NULL) != 0) {
+      (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread lock");
+    } else if (mir_cond_init (&generate_signal, NULL) != 0) {
+      mir_mutex_destroy (&queue_mutex);
+      (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
+    } else if (mir_cond_init (&done_signal, NULL) != 0) {
+      mir_cond_destroy (&generate_signal);
+      mir_mutex_destroy (&queue_mutex);
+      (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread signal");
+    } else {
+      for (int i = 0; i < gens_num; i++) {
+        gen_ctx = &all_gen_ctx->gen_ctx[i];
+        gen_ctx->busy_p = FALSE;
+        gen_ctx->gen_num = i;
+        gen_ctx->all_gen_ctx = all_gen_ctx;
+        if (mir_thread_create (&gen_ctx->gen_thread, NULL, func_generator, gen_ctx) != 0) {
+          signal_threads_to_finish (all_gen_ctx);
+          for (int j = 0; j < i; j++) mir_thread_join (all_gen_ctx->gen_ctx[j].gen_thread, NULL);
+          mir_cond_destroy (&done_signal);
+          mir_cond_destroy (&generate_signal);
+          mir_mutex_destroy (&queue_mutex);
+          (*MIR_get_error_func (ctx)) (MIR_parallel_error, "can not create a generator thread");
+        }
       }
     }
   }
 #endif
   for (int n = 0; n < gens_num; n++) {
     gen_ctx = &all_gen_ctx->gen_ctx[n];
-#if !MIR_PARALLEL_GEN
-    gen_ctx->all_gen_ctx = all_gen_ctx;
-    gen_ctx->gen_num = n;
-#endif
+    if (!MIR_PARALLEL_GEN || all_gen_ctx->gens_num <= 1) {
+      gen_ctx->all_gen_ctx = all_gen_ctx;
+      gen_ctx->gen_num = n;
+    }
     gen_ctx->ctx = ctx;
     optimize_level = 2;
     gen_ctx->target_ctx = NULL;
@@ -9619,15 +9623,17 @@ void MIR_gen_finish (MIR_context_t ctx) {
   gen_ctx_t gen_ctx;
 
 #if MIR_PARALLEL_GEN
-  signal_threads_to_finish (all_gen_ctx);
-  for (int i = 0; i < all_gen_ctx->gens_num; i++)
-    mir_thread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
-  if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&generate_signal) != 0
-      || mir_cond_destroy (&done_signal) != 0) {  // ???
-    (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
-                                              "can not destroy generator mutex or signals");
+  if (all_gen_ctx->gens_num > 1) {
+    signal_threads_to_finish (all_gen_ctx);
+    for (int i = 0; i < all_gen_ctx->gens_num; i++)
+      mir_thread_join (all_gen_ctx->gen_ctx[i].gen_thread, NULL);
+    if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&generate_signal) != 0
+        || mir_cond_destroy (&done_signal) != 0) {  // ???
+      (*MIR_get_error_func (all_gen_ctx->ctx)) (MIR_parallel_error,
+                                                "can not destroy generator mutex or signals");
+    }
+    VARR_DESTROY (func_or_bb_t, code_to_generate);
   }
-  VARR_DESTROY (func_or_bb_t, code_to_generate);
 #endif
   for (int i = 0; i < all_gen_ctx->gens_num; i++) {
     gen_ctx = &all_gen_ctx->gen_ctx[i];
@@ -9680,14 +9686,16 @@ void MIR_set_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
-#if !MIR_PARALLEL_GEN
-  if (func_item == NULL) { /* finish setting interfaces */
-    target_change_to_direct_calls (ctx);
+  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  if (!MIR_PARALLEL_GEN || all_gen_ctx->gens_num <= 1) {
+    if (func_item == NULL) { /* finish setting interfaces */
+      target_change_to_direct_calls (ctx);
+      return;
+    }
+    MIR_gen (ctx, 0, func_item);
     return;
   }
-  MIR_gen (ctx, 0, func_item);
-#else
-  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+#if MIR_PARALLEL_GEN
   func_or_bb_t func_or_bb;
 
   if (func_item == NULL) { /* finish setting interfaces */
@@ -9719,19 +9727,21 @@ void MIR_set_parallel_gen_interface (MIR_context_t ctx, MIR_item_t func_item) {
 
 /* Lazy func generation is done right away. */
 static void generate_func_and_redirect (MIR_context_t ctx, MIR_item_t func_item, int full_p) {
-#if !MIR_PARALLEL_GEN
-  generate_func_code (ctx, 0, func_item, full_p);
-  if (!full_p) {
-    struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
-    gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
-    void *addr;
-
-    create_bb_stubs (gen_ctx);
-    (void) get_bb_version (gen_ctx, &((struct bb_stub *) func_item->data)[0], 0, NULL, TRUE, &addr);
-    _MIR_redirect_thunk (ctx, func_item->addr, addr);
-  }
-#else
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  if (!MIR_PARALLEL_GEN || all_gen_ctx->gens_num <= 1) {
+    generate_func_code (ctx, 0, func_item, full_p);
+    if (!full_p) {
+      gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
+      void *addr;
+
+      create_bb_stubs (gen_ctx);
+      (void) get_bb_version (gen_ctx, &((struct bb_stub *) func_item->data)[0], 0, NULL, TRUE,
+                             &addr);
+      _MIR_redirect_thunk (ctx, func_item->addr, addr);
+    }
+    return;
+  }
+#if MIR_PARALLEL_GEN
   MIR_func_t func = func_item->u.func;
   func_or_bb_t func_or_bb;
 
@@ -9928,22 +9938,27 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   _MIR_replace_bb_thunk (ctx, bb_version->addr, addr);
   bb_version->addr = addr;
 #if MIR_PARALLEL_GEN
-  if (mir_mutex_lock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  if (all_gen_ctx->gens_num > 1 && mir_mutex_lock (&queue_mutex))
+    parallel_error (ctx, "error in mutex lock");
 #endif
   all_gen_ctx->overall_gen_bbs_num++;
   bb_version->machine_code = addr;
 #if MIR_PARALLEL_GEN
-  if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
-  if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  if (all_gen_ctx->gens_num > 1) {
+    if (mir_cond_broadcast (&done_signal)) parallel_error (ctx, "error in cond broadcast");
+    if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex lock");
+  }
 #endif
 }
 
 static void *bb_version_generator (gen_ctx_t gen_ctx, bb_version_t bb_version) {
-#if !MIR_PARALLEL_GEN
-  generate_bb_version_machine_code (gen_ctx, bb_version);
-#else
   MIR_context_t ctx = gen_ctx->ctx;
   struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
+  if (!MIR_PARALLEL_GEN || all_gen_ctx->gens_num <= 1) {
+    generate_bb_version_machine_code (gen_ctx, bb_version);
+    return bb_version->machine_code;
+  }
+#if MIR_PARALLEL_GEN
   func_or_bb_t func_or_bb;
 
   func_or_bb.func_p = FALSE;
@@ -9958,8 +9973,8 @@ static void *bb_version_generator (gen_ctx_t gen_ctx, bb_version_t bb_version) {
     if (mir_cond_wait (&done_signal, &queue_mutex)) parallel_error (ctx, "error in cond wait");
   }
   if (mir_mutex_unlock (&queue_mutex)) parallel_error (ctx, "error in mutex unlock");
-#endif
   return bb_version->machine_code;
+#endif
 }
 
 /* attrs ignored ??? implement versions */
