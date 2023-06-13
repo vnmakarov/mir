@@ -22,11 +22,11 @@
                       --------                                                   -------
                                                                                     |
                                                                                     V
-                  --------                           ----------                  ------
-                 |Generate|    -----     -------    |Register  |    --------    |Build |
-     Machine <---|Machine |<--| DCE |<--|Combine|<--|Allocator |<--|Coalesce|<--|Live  |
-      Insns      | Insns  |    -----     -------     ----------     --------    |Ranges|
-                  --------	                                                 ------
+                  --------                           ----------                  ---------
+                 |Generate|    -----     -------    |Register  |    --------    |Build    |
+     Machine <---|Machine |<--| DCE |<--|Combine|<--|Allocator |<--|Coalesce|<--|Register |
+      Insns      | Insns  |    -----     -------     ----------     --------    |Conflicts|
+                  --------	                                                 ---------
 
    Simplify: Lowering MIR (in mir.c).  Always.
    Build CGF: Building Control Flow Graph (basic blocks and CFG edges).  Always.
@@ -49,7 +49,8 @@
    Machinize: Machine-dependent code (e.g. in mir-gen-x86_64.c)
               transforming MIR for calls ABI, 2-op insns, etc.  Always.
    Building Live Info: Calculating live in and live out for the basic blocks.  Always.
-   Build Live Ranges: Calculating program point ranges for registers.  Only for -O1 and above.
+   Build Register Conflicts: Build conflict matrix for registers involved in moves.
+                             It is used for register coalescing
    Coalesce: Aggressive register coalescing
    Register Allocator (RA): Priority-based linear scan RA (always) with live range splitting
                             (for -O2 and above).
