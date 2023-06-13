@@ -54,6 +54,10 @@ static inline bitmap_t bitmap_create (void) { return bitmap_create2 (0); }
 
 static inline void bitmap_destroy (bitmap_t bm) { VARR_DESTROY (bitmap_el_t, bm); }
 
+static inline size_t bitmap_size (bitmap_t bm) {
+  return VARR_CAPACITY (bitmap_el_t, bm) * sizeof (bitmap_el_t);
+}
+
 static inline void bitmap_clear (bitmap_t bm) { VARR_TRUNC (bitmap_el_t, bm, 0); }
 
 static inline void bitmap_expand (bitmap_t bm, size_t nb) {

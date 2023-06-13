@@ -16,6 +16,7 @@ int main (void) {
 
   status &= bitmap_set_bit_p (b1, 1);
   status &= bitmap_set_bit_p (b1, 120);
+  status &= bitmap_size (b1) > 0;
   status &= !bitmap_set_bit_p (b1, 120);
   status &= !bitmap_empty_p (b1);
   status &= bitmap_bit_p (b1, 1);
