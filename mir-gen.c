@@ -5965,27 +5965,27 @@ static void calculate_func_cfg_live_info (gen_ctx_t gen_ctx, int freq_p) {
 
 static void consider_all_live_vars (gen_ctx_t gen_ctx) { scan_vars_num = 0; }
 
+#ifndef MIR_MAX_COALESCE_VARS
+#define MIR_MAX_COALESCE_VARS 10000 /* 10K means about 8MB for conflict matrix */
+#endif
+
 static void collect_scan_var (gen_ctx_t gen_ctx, MIR_reg_t var) {
   if (!bitmap_set_bit_p (temp_bitmap, var)) return;
+  if (scan_vars_num >= MIR_MAX_COALESCE_VARS) return;
   while (VARR_LENGTH (int, var_to_scan_var_map) <= var) VARR_PUSH (int, var_to_scan_var_map, -1);
   VARR_PUSH (MIR_reg_t, scan_var_to_var_map, var);
   VARR_SET (int, var_to_scan_var_map, var, scan_vars_num++);
 }
 
+static void scan_collected_moves (gen_ctx_t gen_ctx);
+
 static int consider_move_vars_only (gen_ctx_t gen_ctx) {
-  int found_p = FALSE;
   VARR_TRUNC (int, var_to_scan_var_map, 0);
   VARR_TRUNC (MIR_reg_t, scan_var_to_var_map, 0);
   bitmap_clear (temp_bitmap);
   scan_vars_num = 0;
-  for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
-       insn = DLIST_NEXT (MIR_insn_t, insn))
-    if (move_p (insn)) {
-      collect_scan_var (gen_ctx, insn->ops[0].u.var);
-      collect_scan_var (gen_ctx, insn->ops[1].u.var);
-      found_p = TRUE;
-    }
-  return found_p;
+  scan_collected_moves (gen_ctx);
+  return scan_vars_num > 0;
 }
 
 static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
@@ -6706,6 +6706,36 @@ static void update_bitmap_after_coalescing (gen_ctx_t gen_ctx, bitmap_t bm) {
   }
 }
 
+static void collect_moves (gen_ctx_t gen_ctx) {
+  gen_assert (optimize_level > 0);
+  VARR_TRUNC (mv_t, moves, 0);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
+      MIR_insn_t insn = bb_insn->insn;
+      mv_t mv;
+
+      if (move_p (insn)) {
+        mv.bb_insn = bb_insn;
+        mv.freq = 1;
+        for (int i = bb_loop_level (bb); i > 0; i--)
+          if (mv.freq < SIZE_MAX / 8) mv.freq *= LOOP_COST_FACTOR;
+        VARR_PUSH (mv_t, moves, mv);
+      }
+    }
+  }
+  qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
+}
+
+static void scan_collected_moves (gen_ctx_t gen_ctx) {
+  for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
+    mv_t mv = VARR_GET (mv_t, moves, i);
+    MIR_insn_t insn = mv.bb_insn->insn;
+    collect_scan_var (gen_ctx, insn->ops[0].u.var);
+    collect_scan_var (gen_ctx, insn->ops[1].u.var);
+  }
+}
+
 static void coalesce (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_reg_t reg, sreg, dreg, first_reg, first_sreg, first_dreg, sreg_var, dreg_var;
@@ -6717,27 +6747,12 @@ static void coalesce (gen_ctx_t gen_ctx) {
   int coalesced_moves = 0, change_p;
 
   gen_assert (optimize_level > 0);
-  VARR_TRUNC (mv_t, moves, 0);
   VARR_TRUNC (MIR_reg_t, first_coalesced_reg, 0);
   VARR_TRUNC (MIR_reg_t, next_coalesced_reg, 0);
   for (MIR_reg_t i = 0; i <= curr_cfg->max_var; i++) {
     VARR_PUSH (MIR_reg_t, first_coalesced_reg, i);
     VARR_PUSH (MIR_reg_t, next_coalesced_reg, i);
   }
-  for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
-    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
-         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
-      insn = bb_insn->insn;
-      if (move_p (insn) && insn->ops[0].mode == MIR_OP_VAR && insn->ops[1].mode == MIR_OP_VAR) {
-        mv.bb_insn = bb_insn;
-        mv.freq = 1;
-        for (int i = bb_loop_level (bb); i > 0; i--)
-          if (mv.freq < SIZE_MAX / 8) mv.freq *= LOOP_COST_FACTOR;
-        VARR_PUSH (mv_t, moves, mv);
-      }
-    }
-  }
-  qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
   build_conflict_matrix (gen_ctx);
   /* Coalesced moves, most frequently executed first. */
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
@@ -9191,14 +9206,17 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
     build_loop_tree (gen_ctx);
     DEBUG (2, { print_loop_tree (gen_ctx, TRUE); });
   }
-  if (optimize_level >= 2 && consider_move_vars_only (gen_ctx)) {
-    calculate_func_cfg_live_info (gen_ctx, FALSE);
-    print_live_info (gen_ctx, "Live info before coalesce", TRUE, FALSE);
-    coalesce (gen_ctx);
-    DEBUG (2, {
-      fprintf (debug_file, "+++++++++++++MIR after coalescing:\n");
-      print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, output_bb_border_live_info);
-    });
+  if (optimize_level >= 2) {
+    collect_moves (gen_ctx);
+    if (consider_move_vars_only (gen_ctx)) {
+      calculate_func_cfg_live_info (gen_ctx, FALSE);
+      print_live_info (gen_ctx, "Live info before coalesce", TRUE, FALSE);
+      coalesce (gen_ctx);
+      DEBUG (2, {
+        fprintf (debug_file, "+++++++++++++MIR after coalescing:\n");
+        print_CFG (gen_ctx, TRUE, TRUE, TRUE, TRUE, output_bb_border_live_info);
+      });
+    }
   }
   consider_all_live_vars (gen_ctx);
   calculate_func_cfg_live_info (gen_ctx, TRUE);
