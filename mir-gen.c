@@ -2649,20 +2649,6 @@ static void build_ssa (gen_ctx_t gen_ctx, int rename_p) {
   }
 }
 
-static int var_live_ranges_intersect_p (gen_ctx_t gen_ctx, MIR_reg_t var1, MIR_reg_t var2);
-
-static int conflict_phi_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
-  gen_assert (insn->code == MIR_PHI);
-  MIR_reg_t dest_var = insn->ops[0].u.var;
-  for (size_t i = 1; i < insn->nops; i++)
-    if (insn->ops[i].mode == MIR_OP_VAR
-        && var_live_ranges_intersect_p (gen_ctx, dest_var, insn->ops[i].u.var))
-      return TRUE;
-  return FALSE;
-}
-
-static void build_live_ranges (gen_ctx_t gen_ctx);
-static void free_func_live_ranges (gen_ctx_t gen_ctx);
 static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_type_t type;
@@ -2674,7 +2660,6 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
   edge_t e;
   ssa_edge_t se;
 
-  build_live_ranges (gen_ctx);
   for (bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
     for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = next_bb_insn) {
       next_bb_insn = DLIST_NEXT (bb_insn_t, bb_insn);
@@ -2684,7 +2669,7 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
       dest_var = var = insn->ops[0].u.var;
       type = MIR_reg_type (gen_ctx->ctx, var - MAX_HARD_REG, curr_func_item->u.func);
       move_code = get_move_code (type);
-      if (conflict_phi_p (gen_ctx, insn)) dest_var = get_new_ssa_reg (gen_ctx, var, '%', TRUE);
+      dest_var = get_new_ssa_reg (gen_ctx, var, '%', TRUE);
       gen_assert (dest_var != MIR_NON_VAR);
       e = DLIST_HEAD (in_edge_t, bb->in_edges);
       for (size_t i = 1; i < insn->nops; i++) {
@@ -2704,15 +2689,6 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
           DLIST_APPEND (bb_insn_t, e->src->bb_insns, new_bb_insn);
         } else if (MIR_any_branch_code_p (tail->insn->code)) {
           gen_add_insn_before (gen_ctx, tail->insn, new_insn);
-          for (size_t j = 0; j < tail->insn->nops; j++) {
-            /* remove a conflict: we have dest_var = p; b ..p.. => dest_var = p; b .. dest_var .. */
-            if (tail->insn->ops[j].mode != MIR_OP_VAR
-                || tail->insn->ops[j].u.var != new_insn->ops[1].u.var)
-              continue;
-            tail->insn->ops[j].u.var = dest_var;
-            remove_ssa_edge (tail->insn->ops[j].data);
-            add_ssa_edge (gen_ctx, new_insn->data, 0, tail, j);
-          }
         } else {
           gen_add_insn_after (gen_ctx, tail->insn, new_insn);
         }
@@ -2724,7 +2700,6 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
         insn->ops[i].u.var = dest_var;
         e = DLIST_NEXT (in_edge_t, e);
       }
-      if (dest_var == var) continue;
       for (se = insn->ops[0].data; se != NULL; se = se->next_use)
         if (se->use->bb != bb) break;
       if (se == NULL) { /* we should do this only after adding moves at the end of bbs */
@@ -2742,7 +2717,6 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
         add_ssa_edge (gen_ctx, bb_insn, 0, new_insn->data, 1);
       }
     }
-  free_func_live_ranges (gen_ctx);
 }
 
 static void free_fake_bb_insns (VARR (bb_insn_t) * bb_insns) {
@@ -6317,88 +6291,8 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   });
 }
 
-/* Merge *non-intersected* ranges R1 and R2 *without live range bb info* and returns the result.
-   The function maintains the order of ranges and tries to minimize size of the result range list.
-   Ranges R1 and R2 may not be used after the call.  */
-static live_range_t merge_live_ranges (gen_ctx_t gen_ctx, live_range_t r1, live_range_t r2) {
-  live_range_t first, last, temp;
-
-  if (r1 == NULL) return r2;
-  if (r2 == NULL) return r1;
-  gen_assert (r1->lr_bb == NULL && r2->lr_bb == NULL);
-  DEBUG (3, {
-    fprintf (debug_file, "  Merging range:");
-    print_live_ranges (gen_ctx, r1);
-    fprintf (debug_file, "      and range:");
-    print_live_ranges (gen_ctx, r2);
-  });
-  for (first = last = NULL; r1 != NULL && r2 != NULL;) {
-    if (r1->start < r2->start) SWAP (r1, r2, temp);
-    if (r1->start == r2->finish + 1) {
-      /* Joint ranges: merge r1 and r2 into r1.  */
-      DEBUG (4, {
-        fprintf (debug_file, "        merging");
-        print_live_range (gen_ctx, r1);
-        fprintf (debug_file, " and");
-        print_live_range (gen_ctx, r2);
-        fprintf (debug_file, "\n");
-      });
-      r1->start = r2->start;
-      temp = r2;
-      r2 = r2->next;
-      free_one_live_range (gen_ctx, temp);
-    } else {
-      gen_assert (r2->finish + 1 < r1->start);
-      /* Add r1 to the result.  */
-      if (first == NULL) {
-        first = last = r1;
-      } else {
-        last->next = r1;
-        last = r1;
-      }
-      r1 = r1->next;
-    }
-  }
-  if (r1 != NULL) {
-    if (first == NULL)
-      first = r1;
-    else
-      last->next = r1;
-  } else {
-    gen_assert (r2 != NULL);
-    if (first == NULL)
-      first = r2;
-    else
-      last->next = r2;
-  }
-  DEBUG (3, {
-    fprintf (debug_file, "    result: ");
-    print_live_ranges (gen_ctx, first);
-  });
-  return first;
-}
-
-/* Return TRUE if live ranges R1 and R2 intersect.  */
-static int live_range_intersect_p (live_range_t r1, live_range_t r2) {
-  /* Remember the live ranges are always kept ordered.	*/
-  while (r1 != NULL && r2 != NULL) {
-    if (r1->start > r2->finish)
-      r1 = r1->next;
-    else if (r2->start > r1->finish)
-      r2 = r2->next;
-    else
-      return TRUE;
-  }
-  return FALSE;
-}
-
 #define spill_gen gen   /* pseudo regs fully spilled in BB */
 #define spill_kill kill /* pseudo regs referenced in the BB */
-
-static int var_live_ranges_intersect_p (gen_ctx_t gen_ctx, MIR_reg_t var1, MIR_reg_t var2) {
-  return live_range_intersect_p (VARR_GET (live_range_t, var_live_ranges, var1),
-                                 VARR_GET (live_range_t, var_live_ranges, var2));
-}
 
 static void process_bb_ranges (gen_ctx_t gen_ctx, bb_t bb, MIR_insn_t start_insn,
                                MIR_insn_t tail_insn) {
@@ -6697,11 +6591,70 @@ struct coalesce_ctx {
   VARR (mv_t) * moves;
   /* the first and the next res in the coalesced regs group */
   VARR (MIR_reg_t) * first_coalesced_reg, *next_coalesced_reg;
+  bitmap_t conflict_matrix;
 };
 
 #define moves gen_ctx->coalesce_ctx->moves
 #define first_coalesced_reg gen_ctx->coalesce_ctx->first_coalesced_reg
 #define next_coalesced_reg gen_ctx->coalesce_ctx->next_coalesced_reg
+#define conflict_matrix gen_ctx->coalesce_ctx->conflict_matrix
+
+static void set_scan_var_conflict (gen_ctx_t gen_ctx, int scan_var1, int scan_var2) {
+  int temp_scan_var;
+  if (scan_var1 > scan_var2) SWAP (scan_var1, scan_var2, temp_scan_var);
+  bitmap_set_bit_p (conflict_matrix, scan_var1 * scan_vars_num + scan_var2);
+}
+
+static int scan_var_conflict_p (gen_ctx_t gen_ctx, int scan_var1, int scan_var2) {
+  int temp_scan_var;
+  if (scan_var1 > scan_var2) SWAP (scan_var1, scan_var2, temp_scan_var);
+  return bitmap_bit_p (conflict_matrix, scan_var1 * scan_vars_num + scan_var2);
+}
+
+static void process_bb_conflicts (gen_ctx_t gen_ctx, bb_t bb, MIR_insn_t start_insn,
+                                  MIR_insn_t tail_insn) {
+  MIR_reg_t var;
+  size_t nel;
+  int scan_var, ignore_scan_var, live_scan_var, op_num;
+  bitmap_iterator_t bi;
+  insn_var_iterator_t insn_var_iter;
+
+  bitmap_clear (live_vars);
+  if (bb->live_out != NULL) FOREACH_BITMAP_BIT (bi, bb->live_out, nel) {
+      bitmap_set_bit_p (live_vars, nel);
+    }
+  for (MIR_insn_t insn = tail_insn;; insn = DLIST_PREV (MIR_insn_t, insn)) {
+    ignore_scan_var = -1;
+    if (move_p (insn)) ignore_scan_var = var_to_scan_var (gen_ctx, insn->ops[1].u.var);
+    FOREACH_OUT_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num) {
+      if ((scan_var = var_to_scan_var (gen_ctx, var)) < 0) continue;
+      FOREACH_BITMAP_BIT (bi, live_vars, nel) {
+        live_scan_var = nel;
+        if (live_scan_var != scan_var && live_scan_var != ignore_scan_var)
+          set_scan_var_conflict (gen_ctx, scan_var, live_scan_var);
+      }
+      bitmap_clear_bit_p (live_vars, scan_var);
+    }
+    FOREACH_IN_INSN_VAR (gen_ctx, insn_var_iter, insn, var, op_num) {
+      if ((scan_var = var_to_scan_var (gen_ctx, var)) >= 0) bitmap_set_bit_p (live_vars, scan_var);
+    }
+    if (insn == start_insn) break;
+  }
+  gen_assert (bitmap_equal_p (bb->live_in, live_vars));
+}
+
+static void build_conflict_matrix (gen_ctx_t gen_ctx) {
+  bitmap_clear (conflict_matrix);
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
+    if (DLIST_HEAD (bb_insn_t, bb->bb_insns) == NULL) continue;
+    process_bb_conflicts (gen_ctx, bb, DLIST_HEAD (bb_insn_t, bb->bb_insns)->insn,
+                          DLIST_TAIL (bb_insn_t, bb->bb_insns)->insn);
+  }
+  DEBUG (2, {
+    fprintf (debug_file, "  Conflict matrix size=%lu, scan vars = %d\n",
+             (unsigned long) bitmap_size (conflict_matrix), scan_vars_num);
+  });
+}
 
 static int substitute_reg (gen_ctx_t gen_ctx, MIR_reg_t *reg) {
   if (*reg == MIR_NON_VAR || VARR_GET (MIR_reg_t, first_coalesced_reg, *reg) == *reg) return FALSE;
@@ -6718,10 +6671,26 @@ static int mv_freq_cmp (const void *v1p, const void *v2p) {
   return (long) mv1->bb_insn->index - (long) mv2->bb_insn->index;
 }
 
-/* Merge two sets of coalesced regs given correspondingly by regs REG1 and REG2.  Set up
-   COALESCED_REGS_BITMAP.  */
+static int var_conflict_p (gen_ctx_t gen_ctx, MIR_reg_t var1, MIR_reg_t var2) {
+  gen_assert (var1 == VARR_GET (MIR_reg_t, first_coalesced_reg, var1));
+  gen_assert (var2 == VARR_GET (MIR_reg_t, first_coalesced_reg, var2));
+  for (MIR_reg_t last_reg1 = var1, reg1 = VARR_GET (MIR_reg_t, next_coalesced_reg, var1);;
+       reg1 = VARR_GET (MIR_reg_t, next_coalesced_reg, reg1)) {
+    int scan_var1 = var_to_scan_var (gen_ctx, reg1);
+    for (MIR_reg_t last_reg2 = var2, reg2 = VARR_GET (MIR_reg_t, next_coalesced_reg, var2);;
+         reg2 = VARR_GET (MIR_reg_t, next_coalesced_reg, reg2)) {
+      int scan_var2 = var_to_scan_var (gen_ctx, reg2);
+      if (scan_var_conflict_p (gen_ctx, scan_var1, scan_var2)) return TRUE;
+      if (reg2 == last_reg2) break;
+    }
+    if (reg1 == last_reg1) break;
+  }
+  return FALSE;
+}
+
+/* Merge two sets of coalesced regs given correspondingly by regs REG1 and REG2.  */
 static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
-  MIR_reg_t reg, first, first2, last, next, first_var, first2_var, temp;
+  MIR_reg_t reg, first, first2, last, next, temp;
 
   first = VARR_GET (MIR_reg_t, first_coalesced_reg, reg1);
   if ((first2 = VARR_GET (MIR_reg_t, first_coalesced_reg, reg2)) == first) return;
@@ -6740,12 +6709,6 @@ static void merge_regs (gen_ctx_t gen_ctx, MIR_reg_t reg1, MIR_reg_t reg2) {
   next = VARR_GET (MIR_reg_t, next_coalesced_reg, first);
   VARR_SET (MIR_reg_t, next_coalesced_reg, first, reg2);
   VARR_SET (MIR_reg_t, next_coalesced_reg, last, next);
-  first_var = first;
-  first2_var = first2;
-  live_range_t list = VARR_GET (live_range_t, var_live_ranges, first_var);
-  live_range_t list2 = VARR_GET (live_range_t, var_live_ranges, first2_var);
-  VARR_SET (live_range_t, var_live_ranges, first2_var, NULL);
-  VARR_SET (live_range_t, var_live_ranges, first_var, merge_live_ranges (gen_ctx, list, list2));
 }
 
 static void update_bitmap_after_coalescing (gen_ctx_t gen_ctx, bitmap_t bm) {
@@ -6794,7 +6757,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
     }
   }
   qsort (VARR_ADDR (mv_t, moves), VARR_LENGTH (mv_t, moves), sizeof (mv_t), mv_freq_cmp);
-  build_live_ranges (gen_ctx);
+  build_conflict_matrix (gen_ctx);
   /* Coalesced moves, most frequently executed first. */
   for (size_t i = 0; i < VARR_LENGTH (mv_t, moves); i++) {
     mv = VARR_GET (mv_t, moves, i);
@@ -6815,7 +6778,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
     } else {
       sreg_var = first_sreg;
       dreg_var = first_dreg;
-      if (!var_live_ranges_intersect_p (gen_ctx, sreg_var, dreg_var)
+      if (!var_conflict_p (gen_ctx, sreg_var, dreg_var)
           && (MIR_reg_hard_reg_name (ctx, first_sreg - MAX_HARD_REG, curr_func_item->u.func) == NULL
               || MIR_reg_hard_reg_name (ctx, first_dreg - MAX_HARD_REG, curr_func_item->u.func)
                    == NULL)) {
@@ -6898,7 +6861,6 @@ static void coalesce (gen_ctx_t gen_ctx) {
                moves_num, 100.0 * coalesced_moves / moves_num);
     }
   });
-  free_func_live_ranges (gen_ctx);
 }
 #undef live_in
 #undef live_out
@@ -6908,12 +6870,14 @@ static void init_coalesce (gen_ctx_t gen_ctx) {
   VARR_CREATE (mv_t, moves, 0);
   VARR_CREATE (MIR_reg_t, first_coalesced_reg, 0);
   VARR_CREATE (MIR_reg_t, next_coalesced_reg, 0);
+  conflict_matrix = bitmap_create ();
 }
 
 static void finish_coalesce (gen_ctx_t gen_ctx) {
   VARR_DESTROY (mv_t, moves);
   VARR_DESTROY (MIR_reg_t, first_coalesced_reg);
   VARR_DESTROY (MIR_reg_t, next_coalesced_reg);
+  bitmap_destroy (conflict_matrix);
   free (gen_ctx->coalesce_ctx);
   gen_ctx->coalesce_ctx = NULL;
 }
@@ -9210,8 +9174,6 @@ static void *generate_func_code (MIR_context_t ctx, int gen_num, MIR_item_t func
   }
   if (optimize_level >= 2) {
     if (consider_phi_vars_only (gen_ctx)) {
-      calculate_func_cfg_live_info (gen_ctx, FALSE);
-      print_live_info (gen_ctx, "Live info before conventional SSA transformation", TRUE, FALSE);
       make_conventional_ssa (gen_ctx);
       DEBUG (2, {
         fprintf (debug_file, "+++++++++++++MIR after transformation to conventional SSA:\n");
