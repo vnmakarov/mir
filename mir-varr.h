@@ -91,6 +91,11 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
     return varr->els_num;                                                                     \
   }                                                                                           \
                                                                                               \
+  static inline size_t VARR_OP_DEF (T, capacity) (const VARR (T) * varr) {                    \
+    VARR_ASSERT (varr, "size", T);                                                            \
+    return varr->size;                                                                        \
+  }                                                                                           \
+                                                                                              \
   static inline T *VARR_OP_DEF (T, addr) (const VARR (T) * varr) {                            \
     VARR_ASSERT (varr, "addr", T);                                                            \
     return &varr->varr[0];                                                                    \
@@ -160,6 +165,7 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
 #define VARR_CREATE(T, V, L) (VARR_OP (T, create) (&(V), L))
 #define VARR_DESTROY(T, V) (VARR_OP (T, destroy) (&(V)))
 #define VARR_LENGTH(T, V) (VARR_OP (T, length) (V))
+#define VARR_CAPACITY(T, V) (VARR_OP (T, capacity) (V))
 #define VARR_ADDR(T, V) (VARR_OP (T, addr) (V))
 #define VARR_LAST(T, V) (VARR_OP (T, last) (V))
 #define VARR_GET(T, V, I) (VARR_OP (T, get) (V, I))

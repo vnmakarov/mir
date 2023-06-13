@@ -24,6 +24,7 @@ int main (void) {
              && VARR_ADDR (int, test)[2] == 1 && VARR_ADDR (int, test)[3] == 2
              && VARR_ADDR (int, test)[4] == 3 && VARR_ADDR (int, test)[5] == 4
              && VARR_LENGTH (int, test) == 6);
+  status &= VARR_CAPACITY (int, test) >= VARR_LENGTH (int, test);
   VARR_FOREACH_ELEM (int, test, ind, elem) { status &= VARR_GET (int, test, ind) == elem; }
   VARR_TRUNC (int, test, 1);
   status &= VARR_LENGTH (int, test) == 1;
