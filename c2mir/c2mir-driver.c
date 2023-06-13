@@ -359,9 +359,7 @@ static void init_options (int argc, char *argv[]) {
   options.include_dirs = VARR_ADDR (char_ptr_t, headers);
   options.macro_commands_num = VARR_LENGTH (macro_command_t, macro_commands);
   options.macro_commands = VARR_ADDR (macro_command_t, macro_commands);
-#if !MIR_PARALLEL_GEN
-  threads_num = 0;
-#endif
+  if (!MIR_PARALLEL_GEN || threads_num <= 1) threads_num = 0;
 }
 
 static int t_getc (void *data) {
@@ -523,6 +521,7 @@ static void *compile (void *arg) {
 #endif
 
 static void init_compilers (void) {
+  if (threads_num == 0) return;
 #if MIR_PARALLEL_GEN
   if (mir_mutex_init (&queue_mutex, NULL) != 0) {
     fprintf (stderr, "can not create a c2m thread lock -- bye!\n");
@@ -558,6 +557,7 @@ static void init_compilers (void) {
 }
 
 static void finish_compilers (void) {
+  if (threads_num == 0) return;
 #if MIR_PARALLEL_GEN
   if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&compile_signal) != 0
       || mir_cond_destroy (&done_signal) != 0) {  // ???
@@ -589,23 +589,27 @@ static void signal_compilers_to_finish (int cancel_p) {
 static void send_to_compile (input_t *input) {
   if (input == NULL) { /* finish compilation */
 #if MIR_PARALLEL_GEN
-    signal_compilers_to_finish (FALSE);
-    for (int i = 0; i < threads_num; i++) mir_thread_join (compilers[i].compile_thread, NULL);
+    if (threads_num >= 1) {
+      signal_compilers_to_finish (FALSE);
+      for (int i = 0; i < threads_num; i++) mir_thread_join (compilers[i].compile_thread, NULL);
+    }
 #endif
     return;
   }
-#if !MIR_PARALLEL_GEN
-  const char *result_file_name;
-  FILE *f;
+  if (!MIR_PARALLEL_GEN || threads_num == 0) {
+    const char *result_file_name;
+    FILE *f;
 
-  f = (!options.asm_p && !options.object_p
-         ? NULL
-         : get_output_file_from_parts (&result_file_name, options.output_file_name,
-                                       input->input_name, options.asm_p ? ".mir" : ".bmir"));
-  if (!c2mir_compile (main_ctx, &input->options, t_getc, input, input->input_name, f))
-    result_code = 1;
-  if (input->code_container != NULL) VARR_DESTROY (uint8_t, input->code_container);
-#else
+    f = (!options.asm_p && !options.object_p
+           ? NULL
+           : get_output_file_from_parts (&result_file_name, options.output_file_name,
+                                         input->input_name, options.asm_p ? ".mir" : ".bmir"));
+    if (!c2mir_compile (main_ctx, &input->options, t_getc, input, input->input_name, f))
+      result_code = 1;
+    if (input->code_container != NULL) VARR_DESTROY (uint8_t, input->code_container);
+    return;
+  }
+#if MIR_PARALLEL_GEN
   if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in c2m mutex lock");
   VARR_PUSH (input_t, inputs_to_compile, *input);
   if (mir_cond_broadcast (&compile_signal)) parallel_error ("error in c2m cond broadcast");
@@ -666,9 +670,7 @@ int main (int argc, char *argv[], char *env[]) {
   options.prepro_output_file = NULL;
   init_options (argc, argv);
   main_ctx = MIR_init ();
-#if !MIR_PARALLEL_GEN
-  c2mir_init (main_ctx);
-#endif
+  if (!MIR_PARALLEL_GEN || threads_num <= 0) c2mir_init (main_ctx);
   init_compilers ();
   result_code = 0;
   for (i = options.module_num = 0;; i++, options.module_num++) {
@@ -797,8 +799,10 @@ int main (int argc, char *argv[], char *env[]) {
     double start_time;
 
 #if MIR_PARALLEL_GEN
-    for (i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
-    sort_modules (main_ctx);
+    if (threads_num > 0) {
+      for (i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
+      sort_modules (main_ctx);
+    }
 #endif
     for (module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (main_ctx)); module != NULL;
          module = DLIST_NEXT (MIR_module_t, module)) {
@@ -881,9 +885,7 @@ int main (int argc, char *argv[], char *env[]) {
   close_cmdline_libs ();
   close_std_libs ();
   finish_compilers ();
-#if !MIR_PARALLEL_GEN
-  c2mir_finish (main_ctx);
-#endif
+  if (!MIR_PARALLEL_GEN || threads_num <= 0) c2mir_finish (main_ctx);
   MIR_finish (main_ctx);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (char_ptr_t, headers);
