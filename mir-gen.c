@@ -5239,7 +5239,8 @@ static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
   }
 }
 
-static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_insn) {
+static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_insn,
+                             bitmap_t loop_invariant_insn_bitmap) {
   MIR_insn_t insn = bb_insn->insn;
   bb_t bb = bb_insn->bb;
   loop_node_t curr_loop;
@@ -5248,13 +5249,15 @@ static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_i
   ssa_edge_t se;
   insn_var_iterator_t iter;
 
-  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
-      || insn->code == MIR_LABEL || MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA
-      || insn->code == MIR_BSTART || insn->code == MIR_BEND || insn->code == MIR_VA_START
-      || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END
-      || (insn->code == MIR_MOV
-          && (insn->ops[1].mode != MIR_OP_REF
-              || (get_ref_value (gen_ctx, &insn->ops[1]) >> 32) != 0)))
+  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_PHI || insn->code == MIR_RET
+      || insn->code == MIR_JRET || insn->code == MIR_LABEL || MIR_call_code_p (insn->code)
+      || insn->code == MIR_ALLOCA || insn->code == MIR_BSTART || insn->code == MIR_BEND
+      || insn->code == MIR_VA_START || insn->code == MIR_VA_ARG || insn->code == MIR_VA_BLOCK_ARG
+      || insn->code == MIR_VA_END
+      /* possible exception insns: */
+      || insn->code == MIR_DIV || insn->code == MIR_DIVS || insn->code == MIR_UDIV
+      || insn->code == MIR_UDIVS || insn->code == MIR_MOD || insn->code == MIR_MODS
+      || insn->code == MIR_UMOD || insn->code == MIR_UMODS)
     return FALSE;
   for (size_t i = 0; i < insn->nops; i++)
     if (insn->ops[i].mode == MIR_OP_VAR_MEM) return FALSE;
@@ -5262,9 +5265,12 @@ static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_i
     se = insn->ops[op_num].data;
     gen_assert (se != NULL);
     bb_insn = se->def;
+    if (loop_invariant_insn_bitmap != NULL
+        && bitmap_bit_p (loop_invariant_insn_bitmap, bb_insn->index))
+      continue;
     bb = bb_insn->bb;
     for (curr_loop = loop->parent; curr_loop != NULL; curr_loop = curr_loop->parent)
-      if (curr_loop == bb->loop_node) break;
+      if (curr_loop == bb->loop_node->parent) break;
     if (curr_loop == NULL) return FALSE;
   }
   return TRUE;
@@ -5283,14 +5289,55 @@ static void licm_move_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, bb_t to, bb_in
   MIR_insert_insn_before (ctx, curr_func_item, before->insn, insn);
 }
 
+static void mark_as_moved (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
+                           bitmap_t loop_invariant_bb_insn_bitmap,
+                           bitmap_t bb_insns_to_move_bitmap) {
+  int op_num;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+  ssa_edge_t se;
+
+  VARR_TRUNC (bb_insn_t, temp_bb_insns2, 0);
+  VARR_PUSH (bb_insn_t, temp_bb_insns2, bb_insn);
+  gen_assert (bitmap_bit_p (loop_invariant_bb_insn_bitmap, bb_insn->index));
+  while (VARR_LENGTH (bb_insn_t, temp_bb_insns2) != 0) {
+    bb_insn = VARR_POP (bb_insn_t, temp_bb_insns2);
+    bitmap_set_bit_p (bb_insns_to_move_bitmap, bb_insn->index);
+    FOREACH_IN_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num)
+    if ((se = bb_insn->insn->ops[op_num].data) != NULL
+        && bitmap_bit_p (loop_invariant_bb_insn_bitmap, bb_insn->index))
+      VARR_PUSH (bb_insn_t, temp_bb_insns2, se->def);
+  }
+}
+
+static int non_invariant_use_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
+                                bitmap_t loop_invariant_bb_insn_bitmap) {
+  int op_num;
+  MIR_reg_t var;
+  insn_var_iterator_t iter;
+  ssa_edge_t se;
+
+  FOREACH_OUT_INSN_VAR (gen_ctx, iter, bb_insn->insn, var, op_num) {
+    for (se = bb_insn->insn->ops[op_num].data; se != NULL; se = se->next_use)
+      if (!bitmap_bit_p (loop_invariant_bb_insn_bitmap, se->use->index)) return TRUE;
+  }
+  return FALSE;
+}
+
+static int expensive_insn_p (MIR_insn_t insn) {
+  return insn->code == MIR_MUL || insn->code == MIR_MULS;
+}
+
 static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
   MIR_insn_t insn;
   bb_insn_t bb_insn;
   loop_node_t node;
   int subloop_p = FALSE, move_p = FALSE, op_num;
   MIR_reg_t var;
+  ssa_edge_t se;
   insn_var_iterator_t iter;
   bitmap_t loop_invariant_bb_insn_bitmap = temp_bitmap;
+  bitmap_t bb_insns_to_move_bitmap = temp_bitmap2;
   VARR (bb_insn_t) *loop_invariant_bb_insns = temp_bb_insns;
 
   for (node = DLIST_HEAD (loop_node_t, loop->children); node != NULL;
@@ -5312,26 +5359,72 @@ static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
     if (node->bb == NULL) continue; /* skip subloops */
     for (bb_insn = DLIST_HEAD (bb_insn_t, node->bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
-      if (loop_invariant_p (gen_ctx, loop, bb_insn))
+      if (loop_invariant_p (gen_ctx, loop, bb_insn, NULL)) { /* Push start invariants */
         VARR_PUSH (bb_insn_t, loop_invariant_bb_insns, bb_insn);
+        bitmap_set_bit_p (loop_invariant_bb_insn_bitmap, bb_insn->index);
+      }
   }
-  while (VARR_LENGTH (bb_insn_t, loop_invariant_bb_insns) != 0) {
-    bb_insn = VARR_POP (bb_insn_t, loop_invariant_bb_insns);
+  for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, loop_invariant_bb_insns); i++) {
+    /* Add insns becoming invariant if we move its inputs: */
+    bb_insn = VARR_GET (bb_insn_t, loop_invariant_bb_insns, i);
+    insn = bb_insn->insn;
+    FOREACH_OUT_INSN_VAR (gen_ctx, iter, insn, var, op_num) {
+      for (se = insn->ops[op_num].data; se != NULL; se = se->next_use) {
+        if (loop_invariant_p (gen_ctx, loop, se->use, loop_invariant_bb_insn_bitmap)
+            && bitmap_set_bit_p (loop_invariant_bb_insn_bitmap, se->use->index))
+          VARR_PUSH (bb_insn_t, loop_invariant_bb_insns, se->use);
+      }
+    }
+  }
+  bitmap_clear (bb_insns_to_move_bitmap);
+  for (int i = (int) VARR_LENGTH (bb_insn_t, loop_invariant_bb_insns) - 1; i >= 0; i--) {
+    bb_insn = VARR_GET (bb_insn_t, loop_invariant_bb_insns, i);
+    insn = bb_insn->insn;
+    DEBUG (2, {
+      fprintf (debug_file, "  Considering invariant ");
+      print_bb_insn (gen_ctx, bb_insn, FALSE);
+    });
+    if (bitmap_bit_p (bb_insns_to_move_bitmap, bb_insn->index)) {
+      DEBUG (2, { fprintf (debug_file, "     -- already marked as moved\n"); });
+      continue;
+    }
+    if (expensive_insn_p (insn)) {
+      DEBUG (2, { fprintf (debug_file, "     -- marked as moved becuase it is costly\n"); });
+      mark_as_moved (gen_ctx, bb_insn, loop_invariant_bb_insn_bitmap, bb_insns_to_move_bitmap);
+      continue;
+    }
+    int can_be_moved = TRUE, input_var_p = FALSE;
+    FOREACH_IN_INSN_VAR (gen_ctx, iter, insn, var, op_num) {
+      input_var_p = TRUE;
+      if ((se = insn->ops[op_num].data) != NULL
+          && bitmap_bit_p (loop_invariant_bb_insn_bitmap, se->def->index)
+          && !bitmap_bit_p (bb_insns_to_move_bitmap, se->def->index)
+          && non_invariant_use_p (gen_ctx, se->def, loop_invariant_bb_insn_bitmap)) {
+        can_be_moved = FALSE;
+        break;
+      }
+    }
+    DEBUG (2, {
+      if (input_var_p)
+        fprintf (debug_file, "     -- %s be moved because reg presure consideration\n",
+                 can_be_moved ? "can" : "can't");
+      else
+        fprintf (debug_file, "     -- can't be moved because single insn\n");
+    });
+    if (can_be_moved && input_var_p)
+      mark_as_moved (gen_ctx, bb_insn, loop_invariant_bb_insn_bitmap, bb_insns_to_move_bitmap);
+  }
+  for (size_t i = 0; i < VARR_LENGTH (bb_insn_t, loop_invariant_bb_insns); i++) {
+    bb_insn = VARR_GET (bb_insn_t, loop_invariant_bb_insns, i);
+    if (!bitmap_bit_p (bb_insns_to_move_bitmap, bb_insn->index)) continue;
     insn = bb_insn->insn;
     DEBUG (2, {
       fprintf (debug_file, "  Move invariant ");
       print_bb_insn (gen_ctx, bb_insn, FALSE);
     });
-    move_p = TRUE;
     licm_move_insn (gen_ctx, bb_insn, loop->u.preheader->bb,
                     DLIST_HEAD (bb_insn_t, loop->entry->bb->bb_insns));
-    FOREACH_OUT_INSN_VAR (gen_ctx, iter, insn, var, op_num) {
-      for (ssa_edge_t se = insn->ops[op_num].data; se != NULL; se = se->next_use) {
-        if (loop_invariant_p (gen_ctx, loop, se->use)
-            && bitmap_set_bit_p (loop_invariant_bb_insn_bitmap, se->use->index))
-          VARR_PUSH (bb_insn_t, loop_invariant_bb_insns, se->use);
-      }
-    }
+    move_p = TRUE;
   }
   return move_p;
 }
