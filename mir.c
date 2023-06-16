@@ -1847,7 +1847,13 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
                   && first_item->item_type != MIR_import_item
                   && first_item->item_type != MIR_forward_item);
       if (setup_global (ctx, MIR_item_name (ctx, first_item), first_item->addr, first_item)
-          && item->item_type == MIR_func_item && !item->u.func->redef_permitted_p)
+          && item->item_type == MIR_func_item
+          && !item->u.func->redef_permitted_p
+#ifdef __APPLE__
+          /* macosx can have multiple equal external inline definitions of the same function: */
+          && strncmp (item->u.func->name, "__darwin", 8) != 0
+#endif
+      )
         MIR_get_error_func (ctx) (MIR_repeated_decl_error, "func %s is prohibited for redefinition",
                                   item->u.func->name);
     }
