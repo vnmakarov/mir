@@ -5230,7 +5230,7 @@ static void licm_add_loop_preheaders (gen_ctx_t gen_ctx, loop_node_t loop) {
   if (subloop_p || loop == curr_cfg->root_loop_node) return;
   loop->u.preheader = NULL;
   if ((e = find_loop_entry_edge (loop->entry->bb)) == NULL) return;
-  if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL
+  if ((bb_insn = DLIST_TAIL (bb_insn_t, e->src->bb_insns)) == NULL || bb_insn->insn->code == MIR_JMP
       || !MIR_any_branch_code_p (bb_insn->insn->code)) {
     loop->u.preheader = e->src->loop_node;      /* The preheader already exists */
     e->src->loop_node->u.preheader_loop = loop; /* The preheader already exists */
@@ -5280,13 +5280,19 @@ static void licm_move_insn (gen_ctx_t gen_ctx, bb_insn_t bb_insn, bb_t to, bb_in
   MIR_context_t ctx = gen_ctx->ctx;
   bb_t bb = bb_insn->bb;
   MIR_insn_t insn = bb_insn->insn;
+  bb_insn_t last = DLIST_TAIL (bb_insn_t, to->bb_insns);
 
   gen_assert (before != NULL);
   DLIST_REMOVE (bb_insn_t, bb->bb_insns, bb_insn);
-  DLIST_APPEND (bb_insn_t, to->bb_insns, bb_insn);
-  bb_insn->bb = to;
   DLIST_REMOVE (MIR_insn_t, curr_func_item->u.func->insns, insn);
-  MIR_insert_insn_before (ctx, curr_func_item, before->insn, insn);
+  if (last != NULL && last->insn->code == MIR_JMP) {
+    DLIST_INSERT_BEFORE (bb_insn_t, to->bb_insns, last, bb_insn);
+    MIR_insert_insn_before (ctx, curr_func_item, last->insn, insn);
+  } else {
+    DLIST_APPEND (bb_insn_t, to->bb_insns, bb_insn);
+    MIR_insert_insn_before (ctx, curr_func_item, before->insn, insn);
+  }
+  bb_insn->bb = to;
 }
 
 static void mark_as_moved (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
@@ -5419,7 +5425,8 @@ static int loop_licm (gen_ctx_t gen_ctx, loop_node_t loop) {
     if (!bitmap_bit_p (bb_insns_to_move_bitmap, bb_insn->index)) continue;
     insn = bb_insn->insn;
     DEBUG (2, {
-      fprintf (debug_file, "  Move invariant ");
+      fprintf (debug_file, "  Move invariant (target bb%lu) %-5lu",
+               (unsigned long) loop->u.preheader->bb->index, (unsigned long) bb_insn->index);
       print_bb_insn (gen_ctx, bb_insn, FALSE);
     });
     licm_move_insn (gen_ctx, bb_insn, loop->u.preheader->bb,
