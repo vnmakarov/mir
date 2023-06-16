@@ -8848,7 +8848,6 @@ static MIR_insn_t combine_exts (gen_ctx_t gen_ctx, bb_insn_t bb_insn, long *dele
     if (combine_delete_insn (gen_ctx, def_insn, bb_insn)) (*deleted_insns_num)++;
     return insn;
   }
-  gen_assert (FALSE);
   return NULL;
 }
 
