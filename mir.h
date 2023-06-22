@@ -490,7 +490,7 @@ static inline int MIR_branch_code_p (MIR_insn_code_t code) {
 }
 
 static inline int MIR_any_branch_code_p (MIR_insn_code_t code) {
-  return (MIR_branch_code_p (code) || code == MIR_SWITCH);
+  return (MIR_branch_code_p (code) || code == MIR_JMPI || code == MIR_SWITCH);
 }
 
 static inline int MIR_addr_code_p (MIR_insn_code_t code) {
@@ -531,6 +531,9 @@ extern MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name,
                                        MIR_str_t str); /* name can be NULL */
 extern MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item,
                                     int64_t disp); /* name can be NULL */
+extern MIR_item_t MIR_new_lref_data (MIR_context_t ctx, const char *name, MIR_label_t label,
+                                     MIR_label_t label2,
+                                     int64_t disp); /* name and label2 can be NULL */
 extern MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name,
                                      MIR_item_t expr_item); /* name can be NULL */
 extern MIR_item_t MIR_new_proto_arr (MIR_context_t ctx, const char *name, size_t nres,

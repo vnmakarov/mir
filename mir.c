@@ -38,7 +38,7 @@ struct MIR_context {
   VARR (size_t) * insn_nops;          /* constant after initialization */
   VARR (MIR_proto_t) * unspec_protos; /* protos of unspec insns (set only during initialization) */
   VARR (char) * temp_string;
-  VARR (uint8_t) * temp_data;
+  VARR (uint8_t) * temp_data, *used_label_p;
   HTAB (MIR_item_t) * module_item_tab;
   /* Module to keep items potentially used by all modules:  */
   struct MIR_module environment_module;
@@ -68,6 +68,7 @@ struct MIR_context {
 #define insn_nops ctx->insn_nops
 #define temp_string ctx->temp_string
 #define temp_data ctx->temp_data
+#define used_label_p ctx->used_label_p
 #define module_item_tab ctx->module_item_tab
 #define environment_module ctx->environment_module
 #define curr_module ctx->curr_module
@@ -634,6 +635,7 @@ const char *MIR_item_name (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
   case MIR_bss_item: return item->u.bss->name;
   case MIR_data_item: return item->u.data->name;
   case MIR_ref_data_item: return item->u.ref_data->name;
+  case MIR_lref_data_item: return item->u.lref_data->name;
   case MIR_expr_data_item: return item->u.expr_data->name;
   default: mir_assert (FALSE); return NULL;
   }
@@ -759,6 +761,7 @@ MIR_context_t _MIR_init (void) {
   simplify_init (ctx);
   VARR_CREATE (char, temp_string, 64);
   VARR_CREATE (uint8_t, temp_data, 512);
+  VARR_CREATE (uint8_t, used_label_p, 512);
 #if !MIR_NO_IO
   io_init (ctx);
 #endif
@@ -825,6 +828,10 @@ static void remove_item (MIR_context_t ctx, MIR_item_t item) {
     if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.ref_data);
     break;
+  case MIR_lref_data_item:
+    if (item->addr != NULL && item->section_head_p) free (item->addr);
+    free (item->u.lref_data);
+    break;
   case MIR_expr_data_item:
     if (item->addr != NULL && item->section_head_p) free (item->addr);
     free (item->u.expr_data);
@@ -873,6 +880,7 @@ void MIR_finish (MIR_context_t ctx) {
   io_finish (ctx);
 #endif
   VARR_DESTROY (uint8_t, temp_data);
+  VARR_DESTROY (uint8_t, used_label_p);
   VARR_DESTROY (char, temp_string);
   while (VARR_LENGTH (MIR_proto_t, unspec_protos) != 0) {
     MIR_proto_t proto = VARR_POP (MIR_proto_t, unspec_protos);
@@ -1018,6 +1026,7 @@ static MIR_item_t add_item (MIR_context_t ctx, MIR_item_t item) {
   case MIR_bss_item:
   case MIR_data_item:
   case MIR_ref_data_item:
+  case MIR_lref_data_item:
   case MIR_expr_data_item:
   case MIR_func_item:
     if (item->item_type == MIR_export_item) {
@@ -1203,6 +1212,38 @@ MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t ref
   return item;
 }
 
+MIR_item_t MIR_new_lref_data (MIR_context_t ctx, const char *name, MIR_label_t label,
+                              MIR_label_t label2, int64_t disp) {
+  MIR_item_t tab_item, item = create_item (ctx, MIR_lref_data_item, "lref data");
+  MIR_lref_data_t lref_data;
+
+  if (label == NULL) {
+    free (item);
+    MIR_get_error_func (ctx) (MIR_alloc_error, "null label for lref data %s",
+                              name == NULL ? "" : name);
+  }
+  item->u.lref_data = lref_data = malloc (sizeof (struct MIR_lref_data));
+  if (lref_data == NULL) {
+    free (item);
+    MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of lref data %s",
+                              name == NULL ? "" : name);
+  }
+  if (name != NULL) name = get_ctx_str (ctx, name);
+  lref_data->name = name;
+  lref_data->label = label;
+  lref_data->label2 = label2;
+  lref_data->disp = disp;
+  lref_data->orig_label = lref_data->orig_label2 = NULL;
+  lref_data->next = NULL;
+  if (name == NULL) {
+    DLIST_APPEND (MIR_item_t, curr_module->items, item);
+  } else if ((tab_item = add_item (ctx, item)) != item) {
+    free (item);
+    item = tab_item;
+  }
+  return item;
+}
+
 MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t expr_item) {
   MIR_item_t tab_item, item = create_item (ctx, MIR_expr_data_item, "expr data");
   MIR_expr_data_t expr_data;
@@ -1355,6 +1396,7 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->expr_p = func->jret_p = FALSE;
   func->n_inlines = 0;
   func->machine_code = func->call_addr = NULL;
+  func->first_lref = NULL;
   func_regs_init (ctx, func);
   for (size_t i = 0; i < nargs; i++) {
     char *stored_name;
@@ -1770,6 +1812,9 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
       else if (curr_item->item_type == MIR_ref_data_item
                && (curr_item == item || curr_item->u.ref_data->name == NULL))
         section_size += _MIR_type_size (ctx, MIR_T_P);
+      else if (curr_item->item_type == MIR_lref_data_item
+               && (curr_item == item || curr_item->u.lref_data->name == NULL))
+        section_size += _MIR_type_size (ctx, MIR_T_P);
       else if (curr_item->item_type == MIR_expr_data_item
                && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
         expr_item = curr_item->u.expr_data->expr_item;
@@ -1811,6 +1856,11 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
       curr_item->u.ref_data->load_addr = addr;
       curr_item->addr = addr;
       addr += _MIR_type_size (ctx, MIR_T_P);
+    } else if (curr_item->item_type == MIR_lref_data_item
+               && (curr_item == item || curr_item->u.lref_data->name == NULL)) {
+      curr_item->u.lref_data->load_addr = addr;
+      curr_item->addr = addr;
+      addr += _MIR_type_size (ctx, MIR_T_P);
     } else if (curr_item->item_type == MIR_expr_data_item
                && (curr_item == item || curr_item->u.expr_data->name == NULL)) {
       expr_item = curr_item->u.expr_data->expr_item;
@@ -1825,13 +1875,16 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
 }
 
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
+  int lref_p = FALSE;
   mir_assert (m != NULL);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
     MIR_item_t first_item = item;
 
     if (item->item_type == MIR_bss_item || item->item_type == MIR_data_item
-        || item->item_type == MIR_ref_data_item || item->item_type == MIR_expr_data_item) {
+        || item->item_type == MIR_ref_data_item || item->item_type == MIR_lref_data_item
+        || item->item_type == MIR_expr_data_item) {
+      if (item->item_type == MIR_lref_data_item) lref_p = TRUE;
       item = load_bss_data_section (ctx, item, FALSE);
     } else if (item->item_type == MIR_func_item) {
       if (item->addr == NULL) {
@@ -1859,6 +1912,40 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
     }
     if (item->item_type == MIR_func_item) item->u.func->redef_permitted_p = func_redef_permission_p;
   }
+  if (lref_p) { /* link lref data related to funcs */
+    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+         item = DLIST_NEXT (MIR_item_t, item)) {
+      if (item->item_type != MIR_func_item) continue;
+      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
+           insn = DLIST_NEXT (MIR_insn_t, insn))
+        if (insn->code == MIR_LABEL) insn->data = item->u.func;
+    }
+    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+         item = DLIST_NEXT (MIR_item_t, item)) {
+      if (item->item_type == MIR_lref_data_item) {
+        MIR_lref_data_t lref_data = item->u.lref_data;
+        MIR_label_t lab = lref_data->label, lab2 = lref_data->label2;
+        MIR_func_t func = (MIR_func_t) lab->data;
+        if (lab->data == NULL)
+          MIR_get_error_func (ctx) (MIR_wrong_lref_error,
+                                    "A label not from any function in lref %s",
+                                    lref_data->name == NULL ? "" : lref_data->name);
+        else if (lab2 != NULL && lab2->data != func)
+          MIR_get_error_func (ctx) (MIR_wrong_lref_error,
+                                    "Labels from different functions in lref %s",
+                                    lref_data->name == NULL ? "" : lref_data->name);
+        lref_data->next = func->first_lref;
+        func->first_lref = lref_data;
+      }
+    }
+    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+         item = DLIST_NEXT (MIR_item_t, item)) {
+      if (item->item_type != MIR_func_item) continue;
+      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
+           insn = DLIST_NEXT (MIR_insn_t, insn))
+        if (insn->code == MIR_LABEL) insn->data = NULL;
+    }
+  }
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
 
@@ -1871,6 +1958,7 @@ void MIR_load_external (MIR_context_t ctx, const char *name, void *addr) {
   setup_global (ctx, name, addr, NULL);
 }
 
+static void simplify_module_init (MIR_context_t ctx);
 static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float_p);
 static void process_inlines (MIR_context_t ctx, MIR_item_t func_item);
 
@@ -1894,6 +1982,7 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
 
   for (size_t i = 0; i < VARR_LENGTH (MIR_module_t, modules_to_link); i++) {
     m = VARR_GET (MIR_module_t, modules_to_link, i);
+    simplify_module_init (ctx);
     for (item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
          item = DLIST_NEXT (MIR_item_t, item))
       if (item->item_type == MIR_func_item) {
@@ -1941,6 +2030,7 @@ void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_
         memcpy (item->u.ref_data->load_addr, &addr, _MIR_type_size (ctx, MIR_T_P));
         continue;
       }
+      /* lref data are set up in interpreter or generator */
       if (item->item_type != MIR_expr_data_item) continue;
       expr_item = item->u.expr_data->expr_item;
       MIR_interp (ctx, expr_item, &res, 0);
@@ -2633,7 +2723,8 @@ void MIR_insert_insn_before (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t
 static void store_labels_for_duplication (MIR_context_t ctx MIR_UNUSED, VARR (MIR_insn_t) * labels,
                                           VARR (MIR_insn_t) * branch_insns, MIR_insn_t insn,
                                           MIR_insn_t new_insn) {
-  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE) {
+  if (MIR_any_branch_code_p (insn->code) || insn->code == MIR_LADDR || insn->code == MIR_PRBEQ
+      || insn->code == MIR_PRBNE) {
     VARR_PUSH (MIR_insn_t, branch_insns, new_insn);
   } else if (insn->code == MIR_LABEL) {
     mir_assert (insn->data == NULL);
@@ -2650,9 +2741,13 @@ static void redirect_duplicated_labels (MIR_context_t ctx MIR_UNUSED, VARR (MIR_
     size_t start_label_nop = 0, bound_label_nop = 1, n;
 
     insn = VARR_POP (MIR_insn_t, branch_insns);
+    if (insn->code == MIR_JMPI) continue;
     if (insn->code == MIR_SWITCH) {
       start_label_nop = 1;
       bound_label_nop = start_label_nop + insn->nops - 1;
+    } else if (insn->code == MIR_LADDR) {
+      start_label_nop = 1;
+      bound_label_nop = 2;
     }
     for (n = start_label_nop; n < bound_label_nop; n++)
       insn->ops[n].u.label = insn->ops[n].u.label->data;
@@ -2681,6 +2776,12 @@ void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
     new_insn = MIR_copy_insn (ctx, insn);
     DLIST_APPEND (MIR_insn_t, func->insns, new_insn);
     store_labels_for_duplication (ctx, labels, branch_insns, insn, new_insn);
+  }
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL; lref = lref->next) {
+    lref->orig_label = lref->label;
+    lref->orig_label2 = lref->label2;
+    lref->label = lref->label->data;
+    if (lref->label2 != NULL) lref->label2 = lref->label2->data;
   }
   redirect_duplicated_labels (ctx, labels, branch_insns);
   VARR_DESTROY (MIR_insn_t, labels);
@@ -2711,6 +2812,11 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
     MIR_remove_insn (ctx, func_item, insn);
   func->insns = func->original_insns;
   DLIST_INIT (MIR_insn_t, func->original_insns);
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL; lref = lref->next) {
+    lref->label = lref->orig_label;
+    lref->label2 = lref->orig_label2;
+    lref->orig_label = lref->orig_label2 = NULL;
+  }
 }
 
 static void set_item_name (MIR_item_t item, const char *name) {
@@ -2724,6 +2830,7 @@ static void set_item_name (MIR_item_t item, const char *name) {
   case MIR_bss_item: item->u.bss->name = name; break;
   case MIR_data_item: item->u.data->name = name; break;
   case MIR_ref_data_item: item->u.ref_data->name = name; break;
+  case MIR_lref_data_item: item->u.lref_data->name = name; break;
   case MIR_expr_data_item: item->u.expr_data->name = name; break;
   default: mir_assert (FALSE);
   }
@@ -2992,6 +3099,17 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
              (int64_t) ref_data->disp);
     return;
   }
+  if (item->item_type == MIR_lref_data_item) {
+    MIR_lref_data_t lref_data = item->u.lref_data;
+    if (lref_data->name != NULL) fprintf (f, "%s:", lref_data->name);
+    mir_assert (lref_data->label->ops[0].mode == MIR_OP_INT);
+    fprintf (f, "\tlref\tL%" PRId64, lref_data->label->ops[0].u.i);
+    mir_assert (lref_data->label2 == NULL || lref_data->label2->ops[0].mode == MIR_OP_INT);
+    if (lref_data->label2 != NULL) fprintf (f, ", L%" PRId64, lref_data->label2->ops[0].u.i);
+    if (lref_data->disp != 0) fprintf (f, ", %" PRId64, (int64_t) lref_data->disp);
+    fprintf (f, "\n");
+    return;
+  }
   if (item->item_type == MIR_expr_data_item) {
     expr_data = item->u.expr_data;
     if (expr_data->name != NULL) fprintf (f, "%s:", expr_data->name);
@@ -3096,7 +3214,7 @@ struct simplify_ctx {
   VARR (MIR_reg_t) * inline_reg_map;
   VARR (MIR_insn_t) * anchors;
   VARR (size_t) * alloca_sizes;
-  size_t inlined_calls, inline_insns_before, inline_insns_after;
+  size_t new_label_num, inlined_calls, inline_insns_before, inline_insns_after;
 };
 
 #define val_tab ctx->simplify_ctx->val_tab
@@ -3106,6 +3224,7 @@ struct simplify_ctx {
 #define inline_reg_map ctx->simplify_ctx->inline_reg_map
 #define anchors ctx->simplify_ctx->anchors
 #define alloca_sizes ctx->simplify_ctx->alloca_sizes
+#define new_label_num ctx->simplify_ctx->new_label_num
 #define inlined_calls ctx->simplify_ctx->inlined_calls
 #define inline_insns_before ctx->simplify_ctx->inline_insns_before
 #define inline_insns_after ctx->simplify_ctx->inline_insns_after
@@ -3157,6 +3276,11 @@ static void simplify_finish (MIR_context_t ctx) {
   HTAB_DESTROY (val_t, val_tab);
   free (ctx->simplify_ctx);
   ctx->simplify_ctx = NULL;
+}
+
+static void simplify_module_init (MIR_context_t ctx) {
+  new_label_num = 0;
+  VARR_TRUNC (uint8_t, used_label_p, 0);
 }
 
 static void vn_empty (MIR_context_t ctx) { HTAB_CLEAR (val_t, val_tab); }
@@ -3442,14 +3566,20 @@ static void make_one_ret (MIR_context_t ctx, MIR_item_t func_item) {
   }
 }
 
+static void mark_used_label (MIR_context_t ctx, MIR_label_t label) {
+  int64_t label_num = label->ops[0].u.i;
+  while (label_num >= (int64_t) VARR_LENGTH (uint8_t, used_label_p))
+    VARR_PUSH (uint8_t, used_label_p, FALSE);
+  VARR_SET (uint8_t, used_label_p, label_num, TRUE);
+}
+
 static void remove_unused_and_enumerate_labels (MIR_context_t ctx, MIR_item_t func_item) {
-  int64_t new_label_num = 0;
   for (size_t i = 0; i < VARR_LENGTH (MIR_insn_t, labels); i++) {
     MIR_insn_t label = VARR_GET (MIR_insn_t, labels, i);
     int64_t label_num = label->ops[0].u.i;
 
-    if (label_num < (int64_t) VARR_LENGTH (uint8_t, temp_data)
-        && VARR_GET (uint8_t, temp_data, label_num)) {
+    if (label_num < (int64_t) VARR_LENGTH (uint8_t, used_label_p)
+        && VARR_GET (uint8_t, used_label_p, label_num)) {
       label->ops[0] = MIR_new_int_op (ctx, new_label_num++);
       continue;
     }
@@ -3549,7 +3679,6 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
   }
   VARR_TRUNC (MIR_insn_t, temp_insns, 0);
   VARR_TRUNC (MIR_insn_t, labels, 0);
-  VARR_TRUNC (uint8_t, temp_data, 0);
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_insn_code_t code = insn->code;
     MIR_op_t temp_op;
@@ -3647,9 +3776,8 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
       next_insn = insn;
       continue;
     } else {
-      if (MIR_any_branch_code_p (code) || code == MIR_LADDR || code == MIR_PRBEQ
-          || code == MIR_PRBNE) {
-        int64_t label_num;
+      if ((MIR_any_branch_code_p (code) && code != MIR_JMPI) || code == MIR_LADDR
+          || code == MIR_PRBEQ || code == MIR_PRBNE) {
         size_t start_label_nop = 0, bound_label_nop = 1, n;
 
         if (code == MIR_LADDR) {
@@ -3662,10 +3790,7 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
         for (n = start_label_nop; n < bound_label_nop; n++) {
           label = last_label (insn->ops[n].u.label);
           if (label != insn->ops[n].u.label) insn->ops[n].u.label = label;
-          label_num = label->ops[0].u.i;
-          while (label_num >= (int64_t) VARR_LENGTH (uint8_t, temp_data))
-            VARR_PUSH (uint8_t, temp_data, FALSE);
-          VARR_SET (uint8_t, temp_data, label_num, TRUE);
+          mark_used_label (ctx, label);
         }
       }
       simplify_insn (ctx, func_item, insn, TRUE, mem_float_p);
@@ -3673,6 +3798,10 @@ static int simplify_func (MIR_context_t ctx, MIR_item_t func_item, int mem_float
     jmps_num = 0;
   }
   make_one_ret (ctx, func_item);
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL; lref = lref->next) {
+    mark_used_label (ctx, lref->label);
+    if (lref->label2 != NULL) mark_used_label (ctx, lref->label2);
+  }
   remove_unused_and_enumerate_labels (ctx, func_item);
 #if 0
   fprintf (stderr, "+++++ Function after simplification:\n");
@@ -3858,7 +3987,6 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
   MIR_item_t called_func_item;
   MIR_func_t func, called_func;
   size_t original_func_insns_num, func_insns_num, called_func_insns_num;
-  long new_label_num = 0;
 
   mir_assert (func_item->item_type == MIR_func_item);
   vn_empty (ctx);
@@ -3903,7 +4031,7 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
     }
     called_func = called_func_item->u.func;
     called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
-    if (called_func->vararg_p || called_func->jret_p
+    if (called_func->first_lref != NULL || called_func->vararg_p || called_func->jret_p
         || called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
                                                                 : MIR_MAX_INSNS_FOR_CALL_INLINE)
         || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
@@ -4855,6 +4983,28 @@ static size_t write_item (MIR_context_t ctx, writer_func_t writer, MIR_item_t it
     len += write_int (ctx, writer, item->u.ref_data->disp);
     return len;
   }
+  if (item->item_type == MIR_lref_data_item) {
+    if (item->u.lref_data->name == NULL) {
+      len += write_name (ctx, writer, "lref");
+    } else {
+      len += write_name (ctx, writer, "nlref");
+      len += write_name (ctx, writer, item->u.lref_data->name);
+    }
+    mir_assert (item->u.lref_data->label->ops[0].mode == MIR_OP_INT);
+    mir_assert (item->u.lref_data->label2 == NULL
+                || (item->u.lref_data->label2->ops[0].mode == MIR_OP_INT
+                    && item->u.lref_data->label2->ops[0].u.i >= 0));
+    len += write_int (ctx, writer, item->u.lref_data->label->ops[0].u.i);
+    if (item->u.lref_data->label2 == NULL) {
+      len += write_int (ctx, writer, -1);
+    } else {
+      mir_assert (item->u.lref_data->label2->ops[0].mode == MIR_OP_INT
+                  && item->u.lref_data->label2->ops[0].u.i >= 0);
+      len += write_int (ctx, writer, item->u.lref_data->label2->ops[0].u.i);
+    }
+    len += write_int (ctx, writer, item->u.lref_data->disp);
+    return len;
+  }
   if (item->item_type == MIR_expr_data_item) {
     if (item->u.expr_data->name == NULL) {
       len += write_name (ctx, writer, "expr");
@@ -5369,7 +5519,7 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
   int version, global_p;
   bin_tag_t tag, type_tag;
   token_attr_t attr;
-  MIR_label_t lab;
+  MIR_label_t lab, lab2;
   uint64_t nstr, nres, u;
   int64_t i;
   MIR_op_t op;
@@ -5486,6 +5636,18 @@ void MIR_read_with_func (MIR_context_t ctx, int (*const reader) (MIR_context_t))
                                     item_name);
         i = read_int (ctx, "wrong ref disp");
         MIR_new_ref_data (ctx, name, item, i);
+      } else if (strcmp (name, "nlref") == 0 || strcmp (name, "lref") == 0) {
+        name = NULL;
+        if (strcmp (name, "nlref") == 0) name = read_name (ctx, module, "wrong lref data name");
+        if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
+          MIR_get_error_func (ctx) (MIR_binary_io_error, "lref data %s should have no labels",
+                                    name == NULL ? "" : name);
+        i = read_int (ctx, "wrong lref label num");
+        lab = create_label (ctx, i);
+        i = read_int (ctx, "wrong 2nd lref label num");
+        lab2 = i < 0 ? NULL : create_label (ctx, i);
+        i = read_int (ctx, "wrong lref disp");
+        MIR_new_lref_data (ctx, name, lab, lab2, i);
       } else if (strcmp (name, "nexpr") == 0 || strcmp (name, "expr") == 0) {
         name = strcmp (name, "nexpr") == 0 ? read_name (ctx, module, "wrong expr name") : NULL;
         if (VARR_LENGTH (uint64_t, insn_label_string_nums) != 0)
@@ -5762,6 +5924,7 @@ typedef const char *label_name_t;
 DEF_VARR (label_name_t);
 
 typedef struct label_desc {
+  int def_p;
   const char *name;
   MIR_label_t label;
 } label_desc_t;
@@ -6067,15 +6230,21 @@ static htab_hash_t label_hash (label_desc_t l, void *arg MIR_UNUSED) {
   return mir_hash (l.name, strlen (l.name), 0);
 }
 
-static MIR_label_t create_label_desc (MIR_context_t ctx, const char *name) {
+static MIR_label_t create_label_desc (MIR_context_t ctx, const char *name, int def_p) {
   MIR_label_t label;
   label_desc_t label_desc;
 
   label_desc.name = name;
   if (HTAB_DO (label_desc_t, label_desc_tab, label_desc, HTAB_FIND, label_desc)) {
+    if (def_p) {
+      if (label_desc.def_p) scan_error (ctx, "redefinition of label %s in a module", name);
+      label_desc.def_p = TRUE;
+      HTAB_DO (label_desc_t, label_desc_tab, label_desc, HTAB_REPLACE, label_desc);
+    }
     label = label_desc.label;
   } else {
     label_desc.label = label = MIR_new_label (ctx);
+    label_desc.def_p = def_p;
     HTAB_DO (label_desc_t, label_desc_tab, label_desc, HTAB_INSERT, label_desc);
   }
   return label;
@@ -6168,7 +6337,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   MIR_label_t label;
   int64_t i, n;
   int module_p, end_module_p, proto_p, func_p, end_func_p, dots_p, export_p, import_p, forward_p;
-  int bss_p, ref_p, expr_p, string_p, global_p, local_p, push_op_p, read_p, disp_p;
+  int bss_p, ref_p, lref_p, expr_p, string_p, global_p, local_p, push_op_p, read_p, disp_p;
   insn_name_t in, el;
 
   VARR_TRUNC (char, error_msg_buf, 0);
@@ -6199,7 +6368,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         scan_token (ctx, &t, get_string_char, unget_string_char); /* label_names without insn */
     }
     module_p = end_module_p = proto_p = func_p = end_func_p = FALSE;
-    export_p = import_p = forward_p = bss_p = ref_p = expr_p = string_p = FALSE;
+    export_p = import_p = forward_p = bss_p = ref_p = lref_p = expr_p = string_p = FALSE;
     global_p = local_p = FALSE;
     if (strcmp (name, "module") == 0) {
       module_p = TRUE;
@@ -6241,6 +6410,10 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       ref_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
         scan_error (ctx, "at most one label should be used for ref");
+    } else if (strcmp (name, "lref") == 0) {
+      lref_p = TRUE;
+      if (VARR_LENGTH (label_name_t, label_names) > 1)
+        scan_error (ctx, "at most one label should be used for lref");
     } else if (strcmp (name, "expr") == 0) {
       expr_p = TRUE;
       if (VARR_LENGTH (label_name_t, label_names) > 1)
@@ -6265,7 +6438,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (insn_code == MIR_UNSPEC || insn_code == MIR_USE || insn_code == MIR_PHI)
         scan_error (ctx, "UNSPEC, USE, or PHI is not portable and can not be scanned", name);
       for (n = 0; n < (int64_t) VARR_LENGTH (label_name_t, label_names); n++) {
-        label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n));
+        label = create_label_desc (ctx, VARR_GET (label_name_t, label_names, n), TRUE);
         if (func != NULL) MIR_append_insn (ctx, func, label);
       }
     }
@@ -6296,6 +6469,8 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
           } else if (forward_p) {
             MIR_new_forward (ctx, name);
             push_op_p = FALSE;
+          } else if (lref_p) {
+            op = MIR_new_label_op (ctx, create_label_desc (ctx, name, FALSE));
           } else if (!module_p && !end_module_p && !end_func_p
                      && (((MIR_branch_code_p (insn_code) || insn_code == MIR_PRBEQ
                            || insn_code == MIR_PRBNE)
@@ -6303,7 +6478,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                          || (insn_code == MIR_LADDR && VARR_LENGTH (MIR_op_t, scan_insn_ops) == 1)
                          || (insn_code == MIR_SWITCH
                              && VARR_LENGTH (MIR_op_t, scan_insn_ops) > 0))) {
-            op = MIR_new_label_op (ctx, create_label_desc (ctx, name));
+            op = MIR_new_label_op (ctx, create_label_desc (ctx, name, FALSE));
           } else if (!expr_p && !ref_p && func != NULL && func_reg_p (ctx, func->u.func, name)) {
             op.mode = MIR_OP_REG;
             op.u.reg = MIR_reg (ctx, name, func->u.func);
@@ -6459,6 +6634,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
       if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
         scan_error (ctx, "module should have no params");
       module = MIR_new_module (ctx, VARR_GET (label_name_t, label_names, 0));
+      HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_module_p) {
       if (module == NULL) scan_error (ctx, "standalone endmodule");
       if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
@@ -6485,6 +6661,31 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
         = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
                                                         : VARR_GET (label_name_t, label_names, 0));
       MIR_new_ref_data (ctx, name, op_addr[0].u.ref, op_addr[1].u.i);
+    } else if (lref_p) {
+      size_t len = VARR_LENGTH (MIR_op_t, scan_insn_ops);
+      MIR_label_t lab = NULL, lab2 = NULL;
+      int64_t disp = 0;
+      if (len == 0 || len > 3)
+        scan_error (ctx, "lref should have at least one but at most three operands");
+      op_addr = VARR_ADDR (MIR_op_t, scan_insn_ops);
+      if (op_addr[0].mode != MIR_OP_LABEL) scan_error (ctx, "1st lref operand is not a label");
+      lab = op_addr[0].u.label;
+      if (len == 2) {
+        if (op_addr[1].mode != MIR_OP_LABEL && op_addr[1].mode != MIR_OP_INT)
+          scan_error (ctx, "2nd lref operand is not a label or displacement");
+        if (op_addr[1].mode == MIR_OP_LABEL) lab2 = op_addr[1].u.label;
+        if (op_addr[1].mode == MIR_OP_INT) disp = op_addr[1].u.i;
+      } else if (len == 3) {
+        if (op_addr[1].mode != MIR_OP_LABEL) scan_error (ctx, "2nd lref operand is not a label");
+        if (op_addr[2].mode != MIR_OP_INT)
+          scan_error (ctx, "3rd lref operand is not a displacement");
+        lab2 = op_addr[1].u.label;
+        disp = op_addr[2].u.i;
+      }
+      name
+        = (VARR_LENGTH (label_name_t, label_names) == 0 ? NULL
+                                                        : VARR_GET (label_name_t, label_names, 0));
+      MIR_new_lref_data (ctx, name, lab, lab2, disp);
     } else if (expr_p) {
       if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 1)
         scan_error (ctx, "expr should have one operand");
@@ -6535,7 +6736,6 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
                               VARR_LENGTH (MIR_type_t, scan_types),
                               VARR_ADDR (MIR_type_t, scan_types),
                               VARR_LENGTH (MIR_var_t, scan_vars), VARR_ADDR (MIR_var_t, scan_vars));
-      HTAB_CLEAR (label_desc_t, label_desc_tab);
     } else if (end_func_p) {
       if (func == NULL) scan_error (ctx, "standalone endfunc");
       if (VARR_LENGTH (MIR_op_t, scan_insn_ops) != 0)
