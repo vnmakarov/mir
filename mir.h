@@ -72,7 +72,7 @@ typedef enum MIR_error_type {
   REP5 (ERR_EL, func, vararg_func, nested_func, wrong_param_value, hard_reg),
   REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
   REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
-  REP6 (ERR_EL, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
+  REP7 (ERR_EL, wrong_lref, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -345,6 +345,7 @@ typedef struct MIR_func {
   void *machine_code;             /* address of generated machine code or NULL */
   void *call_addr; /* address to call the function, it can be the same as machine_code */
   void *internal;  /* internal data structure */
+  struct MIR_lref_data *first_lref; /* label addr data of the func: defined by module load */
 } *MIR_func_t;
 
 typedef struct MIR_proto {
@@ -372,6 +373,16 @@ typedef struct MIR_ref_data {
   void *load_addr;
 } *MIR_ref_data_t;
 
+typedef struct MIR_lref_data { /* describing [name:]lref lab[,label2][,disp] = lab-lab2+disp */
+  const char *name;            /* can be NULL */
+  MIR_label_t label;           /* base */
+  MIR_label_t label2;          /* can be NULL */
+  MIR_label_t orig_label, orig_label2; /* used to restore original func lrefs */
+  int64_t disp;                        /* disp relative to base */
+  void *load_addr;                     /* where is the value placed */
+  struct MIR_lref_data *next;          /* next label addr related to the same func */
+} *MIR_lref_data_t;
+
 typedef struct MIR_expr_data {
   const char *name;     /* can be NULL */
   MIR_item_t expr_item; /* a special function can be called during linking */
@@ -391,7 +402,7 @@ DEF_DLIST_LINK (MIR_item_t);
 #define ITEM_EL(i) MIR_##i##_item
 
 typedef enum {
-  REP7 (ITEM_EL, func, proto, import, export, forward, data, ref_data),
+  REP8 (ITEM_EL, func, proto, import, export, forward, data, ref_data, lref_data),
   REP2 (ITEM_EL, expr_data, bss),
 } MIR_item_type_t;
 
@@ -425,6 +436,7 @@ struct MIR_item {
     MIR_name_t forward_id;
     MIR_data_t data;
     MIR_ref_data_t ref_data;
+    MIR_lref_data_t lref_data;
     MIR_expr_data_t expr_data;
     MIR_bss_t bss;
   } u;
