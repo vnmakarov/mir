@@ -1874,6 +1874,40 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
   return last_item;
 }
 
+static void link_module_lrefs (MIR_context_t ctx, MIR_module_t m) {
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->item_type != MIR_func_item) continue;
+    for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
+         insn = DLIST_NEXT (MIR_insn_t, insn))
+      if (insn->code == MIR_LABEL) insn->data = item->u.func;
+  }
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->item_type == MIR_lref_data_item) {
+      MIR_lref_data_t lref_data = item->u.lref_data;
+      MIR_label_t lab = lref_data->label, lab2 = lref_data->label2;
+      MIR_func_t func = (MIR_func_t) lab->data;
+      if (lab->data == NULL)
+        MIR_get_error_func (ctx) (MIR_wrong_lref_error, "A label not from any function in lref %s",
+                                  lref_data->name == NULL ? "" : lref_data->name);
+      else if (lab2 != NULL && lab2->data != func)
+        MIR_get_error_func (ctx) (MIR_wrong_lref_error,
+                                  "Labels from different functions in lref %s",
+                                  lref_data->name == NULL ? "" : lref_data->name);
+      lref_data->next = func->first_lref;
+      func->first_lref = lref_data;
+    }
+  }
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (item->item_type != MIR_func_item) continue;
+    for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
+         insn = DLIST_NEXT (MIR_insn_t, insn))
+      if (insn->code == MIR_LABEL) insn->data = NULL;
+  }
+}
+
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   int lref_p = FALSE;
   mir_assert (m != NULL);
@@ -1912,40 +1946,7 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
     }
     if (item->item_type == MIR_func_item) item->u.func->redef_permitted_p = func_redef_permission_p;
   }
-  if (lref_p) { /* link lref data related to funcs */
-    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
-         item = DLIST_NEXT (MIR_item_t, item)) {
-      if (item->item_type != MIR_func_item) continue;
-      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
-           insn = DLIST_NEXT (MIR_insn_t, insn))
-        if (insn->code == MIR_LABEL) insn->data = item->u.func;
-    }
-    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
-         item = DLIST_NEXT (MIR_item_t, item)) {
-      if (item->item_type == MIR_lref_data_item) {
-        MIR_lref_data_t lref_data = item->u.lref_data;
-        MIR_label_t lab = lref_data->label, lab2 = lref_data->label2;
-        MIR_func_t func = (MIR_func_t) lab->data;
-        if (lab->data == NULL)
-          MIR_get_error_func (ctx) (MIR_wrong_lref_error,
-                                    "A label not from any function in lref %s",
-                                    lref_data->name == NULL ? "" : lref_data->name);
-        else if (lab2 != NULL && lab2->data != func)
-          MIR_get_error_func (ctx) (MIR_wrong_lref_error,
-                                    "Labels from different functions in lref %s",
-                                    lref_data->name == NULL ? "" : lref_data->name);
-        lref_data->next = func->first_lref;
-        func->first_lref = lref_data;
-      }
-    }
-    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
-         item = DLIST_NEXT (MIR_item_t, item)) {
-      if (item->item_type != MIR_func_item) continue;
-      for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, item->u.func->insns); insn != NULL;
-           insn = DLIST_NEXT (MIR_insn_t, insn))
-        if (insn->code == MIR_LABEL) insn->data = NULL;
-    }
-  }
+  if (lref_p) link_module_lrefs (ctx, m);
   VARR_PUSH (MIR_module_t, modules_to_link, m);
 }
 
