@@ -124,6 +124,7 @@ static void gen_add_insn_before (gen_ctx_t gen_ctx, MIR_insn_t before, MIR_insn_
 static void gen_add_insn_after (gen_ctx_t gen_ctx, MIR_insn_t after, MIR_insn_t insn);
 static void setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t call_insn, MIR_reg_t hard_reg);
 static uint64_t get_ref_value (gen_ctx_t gen_ctx, const MIR_op_t *ref_op);
+static void gen_setup_lrefs (gen_ctx_t gen_ctx, uint8_t *func_code);
 static int64_t gen_int_log2 (int64_t i);
 
 #define SWAP(v1, v2, temp) \
@@ -783,6 +784,16 @@ static uint64_t get_ref_value (gen_ctx_t gen_ctx, const MIR_op_t *ref_op) {
       && _MIR_reserved_ref_name_p (gen_ctx->ctx, ref_op->u.ref->u.data->name))
     return (uint64_t) ref_op->u.ref->u.data->u.els;
   return (uint64_t) ref_op->u.ref->addr;
+}
+
+static void gen_setup_lrefs (gen_ctx_t gen_ctx, uint8_t *func_code) {
+  for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL;
+       lref = lref->next) { /* set up lrefs */
+    int64_t disp = (int64_t) get_label_disp (gen_ctx, lref->label) + lref->disp;
+    *(void **) lref->load_addr
+      = lref->label2 == NULL ? (void *) (func_code + disp)
+                             : (void *) (disp - (int64_t) get_label_disp (gen_ctx, lref->label2));
+  }
 }
 
 static void setup_used_hard_regs (gen_ctx_t gen_ctx, MIR_type_t type, MIR_reg_t hard_reg) {

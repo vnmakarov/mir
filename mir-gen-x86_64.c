@@ -2962,13 +2962,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
   change_calls (gen_ctx, base);
-  for (MIR_lref_data_t lref = func->first_lref; lref != NULL;
-       lref = lref->next) { /* set up lrefs */
-    int64_t disp = (int64_t) get_label_disp (gen_ctx, lref->label) + lref->disp;
-    *(void **) lref->load_addr
-      = lref->label2 == NULL ? (void *) (base + disp)
-                             : (void *) (disp - (int64_t) get_label_disp (gen_ctx, lref->label2));
-  }
+  gen_setup_lrefs (gen_ctx, base);
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {
