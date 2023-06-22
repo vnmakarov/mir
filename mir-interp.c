@@ -316,8 +316,6 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     case MIR_LADDR:
       VARR_PUSH (MIR_insn_t, branches, insn);
       push_insn_start (interp_ctx, code, insn);
-      v.a = NULL;
-      VARR_PUSH (MIR_val_t, code_varr, v); /* jmpi thunk addr */
       v.i = get_reg (ops[0], &max_nreg);
       VARR_PUSH (MIR_val_t, code_varr, v);
       v.i = 0;
@@ -465,7 +463,6 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     if (insn->code == MIR_LADDR) {
       start_label_nop = 1;
       bound_label_nop = 2;
-      start_label_loc++; /* we thunk first */
     } else if (insn->code == MIR_SWITCH) {
       start_label_nop = 1;
       bound_label_nop = start_label_nop + insn->nops - 1;
@@ -487,6 +484,14 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     (*MIR_get_error_func (ctx)) (MIR_alloc_error, "no memory for interpreter code");
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr),
            VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL; lref = lref->next) {
+    if (lref->label2 == NULL)
+      *(void **) lref->load_addr
+        = (char *) (func_desc->code + (int64_t) lref->label->data) + lref->disp;
+    else
+      *(int64_t *) lref->load_addr
+        = (int64_t) lref->label->data - (int64_t) lref->label2->data + lref->disp;
+  }
   mir_assert (max_nreg < MIR_MAX_REG_NUM);
   func_desc->nregs = max_nreg + 1;
   func_desc->func_item = func_item;
@@ -1431,24 +1436,15 @@ common_addr:;
     if (!unsigned_overflow_p) pc = code + get_i (ops);
     END_INSN;
   }
-  CASE (MIR_LADDR, 3) {
-    void *thunk_addr = get_a (ops);
-    void **r = get_aop (bp, ops + 1);
-    if (thunk_addr == NULL) {
-#if 0
-      ops[0].a = thunk_addr
-        = _MIR_get_jmpi_thunk (ctx, &jmpi_val, code + get_i (ops + 2), &&L_jmpi_finish);
-#endif
-    }
-    *r = thunk_addr;
+  CASE (MIR_LADDR, 2) {
+    void **r = get_aop (bp, ops);
+    *r = code + get_i (ops + 1);
     END_INSN;
   }
 
   CASE (MIR_JMPI, 1) { /* jmpi thunk */
-#if 0
-    void *addr = *get_aop (bp, ops);
-    goto *addr;
-#endif
+    void **r = get_aop (bp, ops);
+    pc = *r;
     END_INSN;
   }
 
