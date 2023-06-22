@@ -1368,7 +1368,8 @@ struct pattern {
      I[0-2] - n-th operand in 4 byte immediate (should be imm of type i32)
      J[0-2] - n-th operand in 8 byte immediate
      P[0-2] - n-th operand is 64-bit call address in memory pool
-     T     - absolute 8-byte switch table address
+     T     - relative switch table address
+     q     - mod==0, rm==5 (ip-relative addressing)
      L[0-2] - n-th operand-label in 32-bit
      l[0-2] - n-th operand-label in 8-bit
      /[0-7] - opmod with given value (reg of MOD-RM)
@@ -1739,8 +1740,12 @@ static struct pattern patterns[] = {
   {MIR_JMP, "L", "E9 L0", 0}, /* 32-bit offset jmp */
   {MIR_JMP, "l", "EB l0", 0}, /* 8-bit offset jmp */
 
-  /* movq TableAddress,r11; mov (r11,r,8),r11; jmp *r11; TableContent */
-  {MIR_SWITCH, "r $", "49 BB T; X 8B hB mT; 41 FF E3", 0},
+  {MIR_LADDR, "r L", "X 8D r0 q L1"}, /* ip-relative addressing */
+  {MIR_JMPI, "r", "Y FF /4 R0", 0},   /* jmp *r */
+  {MIR_JMPI, "m3", "Y FF /4 m0", 0},  /* jmp *m0 */
+
+  /* lea table_offset(rip),r11; jmp *(r11,r,8); TableContent */
+  {MIR_SWITCH, "r $", "X 8D hB T; Y FF /4 mT", 0},
 
   BRS (MIR_BT, "75") BRS (MIR_BF, "74")     /* short branches */
   BR (MIR_BT, "0F 85") BR (MIR_BF, "0F 84") /* branches */
@@ -2366,7 +2371,8 @@ static int get_max_insn_size (gen_ctx_t gen_ctx MIR_UNUSED, const char *replacem
           imm64_p = TRUE;
         }
         break;
-      case 'T': switch_table_addr_p = TRUE; break;
+      case 'T': switch_table_addr_p = modrm_p = TRUE; break;
+      case 'q': modrm_p = TRUE; break;
       case 'l': disp8_p = TRUE; goto label_rest;
       case 'L':
         disp32_p = TRUE;
@@ -2435,7 +2441,7 @@ static int get_max_insn_size (gen_ctx_t gen_ctx MIR_UNUSED, const char *replacem
     if (imm8_p) size++;
     if (imm32_p) size += 4;
     if (imm64_p) size += 8;
-    if (switch_table_addr_p) size += 8;
+    if (switch_table_addr_p) size += 4;
     if (ch == '\0') break;
   }
   return size;
@@ -2446,7 +2452,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   MIR_context_t ctx = gen_ctx->ctx;
   const char *p, *insn_str;
   label_ref_t lr;
-  int switch_table_addr_start = -1;
+  int switch_table_addr_start_offset = -1;
 
   if (insn->code == MIR_ALLOCA
       && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
@@ -2610,10 +2616,16 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         }
         break;
       case 'T': {
-        gen_assert (!switch_table_addr_p && switch_table_addr_start < 0);
+        gen_assert (!switch_table_addr_p && switch_table_addr_start_offset < 0);
         switch_table_addr_p = TRUE;
+        mod = 0;
+        rm = 5;
         break;
       }
+      case 'q':
+        mod = 0;
+        rm = 5;
+        break;
       case 'l':
         gen_assert (disp32 < 0 && disp8 < 0);
         lr.short_p = TRUE;
@@ -2749,8 +2761,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     if (imm64_p) put_uint64 (gen_ctx, imm64, 8);
 
     if (switch_table_addr_p) {
-      switch_table_addr_start = VARR_LENGTH (uint8_t, result_code);
-      put_uint64 (gen_ctx, 0, 8);
+      switch_table_addr_start_offset = VARR_LENGTH (uint8_t, result_code);
+      put_uint64 (gen_ctx, 0, 4);
     }
 
     if (label_ref_num >= 0) VARR_ADDR (label_ref_t, label_refs)
@@ -2760,11 +2772,12 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     [const_ref_num].next_insn_disp = VARR_LENGTH (uint8_t, result_code);
     if (ch == '\0') break;
   }
-  if (switch_table_addr_start < 0) return;
-  gen_assert (insn->code == MIR_SWITCH);
-  VARR_PUSH (uint64_t, abs_address_locs, switch_table_addr_start);
-  set_int64 (&VARR_ADDR (uint8_t, result_code)[switch_table_addr_start],
-             (int64_t) VARR_LENGTH (uint8_t, result_code), 8);
+  if (switch_table_addr_start_offset < 0) return;
+  while (VARR_LENGTH (uint8_t, result_code) % 8 != 0) put_byte (gen_ctx, 0); /* align the table */
+  gen_assert (insn->code == MIR_SWITCH
+              && VARR_LENGTH (uint8_t, result_code) > switch_table_addr_start_offset);
+  set_int64 (&VARR_ADDR (uint8_t, result_code)[switch_table_addr_start_offset],
+             (int64_t) VARR_LENGTH (uint8_t, result_code) - switch_table_addr_start_offset - 4, 4);
   for (size_t i = 1; i < insn->nops; i++) {
     gen_assert (insn->ops[i].mode == MIR_OP_LABEL);
     lr.abs_addr_p = TRUE;
@@ -2938,6 +2951,7 @@ static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
 
 static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   MIR_code_reloc_t reloc;
+  MIR_func_t func = curr_func_item->u.func;
 
   VARR_TRUNC (MIR_code_reloc_t, relocs, 0);
   for (size_t i = 0; i < VARR_LENGTH (uint64_t, abs_address_locs); i++) {
@@ -2948,6 +2962,13 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
   change_calls (gen_ctx, base);
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL;
+       lref = lref->next) { /* set up lrefs */
+    int64_t disp = (int64_t) get_label_disp (gen_ctx, lref->label) + lref->disp;
+    *(void **) lref->load_addr
+      = lref->label2 == NULL ? (void *) (base + disp)
+                             : (void *) (disp - (int64_t) get_label_disp (gen_ctx, lref->label2));
+  }
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {
