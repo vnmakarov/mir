@@ -1318,6 +1318,9 @@ static const struct pattern patterns[] = {
 
           {MIR_JMP, "L", SBRCL (15)}, /* bcril m15, l */
 
+  {MIR_LADDR, "r L", "c0:0* r0 L"}, /* lalr r,offset */
+  {MIR_JMPI, "r", "07* ma15 R0"},   /* br r */
+
   {MIR_BT, "L r", "b902 r1 R1" BRCL (6)}, /* ltgr r0,r0; bcril m8,l */
   {MIR_BF, "L r", "b902 r1 R1" BRCL (8)}, /* ltgr r1,r1; bcril m6,l */
   {MIR_BTS, "L r", "12* r1 R1" BRCL (6)}, /* ltr r0,r0; bcril m8,l */
@@ -2010,7 +2013,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         label_off /= 2;
         break;
       case 'L':
-        op = insn->ops[insn->code != MIR_CALL ? 0 : 1];
+        op = insn->ops[insn->code != MIR_CALL && insn->code != MIR_LADDR ? 0 : 1];
         gen_assert (op.mode == MIR_OP_LABEL);
         lr.abs_addr_p = FALSE;
         lr.label_val_disp = 0;
@@ -2281,6 +2284,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   }
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
+  gen_setup_lrefs (gen_ctx, base);
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {}
