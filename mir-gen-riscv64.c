@@ -718,7 +718,7 @@ struct insn_pattern_info {
 typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
-enum branch_type { BRANCH, JAL, AUIPC_JALR };
+enum branch_type { BRANCH, JAL, AUIPC, AUIPC_JALR };
 struct label_ref {
   int abs_addr_p;
   enum branch_type branch_type;
@@ -1301,6 +1301,8 @@ struct pattern {
      S --  immediate shift (6 bits) as 3th op
      Sp --  nonzero immediate shift (6 bits) as 3th op
      l --  label as the 1st or 2nd op which can be present by signed 13-bit pc offset
+     L --  label as the 1st or 2nd op which can be present by unsigned 20-bit pc offset
+     U --  label used in LADDR as 2nd op which can be present by signed 32-bit pc offset
 
      k -- 2nd or 3rd immediate op for arithmetic insn (6-bit signed)
      kp -- nonzero 2nd or 3rd immediate op for arithmetic insn (6-bit signed)
@@ -1374,6 +1376,7 @@ struct pattern {
      l -- operand-label as signed 13-bit offset ([12|10:5] as [31:25] and [4:1|11] as [11:7]),
           remember address of any insn is even
      L -- operand-label as signed 21-bit offset ([20|10:1|11|19:12] as [31:12])
+     U -- operand-label as signed 32-bit offset in auipc,addi
 
      lc -- operand-label as signed 9-bit offset ([12..10,6-2]), 16-bit insn
      Lc -- operand-label as signed 12-bit offset ([12-2]), 16-bit insn
@@ -1613,6 +1616,9 @@ static const struct pattern patterns[] = {
 
   {MIR_JMP, "L", "O6f hd0 L"}, /* jal: 20-bit offset (w/o 1 bit) jmp */
 
+  {MIR_LADDR, "r U", "O17 rd0 U; O13 F0 rd0 rs0"}, /* auipc r,hi(l);addi r,r,low(L) */
+  {MIR_JMPI, "r", "O67 F0 hd0 rs0 i0"},            /* jmp *r: jalr zero,r,0 */
+
   {MIR_BT, "l r", "O63 F1 rs1 hS0 l"},  /* bne rs1,zero,l */
   {MIR_BTS, "l r", "O63 F1 rs1 hS0 l"}, /* bne rs1,zero,l */
   {MIR_BF, "l r", "O63 F0 rs1 hS0 l"},  /* beq rs1,zero,l */
@@ -1767,7 +1773,7 @@ static const struct pattern patterns[] = {
   {MIR_BSTART, "r", "O13 F0 rd0 hs2 i0"}, /* r = sp: addi rd,rs1,0 */
   {MIR_BEND, "r", "O13 F0 hd2 rs0 i0"},   /* sp = r: addi rd,rs1,0 */
 #endif
-  /* slli t5,r,3; auipc t6,16; add t6,t6,t5;ld t6,T(t6);jalr zero,t6,0;
+  /* slli t5,r,3; auipc t6,0; add t6,t6,t5;ld t6,T(t6);jalr zero,t6,0;
      8-byte aligned TableContent.  Remember r can be t5 can be if switch operand is memory. */
   {MIR_SWITCH, "r $",
    "O13 F1 hd1e rs0 S3; O17 hd1f iu0; O33 F0 hd1f hs1f hS1e; O3 F3 hd1f hs1f T; O67 F0 hd0 hs1f "
@@ -2045,6 +2051,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       break;
     case 'l':
     case 'L':
+    case 'U':
       if (op.mode != MIR_OP_LABEL) return FALSE;
       break;
     case '0':
@@ -2529,12 +2536,14 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         }
         break;
       case 'l':
-      case 'L': {
-        op = insn->ops[start_ch == 'l' || (insn->code != MIR_CALL && insn->code != MIR_INLINE) ? 0
-                                                                                               : 1];
+      case 'L':
+      case 'U': {
+        int n = 0;
+        if (insn->code == MIR_CALL || insn->code == MIR_INLINE || insn->code == MIR_LADDR) n = 1;
+        op = insn->ops[n];
         gen_assert (op.mode == MIR_OP_LABEL || op.mode == MIR_OP_REF);
         lr.abs_addr_p = FALSE;
-        lr.branch_type = start_ch == 'l' ? BRANCH : JAL;
+        lr.branch_type = start_ch == 'l' ? BRANCH : start_ch == 'L' ? JAL : AUIPC;
         lr.label_val_disp = 0;
         if (jump_addrs == NULL)
           lr.u.label = op.u.label;
@@ -2762,6 +2771,11 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
                  - (int64_t) VARR_LENGTH (uint8_t, result_code);
         bin_insn = 0x6f | get_j_format_imm (offset);
         put_uint64 (gen_ctx, bin_insn, 4);
+      } else if (lr.branch_type == AUIPC) {
+        int hi = offset >> 12, low = offset & 0xfff;
+        if ((low & 0x800) != 0) hi++;
+        *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp) |= hi << 12;
+        *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp + 4) |= low << 20;
       } else {
         gen_assert (lr.branch_type != AUIPC_JALR);
         *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp)
@@ -2793,6 +2807,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   }
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
+  gen_setup_lrefs (gen_ctx, base);
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {}
@@ -2870,7 +2885,14 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
       lr->branch_type = AUIPC_JALR;
     }
   }
-  if (lr->branch_type == AUIPC_JALR) {
+  if (lr->branch_type == AUIPC) {
+    int hi = offset >> 12, low = offset & 0xfff;
+    if ((low & 0x800) != 0) hi++;
+    insn |= hi << 12;
+    _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+    insn_ptr += 1;
+    insn = *insn_ptr | (low << 20);
+  } else if (lr->branch_type == AUIPC_JALR) {
     uint32_t carry = (offset & 0x800) << 1;
     insn = 0x17 | (TEMP_INT_HARD_REG1 << 7)
            | (((uint32_t) offset + carry) & 0xfffff000); /* auipc t5 */
