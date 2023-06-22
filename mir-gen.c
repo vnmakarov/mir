@@ -199,6 +199,7 @@ typedef struct spot_attr {
 DEF_VARR (spot_attr_t);
 
 DEF_VARR (MIR_op_t);
+DEF_VARR (MIR_insn_t);
 
 struct gen_ctx {
   struct all_gen_ctx *all_gen_ctx;
@@ -233,6 +234,7 @@ struct gen_ctx {
   struct ra_ctx *ra_ctx;
   struct combine_ctx *combine_ctx;
   VARR (MIR_op_t) * temp_ops;
+  VARR (MIR_insn_t) * temp_insns, *temp_insns2;
   VARR (bb_insn_t) * temp_bb_insns, *temp_bb_insns2;
   VARR (loop_node_t) * loop_nodes, *queue_nodes, *loop_entries; /* used in building loop tree */
   /* true when alloca memory escapes by assigning alloca address to memory: */
@@ -268,6 +270,8 @@ struct gen_ctx {
 #define mem_attrs gen_ctx->mem_attrs
 #define free_dead_vars gen_ctx->free_dead_vars
 #define temp_ops gen_ctx->temp_ops
+#define temp_insns gen_ctx->temp_insns
+#define temp_insns2 gen_ctx->temp_insns2
 #define temp_bb_insns gen_ctx->temp_bb_insns
 #define temp_bb_insns2 gen_ctx->temp_bb_insns2
 #define loop_nodes gen_ctx->loop_nodes
@@ -1552,16 +1556,22 @@ static MIR_insn_t MIR_UNUSED find_bo (gen_ctx_t gen_ctx MIR_UNUSED, MIR_insn_t i
   gen_assert (FALSE);
 }
 
+static int label_cmp (const void *l1, const void *l2) {
+  const MIR_insn_t lab1 = *(const MIR_insn_t *) l1, lab2 = *(const MIR_insn_t *) l2;
+  gen_assert (lab1->code == MIR_LABEL && lab2->code == MIR_LABEL);
+  return lab1 < lab2 ? -1 : lab1 == lab2 ? 0 : 1;
+}
+
 static void build_func_cfg (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_func_t func = curr_func_item->u.func;
-  MIR_insn_t insn, next_insn, ret_insn, use_insn;
+  MIR_insn_t insn, insn2, next_insn, ret_insn, use_insn;
   MIR_insn_t new_insn MIR_UNUSED, new_label MIR_UNUSED, bo_insn MIR_UNUSED;
-  size_t i, nops;
+  size_t i, j, nops;
   MIR_op_t *op, temp_op1 MIR_UNUSED, temp_op2 MIR_UNUSED, temp_op3 MIR_UNUSED;
   MIR_reg_t reg;
   MIR_var_t mir_var;
-  bb_t bb, prev_bb, entry_bb, exit_bb, label_bb;
+  bb_t bb, bb2, prev_bb, entry_bb, exit_bb, label_bb;
 
   DLIST_INIT (bb_t, curr_cfg->bbs);
   curr_cfg->curr_bb_insn_index = 0;
@@ -1576,17 +1586,18 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   add_new_bb (gen_ctx, entry_bb);
   exit_bb = create_bb (gen_ctx, NULL);
   add_new_bb (gen_ctx, exit_bb);
-  insn = DLIST_HEAD (MIR_insn_t, func->insns);
   /* To deal with special cases like adding insns before call in
      machinize or moving invariant out of loop: */
   MIR_prepend_insn (ctx, curr_func_item, _MIR_new_label (ctx));
-  insn = DLIST_HEAD (MIR_insn_t, func->insns);
   bb = create_bb (gen_ctx, NULL);
   add_new_bb (gen_ctx, bb);
   bitmap_clear (tied_regs);
   bitmap_clear (addr_regs);
   addr_insn_p = FALSE;
-  for (ret_insn = NULL; insn != NULL; insn = next_insn) {
+  VARR_TRUNC (MIR_insn_t, temp_insns, 0);
+  VARR_TRUNC (MIR_insn_t, temp_insns2, 0);
+  for (ret_insn = NULL, insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL;
+       insn = next_insn) {
     next_insn = DLIST_NEXT (MIR_insn_t, insn);
     if (MIR_addr_code_p (insn->code)) {
       addr_insn_p = TRUE;
@@ -1780,6 +1791,12 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       else
         setup_insn_data (gen_ctx, insn, bb);
     }
+    if (insn->code == MIR_LADDR) {
+      gen_assert (insn->ops[1].mode == MIR_OP_LABEL);
+      VARR_PUSH (MIR_insn_t, temp_insns2, insn->ops[1].u.label);
+    } else if (insn->code == MIR_JMPI) {
+      VARR_PUSH (MIR_insn_t, temp_insns, insn);
+    }
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
         && (MIR_any_branch_code_p (insn->code) || insn->code == MIR_RET || insn->code == MIR_JRET
@@ -1791,8 +1808,8 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       else
         bb = create_bb (gen_ctx, next_insn);
       add_new_bb (gen_ctx, bb);
-      if (insn->code != MIR_JMP && insn->code != MIR_RET && insn->code != MIR_JRET
-          && insn->code != MIR_SWITCH)
+      if (insn->code != MIR_JMP && insn->code != MIR_JMPI && insn->code != MIR_RET
+          && insn->code != MIR_JRET && insn->code != MIR_SWITCH)
         create_edge (gen_ctx, prev_bb, bb, TRUE, TRUE); /* fall through */
     }
     for (i = 0; i < nops; i++) { /* Transform all ops to var ops */
@@ -1807,8 +1824,10 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       }
       if (op->mode == MIR_OP_LABEL) {
         if (op->u.label->data == NULL) create_bb (gen_ctx, op->u.label);
-        label_bb = get_insn_bb (gen_ctx, op->u.label);
-        create_edge (gen_ctx, get_insn_bb (gen_ctx, insn), label_bb, FALSE, TRUE);
+        if (insn->code != MIR_LADDR) {
+          label_bb = get_insn_bb (gen_ctx, op->u.label);
+          create_edge (gen_ctx, get_insn_bb (gen_ctx, insn), label_bb, FALSE, TRUE);
+        }
       } else if (op->mode == MIR_OP_VAR) {
         update_max_var (gen_ctx, op->u.var);
         update_tied_regs (gen_ctx, op->u.var);
@@ -1818,6 +1837,26 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
         update_max_var (gen_ctx, op->u.var_mem.index);
         update_tied_regs (gen_ctx, op->u.var_mem.index);
       }
+    }
+  }
+  for (MIR_lref_data_t lref = func->first_lref; lref != NULL; lref = lref->next) {
+    VARR_PUSH (MIR_insn_t, temp_insns2, lref->label);
+    if (lref->label2 != NULL) VARR_PUSH (MIR_insn_t, temp_insns2, lref->label2);
+  }
+  qsort (VARR_ADDR (MIR_insn_t, temp_insns2), VARR_LENGTH (MIR_insn_t, temp_insns2),
+         sizeof (MIR_insn_t), label_cmp);
+  for (i = 0; i < VARR_LENGTH (MIR_insn_t, temp_insns); i++) {
+    insn = VARR_GET (MIR_insn_t, temp_insns, i);
+    gen_assert (insn->code == MIR_JMPI);
+    bb = get_insn_bb (gen_ctx, insn);
+    MIR_insn_t prev_label = NULL;
+    for (j = 0; j < VARR_LENGTH (MIR_insn_t, temp_insns2); j++) {
+      insn2 = VARR_GET (MIR_insn_t, temp_insns2, j);
+      if (insn2 == prev_label) continue;
+      gen_assert (insn2->code == MIR_LABEL);
+      prev_label = insn2;
+      bb2 = get_insn_bb (gen_ctx, insn2);
+      create_edge (gen_ctx, bb, bb2, FALSE, TRUE);
     }
   }
   if (optimize_level > 0) remove_unreachable_bbs (gen_ctx);
@@ -9456,6 +9495,32 @@ void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int le
 static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb_version);
 static void *bb_version_generator (gen_ctx_t gen_ctx, bb_version_t bb_version);
 
+static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, uint32_t n_attrs,
+                                    spot_attr_t *attrs, int call_p, void **addr) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  bb_version_t bb_version;
+
+  if ((bb_version = DLIST_HEAD (bb_version_t, bb_stub->bb_versions)) != NULL) {
+    VARR_PUSH (target_bb_version_t, target_succ_bb_versions, NULL);
+    *addr = bb_version->addr;
+    return bb_version;
+  }
+  bb_version = gen_malloc_and_mark_to_free (gen_ctx, sizeof (struct bb_version)
+                                                       + (n_attrs <= 1 ? 0 : n_attrs)
+                                                           * sizeof (spot_attr_t));
+  target_init_bb_version_data (&bb_version->target_data);
+  VARR_PUSH (target_bb_version_t, target_succ_bb_versions,
+             call_p ? NULL : &bb_version->target_data);
+  bb_version->bb_stub = bb_stub;
+  bb_version->n_attrs = n_attrs;
+  if (n_attrs != 0) memcpy (bb_version->attrs, attrs, n_attrs * sizeof (spot_attr_t));
+  bb_version->call_p = call_p;
+  DLIST_APPEND (bb_version_t, bb_stub->bb_versions, bb_version);
+  bb_version->machine_code = NULL;
+  *addr = bb_version->addr = _MIR_get_bb_thunk (ctx, bb_version, bb_wrapper);
+  return bb_version;
+}
+
 /* create bb stubs and set up label data to the corresponding bb stub */
 /* todo finish bb on calls ??? */
 static void create_bb_stubs (gen_ctx_t gen_ctx) {
@@ -9514,32 +9579,18 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       }
     }
   }
-}
-
-static bb_version_t get_bb_version (gen_ctx_t gen_ctx, bb_stub_t bb_stub, uint32_t n_attrs,
-                                    spot_attr_t *attrs, int call_p, void **addr) {
-  MIR_context_t ctx = gen_ctx->ctx;
-  bb_version_t bb_version;
-
-  if ((bb_version = DLIST_HEAD (bb_version_t, bb_stub->bb_versions)) != NULL) {
-    VARR_PUSH (target_bb_version_t, target_succ_bb_versions, NULL);
-    *addr = bb_version->addr;
-    return bb_version;
+  for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL; lref = lref->next) {
+    bb_stub_t lab_bb_stub = lref->label->data;
+    void *addr, *addr2;
+    (void) get_bb_version (gen_ctx, lab_bb_stub, 0, NULL, FALSE, &addr);
+    if (lref->label2 != NULL) {
+      lab_bb_stub = lref->label2->data;
+      (void) get_bb_version (gen_ctx, lab_bb_stub, 0, NULL, FALSE, &addr2);
+      addr = (void *) ((char *) addr - (char *) addr2);
+    }
+    addr = (void *) ((char *) addr + lref->disp);
+    *(void **) lref->load_addr = addr;
   }
-  bb_version = gen_malloc_and_mark_to_free (gen_ctx, sizeof (struct bb_version)
-                                                       + (n_attrs <= 1 ? 0 : n_attrs)
-                                                           * sizeof (spot_attr_t));
-  target_init_bb_version_data (&bb_version->target_data);
-  VARR_PUSH (target_bb_version_t, target_succ_bb_versions,
-             call_p ? NULL : &bb_version->target_data);
-  bb_version->bb_stub = bb_stub;
-  bb_version->n_attrs = n_attrs;
-  if (n_attrs != 0) memcpy (bb_version->attrs, attrs, n_attrs * sizeof (spot_attr_t));
-  bb_version->call_p = call_p;
-  DLIST_APPEND (bb_version_t, bb_stub->bb_versions, bb_version);
-  bb_version->machine_code = NULL;
-  *addr = bb_version->addr = _MIR_get_bb_thunk (ctx, bb_version, bb_wrapper);
-  return bb_version;
 }
 
 #if MIR_PARALLEL_GEN
@@ -9674,6 +9725,8 @@ void MIR_gen_init (MIR_context_t ctx, int gens_num) {
     VARR_CREATE (void_ptr_t, to_free, 0);
     addr_insn_p = FALSE;
     VARR_CREATE (MIR_op_t, temp_ops, 16);
+    VARR_CREATE (MIR_insn_t, temp_insns, 16);
+    VARR_CREATE (MIR_insn_t, temp_insns2, 16);
     VARR_CREATE (bb_insn_t, temp_bb_insns, 16);
     VARR_CREATE (bb_insn_t, temp_bb_insns2, 16);
     VARR_CREATE (loop_node_t, loop_nodes, 32);
@@ -9756,6 +9809,8 @@ void MIR_gen_finish (MIR_context_t ctx) {
     bitmap_destroy (temp_bitmap2);
     bitmap_destroy (temp_bitmap3);
     VARR_DESTROY (MIR_op_t, temp_ops);
+    VARR_DESTROY (MIR_insn_t, temp_insns);
+    VARR_DESTROY (MIR_insn_t, temp_insns2);
     VARR_DESTROY (bb_insn_t, temp_bb_insns);
     VARR_DESTROY (bb_insn_t, temp_bb_insns2);
     VARR_DESTROY (loop_node_t, loop_nodes);
@@ -9992,7 +10047,22 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
       break;
     default: break;
     }
-    if (!skip_p) target_bb_insn_translate (gen_ctx, curr_insn, NULL);
+    if (!skip_p) {
+      if (curr_insn->code != MIR_LADDR) {
+        target_bb_insn_translate (gen_ctx, curr_insn, NULL);
+      } else {
+        VARR_TRUNC (spot_attr_t, spot_attrs, 0);
+        FOREACH_BITMAP_BIT (bi, nonzero_property_spots, nel) {
+          VARR_PUSH (spot_attr_t, spot_attrs, VARR_GET (spot_attr_t, spot2attr, nel));
+        }
+        VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
+        branch_bb_stub = curr_insn->ops[1].u.label->data;
+        (void) get_bb_version (gen_ctx, branch_bb_stub, VARR_LENGTH (spot_attr_t, spot_attrs),
+                               VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);
+        VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
+        target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
+      }
+    }
     if (curr_insn == bb_stub->last_insn) break;
   }
   VARR_TRUNC (spot_attr_t, spot_attrs, 0);
@@ -10001,7 +10071,9 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     VARR_PUSH (spot_attr_t, spot_attrs, VARR_GET (spot_attr_t, spot2attr, nel));
   }
   VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
-  if (curr_insn->code == MIR_SWITCH) {
+  if (curr_insn->code == MIR_JMPI) {
+    target_bb_insn_translate (gen_ctx, curr_insn, NULL);
+  } else if (curr_insn->code == MIR_SWITCH) {
     for (size_t i = 1; i < curr_insn->nops; i++) {
       branch_bb_stub = curr_insn->ops[i].u.label->data;
       (void) get_bb_version (gen_ctx, branch_bb_stub, VARR_LENGTH (spot_attr_t, spot_attrs),
@@ -10016,8 +10088,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     VARR_PUSH (void_ptr_t, succ_bb_addrs, addr);
     target_bb_insn_translate (gen_ctx, curr_insn, VARR_ADDR (void_ptr_t, succ_bb_addrs));
   }
-  if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_SWITCH && curr_insn->code != MIR_RET
-      && curr_insn->code != MIR_JRET) {
+  if (curr_insn->code != MIR_JMP && curr_insn->code != MIR_JMPI && curr_insn->code != MIR_SWITCH
+      && curr_insn->code != MIR_RET && curr_insn->code != MIR_JRET) {
     VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
     (void) get_bb_version (gen_ctx, bb_stub + 1, VARR_LENGTH (spot_attr_t, spot_attrs),
                            VARR_ADDR (spot_attr_t, spot_attrs), FALSE, &addr);
