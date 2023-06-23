@@ -671,7 +671,7 @@ void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func) {  // ?? atom
 
 int MIR_get_func_redef_permission_p (MIR_context_t ctx) { return func_redef_permission_p; }
 
-void MIR_set_func_redef_permission_p (MIR_context_t ctx, int enable_p) {  // ?? atomic access
+void MIR_set_func_redef_permission (MIR_context_t ctx, int enable_p) {  // ?? atomic access
   func_redef_permission_p = enable_p;
 }
 

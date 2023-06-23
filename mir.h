@@ -564,8 +564,8 @@ extern void MIR_finish_module (MIR_context_t ctx);
 extern MIR_error_func_t MIR_get_error_func (MIR_context_t ctx);
 extern void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func);
 
-extern int MIR_get_func_redef_flag (MIR_context_t ctx);
-extern void MIR_set_func_redef_flag (MIR_context_t ctx, int flag_p);
+extern int MIR_get_func_redef_permission_p (MIR_context_t ctx);
+extern void MIR_set_func_redef_permission (MIR_context_t ctx, int flag_p);
 
 extern MIR_insn_t MIR_new_insn_arr (MIR_context_t ctx, MIR_insn_code_t code, size_t nops,
                                     MIR_op_t *ops);
