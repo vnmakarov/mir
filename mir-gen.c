@@ -5309,8 +5309,11 @@ static int loop_invariant_p (gen_ctx_t gen_ctx, loop_node_t loop, bb_insn_t bb_i
       || insn->code == MIR_UDIVS || insn->code == MIR_MOD || insn->code == MIR_MODS
       || insn->code == MIR_UMOD || insn->code == MIR_UMODS)
     return FALSE;
-  for (size_t i = 0; i < insn->nops; i++)
+  for (size_t i = 0; i < insn->nops; i++) {
     if (insn->ops[i].mode == MIR_OP_VAR_MEM) return FALSE;
+    if (insn->ops[i].mode == MIR_OP_VAR && bitmap_bit_p (tied_regs, insn->ops[i].u.var))
+      return FALSE;
+  }
   FOREACH_IN_INSN_VAR (gen_ctx, iter, insn, var, op_num) {
     se = insn->ops[op_num].data;
     gen_assert (se != NULL);
