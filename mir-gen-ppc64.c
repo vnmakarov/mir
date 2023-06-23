@@ -87,7 +87,7 @@ struct insn_pattern_info {
 typedef struct insn_pattern_info insn_pattern_info_t;
 DEF_VARR (insn_pattern_info_t);
 
-enum branch_type { BRCOND, JUMP, BCTR };
+enum branch_type { BRCOND, JUMP, LADDR, BCTR };
 struct label_ref {
   int abs_addr_p;
   enum branch_type branch_type;
@@ -102,7 +102,7 @@ typedef struct label_ref label_ref_t;
 DEF_VARR (label_ref_t);
 
 struct target_ctx {
-  unsigned char alloca_p, block_arg_func_p, leaf_p, switch_p, short_bb_branch_p;
+  unsigned char alloca_p, block_arg_func_p, leaf_p, switch_p, laddr_p, short_bb_branch_p;
   size_t param_save_area_size;
   MIR_insn_t temp_jump;
   const char *temp_jump_replacement;
@@ -118,6 +118,7 @@ struct target_ctx {
 #define block_arg_func_p gen_ctx->target_ctx->block_arg_func_p
 #define leaf_p gen_ctx->target_ctx->leaf_p
 #define switch_p gen_ctx->target_ctx->switch_p
+#define laddr_p gen_ctx->target_ctx->laddr_p
 #define short_bb_branch_p gen_ctx->target_ctx->short_bb_branch_p
 #define param_save_area_size gen_ctx->target_ctx->param_save_area_size
 #define temp_jump gen_ctx->target_ctx->temp_jump
@@ -671,7 +672,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
     int_arg_num += type == MIR_T_LD ? 2 : 1;
   }
   var_args_start = disp;
-  switch_p = alloca_p = FALSE;
+  switch_p = laddr_p = alloca_p = FALSE;
   leaf_p = TRUE;
   for (insn = DLIST_HEAD (MIR_insn_t, func->insns); insn != NULL; insn = next_insn) {
     MIR_item_t proto_item, func_import_item;
@@ -770,6 +771,8 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       alloca_p = TRUE;
     } else if (code == MIR_SWITCH) {
       switch_p = TRUE;
+    } else if (code == MIR_LADDR) {
+      laddr_p = TRUE;
     } else if (code == MIR_RET) {
       /* In simplify we already transformed code for one return insn
          and added extension insn (if any).  */
@@ -835,7 +838,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       else
         saved_fregs_num++;
     }
-  if (leaf_p && !alloca_p && !switch_p /* switch changes LR */
+  if (leaf_p && !alloca_p && !switch_p && !laddr_p /* switch and laddr changes LR */
       && saved_iregs_num == 0 && saved_fregs_num == 0 && stack_slots_num == 0)
     return;
   saved_iregs_num++; /* for fp (R31) ??? only alloca_p */
@@ -1008,6 +1011,7 @@ struct pattern {
      BI<number> - field [11..15] for bcond
      LK<number> - field [31..31]
 
+     W - LADDR label which is a 32-bit signed offset from previous insn
      at - address disp PPC64_TOC_OFFSET
      T - switch table displacement
   */
@@ -1264,6 +1268,10 @@ static const struct pattern patterns[] = {
   {MIR_ULES, "r r u", CMPLWI "; " CRNOT (29, 29) MFCR ";  " RLWINM (30)},
 
   {MIR_JMP, "L", "o18 L"}, /* 24-bit offset word jmp */
+
+  /* bl l4; mflr r0; addis r0,r0,I; addi r0,r0,i: */
+  {MIR_LADDR, "r W", "o18 l4 LK1; o31 O339 rt0 sr8; o15 rt0 ra0 W; o14 rt0 ra0"},
+  {MIR_JMPI, "r", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
 
 #define BRC(o, i) "o16 BO" #o " BI" #i " l"
 #define BRCL(o, i) "o16 BO" #o " BI" #i " l8; o18 L"
@@ -1730,6 +1738,9 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case 'L':
       if (op.mode != MIR_OP_LABEL && op.mode != MIR_OP_REF) return FALSE;
       break;
+    case 'W':
+      if (op.mode != MIR_OP_LABEL) return FALSE;
+      break;
     default: gen_assert (FALSE);
     }
   }
@@ -2162,6 +2173,20 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         }
         break;
       }
+      case 'W': {
+        op = insn->ops[1];
+        gen_assert (insn->code == MIR_LADDR && op.mode == MIR_OP_LABEL);
+        lr.abs_addr_p = FALSE;
+        lr.branch_type = LADDR;
+        lr.label_val_disp = 0;
+        if (jump_addrs == NULL)
+          lr.u.label = op.u.label;
+        else
+          lr.u.jump_addr = jump_addrs[0];
+        label_ref_num = VARR_LENGTH (label_ref_t, label_refs);
+        VARR_PUSH (label_ref_t, label_refs, lr);
+        break;
+      }
       case 'a':
         gen_assert (imm < 0);
         ch2 = *++p;
@@ -2438,6 +2463,13 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
         set_int64 (&VARR_ADDR (uint8_t, result_code)[lr.label_val_disp],
                    (int64_t) get_label_disp (gen_ctx, lr.u.label));
         VARR_PUSH (uint64_t, abs_address_locs, lr.label_val_disp);
+      } else if (lr.branch_type == LADDR) {
+        int64_t offset
+          = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp + 4;
+        int hi = offset >> 16, low = offset & 0xffff;
+        if ((low & 0x8000) != 0) hi++;
+        *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp) |= hi & 0xffff;
+        *(uint32_t *) (VARR_ADDR (uint8_t, result_code) + lr.label_val_disp + 4) |= low;
       } else if (lr.branch_type == BRCOND) { /* 14-bit relative addressing */
         int64_t offset
           = (int64_t) get_label_disp (gen_ctx, lr.u.label) - (int64_t) lr.label_val_disp;
@@ -2477,6 +2509,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   }
   _MIR_update_code_arr (gen_ctx->ctx, base, VARR_LENGTH (MIR_code_reloc_t, relocs),
                         VARR_ADDR (MIR_code_reloc_t, relocs));
+  gen_setup_lrefs (gen_ctx, base);
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {}
@@ -2540,7 +2573,17 @@ static void setup_rel (gen_ctx_t gen_ctx, label_ref_t *lr, uint8_t *base, void *
     lr->label_val_disp += 4 * 8;
     offset -= 4 * 8;
   }
-  if (lr->branch_type == JUMP) {
+  if (lr->branch_type == LADDR) {
+    offset += 4;
+    int hi = offset >> 16, low = offset & 0xffff;
+    if ((low & 0x8000) != 0) hi++;
+    insn |= hi & 0xffff;
+    _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+    insn_ptr++;
+    insn = *insn_ptr | low;
+    _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
+    return;
+  } else if (lr->branch_type == JUMP) {
     if (((offset < 0 ? -offset : offset) & ~(int64_t) 0x1ffffff) == 0) { /* a valid jump offset */
       insn = (insn & ~0x3ffffff) | (((offset / 4) & 0xffffff) << 2);
       _MIR_change_code (ctx, (uint8_t *) insn_ptr, (uint8_t *) &insn, 4);
