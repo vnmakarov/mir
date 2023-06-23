@@ -2926,7 +2926,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
 static void store_call_ref (gen_ctx_t gen_ctx, MIR_item_t ref_func_item, uint8_t *call_addr) {
   call_ref_t call_ref;
 
-  if (ref_func_item->u.func->redef_permitted_p) return;
+  if (MIR_get_func_redef_permission_p (gen_ctx->ctx)) return;
   call_ref.ref_func_item = ref_func_item;
   call_ref.call_addr = call_addr;
   VARR_PUSH (call_ref_t, gen_ctx->target_ctx->call_refs, call_ref);

@@ -336,7 +336,6 @@ typedef struct MIR_func {
   DLIST (MIR_insn_t) insns, original_insns;
   uint32_t nres, nargs, last_temp_num, n_inlines;
   MIR_type_t *res_types;
-  char redef_permitted_p;         /* flag that function can be redefined */
   char vararg_p;                  /* flag of variable number of arguments */
   char expr_p;                    /* flag of that the func can be used as a linker expression */
   char jret_p;                    /* flag of jcall/jret func, set up after MIR_func_finish */

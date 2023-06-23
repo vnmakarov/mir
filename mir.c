@@ -747,6 +747,7 @@ MIR_context_t _MIR_init (void) {
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++) mir_assert (c == insn_descs[c].code);
 #endif
   error_func = default_error;
+  func_redef_permission_p = FALSE;
   curr_module = NULL;
   curr_func = NULL;
   curr_label_num = 0;
@@ -1391,7 +1392,6 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
   func->global_vars = NULL;
   func->nargs = nargs;
   func->last_temp_num = 0;
-  func->redef_permitted_p = FALSE;
   func->vararg_p = vararg_p != 0;
   func->expr_p = func->jret_p = FALSE;
   func->n_inlines = 0;
@@ -1935,7 +1935,7 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
                   && first_item->item_type != MIR_forward_item);
       if (setup_global (ctx, MIR_item_name (ctx, first_item), first_item->addr, first_item)
           && item->item_type == MIR_func_item
-          && !item->u.func->redef_permitted_p
+          && !func_redef_permission_p
 #ifdef __APPLE__
           /* macosx can have multiple equal external inline definitions of the same function: */
           && strncmp (item->u.func->name, "__darwin", 8) != 0
@@ -1944,7 +1944,6 @@ void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
         MIR_get_error_func (ctx) (MIR_repeated_decl_error, "func %s is prohibited for redefinition",
                                   item->u.func->name);
     }
-    if (item->item_type == MIR_func_item) item->u.func->redef_permitted_p = func_redef_permission_p;
   }
   if (lref_p) link_module_lrefs (ctx, m);
   VARR_PUSH (MIR_module_t, modules_to_link, m);
