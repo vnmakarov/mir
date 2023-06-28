@@ -202,7 +202,7 @@ static void gen_call_addr (VARR (uint8_t) * insn_varr, void *base_addr, int temp
 
 void *_MIR_get_thunk (MIR_context_t ctx) {
   /* maximal size thunk -- see _MIR_redirect_thunk */
-  int pat[5] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
+  int pat[4] = {TARGET_NOP, TARGET_NOP, TARGET_NOP, TARGET_NOP};
 
   return _MIR_publish_code (ctx, (uint8_t *) pat, sizeof (pat));
 }
@@ -211,19 +211,30 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   static const uint32_t branch_pat1 = 0xd61f0120; /* br x9 */
   static const uint32_t branch_pat2 = 0x14000000; /* b x */
   int64_t offset = (uint32_t *) to - (uint32_t *) thunk;
-  uint32_t code[5];
+  uint32_t code[4];
 
   mir_assert (((uint64_t) thunk & 0x3) == 0 && ((uint64_t) to & 0x3) == 0); /* alignment */
   if (-(int64_t) MAX_BR_OFFSET <= offset && offset < (int64_t) MAX_BR_OFFSET) {
     code[0] = branch_pat2 | ((uint32_t) offset & BR_OFFSET_MASK);
     _MIR_change_code (ctx, thunk, (uint8_t *) &code[0], sizeof (code[0]));
   } else {
-    int n = setup_imm64_insns (code, 9, (uint64_t) to);
-
-    mir_assert (n == 4);
-    code[4] = branch_pat1;
+    code[0] = 0x58000049; /* ldr x9,8 (pc-relative) */
+    code[1] = branch_pat1;
+    *(void **) &code[2] = to;
     _MIR_change_code (ctx, thunk, (uint8_t *) code, sizeof (code));
   }
+}
+
+void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
+  void *addr;
+  int short_p = (*(uint32_t *) thunk >> BR_OFFSET_BITS) == 0x5;
+  if (short_p) {
+    int32_t offset = *(uint32_t *) thunk & BR_OFFSET_MASK;
+    addr = (uint8_t *) thunk + ((offset << (32 - BR_OFFSET_BITS)) >> (30 - BR_OFFSET_BITS));
+  } else {
+    addr = *(void **) ((char *) thunk + 8);
+  }
+  return addr;
 }
 
 static void gen_blk_mov (VARR (uint8_t) * insn_varr, uint32_t offset, uint32_t addr_offset,
