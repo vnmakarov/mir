@@ -1068,9 +1068,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     gen_mov (gen_ctx, anchor, MIR_MOV,
              _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, SP_HARD_REG, MIR_NON_VAR, 1),
              treg_op); /* mem[sp + 16] = treg */
-  gen_mov (gen_ctx, anchor, MIR_MOV,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
-           _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = lr */
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
+             _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = lr */
   gen_mov (gen_ctx, anchor, MIR_MOV,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_VAR, 1),
            _MIR_new_var_op (ctx, FP_HARD_REG));             /* mem[sp] = fp */
@@ -1158,8 +1159,9 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       }
     }
   /* Restore lr, sp, fp */
-  gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
   gen_mov (gen_ctx, anchor, MIR_MOV, treg_op2, fp_reg_op); /* r10 = fp */
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, FP_HARD_REG, MIR_NON_VAR, 1));
@@ -1738,6 +1740,9 @@ static const struct pattern patterns[] = {
   {MIR_INLINE, "X r $", "d63f0000:fffffc1f rn1"}, /* blr *Rn */
   {MIR_INLINE, "X L $", "94000000:fc000000 rn1"}, /* bl address */
   {MIR_RET, "$", "d65f0000:fffffc1f hn1e"},       /* ret R30  */
+
+  {MIR_JCALL, "X r $", "d61f0000:fffffc00 rn1"}, /* br r1 */
+  {MIR_JRET, "r $", "d61f0000:fffffc00 rn0"},    /* br r0  */
 
   /* add r0, r1, 15; and r0, r0, -16; sub sp, sp, r0; mov r0, sp: */
   {MIR_ALLOCA, "r r",
