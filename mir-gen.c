@@ -461,6 +461,7 @@ struct bb {
   DLIST (bb_insn_t) bb_insns;
   unsigned char call_p;        /* used in mem avail calculation, true if there is a call in BB */
   unsigned char flag;          /* used in different calculation */
+  unsigned char reachable_p;   /* reachable if its label is used as value */
   bitmap_t in, out, gen, kill; /* var bitmaps for different data flow problems */
   bitmap_t dom_in, dom_out;    /* additional var bitmaps */
   loop_node_t loop_node;
@@ -820,7 +821,7 @@ static bb_t create_bb (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   DLIST_INIT (bb_insn_t, bb->bb_insns);
   DLIST_INIT (in_edge_t, bb->in_edges);
   DLIST_INIT (out_edge_t, bb->out_edges);
-  bb->call_p = bb->flag = FALSE;
+  bb->call_p = bb->flag = bb->reachable_p = FALSE;
   bb->in = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->out = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
   bb->gen = bitmap_create2 (DEFAULT_INIT_BITMAP_BITS_NUM);
@@ -1869,6 +1870,12 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       bb2 = get_insn_bb (gen_ctx, insn2);
       create_edge (gen_ctx, bb, bb2, FALSE, TRUE);
     }
+  }
+  for (i = 0; i < VARR_LENGTH (MIR_insn_t, temp_insns2); i++) {
+    insn = VARR_GET (MIR_insn_t, temp_insns2, i);
+    gen_assert (insn->code == MIR_LABEL);
+    bb = get_insn_bb (gen_ctx, insn);
+    bb->reachable_p = TRUE;
   }
   if (optimize_level > 0) remove_unreachable_bbs (gen_ctx);
   /* Add additional edges with entry and exit */
@@ -4210,6 +4217,11 @@ static void mark_unreachable_bbs (gen_ctx_t gen_ctx) {
   VARR_TRUNC (bb_t, worklist, 0);
   VARR_PUSH (bb_t, worklist, bb);
   bitmap_set_bit_p (temp_bitmap, bb->index);
+  for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    if (bb->reachable_p) {
+      VARR_PUSH (bb_t, worklist, bb);
+      bitmap_set_bit_p (temp_bitmap, bb->index);
+    }
   while (VARR_LENGTH (bb_t, worklist) != 0) {
     bb = VARR_POP (bb_t, worklist);
     for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
