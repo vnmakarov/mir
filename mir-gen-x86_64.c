@@ -1380,8 +1380,9 @@ struct pattern {
      h<one or two hex digits> - hardware register with given number in reg of ModRM:reg;
                                  one bit of 8-15 in REX.R
      H<one or two hex digits> - hardware register with given number in rm of MOD-RM with and mod=3
-     (register); one bit of 8-15 in REX.B v<value> - 8-bit immediate with given hex value V<value> -
-     32-bit immediate with given hex value
+     (register); one bit of 8-15 in REX.B
+     v<value> - 8-bit immediate with given hex value
+     V<value> - 32-bit immediate with given hex value
   */
   const char *replacement;
   int max_insn_size;
@@ -1806,6 +1807,7 @@ static struct pattern patterns[] = {
   {MIR_CALL, "X r $", "Y FF /2 R1", 0}, /* call *r1 */
   {MIR_RET, "$", "C3", 0},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
+  {MIR_JCALL, "X i3 $", "FF /4 P1", 0},  /* jmp *rel32(rip)  */
   {MIR_JCALL, "X r $", "Y FF /4 R1", 0}, /* jmp *r1 */
   {MIR_JRET, "r $", "Y FF /4 R0", 0},    /* jmp *r1  */
 };
@@ -2938,14 +2940,16 @@ static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
   for (size_t i = 0; i < VARR_LENGTH (const_ref_t, const_refs); i++) {
     const_ref_t cr = VARR_GET (const_ref_t, const_refs, i);
     if (!cr.call_p) continue;
-    gen_assert (base[cr.pc - 2] == 0xff && base[cr.pc - 1] == 0x15);
+    gen_assert (base[cr.pc - 2] == 0xff);
+    gen_assert (base[cr.pc - 1] == 0x15 || base[cr.pc - 1] == 0x25);
     if (cr.func_item != NULL) store_call_ref (gen_ctx, cr.func_item, (uint8_t *) base + cr.pc - 2);
     uint64_t v = VARR_GET (uint64_t, const_pool, cr.const_num);
     int64_t off = (int64_t) v - (int64_t) (base + cr.next_insn_disp);
     if (!int32_p (off)) continue;
-    uint8_t rel_call[] = {0x40, 0xe8, 0, 0, 0, 0}; /* rex call rel32 */
-    set_int64 (rel_call + 2, off, 4);
-    _MIR_change_code (ctx, (uint8_t *) base + cr.pc - 2, (uint8_t *) rel_call, 6);
+    uint8_t rel_insn[] = {0x40, 0xe8, 0, 0, 0, 0};   /* rex call rel32 */
+    if (base[cr.pc - 1] == 0x25) rel_insn[1] = 0xe9; /* rex jmp rel32 */
+    set_int64 (rel_insn + 2, off, 4);
+    _MIR_change_code (ctx, (uint8_t *) base + cr.pc - 2, (uint8_t *) rel_insn, 6);
   }
 }
 
