@@ -921,10 +921,11 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   start_saved_fregs_offset = frame_size;
   frame_size += saved_fregs_num * 8;
   gen_assert (frame_size % 8 == 0);
-  gen_mov (gen_ctx, anchor, MIR_MOV,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (14 - 2) * 8,
-                                R15_HARD_REG, MIR_NON_VAR, 1),
-           r14_reg_op); /* mem[r15+112] = r14 */
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (14 - 2) * 8,
+                                  R15_HARD_REG, MIR_NON_VAR, 1),
+             r14_reg_op); /* mem[r15+112] = r14 */
   gen_mov (gen_ctx, anchor, MIR_MOV,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (11 - 2) * 8,
                                 R15_HARD_REG, MIR_NON_VAR, 1),
@@ -966,9 +967,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_mov (gen_ctx, anchor, MIR_MOV, r11_reg_op,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (11 - 2) * 8,
                                 R15_HARD_REG, MIR_NON_VAR, 1)); /* restore r11 */
-  gen_mov (gen_ctx, anchor, MIR_MOV, r14_reg_op,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (14 - 2) * 8,
-                                R15_HARD_REG, MIR_NON_VAR, 1)); /* restore r14 */
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV, r14_reg_op,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, S390X_GP_REG_RSAVE_AREA_START + (14 - 2) * 8,
+                                  R15_HARD_REG, MIR_NON_VAR, 1)); /* restore r14 */
 }
 
 struct pattern {
@@ -1423,6 +1425,9 @@ static const struct pattern patterns[] = {
 
   {MIR_CALL, "X r $", "0d* h14 R1"}, /* basr h14,r0 */
   {MIR_RET, "$", "07* ma15 H14"},    /* bcr m15,14 */
+
+  {MIR_JCALL, "X r $", "07* ma15 R1"}, /* br r */
+  {MIR_JRET, "r $", "07* ma15 R0"},    /* br r */
 
 /* sgr h15,r0; lg h0,(h15,r0); stg h0,0(h15); lay r0,160+param_area_size+blkparamsize(h15): */
 #define ALLOCA_END "; b909 h15 R0; e3:04 h0 hs15 x0; e3:24 h0 hs15; e3:71 r0 Q hs15"
