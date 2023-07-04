@@ -1808,8 +1808,8 @@ static struct pattern patterns[] = {
   {MIR_RET, "$", "C3", 0},              /* ret ax, dx, xmm0, xmm1, st0, st1  */
 
   {MIR_JCALL, "X i3 $", "FF /4 P1", 0},  /* jmp *rel32(rip)  */
-  {MIR_JCALL, "X r $", "Y FF /4 R1", 0}, /* jmp *r1 */
-  {MIR_JRET, "r $", "Y FF /4 R0", 0},    /* jmp *r1  */
+  {MIR_JCALL, "X r $", "Y FF /4 R1", 0}, /* jmp *r */
+  {MIR_JRET, "r $", "Y FF /4 R0", 0},    /* jmp *r  */
 };
 
 static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr1, MIR_reg_t *hr2) {
