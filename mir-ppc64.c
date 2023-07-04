@@ -166,7 +166,7 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   return ppc64_publish_func_and_redirect (ctx, code);
 }
 
-static const int max_thunk_len = (7 * 4); /* 5 insns for r=addr and 2 insns for goto r */
+static const int max_thunk_len = (7 * 4 + 8); /* 5 for r=addr, 2 for goto r, addr itself */
 
 void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descriptor: */
   VARR (uint8_t) * code;
