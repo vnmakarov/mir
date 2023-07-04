@@ -851,10 +851,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   start_save_regs_offset = frame_size;
   frame_size += (saved_iregs_num + saved_fregs_num) * 8;
   if (frame_size % 16 != 0) frame_size = (frame_size + 15) / 16 * 16;
-  gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op, lr_reg_op); /* r0 = lr */
-  gen_mov (gen_ctx, anchor, MIR_MOV,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_VAR, 1),
-           r0_reg_op); /* mem[r1] = r0 */
+  if (!func->jret_p) {
+    gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op, lr_reg_op); /* r0 = lr */
+    gen_mov (gen_ctx, anchor, MIR_MOV,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_VAR, 1),
+             r0_reg_op); /* mem[r1] = r0 */
+  }
   gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op, sp_reg_op);
   new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, sp_reg_op, MIR_new_int_op (ctx, -frame_size));
   gen_add_insn_before (gen_ctx, anchor, new_insn); /* r1 -= frame_size */
@@ -897,9 +899,12 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   gen_mov (gen_ctx, anchor, MIR_MOV, fp_reg_op,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, start_save_regs_offset + n * 8, FP_HARD_REG,
                                 MIR_NON_VAR, 1)); /* restore fp */
-  gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_VAR, 1)); /* r0 = 16(sp) */
-  gen_mov (gen_ctx, anchor, MIR_MOV, lr_reg_op, r0_reg_op);                        /* lr = r0 */
+  if (!func->jret_p) {
+    gen_mov (gen_ctx, anchor, MIR_MOV, r0_reg_op,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, R1_HARD_REG, MIR_NON_VAR,
+                                  1));                        /* r0 = 16(sp) */
+    gen_mov (gen_ctx, anchor, MIR_MOV, lr_reg_op, r0_reg_op); /* lr = r0 */
+  }
 }
 
 struct pattern {
@@ -1441,6 +1446,9 @@ static const struct pattern patterns[] = {
 #endif
 
   {MIR_RET, "$", "o19 O16 BO20 BI0"}, /* bclr */
+
+  {MIR_JCALL, "X r $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
+  {MIR_JRET, "r $", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"},    /* mtctr r; bcctr */
 
 #if 0
   /* ld r10,16(r1); subf r1,rt,r1; ldx r0,(r1,rt); std r10,16(r1); std r0,0(r1);
