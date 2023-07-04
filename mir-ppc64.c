@@ -201,9 +201,26 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
   mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
               && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+  push_insns (code, &to, sizeof (to));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
 #endif
+}
+
+static void *get_jump_addr (uint32_t *insns) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  return *(void **) insns;
+#else
+  int i;
+  for (i = 0; i < 8; i++)
+    if (insns[i] == 0x4e800420) break; /* bctr */
+  mir_assert (i < 8);
+  return *(void **) (insns[i + 1] | ((uint64_t) insns[i + 2] << 32));
+#endif
+}
+
+void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
+  return get_jump_addr (thunk);
 }
 
 struct ppc64_va_list {
