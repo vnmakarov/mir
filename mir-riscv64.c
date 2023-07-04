@@ -139,8 +139,10 @@ static int get_jump_code (uint32_t *insns, void *to, int64_t offset, int temp_ha
     insns[1] = TARGET_NOP;                       /* size should be aligned to 8 */
     return 8;
   } else if (-(1l << 31) <= offset && offset < (1 << 31)) {
-    insns[0] = 0x17 | (temp_hard_reg << 7) | ((offset & 0xfffff000) << 12); /* auipc t */
-    insns[1] = 0x67 | (temp_hard_reg << 15) | (offset & 0xfff);             /* jalr t */
+    int hi = offset >> 12, low = offset & 0xfff;
+    if ((low & 0x800) != 0) hi++;
+    insns[0] = 0x17 | (temp_hard_reg << 7) | (hi << 12);   /* auipc t */
+    insns[1] = 0x67 | (temp_hard_reg << 15) | (low << 20); /* jalr t */
     return 8;
   } else {
     insns[0] = 0x17 | (temp_hard_reg << 7); /* auipc t,0x0 */
