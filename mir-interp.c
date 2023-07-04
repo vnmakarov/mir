@@ -63,7 +63,8 @@ typedef enum {
   REP3 (IC_EL, LDF, LDD, LDLD),
   REP7 (IC_EL, STI8, STU8, STI16, STU16, STI32, STU32, STI64),
   REP8 (IC_EL, STF, STD, STLD, MOVI, MOVP, MOVF, MOVD, MOVLD),
-  REP3 (IC_EL, IMM_CALL, LADDR, INSN_BOUND),
+  REP6 (IC_EL, IMM_CALL, IMM_JCALL, MOVFG, FMOVFG, DMOVFG, LDMOVFG),
+  REP5 (IC_EL, MOVTG, FMOVTG, DMOVTG, LDMOVTG, INSN_BOUND),
 } MIR_full_insn_code_t;
 #undef REP_SEP
 
@@ -85,6 +86,7 @@ struct interp_ctx {
 #if DIRECT_THREADED_DISPATCH
   void *dispatch_label_tab[IC_INSN_BOUND];
 #endif
+  MIR_val_t global_regs[MAX_HARD_REG + 1];
   VARR (MIR_val_t) * code_varr;
   VARR (MIR_insn_t) * branches;
   VARR (MIR_val_t) * arg_vals_varr;
@@ -94,6 +96,7 @@ struct interp_ctx {
 #endif
   void *(*bstart_builtin) (void);
   void (*bend_builtin) (void *);
+  void *jret_addr;
   VARR (MIR_val_t) * call_res_args_varr;
   MIR_val_t *call_res_args;
   VARR (_MIR_arg_desc_t) * call_arg_descs_varr;
@@ -102,8 +105,10 @@ struct interp_ctx {
 };
 
 #define dispatch_label_tab interp_ctx->dispatch_label_tab
+#define global_regs interp_ctx->global_regs
 #define code_varr interp_ctx->code_varr
 #define branches interp_ctx->branches
+#define jret_addr interp_ctx->jret_addr
 #define arg_vals_varr interp_ctx->arg_vals_varr
 #define arg_vals interp_ctx->arg_vals
 #define trace_insn_ident interp_ctx->trace_insn_ident
@@ -171,6 +176,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
   int imm_call_p;
   MIR_func_t func = func_item->u.func;
   MIR_insn_t insn, label;
+  MIR_type_t type;
   MIR_val_t v;
   size_t i;
   MIR_reg_t max_nreg = 0;
@@ -217,12 +223,44 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         v.a = item->addr;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
-        mir_assert (ops[1].mode == MIR_OP_REG);
-        push_insn_start (interp_ctx, code, insn);
-        v.i = get_reg (ops[0], &max_nreg);
-        VARR_PUSH (MIR_val_t, code_varr, v);
-        v.i = ops[1].u.reg;
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        const char *hard_reg_name;
+      regreg:
+        mir_assert (ops[0].mode == MIR_OP_REG && ops[1].mode == MIR_OP_REG);
+        type = MIR_reg_type (ctx, ops[0].u.reg, func);
+        mir_assert (type == MIR_reg_type (ctx, ops[1].u.reg, func));
+        if ((hard_reg_name = MIR_reg_hard_reg_name (ctx, ops[0].u.reg, func)) != NULL) {
+          mir_assert (MIR_reg_hard_reg_name (ctx, ops[1].u.reg, func) == NULL);
+          push_insn_start (interp_ctx,
+                           type == MIR_T_F    ? IC_FMOVTG
+                           : type == MIR_T_D  ? IC_DMOVTG
+                           : type == MIR_T_LD ? IC_LDMOVTG
+                                              : IC_MOVTG,
+                           insn);
+          v.i = _MIR_get_hard_reg (ctx, hard_reg_name);
+          mir_assert (v.i <= MAX_HARD_REG);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+          v.i = get_reg (ops[1], &max_nreg);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+        } else if ((hard_reg_name = MIR_reg_hard_reg_name (ctx, ops[1].u.reg, func)) != NULL) {
+          mir_assert (MIR_reg_hard_reg_name (ctx, ops[0].u.reg, func) == NULL);
+          push_insn_start (interp_ctx,
+                           type == MIR_T_F    ? IC_FMOVFG
+                           : type == MIR_T_D  ? IC_DMOVFG
+                           : type == MIR_T_LD ? IC_LDMOVFG
+                                              : IC_MOVFG,
+                           insn);
+          v.i = get_reg (ops[0], &max_nreg);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+          v.i = _MIR_get_hard_reg (ctx, hard_reg_name);
+          mir_assert (v.i <= MAX_HARD_REG);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+        } else {
+          push_insn_start (interp_ctx, code, insn);
+          v.i = get_reg (ops[0], &max_nreg);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+          v.i = get_reg (ops[1], &max_nreg);
+          VARR_PUSH (MIR_val_t, code_varr, v);
+        }
       }
       break;
     case MIR_FMOV:
@@ -243,12 +281,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         v.f = ops[1].u.f;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
-        mir_assert (ops[1].mode == MIR_OP_REG);
-        push_insn_start (interp_ctx, code, insn);
-        v.i = get_reg (ops[0], &max_nreg);
-        VARR_PUSH (MIR_val_t, code_varr, v);
-        v.i = ops[1].u.reg;
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        goto regreg;
       }
       break;
     case MIR_DMOV:
@@ -269,12 +302,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         v.d = ops[1].u.d;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
-        mir_assert (ops[1].mode == MIR_OP_REG);
-        push_insn_start (interp_ctx, code, insn);
-        v.i = get_reg (ops[0], &max_nreg);
-        VARR_PUSH (MIR_val_t, code_varr, v);
-        v.i = ops[1].u.reg;
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        goto regreg;
       }
       break;
     case MIR_LDMOV:
@@ -295,12 +323,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         v.ld = ops[1].u.ld;
         VARR_PUSH (MIR_val_t, code_varr, v);
       } else {
-        mir_assert (ops[1].mode == MIR_OP_REG);
-        push_insn_start (interp_ctx, code, insn);
-        v.i = get_reg (ops[0], &max_nreg);
-        VARR_PUSH (MIR_val_t, code_varr, v);
-        v.i = ops[1].u.reg;
-        VARR_PUSH (MIR_val_t, code_varr, v);
+        goto regreg;
       }
       break;
     case MIR_LABEL: break;
@@ -409,7 +432,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
       push_insn_start (interp_ctx,
-                       imm_call_p           ? IC_IMM_CALL
+                       imm_call_p           ? (code == MIR_JCALL ? IC_IMM_JCALL : IC_IMM_CALL)
                        : code == MIR_INLINE ? MIR_CALL
                                             : code,
                        insn);
@@ -831,8 +854,10 @@ static void start_insn_trace (MIR_context_t ctx, const char *name, func_desc_t f
 
 static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, code_t ops,
                                MIR_val_t *bp) {
+  struct interp_ctx *interp_ctx = ctx->interp_ctx;
   int out_p;
   MIR_op_mode_t op_mode = MIR_OP_UNDEF;
+  MIR_val_t *res = bp;
 
   switch (code) {
   case IC_LDI8:
@@ -843,12 +868,28 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
   case IC_LDU32:
   case IC_LDI64:
   case IC_MOVI:
+  case IC_MOVTG:
+    res = global_regs;
+    /* falls through */
+  case IC_MOVFG:
   case IC_MOVP: op_mode = MIR_OP_INT; break;
   case IC_LDF:
+  case IC_FMOVTG:
+    res = global_regs;
+    /* falls through */
+  case IC_FMOVFG:
   case IC_MOVF: op_mode = MIR_OP_FLOAT; break;
   case IC_LDD:
+  case IC_DMOVTG:
+    res = global_regs;
+    /* falls through */
+  case IC_DMOVFG:
   case IC_MOVD: op_mode = MIR_OP_DOUBLE; break;
   case IC_LDLD:
+  case IC_LDMOVTG:
+    res = global_regs;
+    /* falls through */
+  case IC_LDMOVFG:
   case IC_MOVLD: op_mode = MIR_OP_LDOUBLE; break;
   case IC_STI8:
   case IC_STU8:
@@ -861,6 +902,7 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
   case IC_STD:;
   case IC_STLD: break;
   case IC_IMM_CALL: break;
+  case IC_IMM_JCALL: break;
   default:
     op_mode = _MIR_insn_code_op_mode (ctx, (MIR_insn_code_t) code, 0, &out_p);
     if (op_mode == MIR_OP_BOUND || !out_p) op_mode = MIR_OP_UNDEF;
@@ -869,16 +911,16 @@ static void finish_insn_trace (MIR_context_t ctx, MIR_full_insn_code_t code, cod
   switch (op_mode) {
   case MIR_OP_INT:
   case MIR_OP_UINT:
-    fprintf (stderr, "\t# res = %" PRId64 " (%" PRIu64 "u, 0x%" PRIx64 ")", bp[ops[0].i].i,
-             bp[ops[0].i].u, bp[ops[0].i].u);
+    fprintf (stderr, "\t# res = %" PRId64 " (%" PRIu64 "u, 0x%" PRIx64 ")", res[ops[0].i].i,
+             res[ops[0].i].u, res[ops[0].i].u);
     break;
-  case MIR_OP_FLOAT: fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, bp[ops[0].i].f); break;
+  case MIR_OP_FLOAT: fprintf (stderr, "\t# res = %.*ef", FLT_DECIMAL_DIG, res[ops[0].i].f); break;
   case MIR_OP_LDOUBLE:
 #ifndef _WIN32
-    fprintf (stderr, "\t# res = %.*Le", LDBL_DECIMAL_DIG, bp[ops[0].i].ld);
+    fprintf (stderr, "\t# res = %.*Le", LDBL_DECIMAL_DIG, res[ops[0].i].ld);
     break;
 #endif
-  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %.*e", DBL_DECIMAL_DIG, bp[ops[0].i].d); break;
+  case MIR_OP_DOUBLE: fprintf (stderr, "\t# res = %.*e", DBL_DECIMAL_DIG, res[ops[0].i].d); break;
   default: assert (op_mode == MIR_OP_UNDEF);
   }
   fprintf (stderr, "\n");
@@ -916,6 +958,7 @@ static int64_t addr_offset8, addr_offset16, addr_offset32;
 static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *bp,
                            MIR_val_t *results) {
   struct interp_ctx *interp_ctx = ctx->interp_ctx;
+  MIR_val_t *globals = global_regs;
   code_t pc, ops, code;
   void *jmpi_val; /* where label thunk execution result will be: */
   int64_t offset;
@@ -974,7 +1017,9 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
     REP8 (LAB_EL, IC_LDD, IC_LDLD, IC_STI8, IC_STU8, IC_STI16, IC_STU16, IC_STI32, IC_STU32);
     REP8 (LAB_EL, IC_STI64, IC_STF, IC_STD, IC_STLD, IC_MOVI, IC_MOVP, IC_MOVF, IC_MOVD);
-    REP2 (LAB_EL, IC_MOVLD, IC_IMM_CALL);
+    REP3 (LAB_EL, IC_MOVLD, IC_IMM_CALL, IC_IMM_JCALL);
+    REP4 (LAB_EL, IC_MOVFG, IC_FMOVFG, IC_DMOVFG, IC_LDMOVFG);
+    REP4 (LAB_EL, IC_MOVTG, IC_FMOVTG, IC_DMOVTG, IC_LDMOVTG);
     return;
   }
 #undef REP_SEP
@@ -1049,6 +1094,49 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     *r = p;
     END_INSN;
   }
+
+  CASE (IC_MOVFG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    bp[l].i = globals[r].i;
+    END_INSN;
+  }
+  CASE (IC_FMOVFG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    bp[l].f = globals[r].f;
+    END_INSN;
+  }
+  CASE (IC_DMOVFG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    bp[l].d = globals[r].d;
+    END_INSN;
+  }
+  CASE (IC_LDMOVFG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    bp[l].ld = globals[r].ld;
+    END_INSN;
+  }
+
+  CASE (IC_MOVTG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    globals[l].i = bp[r].i;
+    END_INSN;
+  }
+  CASE (IC_FMOVTG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    globals[l].f = bp[r].f;
+    END_INSN;
+  }
+  CASE (IC_DMOVTG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    globals[l].d = bp[r].d;
+    END_INSN;
+  }
+  CASE (IC_LDMOVTG, 2) {
+    int64_t l = get_i (ops), r = get_i (ops + 1);
+    globals[l].ld = bp[r].ld;
+    END_INSN;
+  }
+
   SCASE (MIR_EXT8, 2, EXT (int8_t));
   SCASE (MIR_EXT16, 2, EXT (int16_t));
   SCASE (MIR_EXT32, 2, EXT (int32_t));
@@ -1489,7 +1577,21 @@ common_addr:;
 
   SCASE (MIR_INLINE, 0, mir_assert (FALSE));
 
-  CASE (MIR_JCALL, 0) {  // ???
+  CASE (MIR_JCALL, 0) {
+    int (*func_addr) (void *buf) = *get_aop (bp, ops + 4);
+    if (func_addr == setjmp_addr)
+      (*MIR_get_error_func (ctx)) (MIR_invalid_insn_error, "jcall of setjmp");
+    call_insn_execute (ctx, pc, bp, ops, FALSE);
+    pc = jret_addr;
+    END_INSN;
+  }
+  CASE (IC_IMM_JCALL, 0) {
+    int (*func_addr) (void *buf) = get_a (ops + 4);
+    if (func_addr == setjmp_addr)
+      (*MIR_get_error_func (ctx)) (MIR_invalid_insn_error, "jcall of setjmp");
+    call_insn_execute (ctx, pc, bp, ops, TRUE);
+    pc = jret_addr;
+    END_INSN;
   }
 
   CASE (MIR_SWITCH, 0) {
@@ -1503,14 +1605,16 @@ common_addr:;
 
   CASE (MIR_RET, 0) {
     int64_t nops = get_i (ops); /* #ops */
-
     for (int64_t i = 0; i < nops; i++) results[i] = bp[get_i (ops + i + 1)];
     pc += nops + 1;
     return;
     END_INSN;
   }
 
-  CASE (MIR_JRET, 0) {  // ???
+  CASE (MIR_JRET, 0) {
+    jret_addr = bp[get_i (ops)].a; /* pc for continuation */
+    return;
+    END_INSN;
   }
 
   CASE (MIR_ALLOCA, 2) {
