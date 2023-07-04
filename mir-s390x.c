@@ -202,6 +202,21 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   redirect_thunk (ctx, thunk, to, 1);
 }
 
+static void *get_jump_addr (uint8_t *insns) {
+  assert (insns[0] == 0xc0);
+  if ((insns[1] >> 4) == 15) { /* bcrl m15,offset */
+    int32_t offset = (insns[2] << 24) | (insns[3] << 16) | (insns[4] << 8) | insns[5];
+    return insns + offset;
+  } else {
+    size_t addr = ((size_t) insns + 14 + 7) / 8 * 8;
+    return *(void **) addr;
+  }
+}
+
+void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
+  return get_jump_addr (thunk);
+}
+
 struct s390x_va_list {
   long __gpr, __fpr;         /* number of args read until now */
   void *__overflow_arg_area; /* argument on the stack to read next */
