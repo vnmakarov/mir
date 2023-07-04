@@ -154,6 +154,26 @@ static int get_jump_code (uint32_t *insns, void *to, int64_t offset, int temp_ha
   }
 }
 
+static void *get_jump_addr (uint32_t *insns) { /* see get_jump_code */
+  int32_t offset;
+  if ((insns[0] & 0x7f) == 0x6f) { /* jal */
+    offset = (((int32_t) insns[0] >> 30) << 20) | insns[0] & 0xff000 | (insns[0] >> 9) & 0x800
+             | (insns[0] >> 20) & 0x7fe;
+    return (int8_t *) insns + offset;
+  } else if ((insns[0] & 0x7f) == 0x17 && (insns[1] & 0x7f) == 0x67) {
+    int32_t hi = (int32_t) insns[0] & 0xfffff000, low = (int32_t) insns[1] >> 20;
+    return (int8_t *) insns + hi + low;
+  } else {
+    assert ((insns[0] & ~0xf80) == 0x17 && (insns[1] & ~0xf8f80) == (0x0003003 | (16 << 20))
+            && (insns[2] & 0x7f) == 0x67);
+    return *(void **) &insns[4];
+  }
+}
+
+void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
+  return get_jump_addr (thunk);
+}
+
 static void redirect_thunk (MIR_context_t ctx, void *thunk, void *to, int temp_hard_reg) {
   uint32_t insns[MAX_JUMP_CODE];
   uint64_t offset = (uint8_t *) to - (uint8_t *) thunk;
