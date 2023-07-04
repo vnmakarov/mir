@@ -1144,9 +1144,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
     gen_mov (gen_ctx, anchor, MIR_MOV,
              _MIR_new_var_mem_op (ctx, MIR_T_I64, 16, SP_HARD_REG, MIR_NON_VAR, 1),
              treg_op); /* mem[sp + 16] = t1 */
-  gen_mov (gen_ctx, anchor, MIR_MOV,
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
-           _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = ra */
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV,
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, SP_HARD_REG, MIR_NON_VAR, 1),
+             _MIR_new_var_op (ctx, LINK_HARD_REG)); /* mem[sp + 8] = ra */
   gen_mov (gen_ctx, anchor, MIR_MOV,
            _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, SP_HARD_REG, MIR_NON_VAR, 1),
            _MIR_new_var_op (ctx, FP_HARD_REG));             /* mem[sp] = fp */
@@ -1217,8 +1218,9 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       }
     }
   /* Restore ra, sp, fp */
-  gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
-           _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
+  if (!func->jret_p)
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
+             _MIR_new_var_mem_op (ctx, MIR_T_I64, 8, FP_HARD_REG, MIR_NON_VAR, 1));
   if (frame_size < (1 << 11)) {
     new_insn = MIR_new_insn (ctx, MIR_ADD, sp_reg_op, fp_reg_op, MIR_new_int_op (ctx, frame_size));
   } else {
@@ -1739,6 +1741,9 @@ static const struct pattern patterns[] = {
   {MIR_CALL, "X r $", "O67 F0 hd1 rs1 i0"},   /* jalr rd,rs1 */
   {MIR_INLINE, "X r $", "O67 F0 hd1 rs1 i0"}, /* jalr rd,rs1 */
   {MIR_RET, "$", "O67 F0 hd0 hs1 i0"},        /* jalr hr0,hr1,0  */
+
+  {MIR_JCALL, "X r $", "O67 F0 hd0 rs1 i0"}, /* jmp *r: jalr zero,r,0 */
+  {MIR_JRET, "r $", "O67 F0 hd0 rs0 i0"},    /* jmp *r: jalr zero,r,0 */
 
 #if COMPRESS_INSNS
   /* addi r0,r0,15; andi r0,r0,-16; c.sub sp,sp,r0; c.mov r0,sp: */
