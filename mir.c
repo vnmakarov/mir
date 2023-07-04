@@ -3395,11 +3395,42 @@ static void simplify_op (MIR_context_t ctx, MIR_item_t func_item, MIR_insn_t ins
     *op = new_op;
     break;
   case MIR_OP_REG:
+    if (MIR_reg_hard_reg_name (ctx, op->u.reg, func) == NULL) break;
+    int another_nop = nop == 0 ? 1 : 0;
+    if (move_p && insn->ops[another_nop].mode == MIR_OP_REG
+        && MIR_reg_hard_reg_name (ctx, insn->ops[another_nop].u.reg, func) == NULL)
+      break;
+    type = MIR_reg_type (ctx, op->u.reg, func);
+    new_op = MIR_new_reg_op (ctx, vn_add_val (ctx, func, type, MIR_INSN_BOUND, *op, *op));
+    if (out_p) {
+      MIR_insert_insn_after (ctx, func_item, insn,
+                             MIR_new_insn (ctx, get_type_move_code (type), *op, new_op));
+    } else {
+      MIR_insert_insn_before (ctx, func_item, insn,
+                              MIR_new_insn (ctx, get_type_move_code (type), new_op, *op));
+    }
+    *op = new_op;
+    break;
   case MIR_OP_VAR:
   case MIR_OP_LABEL: break; /* Do nothing */
   case MIR_OP_MEM: {
+    MIR_op_t reg_op;
     MIR_reg_t addr_reg = 0;
 
+    if (op->u.mem.base != 0 && MIR_reg_hard_reg_name (ctx, op->u.mem.base, func) != NULL) {
+      reg_op = MIR_new_reg_op (ctx, op->u.mem.base);
+      new_op
+        = MIR_new_reg_op (ctx, vn_add_val (ctx, func, MIR_T_I64, MIR_INSN_BOUND, reg_op, reg_op));
+      MIR_insert_insn_before (ctx, func_item, insn, MIR_new_insn (ctx, MIR_MOV, new_op, reg_op));
+      op->u.mem.base = new_op.u.reg;
+    }
+    if (op->u.mem.index != 0 && MIR_reg_hard_reg_name (ctx, op->u.mem.index, func) != NULL) {
+      reg_op = MIR_new_reg_op (ctx, op->u.mem.index);
+      new_op
+        = MIR_new_reg_op (ctx, vn_add_val (ctx, func, MIR_T_I64, MIR_INSN_BOUND, reg_op, reg_op));
+      MIR_insert_insn_before (ctx, func_item, insn, MIR_new_insn (ctx, MIR_MOV, new_op, reg_op));
+      op->u.mem.index = new_op.u.reg;
+    }
     mem_op = *op;
     type = mem_op.u.mem.type;
     if (op->u.mem.base != 0 && op->u.mem.disp == 0
