@@ -1447,8 +1447,13 @@ static const struct pattern patterns[] = {
 
   {MIR_RET, "$", "o19 O16 BO20 BI0"}, /* bclr */
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+  {MIR_JCALL, "X r $",
+   "o58 ht12 ra1; o31 O467 hs12 sr9; o19 O528 BO20 BI0"}, /* ld r12,(r); mtctr r12; bcctr */
+#else
   {MIR_JCALL, "X r $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
-  {MIR_JRET, "r $", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"},    /* mtctr r; bcctr */
+#endif
+  {MIR_JRET, "r $", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
 
 #if 0
   /* ld r10,16(r1); subf r1,rt,r1; ldx r0,(r1,rt); std r10,16(r1); std r0,0(r1);
