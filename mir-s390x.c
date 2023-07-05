@@ -206,7 +206,7 @@ static void *get_jump_addr (uint8_t *insns) {
   assert (insns[0] == 0xc0);
   if ((insns[1] >> 4) == 15) { /* bcrl m15,offset */
     int32_t offset = (insns[2] << 24) | (insns[3] << 16) | (insns[4] << 8) | insns[5];
-    return insns + offset;
+    return insns + offset * 2;
   } else {
     size_t addr = ((size_t) insns + 14 + 7) / 8 * 8;
     return *(void **) addr;
