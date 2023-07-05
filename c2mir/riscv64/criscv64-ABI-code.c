@@ -53,7 +53,7 @@ static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only
     uint64_t nel;
 
     if (at->size->code == N_IGNORE || !(cexpr = at->size->attr)->const_p) return FALSE;
-    nel = cexpr->u.i_val;
+    nel = cexpr->c.i_val;
     if (!small_struct_p (c2m_ctx, at->el_type, FALSE, 0, &sub_n, sub_members)) return FALSE;
     if (sub_n * nel > 2) return FALSE;
     for (int i = 0; i < sub_n * nel; i++) {

@@ -26,7 +26,7 @@ static MIR_type_t fp_homogeneous_type_1 (c2m_ctx_t c2m_ctx, MIR_type_t curr_type
       if ((t = fp_homogeneous_type_1 (c2m_ctx, curr_type, type->u.arr_type->el_type, &n))
           == MIR_T_UNDEF)
         return MIR_T_UNDEF;
-      *num = arr_type->size->code == N_IGNORE || !cexpr->const_p ? 1 : cexpr->u.i_val;
+      *num = arr_type->size->code == N_IGNORE || !cexpr->const_p ? 1 : cexpr->c.i_val;
       return t;
     }
     case TM_STRUCT:
