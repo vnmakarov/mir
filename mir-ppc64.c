@@ -201,7 +201,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
   mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
               && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
-  push_insns (code, &to, sizeof (to));
+  push_insns (code, (uint32_t *) &to, sizeof (to));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
 #endif
@@ -215,7 +215,7 @@ static void *get_jump_addr (uint32_t *insns) {
   for (i = 0; i < 8; i++)
     if (insns[i] == 0x4e800420) break; /* bctr */
   mir_assert (i < 8);
-  return *(void **) (insns[i + 1] | ((uint64_t) insns[i + 2] << 32));
+  return (void *) (insns[i + 1] | ((uint64_t) insns[i + 2] << 32));
 #endif
 }
 
