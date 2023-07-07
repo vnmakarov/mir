@@ -1741,9 +1741,9 @@ static struct pattern patterns[] = {
   {MIR_JMP, "L", "E9 L0", 0}, /* 32-bit offset jmp */
   {MIR_JMP, "l", "EB l0", 0}, /* 8-bit offset jmp */
 
-  {MIR_LADDR, "r L", "X 8D r0 q L1"}, /* ip-relative addressing */
-  {MIR_JMPI, "r", "Y FF /4 R0", 0},   /* jmp *r */
-  {MIR_JMPI, "m3", "Y FF /4 m0", 0},  /* jmp *m0 */
+  {MIR_LADDR, "r L", "X 8D r0 q L1", 0}, /* ip-relative addressing */
+  {MIR_JMPI, "r", "Y FF /4 R0", 0},      /* jmp *r */
+  {MIR_JMPI, "m3", "Y FF /4 m0", 0},     /* jmp *m0 */
 
   /* lea table_offset(rip),r11; jmp *(r11,r,8); TableContent */
   {MIR_SWITCH, "r $", "X 8D hB T; Y FF /4 mT", 0},
