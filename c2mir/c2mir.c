@@ -12604,10 +12604,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                                 MIR_reg (ctx, FP_NAME, curr_func->u.func), 0, 1,
                                                 get_type_alias (c2m_ctx, expr->type), 0));
     }
+    int local_p
+      = decl->scope != top_scope && !decl->decl_spec.static_p && !decl->decl_spec.thread_local_p;
     gen_initializer (c2m_ctx, init_start, var, global_name,
-                     raw_type_size (c2m_ctx, decl->decl_spec.type),
-                     decl->scope != top_scope && !decl->decl_spec.static_p
-                       && !decl->decl_spec.thread_local_p);
+                     (local_p ? raw_type_size : type_size) (c2m_ctx, decl->decl_spec.type),
+                     local_p);
     VARR_TRUNC (init_el_t, init_els, init_start);
     if (var.mir_op.mode == MIR_OP_REF) var.mir_op.u.ref = var.decl->u.item;
     res = var;
@@ -12913,10 +12914,11 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                     && (var.mir_op.mode == MIR_OP_REG
                         || (var.mir_op.mode == MIR_OP_MEM && var.mir_op.u.mem.index == 0)));
           }
+          int local_p = (decl->scope != top_scope && !decl->decl_spec.static_p
+                         && !decl->decl_spec.thread_local_p);
           gen_initializer (c2m_ctx, init_start, var, name,
-                           raw_type_size (c2m_ctx, decl->decl_spec.type),
-                           decl->scope != top_scope && !decl->decl_spec.static_p
-                             && !decl->decl_spec.thread_local_p);
+                           (local_p ? raw_type_size : type_size) (c2m_ctx, decl->decl_spec.type),
+                           local_p);
           VARR_TRUNC (init_el_t, init_els, init_start);
         }
         if (decl->u.item != NULL && decl->scope == top_scope && !decl->decl_spec.static_p) {
