@@ -12401,7 +12401,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   }
   case N_LABEL_ADDR: {
-    node_t target, id = NL_HEAD (r->u.ops);
+    node_t target;
 
     e = r->attr;
     type = e->type;

@@ -2777,7 +2777,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   if (switch_table_addr_start_offset < 0) return;
   while (VARR_LENGTH (uint8_t, result_code) % 8 != 0) put_byte (gen_ctx, 0); /* align the table */
   gen_assert (insn->code == MIR_SWITCH
-              && VARR_LENGTH (uint8_t, result_code) > switch_table_addr_start_offset);
+              && (int) VARR_LENGTH (uint8_t, result_code) > switch_table_addr_start_offset);
   set_int64 (&VARR_ADDR (uint8_t, result_code)[switch_table_addr_start_offset],
              (int64_t) VARR_LENGTH (uint8_t, result_code) - switch_table_addr_start_offset - 4, 4);
   for (size_t i = 1; i < insn->nops; i++) {
@@ -2955,7 +2955,6 @@ static void change_calls (gen_ctx_t gen_ctx, uint8_t *base) {
 
 static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   MIR_code_reloc_t reloc;
-  MIR_func_t func = curr_func_item->u.func;
 
   VARR_TRUNC (MIR_code_reloc_t, relocs, 0);
   for (size_t i = 0; i < VARR_LENGTH (uint64_t, abs_address_locs); i++) {

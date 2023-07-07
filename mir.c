@@ -44,7 +44,7 @@ struct MIR_context {
   struct MIR_module environment_module;
   MIR_module_t curr_module;
   MIR_func_t curr_func;
-  int curr_label_num;
+  size_t curr_label_num;
   DLIST (MIR_module_t) all_modules;
   VARR (MIR_module_t) * modules_to_link;
   VARR (MIR_op_t) * temp_ops;
