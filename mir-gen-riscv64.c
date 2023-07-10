@@ -72,7 +72,9 @@ static void check_hard_reg_alloc_order (void) {
   for (i = 0; i <= MAX_HARD_REG; i++) gen_assert (check_p[i]);
 }
 
-static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
+static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type MIR_UNUSED, int n) {
+  return loc + n;
+}
 
 static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
@@ -364,7 +366,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
       if (qwords <= 2) {
         arg_reg = A0_HARD_REG + int_arg_num;
         if (type == MIR_T_BLK + 1) int_arg_num = (int_arg_num + 1) / 2 * 2; /* Make even */
-        for (int n = 0; n < qwords; n++) {
+        for (size_t n = 0; n < qwords; n++) {
           if (int_arg_num < 8) {
             new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, A0_HARD_REG + int_arg_num),
                                      _MIR_new_var_mem_op (ctx, MIR_T_I64, n * 8, arg_op.u.mem.base,
@@ -771,7 +773,7 @@ struct target_ctx {
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
 
-static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type,
+static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type MIR_UNUSED,
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   size_t offset = curr_func_item->u.func->vararg_p || block_arg_func_p ? 32 : 16;
@@ -779,9 +781,12 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
   return ((MIR_disp_t) slot * 8 + offset);
 }
 
-static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx) { return FP_HARD_REG; }
+static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx MIR_UNUSED) {
+  return FP_HARD_REG;
+}
 
-static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_type_t type,
+                                      MIR_disp_t offset) {
   MIR_disp_t offset2 = type == MIR_T_LD ? offset + 8 : offset;
   return -(1 << 11) <= offset && offset2 < (1 << 11);
 }
@@ -1036,7 +1041,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       uint32_t n_xregs = 0, n_fpregs = 0;
 
       assert (func->nres == MIR_insn_nops (ctx, insn));
-      for (size_t i = 0; i < func->nres; i++) {
+      for (i = 0; i < func->nres; i++) {
         assert (insn->ops[i].mode == MIR_OP_VAR);
         res_type = func->res_types[i];
         if ((res_type == MIR_T_F || res_type == MIR_T_D) && n_fpregs < 2) {
@@ -1848,8 +1853,8 @@ static int compressed_reg_p (MIR_reg_t reg, int int_only_p) {
 
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int n, nop;
-  size_t nops = MIR_insn_nops (ctx, insn);
+  int n;
+  size_t nop, nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
   MIR_op_t op, original;
@@ -1874,20 +1879,20 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
       }
       break;
     case 'h': {
-      uint64_t n;
+      uint64_t num;
       p++;
-      n = read_dec (&p);
-      if (op.mode != MIR_OP_VAR || op.u.var != n) return FALSE;
+      num = read_dec (&p);
+      if (op.mode != MIR_OP_VAR || op.u.var != num) return FALSE;
       break;
     }
     case 'C':
       if (op.mode != MIR_OP_VAR || !compressed_reg_p (op.u.var, FALSE)) return FALSE;
       break;
     case 'c': {
-      uint64_t n;
+      uint64_t num;
       p++;
-      n = read_dec (&p);
-      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || op.u.u != n) return FALSE;
+      num = read_dec (&p);
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || op.u.u != num) return FALSE;
       break;
     }
     case 'm': {
@@ -1920,12 +1925,14 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         type2 = MIR_T_BOUND;
         scale = 16;
         break;
-      case 'u': gen_assert (!compressed_p);
+      case 'u':
+        gen_assert (!compressed_p);
+        /* fall through */
       case 's':
         u_p = ch == 'u';
         s_p = ch == 's';
         ch = *++p;
-        /* Fall through: */
+        /* fall through */
       default:
         gen_assert ('0' <= ch && ch <= '3');
         gen_assert (!compressed_p || '2' <= ch);
@@ -2063,7 +2070,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case '1':
     case '2':
       n = start_ch - '0';
-      gen_assert (n < nop);
+      gen_assert (n < (int) nop);
       original = insn->ops[n];
       mode = op.mode;
       if (mode == MIR_OP_UINT) mode = MIR_OP_INT;
@@ -2283,7 +2290,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (start_ch == 'h') {
           reg = read_hex (&p);
         } else {
-          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < nops);
+          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < (int) nops);
           op = insn->ops[ch - '0'];
           gen_assert (op.mode == MIR_OP_VAR);
           reg = op.u.var;
@@ -2542,8 +2549,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         break;
       case 'l':
       case 'L':
-      case 'U': {
-        int n = 0;
+      case 'U':
+        n = 0;
         if (insn->code == MIR_CALL || insn->code == MIR_INLINE || insn->code == MIR_LADDR) n = 1;
         op = insn->ops[n];
         gen_assert (op.mode == MIR_OP_LABEL || op.mode == MIR_OP_REF);
@@ -2558,7 +2565,6 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         VARR_PUSH (label_ref_t, label_refs, lr);
         el_mask = start_ch == 'l' ? 0xfe000f80 : 0xfffff000;
         break;
-      }
       default: gen_assert (FALSE);
       }
     }
@@ -2645,7 +2651,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   }
 }
 
-static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+static int target_memory_ok_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_op_t *op_ref) {
   if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
   if (op_ref->u.var_mem.index == MIR_NON_VAR && op_ref->u.var_mem.disp >= -(1 << 11)
       && op_ref->u.var_mem.disp < (1 << 11)
@@ -2815,7 +2821,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   gen_setup_lrefs (gen_ctx, base);
 }
 
-static void target_change_to_direct_calls (MIR_context_t ctx) {}
+static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {}
 
 struct target_bb_version {
   uint8_t *base;

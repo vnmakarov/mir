@@ -106,7 +106,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   memcpy (res, a, s);
 }
 
-void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {
   struct riscv64_va_list *va = p;
   va_list *vap = a;
 
@@ -114,7 +114,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   *va = *(struct riscv64_va_list *) vap;
 }
 
-void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
+void va_end_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p MIR_UNUSED) {}
 
 static uint8_t *push_insns (VARR (uint8_t) * insn_varr, const void *pat, size_t pat_len) {
   const uint8_t *p = pat;
@@ -157,8 +157,8 @@ static int get_jump_code (uint32_t *insns, void *to, int64_t offset, int temp_ha
 static void *get_jump_addr (uint32_t *insns) { /* see get_jump_code */
   int32_t offset;
   if ((insns[0] & 0x7f) == 0x6f) { /* jal */
-    offset = (((int32_t) insns[0] >> 30) << 20) | insns[0] & 0xff000 | (insns[0] >> 9) & 0x800
-             | (insns[0] >> 20) & 0x7fe;
+    offset = (((int32_t) insns[0] >> 30) << 20) | (insns[0] & 0xff000) | ((insns[0] >> 9) & 0x800)
+             | ((insns[0] >> 20) & 0x7fe);
     return (int8_t *) insns + offset;
   } else if ((insns[0] & 0x7f) == 0x17 && (insns[1] & 0x7f) == 0x67) {
     int32_t hi = (int32_t) insns[0] & 0xfffff000, low = (int32_t) insns[1] >> 20;
@@ -399,7 +399,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         pat = ld_arg_pat | get_i_format_imm (offset) | get_i_format_rd (7); /* ld t2,offset(s1) */
         push_insns (code, &pat, sizeof (pat));
         if (type == MIR_T_BLK + 1) n_xregs = (n_xregs + 1) / 2 * 2; /* Make even */
-        for (int n = 0; n < parts; n++) {
+        for (uint32_t n = 0; n < parts; n++) {
           if (n_xregs < 8) {
             pat = ld_word_pat | get_i_format_imm (n * 8) | get_i_format_rd (n_xregs + a0_num);
             push_insns (code, &pat, sizeof (pat));
@@ -603,7 +603,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         sp_offset += 8;
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
-      for (int n = 0; n < parts; n++) {
+      for (uint32_t n = 0; n < parts; n++) {
         if (n_xregs < 8) {
           n_xregs++;
         }
@@ -648,7 +648,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         sp_offset += 8;
         n_xregs = (n_xregs + 1) / 2 * 2;
       }
-      for (int n = 0; n < parts; n++) {
+      for (uint32_t n = 0; n < parts; n++) {
         if (n_xregs < 8) {
           pat = sd_arg_pat | get_s_format_imm (sp_offset) | get_s_format_rs2 (n_xregs + a0_num);
           push_insns (code2, &pat, sizeof (pat));
@@ -861,7 +861,6 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   uint32_t insns[MAX_JUMP_CODE];
   int len = 64; /* initial len */
 
-  mir_mutex_lock (&code_mutex);
   VARR_CREATE (uint8_t, code, 128);
   for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
     base_addr = _MIR_get_new_code_addr (ctx, len);
@@ -881,7 +880,6 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     res_code = _MIR_publish_code_by_addr (ctx, base_addr, VARR_ADDR (uint8_t, code), len);
     if (res_code != NULL) break;
   }
-  mir_mutex_unlock (&code_mutex);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
     _MIR_dump_code ("wrapper:", res_code, VARR_LENGTH (uint8_t, code));

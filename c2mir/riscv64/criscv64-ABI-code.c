@@ -7,7 +7,7 @@ typedef struct target_arg_info {
   int n_iregs, n_fregs;
 } target_arg_info_t;
 
-static void target_init_arg_vars (c2m_ctx_t c2m_ctx, target_arg_info_t *arg_info) {
+static void target_init_arg_vars (c2m_ctx_t c2m_ctx MIR_UNUSED, target_arg_info_t *arg_info) {
   arg_info->n_iregs = arg_info->n_fregs = 0;
 }
 
@@ -56,7 +56,7 @@ static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only
     nel = cexpr->c.i_val;
     if (!small_struct_p (c2m_ctx, at->el_type, FALSE, 0, &sub_n, sub_members)) return FALSE;
     if (sub_n * nel > 2) return FALSE;
-    for (int i = 0; i < sub_n * nel; i++) {
+    for (size_t i = 0; i < sub_n * nel; i++) {
       members[i].type = sub_members[i].type;
       members[i].offset = start_offset + i * type_size (c2m_ctx, at->el_type);
     }
@@ -179,7 +179,7 @@ static int target_add_call_res_op (c2m_ctx_t c2m_ctx, struct type *ret_type,
 }
 
 static op_t target_gen_post_call_res_code (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t res,
-                                           MIR_insn_t call, size_t call_ops_start) {
+                                           MIR_insn_t call MIR_UNUSED, size_t call_ops_start) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   struct type_offset members[MAX_MEMBERS];
