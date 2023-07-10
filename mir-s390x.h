@@ -25,7 +25,9 @@ static const char *const target_hard_reg_names[] = {
 static const MIR_reg_t SP_HARD_REG = R15_HARD_REG;
 static const MIR_reg_t FP_HARD_REG = R11_HARD_REG;
 
-static int target_locs_num (MIR_reg_t loc, MIR_type_t type) { return type == MIR_T_LD ? 2 : 1; }
+static int target_locs_num (MIR_reg_t loc MIR_UNUSED, MIR_type_t type) {
+  return type == MIR_T_LD ? 2 : 1;
+}
 
 /* Hard regs not used in machinized code and for passing args, preferably call saved ones. */
 static const MIR_reg_t TEMP_INT_HARD_REG1 = R1_HARD_REG, TEMP_INT_HARD_REG2 = R9_HARD_REG;

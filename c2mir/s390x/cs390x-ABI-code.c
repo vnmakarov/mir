@@ -5,7 +5,8 @@
 
 typedef int target_arg_info_t;
 
-static void target_init_arg_vars (c2m_ctx_t c2m_ctx, target_arg_info_t *arg_info) {}
+static void target_init_arg_vars (c2m_ctx_t c2m_ctx MIR_UNUSED,
+                                  target_arg_info_t *arg_info MIR_UNUSED) {}
 
 static int target_return_by_addr_p (c2m_ctx_t c2m_ctx, struct type *ret_type) {
   return simple_return_by_addr_p (c2m_ctx, ret_type);
@@ -36,12 +37,14 @@ static int reg_aggregate_p (c2m_ctx_t c2m_ctx, struct type *arg_type) {
   return size == 1 || size == 2 || size == 4 || size == 8;
 }
 
-static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx, struct type *arg_type) {
+static MIR_type_t target_get_blk_type (c2m_ctx_t c2m_ctx MIR_UNUSED,
+                                       struct type *arg_type MIR_UNUSED) {
   return MIR_T_BLK; /* one BLK is enough */
 }
 
 static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
-                                  target_arg_info_t *arg_info, VARR (MIR_var_t) * arg_vars) {
+                                  target_arg_info_t *arg_info MIR_UNUSED,
+                                  VARR (MIR_var_t) * arg_vars) {
   MIR_var_t var;
   MIR_type_t type;
 
@@ -58,7 +61,7 @@ static void target_add_arg_proto (c2m_ctx_t c2m_ctx, const char *name, struct ty
 }
 
 static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
-                                    target_arg_info_t *arg_info, op_t arg) {
+                                    target_arg_info_t *arg_info MIR_UNUSED, op_t arg) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   op_t temp;
 
@@ -79,7 +82,7 @@ static void target_add_call_arg_op (c2m_ctx_t c2m_ctx, struct type *arg_type,
 }
 
 static int target_gen_gather_arg (c2m_ctx_t c2m_ctx, const char *name, struct type *arg_type,
-                                  decl_t param_decl, target_arg_info_t *arg_info) {
+                                  decl_t param_decl, target_arg_info_t *arg_info MIR_UNUSED) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_op_t param_op;

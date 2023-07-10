@@ -251,11 +251,11 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUSED) {
   memcpy (res, *(void **) va_arg_builtin (p, MIR_T_I64), s);
 }
 
-void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {
   struct s390x_va_list *va = p;
   va_list *vap = a;
 
@@ -263,7 +263,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   *va = *(struct s390x_va_list *) vap;
 }
 
-void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
+void va_end_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p MIR_UNUSED) {}
 
 /* Generation: fun (fun_addr, res_arg_addresses):
    save r6, r7, r14 (r15 + 48,112);
@@ -275,7 +275,7 @@ void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
    r0=mem[r7,<res_offset>]; res_reg=mem[r0]; ...
    restore r15; restore r6, r7, r14; return. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num MIR_UNUSED) {
   MIR_type_t type;
   int n_gpregs = 0, n_fpregs = 0, res_reg = 7, frame_size, disp, param_offset, blk_offset;
   uint32_t qwords, addr_reg;

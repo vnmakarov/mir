@@ -28,7 +28,7 @@ static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) {
   return loc >= F15_HARD_REG ? loc + 1 : loc + 2; /* coupled fp reg */
 }
 
-static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type MIR_UNUSED) {
   gen_assert (hard_reg <= MAX_HARD_REG);
   return ((R0_HARD_REG <= hard_reg && hard_reg <= R5_HARD_REG) || hard_reg == R14_HARD_REG
           || (F0_HARD_REG <= hard_reg && hard_reg <= F7_HARD_REG));
@@ -615,7 +615,7 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
   }
 }
 
-static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type,
+static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type MIR_UNUSED,
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   return ((MIR_disp_t) slot * 8 + S390X_STACK_HEADER_SIZE + param_save_area_size
@@ -635,9 +635,12 @@ static void set_prev_sp_reg (gen_ctx_t gen_ctx, MIR_insn_t anchor, int *prev_sp_
   }
 }
 
-static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx) { return FP_HARD_REG; }
+static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx MIR_UNUSED) {
+  return FP_HARD_REG;
+}
 
-static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_type_t type MIR_UNUSED,
+                                      MIR_disp_t offset MIR_UNUSED) {
   return TRUE;
 }
 
@@ -788,16 +791,16 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
       int gpr_val = 0, fpr_val = 0;
-      size_t disp = 0;
       MIR_var_t var;
 
+      disp = 0;
       assert (func->vararg_p && (va_op.mode == MIR_OP_VAR));
-      for (uint32_t i = 0; i < func->nargs; i++)
+      for (i = 0; i < func->nargs; i++)
         if (func->res_types[i] == MIR_T_LD) {
           if (gpr_val > 5) disp += 8;
           gpr_val++;
         }
-      for (uint32_t i = 0; i < func->nargs; i++) {
+      for (i = 0; i < func->nargs; i++) {
         var = VARR_GET (MIR_var_t, func->vars, i);
         if (var.type == MIR_T_F || var.type == MIR_T_D) {
           if (fpr_val > 4) disp += 8;
@@ -844,7 +847,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       uint32_t n_gpregs = 0, n_fregs = 0, ld_addr_n = 0;
 
       gen_assert (func->nres == MIR_insn_nops (ctx, insn));
-      for (size_t i = 0; i < func->nres; i++) {
+      for (i = 0; i < func->nres; i++) {
         gen_assert (insn->ops[i].mode == MIR_OP_VAR);
         res_type = func->res_types[i];
         if (res_type == MIR_T_LD) { /* ldmov f1,0(addr_reg);std f1,0(r2);std f3,8(r2): */
@@ -1503,8 +1506,8 @@ static int nth_uint16_p (uint64_t u, int n) { return !(u & ~(((uint64_t) 0xffff)
 
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop, n;
-  size_t nops = MIR_insn_nops (ctx, insn);
+  int n;
+  size_t nop, nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
   MIR_op_mode_t mode;
@@ -1563,7 +1566,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         u_p = ch == 'u';
         s_p = ch == 's';
         ch = *++p;
-        /* Fall through: */
+        /* fall through */
       default:
         gen_assert ('0' <= ch && ch <= '3');
         if (ch == '0') {
@@ -1648,7 +1651,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     case '8':
     case '9':
       n = start_ch - '0';
-      gen_assert (n < nop);
+      gen_assert (n < (int) nop);
       original = insn->ops[n];
       mode = op.mode;
       if (mode == MIR_OP_UINT) mode = MIR_OP_INT;
@@ -1891,7 +1894,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 's':
       case 'n':
         ch2 = *++p;
-        gen_assert ('0' <= ch2 && ch2 <= '2' && ch2 - '0' < nops);
+        gen_assert ('0' <= ch2 && ch2 <= '2' && ch2 - '0' < (int) nops);
         op = insn->ops[ch2 - '0'];
         gen_assert (op.mode == MIR_OP_VAR);
         reg = op.u.var;
@@ -1993,13 +1996,13 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         IMM = u & 0xffff;
         break;
       case 'I': {
-        uint64_t imm;
+        uint64_t imm_val;
 
         ch2 = *++p;
         gen_assert (ch2 == 'a');
         gen_assert (const_ref_num < 0);
-        imm = get_imm (gen_ctx, insn);
-        const_ref_num = setup_imm_addr (gen_ctx, imm);
+        imm_val = get_imm (gen_ctx, insn);
+        const_ref_num = setup_imm_addr (gen_ctx, imm_val);
         break;
       }
       case 'S':
@@ -2163,7 +2166,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   }
 }
 
-static int target_memory_ok_p (gen_ctx_t gen_ctx, MIR_op_t *op_ref) {
+static int target_memory_ok_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_op_t *op_ref) {
   if (op_ref->mode != MIR_OP_VAR_MEM) return FALSE;
   if (((op_ref->u.var_mem.type != MIR_T_U64 && op_ref->u.var_mem.type != MIR_T_U64)
        || op_ref->u.var_mem.base == MIR_NON_VAR || op_ref->u.var_mem.index == MIR_NON_VAR)
@@ -2195,7 +2198,7 @@ static void add_consts (gen_ctx_t gen_ctx) {
   }
 }
 
-static void target_split_insns (gen_ctx_t gen_ctx) {}
+static void target_split_insns (gen_ctx_t gen_ctx MIR_UNUSED) {}
 
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -2292,7 +2295,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   gen_setup_lrefs (gen_ctx, base);
 }
 
-static void target_change_to_direct_calls (MIR_context_t ctx) {}
+static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {}
 
 struct target_bb_version {
   uint8_t *base;
