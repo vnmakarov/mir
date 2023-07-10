@@ -5,6 +5,14 @@
 
 #include "mir.h"
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#error "pp64 big endian is not supported anymore"
+#endif
+
+#define PPC64_STACK_HEADER_SIZE 32
+#define PPC64_TOC_OFFSET 24
+#define PPC64_FUNC_DESC_LEN 0
+
 #define TARGET_NOP (24 << (32 - 6)) /* ori 0,0,0 */
 
 #define HREG_EL(h) h##_HARD_REG

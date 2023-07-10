@@ -55,16 +55,6 @@ SP,R31->+-- Back chain                                    (SP + 0)        (SP + 
 
 Originally SP(r1) and FP (r31) are the same but r1 can be changed by alloca */
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define PPC64_STACK_HEADER_SIZE 32
-#define PPC64_TOC_OFFSET 24
-#define PPC64_FUNC_DESC_LEN 0
-#else
-#define PPC64_STACK_HEADER_SIZE 48
-#define PPC64_TOC_OFFSET 40
-#define PPC64_FUNC_DESC_LEN 24
-#endif
-
 /* ppc64 has 3-ops insns */
 static const MIR_insn_code_t target_io_dup_op_insn_codes[] = {MIR_INSN_BOUND};
 
@@ -334,11 +324,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
     mem_size += type == MIR_T_LD ? 16 : 8;
     n_iregs += type == MIR_T_LD ? 2 : 1;
   }
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   if (vararg_p && mem_size < 64) mem_size = 64; /* to save all arg gprs  */
-#else
-  if (mem_size < 64) mem_size = 64; /* minimal param save area  */
-#endif
   if (param_save_area_size < mem_size) param_save_area_size = mem_size;
   n_iregs = n_fregs = 0;
   for (size_t i = 0; i < proto->nres; i++) {
@@ -1428,61 +1414,31 @@ static const struct pattern patterns[] = {
   {MIR_D2I, "r r", "o63 O815 ht32 rb1; o54 hs32 mt; o58 rt0 mt"},
   {MIR_F2D, "r r", "o63 O72 rt0 rb1"}, /* fmr rt,rb */
   {MIR_D2F, "r r", "o63 O12 rt0 rb1"}, /* frsp rt,rb */
-// i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
+                                       // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
   {MIR_CALL, "X h12 $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mtctr r12; bcctrl */
   {MIR_CALL, "X r $",
    "o31 O444 ha12 rs1 rb1; o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mr r12,r; mtctr r; bcctrl
                                                                        */
-#else
-  /* mr r2,r0; ld r0,0(r2); ld r2,8(r2); mtctr r0; bcctrl */
-  {MIR_CALL, "X h0 $",
-   "o31 O444 ha2 hs0 hb0; o58 ht0 ha2; o58 ht2 ha2 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; "
-   "o31 O444 ha0 hs0 hb0"},
-  /* ld r0,0(r); ld r2,8(r); mtctr r0; bcctrl */
-  {MIR_CALL, "X r $",
-   "o58 ht0 ra1; o58 ht2 ra1 i8; o31 O467 hs0 sr9; o19 O528 BO20 BI0 LK1; o31 O444 ha0 hs0 hb0"},
-#endif
 
   {MIR_RET, "$", "o19 O16 BO20 BI0"}, /* bclr */
 
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  {MIR_JCALL, "X r $",
-   "o58 ht12 ra1; o31 O467 hs12 sr9; o19 O528 BO20 BI0"}, /* ld r12,(r); mtctr r12; bcctr */
-#else
   {MIR_JCALL, "X r $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
-#endif
-  {MIR_JRET, "r $", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"}, /* mtctr r; bcctr */
+  {MIR_JRET, "r $", "o31 O467 rs0 sr9; o19 O528 BO20 BI0"},    /* mtctr r; bcctr */
 
-#if 0
-  /* ld r10,16(r1); subf r1,rt,r1; ldx r0,(r1,rt); std r10,16(r1); std r0,0(r1);
-     std r2,PPC64_TOC_OFFSET(r1); add rt,r1,PPC64_STACK_HEADER_SIZE+PARAM_AREA_SIZE: */
-#define ALLOCA_END                                               \
-  "o58 ht10 ha1 i16; o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
-  "o62 hs10 ha1 i16; o62 hs0 ha1;o62 hs2 ha1 at; o14 rt0 ha1 ih"
-#else
 /* subf r1,rt,r1; ldx r0,(r1,rt); std r0,0(r1);
    add rt,r1,PPC64_STACK_HEADER_SIZE+PARAM_AREA_SIZE: */
 #define ALLOCA_END                             \
   "o31 O40 ht1 ra0 hb1; o31 O21 ht0 ha1 rb0; " \
   "o62 hs0 ha1; o14 rt0 ha1 ih"
-#endif
   /* addi rt,ra,15;rldicr rt,rt,0,59; ... : */
   {MIR_ALLOCA, "r r", "o14 rt0 ra1 i15; o30 ra0 rs0 Sh0 Me59; " ALLOCA_END},
   /* mov rt,ia; ...: */
   {MIR_ALLOCA, "r ia", "o14 rt0 ha0 ia; " ALLOCA_END},
 
   {MIR_BSTART, "r", "o31 O444 ra0 hs1 hb1"}, /* or ra,r1,r1 */
-#if 0
-  /* ld r0,0(r1);ld r2,PPC64_TOC_OFFSET(r1);ld r10,16(sp);or r1,rs,rs
-     std r0,0(r1);std r2,PPC64_TOC_OFFSET(r1);std r10,16(sp): */
-  {MIR_BEND, "r", "o58 hs0 ha1;o58 hs2 ha1 at;o58 hs10 ha1 i16;o31 O444 ha1 rs0 rb0;"
-   "o62 hs0 ha1;o62 hs2 ha1 at;o62 hs10 ha1 i16"},
-#else
   /* ld r0,0(r1);or r1,rs,rs; std r0,0(r1): */
   {MIR_BEND, "r", "o58 hs0 ha1;o31 O444 ha1 rs0 rb0; o62 hs0 ha1"},
-#endif
 
   /* bl l4; mflr r0; rldicr r10,rt,3,60; add r10,r0,r10; ld r0,table-disp(r10); mtctr r0; bcctr;
      TableContent: */
@@ -1503,15 +1459,7 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
   } else if (code == MIR_LDMOV) { /* if mem base reg is R0 */
     *hr1 = R11_HARD_REG; /* don't use arg regs as ldmov can be used in param passing part */
   } else if (code == MIR_CALL || code == MIR_INLINE) {
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     *hr1 = R12_HARD_REG;
-#else
-    *hr1 = R2_HARD_REG;
-#endif
-#if 0
-  } else if (code == MIR_ALLOCA || code == MIR_BEND) {
-    *hr1 = R10_HARD_REG;
-#endif
   } else if (code == MIR_SWITCH) {
     *hr1 = R10_HARD_REG;
   }

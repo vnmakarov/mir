@@ -9,16 +9,6 @@
 
 #define VA_LIST_IS_ARRAY_P 1 /* one element which is a pointer to args */
 
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-#define PPC64_STACK_HEADER_SIZE 32
-#define PPC64_TOC_OFFSET 24
-#define PPC64_FUNC_DESC_LEN 0
-#else
-#define PPC64_STACK_HEADER_SIZE 48
-#define PPC64_TOC_OFFSET 40
-#define PPC64_FUNC_DESC_LEN 24
-#endif
-
 static void ppc64_push_func_desc (VARR (uint8_t) * *insn_varr);
 void (*ppc64_func_desc) (VARR (uint8_t) * *insn_varr) = ppc64_push_func_desc;
 
@@ -28,19 +18,9 @@ static void ppc64_push_func_desc (VARR (uint8_t) * *insn_varr) {
     VARR_PUSH (uint8_t, *insn_varr, ((uint8_t *) ppc64_func_desc)[i]);
 }
 
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-static void ppc64_redirect_func_desc (MIR_context_t ctx, void *desc, void *to) {
-  mir_assert (((uint64_t) desc & 0x3) == 0 && ((uint64_t) to & 0x3) == 0); /* alignment */
-  _MIR_change_code (ctx, desc, (uint8_t *) &to, sizeof (to));
-}
-#endif
-
 static void *ppc64_publish_func_and_redirect (MIR_context_t ctx, VARR (uint8_t) * insn_varr) {
   void *res
     = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, insn_varr), VARR_LENGTH (uint8_t, insn_varr));
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  ppc64_redirect_func_desc (ctx, res, (uint8_t *) res + PPC64_FUNC_DESC_LEN);
-#endif
   VARR_DESTROY (uint8_t, insn_varr);
   return res;
 }
@@ -102,16 +82,9 @@ static void ppc64_gen_jump (VARR (uint8_t) * insn_varr, unsigned int reg) {
 }
 
 static void ppc64_gen_call (VARR (uint8_t) * insn_varr, unsigned int reg) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  assert (reg != 0);
-  ppc64_gen_ld (insn_varr, 0, reg, 0, MIR_T_I64);                         /* 0 = func addr */
-  ppc64_gen_ld (insn_varr, 2, reg, 8, MIR_T_I64);                         /* r2 = TOC */
-  push_insn (insn_varr, (31 << 26) | (467 << 1) | (0 << 21) | (9 << 16)); /* mctr 0 */
-#else
   if (reg != 12) ppc64_gen_mov (insn_varr, 12, reg);                       /* 12 = func addr */
   push_insn (insn_varr, (31 << 26) | (467 << 1) | (12 << 21) | (9 << 16)); /* mctr 12 */
-#endif
-  push_insn (insn_varr, (19 << 26) | (528 << 1) | (20 << 21) | 1); /* bcctrl */
+  push_insn (insn_varr, (19 << 26) | (528 << 1) | (20 << 21) | 1);         /* bcctrl */
 }
 
 /* r11=addr_reg+addr_disp; r15=r1(sp)+sp_offset; r0=qwords-1;
@@ -170,11 +143,6 @@ static const int max_thunk_len = (7 * 4 + 8); /* 5 for r=addr, 2 for goto r, add
 
 void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descriptor: */
   VARR (uint8_t) * code;
-
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  ppc64_push_func_desc (&code);
-  return ppc64_publish_func_and_redirect (ctx, code);
-#else
   void *res;
 
   VARR_CREATE (uint8_t, code, 128);
@@ -182,7 +150,6 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
   return res;
-#endif
 }
 
 static const uint32_t thunk_code_end[] = {
@@ -191,11 +158,7 @@ static const uint32_t thunk_code_end[] = {
 };
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  ppc64_redirect_func_desc (ctx, thunk, to);
-#else
   VARR (uint8_t) * code;
-
   VARR_CREATE (uint8_t, code, 256);
   ppc64_gen_address (code, 12, to);
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
@@ -204,19 +167,14 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   push_insns (code, (uint32_t *) &to, sizeof (to));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
-#endif
 }
 
 static void *get_jump_addr (uint32_t *insns) {
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  return *(void **) insns;
-#else
   int i;
   for (i = 0; i < 8; i++)
     if (insns[i] == 0x4e800420) break; /* bctr */
   mir_assert (i < 8);
   return (void *) (insns[i + 1] | ((uint64_t) insns[i + 2] << 32));
-#endif
 }
 
 void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
@@ -237,9 +195,6 @@ void *va_arg_builtin (void *p, uint64_t t) {
   } else {
     va->arg_area++;
   }
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-  if (type == MIR_T_F || type == MIR_T_I32) a = (char *) a + 4; /* 2nd word of doubleword */
-#endif
   return a;
 }
 
