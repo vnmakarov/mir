@@ -632,26 +632,23 @@ main:	  func
 
 # MIR generator (file mir-gen.h)
   * Before use of MIR generator for given context you should initialize it by API function
-    `MIR_gen_init (MIR_context ctx, int gens_num)`.  `gens_num` defines how many generator instances you need.
-    Each generator instance can be used in a different thread to compile different MIR functions from the same context.
-    If you pass a negative or zero number `gens_num`, it will have the same effect as value `1`
+    `MIR_gen_init (MIR_context ctx)`
   * API function `MIR_gen_finish (MIR_context ctx)` frees all internal generator data (and its instances) for the context.
     If you want to generate code for the context again after the `MIR_gen_finish` call, you should call
     `MIR_gen_init` again first
-  * API function `void *MIR_gen (MIR_context ctx, int gen_num, MIR_item_t func_item)` generates machine code
-    of given MIR function in generator instance `gen_num` and returns an address to call it.  You can call
-    the code as usual C function by using this address as the called function address.
-    `gen_num`  should be a number in the range `0` .. `gens_num - 1` from corresponding `MIR_gen_init`
-  * API function `void MIR_gen_set_debug_file (MIR_context_t ctx, int gen_num, FILE *f)` sets up MIR generator
-    debug file to `f` for generator instance `gen_num`.
+  * API function `void *MIR_gen (MIR_context ctx, MIR_item_t func_item)` generates machine code
+    of given MIR function in generator and returns an address to call it.  You can call
+    the code as usual C function by using this address as the called function address
+  * API function `void MIR_gen_set_debug_file (MIR_context_t ctx, FILE *f)` sets up MIR generator
+    debug file to `f` for the generator.
     If it is not NULL a debugging and optimization information will be output to the file according to the
     current generator debug level.  It is useful mostly for MIR developers
-  * API function `void MIR_gen_set_debug_level (MIR_context_t ctx, int gen_num, level)` sets up MIR generator
-    debug level to `level` for generator instance `gen_num`.  The default level value is maximum possible level
+  * API function `void MIR_gen_set_debug_level (MIR_context_t ctx, level)` sets up MIR generator
+    debug level to `level` for the generator.  The default level value is maximum possible level
     for printing information as much as possible.  Negative level results in no output.  The function is useful
     mostly for MIR developers
-  * API function `void MIR_gen_set_optimize_level (MIR_context_t ctx, int gen_num, unsigned int level)` sets up optimization
-    level for MIR generator instance `gen_num`:
+  * API function `void MIR_gen_set_optimize_level (MIR_context_t ctx, unsigned int level)` sets up optimization
+    level for MIR generator:
     * `0` means only register allocator and machine code generator work
     * `1` means additional code selection task.  On this level MIR generator creates more compact and faster
       code than on zero level with practically on the same speed
