@@ -17,6 +17,40 @@
 #include <windows.h>
 #endif
 
+#ifndef C2MIR_PARALLEL
+#define C2MIR_PARALLEL 0
+#endif
+
+#if C2MIR_PARALLEL && defined(_WIN32) /* TODO: Win thread primitives ??? */
+#undef C2MIR_PARALLEL
+#define C2MIR_PARALLEL 0
+#endif
+
+#if C2MIR_PARALLEL
+#include <pthread.h>
+typedef pthread_mutex_t mir_mutex_t;
+typedef pthread_cond_t mir_cond_t;
+typedef pthread_attr_t mir_thread_attr_t;
+#define mir_thread_create(m, attr, f, arg) pthread_create (m, attr, f, arg)
+#define mir_thread_join(t, r) pthread_join (t, r)
+#define mir_mutex_init(m, a) pthread_mutex_init (m, a)
+#define mir_mutex_destroy(m) pthread_mutex_destroy (m)
+#define mir_mutex_lock(m) pthread_mutex_lock (m)
+#define mir_mutex_unlock(m) pthread_mutex_unlock (m)
+#define mir_cond_init(m, a) pthread_cond_init (m, a)
+#define mir_cond_destroy(m) pthread_cond_destroy (m)
+#define mir_cond_wait(c, m) pthread_cond_wait (c, m)
+#define mir_cond_signal(c) pthread_cond_signal (c)
+#define mir_cond_broadcast(c) pthread_cond_broadcast (c)
+#define mir_thread_attr_init(a) pthread_attr_init (a)
+#define mir_thread_attr_setstacksize(a, s) pthread_attr_setstacksize (a, s)
+#else
+#define mir_mutex_init(m, a) 0
+#define mir_mutex_destroy(m) 0
+#define mir_mutex_lock(m) 0
+#define mir_mutex_unlock(m) 0
+#endif
+
 #include "c2mir.h"
 #include "mir-gen.h"
 #include "real-time.h"
@@ -367,7 +401,7 @@ static void init_options (int argc, char *argv[]) {
   options.include_dirs = VARR_ADDR (char_ptr_t, headers);
   options.macro_commands_num = VARR_LENGTH (macro_command_t, macro_commands);
   options.macro_commands = VARR_ADDR (macro_command_t, macro_commands);
-  if (!MIR_PARALLEL_GEN || threads_num <= 1) threads_num = 0;
+  if (!C2MIR_PARALLEL || threads_num <= 1) threads_num = 0;
 }
 
 static int t_getc (void *data) {
@@ -451,7 +485,7 @@ static FILE *get_output_file_from_parts (const char **result_file_name, const ch
   return get_output_file (*result_file_name);
 }
 
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
 static void parallel_error (const char *message) {
   fprintf (stderr, "%s -- good bye\n", message);
   exit (1);
@@ -464,7 +498,7 @@ struct compiler {
   MIR_context_t ctx;
   int num, busy_p;
   struct input input;
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
   pthread_t compile_thread;
 #endif
 };
@@ -474,7 +508,7 @@ static struct compiler *compilers;
 
 static int result_code;
 
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
 
 static mir_mutex_t queue_mutex;
 static mir_cond_t compile_signal, done_signal;
@@ -530,7 +564,7 @@ static void *compile (void *arg) {
 
 static void init_compilers (void) {
   if (threads_num == 0) return;
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
   if (mir_mutex_init (&queue_mutex, NULL) != 0) {
     fprintf (stderr, "can not create a c2m thread lock -- bye!\n");
     exit (1);
@@ -549,7 +583,7 @@ static void init_compilers (void) {
     compiler->num = i;
     compiler->ctx = MIR_init ();
     c2mir_init (compiler->ctx);
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
     mir_thread_attr_t attr;
     if (mir_thread_attr_init (&attr) != 0
         || mir_thread_attr_setstacksize (&attr, 2 * 1024 * 1024) != 0) {
@@ -566,7 +600,7 @@ static void init_compilers (void) {
 
 static void finish_compilers (void) {
   if (threads_num == 0) return;
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
   if (mir_mutex_destroy (&queue_mutex) != 0 || mir_cond_destroy (&compile_signal) != 0
       || mir_cond_destroy (&done_signal) != 0) {  // ???
     parallel_error ("can not destroy compiler mutex or signals");
@@ -580,7 +614,7 @@ static void finish_compilers (void) {
   }
 }
 
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
 static void signal_compilers_to_finish (int cancel_p) {
   if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in mutex lock");
   if (cancel_p) {
@@ -596,7 +630,7 @@ static void signal_compilers_to_finish (int cancel_p) {
 
 static void send_to_compile (input_t *input) {
   if (input == NULL) { /* finish compilation */
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
     if (threads_num >= 1) {
       signal_compilers_to_finish (FALSE);
       for (int i = 0; i < threads_num; i++) mir_thread_join (compilers[i].compile_thread, NULL);
@@ -604,7 +638,7 @@ static void send_to_compile (input_t *input) {
 #endif
     return;
   }
-  if (!MIR_PARALLEL_GEN || threads_num == 0) {
+  if (!C2MIR_PARALLEL || threads_num == 0) {
     const char *result_file_name;
     FILE *f;
 
@@ -617,7 +651,7 @@ static void send_to_compile (input_t *input) {
     if (input->code_container != NULL) VARR_DESTROY (uint8_t, input->code_container);
     return;
   }
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
   if (mir_mutex_lock (&queue_mutex)) parallel_error ("error in c2m mutex lock");
   VARR_PUSH (input_t, inputs_to_compile, *input);
   if (mir_cond_broadcast (&compile_signal)) parallel_error ("error in c2m cond broadcast");
@@ -625,7 +659,7 @@ static void send_to_compile (input_t *input) {
 #endif
 }
 
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
 
 static void move_modules_main_context (MIR_context_t ctx) {
   MIR_module_t module, next_module;
@@ -678,7 +712,7 @@ int main (int argc, char *argv[], char *env[]) {
   options.prepro_output_file = NULL;
   init_options (argc, argv);
   main_ctx = MIR_init ();
-  if (!MIR_PARALLEL_GEN || threads_num <= 0) c2mir_init (main_ctx);
+  if (!C2MIR_PARALLEL || threads_num <= 0) c2mir_init (main_ctx);
   init_compilers ();
   result_code = 0;
   for (i = options.module_num = 0;; i++, options.module_num++) {
@@ -806,7 +840,7 @@ int main (int argc, char *argv[], char *env[]) {
     uint64_t (*fun_addr) (int, void *argv, char *env[]);
     double start_time;
 
-#if MIR_PARALLEL_GEN
+#if C2MIR_PARALLEL
     if (threads_num > 0) {
       for (i = 0; i < threads_num; i++) move_modules_main_context (compilers[i].ctx);
       sort_modules (main_ctx);
@@ -860,25 +894,21 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "exit code: %lu\n", (long unsigned) result_code);
         }
       } else {
-        int n_gen = gen_debug_level >= 0 || threads_num == 0 ? 1 : threads_num;
         int fun_argc = (int) VARR_LENGTH (char_ptr_t, exec_argv);
         const char **fun_argv = VARR_ADDR (char_ptr_t, exec_argv);
 
-        MIR_gen_init (main_ctx, n_gen);
-        for (int n = 0; n < n_gen; n++) {
-          if (optimize_level >= 0)
-            MIR_gen_set_optimize_level (main_ctx, n, (unsigned) optimize_level);
-          if (gen_debug_level >= 0) {
-            MIR_gen_set_debug_file (main_ctx, n, stderr);
-            MIR_gen_set_debug_level (main_ctx, n, gen_debug_level);
-          }
+        MIR_gen_init (main_ctx);
+        if (optimize_level >= 0) MIR_gen_set_optimize_level (main_ctx, (unsigned) optimize_level);
+        if (gen_debug_level >= 0) {
+          MIR_gen_set_debug_file (main_ctx, stderr);
+          MIR_gen_set_debug_level (main_ctx, gen_debug_level);
         }
         MIR_link (main_ctx,
-                  gen_exec_p ? (n_gen > 1 ? MIR_set_parallel_gen_interface : MIR_set_gen_interface)
+                  gen_exec_p        ? MIR_set_gen_interface
                   : lazy_gen_exec_p ? MIR_set_lazy_gen_interface
                                     : MIR_set_lazy_bb_gen_interface,
                   import_resolver);
-        fun_addr = gen_exec_p && n_gen > 1 ? MIR_gen (main_ctx, 0, main_func) : main_func->addr;
+        fun_addr = main_func->addr;
         start_time = real_usec_time ();
         result_code = fun_addr (fun_argc, fun_argv, env);
         if (options.verbose_p) {
@@ -893,7 +923,7 @@ int main (int argc, char *argv[], char *env[]) {
   close_cmdline_libs ();
   close_std_libs ();
   finish_compilers ();
-  if (!MIR_PARALLEL_GEN || threads_num <= 0) c2mir_finish (main_ctx);
+  if (!C2MIR_PARALLEL || threads_num <= 0) c2mir_finish (main_ctx);
   MIR_finish (main_ctx);
   VARR_DESTROY (char, temp_string);
   VARR_DESTROY (char_ptr_t, headers);

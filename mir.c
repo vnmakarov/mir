@@ -30,9 +30,6 @@ struct interp_ctx;
 struct MIR_context {
   struct gen_ctx *gen_ctx;     /* should be the 1st member */
   struct c2mir_ctx *c2mir_ctx; /* should be the 2nd member */
-#if MIR_PARALLEL_GEN
-  mir_mutex_t ctx_mutex;
-#endif
   MIR_error_func_t error_func;
   int func_redef_permission_p;        /* when true loaded func can be redfined lately */
   VARR (size_t) * insn_nops;          /* constant after initialization */
@@ -61,7 +58,6 @@ struct MIR_context {
   void *wrapper_end_addr; /* used by generator */
 };
 
-#define ctx_mutex ctx->ctx_mutex
 #define error_func ctx->error_func
 #define func_redef_permission_p ctx->func_redef_permission_p
 #define unspec_protos ctx->unspec_protos
@@ -718,10 +714,6 @@ static void init_module (MIR_context_t ctx, MIR_module_t m, const char *name) {
 static void code_init (MIR_context_t ctx);
 static void code_finish (MIR_context_t ctx);
 
-static void parallel_error (MIR_context_t ctx, const char *err_message) {
-  MIR_get_error_func (ctx) (MIR_parallel_error, err_message);
-}
-
 double _MIR_get_api_version (void) { return MIR_API_VERSION; }
 
 static void hard_reg_name_init (MIR_context_t ctx);
@@ -742,7 +734,6 @@ MIR_context_t _MIR_init (void) {
   ctx->scan_ctx = NULL;
   ctx->hard_reg_ctx = NULL;
   ctx->interp_ctx = NULL;
-  if (mir_mutex_init (&ctx_mutex, NULL)) parallel_error (ctx, "error in mutex init");
 #ifndef NDEBUG
   for (MIR_insn_code_t c = 0; c < MIR_INVALID_INSN; c++) mir_assert (c == insn_descs[c].code);
 #endif
@@ -903,7 +894,6 @@ void MIR_finish (MIR_context_t ctx) {
                               curr_module->name);
   free (ctx->string_ctx);
   free (ctx->alias_ctx);
-  if (mir_mutex_destroy (&ctx_mutex)) parallel_error (ctx, "error in mutex destroy");
   free (ctx);
   ctx = NULL;
 }
@@ -1497,18 +1487,12 @@ MIR_reg_t MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_
 /* Two parallel version functions for the generator: */
 MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                              const char *name) {
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
-  MIR_reg_t reg = MIR_new_func_reg (ctx, func, type, name);
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
-  return reg;
+  return MIR_new_func_reg (ctx, func, type, name);
 }
 
 MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
                                     const char *name, const char *hard_reg_name) {
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
-  MIR_reg_t reg = MIR_new_global_func_reg (ctx, func, type, name, hard_reg_name);
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
-  return reg;
+  return MIR_new_global_func_reg (ctx, func, type, name, hard_reg_name);
 }
 
 static reg_desc_t *find_rd_by_name (MIR_context_t ctx MIR_UNUSED, const char *name,
@@ -2385,12 +2369,7 @@ static MIR_insn_t create_label (MIR_context_t ctx, int64_t label_num) {
 
 MIR_insn_t MIR_new_label (MIR_context_t ctx) { return create_label (ctx, ++curr_label_num); }
 
-MIR_insn_t _MIR_new_label (MIR_context_t ctx) {
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
-  MIR_insn_t label = MIR_new_label (ctx);
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
-  return label;
-}
+MIR_insn_t _MIR_new_label (MIR_context_t ctx) { return MIR_new_label (ctx); }
 
 void _MIR_free_insn (MIR_context_t ctx MIR_UNUSED, MIR_insn_t insn) { free (insn); }
 
@@ -2413,15 +2392,7 @@ static MIR_reg_t new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t fu
 }
 
 MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type, MIR_func_t func) {
-  MIR_reg_t temp;
-
-  /* It can be used by generator in parallel from different processed
-     funcs in the same ctx and uses data, e.g. string tab, common for
-     ctx.  So it should be thread safe.  */
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
-  temp = new_temp_reg (ctx, type, func);
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
-  return temp;
+  return new_temp_reg (ctx, type, func);
 }
 
 static reg_desc_t *get_func_rd_by_name (MIR_context_t ctx, const char *reg_name, MIR_func_t func) {
@@ -4254,7 +4225,6 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   MIR_module_t saved_module;
 
   va_start (argp, nargs);
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
   saved_module = curr_module;
   for (i = 0; i < nargs; i++) {
     args[i].type = va_arg (argp, MIR_type_t);
@@ -4272,7 +4242,6 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
         for (i = 0; i < nargs; i++)
           if (args[i].type != VARR_GET (MIR_var_t, proto_item->u.proto->args, i).type) break;
         if (i >= nargs) {
-          if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
           return proto_item;
         }
       }
@@ -4287,7 +4256,6 @@ MIR_item_t _MIR_builtin_proto (MIR_context_t ctx, MIR_module_t module, const cha
   DLIST_REMOVE (MIR_item_t, curr_module->items, proto_item);
   DLIST_PREPEND (MIR_item_t, curr_module->items, proto_item); /* make it first in the list */
   curr_module = saved_module;
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
   return proto_item;
 }
 
@@ -4296,7 +4264,6 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
   MIR_item_t item, ref_item;
   MIR_module_t saved_module = curr_module;
 
-  if (mir_mutex_lock (&ctx_mutex)) parallel_error (ctx, "error in mutex lock");
   name = _MIR_uniq_string (ctx, name);
   if ((ref_item = item_tab_find (ctx, name, &environment_module)) != NULL) {
     if (ref_item->item_type != MIR_import_item || ref_item->addr != addr)
@@ -4328,7 +4295,6 @@ MIR_item_t _MIR_builtin_func (MIR_context_t ctx, MIR_module_t module, const char
     item->ref_def = ref_item;
     curr_module = saved_module;
   }
-  if (mir_mutex_unlock (&ctx_mutex)) parallel_error (ctx, "error in mutex unlock");
   return item;
 }
 
@@ -4421,14 +4387,10 @@ typedef struct code_holder code_holder_t;
 DEF_VARR (code_holder_t);
 
 struct machine_code_ctx {
-#if MIR_PARALLEL_GEN
-  mir_mutex_t code_mutex;
-#endif
   VARR (code_holder_t) * code_holders;
   size_t page_size;
 };
 
-#define code_mutex ctx->machine_code_ctx->code_mutex
 #define code_holders ctx->machine_code_ctx->code_holders
 #define page_size ctx->machine_code_ctx->page_size
 
@@ -4493,10 +4455,8 @@ uint8_t *_MIR_publish_code (MIR_context_t ctx, const uint8_t *code,
   code_holder_t *ch_ptr;
   uint8_t *res = NULL;
 
-  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   if ((ch_ptr = get_last_code_holder (ctx, code_len)) != NULL)
     res = add_code (ctx, ch_ptr, code, code_len);
-  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
   return res;
 }
 
@@ -4517,12 +4477,10 @@ void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
 
   start = (size_t) addr / page_size * page_size;
   len = (size_t) addr + code_len - start;
-  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   reloc.offset = 0;
   reloc.value = code;
   _MIR_set_code (start, len, addr, 1, &reloc, code_len);
   _MIR_flush_code_cache (addr, addr + code_len);
-  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 
 void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
@@ -4534,10 +4492,8 @@ void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
     if (max_offset < relocs[i].offset) max_offset = relocs[i].offset;
   start = (size_t) base / page_size * page_size;
   len = (size_t) base + max_offset + sizeof (void *) - start;
-  if (mir_mutex_lock (&code_mutex)) parallel_error (ctx, "error in mutex lock");
   _MIR_set_code (start, len, base, nloc, relocs, 0);
   _MIR_flush_code_cache (base, base + max_offset + sizeof (void *));
-  if (mir_mutex_unlock (&code_mutex)) parallel_error (ctx, "error in mutex unlock");
 }
 
 void _MIR_update_code (MIR_context_t ctx, uint8_t *base, size_t nloc, ...) { /* thread safe */
@@ -4565,11 +4521,9 @@ static void code_init (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, 128);
-  if (mir_mutex_init (&code_mutex, NULL)) parallel_error (ctx, "error in mutex init");
 }
 
 static void code_finish (MIR_context_t ctx) {
-  if (mir_mutex_destroy (&code_mutex)) parallel_error (ctx, "error in mutex destroy");
   while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
     code_holder_t ch = VARR_POP (code_holder_t, code_holders);
     mem_unmap (ch.start, ch.bound - ch.start);
@@ -6919,7 +6873,7 @@ static void scan_finish (MIR_context_t ctx) {
 #define pclose _pclose
 #endif
 
-void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len) {
+void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len) {
   size_t i;
   int ch;
   char cfname[50];
@@ -6931,7 +6885,7 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
 #endif
 
   if (name != NULL) fprintf (stderr, "%s:", name);
-  sprintf (cfname, "_mir_%d_%lu.c", index, (unsigned long) getpid ());
+  sprintf (cfname, "_mir_%lu.c", (unsigned long) getpid ());
   if ((f = fopen (cfname, "w")) == NULL) return;
 #if defined(__APPLE__)
   fprintf (f, "unsigned char code[] = {");
@@ -6949,7 +6903,7 @@ void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len
            cfname, cfname, cfname, cfname, cfname);
 #endif
 #else
-  sprintf (bfname, "_mir_%d_%lu.bin", index, (unsigned long) getpid ());
+  sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
   if ((bf = fopen (bfname, "w")) == NULL) return;
   fprintf (f, "void code (void) {}\n");
   for (i = 0; i < code_len; i++) fputc (code[i], bf);

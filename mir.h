@@ -41,15 +41,6 @@ static inline int mir_assert (int cond) { return 0 && cond; }
 #define MIR_NO_SCAN 0
 #endif
 
-#ifndef MIR_PARALLEL_GEN
-#define MIR_PARALLEL_GEN 0
-#endif
-
-#if MIR_PARALLEL_GEN && defined(_WIN32) /* TODO: Win thread primitives ??? */
-#undef MIR_PARALLEL_GEN
-#define MIR_PARALLEL_GEN 0
-#endif
-
 #ifdef __GNUC__
 #define MIR_UNUSED __attribute__ ((unused))
 #else
@@ -72,7 +63,7 @@ typedef enum MIR_error_type {
   REP5 (ERR_EL, func, vararg_func, nested_func, wrong_param_value, hard_reg),
   REP5 (ERR_EL, reserved_name, import_export, undeclared_func_reg, repeated_decl, reg_type),
   REP6 (ERR_EL, wrong_type, unique_reg, undeclared_op_ref, ops_num, call_op, unspec_op),
-  REP7 (ERR_EL, wrong_lref, ret, op_mode, out_op, invalid_insn, ctx_change, parallel)
+  REP6 (ERR_EL, wrong_lref, ret, op_mode, out_op, invalid_insn, ctx_change)
 } MIR_error_type_t;
 
 #ifdef __GNUC__
@@ -83,31 +74,6 @@ typedef enum MIR_error_type {
 
 typedef void MIR_NO_RETURN (*MIR_error_func_t) (MIR_error_type_t error_type, const char *format,
                                                 ...);
-
-#if MIR_PARALLEL_GEN
-#include <pthread.h>
-typedef pthread_mutex_t mir_mutex_t;
-typedef pthread_cond_t mir_cond_t;
-typedef pthread_attr_t mir_thread_attr_t;
-#define mir_thread_create(m, attr, f, arg) pthread_create (m, attr, f, arg)
-#define mir_thread_join(t, r) pthread_join (t, r)
-#define mir_mutex_init(m, a) pthread_mutex_init (m, a)
-#define mir_mutex_destroy(m) pthread_mutex_destroy (m)
-#define mir_mutex_lock(m) pthread_mutex_lock (m)
-#define mir_mutex_unlock(m) pthread_mutex_unlock (m)
-#define mir_cond_init(m, a) pthread_cond_init (m, a)
-#define mir_cond_destroy(m) pthread_cond_destroy (m)
-#define mir_cond_wait(c, m) pthread_cond_wait (c, m)
-#define mir_cond_signal(c) pthread_cond_signal (c)
-#define mir_cond_broadcast(c) pthread_cond_broadcast (c)
-#define mir_thread_attr_init(a) pthread_attr_init (a)
-#define mir_thread_attr_setstacksize(a, s) pthread_attr_setstacksize (a, s)
-#else
-#define mir_mutex_init(m, a) 0
-#define mir_mutex_destroy(m) 0
-#define mir_mutex_lock(m) 0
-#define mir_mutex_unlock(m) 0
-#endif
 
 #define INSN_EL(i) MIR_##i
 
@@ -753,7 +719,7 @@ extern void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to);
 extern void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address);
 
 extern int _MIR_name_char_p (MIR_context_t ctx, int ch, int first_p);
-extern void _MIR_dump_code (const char *name, int index, uint8_t *code, size_t code_len);
+extern void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len);
 
 extern int _MIR_get_hard_reg (MIR_context_t ctx, const char *hard_reg_name);
 extern void *_MIR_get_module_global_var_hard_regs (MIR_context_t ctx, MIR_module_t module);

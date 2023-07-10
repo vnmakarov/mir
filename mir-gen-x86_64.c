@@ -2884,7 +2884,7 @@ static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
     } else if (insn->code != MIR_USE) {
       ind = find_insn_pattern (gen_ctx, insn, &max_insn_size);
       if (ind < 0) {
-        fprintf (stderr, "%d: fatal failure in matching insn:", gen_ctx->gen_num);
+        fprintf (stderr, "Fatal failure in matching insn:");
         MIR_output_insn (ctx, stderr, insn, curr_func_item->u.func, TRUE);
         exit (1);
       }
@@ -2969,14 +2969,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
 }
 
 static void target_change_to_direct_calls (MIR_context_t ctx) {
-  struct all_gen_ctx *all_gen_ctx = *all_gen_ctx_loc (ctx);
-  gen_ctx_t gen_ctx = &all_gen_ctx->gen_ctx[0];
-  if (all_gen_ctx->gens_num > 1) { /* collect all func refs in zeroth gen_ctx */
-    for (int i = 1; i < all_gen_ctx->gens_num; i++)
-      while (VARR_LENGTH (call_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->call_refs) != 0)
-        VARR_PUSH (call_ref_t, gen_ctx->target_ctx->call_refs,
-                   VARR_POP (call_ref_t, all_gen_ctx->gen_ctx[i].target_ctx->call_refs));
-  }
+  gen_ctx_t gen_ctx = *gen_ctx_loc (ctx);
   size_t len = VARR_LENGTH (call_ref_t, gen_ctx->target_ctx->call_refs);
   if (len == 0) return;
   call_ref_t *call_refs_addr = VARR_ADDR (call_ref_t, gen_ctx->target_ctx->call_refs);

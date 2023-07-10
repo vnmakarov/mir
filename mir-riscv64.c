@@ -183,7 +183,7 @@ static void redirect_thunk (MIR_context_t ctx, void *thunk, void *to, int temp_h
   _MIR_change_code (ctx, (uint8_t *) thunk, (uint8_t *) insns, len);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("thunk", 0, thunk, len);
+    _MIR_dump_code ("thunk", thunk, len);
 #endif
 }
 
@@ -531,7 +531,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("ffi:", 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("ffi:", VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;
@@ -761,7 +761,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code (func->name, 0, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code (func->name, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   VARR_DESTROY (uint8_t, code2);
@@ -884,7 +884,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   mir_mutex_unlock (&code_mutex);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("wrapper:", 0, res_code, VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("wrapper:", res_code, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res_code;
@@ -932,7 +932,7 @@ void *_MIR_get_wrapper_end (MIR_context_t ctx) {
   res_code = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("wrapper end:", 0, res_code, VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("wrapper end:", res_code, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res_code;
@@ -1112,7 +1112,7 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   redirect_thunk (ctx, (uint8_t *) res + 8, handler, T6_HARD_REG);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("bb thunk:", 0, res, VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("bb thunk:", res, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res;
@@ -1172,7 +1172,7 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   res_code = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
-    _MIR_dump_code ("bb wrapper:", 0, res_code, VARR_LENGTH (uint8_t, code));
+    _MIR_dump_code ("bb wrapper:", res_code, VARR_LENGTH (uint8_t, code));
 #endif
   VARR_DESTROY (uint8_t, code);
   return res_code;
