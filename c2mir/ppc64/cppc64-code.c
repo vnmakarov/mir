@@ -18,7 +18,8 @@ static string_include_t standard_includes[]
 
 #define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) ppc64_adjust_var_alignment (c2m_ctx, align, type)
 
-static int ppc64_adjust_var_alignment (c2m_ctx_t c2m_ctx, int align, struct type *type) {
+static int ppc64_adjust_var_alignment (c2m_ctx_t c2m_ctx MIR_UNUSED, int align MIR_UNUSED,
+                                       struct type *type MIR_UNUSED) {
   return align;
 }
 

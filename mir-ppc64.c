@@ -163,7 +163,7 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   ppc64_gen_address (code, 12, to);
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
   mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
-              && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+              && VARR_LENGTH (uint8_t, code) <= (size_t) max_thunk_len);
   push_insns (code, (uint32_t *) &to, sizeof (to));
   _MIR_change_code (ctx, thunk, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
@@ -198,14 +198,14 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUSED) {
   struct ppc64_va_list *va = p;
   void *a = va->arg_area;
   memcpy (res, a, s);
   va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
 }
 
-void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {
   struct ppc64_va_list **va = p;
   va_list *vap = a;
 
@@ -213,7 +213,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   *va = (struct ppc64_va_list *) vap;
 }
 
-void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
+void va_end_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p MIR_UNUSED) {}
 
 /* Generation: fun (fun_addr, res_arg_addresses):
    save lr (r1 + 16); allocate and form minimal stack frame (with necessary param area); save
@@ -497,7 +497,7 @@ static void redirect_bb_thunk (MIR_context_t ctx, VARR (uint8_t) * code, void *s
     ppc64_gen_address (code, 12, to); /* r12 = to */
     push_insns (code, thunk_code_end, sizeof (thunk_code_end));
     mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
-                && VARR_LENGTH (uint8_t, code) <= max_thunk_len);
+                && VARR_LENGTH (uint8_t, code) <= (size_t) max_thunk_len);
   }
   _MIR_change_code (ctx, start, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
 }
@@ -530,7 +530,7 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
 
   /* find jump code offset (see ppc64_gen_address): */
   for (i = 0; i <= 5; i++) {
-    if ((opcode = insns[i] >> 26) == PPC_JUMP_OPCODE) break; /* uncond branch */
+    if ((opcode = insns[i] >> 26) == (uint32_t) PPC_JUMP_OPCODE) break; /* uncond branch */
     if ((opcode == LI_OPCODE || opcode == LIS_OPCODE
          || opcode == XOR_OPCODE) /* (li|lis|xor) r12, ... */
         && ((insns[i] >> 21) & 0x1f) == 12)

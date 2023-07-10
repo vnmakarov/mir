@@ -68,7 +68,7 @@ static inline int target_fixed_hard_reg_p (MIR_reg_t hard_reg) {
           || hard_reg == TEMP_LDOUBLE_HARD_REG1 || hard_reg == TEMP_LDOUBLE_HARD_REG2);
 }
 
-static int target_locs_num (MIR_reg_t loc, MIR_type_t type) {
+static int target_locs_num (MIR_reg_t loc MIR_UNUSED, MIR_type_t type) {
   return /*loc > MAX_HARD_REG && */ type == MIR_T_LD ? 2 : 1;
 }
 

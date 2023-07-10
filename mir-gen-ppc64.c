@@ -24,15 +24,19 @@ static void fancy_abort (int code) {
 
 static const MIR_reg_t LINK_HARD_REG = LR_HARD_REG;
 
-static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
+static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type MIR_UNUSED, int n) {
+  return loc + n;
+}
 
-static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
+static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type MIR_UNUSED) {
   assert (hard_reg <= MAX_HARD_REG);
   return ((R0_HARD_REG <= hard_reg && hard_reg <= R13_HARD_REG)
           || (F0_HARD_REG <= hard_reg && hard_reg <= F13_HARD_REG));
 }
 
-static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx) { return FP_HARD_REG; }
+static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx MIR_UNUSED) {
+  return FP_HARD_REG;
+}
 
 /* Stack layout (r1(sp) refers to the last reserved stack slot
    address) from higher address to lower address memory:
@@ -563,7 +567,7 @@ static int get_builtin (gen_ctx_t gen_ctx, MIR_insn_code_t code, MIR_item_t *pro
   }
 }
 
-static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type,
+static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type MIR_UNUSED,
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   return ((MIR_disp_t) slot * 8 + PPC64_STACK_HEADER_SIZE + param_save_area_size);
@@ -579,7 +583,8 @@ static void set_prev_sp_op (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_op_t *prev
   }
 }
 
-static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_type_t type MIR_UNUSED,
+                                      MIR_disp_t offset MIR_UNUSED) {
   return TRUE;
 }
 
@@ -765,7 +770,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       uint32_t n_gpregs = 0, n_fregs = 0;
 
       assert (func->nres == MIR_insn_nops (ctx, insn));
-      for (size_t i = 0; i < func->nres; i++) {
+      for (i = 0; i < func->nres; i++) {
         assert (insn->ops[i].mode == MIR_OP_VAR);
         res_type = func->res_types[i];
         if (((res_type == MIR_T_F || res_type == MIR_T_D) && n_fregs < 4)
@@ -1516,8 +1521,7 @@ static int negative32_p (uint64_t u, uint64_t *n) {
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn,
                             int use_short_label_p) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop;
-  size_t nops = MIR_insn_nops (ctx, insn);
+  size_t nop, nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
   MIR_op_t op;
@@ -1596,7 +1600,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         u_p = ch == 'u';
         s_p = ch == 's';
         ch = *++p;
-        /* Fall through: */
+        /* fall through */
       default:
         gen_assert ('0' <= ch && ch <= '3');
         if (ch == '0') {
@@ -1826,7 +1830,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (start_ch == 'h') {
           reg = read_dec (&p);
         } else {
-          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < insn->nops);
+          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < (int) insn->nops);
           op = insn->ops[ch - '0'];
           gen_assert (op.mode == MIR_OP_VAR);
           reg = op.u.var + (start_ch == 'n' ? 1 : 0);
@@ -1917,19 +1921,19 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           if (ch2 == 'd') {
             ch2 = *++p;
             gen_assert (ch2 == 's' && ra < 0 && disp4 < 0);
-            ra = op.u.var_mem.base;
-            if (ra == MIR_NON_VAR) ra = R0_HARD_REG;
+            ra = (int) op.u.var_mem.base;
+            if (op.u.var_mem.base == MIR_NON_VAR) ra = R0_HARD_REG;
             disp4 = op.u.var_mem.disp & 0xffff;
             gen_assert ((disp4 & 0x3) == 0);
           } else {
             --p;
             gen_assert (ra < 0 && rb < 0);
-            ra = op.u.var_mem.base;
-            rb = op.u.var_mem.index;
-            if (rb == MIR_NON_VAR) {
+            ra = (int) op.u.var_mem.base;
+            rb = (int) op.u.var_mem.index;
+            if (op.u.var_mem.index == MIR_NON_VAR) {
               rb = ra;
               ra = R0_HARD_REG;
-            } else if (ra == MIR_NON_VAR) {
+            } else if (op.u.var_mem.base == MIR_NON_VAR) {
               ra = R0_HARD_REG;
             } else if (ra == R0_HARD_REG) {
               ra = rb;
@@ -1987,15 +1991,15 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           if (ch2 == 'd') {
             ch2 = *++p;
             gen_assert (ch2 == 's' && ra < 0 && disp4 < 0);
-            ra = op.u.var_mem.base;
-            if (ra == MIR_NON_VAR) ra = R0_HARD_REG;
+            ra = (int) op.u.var_mem.base;
+            if (op.u.var_mem.base == MIR_NON_VAR) ra = R0_HARD_REG;
             disp4 = op.u.var_mem.disp & 0xffff;
             gen_assert ((disp4 & 0x3) == 0);
           } else {
             if (ch2 != 'n') --p;
             gen_assert (ra < 0 && disp < 0);
-            ra = op.u.var_mem.base;
-            if (ra == MIR_NON_VAR) ra = R0_HARD_REG;
+            ra = (int) op.u.var_mem.base;
+            if (op.u.var_mem.base == MIR_NON_VAR) ra = R0_HARD_REG;
             disp = (op.u.var_mem.disp + (ch2 != 'n' ? 0 : 8)) & 0xffff;
           }
         }
@@ -2024,7 +2028,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           break;
         }
         p--;
-        /* fall through: */
+        /* fall through */
       case 'u':
       case 'I':
       case 'U':
@@ -2036,7 +2040,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 'x':
       case 'z': {
         int ok_p;
-        uint64_t v, n;
+        uint64_t v;
 
         op = insn->ops[nops - 1];
         gen_assert (op.mode == MIR_OP_INT || op.mode == MIR_OP_UINT || op.mode == MIR_OP_REF);
@@ -2049,10 +2053,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
           v = (uint64_t) op.u.ref->addr;
         }
         if (start_ch == 'x') {
-          ok_p = negative32_p (v, &n);
-          n = 32 - n;
+          uint64_t num;
+          ok_p = negative32_p (v, &num);
+          num = 32 - num;
           gen_assert (Mb < 0 && ok_p);
-          Mb = ((n & 0x1f) << 1) | ((n >> 5) & 1);
+          Mb = ((num & 0x1f) << 1) | ((num >> 5) & 1);
         } else {
           gen_assert (imm < 0);
           n = dec_value (*++p);
@@ -2473,7 +2478,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   gen_setup_lrefs (gen_ctx, base);
 }
 
-static void target_change_to_direct_calls (MIR_context_t ctx) {}
+static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {}
 
 struct target_bb_version {
   uint8_t *base;
