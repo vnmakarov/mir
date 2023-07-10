@@ -15,7 +15,9 @@ static void fancy_abort (int code) {
 static const MIR_reg_t FP_HARD_REG = R29_HARD_REG;
 static const MIR_reg_t LINK_HARD_REG = R30_HARD_REG;
 
-static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type, int n) { return loc + n; }
+static inline MIR_reg_t target_nth_loc (MIR_reg_t loc, MIR_type_t type MIR_UNUSED, int n) {
+  return loc + n;
+}
 
 static inline int target_call_used_hard_reg_p (MIR_reg_t hard_reg, MIR_type_t type) {
   assert (hard_reg <= MAX_HARD_REG);
@@ -124,7 +126,9 @@ static MIR_insn_t gen_mov (gen_ctx_t gen_ctx, MIR_insn_t anchor, MIR_insn_code_t
   return insn;
 }
 
-static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx) { return FP_HARD_REG; }
+static MIR_reg_t target_get_stack_slot_base_reg (gen_ctx_t gen_ctx MIR_UNUSED) {
+  return FP_HARD_REG;
+}
 
 static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset);
 
@@ -720,7 +724,7 @@ struct target_ctx {
 #define abs_address_locs gen_ctx->target_ctx->abs_address_locs
 #define relocs gen_ctx->target_ctx->relocs
 
-static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type,
+static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t type MIR_UNUSED,
                                                 MIR_reg_t slot) {
   /* slot is 0, 1, ... */
   size_t offset = curr_func_item->u.func->vararg_p || block_arg_func_p ? 32 : 16;
@@ -728,7 +732,8 @@ static MIR_disp_t target_get_stack_slot_offset (gen_ctx_t gen_ctx, MIR_type_t ty
   return ((MIR_disp_t) slot * 8 + offset);
 }
 
-static int target_valid_mem_offset_p (gen_ctx_t gen_ctx, MIR_type_t type, MIR_disp_t offset) {
+static int target_valid_mem_offset_p (gen_ctx_t gen_ctx MIR_UNUSED, MIR_type_t type,
+                                      MIR_disp_t offset) {
   int scale;
   switch (type) {
   case MIR_T_I8:
@@ -968,7 +973,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       uint32_t n_iregs = 0, n_vregs = 0;
 
       assert (func->nres == MIR_insn_nops (ctx, insn));
-      for (size_t i = 0; i < func->nres; i++) {
+      for (i = 0; i < func->nres; i++) {
         assert (insn->ops[i].mode == MIR_OP_VAR);
         res_type = func->res_types[i];
         if ((res_type == MIR_T_F || res_type == MIR_T_D || res_type == MIR_T_LD) && n_vregs < 8) {
@@ -1893,8 +1898,7 @@ static int lshift_const_p (int64_t v, int short_p, int *immr, int *imms) {
 
 static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_insn_t insn) {
   MIR_context_t ctx = gen_ctx->ctx;
-  int nop;
-  size_t nops = MIR_insn_nops (ctx, insn);
+  size_t nop, nops = MIR_insn_nops (ctx, insn);
   const char *p;
   char ch, start_ch;
   MIR_op_t op;
@@ -1955,7 +1959,7 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
         u_p = ch == 'u';
         s_p = ch == 's';
         ch = *++p;
-        /* Fall through: */
+        /* fall through */
       default:
         gen_assert ('0' <= ch && ch <= '3');
         scale = 1 << (ch - '0');
@@ -2205,7 +2209,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         if (start_ch == 'h') {
           reg = read_hex (&p);
         } else {
-          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < insn->nops);
+          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < (int) insn->nops);
           op = insn->ops[ch - '0'];
           gen_assert (op.mode == MIR_OP_VAR);
           reg = op.u.var;
@@ -2234,32 +2238,32 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         scale = op.u.var_mem.scale;
         break;
       case 'M': {
-        int scale = 1;
+        int dsize = 1;
 
         op = insn->ops[0].mode == MIR_OP_VAR_MEM ? insn->ops[0] : insn->ops[1];
         switch (op.u.var_mem.type) {
         case MIR_T_I8:
-        case MIR_T_U8: scale = 1; break;
+        case MIR_T_U8: dsize = 1; break;
         case MIR_T_I16:
-        case MIR_T_U16: scale = 2; break;
+        case MIR_T_U16: dsize = 2; break;
 #if MIR_PTR32
         case MIR_T_P:
 #endif
         case MIR_T_I32:
         case MIR_T_U32:
-        case MIR_T_F: scale = 4; break;
+        case MIR_T_F: dsize = 4; break;
 #if MIR_PTR64
         case MIR_T_P:
 #endif
         case MIR_T_I64:
         case MIR_T_U64:
-        case MIR_T_D: scale = 8; break;
-        case MIR_T_LD: scale = 16; break;
+        case MIR_T_D: dsize = 8; break;
+        case MIR_T_LD: dsize = 16; break;
         default: assert (FALSE);
         }
-        gen_assert (op.u.var_mem.disp % scale == 0);
+        gen_assert (op.u.var_mem.disp % dsize == 0);
         rn = op.u.var_mem.base;
-        disp = op.u.var_mem.disp / scale;
+        disp = op.u.var_mem.disp / dsize;
         gen_assert (disp < (1 << 12));
         break;
       }
@@ -2283,7 +2287,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 'Z': {
         int n, n2;
         uint64_t v;
-        struct imm imms[4];
+        struct imm immediates[4];
 
         ch = *++p;
         gen_assert ('0' <= ch && ch <= '3');
@@ -2297,10 +2301,10 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         } else {
           v = (uint64_t) op.u.ref->addr;
         }
-        n2 = movnzk_const (v, start_ch == 'N', imms);
+        n2 = movnzk_const (v, start_ch == 'N', immediates);
         gen_assert (n < n2);
-        imm16 = imms[n].v;
-        imm16_shift = imms[n].shift >> 4;
+        imm16 = immediates[n].v;
+        imm16_shift = immediates[n].shift >> 4;
         break;
       }
       case 'I': {
@@ -2457,7 +2461,7 @@ static int target_insn_ok_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   return find_insn_pattern_replacement (gen_ctx, insn) != NULL;
 }
 
-static void target_split_insns (gen_ctx_t gen_ctx) {}
+static void target_split_insns (gen_ctx_t gen_ctx MIR_UNUSED) {}
 
 static uint8_t *target_translate (gen_ctx_t gen_ctx, size_t *len) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -2525,7 +2529,7 @@ static void target_rebase (gen_ctx_t gen_ctx, uint8_t *base) {
   gen_setup_lrefs (gen_ctx, base);
 }
 
-static void target_change_to_direct_calls (MIR_context_t ctx) {}
+static void target_change_to_direct_calls (MIR_context_t ctx MIR_UNUSED) {}
 
 struct target_bb_version {
   uint8_t *base;

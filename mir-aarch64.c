@@ -100,7 +100,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
   return a;
 }
 
-void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
+void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUSED) {
   struct aarch64_va_list *va = p;
 #if defined(__APPLE__)
   void *a = (void *) va->arg_area;
@@ -135,7 +135,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
 #endif
 }
 
-void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
+void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {
   struct aarch64_va_list *va = p;
   va_list *vap = a;
 
@@ -143,7 +143,7 @@ void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
   *va = *(struct aarch64_va_list *) vap;
 }
 
-void va_end_interp_builtin (MIR_context_t ctx, void *p) {}
+void va_end_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p MIR_UNUSED) {}
 
 static int setup_imm64_insns (uint32_t *to, int reg, uint64_t imm64) {
   /* xd=imm64 */
@@ -312,7 +312,7 @@ static const uint32_t stld_pat = 0x3d800000; /* str q, [xn|sp], offset */
    x10=mem[x19,<offset>]; res_reg=mem[x10]; ...
    pop x19, x30; ret x30. */
 void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, size_t nargs,
-                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num) {
+                        _MIR_arg_desc_t *arg_descs, size_t arg_vars_num MIR_UNUSED) {
   static const uint32_t prolog[] = {
     0xa9bf7bf3, /* stp x19,x30,[sp, -16]! */
     0xd10003ff, /* sub sp,sp,<sp_offset> */
@@ -371,12 +371,12 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         pat = ld_pat | offset_imm | addr_reg;
         push_insns (code, &pat, sizeof (pat));
         if (n_xregs + qwords <= 8) {
-          for (int n = 0; n < qwords; n++) {
+          for (uint32_t n = 0; n < qwords; n++) {
             pat = gen_ld_pat | (((n * 8) >> scale) << 10) | (n_xregs + n) | (addr_reg << 5);
             push_insns (code, &pat, sizeof (pat));
           }
         } else {
-          for (int n = 0; n < qwords; n++) {
+          for (uint32_t n = 0; n < qwords; n++) {
             pat = gen_ld_pat | (((n * 8) >> scale) << 10) | temp_reg | (addr_reg << 5);
             push_insns (code, &pat, sizeof (pat));
             pat = st_pat | ((sp_offset >> scale) << 10) | temp_reg | (sp << 5);
@@ -554,7 +554,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
       /* passing by one or two qwords */
       if (n_xregs + qwords
           <= 8) { /* passed by hard regs: str xreg, offset[sp]; str xreg, offset+8[sp] */
-        for (int n = 0; n < qwords; n++) {
+        for (uint32_t n = 0; n < qwords; n++) {
           pat = st_pat | ((sp_offset >> scale) << 10) | n_xregs++ | (sp << 5);
           sp_offset += 8;
           push_insns (code, &pat, sizeof (pat));
@@ -683,7 +683,6 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   size_t len = 5 * 4; /* initial len */
   VARR (uint8_t) * code;
 
-  mir_mutex_lock (&code_mutex);
   VARR_CREATE (uint8_t, code, 128);
   for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
     curr_addr = base_addr = _MIR_get_new_code_addr (ctx, len);
@@ -703,7 +702,6 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
     if (res_code != NULL) break;
   }
   VARR_DESTROY (uint8_t, code);
-  mir_mutex_unlock (&code_mutex);
   return res_code;
 }
 

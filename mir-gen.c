@@ -721,7 +721,7 @@ static void MIR_UNUSED setup_call_hard_reg_args (gen_ctx_t gen_ctx, MIR_insn_t c
   bitmap_set_bit_p (insn_data->u.call_hard_reg_args, hard_reg);
 }
 
-static int gen_nested_loop_label_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+static int MIR_UNUSED gen_nested_loop_label_p (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   gen_assert (insn->code == MIR_LABEL);
   if (optimize_level <= 1) return FALSE;
   bb_t bb = get_insn_bb (gen_ctx, insn);
@@ -1534,6 +1534,7 @@ static MIR_insn_t MIR_UNUSED find_bo (gen_ctx_t gen_ctx MIR_UNUSED, MIR_insn_t i
         || insn->code == MIR_UBNO)
       return insn;
   gen_assert (FALSE);
+  return NULL;
 }
 
 static int label_cmp (const void *l1, const void *l2) {
