@@ -38,7 +38,7 @@
      * `MIR_T_I16` and `MIR_T_U16` -- signed and unsigned 16-bit integer values
      * `MIR_T_I32` and `MIR_T_U32` -- signed and unsigned 32-bit integer values
      * `MIR_T_I64` and `MIR_T_U64` -- signed and unsigned 64-bit integer values
-       * ??? signed and unsigned 64-bit integer types in most cases
+       * signed and unsigned 64-bit integer types in most cases
          are interchangeable as insns themselves decide how to treat
          their value
      * `MIR_T_F` and `MIR_T_D` -- IEEE single and double precision floating point values
@@ -70,37 +70,52 @@
 
   * MIR module consists of **items**.  There are following **item types** (and function for their creation):
     * **Function**: `MIR_func_item`
+      * textual representation of function is described below
     
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name)`)
+      * textual representation of import items is `import <name>{, <name>}`
     
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name)`)
+      * textual representation of export items is `export <name>{, <name>}`
     
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (MIR_context_t ctx, const char *name)`)
+      * textual representation of forward items is `forward <name>{, <name>}`
     
     * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
       `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
       `MIR_new_vararg_func` -- see below).  The only difference is that
-      two or more prototype argument names can be the same
+      two or more prototype argument names can be the same.  The textual representation is analogous to
+      function title (see below) but `proto` is used instead of `func`
       
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str)`)
+      * textual representation of data items `[<name>:] <type> <value>{, <value>}`
       
     * **Reference data**: `MIR_ref_data_item` with optional name
       (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
       * The address of the item after linking plus `disp` is used to initialize the data
+      * textual representation of reference data items `[<name>:] ref <name>[, <disp>]`
       
     * **Expression Data**: `MIR_expr_data_item` with optional name
-      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, **const** **char** *****name,
-      
-      MIR_item_t expr_item))
-      
+      (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t expr_item)`)
       * Not all MIR functions can be used for expression data.  The expression function should have
         only one result, have no arguments, not use any call or any instruction with memory
       * The expression function is called during linking and its result is used to initialize the data
-      
+      * textual representation of expression data items `[<name>:] expr <func name>`
+
     * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
+      * textual representation of memory items `[<name>:] bss <length>`
     
+    * **Label reference**: `MIR_lref_item` with optional name
+      (`MIR_item_t MIR_new_lref_data (MIR_context_t ctx, const char *name, MIR_label_t label,
+                                      MIR_label_t label2, int64_t disp)`) which keeps values derived from label
+      addresses defined as `label[-label2]+disp` where `label2` can be NULL.
+      * Please remember that label scope is whole module
+      * `lref` can refers for labels the same function (this is checked during module load) and
+         there is a warranty label addresses to be defined only at the beginning of the function execution
+      * textual representation of label reference items `[<name>:] lref <label>[, <label2>][, <disp>]`
+   
   * Long double data item is changed to double one, if long double coincides with double for given target or ABI
 
   * Names of MIR functions, imports, and prototypes should be unique in a module
@@ -155,14 +170,41 @@
       * they can be passed on stack, or (partially) in registers, or by address
   * Non-argument function variables are created through API function
     `MIR_reg_t MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type, const char *name)`
+    or `MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
+    const char *name, const char *hard_reg_name)`
     * The only permitted integer type for the variable is `MIR_T_I64` (or MIR_T_U64???)
     * Names in form `t<number>` can not be used as they are fixed for internal purposes
     * You can create function variables even after finishing the
       function creation.  This can be used to modify function insns,
       e.g. for optimizations
+    * Global variables are variables which always bound to specific hard register.  They are used to implement
+      extension "GNU C global reg variables".  Here are the permitted hard register names:
+      * x86_64: `rax`,   `rcx`,   `rdx`,   `rbx`,   `rsp`,   `rbp`,  `rsi`,  `rdi`,  `r8`,
+        `r9`,    `r10`,   `r11`,   `r12`,   `r13`,   `r14`,  `r15`,  `xmm0`, `xmm1`,
+        `xmm2`,  `xmm3`,  `xmm4`,  `xmm5`,  `xmm6`,  `xmm7`, `xmm8`, `xmm9`, `xmm10`,
+        `xmm11`, `xmm12`, `xmm13`, `xmm14`, `xmm15`, `st0`,  `st1`
+      * aarch64: `r0`,  `r1`,  `r2`,  `r3`,  `r4`,  `r5`,  `r6`,  `r7`,  `r8`,  `r9`,  `r10`, `r11`, `r12`,
+        `r13`, `r14`, `r15`, `r16`, `r17`, `r18`, `r19`, `r20`, `r21`, `r22`, `r23`, `r24`, `r25`,
+        `r26`, `r27`, `r28`, `r29`, `r30`, `sp`,  `v0`,  `v1`,  `v2`,  `v3`,  `v4`,  `v5`,  `v6`,
+        `v7`,  `v8`,  `v9`,  `v10`, `v11`, `v12`, `v13`, `v14`, `v15`, `v16`, `v17`, `v18`, `v19`,
+        `v20`, `v21`, `v22`, `v23`, `v24`, `v25`, `v26`, `v27`, `v28`, `v29`, `v30`, `v31`
+      * ppc64: `r0`,  `r1`,  `r2`,  `r3`,  `r4`,  `r5`,  `r6`,  `r7`,  `r8`,  `r9`,  `r10`, `r11`, `r12`,
+        `r13`, `r14`, `r15`, `r16`, `r17`, `r18`, `r19`, `r20`, `r21`, `r22`, `r23`, `r24`, `r25`,
+        `r26`, `r27`, `r28`, `r29`, `r30`, `r31`, `f0`,  `f1`,  `f2`,  `f3`,  `f4`,  `f5`,  `f6`,
+        `f7`,  `f8`,  `f9`,  `f10`, `f11`, `f12`, `f13`, `f14`, `f15`, `f16`, `f17`, `f18`, `f19`,
+        `f20`, `f21`, `f22`, `f23`, `f24`, `f25`, `f26`, `f27`, `f28`, `f29`, `f30`, `f31`, `lr`
+      * riscv64: `r0`,  `r1`,  `r2`,  `r3`,  `r4`,  `r5`,  `r6`,  `r7`,  `r8`,  `r9`,  `r10`, `r11`, `r12`,
+        `r13`, `r14`, `r15`, `r16`, `r17`, `r18`, `r19`, `r20`, `r21`, `r22`, `r23`, `r24`, `r25`,
+        `r26`, `r27`, `r28`, `r29`, `r30`, `r31`, `f0`,  `f1`,  `f2`,  `f3`,  `f4`,  `f5`,  `f6`,
+        `f7`,  `f8`,  `f9`,  `f10`, `f11`, `f12`, `f13`, `f14`, `f15`, `f16`, `f17`, `f18`, `f19`,
+        `f20`, `f21`, `f22`, `f23`, `f24`, `f25`, `f26`, `f27`, `f28`, `f29`, `f30`, `f31`
+      * s390x: `r0`,  `r1`,  `r2`,  `r3`,  `r4`,  `r5`,  `r6`,  `r7`,  `r8`,  `r9`,  `r10`,
+        `r11`, `r12`, `r13`, `r14`, `r15`, `f0`,  `f1`,  `f2`,  `f3`,  `f4`,  `f5`,
+        `f6`,  `f7`,  `f8`,  `f9`,  `f10`, `f11`, `f12`, `f13`, `f14`, `f15`
+
   * Non-argument variable declaration syntax in MIR textual representation looks the following:
 ```
-    local [ <var type>:<var name> {, <var type>:<var name>} ]
+    local [ <var type>:<var name>[:<hard reg name>] {, <var type>:<var name>[:<hard reg name>]} ]
 ```
   * In MIR textual representation variable should be defined through `local` before its use
     
@@ -338,16 +380,37 @@
     | `MIR_DGT`, `MIR_DGE`                 | 3    | **double** precision greater than/greater than or equal         |
     | `MIR_LDGT`, `MIR_LDGE`               | 3    | **long double** greater than/greater than or equal              |
 
+### MIR address insns
+  * The insns take address of variable as the 2nd operand and put it into the 1st operand
+    * They are used to implement C expression `&local_variable`
+
+    | Insn Code               | Nops |   Description                                                         |
+    |-------------------------|-----:|-----------------------------------------------------------------------|
+    | `MIR_ADDR`              | 2    | Take address of variable in its natural type                          |
+    | `MIR_ADDR8`             | 2    | Take address of variable treated as 8-bit value                       |
+    | `MIR_ADDR16`            | 2    | Take address of variable treated as 16-bit value                      |
+    | `MIR_ADDR32`            | 2    | Take address of variable treated as 32-bit value                      |
+
+  * `MIR_ADDR` is used to address variables keeping values of 64-bit integer, float, double, or long double types 
+  * Other address insns are used to address variables keeping integer values of smaller types
+  * Usage of the right address insn is important for big-endian targets
+
 ### MIR branch insns
   * The first operand of the insn should be label
 
-    | Insn Code               | Nops |   Description                                                 |
-    |-------------------------|-----:|---------------------------------------------------------------|
-    | `MIR_JMP`               | 1    | unconditional jump to the label                               |
-    | `MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**  |
-    | `MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**  |
-    | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**     |
-    | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**     |
+    | Insn Code               | Nops |   Description                                                         |
+    |-------------------------|-----:|-----------------------------------------------------------------------|
+    | `MIR_JMP`               | 1    | unconditional jump to the label                                       |
+    | `MIR_BT`                | 2    | jump to the label when 2nd **64-bit** operand is **nonzero**          |
+    | `MIR_BTS`               | 2    | jump to the label when 2nd **32-bit** operand is **nonzero**          |
+    | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**             |
+    | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**             |
+    | `MIR_JMPI`              | 1    | unconditional jump to address in **64-bit** operand (see `MIR_LADRR`) |
+
+### `MIR_LADDR` insn
+  * The insn takes address of a function label given as the 2nd operand and put it into 64-bit integer register
+    or memory given as the the first operand
+  * The insn with `MIR_JMPI` insn is used to implement GNU C extension "labels as values"
 
 ### MIR switch insn
   * The first operand of `MIR_SWITCH` insn should have an integer value from 0 to `N - 1` inclusive
@@ -387,7 +450,7 @@
     | `MIR_DBGT`, `MIR_DBGE`    | 3    | jump on **double** precision greater than/less/ than or equal  |
     | `MIR_LDBGT`, `MIR_LDBGE`  | 3    | jump on **long double** greater than/less/ than or equal       |
 
-### MIR return insn
+### MIR_RET insn
   * Return insn has zero or more operands
   * Return insn operands should correspond to return types of the function
   * 64-bit integer value is truncated to the corresponding function return type first
@@ -410,6 +473,18 @@
     will be changed by inlined function body if it is possible
   * Calls of vararg functions are never inlined
 
+### MIR_JCALL and MIR_JRET insns
+  * `MIR_JCALL` calls a function without setting up the return address
+    (usually return address is put put on the stack or in register depending on ABI)
+    * The first operand is a prototype reference operand
+    * The second operand is a called function address
+  * `MIR_JRET` returns from the function called by `MIR_JCALL`
+    * The single operand contains and the return address as 64-bit integer value
+  * To call a function you can only use pairs `MIR_CALL` (or `MIR_INLINE`) and `MIR_RET` or `MIR_JCALL` and `MIR_JRET`
+  * `MIR_JCALL` and `MIR_JRET` implement non-standard ABI for functions without args and return values
+    * The ABI is useful for high performance switching from direct threading interpreters to JITted code
+    * The argument and return values can be passed through global vars which are tied to specific hard regs
+  
 ### MIR_ALLOCA insn
   * Reserve memory on the stack whose size is given as the 2nd operand and assign the memory address to the 1st operand
   * The reserved memory will be aligned according target ABI
@@ -555,18 +630,18 @@ main:	  func
     you need to load and link it
     * You can load MIR module through API function `MIR_load_module
       (MIR_context ctx, MIR_module_t m)`.  The function simplifies module code.
-      It also allocates the module data/bss
+      It also allocates the module data/bss/refs/lrefs
       and makes visible the exported module items to other module
       during subsequent linking.  There is a guarantee that the
-      different data/bss items will be in adjacent memory if the
-      data/bss items go one after another and all the data/bss items
+      different data/bss/lref items will be in adjacent memory if the
+      data/bss/lref items go one after another and all the data/bss/lref items
       except the first one are anonymous (it means they have no name).
-      Such adjacent data/bss items are called a **section**.
+      Such adjacent data/bss/lref items are called a **section**.
       Alignment of the section is malloc alignment.  There are no any
-      memory space between data/bss in the section.  If you need to
-      provide necessary alignment of a data/bss in the section you
-      should do it yourself by putting additional anonymous data/bss
-      before given data/bss if it is necessary.  BSS memory is
+      memory space between data/bss/refs/lrefs in the section.  If you need to
+      provide necessary alignment of a data/bss/refs/lrefs in the section you
+      should do it yourself by putting additional anonymous data/bss/refs/lrefs
+      before given data/bss/refs/lrefs if it is necessary.  BSS memory is
       initialized by zero and data memory is initialized by the
       corresponding data.  If there is already an exported item with
       the same name, it will be not visible for linking anymore.  Such
@@ -575,6 +650,7 @@ main:	  func
     * Reference data are initialized not during loading but during linking after
       the referenced item address is known.  The address is used for the data
       initialization
+    * Label references are initialized during the corresponding function generation or interpretation
     * Expression data are also initialized not during loading but during linking after
       all addresses are known.  The expression function is evaluated by the interpreter
       and its evaluation result is used for the data initialization.  For example, if
