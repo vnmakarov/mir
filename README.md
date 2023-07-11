@@ -20,7 +20,7 @@
      only for familiarization with the project.  There is absolutely
      no warranty that MIR will not be changed in the future and the
      code will work for any tests except ones given here and on platforms
-     other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64be/ppc64le/s390x/riscv64 Linux**
+     other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64le/s390x/riscv64 Linux**
   
 ## MIR
   * MIR is strongly typed
