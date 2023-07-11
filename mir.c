@@ -1484,17 +1484,6 @@ MIR_reg_t MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_
   return new_func_reg (ctx, func, type, name, hard_reg_name);
 }
 
-/* Two parallel version functions for the generator: */
-MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                             const char *name) {
-  return MIR_new_func_reg (ctx, func, type, name);
-}
-
-MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                                    const char *name, const char *hard_reg_name) {
-  return MIR_new_global_func_reg (ctx, func, type, name, hard_reg_name);
-}
-
 static reg_desc_t *find_rd_by_name (MIR_context_t ctx MIR_UNUSED, const char *name,
                                     MIR_func_t func) {
   func_regs_t func_regs = func->internal;
@@ -2368,8 +2357,6 @@ static MIR_insn_t create_label (MIR_context_t ctx, int64_t label_num) {
 }
 
 MIR_insn_t MIR_new_label (MIR_context_t ctx) { return create_label (ctx, ++curr_label_num); }
-
-MIR_insn_t _MIR_new_label (MIR_context_t ctx) { return MIR_new_label (ctx); }
 
 void _MIR_free_insn (MIR_context_t ctx MIR_UNUSED, MIR_insn_t insn) { free (insn); }
 

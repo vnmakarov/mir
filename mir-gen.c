@@ -988,7 +988,7 @@ static bb_t split_edge_if_necessary (gen_ctx_t gen_ctx, edge_t e) {
       }
     }
     /* add fall through new block before dst */
-    insn = _MIR_new_label (ctx);
+    insn = MIR_new_label (ctx);
     MIR_insert_insn_before (ctx, curr_func_item, first_insn, insn);
     new_bb = create_bb (gen_ctx, insn);
     insert_new_bb_before (gen_ctx, dst, new_bb);
@@ -1569,7 +1569,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   add_new_bb (gen_ctx, exit_bb);
   /* To deal with special cases like adding insns before call in
      machinize or moving invariant out of loop: */
-  MIR_prepend_insn (ctx, curr_func_item, _MIR_new_label (ctx));
+  MIR_prepend_insn (ctx, curr_func_item, MIR_new_label (ctx));
   bb = create_bb (gen_ctx, NULL);
   add_new_bb (gen_ctx, bb);
   bitmap_clear (tied_regs);
@@ -1744,7 +1744,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
         if (bo_insn->code == MIR_BNO || bo_insn->code == MIR_UBNO) {
           new_insn = MIR_new_insn (ctx, MIR_BF, bo_insn->ops[0], temp_op1);
         } else {
-          new_label = _MIR_new_label (ctx);
+          new_label = MIR_new_label (ctx);
           new_insn = MIR_new_insn (ctx, MIR_BF, MIR_new_label_op (ctx, new_label), temp_op1);
         }
         MIR_insert_insn_before (ctx, curr_func_item, bo_insn, new_insn);
@@ -1975,7 +1975,7 @@ static MIR_insn_t get_insn_label (gen_ctx_t gen_ctx, MIR_insn_t insn) {
   MIR_insn_t label;
 
   if (insn->code == MIR_LABEL) return insn;
-  label = _MIR_new_label (ctx);
+  label = MIR_new_label (ctx);
   MIR_insert_insn_before (ctx, curr_func_item, insn, label);
   add_new_bb_insn (gen_ctx, label, ((bb_insn_t) insn->data)->bb, FALSE);
   return label;
@@ -2505,9 +2505,9 @@ static MIR_reg_t get_new_reg (gen_ctx_t gen_ctx, MIR_reg_t old_reg, int sep, siz
   sprintf (ind_str, "%lu", (unsigned long) index); /* ??? should be enough to unique */
   VARR_PUSH_ARR (char, reg_name, ind_str, strlen (ind_str) + 1);
   if (hard_reg_name == NULL) {
-    new_reg = _MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name)) + MAX_HARD_REG;
+    new_reg = MIR_new_func_reg (ctx, func, type, VARR_ADDR (char, reg_name)) + MAX_HARD_REG;
   } else {
-    new_reg = (_MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name)
+    new_reg = (MIR_new_global_func_reg (ctx, func, type, VARR_ADDR (char, reg_name), hard_reg_name)
                + MAX_HARD_REG);
     bitmap_set_bit_p (tied_regs, new_reg);
   }
@@ -6941,7 +6941,7 @@ static void coalesce (gen_ctx_t gen_ctx) {
     if (first_reg != VARR_GET (MIR_reg_t, first_coalesced_reg, dreg)) continue;
     if (DLIST_TAIL (bb_insn_t, bb->bb_insns) == bb_insn
         && DLIST_HEAD (bb_insn_t, bb->bb_insns) == bb_insn) { /* bb is becoming empty */
-      new_insn = _MIR_new_label (ctx);
+      new_insn = MIR_new_label (ctx);
       MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
       add_new_bb_insn (gen_ctx, new_insn, bb, FALSE);
       DEBUG (2, {

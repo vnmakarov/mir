@@ -642,11 +642,6 @@ extern int64_t _MIR_addr_offset (MIR_context_t ctx, MIR_insn_code_t code);
 extern void _MIR_free_insn (MIR_context_t ctx, MIR_insn_t insn);
 extern MIR_reg_t _MIR_new_temp_reg (MIR_context_t ctx, MIR_type_t type,
                                     MIR_func_t func); /* for internal use only */
-extern MIR_reg_t _MIR_new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                                    const char *name);
-extern MIR_reg_t _MIR_new_global_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t type,
-                                           const char *name, const char *hard_reg_name);
-extern MIR_insn_t _MIR_new_label (MIR_context_t ctx);
 extern size_t _MIR_type_size (MIR_context_t ctx, MIR_type_t type);
 extern MIR_op_mode_t _MIR_insn_code_op_mode (MIR_context_t ctx, MIR_insn_code_t code, size_t nop,
                                              int *out_p);
