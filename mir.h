@@ -21,7 +21,7 @@ extern "C" {
 #include "mir-varr.h"
 #include "mir-htab.h"
 
-#define MIR_API_VERSION 0.1
+#define MIR_API_VERSION 0.2
 
 #ifdef NDEBUG
 static inline int mir_assert (int cond) { return 0 && cond; }
