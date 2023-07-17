@@ -32,6 +32,9 @@ runtest () {
 	if test -f $t.mach && ! $EGREP "`uname -m`" $t.mach >/dev/null; then
 	    $ECHO $t: SKIPPED as used only for "`cat $t.mach`"; return 0;
 	fi
+	if test -f $t.opt && ! $EGREP -- "`cat $t.opt`" $execution_program >/dev/null; then
+	    $ECHO $t: SKIPPED as used only for "`cat $t.opt`"; return 0;
+	fi
 	add_main=$2
 	all=`expr $all + 1`
 	if test -f $t.expectrc; then expect_code=`cat $t.expectrc`; else expect_code=0; fi
