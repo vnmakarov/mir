@@ -239,8 +239,9 @@ struct gen_ctx {
   size_t func_stack_slots_num;
   VARR (target_bb_version_t) * target_succ_bb_versions;
   VARR (void_ptr_t) * succ_bb_addrs;
-  void *bb_wrapper; /* to jump to lazy basic block generation */
-  VARR (spot_attr_t) * spot_attrs, *spot2attr;
+  void *bb_wrapper;                /* to jump to lazy basic block generation */
+  VARR (spot_attr_t) * spot2attr;  /* map: spot number -> spot_attr */
+  VARR (spot_attr_t) * spot_attrs; /* spot attrs wit only non-zero properies */
 };
 
 #define optimize_level gen_ctx->optimize_level
@@ -9707,16 +9708,23 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   void *addr;
   uint8_t *code;
   size_t code_len, nel;
-  uint32_t dest_spot, src_spot, max_spot = 0;
+  uint32_t prop, spot, dest_spot, src_spot, max_spot = 0;
   bitmap_t nonzero_property_spots = temp_bitmap;
   bitmap_iterator_t bi;
   spot_attr_t spot_attr;
 
   bitmap_clear (nonzero_property_spots);
+  DEBUG (2, { fprintf (debug_file, "  IN BBStub%lx properties: ", (long unsigned) bb_stub); });
   for (size_t i = 0; i < bb_version->n_attrs; i++) {
     bitmap_set_bit_p (nonzero_property_spots, bb_version->attrs[i].spot);
     set_spot2attr (gen_ctx, &bb_version->attrs[i]);
+    DEBUG (2, {
+      if (i != 0) fprintf (debug_file, ", ");
+      fprintf (debug_file, "(spot=%u,prop=%u)", (unsigned) bb_version->attrs[i].spot,
+               (unsigned) bb_version->attrs[i].prop);
+    });
   }
+  DEBUG (2, { fprintf (debug_file, "\n"); });
   if (bb_version->n_attrs != 0) max_spot = bb_version->attrs[bb_version->n_attrs - 1].spot;
   VARR_TRUNC (target_bb_version_t, target_succ_bb_versions, 0);
   target_bb_translate_start (gen_ctx);
@@ -9737,18 +9745,21 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
         spot_attr.spot = dest_spot;
         spot_attr.prop = (uint32_t) curr_insn->ops[1].u.i;
         spot_attr.mem_ref = mem_spot_p (dest_spot) ? &curr_insn->ops[0] : NULL;
-        VARR_SET (spot_attr_t, spot2attr, dest_spot, spot_attr);
+        set_spot2attr (gen_ctx, &spot_attr);
       }
       skip_p = TRUE;
       break;
     case MIR_PRBEQ:
-    case MIR_PRBNE: /* ??? */
-      if ((curr_insn->code == MIR_PRBEQ
-           && ((curr_insn->ops[2].mode != MIR_OP_INT && curr_insn->ops[2].mode != MIR_OP_UINT)
-               || curr_insn->ops[2].u.i != 0))
-          || (curr_insn->code == MIR_PRBNE
-              && ((curr_insn->ops[2].mode != MIR_OP_INT && curr_insn->ops[2].mode != MIR_OP_UINT)
-                  || curr_insn->ops[2].u.i == 0))) {
+    case MIR_PRBNE:
+      gen_assert (curr_insn->ops[2].mode == MIR_OP_INT || curr_insn->ops[2].mode == MIR_OP_UINT);
+      spot = op2spot (&curr_insn->ops[1]);
+      prop = 0;
+      if (bitmap_bit_p (nonzero_property_spots, spot)) {
+        spot_attr = VARR_GET (spot_attr_t, spot2attr, spot);
+        prop = spot_attr.prop;
+      }
+      if ((curr_insn->code == MIR_PRBEQ && (prop == 0 || curr_insn->ops[2].u.i != prop))
+          || (curr_insn->code == MIR_PRBNE && prop != 0 && curr_insn->ops[2].u.i == prop)) {
         DEBUG (2, {
           fprintf (debug_file, "  Remove property insn ");
           MIR_output_insn (ctx, debug_file, curr_insn, curr_func_item->u.func, TRUE);
@@ -9761,13 +9772,13 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
         MIR_insert_insn_before (ctx, curr_func_item, curr_insn, new_insn);
         DEBUG (2, {
           fprintf (debug_file, "  Change ");
-          MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, FALSE);
+          MIR_output_insn (ctx, debug_file, curr_insn, curr_func_item->u.func, FALSE);
           fprintf (debug_file, " to ");
           MIR_output_insn (ctx, debug_file, new_insn, curr_func_item->u.func, TRUE);
         });
         MIR_remove_insn (ctx, curr_func_item, curr_insn);
-        curr_insn = new_insn;
-        break;
+        next_insn = new_insn;
+        continue;
       }
     case MIR_MOV:
     case MIR_FMOV:
@@ -9792,7 +9803,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
           spot_attr.mem_ref = &curr_insn->ops[0];
         }
         bitmap_set_bit_p (nonzero_property_spots, dest_spot);
-        VARR_SET (spot_attr_t, spot2attr, dest_spot, spot_attr);
+        spot_attr.spot = dest_spot;
+        set_spot2attr (gen_ctx, &spot_attr);
       }
       break;
     default: break;
@@ -9816,10 +9828,18 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     if (curr_insn == bb_stub->last_insn) break;
   }
   VARR_TRUNC (spot_attr_t, spot_attrs, 0);
+  DEBUG (2, { fprintf (debug_file, "  OUT BBStub%lx properties: ", (long unsigned) bb_stub); });
   FOREACH_BITMAP_BIT (bi, nonzero_property_spots, nel) {
     if (MIR_call_code_p (curr_insn->code) && mem_spot_p ((uint32_t) nel)) break;
-    VARR_PUSH (spot_attr_t, spot_attrs, VARR_GET (spot_attr_t, spot2attr, nel));
+    spot_attr = VARR_GET (spot_attr_t, spot2attr, nel);
+    DEBUG (2, {
+      if (VARR_LENGTH (spot_attr_t, spot_attrs) != 0) fprintf (debug_file, ", ");
+      fprintf (debug_file, "(spot=%u,prop=%u)", (unsigned) spot_attr.spot,
+               (unsigned) spot_attr.prop);
+    });
+    VARR_PUSH (spot_attr_t, spot_attrs, spot_attr);
   }
+  DEBUG (2, { fprintf (debug_file, "\n"); });
   VARR_TRUNC (void_ptr_t, succ_bb_addrs, 0);
   if (curr_insn->code == MIR_JMPI) {
     target_bb_insn_translate (gen_ctx, curr_insn, NULL);
