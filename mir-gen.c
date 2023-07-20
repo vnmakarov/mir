@@ -9822,7 +9822,7 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
         spot_attr.mem_ref = NULL;
         if (mem_spot_p (dest_spot)) {
           spot_attr_t *spot_attr_addr = VARR_ADDR (spot_attr_t, spot_attrs);
-          for (uint32_t spot = FIRST_MEM_SPOT; spot <= max_spot; spot++)
+          for (spot = FIRST_MEM_SPOT; spot <= max_spot; spot++)
             if (may_mem_alias_p (spot_attr_addr[dest_spot].mem_ref, spot_attr_addr[spot].mem_ref))
               bitmap_clear_bit_p (nonzero_property_spots, spot);
           spot_attr.mem_ref = &curr_insn->ops[0];

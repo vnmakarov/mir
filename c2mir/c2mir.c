@@ -12734,7 +12734,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       break;
     }
     if (prop_eq_p || prop_ne_p) {
-      MIR_label_t cond_label = MIR_new_label (ctx), t_label = true_label, f_label = false_label;
+      MIR_label_t t_label = true_label, f_label = false_label;
       int make_val_p = t_label == NULL;
       if (make_val_p) {
         t_label = MIR_new_label (ctx);
