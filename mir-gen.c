@@ -8933,9 +8933,9 @@ static void remove_property_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
       fprintf (debug_file, "      changing ");
       print_insn (gen_ctx, insn, FALSE);
     });
+    new_insn->data = insn->data;
     if (optimize_level > 0) {
       bb_insn_t bb_insn = insn->data;
-      new_insn->data = bb_insn;
       bb_insn->insn = new_insn;
     }
     MIR_remove_insn (ctx, curr_func_item, insn);
