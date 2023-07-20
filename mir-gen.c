@@ -9783,8 +9783,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
         spot_attr = VARR_GET (spot_attr_t, spot2attr, spot);
         prop = spot_attr.prop;
       }
-      if ((curr_insn->code == MIR_PRBEQ && (prop == 0 || curr_insn->ops[2].u.i != prop))
-          || (curr_insn->code == MIR_PRBNE && prop != 0 && curr_insn->ops[2].u.i == prop)) {
+      if ((curr_insn->code == MIR_PRBEQ && curr_insn->ops[2].u.i != prop)
+          || (curr_insn->code == MIR_PRBNE && curr_insn->ops[2].u.i == prop)) {
         DEBUG (2, {
           fprintf (debug_file, "  Remove property insn ");
           MIR_output_insn (ctx, debug_file, curr_insn, curr_func_item->u.func, TRUE);
