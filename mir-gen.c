@@ -9738,7 +9738,8 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
   spot_attr_t spot_attr;
 
   bitmap_clear (nonzero_property_spots);
-  DEBUG (2, { fprintf (debug_file, "  IN BBStub%lx properties: ", (long unsigned) bb_stub); });
+  DEBUG (2,
+         { fprintf (debug_file, "  IN BBStub%lx nonzero properties: ", (long unsigned) bb_stub); });
   for (size_t i = 0; i < bb_version->n_attrs; i++) {
     bitmap_set_bit_p (nonzero_property_spots, bb_version->attrs[i].spot);
     set_spot2attr (gen_ctx, &bb_version->attrs[i]);
@@ -9852,7 +9853,9 @@ static void generate_bb_version_machine_code (gen_ctx_t gen_ctx, bb_version_t bb
     if (curr_insn == bb_stub->last_insn) break;
   }
   VARR_TRUNC (spot_attr_t, spot_attrs, 0);
-  DEBUG (2, { fprintf (debug_file, "  OUT BBStub%lx properties: ", (long unsigned) bb_stub); });
+  DEBUG (2, {
+    fprintf (debug_file, "  OUT BBStub%lx nonzero properties: ", (long unsigned) bb_stub);
+  });
   FOREACH_BITMAP_BIT (bi, nonzero_property_spots, nel) {
     if (MIR_call_code_p (curr_insn->code) && mem_spot_p ((uint32_t) nel)) break;
     spot_attr = VARR_GET (spot_attr_t, spot2attr, nel);
