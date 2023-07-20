@@ -8915,6 +8915,37 @@ static void setup_var_ref (gen_ctx_t gen_ctx, MIR_reg_t var, MIR_insn_t insn, si
   var_refs_addr[var].del_p = FALSE;
 }
 
+static void remove_property_insn (gen_ctx_t gen_ctx, MIR_insn_t insn) {
+  gen_assert (insn->code == MIR_PRSET || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE);
+  if (insn->code == MIR_PRSET
+      || (insn->code == MIR_PRBEQ && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i != 0))
+      || (insn->code == MIR_PRBNE && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i == 0))) {
+    DEBUG (2, {
+      fprintf (debug_file, "      removing ");
+      print_insn (gen_ctx, insn, TRUE);
+    });
+    gen_delete_insn (gen_ctx, insn);
+  } else { /* make unconditional jump */
+    MIR_context_t ctx = gen_ctx->ctx;
+    MIR_insn_t new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]);
+    MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
+    DEBUG (2, {
+      fprintf (debug_file, "      changing ");
+      print_insn (gen_ctx, insn, FALSE);
+    });
+    if (optimize_level > 0) {
+      bb_insn_t bb_insn = insn->data;
+      new_insn->data = bb_insn;
+      bb_insn->insn = new_insn;
+    }
+    MIR_remove_insn (ctx, curr_func_item, insn);
+    DEBUG (2, {
+      fprintf (debug_file, " to ");
+      print_insn (gen_ctx, new_insn, TRUE);
+    });
+  }
+}
+
 static void combine (gen_ctx_t gen_ctx, int no_property_p) {
   MIR_context_t ctx = gen_ctx->ctx;
   MIR_insn_code_t code, new_code;
@@ -8959,26 +8990,7 @@ static void combine (gen_ctx_t gen_ctx, int no_property_p) {
           print_bb_insn (gen_ctx, bb_insn, TRUE);
         });
         if (insn->code == MIR_PRSET || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE) {
-          if (no_property_p) {
-            if (insn->code == MIR_PRSET
-                || (insn->code == MIR_PRBEQ
-                    && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i != 0))
-                || (insn->code == MIR_PRBNE
-                    && (insn->ops[2].mode != MIR_OP_INT || insn->ops[2].u.i == 0))) {
-              DEBUG (2, { fprintf (debug_file, "      removing: it is a property insn\n"); });
-              gen_delete_insn (gen_ctx, insn);
-            } else { /* make unconditional jump */
-              new_insn = MIR_new_insn (ctx, MIR_JMP, insn->ops[0]);
-              MIR_insert_insn_before (ctx, curr_func_item, insn, new_insn);
-              MIR_remove_insn (ctx, curr_func_item, insn);
-              new_insn->data = bb_insn;
-              bb_insn->insn = new_insn;
-              DEBUG (2, {
-                fprintf (debug_file, "      changing to ");
-                print_bb_insn (gen_ctx, bb_insn, TRUE);
-              });
-            }
-          }
+          if (no_property_p) remove_property_insn (gen_ctx, insn);
           continue;
         }
         target_get_early_clobbered_hard_regs (insn, &early_clobbered_hard_reg1,
@@ -9077,6 +9089,16 @@ static void finish_combine (gen_ctx_t gen_ctx) {
   bitmap_destroy (vars_bitmap);
   free (gen_ctx->combine_ctx);
   gen_ctx->combine_ctx = NULL;
+}
+
+static void remove_property_insns (gen_ctx_t gen_ctx) {
+  MIR_insn_t insn, next_insn;
+  for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
+       insn = next_insn) {
+    next_insn = DLIST_NEXT (MIR_insn_t, insn);
+    if (insn->code == MIR_PRSET || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE)
+      remove_property_insn (gen_ctx, insn);
+  }
 }
 
 /* New Page */
@@ -9348,7 +9370,9 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
     fprintf (debug_file, "+++++++++++++MIR after RA:\n");
     print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
   });
-  if (optimize_level >= 2) {
+  if (optimize_level < 2) {
+    if (machine_code_p) remove_property_insns (gen_ctx);
+  } else {
     consider_all_live_vars (gen_ctx);
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     add_bb_insn_dead_vars (gen_ctx);
