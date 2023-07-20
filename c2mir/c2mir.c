@@ -3575,6 +3575,9 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 #define EXPECT "__builtin_expect"
 #define JCALL "__builtin_jcall"
 #define JRET "__builtin_jret"
+#define PROP_SET "__builtin_prop_set"
+#define PROP_EQ "__builtin_prop_eq"
+#define PROP_NE "__builtin_prop_ne"
 
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
@@ -3713,7 +3716,9 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
               else
                 res = (strcmp (t->repr, ADD_OVERFLOW) == 0 || strcmp (t->repr, SUB_OVERFLOW) == 0
                        || strcmp (t->repr, MUL_OVERFLOW) == 0 || strcmp (t->repr, EXPECT) == 0
-                       || strcmp (t->repr, JCALL) == 0 || strcmp (t->repr, JRET) == 0);
+                       || strcmp (t->repr, JCALL) == 0 || strcmp (t->repr, JRET) == 0
+                       || strcmp (t->repr, PROP_SET) == 0 || strcmp (t->repr, PROP_EQ) == 0
+                       || strcmp (t->repr, PROP_NE) == 0);
             }
           }
           m->ignore_p = TRUE;
@@ -9138,18 +9143,23 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     struct decl_spec *decl_spec;
     mir_size_t saved_call_arg_area_offset_before_args;
     struct type res_type;
-    int builtin_call_p, alloca_p, va_arg_p = FALSE, va_start_p = FALSE;
+    int builtin_call_p, alloca_p = FALSE, va_arg_p = FALSE, va_start_p = FALSE;
     int add_overflow_p = FALSE, sub_overflow_p = FALSE, mul_overflow_p = FALSE, expect_p = FALSE;
-    int jcall_p = FALSE, jret_p = FALSE;
+    int jcall_p = FALSE, jret_p = FALSE, prop_set_p = FALSE, prop_eq_p = FALSE, prop_ne_p = FALSE;
 
     op1 = NL_HEAD (r->u.ops);
-    alloca_p = op1->code == N_ID && str_eq_p (op1->u.s.s, ALLOCA);
-    add_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, ADD_OVERFLOW) == 0;
-    sub_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, SUB_OVERFLOW) == 0;
-    mul_overflow_p = op1->code == N_ID && strcmp (op1->u.s.s, MUL_OVERFLOW) == 0;
-    expect_p = op1->code == N_ID && strcmp (op1->u.s.s, EXPECT) == 0;
-    jcall_p = op1->code == N_ID && strcmp (op1->u.s.s, JCALL) == 0;
-    jret_p = op1->code == N_ID && strcmp (op1->u.s.s, JRET) == 0;
+    if (op1->code == N_ID) {
+      alloca_p = str_eq_p (op1->u.s.s, ALLOCA);
+      add_overflow_p = strcmp (op1->u.s.s, ADD_OVERFLOW) == 0;
+      sub_overflow_p = strcmp (op1->u.s.s, SUB_OVERFLOW) == 0;
+      mul_overflow_p = strcmp (op1->u.s.s, MUL_OVERFLOW) == 0;
+      expect_p = strcmp (op1->u.s.s, EXPECT) == 0;
+      jcall_p = strcmp (op1->u.s.s, JCALL) == 0;
+      jret_p = strcmp (op1->u.s.s, JRET) == 0;
+      prop_set_p = strcmp (op1->u.s.s, PROP_SET) == 0;
+      prop_eq_p = strcmp (op1->u.s.s, PROP_EQ) == 0;
+      prop_ne_p = strcmp (op1->u.s.s, PROP_NE) == 0;
+    }
     if (op1->code == N_ID && find_def (c2m_ctx, S_REGULAR, op1, curr_scope, NULL) == NULL) {
       va_arg_p = str_eq_p (op1->u.s.s, BUILTIN_VA_ARG);
       va_start_p = str_eq_p (op1->u.s.s, BUILTIN_VA_START);
@@ -9175,7 +9185,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
     }
     builtin_call_p = alloca_p || va_arg_p || va_start_p || add_overflow_p || sub_overflow_p
-                     || mul_overflow_p || expect_p || jcall_p || jret_p;
+                     || mul_overflow_p || expect_p || jcall_p || jret_p || prop_set_p || prop_eq_p
+                     || prop_ne_p;
     if (!builtin_call_p || jcall_p) VARR_PUSH (node_t, call_nodes, r);
     arg_list = NL_NEXT (op1);
     if (builtin_call_p) {
@@ -9191,18 +9202,21 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
         res_type.mode = TM_BASIC;
         res_type.u.basic_type
           = (va_arg_p || add_overflow_p || sub_overflow_p || mul_overflow_p ? TP_INT
-             : expect_p                                                     ? TP_LONG
+             : expect_p || prop_eq_p || prop_ne_p                           ? TP_LONG
                                                                             : TP_VOID);
       }
       ret_type = &res_type;
-      if ((va_start_p && NL_LENGTH (arg_list->u.ops) != 1)
-          || (alloca_p && NL_LENGTH (arg_list->u.ops) != 1)
-          || (add_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
-          || (sub_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
-          || (mul_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
-          || (expect_p && NL_LENGTH (arg_list->u.ops) != 2)
-          || (jret_p && NL_LENGTH (arg_list->u.ops) != 1)
-          || (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2)) {
+      if (builtin_call_p
+          && ((va_start_p && NL_LENGTH (arg_list->u.ops) != 1)
+              || (alloca_p && NL_LENGTH (arg_list->u.ops) != 1)
+              || (add_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
+              || (sub_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
+              || (mul_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
+              || (expect_p && NL_LENGTH (arg_list->u.ops) != 2)
+              || (jret_p && NL_LENGTH (arg_list->u.ops) != 1)
+              || (va_arg_p && NL_LENGTH (arg_list->u.ops) != 2)
+              || (prop_set_p && NL_LENGTH (arg_list->u.ops) != 2)
+              || ((prop_eq_p || prop_ne_p) && NL_LENGTH (arg_list->u.ops) != 2))) {
         error (c2m_ctx, POS (op1), "wrong number of arguments in %s call", op1->u.s.s);
       } else {
         /* first argument type ??? */
@@ -9260,6 +9274,18 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
             error (c2m_ctx, POS (arg), "calling non-void function in %s", JCALL);
             break;
           }
+        } else if (prop_set_p || prop_eq_p || prop_ne_p) {
+          arg = NL_HEAD (arg_list->u.ops);
+          e2 = arg->attr;
+          if (!e2->u.lvalue_node)
+            error (c2m_ctx, POS (r), "1st arg of %s should be lvalue", op1->u.s.s);
+          arg = NL_NEXT (arg);
+          e2 = arg->attr;
+          t2 = e2->type;
+          if (!e2->const_p || !integer_type_p (t2))
+            error (c2m_ctx, POS (arg),
+                   "property value in 2nd arg of %s call should be an integer constant",
+                   op1->u.s.s);
         }
       }
     } else {
@@ -12036,6 +12062,21 @@ static int unsigned_case_compare (const void *v1, const void *v2) {
   return e1->c.u_val < e2->c.u_val ? -1 : 1;
 }
 
+static void make_cond_val (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label,
+                           MIR_label_t false_label, op_t *res) {
+  MIR_context_t ctx = c2m_ctx->ctx;
+  gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
+  struct type *type = ((struct expr *) r->attr)->type;
+  MIR_label_t end_label = MIR_new_label (ctx);
+  *res = get_new_temp (c2m_ctx, get_mir_type (c2m_ctx, type));
+  emit_label_insn_opt (c2m_ctx, true_label);
+  emit2 (c2m_ctx, MIR_MOV, res->mir_op, one_op.mir_op);
+  emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
+  emit_label_insn_opt (c2m_ctx, false_label);
+  emit2 (c2m_ctx, MIR_MOV, res->mir_op, zero_op.mir_op);
+  emit_label_insn_opt (c2m_ctx, end_label);
+}
+
 static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_t false_label,
                  int val_p, op_t *desirable_dest, int *expect_res) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
@@ -12126,18 +12167,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
            r->code == N_ANDAND ? f_label : temp_label, FALSE, NULL, NULL);
       emit_label_insn_opt (c2m_ctx, temp_label);
       gen (c2m_ctx, NL_EL (r->u.ops, 1), t_label, f_label, FALSE, NULL, NULL);
-      if (make_val_p) {
-        MIR_label_t end_label = MIR_new_label (ctx);
-
-        type = ((struct expr *) r->attr)->type;
-        res = get_new_temp (c2m_ctx, get_mir_type (c2m_ctx, type));
-        emit_label_insn_opt (c2m_ctx, t_label);
-        emit2 (c2m_ctx, MIR_MOV, res.mir_op, one_op.mir_op);
-        emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, end_label));
-        emit_label_insn_opt (c2m_ctx, f_label);
-        emit2 (c2m_ctx, MIR_MOV, res.mir_op, zero_op.mir_op);
-        emit_label_insn_opt (c2m_ctx, end_label);
-      }
+      if (make_val_p) make_cond_val (c2m_ctx, r, t_label, f_label, &res);
       true_label = false_label = NULL;
     } else if (true_label != NULL) {
       int true_p;
@@ -12632,6 +12662,9 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int expect_p = call_expr->builtin_call_p && strcmp (func->u.s.s, EXPECT) == 0;
     int jcall_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JCALL) == 0;
     int jret_p = call_expr->builtin_call_p && strcmp (func->u.s.s, JRET) == 0;
+    int prop_set_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_SET) == 0;
+    int prop_eq_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_EQ) == 0;
+    int prop_ne_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_NE) == 0;
     int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
     node_t block = NL_EL (curr_func_def->u.ops, 3);
     struct node_scope *ns = block->attr;
@@ -12688,6 +12721,33 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     if (jret_p) {
       op1 = val_gen (c2m_ctx, NL_HEAD (args->u.ops));
       emit1 (c2m_ctx, MIR_JRET, op1.mir_op);
+      true_label = false_label = NULL;
+      val_p = FALSE;
+      break;
+    }
+    if (prop_set_p) {
+      op1 = gen (c2m_ctx, NL_HEAD (args->u.ops), NULL, NULL, FALSE, NULL, NULL);
+      op2 = val_gen (c2m_ctx, NL_EL (args->u.ops, 1));
+      emit2 (c2m_ctx, MIR_PRSET, op1.mir_op, op2.mir_op);
+      true_label = false_label = NULL;
+      val_p = FALSE;
+      break;
+    }
+    if (prop_eq_p || prop_ne_p) {
+      MIR_label_t cond_label = MIR_new_label (ctx), t_label = true_label, f_label = false_label;
+      int make_val_p = t_label == NULL;
+      if (make_val_p) {
+        t_label = MIR_new_label (ctx);
+        f_label = MIR_new_label (ctx);
+      }
+      node_t arg = NL_HEAD (args->u.ops);
+      op1 = gen (c2m_ctx, arg, NULL, NULL, FALSE, NULL, NULL);
+      arg = NL_NEXT (arg);
+      op2 = val_gen (c2m_ctx, arg);
+      emit3 (c2m_ctx, prop_eq_p ? MIR_PRBEQ : MIR_PRBNE, MIR_new_label_op (ctx, t_label),
+             op1.mir_op, op2.mir_op);
+      emit1 (c2m_ctx, MIR_JMP, MIR_new_label_op (ctx, f_label));
+      if (make_val_p) make_cond_val (c2m_ctx, r, t_label, f_label, &res);
       true_label = false_label = NULL;
       val_p = FALSE;
       break;
