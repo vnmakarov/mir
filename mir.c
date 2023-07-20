@@ -3607,6 +3607,8 @@ MIR_insn_code_t MIR_reverse_branch_code (MIR_insn_code_t code) {
   case MIR_UBO: return MIR_UBNO;
   case MIR_BNO: return MIR_BO;
   case MIR_UBNO: return MIR_UBO;
+  case MIR_PRBEQ: return MIR_PRBNE;
+  case MIR_PRBNE: return MIR_PRBEQ;
   default: return MIR_INSN_BOUND;
   }
 }
