@@ -2126,7 +2126,7 @@ typedef struct expr {
   MIR_insn_t insn;    /* opcode and input operands are the expr keys */
   uint32_t num;       /* the expression number (0, 1 ...) */
   MIR_reg_t temp_reg; /* 0 initially and reg used to remove redundant expr */
-} * expr_t;
+} *expr_t;
 
 DEF_VARR (expr_t);
 DEF_HTAB (expr_t);
@@ -2198,9 +2198,8 @@ static int expr_eq (expr_t e1, expr_t e2, void *arg) {
     ssa_edge2 = insn2->ops[i].data;
     if (ssa_edge1 != NULL && ssa_edge2 != NULL
         && (ssa_edge1->def->gvn_val != ssa_edge2->def->gvn_val
-	    /* we can not be sure what defition we use in multi-output insn: */
-	    || multi_out_insn_p (ssa_edge1->def->insn)
-	    || multi_out_insn_p (ssa_edge2->def->insn)))
+            /* we can not be sure what defition we use in multi-output insn: */
+            || multi_out_insn_p (ssa_edge1->def->insn) || multi_out_insn_p (ssa_edge2->def->insn)))
       return FALSE;
   }
   return TRUE;
