@@ -1,6 +1,6 @@
 name: AMD64-Linux-OSX-Windows-test
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   test:

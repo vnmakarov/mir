@@ -1,6 +1,6 @@
 name: s390x-test
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   s390x:
