@@ -17,10 +17,10 @@ static int target_return_by_addr_p (c2m_ctx_t c2m_ctx, struct type *ret_type) {
 }
 
 static int reg_aggregate_size (c2m_ctx_t c2m_ctx, struct type *type) {
-  int size;
+  size_t size;
 
   if (type->mode != TM_STRUCT && type->mode != TM_UNION) return -1;
-  return (size = type_size (c2m_ctx, type)) <= 2 * 8 ? size : -1;
+  return (size = type_size (c2m_ctx, type)) <= 2 * 8 ? (int) size : -1;
 }
 
 #define MAX_MEMBERS 2
@@ -231,8 +231,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
     } else {
       ret_addr_reg = MIR_reg (ctx, RET_ADDR_NAME, curr_func->u.func);
       var = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, ret_addr_reg, 0, 1));
-      size = type_size (c2m_ctx, ret_type);
-      block_move (c2m_ctx, var, res, size);
+      block_move (c2m_ctx, var, res, type_size (c2m_ctx, ret_type));
     }
     return;
   }
