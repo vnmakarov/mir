@@ -77,7 +77,7 @@ typedef struct stream {
   fpos_t fpos;                    /* file pos to resume file stream */
   const char *start, *curr;       /* non NULL only for string stream  */
   int ifs_length_at_stream_start; /* length of ifs at the stream start */
-} * stream_t;
+} *stream_t;
 
 DEF_VARR (stream_t);
 
@@ -1933,7 +1933,7 @@ typedef struct macro {          /* macro definition: */
   VARR (token_t) * params;      /* (T_ID)* [N_DOTS], NULL means no params */
   VARR (token_t) * replacement; /* token*, NULL means a standard macro */
   int ignore_p;
-} * macro_t;
+} *macro_t;
 
 DEF_VARR (macro_t);
 DEF_HTAB (macro_t);
@@ -1941,7 +1941,7 @@ DEF_HTAB (macro_t);
 typedef struct ifstate {
   int skip_p, true_p, else_p; /* ??? flags that we are in a else part and in a false part */
   pos_t if_pos;               /* pos for #if and last #else, #elif */
-} * ifstate_t;
+} *ifstate_t;
 
 DEF_VARR (ifstate_t);
 
@@ -1956,7 +1956,7 @@ typedef struct macro_call {
   VARR (token_arr_t) * args;
   int repl_pos;                 /* position in macro replacement */
   VARR (token_t) * repl_buffer; /* LIST:(token nodes)* */
-} * macro_call_t;
+} *macro_call_t;
 
 DEF_VARR (macro_call_t);
 
@@ -8255,9 +8255,12 @@ static void process_func_decls_for_allocation (c2m_ctx_t c2m_ctx) {
   }
 }
 
-#define BUILTIN_VA_START (const char *[]){"__builtin_va_start", NULL}
-#define BUILTIN_VA_ARG (const char *[]){"__builtin_va_arg", NULL}
-#define ALLOCA (const char *[]){"alloca", "__builtin_alloca", NULL}
+#define BUILTIN_VA_START \
+  (const char *[]) { "__builtin_va_start", NULL }
+#define BUILTIN_VA_ARG \
+  (const char *[]) { "__builtin_va_arg", NULL }
+#define ALLOCA \
+  (const char *[]) { "alloca", "__builtin_alloca", NULL }
 
 static int str_eq_p (const char *str, const char *v[]) {
   for (int i = 0; v[i] != NULL; i++)
