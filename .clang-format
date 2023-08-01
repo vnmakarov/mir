@@ -8,7 +8,6 @@ PointerAlignment: Right
 BreakBeforeBinaryOperators: All
 ConstructorInitializerIndentWidth: 2
 ContinuationIndentWidth: 2
-ContinuationIndentWidth: 2
 PenaltyBreakBeforeFirstCallParameter: 10000
 SortIncludes: false
 BreakStringLiterals: true
