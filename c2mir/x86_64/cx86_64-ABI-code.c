@@ -35,8 +35,8 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
 
 static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[MAX_QWORDS],
                          int bit_field_p MIR_UNUSED) {
-  size_t size = type_size (c2m_ctx, type);
-  int i, n_el_qwords, n_qwords = (size + 7) / 8;
+  size_t size = type_size (c2m_ctx, type), n_qwords = (size + 7) / 8;
+  int i, n_el_qwords;
   MIR_type_t mir_type;
 
   if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ARR) {
@@ -268,7 +268,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
   MIR_insn_t insn;
   MIR_reg_t ret_addr_reg;
   op_t temp, var;
-  int i, size, n_qwords;
+  int i, n_qwords;
 
   if (void_type_p (ret_type)) return;
   n_qwords = process_ret_type (c2m_ctx, ret_type, qword_types);
@@ -288,8 +288,7 @@ static void target_add_ret_ops (c2m_ctx_t c2m_ctx, struct type *ret_type, op_t r
   } else {
     ret_addr_reg = MIR_reg (ctx, RET_ADDR_NAME, curr_func->u.func);
     var = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_I8, 0, ret_addr_reg, 0, 1));
-    size = type_size (c2m_ctx, ret_type);
-    block_move (c2m_ctx, var, res, size);
+    block_move (c2m_ctx, var, res, type_size (c2m_ctx, ret_type));
   }
 }
 
