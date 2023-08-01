@@ -5554,6 +5554,7 @@ static struct type_qual type_qual_union (const struct type_qual *tq1, const stru
 
 static void init_type (struct type *type) {
   clear_type_qual (&type->type_qual);
+  type->mode = TM_UNDEF;
   type->pos_node = NULL;
   type->arr_type = NULL;
   type->align = -1;
