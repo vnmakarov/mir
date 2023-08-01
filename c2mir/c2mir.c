@@ -2217,7 +2217,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
 static void skip_nl (c2m_ctx_t c2m_ctx, token_t t,
                      VARR (token_t) * buffer) { /* skip until new line */
   if (t == NULL) t = get_next_pptoken (c2m_ctx);
-  for (; t->code != '\n'; t = get_next_pptoken (c2m_ctx))  // ??>
+  for (; t->code != '\n' && t->code != T_EOU; t = get_next_pptoken (c2m_ctx))  // ??>
     if (buffer != NULL) VARR_PUSH (token_t, buffer, t);
   unget_next_pptoken (c2m_ctx, t);
 }
