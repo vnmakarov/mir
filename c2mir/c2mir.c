@@ -9308,7 +9308,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     }
     if (ret_type->mode == TM_STRUCT || ret_type->mode == TM_UNION) {
       set_type_layout (c2m_ctx, ret_type);
-      if (!builtin_call_p) update_call_arg_area_offset (c2m_ctx, ret_type, TRUE);
+      if (!builtin_call_p && curr_scope != top_scope)
+        update_call_arg_area_offset (c2m_ctx, ret_type, TRUE);
     }
     if (builtin_call_p && !jcall_p) break;
     first_arg = jcall_p ? NL_EL (arg_list->u.ops, 1) : NL_HEAD (arg_list->u.ops);
