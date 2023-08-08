@@ -12204,14 +12204,20 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
           op2 = mem_to_address (c2m_ctx, op2, FALSE);
       }
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
-        assert (desirable_dest != NULL && desirable_dest->mir_op.mode == MIR_OP_MEM);
-        res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
+        if (desirable_dest == NULL) {
+          res = get_new_temp (c2m_ctx, MIR_T_I64);
+          MIR_append_insn (ctx, curr_func,
+                           MIR_new_insn (ctx, MIR_MOV, res.mir_op, MIR_new_int_op (ctx, 0)));
+        } else {
+          assert (desirable_dest->mir_op.mode == MIR_OP_MEM);
+          res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
+        }
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_BLOCK_ARG, res.mir_op, op2.mir_op,
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type)),
                                        MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type)
                                                               - MIR_T_BLK)));
-        res = *desirable_dest;
+        if (desirable_dest != NULL) res = *desirable_dest;
       } else {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,

@@ -243,7 +243,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct ppc64_va_list *va = p;
   void *a = va->arg_area;
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
   va->arg_area += (s + sizeof (uint64_t) - 1) / sizeof (uint64_t);
 }
 
