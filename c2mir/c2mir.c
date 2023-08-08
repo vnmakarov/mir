@@ -6513,7 +6513,11 @@ static void def_symbol (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
     return;
   }
   tab_decl_spec = ((decl_t) sym.def_node->attr)->decl_spec;
-  if (linkage == N_IGNORE) {
+  if ((def_node->code == N_ENUM_CONST || sym.def_node->code == N_ENUM_CONST)
+      && def_node->code != sym.def_node->code) {
+    error (c2m_ctx, POS (id), "%s redeclared as a different kind of symbol", id->u.s.s);
+    return;
+  } else if (linkage == N_IGNORE) {
     if (!decl_spec.typedef_p || !tab_decl_spec.typedef_p
         || !type_eq_p (decl_spec.type, tab_decl_spec.type))
 #if defined(__APPLE__)
