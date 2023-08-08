@@ -228,7 +228,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
 
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   void *a = *(void **) va_arg_builtin (p, MIR_T_I64);
-  if (res == NULL) memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
 }
 
 void va_start_interp_builtin (MIR_context_t ctx, void *p, void *a) {
