@@ -8538,13 +8538,15 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       decl->used_p = TRUE;
       assert (decl->decl_spec.type->mode == TM_FUNC);
       *e->type = *decl->decl_spec.type;
-    } else {
-      assert (op1->code == N_ENUM_CONST && aux_node && aux_node->code == N_ENUM);
+    } else if (op1->code == N_ENUM_CONST) {
+      assert (aux_node && aux_node->code == N_ENUM);
       e->type->mode = TM_ENUM;
       e->type->pos_node = r;
       e->type->u.tag_type = aux_node;
       e->const_p = TRUE;
       e->c.i_val = ((struct enum_value *) op1->attr)->u.i_val;
+    } else { /* it is a member reference inside struct/union */
+      assert (op1->code == N_MEMBER);
     }
     break;
   }
