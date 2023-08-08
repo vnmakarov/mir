@@ -110,7 +110,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUS
     a = *(void **) a;
     va->arg_area++;
   }
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
 #else
   void *a;
   long size = (s + 7) / 8 * 8;
@@ -119,7 +119,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUS
     a = va->__stack;
     va->__stack = (char *) va->__stack + size;
     va->__gr_offs += size;
-    memcpy (res, a, s);
+    if (res != NULL) memcpy (res, a, s);
     return;
   }
   if (size > 2 * 8) size = 8;
@@ -131,7 +131,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase MIR_UNUS
     va->__stack = (char *) va->__stack + size;
   }
   if (s > 2 * 8) a = *(void **) a; /* address */
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
 #endif
 }
 

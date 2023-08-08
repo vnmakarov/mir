@@ -103,7 +103,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
     a = *(void **) a;
     va->arg_area++;
   }
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
 }
 
 void va_start_interp_builtin (MIR_context_t ctx MIR_UNUSED, void *p, void *a) {

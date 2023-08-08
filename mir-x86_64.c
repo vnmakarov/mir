@@ -81,7 +81,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
       u[1].i = *(uint64_t *) ((char *) va->reg_save_area + va->gp_offset);
       va->gp_offset += 8;
     }
-    memcpy (res, &u, s);
+    if (res != NULL) memcpy (res, &u, s);
     return;
   case 2:
     u[0].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
@@ -90,7 +90,7 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
       u[1].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
       va->fp_offset += 16;
     }
-    memcpy (res, &u, s);
+    if (res != NULL) memcpy (res, &u, s);
     return;
   case 3:
   case 4:
@@ -104,11 +104,11 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
     }
     va->fp_offset += 8;
     va->gp_offset += 8;
-    memcpy (res, &u, s);
+    if (res != NULL) memcpy (res, &u, s);
     return;
   default: break;
   }
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
   va->overflow_arg_area += size / 8;
 }
 
@@ -136,7 +136,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
 void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
   struct x86_64_va_list *va = p;
   void *a = s <= 8 ? va->arg_area : *(void **) va->arg_area; /* pass by pointer */
-  memcpy (res, a, s);
+  if (res != NULL) memcpy (res, a, s);
   va->arg_area++;
 }
 
