@@ -7698,7 +7698,10 @@ check_one_value:
     }
     return;
   }
-  if (init == NULL) return;
+  if (init == NULL) {
+    if (scalar_type_p (type)) error (c2m_ctx, POS (initializer), "empty scalar initializer");
+    return;
+  }
   assert (init->code == N_INIT);
   des_list = NL_HEAD (init->u.ops);
   assert (des_list->code == N_LIST);
