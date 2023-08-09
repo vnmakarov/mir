@@ -339,6 +339,8 @@ ex100:    func v, 0
     * It uses SSA based IR (kind of simplified LLVM IR)
     * It has the same optimizations as MIR-generator plus aliasing but QBE has no inlining
     * It generates assembler code which makes QBE 30 slower in machine code generation than MIR-generator
+    * On my benchmarks it generates code whose geomean performance is only 65% of GCC with -O2
+      (performance of MIR generated code is 91% of GCC with -O2) while having the same compilation speed as MIR
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
       * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR
@@ -359,5 +361,6 @@ ex100:    func v, 0
       Mozilla Public License
 
 ## Porting MIR
-  * Currently MIR works on x86_64, aarch64, ppc64be, ppc64le, s390x, riscv-64 Linux and x86_64/aarch64 (Apple M1) MacOS
+  * Currently MIR works on x86_64, aarch64, ppc64le, s390x, riscv64 Linux and x86_64/aarch64 (Apple M1) MacOS
   * [HOW-TO-PORT-MIR.md](https://github.com/vnmakarov/mir/blob/master/HOW-TO-PORT-MIR.md) outlines process of porting MIR
+    * On my estimation an experienced developer can port MIR (including `c2m`) to another target for 1-2 months
