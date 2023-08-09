@@ -880,8 +880,13 @@ int main (int argc, char *argv[], char *env[]) {
       open_std_libs ();
       MIR_load_external (main_ctx, "abort", fancy_abort);
       MIR_load_external (main_ctx, "_MIR_flush_code_cache", _MIR_flush_code_cache);
+      start_time = real_usec_time ();
       if (interp_exec_p) {
+        if (options.verbose_p)
+          fprintf (stderr, "MIR link interp start  -- %.0f usec\n", real_usec_time () - start_time);
         MIR_link (main_ctx, MIR_set_interp_interface, import_resolver);
+        if (options.verbose_p)
+          fprintf (stderr, "MIR Link finish        -- %.0f usec\n", real_usec_time () - start_time);
         start_time = real_usec_time ();
         MIR_interp (main_ctx, main_func, &val, 3,
                     (MIR_val_t){.i = VARR_LENGTH (char_ptr_t, exec_argv)},
@@ -889,15 +894,20 @@ int main (int argc, char *argv[], char *env[]) {
                     (MIR_val_t){.a = (void *) env});
         result_code = val.i;
         if (options.verbose_p) {
-          fprintf (stderr, "  execution       -- %.0f msec\n",
-                   (real_usec_time () - start_time) / 1000.0);
+          fprintf (stderr, "  execution       -- %.0f usec\n", real_usec_time () - start_time);
           fprintf (stderr, "exit code: %lu\n", (long unsigned) result_code);
         }
       } else {
         int fun_argc = (int) VARR_LENGTH (char_ptr_t, exec_argv);
         const char **fun_argv = VARR_ADDR (char_ptr_t, exec_argv);
 
+        if (options.verbose_p)
+          fprintf (stderr, "MIR gen init start         -- %.0f usec\n",
+                   real_usec_time () - start_time);
         MIR_gen_init (main_ctx);
+        if (options.verbose_p)
+          fprintf (stderr, "MIR gen init finish         -- %.0f usec\n",
+                   real_usec_time () - start_time);
         if (optimize_level >= 0) MIR_gen_set_optimize_level (main_ctx, (unsigned) optimize_level);
         if (gen_debug_level >= 0) {
           MIR_gen_set_debug_file (main_ctx, stderr);
@@ -908,6 +918,8 @@ int main (int argc, char *argv[], char *env[]) {
                   : lazy_gen_exec_p ? MIR_set_lazy_gen_interface
                                     : MIR_set_lazy_bb_gen_interface,
                   import_resolver);
+        if (options.verbose_p)
+          fprintf (stderr, "MIR link finish        -- %.0f usec\n", real_usec_time () - start_time);
         fun_addr = main_func->addr;
         start_time = real_usec_time ();
         result_code = fun_addr (fun_argc, fun_argv, env);
