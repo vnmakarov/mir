@@ -771,13 +771,16 @@ sloc:
 	| awk '{last=$$1} END {print last}'
 	@echo -n 's390x machine dependent code: ' && wc -l $(SRC_DIR)/mir-s390x.c $(SRC_DIR)/mir-gen-s390x.c\
 	| awk '{last=$$1} END {print last}'
+	@echo -n 'riscv64 machine dependent code: ' && wc -l $(SRC_DIR)/mir-riscv64.c $(SRC_DIR)/mir-gen-riscv64.c\
+	| awk '{last=$$1} END {print last}'
 	@echo -n 'Overall: ' && wc -l $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-hash.h\
 	                              $(SRC_DIR)/mir-htab.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-reduce.h\
 				      $(SRC_DIR)/mir-bitmap.h $(SRC_DIR)/mir.[ch]\
 				      $(SRC_DIR)/mir-interp.c $(SRC_DIR)/mir-gen.[ch] $(SRC_DIR)/mir-x86_64.c\
 				      $(SRC_DIR)/mir-gen-x86_64.c $(SRC_DIR)/mir-aarch64.c\
 				      $(SRC_DIR)/mir-gen-aarch64.c $(SRC_DIR)/mir-ppc64.c $(SRC_DIR)/mir-gen-ppc64.c\
-				      $(SRC_DIR)/mir-s390x.c $(SRC_DIR)/mir-gen-s390x.c\
+				      $(SRC_DIR)/mir-riscv64.c $(SRC_DIR)/mir-gen-riscv64.c\
+				      $(SRC_DIR)/mir-riscv64.c $(SRC_DIR)/mir-gen-riscv64.c\
 	| awk '{last=$$1} END {print last}'
 
 gcc-test:
