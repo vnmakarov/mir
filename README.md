@@ -9,17 +9,14 @@
 
 # MIR Project
   * MIR means **M**edium **I**nternal **R**epresentation
-  * MIR project goal is to provide a basis to implement fast and lightweight interpreters and JITs
+  * MIR project goal is to provide a basis to implement fast and lightweight JITs
   * Plans to try MIR light-weight JIT first for CRuby or/and MRuby implementation
   * Motivations for the project can be found in [this blog post](https://developers.redhat.com/blog/2020/01/20/mir-a-lightweight-jit-compiler-project)
   * C2MIR compiler description can be found in [this blog post](https://developers.redhat.com/blog/2021/04/27/the-mir-c-interpreter-and-just-in-time-jit-compiler)
   * Future of code specialization in MIR for dynamic language JITs can be found in [this blog post](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler)
 
 ## Disclaimer
-   * **This code is in initial stages of development.  It is present
-     only for familiarization with the project.  There is absolutely
-     no warranty that MIR will not be changed in the future and the
-     code will work for any tests except ones given here and on platforms
+   * **There is absolutely no warranty that the code will work for any tests except ones given here and on platforms
      other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64le/s390x/riscv64 Linux**
   
 ## MIR
