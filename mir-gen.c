@@ -9,17 +9,17 @@
            ----------     -----------     -----------     ---------------     ------------
                                                                                    |
                                                                                    V
-      ------------      ------------      ---------------------------       --------------
-     |Dead Store  |    | Copy       |	 | Global Value Numbering,   |     |Loop Invariant|
-     |Elimination |<---| Propagation|<---| Constant Propagation,     |<----|   Motion     |
-      ------------      ------------ 	 | Redundat Load Elimination |      --------------
-           |                               ---------------------------
+      ------------       ------------      ------------      ---------------------------
+     |Dead Code   |     |Dead Store  |    | Copy       |    | Global Value Numbering,   |
+     |Elimination |<--- |Elimination |<---| Propagation|<---| Constant Propagation,     |
+      ------------       ------------      ------------     | Redundat Load Elimination |
+           |                                                 ---------------------------
            V
       -----------     --------     -------     ------     ----                   -------
-     |Dead Code  |   |Register|   | SSA   |   |Out of|   |Jump|    ---------    | Build |
-     |Elimination|-->|Pressure|-->|Combine|-->|  SSA |-->|Opts|-->|Machinize|-->| Live  |
-      -----------    | Relief |    -------     ------     ----     ---------    | Info  |
-                      --------                                                   -------
+     | Loop      |   |Register|   | SSA   |   |Out of|   |Jump|    ---------    | Build |
+     | Invariant |-->|Pressure|-->|Combine|-->|  SSA |-->|Opts|-->|Machinize|-->| Live  |
+     | Motion    |   | Relief |    -------     ------     ----     ---------    | Info  |
+      -----------     --------                                                   -------
                                                                                     |
                                                                                     V
                   --------                           ----------                  ---------
@@ -35,13 +35,13 @@
    Address Transformation: Optional pass to remove or change ADDR insns (for -O2 and above).
    Block Cloning: Cloning insns and BBs to improve hot path optimization opportunities
                   (for -O2 and above).
-   Loop invariant motion (LICM): Moving invarinat insns out of loop (for -O2 and above).
    Global Value Numbering: Removing redundant insns through GVN.  This includes constant
                            propagation and redundant load eliminations (for -O2 and above).
    Copy Propagation: SSA copy propagation and removing redundant extension insns
                      (for -O2 and above).
    Dead store elimination: Removing redundant stores (for -O2 and above).
    Dead code elimination: Removing insns with unused outputs (for -O2 and above).
+   Loop invariant motion (LICM): Moving invarinat insns out of loop (for -O2 and above).
    Pressure relief: Moving insns to decrease register pressure (for -O2 and above).
    SSA combine: Combining addresses and cmp and branch pairs (for -O2 and above).
    Out of SSA: Making conventional SSA and removing phi nodes and SSA edges (for -O2 and above).
@@ -54,7 +54,7 @@
    Coalesce: Aggressive register coalescing
    Register Allocator (RA): Priority-based linear scan RA (always) with live range splitting
                             (for -O2 and above).
-   Combine: Code selection by merging data-depended insns into one (for -O2 and above).
+   Combine: Code selection by merging data-depended insns into one (for -O1 and above).
    Dead code elimination (DCE): Removing insns with unused outputs (for -O1 and above).
    Generate machine insns: Machine-dependent code (e.g. in mir-gen-x86_64.c) creating
                            machine insns. Always.
@@ -9370,9 +9370,8 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
     fprintf (debug_file, "+++++++++++++MIR after RA:\n");
     print_CFG (gen_ctx, TRUE, FALSE, TRUE, FALSE, NULL);
   });
-  if (optimize_level < 2) {
-    if (machine_code_p) remove_property_insns (gen_ctx);
-  } else {
+  if (optimize_level < 2 && machine_code_p) remove_property_insns (gen_ctx);
+  if (optimize_level >= 1) {
     consider_all_live_vars (gen_ctx);
     calculate_func_cfg_live_info (gen_ctx, FALSE);
     add_bb_insn_dead_vars (gen_ctx);
