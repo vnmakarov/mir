@@ -2573,7 +2573,7 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
 #ifdef C2MIR_PREPRO_DEBUG
   fprintf (stderr, "# finding args of macro %s call:\n#    arg 0:", m->id->repr);
 #endif
-  for (;;) {
+  for (int newln_p = FALSE;; newln_p = t->code == '\n') {
     t = get_next_pptoken (c2m_ctx);
 #ifdef C2MIR_PREPRO_DEBUG
     fprintf (stderr, " <%s>%s", get_token_str (t), t->processed_p ? "*" : "");
@@ -2586,7 +2586,7 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
       pop_macro_call (c2m_ctx);
     }
     if (t->code == T_EOFILE || t->code == T_EOU || t->code == T_EOR || t->code == T_BOA
-        || t->code == T_EOA)
+        || t->code == T_EOA || (newln_p && t->code == '#'))
       break;
     if (level == 0 && t->code == ')') break;
     if (level == 0 && !va_p && t->code == ',') {
@@ -2609,7 +2609,13 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
 #ifdef C2MIR_PREPRO_DEBUG
   fprintf (stderr, "\n");
 #endif
-  if (t->code != ')') error (c2m_ctx, t->pos, "unfinished call of macro %s", m->id->repr);
+  if (t->code != ')') {
+    error (c2m_ctx, t->pos, "unfinished call of macro %s", m->id->repr);
+#ifdef C2MIR_PREPRO_DEBUG
+    fprintf (stderr, "# push back <%s>%s\n", get_token_str (t), t->processed_p ? "*" : "");
+#endif
+    unget_next_pptoken (c2m_ctx, t);
+  }
   VARR_PUSH (token_arr_t, args, arg);
   if (params_len == 0 && VARR_LENGTH (token_arr_t, args) == 1) {
     token_arr_t arr = VARR_GET (token_arr_t, args, 0);
