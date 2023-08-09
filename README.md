@@ -216,7 +216,7 @@ ex100:    func v, 0
     in 32-bit instructions
     
 ## MIR JIT compiler
-  * Compiler **Performance Goals** relative to GCC -O2:
+  * Original compiler **Performance Goals** relative to GCC -O2:
     * 70% of generated code speed
     * 100 times faster compilation speed
     * 100 times faster start-up
@@ -228,11 +228,12 @@ ex100:    func v, 0
     * **global common sub-expression elimination**
     * **variable renaming**
     * **register pressure sensitive loop invariant code motion**
-    * **sparse conditional constant propagation**
+    * **conditional constant propagation**
     * **dead code elimination**
     * **code selection**
-    * fast **register allocator** with implicit coalescing hard registers and stack slots
-      for copy elimination
+    * fast **register allocator** with
+      * aggressive coalescing registers and stack slots for copy elimination
+      * live range splitting
   * Different optimization levels to tune compilation speed vs generated code performance
   * **SSA** form of MIR is used before register allocation
     * We use a form of Braun's algorithm to build SSA (M. Braun et al. "Simple and Efficient
@@ -245,16 +246,23 @@ ex100:    func v, 0
   * **Inline**: inlining MIR calls
   * **Build CFG**: building Control Flow Graph (basic blocks and CFG edges)
   * **Build SSA**: Building Single Static Assignment Form by adding phi nodes and SSA edges to operands
-  * **Copy Propagation**: SSA copy propagation and removing redundant extension insns
-  * **Global Value Numbering**: Removing redundant insns through GVN
+  * **Address Transformation**: remove or change MIR ADDR instructions
+  * **Global Value Numbering**: removing redundant insns through GVN.  This includes constant
+    propagation and redundant load eliminations
+  * **Copy Propagation**: SSA copy propagation and removing redundant extension instructions
+  * **Dead store elimination**: removing redundant stores
   * **Dead Code Elimination**: removing insns with unused outputs
-  * **Sparse Conditional Constant Propagation**: constant propagation
-    and removing death paths of CFG
+  * **Pressure relief**: moving insns to decrease register pressure
+  * **SSA combine**: combining addresses and compare and branch instruction pairs
   * **Out of SSA**: Removing phi nodes and SSA edges
   * **Jump opts**: Different jump optimizations
   * **Machinize**: run machine-dependent code transforming MIR for calls ABI, 2-op insns, etc
   * **Find Loops**: finding natural loops and building loop tree
   * **Build Live Info**: calculating live in and live out for the basic blocks
+  * **Build Register Conflicts**: building conflict matrix for registers involved in moves.
+    It is used for register coalescing
+  * **Coalesce**: aggressive register coalescing
+  * **Register Allocator (RA)**: priority-based linear scan RA with live range splitting
   * **Build Live Ranges**: calculating program point ranges for registers
   * **Assign**: fast RA for `-O0` or priority-based linear scan RA for `-O1` and above
   * **Rewrite**: transform MIR according to the assign using reserved hard regs
@@ -263,37 +271,37 @@ ex100:    func v, 0
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
   
 ## C to MIR translation
-  * Currently work on 2 different ways of the translation are ongoing
-    * Implementation of a small C11 (2011 ANSI C standard) to MIR compiler.
-      See [README.md](https://github.com/vnmakarov/mir/tree/master/c2mir)
-    * Implementation of LLVM Bitcode to MIR translator.
-      See [README.md](https://github.com/vnmakarov/mir/tree/master/llvm2mir)
+  * We implemented a small C11 (2011 ANSI C standard with some GCC extensions) to MIR compiler `c2m`.
+    See [README.md](https://github.com/vnmakarov/mir/tree/master/c2mir)
+  * C code can be used as an input of JIT compiler besides MIR
+    * Usage of C as an input to JIT compiler can slow down compilation speed up to 2 times
 
 ## Structure of the project code
  * Files `mir.h` and `mir.c` contain major API code including input/output of MIR binary
    and MIR text representation
- * Files `mir-dlist.h`, `mir-mp.h`, `mir-varr.h`, `mir-bitmap.h`, `mir-htab.h` contain generic code
-   correspondingly for double-linked lists, memory pools, variable length arrays, bitmaps,
-   hash tables.  File `mir-hash.h` is a general, simple, high quality hash function used
-   by hashtables
+ * Files `mir-dlist.h`, `mir-mp.h`, `mir-varr.h`, `mir-bitmap.h`, `mir-hash.h`, `mir-htab.h`, `mir-reduce.h`
+   contain generic code  correspondingly for double-linked lists, memory pools, variable length arrays, bitmaps,
+   hash calculations, hash tables, and compressing/decompressing data.  File `mir-hash.h` is a general, simple,
+   high quality hash function used by hashtables
  * File `mir-interp.c` contains code for interpretation of MIR code.  It is included in `mir.c`
    and never compiled separately
  * Files `mir-gen.h`, `mir-gen.c`, `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`, `mir-gen-s390x.c`,
-   and `mir-gen-riscv.c` contain code for MIR JIT compiler
+   and `mir-gen-riscv64.c` contain code for MIR JIT compiler
    * Files `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`, `mir-gen-s390x.c`,
-   and `mir-gen-riscv.c` is machine dependent code of JIT compiler
+   and `mir-gen-riscv64.c` is machine dependent code of JIT compiler
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
+ * Files `mir-<target>.h` contain declarations common for interpreter and JIT compiler 
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
    C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64`, `c2mir/s390x`,
-   and `c2mir/riscv` contain correspondingly x86_64, aarch64, ppc64, s390x, and riscv machine-dependent
+   and `c2mir/riscv64` contain correspondingly x86_64, aarch64, ppc64le, s390x, and riscv machine-dependent
    code for C to MIR compiler
-   
+ * Directory `mir-utils` contains different utilities to work with MIR,
+   e.g. transforming binary MIR to textual MIR and vice verse
+ * Directory `adt-tests`, `mir-tests`, `c-tests`, and `c-benchmarks` contains code for testing and benchmarking MIR and `c2m`
+
 ## Playing with current MIR project code
-  * MIR project is far away from any serious usage
-  * The current code can be used only to familiarize future users with the project
-    and approaches it uses
   * You can run some benchmarks and tests by `make bench` and `make test`
 
 ## Current MIR Performance Data
