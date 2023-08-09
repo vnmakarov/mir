@@ -29,6 +29,7 @@
     * Each function has **signature** (parameters and return types), **local variables**
       (including function arguments) and **instructions**
       * Each local variable has **type** which can be only 64-bit integer, float, double, or long double
+        and can be bound to a particular target machine register
       * Each instruction has **opcode** and **operands**
         * Operand can be a local variable
 	  (or a function argument), **immediate**, **memory**, **label**, or **reference**
@@ -51,14 +52,20 @@
 	  32- and 64-bit signed and unsigned values
 	* There are **comparison instructions**  working on 32- and 64-bit
 	  signed and unsigned values, float, double, and long double values
+	* There are **local variable address instructions** to get address of local variable
 	* There are **branch insns** (unconditional jump, and jump on zero or non-zero value)
 	  which take a label as one their operand
 	* There are **combined comparison and branch instructions** taking a label as one operand
 	  and two 32- and 64-bit signed and unsigned values, float, double, and long double values
-	* There is **switch** instruction to jump to a label from labels given as operands depending on index given as the first operand
+	* There is **switch** instruction to jump to a label from labels given as operands
+	  depending on index given as the first operand
+	* There is **label address instruction** to get a label address
+	  and **unconditional indirect jump instruction** whose operand contains previously taken label address
 	* There are **function and procedural call instructions**
-	* There are **return instructions** working on 32- and 64-bit
+	* There are **return instructions** optionally returning 32- and 64-bit
 	  integer values, float, double, and long double values
+	* There are **specialized light-weight call and return instructions** can be used for
+	  fast switching from threaded interpreter to JITted code and vice verse
 
 ## MIR Example
   * You can create MIR through **API** consisting of functions for creation of modules,
