@@ -204,9 +204,6 @@ ex100:    func v, 0
 
   * WASM to MIR translation should be pretty straightforward
     * Only small WASM runtime for WASM floating point round insns needed to be provided for MIR
-  * Implementation of Java byte code to/from MIR and LLVM IR to/from MIR compilers
-    will be a challenge:
-    * big runtime and possibly MIR extensions will be required
   * Porting GCC to MIR is possible too.  An experienced GCC developer can implement this
     for 6 to 12 months
   * On my estimation porting MIR JIT compiler to mips64 or sparc64 will take
