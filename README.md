@@ -340,7 +340,7 @@ ex100:    func v, 0
    [1] is based on wall time of compilation of C sieve code (w/o any include file and with
    using memory file system for GCC)
 
-   [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 1
+   [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 2
 
    [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
 
