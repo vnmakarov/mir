@@ -306,31 +306,45 @@ ex100:    func v, 0
 
 ## Current MIR Performance Data
 
-  * Intel i7-9700K with 16GB memory under FC29 with GCC-8.2.1
+  * Intel i5-13600K with 64GB memory under FC37 with GCC-12.3.1
 
-    |                |     MIR-gen      |     MIR-interp  |     gcc -O2      |     gcc -O0     |
-    |----------------|------------------|-----------------|------------------|-----------------|
-    | compilation [1]| **1.0** (69us)   | 0.17 (12us)     | **193** (13.35ms)|  186 (12.8ms)   |
-    | compilation [2]| **1.0** (116us)  | 0.10 (12us)     | **115** (13.35ms)|  110 (12.8ms)   |
-    | execution [3]  | **1.0** (3.05s)  | 6.0 (18.3s)     | **0.95** (2.9s)  |  2.08 (6.34s)   |
-    | code size [4]  | **1.0** (325KB)  | 0.51 (165KB)    | **76** (25.2MB)  |  76 (25.2MB)   |
-    | startup [5]    | **1.0** (1.3us)  | 1.0 (1.3us)     | **9310** (12.1ms)|  9850 (12.8ms)  |
-    | LOC [6]        | **1.0** (15.8K)  | 0.59 (9.4K)     | **94** (1480K)   |  94  (1480K)    |
+    |                | MIR-generator   | MIR-interpreter |     gcc -O2      |     gcc -O0     |
+    |----------------|-----------------|-----------------|------------------|-----------------|
+    | compilation [1]| **1.0** (249us) | 0.09 (22us)     | **109** (27.1ms) |  105 (26.1ms)   |
+    | execution [2]  | **1.0** (1.74s) | 13.7 (23.8s)    | **0.92** (1.6s)  |  2.28 (3.97s)   |
+    | code size [3]  | **1.0** (557KB) | 0.43 (240KB)    | **58** (32.2MB)  |  58 (32.2MB)    |
+    | LOC [4]        | **1.0** (23.4K) | 0.48 (11.3K)    | **103** (2420K)  | 103  (2402K)    |
 
-   [1] is based on wall time of compilation of sieve code (w/o any include file and with
-   using memory file system for GCC) 100 times.  The used optimization level is 1
+   [1] is based on wall time of compilation of C sieve code (w/o any include file and with
+   using memory file system for GCC) and the corresponding MIR sieve code by MIR-interpreter
+   and MIR-generator with optimization level 2
+    
+   [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 2
 
-   [2] is analogous to [1] but with MIR-optimization level 2
+   [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
 
-   [3] is based on the best wall time of 10 runs with used MIR-generator optimization level 1
-
-   [4] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
-
-   [5] is based on wall time of generation of object code for empty C file or generation of empty
-   MIR module through API
-
-   [6] is based only on files required for x86-64 C compiler and files for minimal program to create
+   [4] my estimation based only on files required for x86-64 GNU C compiler and MIR files for minimal program to create
    and run MIR code
+
+## Current C2MIR Performance Data
+
+  * Intel i5-13600K with 64GB memory under FC37 with GCC-12.3.1
+
+    |                | c2m -O2 -eg (generator) | c2m -ei (interpreter) |     gcc -O2      |     gcc -O0     |
+    |----------------|-------------------------|-----------------------|------------------|-----------------|
+    | compilation [1]| **1.0** (336us)         | 1.0 (337us)           | **80** (27.1ms)  |  77 (26.1ms)    |
+    | execution [2]  | **1.0** (1.74s)         | 13.7 (23.8s)          | **0.92** (1.6s)  |  2.28 (3.97s)   |
+    | code size [3]  | **1.0** (961KB)         | 1.0 (961KB)           | **34** (32.2MB)  |  34 (32.2MB)    |
+    | LOC [4]        | **1.0** (54.8K)         | 1.0 (54.8K)           | **44** (2420K)   |  44  (2420K)    |
+
+   [1] is based on wall time of compilation of C sieve code (w/o any include file and with
+   using memory file system for GCC)
+
+   [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 1
+
+   [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
+
+   [4] is based on all source files excluding tests
 
 ## MIR project competitors
   * I only see three projects which could be considered or adapted as real universal light-weight JIT competitors
