@@ -354,14 +354,13 @@ ex100:    func v, 0
       (performance of MIR generated code is 91% of GCC with -O2) while having the same compilation speed as MIR
   * [**LIBJIT**](https://www.gnu.org/software/libjit/) started as a part of DotGNU Project:
     * LIBJIT is bigger:
-      * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 10K C lines for MIR
+      * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 20K C lines for MIR
         (excluding C to MIR compiler)
-      * 420KB object file vs 170KB
     * LIBJIT has fewer optimizations: only copy propagation and register allocation
   * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md)
     is a part of runtime for .NET Core:
     * RyuJIT is even bigger: 360K SLOC
-    * RyuJIT optimizations is basically MIR-generator optimizations minus SCCP
+    * RyuJIT optimizations is basically MIR-generator optimizations
     * RyuJIT uses SSA
   * Other candidates:
     * [**LIBFirm**](https://github.com/libfirm/libfirm): less standalone-, big- (140K LOC), SSA,
