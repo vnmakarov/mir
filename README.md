@@ -343,6 +343,40 @@ ex100:    func v, 0
 
    [4] is based on all source files excluding tests
 
+  * Here is generated code performance related to GCC -O2 for different C compilers on 15 small C benchmarks (from directory `c-benchmarks`) on the same machine where
+    * gcc version is 12.3.1
+    * clang version is 15.0.7
+    * [chibicc](https://github.com/rui314/chibicc) is Rui Ueyama's latest C11 implementation
+    * [cparser](https://github.com/libfirm/cparser) is a C99 implementation based on a pretty sophisticated backend, libFirm version 1.22
+    * [cproc](https://github.com/michaelforney/cproc) is Michael Forney's C11 implementation based on the **QBE** compiler backend
+    * [lacc](https://github.com/larmel/lacc) is a C89 implementation
+    * [pcc](http://pcc.ludd.ltu.se) (1.2.0.DEVEL) is a modern version of the Portable C compiler
+    * [tcc](https://bellard.org/tcc/) (0.9.27) is the tiny C11 compiler
+    * emcc (2.0.20) is emscripten compiler to Webassembly with wasmer (1.0.2) runtime
+    * wasi cranelift is a C to webassember clang compiler (11.0.0) with wasmer (1.0.2) based on cranelift backend
+    * wasi LLVM is a C to webassember clang compiler (11.0.0) with wasmer (1.0.2) based on LLVM backend
+    * wasi singlepass is a C to webassember clang compiler (11.0.0) with wasmer (1.0.2) based on singlepass backend
+    * wasi wasmtime is a C to webassember clang compiler (11.0.0) with wasmtime (0.26.0) runtime based on cranelift backend
+    
+    |                                                  |  Average  |   Geomean |
+    |--------------------------------------------------|-----------|-----------|
+    | gcc -O2                                          |    1.00   |   1.00    |
+    | gcc -O0                                          |    0.63   |   0.57    |
+    | **c2m -eg**                                      |  **0.96** | **0.91**  |
+    | c2m -eb                                          |    0.92   |   0.85    |
+    | chibicc                                          |    0.38   |   0.30    |
+    | clang -O2                                        |    1.12   |   1.09    |
+    | cparser -O3                                      |    1.02   |   0.98    |
+    | cproc                                            |    0.68   |   0.65    |
+    | lacc -O3                                         |    0.47   |   0.39    |
+    | pcc -O                                           |    0.80   |   0.78    |
+    | tcc                                              |    0.54   |   0.50    |
+    | emcc -O2/wasmer                                  |    0.60   |   0.55    |
+    | wasi -O2/wasmer cranelift                        |    0.60   |   0.54    |
+    | wasi -O2/wasmer LLVM                             |    0.78   |   0.72    |
+    | wasi -O2/wasmer singlepass                       |    0.45   |   0.36    |
+    | wasi -O2/wasmtime                                |    0.92   |   0.87    |
+
 ## MIR project competitors
   * I only see three projects which could be considered or adapted as real universal light-weight JIT competitors
   * [**QBE**](https://c9x.me/compile/):
