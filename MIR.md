@@ -247,6 +247,8 @@
 	  <type>: <disp>
 	  <type>: [<disp>] (<base reg> [, <index reg> [, <scale> ]])
 ```
+  * API function `MIR_output_str (MIR_context_t ctx, FILE *f, MIR_str_t str)` outputs the MIR string
+    textual representation into given file
   * API function `MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func)` outputs the operand
     textual representation into given file
         
