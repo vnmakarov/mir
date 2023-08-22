@@ -414,7 +414,12 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
       out_type (f, var.type);
       if (var.name != NULL) fprintf (f, " %s", var.name);
     }
-    if (i == 0) fprintf (f, "void");
+    if (proto->vararg_p) {
+      if (i != 0) fprintf (f, ", ");
+      fprintf (f, "...");
+    } else if (i == 0) {
+      fprintf (f, "void");
+    }
     fprintf (f, ");\n");
     return;
   }
