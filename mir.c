@@ -2468,7 +2468,7 @@ static void output_hard_reg (FILE *f, MIR_reg_t reg) { fprintf (f, "hr%u", reg);
 
 static void output_label (MIR_context_t ctx, FILE *f, MIR_func_t func, MIR_label_t label);
 
-static void out_str (FILE *f, MIR_str_t str) {
+void MIR_output_str (MIR_context_t ctx, FILE *f, MIR_str_t str) {
   fprintf (f, "\"");
   for (size_t i = 0; i < str.len; i++)
     if (str.s[i] == '\\')
@@ -2538,7 +2538,7 @@ void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func) {
     if (op.u.ref->module != func->func_item->module) fprintf (f, "%s.", op.u.ref->module->name);
     fprintf (f, "%s", MIR_item_name (ctx, op.u.ref));
     break;
-  case MIR_OP_STR: out_str (f, op.u.str); break;
+  case MIR_OP_STR: MIR_output_str (ctx, f, op.u.str); break;
   case MIR_OP_LABEL: output_label (ctx, f, func, op.u.label); break;
   default: mir_assert (FALSE);
   }
@@ -2658,7 +2658,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     }
     if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
       fprintf (f, " # "); /* print possible string as a comment */
-      out_str (f, (MIR_str_t){data->nel, (char *) data->u.els});
+      MIR_output_str (ctx, f, (MIR_str_t){data->nel, (char *) data->u.els});
     }
     fprintf (f, "\n");
     return;
