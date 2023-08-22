@@ -62,6 +62,7 @@ static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
     mir_assert (op.u.label->ops[0].mode == MIR_OP_INT);
     fprintf (f, "l%" PRId64, op.u.label->ops[0].u.i);
     break;
+  case MIR_OP_STR: MIR_output_str (ctx, f, op.u.str); break;
   default: mir_assert (FALSE);
   }
 }
@@ -360,6 +361,7 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
     fprintf (f, ") (");
     for (size_t i = start; i < insn->nops; i++) {
       if (i != start) fprintf (f, ", ");
+      if (ops[i].mode == MIR_OP_STR) fprintf (f, "(uint64_t) ");
       out_op (ctx, f, ops[i]);
     }
     fprintf (f, ");\n");
