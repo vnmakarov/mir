@@ -584,6 +584,7 @@ extern void MIR_change_module_ctx (MIR_context_t old_ctx, MIR_module_t m, MIR_co
 extern MIR_insn_code_t MIR_reverse_branch_code (MIR_insn_code_t code);
 
 extern const char *MIR_type_str (MIR_context_t ctx, MIR_type_t tp);
+extern void MIR_output_str (MIR_context_t ctx, FILE *f, MIR_str_t str);
 extern void MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func);
 extern void MIR_output_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn, MIR_func_t func,
                              int newline_p);
