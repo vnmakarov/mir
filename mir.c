@@ -3028,6 +3028,37 @@ static void output_vars (MIR_context_t ctx, FILE *f, MIR_func_t func, VARR (MIR_
   fprintf (f, "\n");
 }
 
+void _MIR_output_data_item_els (MIR_context_t ctx, FILE *f, MIR_item_t item, int c_p) {
+  mir_assert (item->item_type == MIR_data_item);
+  MIR_data_t data = item->u.data;
+  for (size_t i = 0; i < data->nel; i++) {
+    switch (data->el_type) {
+    case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
+    case MIR_T_U8: fprintf (f, "%" PRIu8, ((uint8_t *) data->u.els)[i]); break;
+    case MIR_T_I16: fprintf (f, "%" PRId16, ((int16_t *) data->u.els)[i]); break;
+    case MIR_T_U16: fprintf (f, "%" PRIu16, ((uint16_t *) data->u.els)[i]); break;
+    case MIR_T_I32: fprintf (f, "%" PRId32, ((int32_t *) data->u.els)[i]); break;
+    case MIR_T_U32: fprintf (f, "%" PRIu32, ((uint32_t *) data->u.els)[i]); break;
+    case MIR_T_I64: fprintf (f, "%" PRId64, ((int64_t *) data->u.els)[i]); break;
+    case MIR_T_U64: fprintf (f, "%" PRIu64, ((uint64_t *) data->u.els)[i]); break;
+    case MIR_T_F: fprintf (f, "%.*ef", FLT_MANT_DIG, ((float *) data->u.els)[i]); break;
+    case MIR_T_D: fprintf (f, "%.*e", DBL_MANT_DIG, ((double *) data->u.els)[i]); break;
+    case MIR_T_LD:
+      fprintf (f, "%.*LeL", LDBL_MANT_DIG, ((long double *) data->u.els)[i]);
+      break;
+      /* only ptr as ref ??? */
+    case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
+    default: mir_assert (FALSE);
+    }
+    if (i + 1 < data->nel) fprintf (f, ", ");
+  }
+  if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
+    fprintf (f, c_p ? "/* " : " # "); /* print possible string as a comment */
+    MIR_output_str (ctx, f, (MIR_str_t){data->nel, (char *) data->u.els});
+    if (c_p) fprintf (f, " */");
+  }
+}
+
 void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_insn_t insn;
   MIR_func_t func;
@@ -3082,31 +3113,7 @@ void MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     data = item->u.data;
     if (data->name != NULL) fprintf (f, "%s:", data->name);
     fprintf (f, "\t%s\t", MIR_type_str (ctx, data->el_type));
-    for (size_t i = 0; i < data->nel; i++) {
-      switch (data->el_type) {
-      case MIR_T_I8: fprintf (f, "%" PRId8, ((int8_t *) data->u.els)[i]); break;
-      case MIR_T_U8: fprintf (f, "%" PRIu8, ((uint8_t *) data->u.els)[i]); break;
-      case MIR_T_I16: fprintf (f, "%" PRId16, ((int16_t *) data->u.els)[i]); break;
-      case MIR_T_U16: fprintf (f, "%" PRIu16, ((uint16_t *) data->u.els)[i]); break;
-      case MIR_T_I32: fprintf (f, "%" PRId32, ((int32_t *) data->u.els)[i]); break;
-      case MIR_T_U32: fprintf (f, "%" PRIu32, ((uint32_t *) data->u.els)[i]); break;
-      case MIR_T_I64: fprintf (f, "%" PRId64, ((int64_t *) data->u.els)[i]); break;
-      case MIR_T_U64: fprintf (f, "%" PRIu64, ((uint64_t *) data->u.els)[i]); break;
-      case MIR_T_F: fprintf (f, "%.*ef", FLT_MANT_DIG, ((float *) data->u.els)[i]); break;
-      case MIR_T_D: fprintf (f, "%.*e", DBL_MANT_DIG, ((double *) data->u.els)[i]); break;
-      case MIR_T_LD:
-        fprintf (f, "%.*LeL", LDBL_MANT_DIG, ((long double *) data->u.els)[i]);
-        break;
-        /* only ptr as ref ??? */
-      case MIR_T_P: fprintf (f, "0x%" PRIxPTR, ((uintptr_t *) data->u.els)[i]); break;
-      default: mir_assert (FALSE);
-      }
-      if (i + 1 < data->nel) fprintf (f, ", ");
-    }
-    if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
-      fprintf (f, " # "); /* print possible string as a comment */
-      MIR_output_str (ctx, f, (MIR_str_t){data->nel, (char *) data->u.els});
-    }
+    _MIR_output_data_item_els (ctx, f, item, FALSE);
     fprintf (f, "\n");
     return;
   }
