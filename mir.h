@@ -628,6 +628,7 @@ extern void _MIR_register_unspec_insn (MIR_context_t ctx, uint64_t code, const c
 extern void _MIR_duplicate_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 extern void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item);
 
+extern void _MIR_output_data_item_els (MIR_context_t ctx, FILE *f, MIR_item_t item, int c_p);
 extern void _MIR_get_temp_item_name (MIR_context_t ctx, MIR_module_t module, char *buff,
                                      size_t buff_len);
 
