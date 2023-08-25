@@ -22,7 +22,10 @@ static void out_type (FILE *f, MIR_type_t t) {
   case MIR_T_D: fprintf (f, "double"); break;
   case MIR_T_LD: fprintf (f, "long double"); break;
   case MIR_T_P: fprintf (f, "void *"); break;
-  default: mir_assert (FALSE);
+  default:
+    mir_assert (MIR_blk_type_p (t));
+    fprintf (f, "void *");
+    break;
   }
 }
 
@@ -37,13 +40,16 @@ static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
   case MIR_OP_REF: fprintf (f, "%s", MIR_item_name (ctx, op.u.ref)); break;
   case MIR_OP_MEM: {
     MIR_reg_t no_reg = 0;
-    int disp_p = FALSE;
+    int disp_p = FALSE, blk_p = MIR_blk_type_p (op.u.mem.type);
 
-    fprintf (f, "*(");
-    out_type (f, op.u.mem.type);
-    fprintf (f, "*) (");
+    if (!blk_p) {
+      fprintf (f, "*(");
+      out_type (f, op.u.mem.type);
+      fprintf (f, "*) ");
+    }
+    fprintf (f, "(");
     if (op.u.mem.disp != 0 || (op.u.mem.base == no_reg && op.u.mem.index == no_reg)) {
-      fprintf (f, "%" PRId64, op.u.mem.disp);
+      fprintf (f, "%" PRId64, blk_p ? 0 : op.u.mem.disp);
       disp_p = TRUE;
     }
     if (op.u.mem.base != no_reg || op.u.mem.index != no_reg) {
@@ -384,16 +390,49 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
   }
 }
 
-void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
+static void out_func_decl (MIR_context_t ctx, FILE *f, MIR_func_t func) {
+  MIR_var_t var;
+  if (func->nres == 0)
+    fprintf (f, "void");
+  else if (func->nres == 1)
+    out_type (f, func->res_types[0]);
+  else
+    (*MIR_get_error_func (ctx)) (MIR_func_error,
+                                 "Multiple result functions can not be represented in C");
+  fprintf (f, " %s (", func->name);
+  if (func->nargs == 0) fprintf (f, "void");
+  for (size_t i = 0; i < func->nargs; i++) {
+    if (i != 0) fprintf (f, ", ");
+    var = VARR_GET (MIR_var_t, func->vars, i);
+    out_type (f, var.type);
+    fprintf (f,
+             var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D
+                 || var.type == MIR_T_LD
+               ? " %s"
+               : " _%s",
+             var.name);
+  }
+  fprintf (f, ")");
+}
+
+static void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   MIR_var_t var;
   size_t i, nlocals;
 
-  if (item->item_type == MIR_export_item) return;
+  if (item->item_type == MIR_export_item || item->addr != NULL) return;
   if (item->item_type == MIR_import_item) {
     fprintf (f, "extern char %s[];\n", item->u.import_id);
     return;
   }
   if (item->item_type == MIR_forward_item) {  // ???
+    if (item->ref_def == NULL) return;
+    if (item->ref_def->item_type == MIR_func_item) {
+      out_func_decl (ctx, f, item->ref_def->u.func);
+      fprintf (f, ";\n");
+    } else {
+      out_item (ctx, f, item->ref_def);
+      item->ref_def->addr = (char *) 1; /* mark as processed */
+    }
     return;
   }
   if (item->item_type == MIR_proto_item) {
@@ -424,28 +463,102 @@ void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     return;
   }
   if (!item->export_p) fprintf (f, "static ");
-  curr_func = item->u.func;
-  if (curr_func->nres == 0)
-    fprintf (f, "void");
-  else if (curr_func->nres == 1)
-    out_type (f, curr_func->res_types[0]);
-  else
-    (*MIR_get_error_func (ctx)) (MIR_func_error,
-                                 "Multiple result functions can not be represented in C");
-  fprintf (f, " %s (", curr_func->name);
-  if (curr_func->nargs == 0) fprintf (f, "void");
-  for (i = 0; i < curr_func->nargs; i++) {
-    if (i != 0) fprintf (f, ", ");
-    var = VARR_GET (MIR_var_t, curr_func->vars, i);
-    out_type (f, var.type);
-    fprintf (f,
-             var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D
-                 || var.type == MIR_T_LD
-               ? " %s"
-               : " _%s",
-             var.name);
+  switch (item->item_type) {
+  case MIR_bss_item:
+  case MIR_data_item:
+  case MIR_ref_data_item:
+  case MIR_expr_data_item: {
+    MIR_item_t curr_item, next_item;
+    const char *name, *curr_name;
+    int data_p, struct_p, stop_p, iter, n;
+    if ((name = MIR_item_name (ctx, item)) == NULL) return; /* skip part of a section */
+    data_p = struct_p = FALSE;
+    if ((next_item = DLIST_NEXT (MIR_item_t, item)) != NULL
+        && MIR_item_name (ctx, next_item) == NULL) {
+      struct_p = TRUE;
+      fprintf (f, "struct {");
+    }
+    for (iter = 0; iter < 2; iter++) {
+      for (n = 0, curr_item = item; curr_item != NULL;
+           curr_item = DLIST_NEXT (MIR_item_t, item), n++) {
+        if ((curr_name = MIR_item_name (ctx, curr_item)) != NULL && curr_item != item)
+          break; /* the next section */
+        stop_p = FALSE;
+        switch (curr_item->item_type) {
+        case MIR_data_item:
+          if (iter == 0) {
+            out_type (f, curr_item->u.data->el_type);
+            if (curr_name != NULL)
+              fprintf (f, " %s", curr_name);
+            else
+              fprintf (f, " _m%d", n);
+            if (curr_item->u.data->nel != 1)
+              fprintf (f, "[%lu]", (unsigned long) curr_item->u.data->nel);
+            if (struct_p) fprintf (f, ";");
+          } else {
+            if (curr_item->u.data->nel != 1) fprintf (f, "{");
+            _MIR_output_data_item_els (ctx, f, curr_item, TRUE);
+            if (curr_item->u.data->nel != 1) fprintf (f, "}");
+          }
+          data_p = TRUE;
+          break;
+        case MIR_ref_data_item:
+          data_p = TRUE;
+          if (iter == 0) {
+            if (curr_name != NULL)
+              fprintf (f, "const char *%s", curr_name);
+            else
+              fprintf (f, "const char *_m%d", n);
+            if (struct_p) fprintf (f, ";");
+          } else {
+            fprintf (f, "(const char *) &%s + %" PRId64,
+                     MIR_item_name (ctx, curr_item->u.ref_data->ref_item),
+                     (int64_t) curr_item->u.ref_data->disp);
+          }
+          break;
+        case MIR_expr_data_item:
+          data_p = TRUE;
+          (*MIR_get_error_func (ctx)) (MIR_call_op_error,
+                                       " can not translate MIR expr data func into C");
+          break;
+        case MIR_bss_item:
+          if (iter == 0) {
+            if (curr_name != NULL)
+              fprintf (f, "char %s", curr_name);
+            else
+              fprintf (f, "char _m%d", n);
+            if (curr_item->u.bss->len != 0)
+              fprintf (f, "[%lu]", (unsigned long) curr_item->u.bss->len);
+          } else if (data_p) {
+            mir_assert (struct_p);
+            if (curr_item->u.data->nel != 1) fprintf (f, "{");
+            for (size_t nel = 0; nel < curr_item->u.data->nel; nel++) fprintf (f, "0, ");
+            if (curr_item->u.data->nel != 1) fprintf (f, "}");
+          }
+          break;
+        default: stop_p = TRUE; break;
+        }
+        if (stop_p) break;
+      }
+      if (iter == 0) {
+        if (struct_p) fprintf (f, "} %s", name);
+        if (data_p) {
+          fprintf (f, " = ");
+          if (struct_p) fprintf (f, " {");
+        }
+      } else if (data_p && struct_p) {
+        fprintf (f, ", ");
+      }
+      if (stop_p) break;
+    }
+    fprintf (f, ";\n");
+    return;
   }
-  fprintf (f, ") {\n");
+  default: mir_assert (item->item_type == MIR_func_item);
+  }
+  curr_func = item->u.func;
+  out_func_decl (ctx, f, curr_func);
+  fprintf (f, " {\n");
   for (i = 0; i < curr_func->nargs; i++) {
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
     if (var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
