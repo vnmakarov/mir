@@ -6783,8 +6783,8 @@ static int mv_freq_cmp (const void *v1p, const void *v2p) {
   const mv_t *mv1 = (const mv_t *) v1p;
   const mv_t *mv2 = (const mv_t *) v2p;
 
-  if (mv1->freq < mv2->freq) return -1;
-  if (mv1->freq > mv2->freq) return 1;
+  if (mv1->freq > mv2->freq) return -1;
+  if (mv1->freq < mv2->freq) return 1;
   return (long) mv1->bb_insn->index - (long) mv2->bb_insn->index;
 }
 
