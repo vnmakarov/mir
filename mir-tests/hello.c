@@ -16,7 +16,6 @@ int main(int argc, char **argv)
     if (gen_p)
       break;
     fprintf (stderr, "%s: unknown option %s\n", argv[0], argv[1]);
-    return 1;
   default:
     fprintf (stderr, "%s: [-i|-g]\n", argv[0]);
     return 1;
