@@ -7,3 +7,4 @@
 *.so
 *.so.*
 *.a
+zig-cache/
