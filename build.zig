@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib.disable_sanitize_c = true;
     lib.linkLibC();
     lib.addCSourceFiles(&.{
         "mir.c",
