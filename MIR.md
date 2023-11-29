@@ -218,9 +218,9 @@
       `MIR_op_t MIR_new_double_op (MIR_context_t ctx, double v)`,
       and `MIR_op_t MIR_new_ldouble_op (MIR_context_t ctx, long double v)`.
       Long double operand is changed to double one when long double coincides with double for given target or ABI
-      * In MIR text they are represented the same way as C floating point numbers
+      * In MIR text, they are represented the same way as C floating point numbers
     * **String operands** created through API functions `MIR_op_t MIR_new_str_op (MIR_context_t ctx, MIR_str_t str)`
-      * In MIR text they are represented by `typedef struct MIR_str {size_t len; const char *s;} MIR_str_t`
+      * In MIR text, they are represented by `typedef struct MIR_str {size_t len; const char *s;} MIR_str_t`
       * Strings for each operand are put into memory (which can be modified) and the memory address actually presents the string
     * **Label operand** created through API function `MIR_op_t MIR_new_label_op (MIR_context_t ctx, MIR_label_t label)`
       * Here `label` is a special insn created by API function `MIR_insn_t MIR_new_label (MIR_context_t ctx)`
@@ -228,7 +228,7 @@
     * **Reference operands** created through API function `MIR_op_t MIR_new_ref_op (MIR_context_t ctx, MIR_item_t item)`
       * In MIR text, they are represented by the corresponding item name
     * **Register (variable) operands** created through API function `MIR_op_t MIR_new_reg_op (MIR_context_t ctx, MIR_reg_t reg)`
-      * In MIR text they are represented by the corresponding variable name
+      * In MIR text, they are represented by the corresponding variable name
       * Value of type `MIR_reg_t` is returned by function `MIR_new_func_reg`
         or can be gotten by function `MIR_reg_t MIR_reg (MIR_context_t ctx, const char *reg_name, MIR_func_t func)`, e.g. for argument-variables
     * **Memory operands** consists of type, displacement, base
@@ -254,7 +254,7 @@
         
 
 ## MIR insns
-  * All MIR insns (but call or ret one) expects fixed number of operands
+  * All MIR insns (except `call` or `ret`) expects fixed number of operands
   * Most MIR insns are 3-operand insns: two inputs and one output
   * In majority cases **the first insn operand** describes where the insn result (if any) will be placed
   * Only register or memory operand can be insn output (result) operand
