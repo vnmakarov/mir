@@ -5461,7 +5461,7 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
 static int get_string_char (MIR_context_t ctx) {
   if (input_string_char_num >= input_string_char_limit) return EOF;
   int ch = input_string[input_string_char_num];
-  if (ch == '\0') assert(FALSE); // handled in MIR_scan_string with strlen. Shouldn't have \0 any more
+  if (ch == '\0') return EOF;
   input_string_char_num++;
   if (ch == '\n') curr_lno++;
   return ch;
@@ -5644,7 +5644,7 @@ static MIR_type_t str2type (const char *type_name) {
 
 void MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len);
 void MIR_scan_string (MIR_context_t ctx, const char *str) {
-  MIR_scan_string_s(ctx, str, strlen(str));
+  MIR_scan_string_s(ctx, str, SIZE_MAX);
 }
 
 void MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len) {
