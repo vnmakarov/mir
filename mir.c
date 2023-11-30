@@ -1583,14 +1583,22 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
   return last_item;
 }
 
+extern MIR_item_t MIR_get_module_item (MIR_context_t ctx, MIR_module_t module, const char *name) {
+  mir_assert (module != NULL);
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (strcmp (MIR_item_name (ctx, item), name) == 0) {
+      return item;
+    }
+  }
+  return NULL;
+}
+
 MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name) {
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
         module = DLIST_NEXT (MIR_module_t, module)) {
-    for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL; item = DLIST_NEXT (MIR_item_t, item)) {        
-      if (strcmp (MIR_item_name(ctx, item), name) == 0) {
-        return item;
-      }
-    }
+    MIR_item_t ret = MIR_get_module_item(ctx, module, name);
+    if (ret != NULL) return ret;
   }
   return NULL;
 }

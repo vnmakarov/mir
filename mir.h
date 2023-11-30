@@ -586,6 +586,7 @@ extern void MIR_scan_string (MIR_context_t ctx, const char *str);
 #endif
 
 extern MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name);
+extern MIR_item_t MIR_get_module_item (MIR_context_t ctx, MIR_module_t module, const char *name);
 extern void MIR_load_module (MIR_context_t ctx, MIR_module_t m);
 extern void MIR_load_external (MIR_context_t ctx, const char *name, void *addr);
 extern void MIR_link (MIR_context_t ctx, void (*set_interface) (MIR_context_t ctx, MIR_item_t item),
