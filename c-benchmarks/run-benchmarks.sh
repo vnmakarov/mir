@@ -2,6 +2,8 @@
 # Run run-benchmarks.sh [start_test_num]
 #
 
+export LC_NUMERIC=
+
 srcdir=`dirname $0`
 tempc=__c-bench-temp.c
 temp=__c-bench-temp.out
