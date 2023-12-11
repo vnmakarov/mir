@@ -6348,8 +6348,7 @@ static void shrink_live_ranges (gen_ctx_t gen_ctx) {
   bitmap_clear (points_with_born_vars);
   bitmap_clear (points_with_dead_vars);
   for (size_t i = 0; i < VARR_LENGTH (live_range_t, var_live_ranges); i++) {
-    for (prev_lr = NULL, lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL;
-         lr = lr->next) {
+    for (lr = VARR_GET (live_range_t, var_live_ranges, i); lr != NULL; lr = lr->next) {
       gen_assert (lr->start <= lr->finish);
       bitmap_set_bit_p (points_with_born_vars, lr->start);
       bitmap_set_bit_p (points_with_dead_vars, lr->finish);
@@ -7146,7 +7145,7 @@ typedef struct lr_gap {
   int16_t hreg;    /* key, hard reg assigned to reg */
   int16_t type;    /* type of reg */
   MIR_reg_t reg;   /* reg of the gap lr */
-  live_range_t lr; /* the gap lr, lr->finish is another key */
+  live_range_t lr; /* the gap lr, lr->start is another key */
 } lr_gap_t;
 
 DEF_VARR (lr_gap_t);
