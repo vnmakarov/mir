@@ -129,7 +129,7 @@ L2M_EXE += $(BUILD_DIR)/l2m$(EXE)
 L2M_TEST += l2m-test$(EXE)
 endif
 
-EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE)
+EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE) $(BUILD_DIR)/mir-run$(EXE)
 
 Q=@
 
@@ -234,6 +234,20 @@ clean-c2m:
 	$(RM) $(C2M_BUILD) $(C2M_BUILD:.$(OBJSUFF)=.d)
 
 -include $(C2M_BUILD:.$(OBJSUFF)=.d)
+
+# ------------------ MIR RUN ----------------------
+
+MIR_RUN_SRC:=$(SRC_DIR)/mir-run.c
+MIR_RUN_BUILD:=$(MIR_RUN_SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.$(OBJSUFF))
+
+$(BUILD_DIR)/mir-run$(EXE): $(MIR_RUN_BUILD) $(BUILD_DIR)/libmir.$(LIBSUFF) | $(BUILD_DIR)
+	$(LINK) $^ $(LDLIBS) $(EXEO)$@ $(BUILD_DIR)/libmir.$(LIBSUFF)
+
+.PHONY: clean-mir-run
+clean-mir-run:
+	$(RM) $(MIR_RUN_BUILD) $(MIR_RUN_BUILD:.$(OBJSUFF)=.d)
+
+-include $(MIR_RUN_BUILD:.$(OBJSUFF)=.d)
 
 # ------------------ L2M --------------------------
 L2M_SRC:=$(SRC_DIR)/llvm2mir/llvm2mir.c $(SRC_DIR)/llvm2mir/llvm2mir-driver.c
