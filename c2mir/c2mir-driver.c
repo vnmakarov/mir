@@ -226,36 +226,6 @@ static VARR (input_t) * inputs_to_compile;
 
 static void init_options (int argc, char *argv[]) {
   int incl_p, ldir_p = FALSE; /* to remove an uninitialized warning */
-  VARR_CREATE (char, temp_string, 0);
-  VARR_CREATE (char_ptr_t, headers, 0);
-  VARR_CREATE (macro_command_t, macro_commands, 0);
-
-  // see if called from a linked interface
-  {
-    char *slash_ptr = strrchr(argv[0], '/');
-    if(slash_ptr == NULL)
-      slash_ptr = argv[0];
-    else
-      slash_ptr++;
-
-    if(!strcmp(slash_ptr, "c2m-ei"))
-      interp_exec_p = TRUE;
-    else if(!strcmp(slash_ptr, "c2m-eg"))
-      gen_exec_p = TRUE;
-    else if(!strcmp(slash_ptr, "c2m-el"))
-      lazy_gen_exec_p = TRUE;
-
-    if(interp_exec_p || gen_exec_p || lazy_gen_exec_p) {
-      // (probably) called from binfmt_misc
-      // argv[1] should be full path to binary
-      // argv[2:] should be args, including binary name
-      VARR_PUSH (char_ptr_t, source_file_names, argv[1]);
-      VARR_TRUNC (char_ptr_t, exec_argv, 0);
-      for (int i=2; i < argc; i++) VARR_PUSH (char_ptr_t, exec_argv, argv[i]);
-
-      return;
-    }
-  }
 
   options.message_file = stderr;
   options.output_file_name = NULL;
@@ -263,6 +233,9 @@ static void init_options (int argc, char *argv[]) {
   options.asm_p = options.object_p = options.no_prepro_p = options.prepro_only_p = FALSE;
   options.syntax_only_p = options.pedantic_p = FALSE;
   gen_debug_level = -1;
+  VARR_CREATE (char, temp_string, 0);
+  VARR_CREATE (char_ptr_t, headers, 0);
+  VARR_CREATE (macro_command_t, macro_commands, 0);
   optimize_level = -1;
   threads_num = 1;
   curr_input.code = NULL;

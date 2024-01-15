@@ -130,7 +130,6 @@ L2M_TEST += l2m-test$(EXE)
 endif
 
 EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE)
-LINKS=$(BUILD_DIR)/c2m-ei$(EXE) $(BUILD_DIR)/c2m-eg$(EXE) $(BUILD_DIR)/c2m-el$(EXE)
 
 Q=@
 
@@ -158,9 +157,6 @@ else
     endif
 endif
 	install -m a+rx $(EXECUTABLES) $(PREFIX)/bin
-	-ln -s c2m $(PREFIX)/bin/c2m-ei
-	-ln -s c2m $(PREFIX)/bin/c2m-eg
-	-ln -s c2m $(PREFIX)/bin/c2m-el
 
 $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
@@ -178,7 +174,6 @@ else
     endif
 endif
 	$(RM) $(EXECUTABLES:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
-	$(RM) $(LINKS:$(BUILD_DIR)/%=$(PREFIX)/bin/%)
 	-rmdir $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
 	-rmdir $(PREFIX)
 
@@ -230,15 +225,6 @@ $(BUILD_DIR)/c2mir/%.$(OBJSUFF): $(SRC_DIR)/c2mir/%.c | $(BUILD_DIR)/c2mir
 
 $(BUILD_DIR)/c2m$(EXE): $(C2M_BUILD) $(BUILD_DIR)/libmir.$(LIBSUFF) | $(BUILD_DIR)
 	$(LINK) $^ $(LDLIBS) $(EXEO)$@
-
-$(BUILD_DIR)/c2m-ei$(EXE): $(BUILD_DIR)/c2m$(EXE)
-	ln -s c2m$(EXE) $@
-
-$(BUILD_DIR)/c2m-eg$(EXE): $(BUILD_DIR)/c2m$(EXE)
-	ln -s c2m$(EXE) $@
-
-$(BUILD_DIR)/c2m-el$(EXE): $(BUILD_DIR)/c2m$(EXE)
-	ln -s c2m$(EXE) $@
 
 $(BUILD_DIR)/c2mir:
 	   mkdir -p $@
