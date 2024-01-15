@@ -229,7 +229,7 @@ void lib_dirs_from_env_var(const char *env_var) {
 
   // copy to an allocated buffer
   int value_len = strlen(var_value);
-  char *value = (char*)alloca(value_len+1);
+  char *value = (char*)malloc(value_len+1);
   strcpy(value, var_value);
 
   // colon separated list
@@ -270,7 +270,7 @@ void open_extra_libs(void) {
     return;
 
   int value_len = strlen(var_value);
-  char *value = (char*)alloca(value_len+1);
+  char *value = (char*)malloc(value_len+1);
   strcpy(value, var_value);
 
   char *value_ptr = value;
@@ -299,6 +299,7 @@ int main (int argc, char **argv, char **envp) {
   MIR_val_t val;
   int exit_code;
 
+  VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (lib_t, extra_libs, 16);
   VARR_CREATE (char_ptr_t, lib_dirs, 16);
   for(int i=0; i < sizeof(std_lib_dirs) / sizeof(char_ptr_t); i++)
