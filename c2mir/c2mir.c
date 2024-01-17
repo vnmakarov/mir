@@ -1545,13 +1545,12 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
     case ']': return new_token (c2m_ctx, cs->pos, "]", curr_c, N_IGNORE);
     case EOF: {
       pos = cs->pos;
-      assert (eof_s != cs);
       if (eof_s != NULL) free_stream (eof_s);
-      if (cs->f != stdin && cs->f != NULL) {
+      if (eof_s != cs && cs->f != stdin && cs->f != NULL) {
         fclose (cs->f);
         cs->f = NULL;
       }
-      eof_s = VARR_POP (stream_t, streams);
+      eof_s = VARR_LENGTH (stream_t, streams) == 0 ? NULL : VARR_POP (stream_t, streams);
       if (VARR_LENGTH (stream_t, streams) == 0) {
         return new_token (c2m_ctx, pos, "<EOU>", T_EOU, N_IGNORE);
       }
@@ -3608,7 +3607,8 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
       out_token (c2m_ctx, t);
       continue;
     } else if (t->code == T_EOFILE || t->code == T_EOU) {
-      if ((int) VARR_LENGTH (ifstate_t, ifs) > eof_s->ifs_length_at_stream_start) {
+      if ((int) VARR_LENGTH (ifstate_t, ifs)
+          > (eof_s == NULL ? 0 : eof_s->ifs_length_at_stream_start)) {
         error (c2m_ctx, VARR_LAST (ifstate_t, ifs)->if_pos, "unfinished #if");
       }
       if (t->code == T_EOU) return;
