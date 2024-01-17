@@ -903,7 +903,7 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       new_insn = MIR_new_insn (ctx, MIR_ADD, treg_op, _MIR_new_var_op (ctx, FP_HARD_REG),
                                MIR_new_int_op (ctx, mem_size));
       gen_add_insn_before (gen_ctx, insn, new_insn);
-      va_reg = va_op.var;
+      va_reg = va_op.u.var;
       gen_mov (gen_ctx, insn, MIR_MOV,
                _MIR_new_var_mem_op (ctx, MIR_T_I64, 0, va_reg, MIR_NON_VAR, 1), treg_op);
 #endif
