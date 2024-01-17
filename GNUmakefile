@@ -734,10 +734,10 @@ gen-bench2: $(BUILD_DIR)/c2m # Ignore M1 MacOs as it needs another procedure to 
 	  echo +++++ Compiling and generating all code for c2m: +++++;\
 	  for i in 0 1 2 3;do \
 	    echo === Optimization level $$i:;\
-        echo 'int main () {return 0;}' > a.c;\
+        echo 'int main () {return 0;}' > __a.c;\
 	    time $(BUILD_DIR)/c2m -O$$i -Dx86_64 -I$(SRC_DIR) $(SRC_DIR)/mir-gen.c $(SRC_DIR)/c2mir/c2mir.c\
-	                                                      $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -el -i < a.c;\
-	    rm -f a.c a.bmir;\
+	                       $(SRC_DIR)/c2mir/c2mir-driver.c $(SRC_DIR)/mir.c -el -i -o __a.bmir < __a.c;\
+	    rm -f __a.c __a.bmir;\
 	  done;\
 	fi
 
