@@ -63,6 +63,12 @@ add_executable (c2m "c2mir/c2mir-driver.c")
 target_include_directories(c2m PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(c2m mir ${CMAKE_DL_LIBS} )
 
+# ------------------ MIR RUN ----------------------
+
+add_executable (mir-run "mir-run.c")
+target_include_directories (mir-run PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(mir-run mir ${CMAKE_DL_LIBS} )
+
 # ------------------ MIR utils --------------------
 add_executable (m2b "mir-utils/m2b.c")
 target_include_directories(m2b PRIVATE ${PROJECT_SOURCE_DIR})
