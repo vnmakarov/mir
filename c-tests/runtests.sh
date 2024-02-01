@@ -38,6 +38,9 @@ runtest () {
 	if test -f $t.mach && ! $GREP -E "`uname -m`" $t.mach >/dev/null; then
 	    $ECHO $t: SKIPPED as used only for "`cat $t.mach`"; return 0;
 	fi
+	if test -f $t.nomach && $GREP -E "`uname -m`" $t.nomach >/dev/null; then
+	    $ECHO $t: SKIPPED as disabled for "`cat $t.nomach`"; return 0;
+	fi
 	if test -f $t.opt && ! $GREP -E -- "`cat $t.opt`" $execution_program >/dev/null; then
 	    $ECHO $t: SKIPPED as used only for "`cat $t.opt`"; return 0;
 	fi
