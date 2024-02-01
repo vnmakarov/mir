@@ -129,7 +129,7 @@ L2M_EXE += $(BUILD_DIR)/l2m$(EXE)
 L2M_TEST += l2m-test$(EXE)
 endif
 
-EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE) $(BUILD_DIR)/mir-run$(EXE)
+EXECUTABLES=$(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/m2b$(EXE) $(BUILD_DIR)/b2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE) $(L2M_EXE) $(BUILD_DIR)/mir-bin-run$(EXE)
 
 Q=@
 
@@ -180,7 +180,7 @@ endif
 clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB)
 
-test: readme-example-test c2mir-test
+test: readme-example-test mir-bin-run-test c2mir-test
 
 test-all: adt-test simplify-test io-test scan-test mir2c-test $(L2M-TEST) test
 
@@ -237,14 +237,14 @@ clean-c2m:
 
 # ------------------ MIR RUN ----------------------
 
-MIR_RUN_SRC:=$(SRC_DIR)/mir-run.c
+MIR_RUN_SRC:=$(SRC_DIR)/mir-bin-run.c
 MIR_RUN_BUILD:=$(MIR_RUN_SRC:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.$(OBJSUFF))
 
-$(BUILD_DIR)/mir-run$(EXE): $(MIR_RUN_BUILD) $(BUILD_DIR)/libmir.$(LIBSUFF) | $(BUILD_DIR)
+$(BUILD_DIR)/mir-bin-run$(EXE): $(MIR_RUN_BUILD) $(BUILD_DIR)/libmir.$(LIBSUFF) | $(BUILD_DIR)
 	$(LINK) $^ $(LDLIBS) $(EXEO)$@ $(BUILD_DIR)/libmir.$(LIBSUFF)
 
-.PHONY: clean-mir-run
-clean-mir-run:
+.PHONY: clean-mir-bin-run
+clean-mir-bin-run:
 	$(RM) $(MIR_RUN_BUILD) $(MIR_RUN_BUILD:.$(OBJSUFF)=.d)
 
 -include $(MIR_RUN_BUILD:.$(OBJSUFF)=.d)
@@ -538,6 +538,17 @@ gen-test16: $(BUILD_DIR)/run-test$(EXE)
 
 clean-mir-gen-tests:
 	$(RM) $(BUILD_DIR)/mir-tests/gen-loop-test$(EXE) $(BUILD_DIR)/mir-tests/issue219$(EXE)
+
+# ------------------ MIR run tests --------------------------
+
+mir-bin-run-test: $(BUILD_DIR)/mir-bin-run$(EXE) $(BUILD_DIR)/c2m$(EXE)
+	      $(BUILD_DIR)/c2m$(EXE) -c $(SRC_DIR)/sieve.c
+	      $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=interp time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=gen time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=lazy time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      rm sieve.bmir
+	
 
 # ------------------ readme example test ----------------
 

@@ -4,16 +4,16 @@
 #include <alloca.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
-#include "mir-gen.h"	// mir.h gets included as well
+#include "mir-gen.h"  // mir.h gets included as well
 
 #define MIR_TYPE_INTERP 1
 #define MIR_TYPE_INTERP_NAME "interp"
-#define MIR_TYPE_JIT 2
-#define MIR_TYPE_JIT_NAME "jit"
+#define MIR_TYPE_GEN 2
+#define MIR_TYPE_GEN_NAME "gen"
 #define MIR_TYPE_LAZY 3
 #define MIR_TYPE_LAZY_NAME "lazy"
 
-#define MIR_TYPE_DEFAULT MIR_TYPE_INTERP
+#define MIR_TYPE_DEFAULT MIR_TYPE_LAZY
 
 #define MIR_ENV_VAR_LIB_DIRS "MIR_LIB_DIRS"
 #define MIR_ENV_VAR_EXTRA_LIBS "MIR_LIBS"
@@ -34,11 +34,13 @@ static lib_t std_libs[]
 static const char *std_lib_dirs[] = {"/lib", "/lib32"};
 #elif UINTPTR_MAX == 0xffffffffffffffff
 #if defined(__x86_64__)
-static lib_t std_libs[]
-  = {{"/lib64/libc.so.6", NULL},           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
-     {"/lib64/libm.so.6", NULL},           {"/lib/x86_64-linux-gnu/libm.so.6", NULL},
-     {"/usr/lib64/libpthread.so.0", NULL}, {"/lib/x86_64-linux-gnu/libpthread.so.0", NULL},
-     {"/usr/lib/libc.so", NULL}};
+static lib_t std_libs[] = {{"/lib64/libc.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libc.so.6", NULL},
+                           {"/lib64/libm.so.6", NULL},
+                           {"/lib/x86_64-linux-gnu/libm.so.6", NULL},
+                           {"/usr/lib64/libpthread.so.0", NULL},
+                           {"/lib/x86_64-linux-gnu/libpthread.so.0", NULL},
+                           {"/usr/lib/libc.so", NULL}};
 static const char *std_lib_dirs[] = {"/lib64", "/lib/x86_64-linux-gnu"};
 #elif (__aarch64__)
 static lib_t std_libs[]
@@ -110,7 +112,6 @@ static const char *lib_suffix = ".dll";
 #define dlclose(h) FreeLibrary (h)
 #define dlsym(h, s) GetProcAddress (h, s)
 #endif
-
 
 static void close_std_libs (void) {
   for (int i = 0; i < sizeof (std_libs) / sizeof (lib_t); i++)
@@ -222,20 +223,19 @@ static void *import_resolver (const char *name) {
   return sym;
 }
 
-void lib_dirs_from_env_var(const char *env_var) {
-  const char *var_value = getenv(env_var);
-  if (var_value == NULL || var_value[0] == '\0')
-    return;
+void lib_dirs_from_env_var (const char *env_var) {
+  const char *var_value = getenv (env_var);
+  if (var_value == NULL || var_value[0] == '\0') return;
 
   // copy to an allocated buffer
-  int value_len = strlen(var_value);
-  char *value = (char*)malloc(value_len+1);
-  strcpy(value, var_value);
+  int value_len = strlen (var_value);
+  char *value = (char *) malloc (value_len + 1);
+  strcpy (value, var_value);
 
   // colon separated list
   char *value_ptr = value;
   char *colon = NULL;
-  while ((colon = strchr(value_ptr, ':')) != NULL) {
+  while ((colon = strchr (value_ptr, ':')) != NULL) {
     colon[0] = '\0';
     VARR_PUSH (char_ptr_t, lib_dirs, value_ptr);
     // goto next
@@ -246,55 +246,48 @@ void lib_dirs_from_env_var(const char *env_var) {
   VARR_PUSH (char_ptr_t, lib_dirs, value_ptr);
 }
 
-int get_mir_type(void) {
-  const char *type_value = getenv(MIR_ENV_VAR_TYPE);
-  if (type_value == NULL || type_value[0] == '\0')
-    return MIR_TYPE_DEFAULT;
+int get_mir_type (void) {
+  const char *type_value = getenv (MIR_ENV_VAR_TYPE);
+  if (type_value == NULL || type_value[0] == '\0') return MIR_TYPE_DEFAULT;
 
-  if (strcmp(type_value, MIR_TYPE_INTERP_NAME) == 0)
-    return MIR_TYPE_INTERP;
+  if (strcmp (type_value, MIR_TYPE_INTERP_NAME) == 0) return MIR_TYPE_INTERP;
 
-  if (strcmp(type_value, MIR_TYPE_JIT_NAME) == 0)
-    return MIR_TYPE_JIT;
+  if (strcmp (type_value, MIR_TYPE_GEN_NAME) == 0) return MIR_TYPE_GEN;
 
-  if (strcmp(type_value, MIR_TYPE_LAZY_NAME) == 0)
-    return MIR_TYPE_LAZY;
+  if (strcmp (type_value, MIR_TYPE_LAZY_NAME) == 0) return MIR_TYPE_LAZY;
 
-  fprintf(stderr, "warning: unknown MIR_TYPE '%s', using default one\n", type_value);
+  fprintf (stderr, "warning: unknown MIR_TYPE '%s', using default one\n", type_value);
   return MIR_TYPE_DEFAULT;
 }
 
-void open_extra_libs(void) {
-  const char *var_value = getenv(MIR_ENV_VAR_EXTRA_LIBS);
-  if (var_value == NULL || var_value[0] == '\0')
-    return;
+void open_extra_libs (void) {
+  const char *var_value = getenv (MIR_ENV_VAR_EXTRA_LIBS);
+  if (var_value == NULL || var_value[0] == '\0') return;
 
-  int value_len = strlen(var_value);
-  char *value = (char*)malloc(value_len+1);
-  strcpy(value, var_value);
+  int value_len = strlen (var_value);
+  char *value = (char *) malloc (value_len + 1);
+  strcpy (value, var_value);
 
   char *value_ptr = value;
   char *colon = NULL;
-  while ((colon = strchr(value_ptr, ':')) != NULL) {
+  while ((colon = strchr (value_ptr, ':')) != NULL) {
     colon[0] = '\0';
-    process_extra_lib(value_ptr);
+    process_extra_lib (value_ptr);
 
     value_ptr = colon + 1;
   }
-  process_extra_lib(value_ptr);
+  process_extra_lib (value_ptr);
 }
 
-
 int main (int argc, char **argv, char **envp) {
-
   // from binfmt_misc we expect the arguments to be:
   // `mir-run /full/path/to/mir-binary mir-binary <args...>`
   if (argc < 3) {
-    fprintf(stderr, "usage: %s <full-path> <name> [<args>...]\n", argv[0]);
+    fprintf (stderr, "usage: %s <full-path> <name> [<args>...]\n", argv[0]);
     return 1;
   }
 
-  int mir_type = get_mir_type();
+  int mir_type = get_mir_type ();
 
   MIR_val_t val;
   int exit_code;
@@ -302,20 +295,20 @@ int main (int argc, char **argv, char **envp) {
   VARR_CREATE (char, temp_string, 0);
   VARR_CREATE (lib_t, extra_libs, 16);
   VARR_CREATE (char_ptr_t, lib_dirs, 16);
-  for(int i=0; i < sizeof(std_lib_dirs) / sizeof(char_ptr_t); i++)
+  for (int i = 0; i < sizeof (std_lib_dirs) / sizeof (char_ptr_t); i++)
     VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[i]);
-  lib_dirs_from_env_var("LD_LIBRARY_PATH");
-  lib_dirs_from_env_var(MIR_ENV_VAR_LIB_DIRS);
+  lib_dirs_from_env_var ("LD_LIBRARY_PATH");
+  lib_dirs_from_env_var (MIR_ENV_VAR_LIB_DIRS);
 
   MIR_item_t main_func = NULL;
 
-  MIR_context_t mctx = MIR_init();
-  FILE *mir_file = fopen(argv[1], "r");
+  MIR_context_t mctx = MIR_init ();
+  FILE *mir_file = fopen (argv[1], "r");
   if (!mir_file) {
-    fprintf(stderr, "failed to open file '%s'\n", argv[1]);
+    fprintf (stderr, "failed to open file '%s'\n", argv[1]);
     return 1;
   }
-  MIR_read(mctx, mir_file);
+  MIR_read (mctx, mir_file);
 
   for (MIR_module_t module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (mctx)); module != NULL;
        module = DLIST_NEXT (MIR_module_t, module)) {
@@ -336,27 +329,20 @@ int main (int argc, char **argv, char **envp) {
 
   if (mir_type == MIR_TYPE_INTERP) {
     MIR_link (mctx, MIR_set_interp_interface, import_resolver);
-    MIR_interp (
-      mctx, main_func, &val, 3,
-      (MIR_val_t){.i = (argc-2)},
-      (MIR_val_t){.a = (void*)(argv+2)},
-      (MIR_val_t){.a = (void*)envp}
-    );
+    MIR_interp (mctx, main_func, &val, 3, (MIR_val_t){.i = (argc - 2)},
+                (MIR_val_t){.a = (void *) (argv + 2)}, (MIR_val_t){.a = (void *) envp});
     exit_code = val.i;
   } else {
     MIR_gen_init (mctx, 1);
-    MIR_link (mctx,
-              mir_type == MIR_TYPE_JIT
-                ? MIR_set_gen_interface
-                : MIR_set_lazy_gen_interface,
+    MIR_link (mctx, mir_type == MIR_TYPE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
-    uint64_t (*fun_addr)(int, char**, char**) = MIR_gen(mctx, 0, main_func);
-    exit_code = fun_addr(argc-2, argv+2, envp);
-    MIR_gen_finish(mctx);
+    uint64_t (*fun_addr) (int, char **, char **) = MIR_gen (mctx, 0, main_func);
+    exit_code = fun_addr (argc - 2, argv + 2, envp);
+    MIR_gen_finish (mctx);
   }
   MIR_finish (mctx);
-  close_extra_libs();
-  close_std_libs();
+  close_extra_libs ();
+  close_std_libs ();
 
   return exit_code;
 }
