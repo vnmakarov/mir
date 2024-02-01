@@ -188,17 +188,17 @@ ex100:    func v, 0
     /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
 
-### Running through `binfmt_misc`
+### Running binary MIR files on Linux through `binfmt_misc`
 
-The `mir-run` binary is prepared to be used from `binfmt_misc` with the
+The `mir-bin-run` binary is prepared to be used from `binfmt_misc` with the
 following line (example):
 
 ```bash
-line=:mir:M::MIR::/usr/local/bin/mir-run:P
+line=:mir:M::MIR::/usr/local/bin/mir-bin-run:P
 echo $line > /proc/sys/fs/binfmt_misc/register
 ```
 
-> Do adapt the mir-run binary path to your system, that is the default one
+> Do adapt the mir-bin-run binary path to your system, that is the default one
 
 And run with
 ```bash
@@ -209,15 +209,15 @@ chmod +x your-file
 
 The executable is "configurable" with environment variables:
 
-- `MIR_TYPE` sets the interface for code execution: `interp` (default),
-  `jit` (for generation) and `lazy` (for lazy generation);
-- `MIR_LIBS` (colon separated list) defines a list of extra libraries to load;
-- `MIR_LIB_DIRS` or `LD_LIBRARY_PATH` (colon separated list) defines an extra list
+* `MIR_TYPE` sets the interface for code execution: `interp` (for interpretation),
+  `jit` (for generation) and `lazy` (for lazy generation, default);
+* `MIR_LIBS` (colon separated list) defines a list of extra libraries to load;
+* `MIR_LIB_DIRS` or `LD_LIBRARY_PATH` (colon separated list) defines an extra list
   of directories to search the libraries on.
 
 
-> Due to the tied nature of `mir-run` with `binfmt_misc`, it may be a bit weird
-> to call `mir-run` directly.
+> Due to the tied nature of `mir-bin-run` with `binfmt_misc`, it may be a bit weird
+> to call `mir-bin-run` directly.
 > The `P` flag on the binfmt_misc passes an extra argument with the full path
 > to the MIR binary.
 
