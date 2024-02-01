@@ -1,6 +1,6 @@
 name: ppc64le-test
 
-on: [workflow_dispatch] # [push, workflow_dispatch]
+on: [push, workflow_dispatch]
 
 jobs:
   ppc64le:
