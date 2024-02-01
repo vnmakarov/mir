@@ -1,4 +1,4 @@
-name: Apple silicon
+name: apple-aarch64-test
 
 on: [push, workflow_dispatch]
 
