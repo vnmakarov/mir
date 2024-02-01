@@ -7,3 +7,5 @@
 *.so
 *.so.*
 *.a
+/mir-run
+/build

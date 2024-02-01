@@ -173,7 +173,7 @@ ex100:    func v, 0
   * After linking, you can interpret functions from the modules or call machine code
     for the functions generated with MIR JIT compiler (generator).  What way the function can be executed
     is usually defined by set up interface.  How the generated code is produced (lazily on the first call or ahead of time)
-    can be also dependent on the interface 
+    can be also dependent on the interface
   * Running code from the above example could look like the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
 ```c
@@ -187,6 +187,39 @@ ex100:    func v, 0
     MIR_interp (ctx, func, &result, 0); /* zero here is arguments number  */
     /* or ((void (*) (void)) func->addr) (); to call interpr. or gen. code through the interface */
 ```
+
+### Running through `binfmt_misc`
+
+The `mir-run` binary is prepared to be used from `binfmt_misc` with the
+following line (example):
+
+```bash
+line=:mir:M::MIR::/usr/local/bin/mir-run:P
+echo $line > /proc/sys/fs/binfmt_misc/register
+```
+
+> Do adapt the mir-run binary path to your system, that is the default one
+
+And run with
+```bash
+c2m your-file.c -o your-file
+chmod +x your-file
+./your-file your args
+```
+
+The executable is "configurable" with environment variables:
+
+- `MIR_TYPE` sets the interface for code execution: `interp` (default),
+  `jit` (for generation) and `lazy` (for lazy generation);
+- `MIR_LIBS` (colon separated list) defines a list of extra libraries to load;
+- `MIR_LIB_DIRS` or `LD_LIBRARY_PATH` (colon separated list) defines an extra list
+  of directories to search the libraries on.
+
+
+> Due to the tied nature of `mir-run` with `binfmt_misc`, it may be a bit weird
+> to call `mir-run` directly.
+> The `P` flag on the binfmt_misc passes an extra argument with the full path
+> to the MIR binary.
 
 ## The current state of MIR project
 
@@ -212,7 +245,7 @@ ex100:    func v, 0
   * Performance minded porting MIR JIT compiler to 32-bit targets will need an implementation of
     additional small analysis pass to get info what 64-bit variables are used only
     in 32-bit instructions
-    
+
 ## MIR JIT compiler
   * Original compiler **Performance Goals** relative to GCC -O2:
     * 70% of generated code speed
@@ -267,7 +300,7 @@ ex100:    func v, 0
   * **Combine** (code selection): merging data-depended insns into one
   * **Dead Code Elimination**: removing insns with unused outputs
   * **Generate Machine Insns**: run machine-dependent code creating machine insns
-  
+
 ## C to MIR translation
   * We implemented a small C11 (2011 ANSI C standard with some GCC extensions) to MIR compiler `c2m`.
     See [README.md](https://github.com/vnmakarov/mir/tree/master/c2mir)
