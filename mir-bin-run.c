@@ -333,10 +333,10 @@ int main (int argc, char **argv, char **envp) {
                 (MIR_val_t){.a = (void *) (argv + 2)}, (MIR_val_t){.a = (void *) envp});
     exit_code = val.i;
   } else {
-    MIR_gen_init (mctx, 1);
+    MIR_gen_init (mctx);
     MIR_link (mctx, mir_type == MIR_TYPE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
-    uint64_t (*fun_addr) (int, char **, char **) = MIR_gen (mctx, 0, main_func);
+    uint64_t (*fun_addr) (int, char **, char **) = MIR_gen (mctx, main_func);
     exit_code = fun_addr (argc - 2, argv + 2, envp);
     MIR_gen_finish (mctx);
   }
