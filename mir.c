@@ -5271,6 +5271,7 @@ struct scan_ctx {
   HTAB (insn_name_t) * insn_name_tab;
   const char *input_string;
   size_t input_string_char_num;
+  size_t input_string_char_limit;
   VARR (label_name_t) * label_names;
   HTAB (label_desc_t) * label_desc_tab;
 };
@@ -5284,6 +5285,7 @@ struct scan_ctx {
 #define insn_name_tab ctx->scan_ctx->insn_name_tab
 #define input_string ctx->scan_ctx->input_string
 #define input_string_char_num ctx->scan_ctx->input_string_char_num
+#define input_string_char_limit ctx->scan_ctx->input_string_char_limit
 #define label_names ctx->scan_ctx->label_names
 #define label_desc_tab ctx->scan_ctx->label_desc_tab
 
@@ -5461,8 +5463,8 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
 }
 
 static int get_string_char (MIR_context_t ctx) {
+  if (input_string_char_num >= input_string_char_limit) return EOF;
   int ch = input_string[input_string_char_num];
-
   if (ch == '\0') return EOF;
   input_string_char_num++;
   if (ch == '\n') curr_lno++;
@@ -5644,7 +5646,12 @@ static MIR_type_t str2type (const char *type_name) {
 
 */
 
+void MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len);
 void MIR_scan_string (MIR_context_t ctx, const char *str) {
+  MIR_scan_string_s(ctx, str, SIZE_MAX);
+}
+
+void MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len) {
   token_t t;
   const char *name;
   MIR_module_t module = NULL;
@@ -5664,6 +5671,7 @@ void MIR_scan_string (MIR_context_t ctx, const char *str) {
   curr_lno = 1;
   input_string = str;
   input_string_char_num = 0;
+  input_string_char_limit = str_len;
   t.code = TC_NL;
   for (;;) {
     if (setjmp (error_jmp_buf)) {

@@ -19,7 +19,7 @@
    * To start work with MIR program, you should first call API function `MIR_init`
    * API function `MIR_finish (MIR_context_t ctx)` should be called last.  It frees all internal data used to work with MIR program and all IR (insns, functions, items, and modules) created in this context
    * API function `MIR_output (MIR_context_t ctx, FILE *f)` outputs MIR textual representation of the program into given file
-   * API function `MIR_scan_string (MIR_context_t ctx, const char *str)` reads textual MIR representation given by a string
+   * API function `MIR_scan_string_s (MIR_context_t ctx, const char *str, size_t str_len)` reads textual MIR representation given by a string
    * API functions `MIR_write (MIR_context_t ctx, FILE *f)` and
      `MIR_read (MIR_context_t ctx, FILE *f)` outputs and reads
      **binary MIR representation** to/from given file.  There are also
