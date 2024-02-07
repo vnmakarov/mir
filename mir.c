@@ -505,20 +505,24 @@ static void push_data (MIR_context_t ctx, uint8_t *els, size_t size) {
   for (size_t i = 0; i < size; i++) VARR_PUSH (uint8_t, temp_data, els[i]);
 }
 
-const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
+static const char** item_name_ptr (MIR_item_t item) {
   mir_assert (item != NULL);
   switch (item->item_type) {
-  case MIR_func_item: return item->u.func->name;
-  case MIR_proto_item: return item->u.proto->name;
-  case MIR_import_item: return item->u.import_id;
-  case MIR_export_item: return item->u.export_id;
-  case MIR_forward_item: return item->u.forward_id;
-  case MIR_bss_item: return item->u.bss->name;
-  case MIR_data_item: return item->u.data->name;
-  case MIR_ref_data_item: return item->u.ref_data->name;
-  case MIR_expr_data_item: return item->u.expr_data->name;
-  default: mir_assert (FALSE); return NULL;
+  case MIR_func_item: return &item->u.func->name;
+  case MIR_proto_item: return &item->u.proto->name;
+  case MIR_import_item: return &item->u.import_id;
+  case MIR_export_item: return &item->u.export_id;
+  case MIR_forward_item: return &item->u.forward_id;
+  case MIR_bss_item: return &item->u.bss->name;
+  case MIR_data_item: return &item->u.data->name;
+  case MIR_ref_data_item: return &item->u.ref_data->name;
+  case MIR_expr_data_item: return &item->u.expr_data->name;
+  default: mir_assert (FALSE);
   }
+}
+
+const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) {
+  return *item_name_ptr(item);
 }
 
 MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item) {
@@ -1579,6 +1583,26 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
   return last_item;
 }
 
+extern MIR_item_t MIR_get_module_item (MIR_context_t ctx, MIR_module_t module, const char *name) {
+  mir_assert (module != NULL);
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (strcmp (MIR_item_name (ctx, item), name) == 0) {
+      return item;
+    }
+  }
+  return NULL;
+}
+
+MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name) {
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
+        module = DLIST_NEXT (MIR_module_t, module)) {
+    MIR_item_t ret = MIR_get_module_item(ctx, module, name);
+    if (ret != NULL) return ret;
+  }
+  return NULL;
+}
+
 void MIR_load_module (MIR_context_t ctx, MIR_module_t m) {
   mir_assert (m != NULL);
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
@@ -2392,19 +2416,7 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
 }
 
 static void set_item_name (MIR_item_t item, const char *name) {
-  mir_assert (item != NULL);
-  switch (item->item_type) {
-  case MIR_func_item: item->u.func->name = name; break;
-  case MIR_proto_item: item->u.proto->name = name; break;
-  case MIR_import_item: item->u.import_id = name; break;
-  case MIR_export_item: item->u.export_id = name; break;
-  case MIR_forward_item: item->u.forward_id = name; break;
-  case MIR_bss_item: item->u.bss->name = name; break;
-  case MIR_data_item: item->u.data->name = name; break;
-  case MIR_ref_data_item: item->u.ref_data->name = name; break;
-  case MIR_expr_data_item: item->u.expr_data->name = name; break;
-  default: mir_assert (FALSE);
-  }
+  *item_name_ptr(item) = name;
 }
 
 static void change_var_names (MIR_context_t new_ctx, VARR (MIR_var_t) * vars) {
