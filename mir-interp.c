@@ -473,41 +473,41 @@ static ALWAYS_INLINE double get_d (MIR_val_t *v) { return v->d; }
 static ALWAYS_INLINE long double get_ld (MIR_val_t *v) { return v->ld; }
 
 static ALWAYS_INLINE void **get_aop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].a; }
-static ALWAYS_INLINE int64_t *get_iop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].i; }
-static ALWAYS_INLINE uint64_t *get_uop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].u; }
+static ALWAYS_INLINE intptr_t *get_iop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].i; }
+static ALWAYS_INLINE uintptr_t *get_uop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].u; }
 static ALWAYS_INLINE float *get_fop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].f; }
 static ALWAYS_INLINE double *get_dop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].d; }
 static ALWAYS_INLINE long double *get_ldop (MIR_val_t *bp, code_t c) { return &bp[get_i (c)].ld; }
 
-static ALWAYS_INLINE int64_t *get_2iops (MIR_val_t *bp, code_t c, int64_t *p) {
+static ALWAYS_INLINE intptr_t *get_2iops (MIR_val_t *bp, code_t c, intptr_t *p) {
   *p = *get_iop (bp, c + 1);
   return get_iop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_2isops (MIR_val_t *bp, code_t c, int32_t *p) {
+static ALWAYS_INLINE intptr_t *get_2isops (MIR_val_t *bp, code_t c, int32_t *p) {
   *p = *get_iop (bp, c + 1);
   return get_iop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_3iops (MIR_val_t *bp, code_t c, int64_t *p1, int64_t *p2) {
+static ALWAYS_INLINE intptr_t *get_3iops (MIR_val_t *bp, code_t c, intptr_t *p1, intptr_t *p2) {
   *p1 = *get_iop (bp, c + 1);
   *p2 = *get_iop (bp, c + 2);
   return get_iop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_3isops (MIR_val_t *bp, code_t c, int32_t *p1, int32_t *p2) {
+static ALWAYS_INLINE intptr_t *get_3isops (MIR_val_t *bp, code_t c, int32_t *p1, int32_t *p2) {
   *p1 = *get_iop (bp, c + 1);
   *p2 = *get_iop (bp, c + 2);
   return get_iop (bp, c);
 }
 
-static ALWAYS_INLINE uint64_t *get_3uops (MIR_val_t *bp, code_t c, uint64_t *p1, uint64_t *p2) {
+static ALWAYS_INLINE uintptr_t *get_3uops (MIR_val_t *bp, code_t c, uintptr_t *p1, uintptr_t *p2) {
   *p1 = *get_uop (bp, c + 1);
   *p2 = *get_uop (bp, c + 2);
   return get_uop (bp, c);
 }
 
-static ALWAYS_INLINE uint64_t *get_3usops (MIR_val_t *bp, code_t c, uint32_t *p1, uint32_t *p2) {
+static ALWAYS_INLINE uintptr_t *get_3usops (MIR_val_t *bp, code_t c, uint32_t *p1, uint32_t *p2) {
   *p1 = *get_uop (bp, c + 1);
   *p2 = *get_uop (bp, c + 2);
   return get_uop (bp, c);
@@ -524,7 +524,7 @@ static ALWAYS_INLINE float *get_3fops (MIR_val_t *bp, code_t c, float *p1, float
   return get_fop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_fcmp_ops (MIR_val_t *bp, code_t c, float *p1, float *p2) {
+static ALWAYS_INLINE intptr_t *get_fcmp_ops (MIR_val_t *bp, code_t c, float *p1, float *p2) {
   *p1 = *get_fop (bp, c + 1);
   *p2 = *get_fop (bp, c + 2);
   return get_iop (bp, c);
@@ -541,7 +541,7 @@ static ALWAYS_INLINE double *get_3dops (MIR_val_t *bp, code_t c, double *p1, dou
   return get_dop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1, double *p2) {
+static ALWAYS_INLINE intptr_t *get_dcmp_ops (MIR_val_t *bp, code_t c, double *p1, double *p2) {
   *p1 = *get_dop (bp, c + 1);
   *p2 = *get_dop (bp, c + 2);
   return get_iop (bp, c);
@@ -559,63 +559,63 @@ static ALWAYS_INLINE long double *get_3ldops (MIR_val_t *bp, code_t c, long doub
   return get_ldop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t *get_ldcmp_ops (MIR_val_t *bp, code_t c, long double *p1,
+static ALWAYS_INLINE intptr_t *get_ldcmp_ops (MIR_val_t *bp, code_t c, long double *p1,
                                              long double *p2) {
   *p1 = *get_ldop (bp, c + 1);
   *p2 = *get_ldop (bp, c + 2);
   return get_iop (bp, c);
 }
 
-static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[get_i (c)].i; }
+static ALWAYS_INLINE intptr_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[get_i (c)].i; }
 
 #define EXT(tp)                     \
   do {                              \
-    int64_t *r = get_iop (bp, ops); \
+    intptr_t *r = get_iop (bp, ops); \
     tp s = *get_iop (bp, ops + 1);  \
     *r = s;                         \
   } while (0)
 #define IOP2(op)                 \
   do {                           \
-    int64_t *r, p;               \
+    intptr_t *r, p;               \
     r = get_2iops (bp, ops, &p); \
     *r = op p;                   \
   } while (0)
 #define IOP2S(op)                 \
   do {                            \
-    int64_t *r;                   \
+    intptr_t *r;                   \
     int32_t p;                    \
     r = get_2isops (bp, ops, &p); \
     *r = op p;                    \
   } while (0)
 #define IOP3(op)                       \
   do {                                 \
-    int64_t *r, p1, p2;                \
+    intptr_t *r, p1, p2;                \
     r = get_3iops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                     \
   } while (0)
 #define IOP3S(op)                       \
   do {                                  \
-    int64_t *r;                         \
+    intptr_t *r;                         \
     int32_t p1, p2;                     \
     r = get_3isops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                      \
   } while (0)
 #define ICMP(op)                       \
   do {                                 \
-    int64_t *r, p1, p2;                \
+    intptr_t *r, p1, p2;                \
     r = get_3iops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                     \
   } while (0)
 #define ICMPS(op)                       \
   do {                                  \
-    int64_t *r;                         \
+    intptr_t *r;                         \
     int32_t p1, p2;                     \
     r = get_3isops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                      \
   } while (0)
 #define BICMP(op)                                                       \
   do {                                                                  \
-    int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); \
+    intptr_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); \
     if (op1 op op2) pc = code + get_i (ops);                            \
   } while (0)
 #define BICMPS(op)                                                      \
@@ -625,46 +625,46 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
   } while (0)
 #define UOP3(op)                       \
   do {                                 \
-    uint64_t *r, p1, p2;               \
+    uintptr_t *r, p1, p2;               \
     r = get_3uops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                     \
   } while (0)
 #define UOP3S(op)                       \
   do {                                  \
-    uint64_t *r;                        \
+    uintptr_t *r;                        \
     uint32_t p1, p2;                    \
     r = get_3usops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                      \
   } while (0)
 #define UIOP3(op)                      \
   do {                                 \
-    uint64_t *r, p1, p2;               \
+    uintptr_t *r, p1, p2;               \
     r = get_3uops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                     \
   } while (0)
 #define UIOP3S(op)                      \
   do {                                  \
-    uint64_t *r;                        \
+    uintptr_t *r;                        \
     uint32_t p1, p2;                    \
     r = get_3usops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                      \
   } while (0)
 #define UCMP(op)                       \
   do {                                 \
-    uint64_t *r, p1, p2;               \
+    uintptr_t *r, p1, p2;               \
     r = get_3uops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                     \
   } while (0)
 #define UCMPS(op)                       \
   do {                                  \
-    uint64_t *r;                        \
+    uintptr_t *r;                        \
     uint32_t p1, p2;                    \
     r = get_3usops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                      \
   } while (0)
 #define BUCMP(op)                                                        \
   do {                                                                   \
-    uint64_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); \
+    uintptr_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); \
     if (op1 op op2) pc = code + get_i (ops);                             \
   } while (0)
 #define BUCMPS(op)                                                       \
@@ -687,7 +687,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
   } while (0)
 #define FCMP(op)                          \
   do {                                    \
-    int64_t *r;                           \
+    intptr_t *r;                           \
     float p1, p2;                         \
     r = get_fcmp_ops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                        \
@@ -712,7 +712,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
   } while (0)
 #define DCMP(op)                          \
   do {                                    \
-    int64_t *r;                           \
+    intptr_t *r;                           \
     double p1, p2;                        \
     r = get_dcmp_ops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                        \
@@ -737,7 +737,7 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
   } while (0)
 #define LDCMP(op)                          \
   do {                                     \
-    int64_t *r;                            \
+    intptr_t *r;                            \
     long double p1, p2;                    \
     r = get_ldcmp_ops (bp, ops, &p1, &p2); \
     *r = p1 op p2;                         \
@@ -751,13 +751,13 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
 #define LD(op, val_type, mem_type)          \
   do {                                      \
     val_type *r = get_##op (bp, ops);       \
-    int64_t a = get_mem_addr (bp, ops + 1); \
+    intptr_t a = get_mem_addr (bp, ops + 1); \
     *r = *((mem_type *) a);                 \
   } while (0)
 #define ST(op, val_type, mem_type)          \
   do {                                      \
     val_type v = *get_##op (bp, ops);       \
-    int64_t a = get_mem_addr (bp, ops + 1); \
+    intptr_t a = get_mem_addr (bp, ops + 1); \
     *((mem_type *) a) = v;                  \
   } while (0)
 
@@ -972,7 +972,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
 #endif
 
   CASE (MIR_MOV, 2) {
-    int64_t p, *r = get_2iops (bp, ops, &p);
+    intptr_t p, *r = get_2iops (bp, ops, &p);
     *r = p;
     END_INSN;
   }
@@ -999,21 +999,21 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_UEXT32, 2, EXT (uint32_t));
   CASE (MIR_I2F, 2) {
     float *r = get_fop (bp, ops);
-    int64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
   }
   CASE (MIR_I2D, 2) {
     double *r = get_dop (bp, ops);
-    int64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
   }
   CASE (MIR_I2LD, 2) {
     long double *r = get_ldop (bp, ops);
-    int64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
@@ -1021,42 +1021,42 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
 
   CASE (MIR_UI2F, 2) {
     float *r = get_fop (bp, ops);
-    uint64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
   }
   CASE (MIR_UI2D, 2) {
     double *r = get_dop (bp, ops);
-    uint64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
   }
   CASE (MIR_UI2LD, 2) {
     long double *r = get_ldop (bp, ops);
-    uint64_t i = *get_iop (bp, ops + 1);
+    intptr_t i = *get_iop (bp, ops + 1);
 
     *r = i;
     END_INSN;
   }
 
   CASE (MIR_F2I, 2) {
-    int64_t *r = get_iop (bp, ops);
+    intptr_t *r = get_iop (bp, ops);
     float f = *get_fop (bp, ops + 1);
 
     *r = f;
     END_INSN;
   }
   CASE (MIR_D2I, 2) {
-    int64_t *r = get_iop (bp, ops);
+    intptr_t *r = get_iop (bp, ops);
     double d = *get_dop (bp, ops + 1);
 
     *r = d;
     END_INSN;
   }
   CASE (MIR_LD2I, 2) {
-    int64_t *r = get_iop (bp, ops);
+    intptr_t *r = get_iop (bp, ops);
     long double ld = *get_ldop (bp, ops + 1);
 
     *r = ld;
@@ -1325,10 +1325,10 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   }
 
   CASE (MIR_ALLOCA, 2) {
-    int64_t *r, s;
+    intptr_t *r, s;
 
     r = get_2iops (bp, ops, &s);
-    *r = (uint64_t) alloca (s);
+    *r = (intptr_t) alloca (s);
     END_INSN;
   }
   CASE (MIR_BSTART, 1) {
@@ -1339,15 +1339,15 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   }
   SCASE (MIR_BEND, 1, bend_builtin (*get_aop (bp, ops)));
   CASE (MIR_VA_ARG, 3) {
-    int64_t *r, va, tp;
+    intptr_t *r, va, tp;
 
     r = get_2iops (bp, ops, &va);
     tp = get_i (ops + 2);
-    *r = (uint64_t) va_arg_builtin ((void *) va, tp);
+    *r = (intptr_t) va_arg_builtin ((void *) va, tp);
     END_INSN;
   }
   CASE (MIR_VA_BLOCK_ARG, 4) {
-    int64_t *r, va, size;
+    intptr_t *r, va, size;
 
     r = get_3iops (bp, ops, &va, &size);
     va_block_arg_builtin ((void *) *r, (void *) va, size, *get_iop (bp, ops + 3));
@@ -1356,13 +1356,13 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (MIR_VA_START, 1, va_start_interp_builtin (ctx, bp[get_i (ops)].a, bp[-1].a));
   SCASE (MIR_VA_END, 1, va_end_interp_builtin (ctx, bp[get_i (ops)].a));
 
-  SCASE (IC_LDI8, 2, LD (iop, int64_t, int8_t));
-  SCASE (IC_LDU8, 2, LD (uop, uint64_t, uint8_t));
-  SCASE (IC_LDI16, 2, LD (iop, int64_t, int16_t));
-  SCASE (IC_LDU16, 2, LD (uop, uint64_t, uint16_t));
-  SCASE (IC_LDI32, 2, LD (iop, int64_t, int32_t));
-  SCASE (IC_LDU32, 2, LD (uop, uint64_t, uint32_t));
-  SCASE (IC_LDI64, 2, LD (iop, int64_t, int64_t));
+  SCASE (IC_LDI8, 2, LD (iop, intptr_t, int8_t));
+  SCASE (IC_LDU8, 2, LD (uop, uintptr_t, uint8_t));
+  SCASE (IC_LDI16, 2, LD (iop, intptr_t, int16_t));
+  SCASE (IC_LDU16, 2, LD (uop, uintptr_t, uint16_t));
+  SCASE (IC_LDI32, 2, LD (iop, intptr_t, int32_t));
+  SCASE (IC_LDU32, 2, LD (uop, uintptr_t, uint32_t));
+  SCASE (IC_LDI64, 2, LD (iop, intptr_t, int64_t));
   SCASE (IC_LDF, 2, LD (fop, float, float));
   SCASE (IC_LDD, 2, LD (dop, double, double));
   SCASE (IC_LDLD, 2, LD (ldop, long double, long double));
@@ -1382,7 +1382,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
   SCASE (IC_STD, 2, ST (dop, double, double));
   SCASE (IC_STLD, 2, ST (ldop, long double, long double));
   CASE (IC_MOVI, 2) {
-    int64_t *r = get_iop (bp, ops), imm = get_i (ops + 1);
+    intptr_t *r = get_iop (bp, ops), imm = get_i (ops + 1);
     *r = imm;
     END_INSN;
   }
@@ -1543,10 +1543,10 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
     case MIR_T_F: call_res_args[i + nres].f = arg_vals[i].f; break;
     case MIR_T_D: call_res_args[i + nres].d = arg_vals[i].d; break;
     case MIR_T_LD: call_res_args[i + nres].ld = arg_vals[i].ld; break;
-    case MIR_T_P: call_res_args[i + nres].u = (uint64_t) arg_vals[i].a; break;
+    case MIR_T_P: call_res_args[i + nres].u = (uintptr_t) arg_vals[i].a; break;
     default:
       mir_assert (MIR_all_blk_type_p (type));
-      call_res_args[i + nres].u = (uint64_t) arg_vals[i].a;
+      call_res_args[i + nres].u = (uintptr_t) arg_vals[i].a;
       break;
     }
   }

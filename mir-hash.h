@@ -57,7 +57,7 @@ static inline uint64_t mir_mum (uint64_t v, uint64_t c, int relax_p) {
   return v1 * c1 + (rm >> 32) + v2 * c2 + (rm << 32);
 }
 
-static inline uint64_t mir_round (uint64_t state, uint64_t v, int relax_p) {
+static inline uint64_t mir_round (uint64_t state, uintptr_t v, int relax_p) {
   state ^= mir_mum (v, p1, relax_p);
   return state ^ mir_mum (state, p2, relax_p);
 }
@@ -88,7 +88,7 @@ static inline uint64_t mir_hash_strict (const void *key, size_t len, uint64_t se
 }
 
 static inline uint64_t mir_hash_init (uint64_t seed) { return seed; }
-static inline uint64_t mir_hash_step (uint64_t h, uint64_t key) { return mir_round (h, key, 1); }
+static inline uint64_t mir_hash_step (uint64_t h, uintptr_t key) { return mir_round (h, key, 1); }
 static inline uint64_t mir_hash_finish (uint64_t h) { return mir_round (h, h, 1); }
 
 static inline uint64_t mir_hash64 (uint64_t key, uint64_t seed) {

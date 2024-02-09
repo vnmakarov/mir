@@ -2145,7 +2145,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
     int prefix = -1, disp8 = -1, imm8 = -1, lb = -1;
     int64_t disp32 = -1, imm32 = -1;
     int imm64_p = FALSE;
-    uint64_t imm64 = 0, v;
+    uintptr_t imm64 = 0, v;
     MIR_op_t op;
     int const_ref_num = -1, label_ref_num = -1, switch_table_addr_p = FALSE;
 
@@ -2294,9 +2294,9 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         imm64_p = TRUE;
         if (op.u.ref->item_type == MIR_data_item && op.u.ref->u.data->name != NULL
             && _MIR_reserved_ref_name_p (ctx, op.u.ref->u.data->name))
-          imm64 = (uint64_t) op.u.ref->u.data->u.els;
+          imm64 = (uintptr_t) op.u.ref->u.data->u.els;
         else
-          imm64 = (uint64_t) op.u.ref->addr;
+          imm64 = (uintptr_t) op.u.ref->addr;
         break;
       case 'T': {
         gen_assert (!switch_table_addr_p && switch_table_addr_start < 0);
