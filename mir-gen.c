@@ -513,12 +513,17 @@ static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_r
   }
 }
 
-static void move_bb_insn_dead_vars (bb_insn_t bb_insn, bb_insn_t from_bb_insn) {
+static void move_bb_insn_dead_vars (gen_ctx_t gen_ctx, bb_insn_t bb_insn, bb_insn_t from_bb_insn,
+                                    int (*filter_p) (gen_ctx_t, bb_insn_t, MIR_reg_t)) {
   dead_var_t dv;
 
   while ((dv = DLIST_HEAD (dead_var_t, from_bb_insn->dead_vars)) != NULL) {
     DLIST_REMOVE (dead_var_t, from_bb_insn->dead_vars, dv);
-    DLIST_APPEND (dead_var_t, bb_insn->dead_vars, dv);
+    if (filter_p (gen_ctx, bb_insn, dv->var)) {
+      DLIST_APPEND (dead_var_t, bb_insn->dead_vars, dv);
+    } else {
+      free_dead_var (gen_ctx, dv);
+    }
   }
 }
 
@@ -4555,6 +4560,18 @@ static void combine_process_op (gen_ctx_t gen_ctx, const MIR_op_t *op_ref, bb_in
   }
 }
 
+static int hard_reg_used_in_bb_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t reg) {
+  int op_num, out_p, mem_p;
+  size_t passed_mem_num;
+  MIR_reg_t r;
+  insn_var_iterator_t iter;
+
+  FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, r, op_num, out_p, mem_p, passed_mem_num) {
+    if (r == reg) return TRUE;
+  }
+  return FALSE;
+}
+
 static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_t bb_insn) {
   MIR_reg_t hr;
 
@@ -4566,7 +4583,7 @@ static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_
     print_bb_insn (gen_ctx, def_insn->data, TRUE);
   });
   remove_bb_insn_dead_var (gen_ctx, bb_insn, hr);
-  move_bb_insn_dead_vars (bb_insn, def_insn->data);
+  move_bb_insn_dead_vars (gen_ctx, bb_insn, def_insn->data, hard_reg_used_in_bb_insn_p);
   /* We should delete the def insn here because of possible
      substitution of the def insn 'r0 = ... r0 ...'.  We still
      need valid entry for def here to find obsolete definiton,
@@ -4968,7 +4985,7 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
   if (sh == 0) {
     new_insns[0] = MIR_new_insn (ctx, MIR_MOV, insn->ops[0], insn->ops[1]);
     gen_add_insn_before (gen_ctx, insn, new_insns[0]);
-    move_bb_insn_dead_vars (new_insns[0]->data, bb_insn);
+    move_bb_insn_dead_vars (gen_ctx, new_insns[0]->data, bb_insn, hard_reg_used_in_bb_insn_p);
     DEBUG (2, {
       fprintf (debug_file, "      changing to ");
       print_bb_insn (gen_ctx, new_insns[0]->data, TRUE);
@@ -5023,7 +5040,7 @@ static MIR_insn_t combine_mul_div_substitute (gen_ctx_t gen_ctx, bb_insn_t bb_in
     if (n < 6) {
       for (n = 0; n < 6; n++) gen_delete_insn (gen_ctx, new_insns[n]);
     } else {
-      move_bb_insn_dead_vars (new_insns[3]->data, bb_insn);
+      move_bb_insn_dead_vars (gen_ctx, new_insns[3]->data, bb_insn, hard_reg_used_in_bb_insn_p);
       add_bb_insn_dead_var (gen_ctx, new_insns[5]->data, TEMP_INT_HARD_REG2);
       DEBUG (2, {
         fprintf (debug_file, "      changing to ");
