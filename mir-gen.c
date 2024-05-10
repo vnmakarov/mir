@@ -4567,7 +4567,7 @@ static int hard_reg_used_in_bb_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR
   insn_var_iterator_t iter;
 
   FOREACH_INSN_VAR (gen_ctx, iter, bb_insn->insn, r, op_num, out_p, mem_p, passed_mem_num) {
-    if (r == reg) return TRUE;
+    if (!out_p && r == reg) return TRUE;
   }
   return FALSE;
 }
