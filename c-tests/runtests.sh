@@ -3,6 +3,7 @@
 #
 
 outf=__c-tests-temp.out
+stderrf=__c-tests-temp.stderr
 errf=__c-tests-temp.err
 all=0
 ok=0
@@ -50,23 +51,31 @@ runtest () {
 	if test -f $t.disable && $GREP -F "$ARCH" $t.disable >/dev/null 2>&1; then $ECHO Skipped; return; fi
 	if test -f $t.expectrc; then expect_code=`cat $t.expectrc`; else expect_code=0; fi
 	if test -f $t.expect; then expect_out=$t.expect; else expect_out=; fi
+	if test -f $t.stderr-expect; then stderr_expect_out=$t.stderr-expect; else stderr_expect_out=; fi
 	another_expect=`dirname $t`/`basename $t .c`.expect
 	if test x$expect_out = x && test -f $another_expect; then expect_out=$another_expect; else expect_out=; fi
-	$TIMEOUT sh $execution_program $compiler $t $add_main 2>$errf >$outf
+	$TIMEOUT sh $execution_program $compiler $t $add_main 2>$stderrf >$outf
 	code=$?
 	if test $code = $expect_code; then
 	    if test x$expect_out != x && ! diff --strip-trailing-cr -up $expect_out $outf >$errf;then
 	            $ECHO Output mismatch
 		    cat $errf
-		else
+            else
 		    ok=`expr $ok + 1`
 	            $ECHO -ne "OK               \r"
-		fi
+	    fi
+	    if test x$stderr_expect_out != x && ! diff --strip-trailing-cr -up $stderr_expect_out $stderrf >$errf;then
+	            $ECHO Stderr mismatch
+		    cat $errf
+            else
+		    ok=`expr $ok + 1`
+	            $ECHO -ne "OK               \r"
+	    fi
 	elif test $expect_code = 0; then
-	        cat $errf
+	        cat $stderrf
 	        $ECHO FAIL "(code = $code)"
 	else
-	        cat $errf
+	        cat $stderrf
 		$ECHO $FAIL "(code = $code, expected code = $expect_code)"
 	fi
 }
@@ -99,4 +108,4 @@ do
 done
 
 $ECHO Tests $all, Success tests $ok
-rm -f $outf $errf
+rm -f $outf $stderrf $errf
