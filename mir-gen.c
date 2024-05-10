@@ -552,12 +552,17 @@ static void remove_bb_insn_dead_var (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_r
   }
 }
 
-static void move_bb_insn_dead_vars (bb_insn_t bb_insn, bb_insn_t from_bb_insn) {
+static void move_bb_insn_dead_vars (gen_ctx_t gen_ctx, bb_insn_t bb_insn, bb_insn_t from_bb_insn,
+                                    int (*filter_p) (gen_ctx_t, bb_insn_t, MIR_reg_t)) {
   dead_var_t dv;
 
   while ((dv = DLIST_HEAD (dead_var_t, from_bb_insn->insn_dead_vars)) != NULL) {
     DLIST_REMOVE (dead_var_t, from_bb_insn->insn_dead_vars, dv);
-    DLIST_APPEND (dead_var_t, bb_insn->insn_dead_vars, dv);
+    if (filter_p (gen_ctx, bb_insn, dv->var)) {
+      DLIST_APPEND (dead_var_t, bb_insn->insn_dead_vars, dv);
+    } else {
+      free_dead_var (gen_ctx, dv);
+    }
   }
 }
 
@@ -8694,6 +8699,18 @@ static void combine_process_op (gen_ctx_t gen_ctx, const MIR_op_t *op_ref, bb_in
   }
 }
 
+static int hard_reg_used_in_bb_insn_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn, MIR_reg_t var) {
+  int op_num, out_p, mem_p;
+  size_t passed_mem_num;
+  MIR_reg_t v;
+  insn_var_iterator_t iter;
+
+  FOREACH_IN_INSN_VAR (gen_ctx, iter, bb_insn->insn, v, op_num) {
+    if (v == var) return TRUE;
+  }
+  return FALSE;
+}
+
 static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_t bb_insn) {
   MIR_reg_t var;
 
@@ -8705,7 +8722,7 @@ static int combine_delete_insn (gen_ctx_t gen_ctx, MIR_insn_t def_insn, bb_insn_
     print_bb_insn (gen_ctx, def_insn->data, TRUE);
   });
   remove_bb_insn_dead_var (gen_ctx, bb_insn, var);
-  move_bb_insn_dead_vars (bb_insn, def_insn->data);
+  move_bb_insn_dead_vars (gen_ctx, bb_insn, def_insn->data, hard_reg_used_in_bb_insn_p);
   /* We should delete the def insn here because of possible substitution of the def
      insn 'r0 = ... r0 ...'.  We still need valid entry for def here to find obsolete
      definiton, e.g. "r1 = r0; r0 = ...; r0 = ... (deleted); ...= ...r1..." */
