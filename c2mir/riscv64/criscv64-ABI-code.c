@@ -69,9 +69,13 @@ static int small_struct_p (c2m_ctx_t c2m_ctx, struct type *type, int struct_only
          el = NL_NEXT (el))
       if (el->code == N_MEMBER) {
         decl_t decl = el->attr;
+        mir_size_t member_offset = decl->offset;
 
         if (decl->width == 0) continue;
-        if (!small_struct_p (c2m_ctx, decl->decl_spec.type, FALSE, decl->offset + start_offset,
+        if (decl->containing_unnamed_anon_struct_union_member != NULL) {
+          member_offset = 0;
+        }
+        if (!small_struct_p (c2m_ctx, decl->decl_spec.type, FALSE, member_offset + start_offset,
                              &sub_n, sub_members))
           return FALSE;
         if (sub_n + *members_n > 2) return FALSE;
