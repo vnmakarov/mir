@@ -62,8 +62,16 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
            el = NL_NEXT (el))
         if (el->code == N_MEMBER) {
           decl_t decl = el->attr;
-          int start_qword = decl->offset / 8;
-          int end_qword = (decl->offset + type_size (c2m_ctx, decl->decl_spec.type) - 1) / 8;
+          mir_size_t offset = decl->offset;
+          node_t container;
+          if ((container = decl->containing_unnamed_anon_struct_union_member) != NULL) {
+            decl_t decl2 = container->attr;
+            assert (decl2->decl_spec.type->mode == TM_STRUCT
+                    || decl2->decl_spec.type->mode == TM_UNION);
+            offset -= decl2->offset;
+          }
+          int start_qword = offset / 8;
+          int end_qword = (offset + type_size (c2m_ctx, decl->decl_spec.type) - 1) / 8;
           int span_qwords = end_qword - start_qword + 1;
 
           if (decl->bit_offset >= 0) {
