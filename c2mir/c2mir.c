@@ -1637,7 +1637,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
     case '\'':
     case '\"':
       wide_type = ' ';
-    literal : {
+    literal: {
       token_t t;
       int stop = curr_c;
 
@@ -4525,6 +4525,11 @@ D (sc_spec) {
   } else if (MP (T_REGISTER, pos)) {
     r = new_pos_node (c2m_ctx, N_REGISTER, pos);
   } else if (MP (T_THREAD_LOCAL, pos)) {
+    if (c2m_options->pedantic_p)
+      error (c2m_ctx, pos, "Thread local is not implemented");
+    else
+      warning (c2m_ctx, pos,
+               "Thread local is not implemented -- program might not work as assumed");
     r = new_pos_node (c2m_ctx, N_THREAD_LOCAL, pos);
   } else {
     if (record_level == 0) syntax_error (c2m_ctx, "a storage specifier");
@@ -6300,10 +6305,8 @@ static void cast_value (struct expr *to_e, struct expr *from_e, struct type *to)
   assert (to_e->const_p && from_e->const_p);
   struct type *from = from_e->type;
 
-#define CONV(TP, cast, mto, mfrom)        \
-  case TP:                                \
-    to_e->c.mto = (cast) from_e->c.mfrom; \
-    break;
+#define CONV(TP, cast, mto, mfrom) \
+  case TP: to_e->c.mto = (cast) from_e->c.mfrom; break;
 #define BASIC_FROM_CONV(mfrom)                                                           \
   switch (to->u.basic_type) {                                                            \
     CONV (TP_BOOL, mir_bool, u_val, mfrom) CONV (TP_UCHAR, mir_uchar, u_val, mfrom);     \
@@ -10950,8 +10953,7 @@ static MIR_insn_code_t get_compare_branch_code (MIR_insn_code_t code) {
   case MIR_##n##S: return MIR_B##n##S; \
   case MIR_F##n: return MIR_FB##n;     \
   case MIR_D##n: return MIR_DB##n;     \
-  case MIR_LD##n:                      \
-    return MIR_LDB##n;
+  case MIR_LD##n: return MIR_LDB##n;
 #define BCMP(n)                    \
   B (n)                            \
   case MIR_U##n: return MIR_UB##n; \
