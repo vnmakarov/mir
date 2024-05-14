@@ -209,10 +209,10 @@ static const uint8_t save_pat[] = {
   0x56,                                  /*push   %rsi			   */
   0x57,                                  /*push   %rdi			   */
 #else
-  0x48, 0x89, 0x4c, 0x24, 0x08,                /*mov  %rcx,0x08(%rsp) */
-  0x48, 0x89, 0x54, 0x24, 0x10,                /*mov  %rdx,0x10(%rsp) */
-  0x4c, 0x89, 0x44, 0x24, 0x18,                /*mov  %r8, 0x18(%rsp) */
-  0x4c, 0x89, 0x4c, 0x24, 0x20,                /*mov  %r9, 0x20(%rsp) */
+  0x48, 0x89, 0x4c, 0x24, 0x08, /*mov  %rcx,0x08(%rsp) */
+  0x48, 0x89, 0x54, 0x24, 0x10, /*mov  %rdx,0x10(%rsp) */
+  0x4c, 0x89, 0x44, 0x24, 0x18, /*mov  %r8, 0x18(%rsp) */
+  0x4c, 0x89, 0x4c, 0x24, 0x20, /*mov  %r9, 0x20(%rsp) */
 #endif
 };
 
@@ -234,14 +234,14 @@ static const uint8_t restore_pat[] = {
   0xf3, 0x0f, 0x6f, 0x7c, 0x24, 0x70,    /*movdqu 0x70(%rsp),%xmm7	   */
   0x48, 0x81, 0xc4, 0x80, 0,    0,    0, /*add    $0x80,%rsp		   */
 #else
-  0x48, 0x8b, 0x4c, 0x24, 0x08,                /*mov  0x08(%rsp),%rcx */
-  0x48, 0x8b, 0x54, 0x24, 0x10,                /*mov  0x10(%rsp),%rdx */
-  0x4c, 0x8b, 0x44, 0x24, 0x18,                /*mov  0x18(%rsp),%r8  */
-  0x4c, 0x8b, 0x4c, 0x24, 0x20,                /*mov  0x20(%rsp),%r9  */
-  0xf3, 0x0f, 0x7e, 0x44, 0x24, 0x08,          /*movq 0x08(%rsp),%xmm0*/
-  0xf3, 0x0f, 0x7e, 0x4c, 0x24, 0x10,          /*movq 0x10(%rsp),%xmm1*/
-  0xf3, 0x0f, 0x7e, 0x54, 0x24, 0x18,          /*movq 0x18(%rsp),%xmm2*/
-  0xf3, 0x0f, 0x7e, 0x5c, 0x24, 0x20,          /*movq 0x20(%rsp),%xmm3*/
+  0x48, 0x8b, 0x4c, 0x24, 0x08,       /*mov  0x08(%rsp),%rcx */
+  0x48, 0x8b, 0x54, 0x24, 0x10,       /*mov  0x10(%rsp),%rdx */
+  0x4c, 0x8b, 0x44, 0x24, 0x18,       /*mov  0x18(%rsp),%r8  */
+  0x4c, 0x8b, 0x4c, 0x24, 0x20,       /*mov  0x20(%rsp),%r9  */
+  0xf3, 0x0f, 0x7e, 0x44, 0x24, 0x08, /*movq 0x08(%rsp),%xmm0*/
+  0xf3, 0x0f, 0x7e, 0x4c, 0x24, 0x10, /*movq 0x10(%rsp),%xmm1*/
+  0xf3, 0x0f, 0x7e, 0x54, 0x24, 0x18, /*movq 0x18(%rsp),%xmm2*/
+  0xf3, 0x0f, 0x7e, 0x5c, 0x24, 0x20, /*movq 0x20(%rsp),%xmm3*/
 #endif
 };
 
@@ -388,13 +388,13 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
     0x49, 0x89, 0xfb,             /* mov $rdi, $r11 -- fun addr */
     0x48, 0x89, 0xf3,             /* mov $rsi, $rbx -- result/arg addresses */
 #else
-    /* 0x0: */ 0x41,  0x54,                    /* pushq %r12 */
-    /* 0x2: */ 0x53,                           /* pushq %rbx */
-    /* 0x3: */ 0x55,                           /* push %rbp */
-    /* 0x4: */ 0x48,  0x89, 0xe5,              /* mov %rsp,%rbp */
-    /* 0x7: */ 0x48,  0x81, 0xec, 0, 0, 0, 0,  /* subq <sp_offset>, %rsp */
-    /* 0xe: */ 0x49,  0x89, 0xcb,              /* mov $rcx, $r11 -- fun addr */
-    /* 0x11: */ 0x48, 0x89, 0xd3,              /* mov $rdx, $rbx -- result/arg addresses */
+    /* 0x0: */ 0x41,  0x54,                   /* pushq %r12 */
+    /* 0x2: */ 0x53,                          /* pushq %rbx */
+    /* 0x3: */ 0x55,                          /* push %rbp */
+    /* 0x4: */ 0x48,  0x89, 0xe5,             /* mov %rsp,%rbp */
+    /* 0x7: */ 0x48,  0x81, 0xec, 0, 0, 0, 0, /* subq <sp_offset>, %rsp */
+    /* 0xe: */ 0x49,  0x89, 0xcb,             /* mov $rcx, $r11 -- fun addr */
+    /* 0x11: */ 0x48, 0x89, 0xd3,             /* mov $rdx, $rbx -- result/arg addresses */
 #endif
   };
   static const uint8_t call_end[] = {
@@ -422,7 +422,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 #else
   static const uint8_t iregs[] = {1, 2, 8, 9}; /* rcx, rdx, r8, r9 */
   static const uint32_t max_iregs = 4, max_xregs = 4;
-  uint32_t blk_offset = nargs < 4 ? 32 : nargs * 8, sp_offset = 32; /* spill area */
+  uint32_t blk_offset = nargs < 4 ? 32 : (uint32_t) nargs * 8, sp_offset = 32; /* spill area */
 #endif
   uint32_t n_iregs = 0, n_xregs = 0, n_fregs, qwords;
   uint8_t *addr;
@@ -436,29 +436,30 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
 
     if ((MIR_T_I8 <= type && type <= MIR_T_U64) || type == MIR_T_P || type == MIR_T_RBLK) {
       if (n_iregs < max_iregs) {
-        gen_mov (code, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+        gen_mov (code, (uint32_t) ((i + nres) * sizeof (long double)), iregs[n_iregs++], TRUE);
 #ifdef _WIN32
         n_xregs++;
 #endif
       } else {
-        gen_ldst (code, sp_offset, (i + nres) * sizeof (long double), TRUE);
+        gen_ldst (code, sp_offset, (uint32_t) ((i + nres) * sizeof (long double)), TRUE);
         sp_offset += 8;
       }
     } else if (type == MIR_T_F || type == MIR_T_D) {
       if (n_xregs < max_xregs) {
-        gen_movxmm (code, (i + nres) * sizeof (long double), n_xregs++, type == MIR_T_F, TRUE);
+        gen_movxmm (code, (uint32_t) ((i + nres) * sizeof (long double)), n_xregs++,
+                    type == MIR_T_F, TRUE);
 #ifdef _WIN32
-        gen_mov (code, (i + nres) * sizeof (long double), iregs[n_iregs++], TRUE);
+        gen_mov (code, (uint32_t) ((i + nres) * sizeof (long double)), iregs[n_iregs++], TRUE);
 #endif
       } else {
-        gen_ldst (code, sp_offset, (i + nres) * sizeof (long double), type == MIR_T_D);
+        gen_ldst (code, sp_offset, (uint32_t) ((i + nres) * sizeof (long double)), type == MIR_T_D);
         sp_offset += 8;
       }
     } else if (type == MIR_T_LD) {
-      gen_ldst80 (code, sp_offset, (i + nres) * sizeof (long double));
+      gen_ldst80 (code, sp_offset, (uint32_t) ((i + nres) * sizeof (long double)));
       sp_offset += 16;
     } else if (MIR_blk_type_p (type)) {
-      qwords = (arg_descs[i].size + 7) / 8;
+      qwords = (uint32_t) ((arg_descs[i].size + 7) / 8);
 #ifndef _WIN32
       if (type == MIR_T_BLK + 1 && n_iregs + qwords <= max_iregs) {
         assert (qwords <= 2);
@@ -498,7 +499,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       sp_offset += qwords * 8;
 #else
       if (qwords <= 1) {
-        gen_mov (code, (i + nres) * sizeof (long double), 12, TRUE); /* r12 = mem[disp + rbx] */
+        gen_mov (code, (uint32_t) ((i + nres) * sizeof (long double)), 12,
+                 TRUE); /* r12 = mem[disp + rbx] */
         if (n_iregs < max_iregs) {
           gen_mov2 (code, 0, iregs[n_iregs++], TRUE); /* arg_reg = mem[r12] */
           n_xregs++;
@@ -509,7 +511,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         }
       } else {
         /* r12 = mem[disp + rbx]; mem[rsp+blk_offset + nw] = r10 = mem[r12 + nw]; */
-        gen_blk_mov (code, blk_offset, (i + nres) * sizeof (long double), qwords);
+        gen_blk_mov (code, blk_offset, (uint32_t) ((i + nres) * sizeof (long double)), qwords);
         if (n_iregs < max_iregs) {
           gen_add (code, blk_offset, iregs[n_iregs++]); /* arg_reg = sp + blk_offset */
           n_xregs++;
@@ -550,11 +552,13 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   for (size_t i = 0; i < nres; i++) {
     if (((MIR_T_I8 <= res_types[i] && res_types[i] <= MIR_T_U64) || res_types[i] == MIR_T_P)
         && n_iregs < 2) {
-      gen_mov (code, i * sizeof (long double), n_iregs++ == 0 ? 0 : 2, FALSE); /* rax or rdx */
+      gen_mov (code, (uint32_t) (i * sizeof (long double)), n_iregs++ == 0 ? 0 : 2,
+               FALSE); /* rax or rdx */
     } else if ((res_types[i] == MIR_T_F || res_types[i] == MIR_T_D) && n_xregs < 2) {
-      gen_movxmm (code, i * sizeof (long double), n_xregs++, res_types[i] == MIR_T_F, FALSE);
+      gen_movxmm (code, (uint32_t) (i * sizeof (long double)), n_xregs++, res_types[i] == MIR_T_F,
+                  FALSE);
     } else if (res_types[i] == MIR_T_LD && n_fregs < 2) {
-      gen_st80 (code, i * sizeof (long double));
+      gen_st80 (code, (uint32_t) (i * sizeof (long double)));
     } else {
       MIR_get_error_func (ctx) (MIR_ret_error,
                                 "x86-64 can not handle this combination of return values");
@@ -829,7 +833,7 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   };
   res = _MIR_publish_code (ctx, pattern, sizeof (pattern));
   _MIR_update_code (ctx, res, 1, 2, bb_version);
-  disp = (char *) handler - ((char *) res + sizeof (pattern));
+  disp = (int32_t) ((char *) handler - ((char *) res + sizeof (pattern)));
   _MIR_change_code (ctx, (uint8_t *) res + 11, (uint8_t *) &disp, 4);
   return res;
 }
@@ -839,7 +843,7 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   uint8_t op = 0xe9; /* jmpq */
   int32_t disp;
   _MIR_change_code (ctx, (uint8_t *) thunk, &op, 1); /* jmpq <disp32> */
-  disp = (char *) to - ((char *) thunk + 5);
+  disp = (int32_t) ((char *) to - ((char *) thunk + 5));
   _MIR_change_code (ctx, (uint8_t *) thunk + 1, (uint8_t *) &disp, 4);
 }
 

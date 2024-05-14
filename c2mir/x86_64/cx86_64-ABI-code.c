@@ -36,23 +36,22 @@ static MIR_type_t get_result_type (MIR_type_t arg_type1, MIR_type_t arg_type2) {
 static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[MAX_QWORDS],
                          int bit_field_p MIR_UNUSED) {
   size_t size = type_size (c2m_ctx, type), n_qwords = (size + 7) / 8;
-  int i, n_el_qwords;
   MIR_type_t mir_type;
 
   if (type->mode == TM_STRUCT || type->mode == TM_UNION || type->mode == TM_ARR) {
-    MIR_type_t subtypes[MAX_QWORDS];
-
     if (n_qwords > MAX_QWORDS) return 0; /* too big aggregate */
 
 #ifndef _WIN32
-    for (i = 0; i < n_qwords; i++) types[i] = (MIR_type_t) NO_CLASS;
+    MIR_type_t subtypes[MAX_QWORDS];
+    int i, n_el_qwords;
+    for (i = 0; (size_t) i < n_qwords; i++) types[i] = (MIR_type_t) NO_CLASS;
 
     switch (type->mode) {
     case TM_ARR: { /* Arrays are handled as small records.  */
       n_el_qwords = classify_arg (c2m_ctx, type->u.arr_type->el_type, subtypes, FALSE);
       if (n_el_qwords == 0) return 0;
       /* make full types: */
-      for (i = 0; i < n_qwords; i++)
+      for (i = 0; (size_t) i < n_qwords; i++)
         types[i] = get_result_type (types[i], subtypes[i % n_el_qwords]);
       break;
     }
@@ -80,7 +79,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
             n_el_qwords
               = classify_arg (c2m_ctx, decl->decl_spec.type, subtypes, decl->bit_offset >= 0);
             if (n_el_qwords == 0) return 0;
-            for (i = 0; i < n_el_qwords && (i + start_qword) < n_qwords; i++) {
+            for (i = 0; i < n_el_qwords && (size_t) (i + start_qword) < n_qwords; i++) {
               types[i + start_qword] = get_result_type (subtypes[i], types[i + start_qword]);
               if (span_qwords > n_el_qwords)
                 types[i + start_qword + 1]
@@ -94,7 +93,7 @@ static int classify_arg (c2m_ctx_t c2m_ctx, struct type *type, MIR_type_t types[
 
     if (n_qwords > 2) return 0; /* as we don't have vector values (see SSEUP_CLASS) */
 
-    for (i = 0; i < n_qwords; i++) {
+    for (i = 0; (size_t) i < n_qwords; i++) {
       if (types[i] == MIR_T_UNDEF) return 0; /* pass in memory if a word class is memory.  */
       if ((enum add_arg_class) types[i] == X87UP_CLASS && (i == 0 || types[i - 1] != MIR_T_LD))
         return 0;

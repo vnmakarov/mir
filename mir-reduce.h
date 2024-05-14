@@ -209,6 +209,7 @@ static inline uint32_t _reduce_dict_find_longest (struct reduce_data *data, uint
      compression speed by 10%.  */
   hash
     = mir_hash_strict (&data->buf[pos], _REDUCE_START_LEN, _REDUCE_HASH_SEED) % _REDUCE_TABLE_SIZE;
+  best_len = 0; /* to remove a warning */
   for (curr = encode_data->table[hash].head; curr != UINT32_MAX; curr = next) {
     next = encode_data->table[curr].next;
     el = &encode_data->table[curr];
@@ -385,7 +386,7 @@ static inline int reduce_decode_get (struct reduce_data *data) {
     if (sym_len != 0) {
       if (sym_len == _REDUCE_SYMB_TAG_LONG) {
         if ((r = _reduce_uint_read (reader, data->aux_data)) < 0) break;
-        sym_len = r;
+        sym_len = (uint32_t) r;
       }
       if (sym_len > _REDUCE_MAX_SYMB_LEN || pos + sym_len > _REDUCE_BUF_LEN) break;
       if (reader (&data->buf[pos], sym_len, data->aux_data) != sym_len) break;
@@ -396,11 +397,11 @@ static inline int reduce_decode_get (struct reduce_data *data) {
     if (ref_len != 0) {
       if (ref_len == _REDUCE_REF_TAG_LONG) {
         if ((r = _reduce_uint_read (reader, data->aux_data)) < 0) break;
-        ref_len = r;
+        ref_len = (uint32_t) r;
       }
       ref_len += _REDUCE_START_LEN - 1;
       if ((r = _reduce_uint_read (reader, data->aux_data)) < 0) break;
-      ref_ind = r;
+      ref_ind = (uint32_t) r;
       if (curr_ind < ref_ind) break;
       sym_pos = decode_data->ind2pos[curr_ind - ref_ind];
       if (sym_pos + ref_len > _REDUCE_BUF_LEN) break;

@@ -376,13 +376,13 @@ static int str_eq (tab_str_t str1, tab_str_t str2, void *arg MIR_UNUSED) {
   return str1.str.len == str2.str.len && memcmp (str1.str.s, str2.str.s, str1.str.len) == 0;
 }
 static htab_hash_t str_hash (tab_str_t str, void *arg MIR_UNUSED) {
-  return mir_hash (str.str.s, str.str.len, 0x42);
+  return (htab_hash_t) mir_hash (str.str.s, str.str.len, 0x42);
 }
 static int str_key_eq (tab_str_t str1, tab_str_t str2, void *arg MIR_UNUSED) {
   return str1.key == str2.key;
 }
 static htab_hash_t str_key_hash (tab_str_t str, void *arg MIR_UNUSED) {
-  return mir_hash64 (str.key, 0x24);
+  return (htab_hash_t) mir_hash64 (str.key, 0x24);
 }
 
 static str_t uniq_cstr (c2m_ctx_t c2m_ctx, const char *str);
@@ -963,7 +963,7 @@ static int string_stream_p (stream_t s) { return s->getc_func != NULL; }
 static void change_stream_pos (c2m_ctx_t c2m_ctx, pos_t pos) { cs->pos = pos; }
 
 static void remove_trigraphs (c2m_ctx_t c2m_ctx) {
-  int len = VARR_LENGTH (char, cs->ln);
+  int len = (int) VARR_LENGTH (char, cs->ln);
   char *addr = VARR_ADDR (char, cs->ln);
   int i, start, to, ch;
 
@@ -1078,26 +1078,26 @@ static void push_str_char (VARR (char) * temp, uint64_t ch, int type) {
   switch (type) {
   case ' ':
     if (ch <= 0xFF) {
-      VARR_PUSH (char, temp, ch);
+      VARR_PUSH (char, temp, (char) ch);
       return;
     }
     /* Fall through */
   case '8':
     if (ch <= 0x7F) {
-      VARR_PUSH (char, temp, ch);
+      VARR_PUSH (char, temp, (char) ch);
     } else if (ch <= 0x7FF) {
-      VARR_PUSH (char, temp, 0xC0 | (ch >> 6));
-      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
+      VARR_PUSH (char, temp, (char) (0xC0 | (ch >> 6)));
+      VARR_PUSH (char, temp, (char) (0x80 | (ch & 0x3F)));
     } else if (ch <= 0xFFFF) {
-      VARR_PUSH (char, temp, 0xE0 | (ch >> 12));
-      VARR_PUSH (char, temp, 0x80 | ((ch >> 6) & 0x3F));
-      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
+      VARR_PUSH (char, temp, (char) (0xE0 | (ch >> 12)));
+      VARR_PUSH (char, temp, (char) (0x80 | ((ch >> 6) & 0x3F)));
+      VARR_PUSH (char, temp, (char) (0x80 | (ch & 0x3F)));
     } else {
       assert (ch <= MAX_UTF8);
-      VARR_PUSH (char, temp, 0xF0 | (ch >> 18));
-      VARR_PUSH (char, temp, 0x80 | ((ch >> 12) & 0x3F));
-      VARR_PUSH (char, temp, 0x80 | ((ch >> 6) & 0x3F));
-      VARR_PUSH (char, temp, 0x80 | (ch & 0x3F));
+      VARR_PUSH (char, temp, (char) (0xF0 | (ch >> 18)));
+      VARR_PUSH (char, temp, (char) (0x80 | ((ch >> 12) & 0x3F)));
+      VARR_PUSH (char, temp, (char) (0x80 | ((ch >> 6) & 0x3F)));
+      VARR_PUSH (char, temp, (char) (0x80 | (ch & 0x3F)));
     }
     return;
   case 'L':
@@ -1133,7 +1133,7 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
   assert (t->code == T_STR || t->code == T_CH);
   str = t->repr;
   VARR_TRUNC (char, temp, 0);
-  str_len = strlen (str);
+  str_len = (int) strlen (str);
   assert (str_len >= start + 2 && (str[start] == '"' || str[start] == '\'')
           && str[start] == str[str_len - 1]);
   for (i = start + 1; i < str_len - 1; i++) {
@@ -1174,12 +1174,12 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
       uint64_t v = curr_c - '0';
 
       curr_c = str[++i];
-      if (!isdigit (curr_c) || curr_c == '8' || curr_c == '9') {
+      if (!isdigit ((int) curr_c) || curr_c == '8' || curr_c == '9') {
         i--;
       } else {
         v = v * 8 + curr_c - '0';
         curr_c = str[++i];
-        if (!isdigit (curr_c) || curr_c == '8' || curr_c == '9')
+        if (!isdigit ((int) curr_c) || curr_c == '8' || curr_c == '9')
           i--;
         else
           v = v * 8 + curr_c - '0';
@@ -1194,13 +1194,13 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
 
       for (i++;; i++) {
         curr_c = str[i];
-        if (!isxdigit (curr_c)) break;
+        if (!isxdigit ((int) curr_c)) break;
         first_p = FALSE;
         if (v <= UINT32_MAX) {
           v *= 16;
-          v += (isdigit (curr_c)   ? curr_c - '0'
-                : islower (curr_c) ? curr_c - 'a' + 10
-                                   : curr_c - 'A' + 10);
+          v += (isdigit ((int) curr_c)   ? curr_c - '0'
+                : islower ((int) curr_c) ? curr_c - 'a' + 10
+                                         : curr_c - 'A' + 10);
         }
       }
       if (first_p) {
@@ -1218,16 +1218,16 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
     }
     case 'u':
     case 'U': {
-      int n, start_c = curr_c, digits_num = curr_c == 'u' ? 4 : 8;
+      int n, start_c = (int) curr_c, digits_num = curr_c == 'u' ? 4 : 8;
       uint64_t v = 0;
 
       for (i++, n = 0; n < digits_num; i++, n++) {
         curr_c = str[i];
-        if (!isxdigit (curr_c)) break;
+        if (!isxdigit ((int) curr_c)) break;
         v *= 16;
-        v += (isdigit (curr_c)   ? curr_c - '0'
-              : islower (curr_c) ? curr_c - 'a' + 10
-                                 : curr_c - 'A' + 10);
+        v += (isdigit ((int) curr_c)   ? curr_c - '0'
+              : islower ((int) curr_c) ? curr_c - 'a' + 10
+                                       : curr_c - 'A' + 10);
       }
       last_c = curr_c = v;
       if (n < digits_num) {
@@ -1264,9 +1264,9 @@ static void set_string_val (c2m_ctx_t c2m_ctx, token_t t, VARR (char) * temp, in
   else if (last_c < 0) {
     if (!pre_skip_if_part_p (c2m_ctx)) error (c2m_ctx, t->pos, "empty char constant");
   } else if (type == 'U' || type == 'u' || type == 'L') {
-    t->node->u.ul = last_c;
+    t->node->u.ul = (mir_ulong) last_c;
   } else {
-    t->node->u.ch = last_c;
+    t->node->u.ch = (mir_char) last_c;
   }
 }
 
@@ -1292,7 +1292,7 @@ static token_t get_next_pptoken_1 (c2m_ctx_t c2m_ctx, int header_p) {
     for (comment_char = -1, nl_p = FALSE;; curr_c = cs_get (c2m_ctx)) {
       switch (curr_c) {
       case '\t':
-        cs->pos.ln_pos = round_size (cs->pos.ln_pos, TAB_STOP);
+        cs->pos.ln_pos = (int) round_size ((mir_size_t) cs->pos.ln_pos, TAB_STOP);
         /* fall through */
       case ' ':
       case '\f':
@@ -1767,7 +1767,7 @@ static const char *stringify (const char *str, VARR (char) * to) {
 }
 
 static void destringify (const char *repr, VARR (char) * to) {
-  int i, repr_len = strlen (repr);
+  int i, repr_len = (int) strlen (repr);
 
   VARR_TRUNC (char, to, 0);
   if (repr_len == 0) return;
@@ -1818,20 +1818,20 @@ static node_t get_int_node_from_repr (c2m_ctx_t c2m_ctx, const char *repr, char 
     return new_ull_node (c2m_ctx, ull, pos);
   }
   if (long_p) {
-    if (!uns_p && ull <= MIR_LONG_MAX) return new_l_node (c2m_ctx, ull, pos);
-    if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, ull, pos);
+    if (!uns_p && ull <= MIR_LONG_MAX) return new_l_node (c2m_ctx, (long) ull, pos);
+    if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, (unsigned long) ull, pos);
     if (!uns_p && (base == 10 || ull <= MIR_LLONG_MAX)) return new_ll_node (c2m_ctx, ull, pos);
     return new_ull_node (c2m_ctx, ull, pos);
   }
   if (uns_p) {
-    if (ull <= MIR_UINT_MAX) return new_u_node (c2m_ctx, ull, pos);
-    if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, ull, pos);
+    if (ull <= MIR_UINT_MAX) return new_u_node (c2m_ctx, (unsigned long) ull, pos);
+    if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, (unsigned long) ull, pos);
     return new_ull_node (c2m_ctx, ull, pos);
   }
-  if (ull <= MIR_INT_MAX) return new_i_node (c2m_ctx, ull, pos);
-  if (base != 10 && ull <= MIR_UINT_MAX) return new_u_node (c2m_ctx, ull, pos);
-  if (ull <= MIR_LONG_MAX) return new_l_node (c2m_ctx, ull, pos);
-  if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, ull, pos);
+  if (ull <= MIR_INT_MAX) return new_i_node (c2m_ctx, (long) ull, pos);
+  if (base != 10 && ull <= MIR_UINT_MAX) return new_u_node (c2m_ctx, (unsigned long) ull, pos);
+  if (ull <= MIR_LONG_MAX) return new_l_node (c2m_ctx, (long) ull, pos);
+  if (ull <= MIR_ULONG_MAX) return new_ul_node (c2m_ctx, (unsigned long) ull, pos);
   if (base == 10 || ull <= MIR_LLONG_MAX) return new_ll_node (c2m_ctx, ull, pos);
   return new_ull_node (c2m_ctx, ull, pos);
 }
@@ -1845,7 +1845,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
     tab_str_t str = str_add (c2m_ctx, t->repr, strlen (t->repr) + 1, T_STR, 0, FALSE);
 
     if (str.key != T_STR) {
-      t->code = str.key;
+      t->code = (int) str.key;
       t->node_code = N_IGNORE;
       t->node = NULL;
     }
@@ -1857,7 +1857,7 @@ static token_t pptoken2token (c2m_ctx_t c2m_ctx, token_t t, int id2kw_p) {
     int uns_p = FALSE, long_p = FALSE, llong_p = FALSE;
     const char *repr = t->repr, *start = t->repr;
     char *stop;
-    int last = strlen (repr) - 1;
+    int last = (int) strlen (repr) - 1;
 
     assert (last >= 0);
     if (repr[0] == '0' && (repr[1] == 'x' || repr[1] == 'X')) {
@@ -2041,7 +2041,7 @@ static int macro_eq (macro_t macro1, macro_t macro2, void *arg MIR_UNUSED) {
 }
 
 static htab_hash_t macro_hash (macro_t macro, void *arg MIR_UNUSED) {
-  return mir_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
+  return (htab_hash_t) mir_hash (macro->id->repr, strlen (macro->id->repr), 0x42);
 }
 
 static macro_t new_macro (c2m_ctx_t c2m_ctx, token_t id, VARR (token_t) * params,
@@ -2144,7 +2144,7 @@ static void pop_ifstate (c2m_ctx_t c2m_ctx) {
 static void pre_init (c2m_ctx_t c2m_ctx) {
   pre_ctx_t pre_ctx;
   time_t t, time_loc;
-  struct tm *tm, tm_loc;
+  struct tm *tm, tm_loc MIR_UNUSED;
 
   c2m_ctx->pre_ctx = pre_ctx = c2mir_calloc (c2m_ctx, sizeof (struct pre_ctx));
   no_out_p = skip_if_part_p = FALSE;
@@ -2210,7 +2210,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
     add_stream (c2m_ctx, f, fname, NULL);
   else
     add_string_stream (c2m_ctx, fname, content);
-  cs->ifs_length_at_stream_start = VARR_LENGTH (ifstate_t, ifs);
+  cs->ifs_length_at_stream_start = (int) VARR_LENGTH (ifstate_t, ifs);
 }
 
 static void skip_nl (c2m_ctx_t c2m_ctx, token_t t,
@@ -2228,7 +2228,7 @@ static int find_param (VARR (token_t) * params, const char *name) {
   token_t param;
 
   if (strcmp (name, varg) == 0 && len != 0 && VARR_LAST (token_t, params)->code == T_DOTS)
-    return len - 1;
+    return (int) len - 1;
   for (size_t i = 0; i < len; i++) {
     param = VARR_GET (token_t, params, i);
     if (strcmp (param->repr, name) == 0) return (int) i;
@@ -2501,7 +2501,8 @@ static pos_t check_line_directive_args (c2m_ctx_t c2m_ctx, VARR (token_t) * buff
   if (i >= len || buffer_arr[i]->code != T_NUMBER) return no_pos;
   if (!digits_p (buffer_arr[i]->repr)) return no_pos;
   errno = 0;
-  lno = l = strtoll (buffer_arr[i]->repr, NULL, 10);
+  l = strtoll (buffer_arr[i]->repr, NULL, 10);
+  lno = (int) l;
   if (errno || l > ((1ul << 31) - 1))
     error (c2m_ctx, buffer_arr[i]->pos, "#line with too big value: %s", buffer_arr[i]->repr);
   i++;
@@ -2693,7 +2694,7 @@ static void add_token (VARR (token_t) * to, token_t t) {
 static void add_arg_tokens (VARR (token_t) * to, VARR (token_t) * from) {
   int start;
 
-  for (start = VARR_LENGTH (token_t, from) - 1; start >= 0; start--)
+  for (start = (int) VARR_LENGTH (token_t, from) - 1; start >= 0; start--)
     if (VARR_GET (token_t, from, start)->code == T_BOA) break;
   assert (start >= 0);
   for (size_t i = start + 1; i < VARR_LENGTH (token_t, from); i++)
@@ -2707,7 +2708,7 @@ static void add_tokens (VARR (token_t) * to, VARR (token_t) * from) {
 }
 
 static void del_tokens (VARR (token_t) * tokens, int from, int len) {
-  int diff, tokens_len = VARR_LENGTH (token_t, tokens);
+  int diff, tokens_len = (int) VARR_LENGTH (token_t, tokens);
   token_t *addr = VARR_ADDR (token_t, tokens);
 
   if (len < 0) len = tokens_len - from;
@@ -2718,7 +2719,7 @@ static void del_tokens (VARR (token_t) * tokens, int from, int len) {
 }
 
 static VARR (token_t) * do_concat (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
-  int i, j, k, empty_j_p, empty_k_p, len = VARR_LENGTH (token_t, tokens);
+  int i, j, k, empty_j_p, empty_k_p, len = (int) VARR_LENGTH (token_t, tokens);
   token_t t;
 
   for (i = len - 1; i >= 0; i--)
@@ -2759,7 +2760,7 @@ static VARR (token_t) * do_concat (c2m_ctx_t c2m_ctx, VARR (token_t) * tokens) {
         VARR_SET (token_t, tokens, k, t);
       }
       i = k;
-      len = VARR_LENGTH (token_t, tokens);
+      len = (int) VARR_LENGTH (token_t, tokens);
     }
   for (i = len - 1; i >= 0; i--) VARR_GET (token_t, tokens, i)->processed_p = TRUE;
   return tokens;
@@ -2774,7 +2775,7 @@ static void process_replacement (c2m_ctx_t c2m_ctx, macro_call_t mc) {
   m = mc->macro;
   sharp_pos = -1;
   m_repl = VARR_ADDR (token_t, m->replacement);
-  m_repl_len = VARR_LENGTH (token_t, m->replacement);
+  m_repl_len = (int) VARR_LENGTH (token_t, m->replacement);
   for (;;) {
     if (mc->repl_pos >= m_repl_len) {
       t = get_next_pptoken (c2m_ctx);
@@ -2837,7 +2838,7 @@ static void process_replacement (c2m_ctx_t c2m_ctx, macro_call_t mc) {
         }
       }
     } else if (t->code == '#') {
-      sharp_pos = VARR_LENGTH (token_t, mc->repl_buffer);
+      sharp_pos = (int) VARR_LENGTH (token_t, mc->repl_buffer);
     } else if (t->code != ' ') {
       sharp_pos = -1;
     }
@@ -2962,7 +2963,7 @@ static void transform_to_header (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer) {
   VARR_PUSH (char, symbol_text, '>');
   VARR_PUSH (char, symbol_text, '\0');
   VARR_PUSH (char, temp_string, '\0');
-  del_tokens (buffer, i, j - i);
+  del_tokens (buffer, (int) i, (int) (j - i));
   t = new_node_token (c2m_ctx, pos, VARR_ADDR (char, symbol_text), T_HEADER,
                       new_str_node (c2m_ctx, N_STR,
                                     uniq_cstr (c2m_ctx, VARR_ADDR (char, temp_string)), pos));
@@ -3326,7 +3327,7 @@ static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
         res = HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, tab_macro) ? "1" : "0";
         VARR_SET (token_t, expr_buffer, i,
                   new_token (c2m_ctx, t->pos, res, T_NUMBER, N_IGNORE));  // ???
-        del_tokens (expr_buffer, i + 1, j - i);
+        del_tokens (expr_buffer, (int) i + 1, (int) (j - i));
         continue;
       }
       if (j >= len || VARR_GET (token_t, expr_buffer, j)->code != '(') continue;
@@ -3341,7 +3342,7 @@ static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
       res = HTAB_DO (macro_t, macro_tab, &macro_struct, HTAB_FIND, tab_macro) ? "1" : "0";
       VARR_SET (token_t, expr_buffer, i,
                 new_token (c2m_ctx, t->pos, res, T_NUMBER, N_IGNORE));  // ???
-      del_tokens (expr_buffer, i + 1, j - i);
+      del_tokens (expr_buffer, (int) i + 1, (int) (j - i));
     }
   }
 }
@@ -3963,7 +3964,7 @@ static int tpname_eq (tpname_t tpname1, tpname_t tpname2, void *arg MIR_UNUSED) 
 }
 
 static htab_hash_t tpname_hash (tpname_t tpname, void *arg MIR_UNUSED) {
-  return (mir_hash_finish (
+  return (htab_hash_t) (mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) tpname.id->u.s.s),
                    (uint64_t) tpname.scope)));
 }
@@ -5578,7 +5579,7 @@ static int symbol_eq (symbol_t s1, symbol_t s2, void *arg MIR_UNUSED) {
 }
 
 static htab_hash_t symbol_hash (symbol_t s, void *arg MIR_UNUSED) {
-  return (mir_hash_finish (
+  return (htab_hash_t) (mir_hash_finish (
     mir_hash_step (mir_hash_step (mir_hash_step (mir_hash_init (0x42), (uint64_t) s.mode),
                                   (uint64_t) s.id->u.s.s),
                    (uint64_t) s.scope)));

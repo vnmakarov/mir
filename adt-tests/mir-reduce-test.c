@@ -56,18 +56,18 @@ int main (int argc, const char *argv[]) {
     fprintf (stderr, "Error in reducing input file!\n");
     return 1;
   }
-  fprintf (stderr, "Compression:   original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n",
-           input_length1, output_length1, (input_length1 + 0.0) / output_length1,
-           (real_usec_time () - start) / 1000.0);
+  fprintf (stderr, "Compression:   original len = %llu, result = %llu, ration=%.2f, time=%.2fms\n",
+           (unsigned long long) input_length1, (unsigned long long) output_length1,
+           (input_length1 + 0.0) / output_length1, (real_usec_time () - start) / 1000.0);
   VARR_CREATE (uint8_t, buf2, 0);
   start = real_usec_time ();
   if (!reduce_decode (reader2, writer2, NULL)) {
     fprintf (stderr, "Corrupted input file!\n");
     return 1;
   }
-  fprintf (stderr, "Decompression: original len = %lu, result = %lu, ration=%.2f, time=%.2fms\n",
-           input_length2, output_length2, (input_length2 + 0.0) / output_length2,
-           (real_usec_time () - start) / 1000.0);
+  fprintf (stderr, "Decompression: original len = %llu, result = %llu, ration=%.2f, time=%.2fms\n",
+           (unsigned long long) input_length2, (unsigned long long) output_length2,
+           (input_length2 + 0.0) / output_length2, (real_usec_time () - start) / 1000.0);
   if (VARR_LENGTH (uint8_t, orig) != VARR_LENGTH (uint8_t, buf2)) {
     fprintf (stderr, "FAIL: original and reduced/unreduced files are of different length!\n");
     return 1;
@@ -76,7 +76,8 @@ int main (int argc, const char *argv[]) {
     if (VARR_GET (uint8_t, orig, i) != VARR_GET (uint8_t, buf2, i)) break;
   if (i < VARR_LENGTH (uint8_t, orig)) {
     fprintf (stderr,
-             "FAIL: original and reduced/unreduced files are different on pos = %lu! Result:\n", i);
+             "FAIL: original and reduced/unreduced files are different on pos = %llu! Result:\n",
+             (unsigned long long) i);
     for (n = i; n < i + 40 && n < VARR_LENGTH (uint8_t, buf2); n++)
       fprintf (stderr, "%c", VARR_GET (uint8_t, buf2, n));
     fprintf (stderr, "\n");

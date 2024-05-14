@@ -470,7 +470,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
         } else if (MIR_call_code_p (code) && ops[i].mode == MIR_OP_MEM) {
           mir_assert (MIR_all_blk_type_p (ops[i].u.mem.type));
           v.i = ops[i].u.mem.base;
-          update_max_nreg (v.i, &max_nreg);
+          update_max_nreg ((MIR_reg_t) v.i, &max_nreg);
         } else {
           mir_assert (ops[i].mode == MIR_OP_REG);
           v.i = get_reg (ops[i], &max_nreg);
@@ -549,7 +549,7 @@ static ALWAYS_INLINE int64_t *get_2iops (MIR_val_t *bp, code_t c, int64_t *p) {
 }
 
 static ALWAYS_INLINE int64_t *get_2isops (MIR_val_t *bp, code_t c, int32_t *p) {
-  *p = *get_iop (bp, c + 1);
+  *p = (int32_t) *get_iop (bp, c + 1);
   return get_iop (bp, c);
 }
 
@@ -560,8 +560,8 @@ static ALWAYS_INLINE int64_t *get_3iops (MIR_val_t *bp, code_t c, int64_t *p1, i
 }
 
 static ALWAYS_INLINE int64_t *get_3isops (MIR_val_t *bp, code_t c, int32_t *p1, int32_t *p2) {
-  *p1 = *get_iop (bp, c + 1);
-  *p2 = *get_iop (bp, c + 2);
+  *p1 = (int32_t) *get_iop (bp, c + 1);
+  *p2 = (int32_t) *get_iop (bp, c + 2);
   return get_iop (bp, c);
 }
 
@@ -572,8 +572,8 @@ static ALWAYS_INLINE uint64_t *get_3uops (MIR_val_t *bp, code_t c, uint64_t *p1,
 }
 
 static ALWAYS_INLINE uint64_t *get_3usops (MIR_val_t *bp, code_t c, uint32_t *p1, uint32_t *p2) {
-  *p1 = *get_uop (bp, c + 1);
-  *p2 = *get_uop (bp, c + 2);
+  *p1 = (uint32_t) *get_uop (bp, c + 1);
+  *p2 = (uint32_t) *get_uop (bp, c + 2);
   return get_uop (bp, c);
 }
 
@@ -632,11 +632,11 @@ static ALWAYS_INLINE int64_t *get_ldcmp_ops (MIR_val_t *bp, code_t c, long doubl
 
 static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[get_i (c)].i; }
 
-#define EXT(tp)                     \
-  do {                              \
-    int64_t *r = get_iop (bp, ops); \
-    tp s = *get_iop (bp, ops + 1);  \
-    *r = s;                         \
+#define EXT(tp)                          \
+  do {                                   \
+    int64_t *r = get_iop (bp, ops);      \
+    tp s = (tp) * get_iop (bp, ops + 1); \
+    *r = (int64_t) s;                    \
   } while (0)
 #define IOP2(op)                 \
   do {                           \
@@ -682,10 +682,10 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
     int64_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); \
     if (op1 op op2) pc = code + get_i (ops);                            \
   } while (0)
-#define BICMPS(op)                                                      \
-  do {                                                                  \
-    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2); \
-    if (op1 op op2) pc = code + get_i (ops);                            \
+#define BICMPS(op)                                                                            \
+  do {                                                                                        \
+    int32_t op1 = (int32_t) * get_iop (bp, ops + 1), op2 = (int32_t) * get_iop (bp, ops + 2); \
+    if (op1 op op2) pc = code + get_i (ops);                                                  \
   } while (0)
 #define UOP3(op)                       \
   do {                                 \
@@ -731,10 +731,10 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
     uint64_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); \
     if (op1 op op2) pc = code + get_i (ops);                             \
   } while (0)
-#define BUCMPS(op)                                                       \
-  do {                                                                   \
-    uint32_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2); \
-    if (op1 op op2) pc = code + get_i (ops);                             \
+#define BUCMPS(op)                                                                               \
+  do {                                                                                           \
+    uint32_t op1 = (uint32_t) * get_uop (bp, ops + 1), op2 = (uint32_t) * get_uop (bp, ops + 2); \
+    if (op1 op op2) pc = code + get_i (ops);                                                     \
   } while (0)
 
 #define FOP2(op)                 \
@@ -818,11 +818,11 @@ static ALWAYS_INLINE int64_t get_mem_addr (MIR_val_t *bp, code_t c) { return bp[
     int64_t a = get_mem_addr (bp, ops + 1); \
     *r = *((mem_type *) a);                 \
   } while (0)
-#define ST(op, val_type, mem_type)          \
-  do {                                      \
-    val_type v = *get_##op (bp, ops);       \
-    int64_t a = get_mem_addr (bp, ops + 1); \
-    *((mem_type *) a) = v;                  \
+#define ST(op, val_type, mem_type)                \
+  do {                                            \
+    val_type v = (val_type) * get_##op (bp, ops); \
+    int64_t a = get_mem_addr (bp, ops + 1);       \
+    *((mem_type *) a) = (mem_type) v;             \
   } while (0)
 
 #if !MIR_INTERP_TRACE && defined(__GNUC__) && !defined(__clang__)
@@ -1147,21 +1147,21 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     float *r = get_fop (bp, ops);
     int64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (float) i;
     END_INSN;
   }
   CASE (MIR_I2D, 2) {
     double *r = get_dop (bp, ops);
     int64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (double) i;
     END_INSN;
   }
   CASE (MIR_I2LD, 2) {
     long double *r = get_ldop (bp, ops);
     int64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (long double) i;
     END_INSN;
   }
 
@@ -1169,21 +1169,21 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     float *r = get_fop (bp, ops);
     uint64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (float) i;
     END_INSN;
   }
   CASE (MIR_UI2D, 2) {
     double *r = get_dop (bp, ops);
     uint64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (double) i;
     END_INSN;
   }
   CASE (MIR_UI2LD, 2) {
     long double *r = get_ldop (bp, ops);
     uint64_t i = *get_iop (bp, ops + 1);
 
-    *r = i;
+    *r = (long double) i;
     END_INSN;
   }
 
@@ -1191,21 +1191,21 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     int64_t *r = get_iop (bp, ops);
     float f = *get_fop (bp, ops + 1);
 
-    *r = f;
+    *r = (int64_t) f;
     END_INSN;
   }
   CASE (MIR_D2I, 2) {
     int64_t *r = get_iop (bp, ops);
     double d = *get_dop (bp, ops + 1);
 
-    *r = d;
+    *r = (int64_t) d;
     END_INSN;
   }
   CASE (MIR_LD2I, 2) {
     int64_t *r = get_iop (bp, ops);
     long double ld = *get_ldop (bp, ops + 1);
 
-    *r = ld;
+    *r = (int64_t) ld;
     END_INSN;
   }
 
@@ -1226,7 +1226,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     float *r = get_fop (bp, ops);
     double d = *get_dop (bp, ops + 1);
 
-    *r = d;
+    *r = (float) d;
     END_INSN;
   }
   CASE (MIR_D2LD, 2) {
@@ -1240,7 +1240,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     float *r = get_fop (bp, ops);
     long double ld = *get_ldop (bp, ops + 1);
 
-    *r = ld;
+    *r = (float) ld;
     END_INSN;
   }
 
@@ -1381,7 +1381,7 @@ common_addr:;
 
   CASE (MIR_ADDOS, 3) {
     int64_t *r = get_iop (bp, ops);
-    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    int32_t op1 = (int32_t) *get_iop (bp, ops + 1), op2 = (int32_t) *get_iop (bp, ops + 2);
     unsigned_overflow_p = (uint32_t) op1 > UINT32_MAX - (uint32_t) op2;
     signed_overflow_p = op2 >= 0 ? op1 > INT32_MAX - op2 : op1 < INT32_MIN - op2;
     *r = op1 + op2;
@@ -1399,7 +1399,7 @@ common_addr:;
 
   CASE (MIR_SUBOS, 3) {
     int64_t *r = get_iop (bp, ops);
-    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    int32_t op1 = (int32_t) *get_iop (bp, ops + 1), op2 = (int32_t) *get_iop (bp, ops + 2);
     unsigned_overflow_p = (uint32_t) op1 < (uint32_t) op2;
     signed_overflow_p = op2 < 0 ? op1 > INT32_MAX + op2 : op1 < INT32_MIN + op2;
     *r = op1 - op2;
@@ -1419,7 +1419,7 @@ common_addr:;
 
   CASE (MIR_MULOS, 3) {
     int64_t *r = get_iop (bp, ops);
-    int32_t op1 = *get_iop (bp, ops + 1), op2 = *get_iop (bp, ops + 2);
+    int32_t op1 = (int32_t) *get_iop (bp, ops + 1), op2 = (int32_t) *get_iop (bp, ops + 2);
     signed_overflow_p = (op1 == 0    ? FALSE
                          : op1 == -1 ? op2 < -INT32_MAX
                          : op1 > 0   ? (op2 > 0 ? INT32_MAX / op1 < op2 : INT32_MIN / op1 > op2)
@@ -1438,7 +1438,7 @@ common_addr:;
 
   CASE (MIR_UMULOS, 3) {
     uint64_t *r = get_uop (bp, ops);
-    uint32_t op1 = *get_uop (bp, ops + 1), op2 = *get_uop (bp, ops + 2);
+    uint32_t op1 = (uint32_t) *get_uop (bp, ops + 1), op2 = (uint32_t) *get_uop (bp, ops + 2);
     unsigned_overflow_p = op1 == 0 ? FALSE : UINT32_MAX / op1 < op2;
     *r = op1 * op2;
     END_INSN;
@@ -1458,13 +1458,13 @@ common_addr:;
     END_INSN;
   }
   CASE (MIR_BTS, 2) {
-    int32_t cond = *get_iop (bp, ops + 1);
+    int32_t cond = (int32_t) *get_iop (bp, ops + 1);
 
     if (cond) pc = code + get_i (ops);
     END_INSN;
   }
   CASE (MIR_BFS, 2) {
-    int32_t cond = *get_iop (bp, ops + 1);
+    int32_t cond = (int32_t) *get_iop (bp, ops + 1);
 
     if (!cond) pc = code + get_i (ops);
     END_INSN;
@@ -1707,15 +1707,16 @@ static inline func_desc_t get_func_desc (MIR_item_t func_item) {
 }
 
 static htab_hash_t ff_interface_hash (ff_interface_t i, void *arg MIR_UNUSED) {
-  htab_hash_t h = mir_hash_step (mir_hash_init (0), i->nres);
-  h = mir_hash_step (h, i->nargs);
-  h = mir_hash_step (h, i->arg_vars_num);
-  h = mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres, h);
+  htab_hash_t h = (htab_hash_t) mir_hash_step (mir_hash_init (0), i->nres);
+  h = (htab_hash_t) mir_hash_step (h, i->nargs);
+  h = (htab_hash_t) mir_hash_step (h, i->arg_vars_num);
+  h = (htab_hash_t) mir_hash (i->res_types, sizeof (MIR_type_t) * i->nres, h);
   for (size_t n = 0; n < i->nargs; n++) {
-    h = mir_hash_step (h, i->arg_descs[n].type);
-    if (MIR_all_blk_type_p (i->arg_descs[n].type)) h = mir_hash_step (h, i->arg_descs[n].size);
+    h = (htab_hash_t) mir_hash_step (h, i->arg_descs[n].type);
+    if (MIR_all_blk_type_p (i->arg_descs[n].type))
+      h = (htab_hash_t) mir_hash_step (h, i->arg_descs[n].size);
   }
-  return mir_hash_finish (h);
+  return (htab_hash_t) mir_hash_finish (h);
 }
 
 static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg MIR_UNUSED) {

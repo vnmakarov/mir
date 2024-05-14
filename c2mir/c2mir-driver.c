@@ -210,7 +210,6 @@ static VARR (char_ptr_t) * lib_dirs;
 static void *open_lib (const char *dir, const char *name) {
   const char *last_slash = strrchr (dir, slash);
   void *res;
-  FILE *f;
 
   VARR_TRUNC (char, temp_string, 0);
   VARR_PUSH_ARR (char, temp_string, dir, strlen (dir));
@@ -223,6 +222,7 @@ static void *open_lib (const char *dir, const char *name) {
   VARR_PUSH (char, temp_string, 0);
   if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
 #ifndef _WIN32
+    FILE *f;
     if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
       fclose (f);
       fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
@@ -716,7 +716,7 @@ int main (int argc, char *argv[], char *env[]) {
   if (!C2MIR_PARALLEL || threads_num <= 0) c2mir_init (main_ctx);
   init_compilers ();
   result_code = 0;
-  for (i = options.module_num = 0;; i++, options.module_num++) {
+  for (i = 0, options.module_num = 0;; i++, options.module_num++) {
     curr_input.input_name = NULL;
     if (i == 0) { /* check and modify options */
       if (curr_input.code == NULL && VARR_LENGTH (char_ptr_t, source_file_names) == 0) {
@@ -893,7 +893,7 @@ int main (int argc, char *argv[], char *env[]) {
                     (MIR_val_t){.i = VARR_LENGTH (char_ptr_t, exec_argv)},
                     (MIR_val_t){.a = (void *) VARR_ADDR (char_ptr_t, exec_argv)},
                     (MIR_val_t){.a = (void *) env});
-        result_code = val.i;
+        result_code = (int) val.i;
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f usec\n", real_usec_time () - start_time);
           fprintf (stderr, "exit code: %lu\n", (long unsigned) result_code);
@@ -923,7 +923,7 @@ int main (int argc, char *argv[], char *env[]) {
           fprintf (stderr, "MIR link finish        -- %.0f usec\n", real_usec_time () - start_time);
         fun_addr = main_func->addr;
         start_time = real_usec_time ();
-        result_code = fun_addr (fun_argc, fun_argv, env);
+        result_code = (int) fun_addr (fun_argc, fun_argv, env);
         if (options.verbose_p) {
           fprintf (stderr, "  execution       -- %.0f msec\n",
                    (real_usec_time () - start_time) / 1000.0);

@@ -71,12 +71,12 @@ int main (int argc, char *argv[]) {
     MIR_interp (ctx, main_func, &val, 0);
     fprintf (stderr, "%s: %lu\n", mir_fname, (unsigned long) val.i);
   } else if (gen_p) {
-    MIR_gen_init (ctx, 1);
-    if (debug_p) MIR_gen_set_debug_file (ctx, 0, stderr);
+    MIR_gen_init (ctx);
+    if (debug_p) MIR_gen_set_debug_file (ctx, stderr);
     if (execute_p) {
       MIR_link (ctx, MIR_set_gen_interface, NULL);
-      fun_addr = MIR_gen (ctx, 0, main_func);
-      res = fun_addr ();
+      fun_addr = MIR_gen (ctx, main_func);
+      res = (int) fun_addr ();
       fprintf (stderr, "%s: %d\n", mir_fname, res);
     }
     MIR_gen_finish (ctx);
