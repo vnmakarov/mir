@@ -6135,11 +6135,13 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
     if (!*bf_p) { /* previous is a regular field: */
       if (curr_offset < prev_field_offset + prev_field_type_size) {
         if (bits >= 0) {
-          *bound_bit = (prev_field_offset + prev_field_type_size - curr_offset) * MIR_CHAR_BIT;
+          *bound_bit
+            = (int) (prev_field_offset + prev_field_type_size - curr_offset) * MIR_CHAR_BIT;
           if (*bound_bit + bits <= (long) field_type_size * MIR_CHAR_BIT) continue;
           *bound_bit = bits;
           if (prev_field_offset + prev_field_type_size > start_offset)
-            *bound_bit += (prev_field_offset + prev_field_type_size - start_offset) * MIR_CHAR_BIT;
+            *bound_bit
+              += (int) (prev_field_offset + prev_field_type_size - start_offset) * MIR_CHAR_BIT;
         }
         break;
       }
@@ -6151,8 +6153,8 @@ static void update_field_layout (int *bf_p, mir_size_t *overall_size, mir_size_t
         if (start_offset * MIR_CHAR_BIT >= prev_field_offset * MIR_CHAR_BIT + *bound_bit) {
           *bound_bit = bits;
         } else {
-          *bound_bit
-            = prev_field_offset * MIR_CHAR_BIT + *bound_bit + bits - start_offset * MIR_CHAR_BIT;
+          *bound_bit = (int) (prev_field_offset * MIR_CHAR_BIT + *bound_bit + bits
+                              - start_offset * MIR_CHAR_BIT);
         }
         break;
       }
@@ -6885,7 +6887,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
           } else if (invalid_alignment (cexpr->c.i_val)) {
             error (c2m_ctx, POS (op), "unsupported alignmnent");
           } else {
-            align = cexpr->c.i_val;
+            align = (int) cexpr->c.i_val;
           }
         }
         if (align != 0 && res->align < align) {
@@ -7704,7 +7706,7 @@ check_one_value:
     len = str->u.s.len;
     if (incomplete_type_p (c2m_ctx, type)) {
       assert (len < MIR_INT_MAX);
-      type->u.arr_type->size = new_i_node (c2m_ctx, len, POS (type->u.arr_type->size));
+      type->u.arr_type->size = new_i_node (c2m_ctx, (long) len, POS (type->u.arr_type->size));
       check (c2m_ctx, type->u.arr_type->size, NULL);
       make_type_complete (c2m_ctx, type);
     } else if (len > (size_t) ((struct expr *) type->u.arr_type->size->attr)->c.i_val + 1) {
@@ -7834,8 +7836,8 @@ check_one_value:
     type->u.arr_type = arr_type;
     size_node = type->u.arr_type->size;
     type->u.arr_type->size
-      = (max_index < MIR_INT_MAX    ? new_i_node (c2m_ctx, max_index + 1, POS (size_node))
-         : max_index < MIR_LONG_MAX ? new_l_node (c2m_ctx, max_index + 1, POS (size_node))
+      = (max_index < MIR_INT_MAX    ? new_i_node (c2m_ctx, (long) max_index + 1, POS (size_node))
+         : max_index < MIR_LONG_MAX ? new_l_node (c2m_ctx, (long) max_index + 1, POS (size_node))
                                     : new_ll_node (c2m_ctx, max_index + 1, POS (size_node)));
     check (c2m_ctx, type->u.arr_type->size, NULL);
     make_type_complete (c2m_ctx, type);
@@ -8015,7 +8017,7 @@ static void get_int_node (c2m_ctx_t c2m_ctx, node_t *op, struct expr **e, struct
   if (i == 1) {
     *op = n_i1_node;
   } else {
-    *op = new_i_node (c2m_ctx, i, no_pos);
+    *op = new_i_node (c2m_ctx, (long) i, no_pos);
     check (c2m_ctx, *op, NULL);
   }
   *e = (*op)->attr;
@@ -8237,8 +8239,8 @@ static unsigned case_hash (case_t el, void *arg MIR_UNUSED) {
   expr = case_expr->attr;
   assert (expr->const_p);
   if (signed_integer_type_p (expr->type))
-    return mir_hash (&expr->c.i_val, sizeof (expr->c.i_val), 0x42);
-  return mir_hash (&expr->c.u_val, sizeof (expr->c.u_val), 0x42);
+    return (unsigned) mir_hash (&expr->c.i_val, sizeof (expr->c.i_val), 0x42);
+  return (unsigned) mir_hash (&expr->c.u_val, sizeof (expr->c.u_val), 0x42);
 }
 
 static int case_eq (case_t el1, case_t el2, void *arg MIR_UNUSED) {
@@ -8524,7 +8526,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     arr_type->el_type->pos_node = r;
     arr_type->el_type->mode = TM_BASIC;
     arr_type->el_type->u.basic_type = size == 1 ? TP_CHAR : get_uint_basic_type (size);
-    arr_type->size = new_i_node (c2m_ctx, r->u.s.len, POS (r));
+    arr_type->size = new_i_node (c2m_ctx, (long) r->u.s.len, POS (r));
     check (c2m_ctx, arr_type->size, NULL);
     break;
   }
@@ -9134,7 +9136,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       error (c2m_ctx, POS (r), "compound literal of incomplete type");
       break;
     }
-    for (n_spec_index = VARR_LENGTH (node_t, context_stack) - 1;
+    for (n_spec_index = (int) VARR_LENGTH (node_t, context_stack) - 1;
          n_spec_index >= 0 && (n = VARR_GET (node_t, context_stack, n_spec_index)) != NULL
          && n->code != N_SPEC_DECL;
          n_spec_index--)
@@ -9335,7 +9337,7 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
     param_list = func_type->param_list;
     param = start_param = NL_HEAD (param_list->u.ops);
     if (void_param_p (start_param)) { /* f(void) */
-      if (first_arg != NULL) error (c2m_ctx, POS (arg), "too many arguments");
+      if (first_arg != NULL) error (c2m_ctx, POS (first_arg), "too many arguments");
       break;
     }
     saved_call_arg_area_offset_before_args = curr_call_arg_area_offset;
@@ -10170,7 +10172,7 @@ static op_t new_op (decl_t decl, MIR_op_t mir_op) {
 }
 
 static htab_hash_t reg_var_hash (reg_var_t r, void *arg MIR_UNUSED) {
-  return mir_hash (r.name, strlen (r.name), 0x42);
+  return (htab_hash_t) mir_hash (r.name, strlen (r.name), 0x42);
 }
 static int reg_var_eq (reg_var_t r1, reg_var_t r2, void *arg MIR_UNUSED) {
   return strcmp (r1.name, r2.name) == 0;
@@ -10365,7 +10367,7 @@ static void get_type_alias_name (c2m_ctx_t c2m_ctx, struct type *type, VARR (cha
       if (VARR_GET (node_t, node_stack, i) == type->u.tag_type) break;
     if (i < VARR_LENGTH (node_t, node_stack)) {
       VARR_PUSH (char, name, 'r');
-      push_val (name, i);
+      push_val (name, (mir_long) i);
     } else {
       VARR_PUSH (node_t, node_stack, type->u.tag_type);
       for (node_t member = NL_HEAD (NL_EL (type->u.tag_type->u.ops, 1)->u.ops); member != NULL;
@@ -10378,7 +10380,7 @@ static void get_type_alias_name (c2m_ctx_t c2m_ctx, struct type *type, VARR (cha
           get_type_alias_name (c2m_ctx, decl->decl_spec.type, name);
           if (width->code != N_IGNORE && (expr = width->attr)->const_p) {
             VARR_PUSH (char, name, 'w');
-            push_val (name, expr->c.u_val);
+            push_val (name, (mir_long) expr->c.u_val);
             for (mir_ullong v = expr->c.u_val;;) {
               VARR_PUSH (char, name, v % 10 + '0');
               v /= 10;
@@ -10445,7 +10447,7 @@ static int push_const_val (c2m_ctx_t c2m_ctx, node_t r, op_t *res) {
   if (floating_type_p (e->type)) {
     /* MIR support only IEEE float and double */
     mir_type = get_mir_type (c2m_ctx, e->type);
-    *res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, e->c.d_val)
+    *res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, (float) e->c.d_val)
                           : mir_type == MIR_T_D ? MIR_new_double_op (ctx, e->c.d_val)
                                                 : MIR_new_ldouble_op (ctx, e->c.d_val)));
   } else {
@@ -11244,7 +11246,7 @@ static inline void MIR_UNUSED gen_multiple_load_store (c2m_ctx_t c2m_ctx, struct
   MIR_context_t ctx = c2m_ctx->ctx;
   MIR_op_t op, var_op;
   MIR_insn_t insn;
-  int i, sh, size = type_size (c2m_ctx, type);
+  int i, sh, size = (int) type_size (c2m_ctx, type);
 
   if (size == 0) return;
   if (type_align (type) == 8) {
@@ -11972,12 +11974,12 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
             data_size = next_init_el.offset - init_el.offset;
         }
         switch (t) {
-        case MIR_T_I8: u.i8 = val.mir_op.u.i; break;
-        case MIR_T_U8: u.u8 = val.mir_op.u.u; break;
-        case MIR_T_I16: u.i16 = val.mir_op.u.i; break;
-        case MIR_T_U16: u.u16 = val.mir_op.u.u; break;
-        case MIR_T_I32: u.i32 = val.mir_op.u.i; break;
-        case MIR_T_U32: u.u32 = val.mir_op.u.u; break;
+        case MIR_T_I8: u.i8 = (int8_t) val.mir_op.u.i; break;
+        case MIR_T_U8: u.u8 = (uint8_t) val.mir_op.u.u; break;
+        case MIR_T_I16: u.i16 = (int16_t) val.mir_op.u.i; break;
+        case MIR_T_U16: u.u16 = (uint16_t) val.mir_op.u.u; break;
+        case MIR_T_I32: u.i32 = (int32_t) val.mir_op.u.i; break;
+        case MIR_T_U32: u.u32 = (uint32_t) val.mir_op.u.u; break;
         case MIR_T_I64: u.i64 = val.mir_op.u.i; break;
         case MIR_T_U64: u.u64 = val.mir_op.u.u; break;
         case MIR_T_F: u.f = val.mir_op.u.f; break;
@@ -12146,7 +12148,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     ld = r->u.ld;
   float_val:
     mir_type = get_mir_type (c2m_ctx, ((struct expr *) r->attr)->type);
-    res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, ld)
+    res = new_op (NULL, (mir_type == MIR_T_F   ? MIR_new_float_op (ctx, (float) ld)
                          : mir_type == MIR_T_D ? MIR_new_double_op (ctx, ld)
                                                : MIR_new_ldouble_op (ctx, ld)));
     break;
@@ -12435,7 +12437,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       res.mir_op.u.mem.base = op2.mir_op.u.reg;
     } else if (res.mir_op.u.mem.index == 0 && size <= MIR_MAX_SCALE) {
       res.mir_op.u.mem.index = op2.mir_op.u.reg;
-      res.mir_op.u.mem.scale = size;
+      res.mir_op.u.mem.scale = (MIR_scale_t) size;
     } else {
       op_t temp_op;
 
@@ -13458,7 +13460,7 @@ static htab_hash_t proto_hash (MIR_item_t pi, void *arg MIR_UNUSED) {
     h = mir_hash_step (h, mir_hash (args[i].name, strlen (args[i].name), 24));
     if (MIR_all_blk_type_p (args[i].type)) h = mir_hash_step (h, args[i].size);
   }
-  return mir_hash_finish (h);
+  return (htab_hash_t) mir_hash_finish (h);
 }
 
 static int proto_eq (MIR_item_t pi1, MIR_item_t pi2, void *arg MIR_UNUSED) {
@@ -13487,7 +13489,7 @@ static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p) {
 
   pi.u.proto = &p;
   p.vararg_p = vararg_p;
-  p.nres = VARR_LENGTH (MIR_type_t, proto_info.ret_types);
+  p.nres = (uint32_t) VARR_LENGTH (MIR_type_t, proto_info.ret_types);
   p.res_types = VARR_ADDR (MIR_type_t, proto_info.ret_types);
   p.args = proto_info.arg_vars;
   if (HTAB_DO (MIR_item_t, proto_tab, &pi, HTAB_FIND, el)) return el;
