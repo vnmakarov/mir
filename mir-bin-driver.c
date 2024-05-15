@@ -137,10 +137,10 @@ int main (int argc, char *argv[], char *env[]) {
 #endif
     exit_code = val.i;
   } else {
-    MIR_gen_init (ctx, 1);
+    MIR_gen_init (ctx);
 #if MIR_BIN_DEBUG
-    MIR_gen_set_debug_file (ctx, 0, stderr);
-    MIR_gen_set_debug_level (ctx, 0, MIR_BIN_DEBUG);
+    MIR_gen_set_debug_file (ctx, stderr);
+    MIR_gen_set_debug_level (ctx, MIR_BIN_DEBUG);
 #endif
     MIR_link (ctx, MIR_USE_GEN ? MIR_set_gen_interface : MIR_set_lazy_gen_interface,
               import_resolver);
@@ -151,7 +151,7 @@ int main (int argc, char *argv[], char *env[]) {
                 : "Finish of MIR loading/linking/generation (%d funcs) -- curr_time %.0f usec\n"),
              funcs_num, real_usec_time () - start_time);
 #endif
-    fun_addr = MIR_gen (ctx, 0, main_func);
+    fun_addr = MIR_gen (ctx, main_func);
 #if MIR_BIN_DEBUG
     start_time = real_usec_time ();
 #endif
