@@ -693,7 +693,7 @@ c2mir-bootstrap-test4: $(BUILD_DIR)/c2m$(EXE) $(BUILD_DIR)/b2ctab$(EXE)
 	                         $(SRC_DIR)/c2mir/c2mir.c $(SRC_DIR)/c2mir/c2mir-driver.c\
 				 $(SRC_DIR)/mir.c -o $(BUILD_DIR)/t2.bmir
 	$(Q) cmp $(BUILD_DIR)/t1.bmir $(BUILD_DIR)/t2.bmir && echo Passed || echo FAIL
-	$(Q) rm -rf $(BUILD_DIR)/t1.bmir $(BUILD_DIR)/t2.bmir $(BUILD_DIR)/mir-ctab
+	$(Q) rm -rf $(BUILD_DIR)/t1.bmir $(BUILD_DIR)/t2.bmir $(BUILD_DIR)/mir-ctab $(BUILD_DIR)/c2m-test$(EXE)
 
 c2mir-bootstrap-test5: $(BUILD_DIR)/c2m$(EXE)
 	$(Q) echo -n +++++++ C2MIR Bootstrap Interpreter Test '... '
