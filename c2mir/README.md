@@ -24,13 +24,13 @@
 	    analogous to the above builtin but makes subtraction and multiplication
         * builtins for jump calls and returns can be used for fast switching between JITted code
 	  and threaded code interpreters:
-  	  * `__builtin_jcall(func)` calls the void C function w/o args through a direct jump.
+	  * `__builtin_jcall(func)` calls the void C function w/o args through a direct jump.
 	    Such function should return by the next builtin only
 	  * `__builtin_jret (addr)` returns from a function called by `__builtin_jcall` to given address
         * builtins used for generating specialized code based on lazy basic block versioning
 	  (see [blogpost](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler#)
 	  how to use them):
-  	  * `__builtin_prop_set(var, property_const)` sets the variable property to given constant
+	  * `__builtin_prop_set(var, property_const)` sets the variable property to given constant
 	  * `__builtin_prop_eq(var, property_const)` and `__builtin_prop_eq(var, property_const)` compares
 	    current property value of the variable with given constant and returns true
 	    if they are correspondingly equal or not equal
