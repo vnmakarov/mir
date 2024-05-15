@@ -1,5 +1,5 @@
 /* This file is a part of MIR project.
-   Copyright (C) 2019-2021 Vladimir Makarov <vmakarov.gcc@gmail.com>.
+   Copyright (C) 2019-2024 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 
    Driver to translate bitcode into MIR and execute the generated MIR.
 */
