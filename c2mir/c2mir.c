@@ -11443,7 +11443,7 @@ static mir_size_t get_object_path_offset (c2m_ctx_t c2m_ctx) {
 
 /* The function has the same structure as check_initializer.  Keep it this way. */
 static void collect_init_els (c2m_ctx_t c2m_ctx, decl_t member_decl, struct type **type_ptr,
-                              node_t initializer, int const_only_p, int top_p) {
+                              node_t initializer, int const_only_p, int top_p MIR_UNUSED) {
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   struct type *type = *type_ptr;
   struct expr *cexpr;

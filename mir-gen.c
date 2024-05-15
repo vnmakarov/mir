@@ -2361,7 +2361,7 @@ static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
 }
 
 static ssa_edge_t add_ssa_edge_1 (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
-                                  int use_op_num, int dup_p) {
+                                  int use_op_num, int dup_p MIR_UNUSED) {
   MIR_op_t *op_ref;
   ssa_edge_t ssa_edge = gen_malloc (gen_ctx, sizeof (struct ssa_edge));
 
