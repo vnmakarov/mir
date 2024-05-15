@@ -71,32 +71,32 @@
   * MIR module consists of **items**.  There are following **item types** (and function for their creation):
     * **Function**: `MIR_func_item`
       * textual representation of function is described below
-    
+
     * **Import**: `MIR_import_item` (`MIR_item_t MIR_new_import (MIR_context_t ctx, const char *name)`)
       * textual representation of import items is `import <name>{, <name>}`
-    
+
     * **Export**: `MIR_export_item` (`MIR_item_t MIR_new_export (MIR_context_t ctx, const char *name)`)
       * textual representation of export items is `export <name>{, <name>}`
-    
+
     * **Forward declaration**: `MIR_forward_item` (`MIR_item_t MIR_new_forward (MIR_context_t ctx, const char *name)`)
       * textual representation of forward items is `forward <name>{, <name>}`
-    
+
     * **Prototype**: `MIR_proto_item` (`MIR_new_proto_arr`, `MIR_new_proto`, `MIR_new_vararg_proto_arr`,
       `MIR_new_vararg_proto` analogous to `MIR_new_func_arr`, `MIR_new_func`, `MIR_new_vararg_func_arr` and
       `MIR_new_vararg_func` -- see below).  The only difference is that
       two or more prototype argument names can be the same.  The textual representation is analogous to
       function title (see below) but `proto` is used instead of `func`
-      
+
     * **Data**: `MIR_data_item` with optional name
       (`MIR_item_t MIR_new_data (MIR_context_t ctx, const char *name, MIR_type_t el_type, size_t nel, const void *els)`
        or `MIR_item_t MIR_new_string_data (MIR_context_t ctx, const char *name, MIR_str_t str)`)
       * textual representation of data items `[<name>:] <type> <value>{, <value>}`
-      
+
     * **Reference data**: `MIR_ref_data_item` with optional name
       (`MIR_item_t MIR_new_ref_data (MIR_context_t ctx, const char *name, MIR_item_t item, int64_t disp)`
       * The address of the item after linking plus `disp` is used to initialize the data
       * textual representation of reference data items `[<name>:] ref <name>[, <disp>]`
-      
+
     * **Expression Data**: `MIR_expr_data_item` with optional name
       (`MIR_item_t MIR_new_expr_data (MIR_context_t ctx, const char *name, MIR_item_t expr_item)`)
       * Not all MIR functions can be used for expression data.  The expression function should have
@@ -106,7 +106,7 @@
 
     * **Memory segment**: `MIR_bss_item` with optional name (`MIR_item_t MIR_new_bss (MIR_context_t ctx, const char *name, size_t len)`)
       * textual representation of memory items `[<name>:] bss <length>`
-    
+
     * **Label reference**: `MIR_lref_item` with optional name
       (`MIR_item_t MIR_new_lref_data (MIR_context_t ctx, const char *name, MIR_label_t label,
                                       MIR_label_t label2, int64_t disp)`) which keeps values derived from label
@@ -115,7 +115,7 @@
       * `lref` can refers for labels the same function (this is checked during module load) and
          there is a warranty label addresses to be defined only at the beginning of the function execution
       * textual representation of label reference items `[<name>:] lref <label>[, <label2>][, <disp>]`
-   
+
   * Long double data item is changed to double one, if long double coincides with double for given target or ABI
 
   * Names of MIR functions, imports, and prototypes should be unique in a module
@@ -123,7 +123,7 @@
   * API functions `MIR_output_item (MIR_context_t ctx, FILE *f, MIR_item_t item)`
     and `MIR_output_module (MIR_context_t ctx, FILE *f, MIR_module_t module)` output item or module
     textual representation into given file
-    
+
   * MIR text module syntax looks the following:
 ```
     <module name>: module
@@ -207,7 +207,7 @@
     local [ <var type>:<var name>[:<hard reg name>] {, <var type>:<var name>[:<hard reg name>]} ]
 ```
   * In MIR textual representation variable should be defined through `local` before its use
-    
+
 ## MIR insn operands
   * MIR insns work with operands
   * There are following operands:
@@ -242,7 +242,7 @@
       * result 64-bit integer value is truncated to integer memory type
       * Memory operand has the following syntax in MIR text (absent displacement means zero one,
         absent scale means one, scale should be 1, 2, 4, or 8):
-      
+
 ```
 	  <type>: <disp>
 	  <type>: [<disp>] (<base reg> [, <index reg> [, <scale> ]])
@@ -251,7 +251,7 @@
     textual representation into given file
   * API function `MIR_output_op (MIR_context_t ctx, FILE *f, MIR_op_t op, MIR_func_t func)` outputs the operand
     textual representation into given file
-        
+
 
 ## MIR insns
   * All MIR insns (except `call` or `ret`) expects fixed number of operands
@@ -300,7 +300,7 @@
   * If insn has prefix `U` in insn name, the insn treats integer as unsigned integers
   * Some insns has no unsigned variant as MIR is oriented to CPUs with two complement integer arithmetic
     (the huge majority of all CPUs)
-  
+
     | Insn Code               | Nops |   Description                                          |
     |-------------------------|-----:|--------------------------------------------------------|
     | `MIR_EXT8`              | 2    | **sign** extension of lower **8 bit** input part       |
@@ -353,7 +353,7 @@
   * Otherwise, insn has prefix `LD` in insn name and the insn is a long double insn.
     Its operands should have `MIR_T_LD` type.
   * The result of comparison insn is a 64-bit integer value, so the result operand should be of integer type
-  
+
     | Insn Code                            | Nops |   Description                                                   |
     |--------------------------------------|-----:|-----------------------------------------------------------------|
     | `MIR_F2I`, `MIR_D2I`, `MIR_LD2I`     | 2    | transforming floating point value into 64-bit integer           |
@@ -393,7 +393,7 @@
     | `MIR_ADDR16`            | 2    | Take address of variable treated as 16-bit value                      |
     | `MIR_ADDR32`            | 2    | Take address of variable treated as 32-bit value                      |
 
-  * `MIR_ADDR` is used to address variables keeping values of 64-bit integer, float, double, or long double types 
+  * `MIR_ADDR` is used to address variables keeping values of 64-bit integer, float, double, or long double types
   * Other address insns are used to address variables keeping integer values of smaller types
   * Usage of the right address insn is important for big-endian targets
 
@@ -486,7 +486,7 @@
   * `MIR_JCALL` and `MIR_JRET` implement non-standard ABI for functions without args and return values
     * The ABI is useful for high performance switching from direct threading interpreters to JITted code
     * The argument and return values can be passed through global vars which are tied to specific hard regs
-  
+
 ### MIR_ALLOCA insn
   * Reserve memory on the stack whose size is given as the 2nd operand and assign the memory address to the 1st operand
   * The reserved memory will be aligned according target ABI
@@ -521,7 +521,7 @@
   * `MIR_PRSET` sets property of the variable given as the 1st operand to integer constant given as the 2nd operand
   * `MIR_PRBEQ` and `MIR_PRBNE` jumps to the label given as the 1st operand if property of the variable given as the
     2nd operand equal or not equal to integer constant given as the 2rd operand
-    
+
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
@@ -578,7 +578,7 @@ fin3:     add iter, iter, 1
 fin:      ret count
           endfunc
           endmodule
-          
+
 m_ex100:  module
 format:   string "sieve (10) = %d\n"
 p_printf: proto p:fmt, i32:v
