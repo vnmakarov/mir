@@ -515,6 +515,13 @@
     address of the va_list is not in the memory but is the
     memory address
 
+### MIR property insns
+  * These insns never generate any corresponding machine insns but can be used to a generate specialized code
+    when lazy basic block versioning is used
+  * `MIR_PRSET` sets property of the variable given as the 1st operand to integer constant given as the 2nd operand
+  * `MIR_PRBEQ` and `MIR_PRBNE` jumps to the label given as the 1st operand if property of the variable given as the
+    2nd operand equal or not equal to integer constant given as the 2rd operand
+    
 ## MIR API example
   * The following code on C creates MIR analog of C code
     `int64_t loop (int64_t arg1) {int64_t count = 0; while (count < arg1) count++; return count;}`
@@ -678,6 +685,9 @@ main:	  func
         MIR-generator will generate machine code only on the first
         function call and called functions from MIR code will execute
         the machine code
+      * If you pass `MIR_set_lazy_bb_gen_interface` to `MIR_link`, then
+        MIR-generator will generate machine code of function basic blocks
+	only on their first execution
       * If you pass non-null `import_resolver` function, it will be
         called for defining address for import without definition.
         The function get the import name and return the address which
