@@ -1,7 +1,8 @@
 # C to MIR compiler
   * Implementation of a small C11 (2011 ANSI C standard) to MIR compiler
-    * no optional standard features: variable size arrays, complex, atomic
-    * support of the following C extensions:
+    * no optional standard features: variable size arrays, complex, atomic, thread local variables
+    * support of the following C extensions (many of them can be used for better
+      JIT implementation of dynamic programming languages):
       * `\e` escape sequence
       * binary numbers starting with `0b` or `0B` prefix
       * macro `__has_include`
@@ -9,6 +10,30 @@
       * range cases `case <start>...<finish>`
       * zero size arrays
       * statement expressions
+      * labels as values (see analogous GNU C extension)
+      * register variables (see analogous global register variable extension in GNU C)
+      * builtins (some of them is a part GNU C extensions):
+        * `__builtin_expect(<cond>, <expected cond value>)` is used instead of <cond>
+	  to hint `c2mir` about expected value and results in better code generation
+	  by placing code related to the expected condition nearby
+        * overflow builtins can be used for effective code generation in JIT for interpreters
+	  using multi-precision integer numbers like Ruby or Python:
+          * `__builtin_add_overflow(v1,v2,&res)` makes `res=v1+v2` and returns non-zero
+	    if the overflow occurs
+	  * `__builtin_sub_overflow(v1,v2,&res)` and `__builtin_sub_overflow(v1,v2,&res)` are
+	    analogous to the above builtin but makes subtraction and multiplication
+        * builtins for jump calls and returns can be used for fast switching between JITted code
+	  and threaded code interpreters:
+  	  * `__builtin_jcall(func)` calls the void C function w/o args through a direct jump.
+	    Such function should return by the next builtin only
+	  * `__builtin_jret (addr)` returns from a function called by `__builtin_jcall` to given address
+        * builtins used for generating specialized code based on lazy basic block versioning
+	  (see [blogpost](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler#)
+	  how to use them):
+  	  * `__builtin_prop_set(var, property_const)` sets the variable property to given constant
+	  * `__builtin_prop_eq(var, property_const)` and `__builtin_prop_eq(var, property_const)` compares
+	    current property value of the variable with given constant and returns true
+	    if they are correspondingly equal or not equal
   * Minimal compiler code dependency.  No additional tools (like yacc/flex) are used
   * Simplicity of implementation over speed to make code easy to learn and maintain
     * Four passes to divide compilation on manageable sub-tasks:
@@ -131,12 +156,3 @@
       `syntax_only_p`, `asm_p`, and `object_p are zero, there will be no output files, only
       the generated MIR module will be kept in memory of the context `ctx`
     * Member `module_num` defines index in the generated MIR module name (if there is any)
-    
-## Current state C to MIR compiler
-  * **On Oct 25 we achieved a successful bootstrap**
-    * `c2m` compiles own sources and generate binary MIR, this binary
-      MIR compiles `c2m` sources again and generate another binary
-      MIR, and the two binary MIR files are identical
-    * The bootstrap test takes about CPU 10 sec (for comparison GCC minimal bootstrap takes about 2 CPU hours)    
-  * ABI compliant calls (multiple return regs, passing structures through regs) has implemented for x86-64, ppc64,
-    aarch64, and s390x
