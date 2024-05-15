@@ -67,6 +67,7 @@
 	  integer values, float, double, and long double values
 	* There are **specialized light-weight call and return instructions** can be used for
 	  fast switching from threaded interpreter to JITted code and vice verse
+	* There are **property** instructions to generated specialized machine code when lazy basic block versioning is used
 
 ## MIR Example
   * You can create MIR through **API** consisting of functions for creation of modules,
@@ -323,11 +324,12 @@ The executable is "configurable" with environment variables:
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir-<target>.h` contain declarations common for interpreter and JIT compiler 
- * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
    C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64`, `c2mir/s390x`,
    and `c2mir/riscv64` contain correspondingly x86_64, aarch64, ppc64le, s390x, and riscv machine-dependent
    code for C to MIR compiler
+ * File `mir-bin-run.c` contains code for `mir-bin-run` described above
+ * File `mir-bin-driver.c` with `b2ctab` utility can be used for portable way to generate binary from MIR binary files
  * Directory `mir-utils` contains different utilities to work with MIR,
    e.g. transforming binary MIR to textual MIR and vice verse
  * Directory `adt-tests`, `mir-tests`, `c-tests`, and `c-benchmarks` contains code for testing and benchmarking MIR and `c2m`
