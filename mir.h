@@ -143,7 +143,8 @@ typedef enum {
   REP2 (INSN_EL, BSTART, BEND), /* block start: result addr; block end: addr from block start */
   /* Special insns: */
   INSN_EL (VA_ARG),       /* result is arg address, operands: va_list addr and memory */
-  INSN_EL (VA_BLOCK_ARG), /* result is arg address, operands: va_list addr and integer (size) */
+  INSN_EL (VA_BLOCK_ARG), /* result is arg address, operands: va_list addr, integer (size), and
+                             integer (block type) */
   INSN_EL (VA_START),
   INSN_EL (VA_END),                    /* operand is va_list */
   INSN_EL (LABEL),                     /* One immediate operand is unique label number  */

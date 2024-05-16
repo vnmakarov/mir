@@ -7,6 +7,7 @@
 #include <inttypes.h>
 
 static MIR_func_t curr_func;
+static int64_t curr_temp;
 
 static void out_type (FILE *f, MIR_type_t t) {
   switch (t) {
@@ -26,6 +27,12 @@ static void out_type (FILE *f, MIR_type_t t) {
     mir_assert (MIR_blk_type_p (t));
     fprintf (f, "void *");
     break;
+  }
+}
+
+static void out_block_type (FILE *f, MIR_type_t bt, int64_t s) {
+  switch (bt) {
+  default: fprintf (f, "struct __s%d{ int64_t a[%ld];}", curr_temp, (long) ((s + 7) / 8)); break;
   }
 }
 
@@ -290,18 +297,16 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
   case MIR_LDGE: out_fop3 (ctx, f, ops, ">="); break;
   case MIR_JMP: out_jmp (ctx, f, ops[0]); break;
   case MIR_BT:
-    fprintf (f, "if ((int64_t) ");
-    out_op (ctx, f, ops[1]);
-    fprintf (f, ") ");
-    out_jmp (ctx, f, ops[0]);
-    break;
   case MIR_BF:
-    fprintf (f, "if (! (int64_t) ");
+  case MIR_BTS:
+  case MIR_BFS:
+    fprintf (f, "if (");
+    if (insn->code == MIR_BF || insn->code == MIR_BFS) fprintf (f, "!");
+    fprintf (f, insn->code == MIR_BF || insn->code == MIR_BT ? "(int64_t) " : "(int32_t) ");
     out_op (ctx, f, ops[1]);
     fprintf (f, ") ");
     out_jmp (ctx, f, ops[0]);
     break;
-    /* ??? case MIR_BTS: case MIR_BFS: */
   case MIR_BEQ: out_bcmp (ctx, f, ops, "=="); break;
   case MIR_BNE: out_bcmp (ctx, f, ops, "!="); break;
   case MIR_BLT: out_bcmp (ctx, f, ops, "<"); break;
@@ -386,12 +391,203 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
     mir_assert (ops[0].mode == MIR_OP_INT);
     fprintf (f, "l%" PRId64 ":\n", ops[0].u.i);
     break;
+  case MIR_ADDO:
+  case MIR_SUBO:
+  case MIR_MULO:
+    fprintf (f, "__overflow = __builtin_%s_overflow((int64_t)",
+             insn->code == MIR_ADDO   ? "add"
+             : insn->code == MIR_SUBO ? "sub"
+                                      : "mul");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", (int64_t)");
+    out_op (ctx, f, ops[2]);
+    fprintf (f, ", (int64_t *)&");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+  case MIR_ADDOS:
+  case MIR_SUBOS:
+  case MIR_MULOS:
+    fprintf (f, "__overflow = __builtin_%s_overflow((int32_t)",
+             insn->code == MIR_ADDOS   ? "add"
+             : insn->code == MIR_SUBOS ? "sub"
+                                       : "mul");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", (int32_t)");
+    out_op (ctx, f, ops[2]);
+    fprintf (f, ", (int32_t *)&");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+  case MIR_UMULO:
+    fprintf (f, "__overflow = __builtin_mul_overflow((uint64_t)");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", (uint64_t)");
+    out_op (ctx, f, ops[2]);
+    fprintf (f, ", (uint64_t *)&");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+  case MIR_UMULOS:
+    fprintf (f, "__overflow = __builtin_mul_overflow((uint32_t)");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", (uint32_t)");
+    out_op (ctx, f, ops[2]);
+    fprintf (f, ", (uint32_t *)&");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+  case MIR_BO:
+  case MIR_UBO:
+    fprintf (f, "if (__overflow) ");
+    out_jmp (ctx, f, ops[0]);
+    break;
+  case MIR_BNO:
+  case MIR_UBNO:
+    fprintf (f, "if (!__overflow) ");
+    out_jmp (ctx, f, ops[0]);
+    break;
+  case MIR_ADDR:
+  case MIR_ADDR8:
+  case MIR_ADDR16:
+  case MIR_ADDR32:
+    out_op (ctx, f, ops[0]);
+    fprintf (f, " = (int64_t)(");
+    fprintf (f, "(char *)&(");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ")");
+    fprintf (f, "+ (LITLE_ENDIAN ? 0 : %d",
+             insn->code == MIR_ADDR8    ? 7
+             : insn->code == MIR_ADDR16 ? 6
+             : insn->code == MIR_ADDR32 ? 4
+                                        : 0);
+    fprintf (f, "));\n");
+    break;
+  case MIR_LADDR:
+    out_op (ctx, f, ops[0]);
+    fprintf (f, " = (int64_t)&&");
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ";\n");
+    break;
+  case MIR_JMPI:
+    fprintf (f, "goto *(void *)");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ";\n");
+    break;
+  case MIR_JCALL:
+    fprintf (f, "__builtin_jcall(");
+    out_op (ctx, f, ops[1]);
+    for (size_t i = 2; i < insn->nops; i++) {
+      fprintf (f, ", ");
+      if (ops[i].mode == MIR_OP_STR) fprintf (f, "(uint64_t) ");
+      out_op (ctx, f, ops[i]);
+    }
+    fprintf (f, ");\n");
+    break;
+  case MIR_JRET:
+    fprintf (f, "__builtin_jret((void *) ");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+    /* Assuming the correct (nested) use of the following insns: */
+  case MIR_BSTART: fprintf (f, "{ /* block start */\n"); break;
+  case MIR_BEND: fprintf (f, "} /* block end */\n"); break;
+  case MIR_PRSET:  // nothing
+    break;
+  case MIR_PRBEQ:  // assuming unknown property (0)
+    if ((ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT) && insn->ops[2].u.i == 0) {
+      out_jmp (ctx, f, ops[0]);
+    }
+    break;
+  case MIR_PRBNE:  // assuming unknown property (0)
+    if ((ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT) && insn->ops[2].u.i != 0) {
+      out_jmp (ctx, f, ops[0]);
+    }
+    break;
+  case MIR_VA_ARG: /* result is arg address, operands: va_list addr and memory */
+    mir_assert (ops[2].mode == MIR_OP_MEM);
+    MIR_type_t t = ops[2].u.mem.type;
+    out_type (f, t);
+    curr_temp++;
+    fprintf (f, " __t%d = va_arg(*(va_list *) ", curr_temp);
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", ");
+    if (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16) {
+      fprintf (f, "int");
+    } else {
+      out_type (f, t);
+    }
+    fprintf (f, "); ");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, " = (int64_t) &__t%d;\n", curr_temp);
+    break;
+  case MIR_VA_BLOCK_ARG: /* result is arg address, operands: va_list addr and integer (size) */
+    mir_assert (ops[2].mode == MIR_OP_INT || ops[2].mode == MIR_OP_UINT);
+    mir_assert (ops[3].mode == MIR_OP_INT || ops[3].mode == MIR_OP_UINT);
+    int64_t s = ops[2].u.i;
+    int64_t bt = ops[3].u.i;
+#if defined(__riscv) || defined(__aarch64__) && defined(__APPLE__)
+    if (s > 16) {
+      out_op (ctx, f, ops[0]);
+      fprintf (f, " = (int64_t) va_arg(*(va_list *) ");
+      out_op (ctx, f, ops[1]);
+      va_arg (", void*);\n");
+      break;
+    }
+#endif
+    curr_temp++;
+    fprintf (f, "struct __s%d {", curr_temp);
+    switch (bt) {
+#if defined(__x86_64__) || defined(_M_AMD64)
+    case 1:
+      fprintf (f, "int64_t a1;");
+      if (s > 8) fprintf (f, "int64_t a2;");
+      break;
+    case 2:
+      fprintf (f, "double a1;");
+      if (s > 8) fprintf (f, "double a2;");
+      break;
+    case 3: fprintf (f, "int64_t a1; double a2;"); break;
+    case 4: fprintf (f, "double a1; int64_t a2;"); break;
+#endif
+    default:
+#if defined(__riscv)
+      if (s > 8 && bt == 1) {
+        fprintf (f, "long double a[%ld];", (long) ((s + 15) / 16));
+        break;
+      }
+#endif
+      fprintf (f, "int64_t a[%ld];", (long) ((s + 7) / 8));
+      break;
+    }
+    fprintf (f, "} __t%d = va_arg(*(va_list *) ", curr_temp);
+    out_op (ctx, f, ops[1]);
+    fprintf (f, ", struct __s%d); ", curr_temp);
+    out_op (ctx, f, ops[0]);
+    fprintf (f, " = (int64_t) &__t%d;\n", curr_temp);
+    break;
+  case MIR_VA_START:
+    fprintf (f, "va_start(*(va_list *)");
+    out_op (ctx, f, ops[0]);
+    if (curr_func->nargs == 0) {
+      fprintf (stderr, "cannot translate va_start in func %s w/o any arg\n", curr_func->name);
+      exit (1);
+    }
+    fprintf (f, ", %s);\n", VARR_GET (MIR_var_t, curr_func->vars, curr_func->nargs - 1).name);
+    break;
+  case MIR_VA_END:
+    fprintf (f, "va_end(*(va_list *)");
+    out_op (ctx, f, ops[0]);
+    fprintf (f, ");\n");
+    break;
+    /* operand is va_list */
   default: mir_assert (FALSE);
   }
 }
 
 static void out_func_decl (MIR_context_t ctx, FILE *f, MIR_func_t func) {
   MIR_var_t var;
+  size_t i;
   if (func->nres == 0)
     fprintf (f, "void");
   else if (func->nres == 1)
@@ -400,8 +596,7 @@ static void out_func_decl (MIR_context_t ctx, FILE *f, MIR_func_t func) {
     (*MIR_get_error_func (ctx)) (MIR_func_error,
                                  "Multiple result functions can not be represented in C");
   fprintf (f, " %s (", func->name);
-  if (func->nargs == 0) fprintf (f, "void");
-  for (size_t i = 0; i < func->nargs; i++) {
+  for (i = 0; i < func->nargs; i++) {
     if (i != 0) fprintf (f, ", ");
     var = VARR_GET (MIR_var_t, func->vars, i);
     out_type (f, var.type);
@@ -411,6 +606,12 @@ static void out_func_decl (MIR_context_t ctx, FILE *f, MIR_func_t func) {
                ? " %s"
                : " _%s",
              var.name);
+  }
+  if (func->vararg_p) {
+    if (i != 0) fprintf (f, ", ");
+    fprintf (f, "...");
+  } else if (i == 0) {
+    fprintf (f, "void");
   }
   fprintf (f, ")");
 }
@@ -559,6 +760,7 @@ static void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
   curr_func = item->u.func;
   out_func_decl (ctx, f, curr_func);
   fprintf (f, " {\n");
+  curr_temp = 0;
   for (i = 0; i < curr_func->nargs; i++) {
     var = VARR_GET (MIR_var_t, curr_func->vars, i);
     if (var.type == MIR_T_I64 || var.type == MIR_T_F || var.type == MIR_T_D || var.type == MIR_T_LD)
@@ -572,6 +774,9 @@ static void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
     out_type (f, var.type);
     fprintf (f, " %s;\n", var.name);
   }
+  fprintf (f, "  int __overflow;\n");
+  fprintf (f, "  const int LITLE_ENDIAN_X = 1;\n");
+  fprintf (f, "  const int LITLE_ENDIAN = *(char *) &LITLE_ENDIAN_X;\n");
   for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, curr_func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
     out_insn (ctx, f, insn);
@@ -579,7 +784,7 @@ static void out_item (MIR_context_t ctx, FILE *f, MIR_item_t item) {
 }
 
 void MIR_module2c (MIR_context_t ctx, FILE *f, MIR_module_t m) {
-  fprintf (f, "#include <stdint.h>\n");
+  fprintf (f, "#include <stdint.h>\n#include <stdarg.h>\n");
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item))
     out_item (ctx, f, item);
@@ -591,6 +796,55 @@ void MIR_module2c (MIR_context_t ctx, FILE *f, MIR_module_t m) {
 #include "mir-tests/scan-sieve.h"
 #include "mir-tests/scan-hi.h"
 
+MIR_module_t create_ext_module (MIR_context_t ctx) {
+  const char *str
+    = "\n\
+m_ext:   module\n\
+p:	 proto i64:a, ...\n\
+ext:     func i64:a, ...\n\
+         local i64:i,i64:j,i64:k,i64:va\n\
+         va_start va\n\
+         va_arg i,va,i8:0\n\
+         va_block_arg i, va, 40, 0\n\
+         va_block_arg i, va, 16, 1\n\
+         va_block_arg i, va, 16, 2\n\
+         va_block_arg i, va, 16, 3\n\
+         va_block_arg i, va, 16, 4\n\
+         va_end va\n\
+l5:\n\
+         bstart i\n\
+         bend i\n\
+l6:\n\
+         addo i,j,k\n\
+         addos i,j,k\n\
+         subo i,j,k\n\
+         subos i,j,k\n\
+         mulo i,j,k\n\
+         bo l5\n\
+         mulos i,j,k\n\
+         bno l6\n\
+         umulo i,j,k\n\
+         ubo l5\n\
+         umulos i,j,k\n\
+         ubno l6\n\
+         addr i,i\n\
+         addr8 i,i\n\
+         addr16 i,i\n\
+         addr32 i,i\n\
+         laddr i,l5\n\
+         jmpi i\n\
+         jret i\n\
+         endfunc\n\
+ext2:    func\n\
+         jcall p,ext,10\n\
+         endfunc\n\
+         endmodule\n\
+";
+
+  MIR_scan_string (ctx, str);
+  return DLIST_TAIL (MIR_module_t, *MIR_get_module_list (ctx));
+}
+
 int main (int argc, const char *argv[]) {
   MIR_module_t m;
   MIR_context_t ctx = MIR_init ();
@@ -598,6 +852,8 @@ int main (int argc, const char *argv[]) {
   create_mir_func_sieve (ctx, NULL, &m);
   MIR_module2c (ctx, stdout, m);
   m = create_hi_module (ctx);
+  MIR_module2c (ctx, stdout, m);
+  m = create_ext_module (ctx);
   MIR_module2c (ctx, stdout, m);
   MIR_finish (ctx);
   return 0;
