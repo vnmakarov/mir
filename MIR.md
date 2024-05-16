@@ -347,6 +347,19 @@
     | `MIR_GTS`, `MIR_GES`    | 3    | **32-bit signed** greater than/greater than or equal   |
     | `MIR_UGTS`, `MIR_UGES`  | 3    | **32-bit unsigned** greater than/greater than or equal |
 
+### MIR integer overflow insns
+  * All the insns set up an overflow flag which can be checked by branches on overflow `MIR_BO`, `MIR_BNO`, `MIR_UBO`, and `MIR_UBNO`
+  * If insn has suffix `S` in insn name, the insn works with lower 32-bit part of 64-bit integer value
+  * The higher part of 32-bit insn result is undefined
+  * If insn has prefix `U` in insn name, the insn treats integer as unsigned integers
+
+    | Insn Code               | Nops |   Description                                          |
+    |-------------------------|-----:|--------------------------------------------------------|
+    | `MIR_ADDO`, `MIR_SUBO`  | 3    | **64-bit** integer addition and subtraction            |
+    | `MIR_ADDOS`, `MIR_SUBOS`| 3    | **32-bit** integer addition and subtraction            |
+    | `MIR_MULO`, `MIR_MULOS` | 3    | **64-bit signed**  multiplication and divison          |
+    | `MIR_UMUL`, `MIR_UMULOS`| 3    | **64-bit unsigned** integer multiplication and divison |
+
 ### MIR floating point insns
   * If insn has prefix `F` in insn name, the insn is single precision float point insn.  Its operands should have `MIR_T_F` type
   * If insn has prefix `D` in insn name, the insn is double precision float point insn.  Its operands should have `MIR_T_D` type
@@ -408,6 +421,17 @@
     | `MIR_BF`                | 2    | jump to the label when 2nd **64-bit** operand is **zero**             |
     | `MIR_BFS`               | 2    | jump to the label when 2nd **32-bit** operand is **zero**             |
     | `MIR_JMPI`              | 1    | unconditional jump to address in **64-bit** operand (see `MIR_LADRR`) |
+
+### MIR branch on overflow insns
+  * The first operand of the insn should be label
+  * The previous insn must be a MIR integer overflow insn
+
+    | Insn Code               | Nops |   Description                                                         |
+    |-------------------------|-----:|-----------------------------------------------------------------------|
+    | `MIR_BO`                | 1    | jump to the label when signed overflow is set up                      |
+    | `MIR_BNO`               | 1    | jump to the label when signed overflow is not set up                  |
+    | `MIR_UBO`               | 1    | jump to the label when unsigned overflow is set up                    |
+    | `MIR_UBNO`              | 1    | jump to the label when unsigned overflow is set up                    |
 
 ### `MIR_LADDR` insn
   * The insn takes address of a function label given as the 2nd operand and put it into 64-bit integer register
