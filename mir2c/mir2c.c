@@ -7,7 +7,7 @@
 #include <inttypes.h>
 
 static MIR_func_t curr_func;
-static int64_t curr_temp;
+static int curr_temp;
 
 static void out_type (FILE *f, MIR_type_t t) {
   switch (t) {
