@@ -560,9 +560,9 @@ clean-mir-gen-tests:
 mir-bin-run-test: $(BUILD_DIR)/mir-bin-run$(EXE) $(BUILD_DIR)/c2m$(EXE)
 	      $(BUILD_DIR)/c2m$(EXE) -c $(SRC_DIR)/sieve.c
 	      $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
-	      MIR_TYPE=interp time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
-	      MIR_TYPE=gen time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
-	      MIR_TYPE=lazy time $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=interp $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=gen $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
+	      MIR_TYPE=lazy $(BUILD_DIR)/mir-bin-run$(EXE) `pwd`/sieve.bmir sieve.bmir
 	      rm sieve.bmir
 	
 
