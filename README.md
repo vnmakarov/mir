@@ -248,12 +248,6 @@ The executable is "configurable" with environment variables:
     in 32-bit instructions
 
 ## MIR JIT compiler
-  * Original compiler **Performance Goals** relative to GCC -O2:
-    * 70% of generated code speed
-    * 100 times faster compilation speed
-    * 100 times faster start-up
-    * 100 times smaller code size
-    * less 15K C LOC
   * Very short optimization pipeline for speed and light-weight
   * Only the **most valuable** optimization usage:
     * **function inlining**
