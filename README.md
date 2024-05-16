@@ -324,6 +324,7 @@ The executable is "configurable" with environment variables:
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
    JIT compiler 
  * Files `mir-<target>.h` contain declarations common for interpreter and JIT compiler 
+ * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler.  The generated code might be not portable
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
    C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64`, `c2mir/s390x`,
    and `c2mir/riscv64` contain correspondingly x86_64, aarch64, ppc64le, s390x, and riscv machine-dependent
