@@ -20,11 +20,11 @@
 	  using multi-precision integer numbers like Ruby or Python:
           * `__builtin_add_overflow(v1,v2,&res)` makes `res=v1+v2` and returns non-zero
 	    if the overflow occurs
-	  * `__builtin_sub_overflow(v1,v2,&res)` and `__builtin_sub_overflow(v1,v2,&res)` are
+	  * `__builtin_sub_overflow(v1,v2,&res)` and `__builtin_mul_overflow(v1,v2,&res)` are
 	    analogous to the above builtin but makes subtraction and multiplication
         * builtins for jump calls and returns can be used for fast switching between JITted code
 	  and threaded code interpreters:
-	  * `__builtin_jcall(func)` calls the void C function w/o args through a direct jump.
+	  * `__builtin_jcall(func)` calls the C function with void result through a direct jump.
 	    Such function should return by the next builtin only
 	  * `__builtin_jret (addr)` returns from a function called by `__builtin_jcall` to given address
         * builtins used for generating specialized code based on lazy basic block versioning
