@@ -531,7 +531,7 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
       out_op (ctx, f, ops[0]);
       fprintf (f, " = (int64_t) va_arg(*(va_list *) ");
       out_op (ctx, f, ops[1]);
-      va_arg (", void*);\n");
+      fprintf (f, ", void*);\n");
       break;
     }
 #endif
