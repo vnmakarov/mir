@@ -30,12 +30,6 @@ static void out_type (FILE *f, MIR_type_t t) {
   }
 }
 
-static void out_block_type (FILE *f, MIR_type_t bt, int64_t s) {
-  switch (bt) {
-  default: fprintf (f, "struct __s%d{ int64_t a[%ld];}", curr_temp, (long) ((s + 7) / 8)); break;
-  }
-}
-
 static void out_op (MIR_context_t ctx, FILE *f, MIR_op_t op) {
   switch (op.mode) {
   case MIR_OP_REG: fprintf (f, "%s", MIR_reg_name (ctx, op.u.reg, curr_func)); break;
