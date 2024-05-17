@@ -370,7 +370,7 @@ The executable is "configurable" with environment variables:
 
    [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 2
 
-   [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
+   [3] is based on stripped sizes of cc1 for GCC and C2MIR, MIR core, interpreter, and generator for MIR
 
    [4] is based on all source files excluding tests
 
