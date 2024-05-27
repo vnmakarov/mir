@@ -10,4 +10,4 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: make test
-      run: ~/mir-s390x-test.sh master `git log |head -1|awk '{print $2}'`
+      run: ~/mir-s390x-test.sh v0_master `git log |head -1|awk '{print $2}'`
