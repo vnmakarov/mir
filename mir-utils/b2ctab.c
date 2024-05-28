@@ -2,6 +2,12 @@
 
 #include "mir.h"
 
+#ifdef _WIN32
+/* <stdio.h> provides _fileno */
+#include <fcntl.h> /* provides _O_BINARY */
+#include <io.h>    /* provides _setmode */
+#endif
+
 static size_t output_mir_code_byte_num;
 static FILE *output_mir_code_file;
 
@@ -13,6 +19,10 @@ static int output_mir_code_byte (MIR_context_t ctx MIR_UNUSED, uint8_t byte) {
 
 int main (int argc, char *argv[]) {
   MIR_context_t ctx = MIR_init ();
+
+#ifdef _WIN32
+  if (_setmode (_fileno (stdin), _O_BINARY) == -1) return 1;
+#endif
 
   if (argc != 1) {
     fprintf (stderr, "Usage: %s < mir-binary-file  > C-file\n", argv[1]);
