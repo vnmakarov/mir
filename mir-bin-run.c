@@ -149,7 +149,7 @@ static void *open_lib (const char *dir, const char *name) {
   VARR_PUSH (char, temp_string, 0);
   if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
 #ifndef _WIN32
-    if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
+    if ((f = fopen (VARR_ADDR (char, temp_string), "rb")) != NULL) {
       fclose (f);
       fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
     }
@@ -303,7 +303,7 @@ int main (int argc, char **argv, char **envp) {
   MIR_item_t main_func = NULL;
 
   MIR_context_t mctx = MIR_init ();
-  FILE *mir_file = fopen (argv[1], "r");
+  FILE *mir_file = fopen (argv[1], "rb");
   if (!mir_file) {
     fprintf (stderr, "failed to open file '%s'\n", argv[1]);
     return 1;

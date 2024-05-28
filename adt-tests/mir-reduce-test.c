@@ -46,7 +46,7 @@ int main (int argc, const char *argv[]) {
   size_t i, n;
   double start = real_usec_time ();
 
-  if (argc != 2 || (input_file = fopen (argv[1], "r")) == NULL) {
+  if (argc != 2 || (input_file = fopen (argv[1], "rb")) == NULL) {
     fprintf (stderr, "usage: %s <inputfile>\n", argv[0]);
     return 1;
   }

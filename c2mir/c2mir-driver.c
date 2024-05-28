@@ -223,7 +223,7 @@ static void *open_lib (const char *dir, const char *name) {
   if ((res = dlopen (VARR_ADDR (char, temp_string), RTLD_LAZY)) == NULL) {
 #ifndef _WIN32
     FILE *f;
-    if ((f = fopen (VARR_ADDR (char, temp_string), "r")) != NULL) {
+    if ((f = fopen (VARR_ADDR (char, temp_string), "rb")) != NULL) {
       fclose (f);
       fprintf (stderr, "loading %s:%s\n", VARR_ADDR (char, temp_string), dlerror ());
     }
