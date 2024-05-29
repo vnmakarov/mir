@@ -6,6 +6,9 @@
 /* <stdio.h> provides _fileno */
 #include <fcntl.h> /* provides _O_BINARY */
 #include <io.h>    /* provides _setmode */
+#define set_filemode_binary(F) _setmode (_fileno (F), _O_BINARY)
+#else
+#define set_filemode_binary(F) 0
 #endif
 
 static size_t output_mir_code_byte_num;
@@ -20,10 +23,7 @@ static int output_mir_code_byte (MIR_context_t ctx MIR_UNUSED, uint8_t byte) {
 int main (int argc, char *argv[]) {
   MIR_context_t ctx = MIR_init ();
 
-#ifdef _WIN32
-  if (_setmode (_fileno (stdin), _O_BINARY) == -1) return 1;
-#endif
-
+  if (set_filemode_binary (stdin) == -1) return 1;
   if (argc != 1) {
     fprintf (stderr, "Usage: %s < mir-binary-file  > C-file\n", argv[1]);
     return 1;
