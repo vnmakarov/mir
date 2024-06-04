@@ -2100,7 +2100,10 @@ static int clone_bbs (gen_ctx_t gen_ctx) {
       }
     });
   }
-  if (res) enumerate_bbs (gen_ctx);
+  if (res) {
+    remove_unreachable_bbs (gen_ctx);
+    enumerate_bbs (gen_ctx);
+  }
   return res;
 }
 
