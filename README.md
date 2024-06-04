@@ -422,7 +422,7 @@ The executable is "configurable" with environment variables:
       * 80K C lines (for LIBJIT w/o dynamic Pascal compiler) vs 20K C lines for MIR
         (excluding C to MIR compiler)
     * LIBJIT has fewer optimizations: only copy propagation and register allocation
-  * [**RyuJIT**](https://github.com/dotnet/coreclr/blob/master/Documentation/botr/ryujit-overview.md)
+  * [**RyuJIT**](https://github.com/dotnet/runtime/blob/main/docs/design/coreclr/jit/ryujit-overview.md)
     is a part of runtime for .NET Core:
     * RyuJIT is even bigger: 360K SLOC
     * RyuJIT optimizations is basically MIR-generator optimizations
