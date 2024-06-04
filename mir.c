@@ -5866,6 +5866,11 @@ static void io_finish (MIR_context_t ctx) {
 
 /* Reading MIR text file */
 
+int _MIR_name_char_p (MIR_context_t ctx MIR_UNUSED, int ch, int first_p) {
+  if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') return TRUE;
+  return !first_p && isdigit (ch);
+}
+
 #if !MIR_NO_SCAN
 
 #include <stddef.h>
@@ -6131,11 +6136,6 @@ static void unget_string_char (MIR_context_t ctx, int ch) {
   input_string_char_num--;
   mir_assert (input_string[input_string_char_num] == ch);
   if (ch == '\n') curr_lno--;
-}
-
-int _MIR_name_char_p (MIR_context_t ctx MIR_UNUSED, int ch, int first_p) {
-  if (isalpha (ch) || ch == '_' || ch == '$' || ch == '%' || ch == '.') return TRUE;
-  return !first_p && isdigit (ch);
 }
 
 static void scan_token (MIR_context_t ctx, token_t *token, int (*get_char) (MIR_context_t),
