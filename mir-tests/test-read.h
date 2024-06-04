@@ -3,7 +3,7 @@ static char *read_file (const char *name) {
   size_t flen, rlen;
   char *str;
 
-  if ((f = fopen (name, "r")) == NULL) {
+  if ((f = fopen (name, "rb")) == NULL) {
     perror (name);
     exit (1);
   }

@@ -6906,7 +6906,7 @@ void _MIR_dump_code (const char *name, uint8_t *code, size_t code_len) {
 #endif
 #else
   sprintf (bfname, "_mir_%lu.bin", (unsigned long) getpid ());
-  if ((bf = fopen (bfname, "w")) == NULL) return;
+  if ((bf = fopen (bfname, "wb")) == NULL) return;
   fprintf (f, "void code (void) {}\n");
   for (i = 0; i < code_len; i++) fputc (code[i], bf);
   fclose (f);
