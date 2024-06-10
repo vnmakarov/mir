@@ -20,7 +20,7 @@ typedef enum {
   log_verbose,
   log_warning,
   log_error,
-	log_syntax_error,
+  log_syntax_error,
   log_fatal_error
 } c2mir_log_type;
 
@@ -39,8 +39,8 @@ struct c2mir_options {
   size_t macro_commands_num, include_dirs_num;
   struct c2mir_macro_command *macro_commands;
   const char **include_dirs;
-	void (*console_log) (void *instance, c2mir_log_type type, c2mir_pos *pos, const char *message, va_list args);
-	void *console_instance;
+  void (*console_log) (void *instance, c2mir_log_type type, c2mir_pos *pos, const char *message, va_list args);
+  void *console_instance;
 };
 
 void c2mir_init (MIR_context_t ctx);
