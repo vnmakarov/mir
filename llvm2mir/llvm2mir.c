@@ -69,7 +69,7 @@ static int bb_gen_info_eq (bb_gen_info_t bb_gen_info1, bb_gen_info_t bb_gen_info
   return bb_gen_info1->bb == bb_gen_info2->bb;
 }
 static htab_hash_t bb_gen_info_hash (bb_gen_info_t bb_gen_info, void *arg) {
-  return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uint64_t) bb_gen_info->bb));
+  return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uintptr_t) bb_gen_info->bb));
 }
 
 static void init_bb_gen_info (void) {
@@ -223,7 +223,7 @@ static int expr_res_eq (expr_res_t expr_res1, expr_res_t expr_res2, void *arg) {
   return expr_res1.expr == expr_res2.expr;
 }
 static htab_hash_t expr_res_hash (expr_res_t expr_res, void *arg) {
-  return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uint64_t) expr_res.expr));
+  return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uintptr_t) expr_res.expr));
 }
 
 static void add_mir_reg_to_table (LLVMValueRef expr, MIR_reg_t reg) {
