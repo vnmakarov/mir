@@ -46,6 +46,9 @@ target_include_directories(mir PRIVATE ${PROJECT_SOURCE_DIR})
 if(Threads_FOUND)
   target_compile_definitions(mir PUBLIC "MIR_PARALLEL_GEN")
 endif()
+if(UNIX)
+	target_link_libraries(mir m)
+endif()
 
 # ------------------ LIBMIR -----------------------
 add_library(mir_static STATIC)
@@ -65,9 +68,9 @@ target_link_libraries(c2m mir ${CMAKE_DL_LIBS} )
 
 # ------------------ MIR RUN ----------------------
 
-add_executable (mir-run "mir-run.c")
-target_include_directories (mir-run PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(mir-run mir ${CMAKE_DL_LIBS} )
+#add_executable (mir-run "mir-run.c")
+#target_include_directories (mir-run PRIVATE ${PROJECT_SOURCE_DIR})
+#target_link_libraries(mir-run mir ${CMAKE_DL_LIBS} )
 
 # ------------------ MIR utils --------------------
 add_executable (m2b "mir-utils/m2b.c")
