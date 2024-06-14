@@ -1,9 +1,9 @@
-static char *read_file (const char *name) {
+static char *read_file (const char *name) { /* we read only text files by this func */
   FILE *f;
   size_t flen, rlen;
   char *str;
 
-  if ((f = fopen (name, "rb")) == NULL) {
+  if ((f = fopen (name, "r")) == NULL) {
     perror (name);
     exit (1);
   }
