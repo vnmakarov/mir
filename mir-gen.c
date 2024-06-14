@@ -6131,7 +6131,7 @@ static int consider_move_vars_only (gen_ctx_t gen_ctx) {
   bitmap_clear (temp_bitmap);
   scan_vars_num = 0;
   scan_collected_moves (gen_ctx);
-  return scan_vars_num > 0;
+  return scan_vars_num > 0 && scan_vars_num < MIR_MAX_COALESCE_VARS;
 }
 
 static void add_bb_insn_dead_vars (gen_ctx_t gen_ctx) {
