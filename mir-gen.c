@@ -4702,11 +4702,19 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         }
         break;
       case MIR_BT:
-      case MIR_BTS: const_p = get_gvn_op (insn, 1, &val); break;
+      case MIR_BTS:
+        const_p = get_gvn_op (insn, 1, &val);
+        if (const_p && insn->code == MIR_BTS) val = (int32_t) val;
+        break;
       case MIR_BF:
       case MIR_BFS:
         const_p = get_gvn_op (insn, 1, &val);
-        if (const_p) val = !val;
+        if (const_p) {
+          if (insn->code == MIR_BF)
+            val = !val;
+          else
+            val = !(int32_t) val;
+        }
         break;
       case MIR_BEQ: GVN_ICMP (==); break;
       case MIR_BEQS: GVN_ICMPS (==); break;
