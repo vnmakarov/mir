@@ -4,8 +4,8 @@
 */
 
 /* See https://gitlab.com/x86-psABIs/x86-64-ABI.
- * We use MIR_T_UNDEF for MEMORY.
- */
+   We use MIR_T_UNDEF for MEMORY.
+*/
 
 enum add_arg_class { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
