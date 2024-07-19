@@ -3,8 +3,9 @@
    x86_64 ABI target specific code.
 */
 
-/* See https://github.com/hjl-tools/x86-psABI/wiki/x86-64-psABI-1.0.pdf.  We use MIR_T_UNDEF for
-   MEMORY. */
+/* See https://gitlab.com/x86-psABIs/x86-64-ABI.
+ * We use MIR_T_UNDEF for MEMORY.
+ */
 
 enum add_arg_class { NO_CLASS = MIR_T_BOUND + 1, X87UP_CLASS };
 
