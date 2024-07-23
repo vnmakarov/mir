@@ -2,7 +2,7 @@
    Copyright (C) 2019-2024 Vladimir Makarov <vmakarov.gcc@gmail.com>.
 */
 
-/* See C11 7.16 and https://www.uclibc.org/docs/psABI-x86_64.pdf */
+/* See C11 7.16 and https://gitlab.com/x86-psABIs/x86-64-ABI */
 static char stdarg_str[]
   = "#ifndef __STDARG_H\n"
     "#define __STDARG_H\n"

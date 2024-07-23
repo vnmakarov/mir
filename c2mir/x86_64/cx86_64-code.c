@@ -24,7 +24,7 @@ static string_include_t standard_includes[]
 #define ADJUST_VAR_ALIGNMENT(c2m_ctx, align, type) x86_adjust_var_alignment (c2m_ctx, align, type)
 
 static int x86_adjust_var_alignment (c2m_ctx_t c2m_ctx, int align, struct type *type) {
-  /* see https://www.uclibc.org/docs/psABI-x86_64.pdf */
+  /* see https://gitlab.com/x86-psABIs/x86-64-ABI */
   if (type->mode == TM_ARR && raw_type_size (c2m_ctx, type) >= 16) return 16;
   return align;
 }
