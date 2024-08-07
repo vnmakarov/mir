@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "mir-alloc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,6 +61,7 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
     size_t els_num;         \
     size_t size;            \
     T *varr;                \
+    MIR_alloc_t alloc;      \
   } VARR (T)
 
 #define VARR_DEFAULT_SIZE 64
@@ -68,21 +70,24 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
 #define DEF_VARR(T)                                                                           \
   VARR_T (T);                                                                                 \
                                                                                               \
-  static inline void VARR_OP_DEF (T, create) (VARR (T) * *varr, size_t size) {                \
+  static inline void VARR_OP_DEF (T, create) (VARR (T) * *varr, MIR_alloc_t alloc,            \
+                                              size_t size) {                                  \
     VARR (T) * va;                                                                            \
     if (size == 0) size = VARR_DEFAULT_SIZE;                                                  \
-    *varr = va = (VARR (T) *) malloc (sizeof (VARR (T)));                                     \
+    *varr = va = (VARR (T) *) MIR_malloc (alloc, sizeof (VARR (T)));                          \
     if (va == NULL) mir_varr_error ("varr: no memory");                                       \
     va->els_num = 0;                                                                          \
     va->size = size;                                                                          \
-    va->varr = (T *) malloc (size * sizeof (T));                                              \
+    va->varr = (T *) MIR_malloc (alloc, size * sizeof (T));                                   \
+    va->alloc = alloc;                                                                        \
   }                                                                                           \
                                                                                               \
   static inline void VARR_OP_DEF (T, destroy) (VARR (T) * *varr) {                            \
     VARR (T) *va = *varr;                                                                     \
+    MIR_alloc_t alloc = va->alloc;                                                            \
     VARR_ASSERT (va && va->varr, "destroy", T);                                               \
-    free (va->varr);                                                                          \
-    free (va);                                                                                \
+    MIR_free (alloc, va->varr);                                                               \
+    MIR_free (alloc, va);                                                                     \
     *varr = NULL;                                                                             \
   }                                                                                           \
                                                                                               \
@@ -123,9 +128,11 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
                                                                                               \
   static inline int VARR_OP_DEF (T, expand) (VARR (T) * varr, size_t size) {                  \
     VARR_ASSERT (varr && varr->varr, "expand", T);                                            \
+    MIR_alloc_t alloc = varr->alloc;                                                          \
     if (varr->size < size) {                                                                  \
       size += size / 2;                                                                       \
-      varr->varr = (T *) realloc (varr->varr, sizeof (T) * size);                             \
+      varr->varr = (T *) MIR_realloc (alloc, varr->varr, sizeof (T) * varr->size,             \
+                                      sizeof (T) * size);                                     \
       varr->size = size;                                                                      \
       return 1;                                                                               \
     }                                                                                         \
@@ -134,7 +141,10 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
                                                                                               \
   static inline void VARR_OP_DEF (T, tailor) (VARR (T) * varr, size_t size) {                 \
     VARR_ASSERT (varr && varr->varr, "tailor", T);                                            \
-    if (varr->size != size) varr->varr = (T *) realloc (varr->varr, sizeof (T) * size);       \
+    MIR_alloc_t alloc = varr->alloc;                                                          \
+    if (varr->size != size)                                                                   \
+      varr->varr = (T *) MIR_realloc (alloc, varr->varr, sizeof (T) * varr->size,             \
+                                      sizeof (T) * size);                                     \
     varr->els_num = varr->size = size;                                                        \
   }                                                                                           \
                                                                                               \
@@ -162,7 +172,7 @@ static inline void MIR_VARR_NO_RETURN mir_varr_error (const char *message) {
     return obj;                                                                               \
   }
 
-#define VARR_CREATE(T, V, L) (VARR_OP (T, create) (&(V), L))
+#define VARR_CREATE(T, V, A, L) (VARR_OP (T, create) (&(V), A, L))
 #define VARR_DESTROY(T, V) (VARR_OP (T, destroy) (&(V)))
 #define VARR_LENGTH(T, V) (VARR_OP (T, length) (V))
 #define VARR_CAPACITY(T, V) (VARR_OP (T, capacity) (V))

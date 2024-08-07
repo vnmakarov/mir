@@ -429,7 +429,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
   push_insns (code, prolog, sizeof (prolog));
   for (size_t i = 0; i < nargs; i++) {
     MIR_type_t type = arg_descs[i].type;
@@ -641,7 +641,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
 #ifndef _WIN32
   push_insns (code, push_rbx, sizeof (push_rbx));
 #endif
@@ -726,7 +726,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
   addr = push_insns (code, start_pat, sizeof (start_pat));
   memcpy (addr + call_func_offset, &called_func, sizeof (void *));
   memcpy (addr + ctx_offset, &ctx, sizeof (void *));
@@ -816,7 +816,7 @@ void *_MIR_get_wrapper_end (MIR_context_t ctx) {
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
   push_insns (code, wrap_end, sizeof (wrap_end));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
@@ -959,7 +959,7 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
   push_insns (code, save_pat2, sizeof (save_pat2));
   addr = push_insns (code, call_pat, sizeof (call_pat));
   memcpy (addr + data_offset, &data, sizeof (void *));
