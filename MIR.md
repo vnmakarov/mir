@@ -10,13 +10,14 @@
   * MIR API code has an implicit state called by MIR context
   * MIR context is represented by data of `MIR_context_t`
   * MIR context is created by function `MIR_context_t MIR_init (void)`
-  * Every MIR API function (except for `MIR_init`) requires MIR context passed through the first argument of type `MIR_context_t`
+  * In case you want to use custom allocators, use `MIR_context_t MIR_init2 (MIR_alloc_t, MIR_code_alloc_t)` instead (see [here](CUSTOM-ALLOCATORS.md) for more details)
+  * Every MIR API function (except for `MIR_init` / `MIR_init2`) requires MIR context passed through the first argument of type `MIR_context_t`
   * You can use MIR functions in different threads without any synchronization
     if they work with different contexts in each thread
 
 ## MIR program
    * MIR program consists of MIR **modules**
-   * To start work with MIR program, you should first call API function `MIR_init`
+   * To start work with MIR program, you should first call API function `MIR_init` / `MIR_init2`
    * API function `MIR_finish (MIR_context_t ctx)` should be called last.  It frees all internal data used to work with MIR program and all IR (insns, functions, items, and modules) created in this context
    * API function `MIR_output (MIR_context_t ctx, FILE *f)` outputs MIR textual representation of the program into given file
    * API function `MIR_scan_string (MIR_context_t ctx, const char *str)` reads textual MIR representation given by a string

@@ -5,6 +5,7 @@
 #ifndef MIR_HTAB_H
 #define MIR_HTAB_H
 
+#include "mir-alloc.h"
 #include "mir-varr.h"
 
 #ifdef __cplusplus
@@ -87,7 +88,8 @@ DEF_VARR (htab_ind_t)
 #define DEF_HTAB(T)                                                                              \
   HTAB_T (T)                                                                                     \
                                                                                                  \
-  static inline void HTAB_OP_DEF (T, create) (HTAB (T) * *htab, htab_size_t min_size,            \
+  static inline void HTAB_OP_DEF (T, create) (HTAB (T) * *htab, MIR_alloc_t alloc,               \
+                                              htab_size_t min_size,                              \
                                               htab_hash_t (*hash_func) (T el, void *arg),        \
                                               int (*eq_func) (T el1, T el2, void *arg),          \
                                               void (*free_func) (T el, void *arg), void *arg) {  \
@@ -96,11 +98,11 @@ DEF_VARR (htab_ind_t)
                                                                                                  \
     for (size = 2; min_size > size; size *= 2)                                                   \
       ;                                                                                          \
-    ht = malloc (sizeof (*ht));                                                                  \
+    ht = MIR_malloc (alloc, sizeof (*ht));                                                       \
     if (ht == NULL) mir_htab_error ("htab: no memory");                                          \
-    VARR_CREATE (HTAB_EL (T), ht->els, size);                                                    \
+    VARR_CREATE (HTAB_EL (T), ht->els, alloc, size);                                             \
     VARR_TAILOR (HTAB_EL (T), ht->els, size);                                                    \
-    VARR_CREATE (htab_ind_t, ht->entries, 2 * size);                                             \
+    VARR_CREATE (htab_ind_t, ht->entries, alloc, 2 * size);                                      \
     ht->arg = arg;                                                                               \
     ht->hash_func = hash_func;                                                                   \
     ht->eq_func = eq_func;                                                                       \
@@ -133,9 +135,10 @@ DEF_VARR (htab_ind_t)
   static inline void HTAB_OP_DEF (T, destroy) (HTAB (T) * *htab) {                               \
     HTAB_ASSERT (*htab != NULL, "destroy", T);                                                   \
     if ((*htab)->free_func != NULL) HTAB_OP (T, clear) (*htab);                                  \
+    MIR_alloc_t alloc = (*htab)->els->alloc;                                                     \
     VARR_DESTROY (HTAB_EL (T), (*htab)->els);                                                    \
     VARR_DESTROY (htab_ind_t, (*htab)->entries);                                                 \
-    free (*htab);                                                                                \
+    MIR_free (alloc, *htab);                                                                     \
     *htab = NULL;                                                                                \
   }                                                                                              \
                                                                                                  \
@@ -235,9 +238,9 @@ DEF_VARR (htab_ind_t)
       if (els_addr[i].hash != HTAB_DELETED_HASH) func (els_addr[i].el, arg);                     \
   }
 
-#define HTAB_CREATE(T, V, S, H, EQ, A) (HTAB_OP (T, create) (&(V), S, H, EQ, NULL, A))
-#define HTAB_CREATE_WITH_FREE_FUNC(T, V, S, H, EQ, F, A) \
-  (HTAB_OP (T, create) (&(V), S, H, EQ, F, A))
+#define HTAB_CREATE(T, V, M, S, H, EQ, A) (HTAB_OP (T, create) (&(V), M, S, H, EQ, NULL, A))
+#define HTAB_CREATE_WITH_FREE_FUNC(T, V, M, S, H, EQ, F, A) \
+  (HTAB_OP (T, create) (&(V), M, S, H, EQ, F, A))
 #define HTAB_CLEAR(T, V) (HTAB_OP (T, clear) (V))
 #define HTAB_DESTROY(T, V) (HTAB_OP (T, destroy) (&(V)))
 /* It returns TRUE if the element existed in the table.  */

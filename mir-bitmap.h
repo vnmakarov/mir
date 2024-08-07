@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <limits.h>
+#include "mir-alloc.h"
 #include "mir-varr.h"
 
 #define FALSE 0
@@ -43,14 +44,14 @@ DEF_VARR (bitmap_el_t);
 typedef VARR (bitmap_el_t) * bitmap_t;
 typedef const VARR (bitmap_el_t) * const_bitmap_t;
 
-static inline bitmap_t bitmap_create2 (size_t init_bits_num) {
+static inline bitmap_t bitmap_create2 (MIR_alloc_t alloc, size_t init_bits_num) {
   bitmap_t bm;
 
-  VARR_CREATE (bitmap_el_t, bm, (init_bits_num + BITMAP_WORD_BITS - 1) / BITMAP_WORD_BITS);
+  VARR_CREATE (bitmap_el_t, bm, alloc, (init_bits_num + BITMAP_WORD_BITS - 1) / BITMAP_WORD_BITS);
   return bm;
 }
 
-static inline bitmap_t bitmap_create (void) { return bitmap_create2 (0); }
+static inline bitmap_t bitmap_create (MIR_alloc_t alloc) { return bitmap_create2 (alloc, 0); }
 
 static inline void bitmap_destroy (bitmap_t bm) { VARR_DESTROY (bitmap_el_t, bm); }
 
