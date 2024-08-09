@@ -1530,29 +1530,35 @@ struct pattern {
   BR1 (ICODE, , Y, LONG_JMP_OPCODE)  \
   BR1 (ICODE, S, Y, LONG_JMP_OPCODE)
 
-#define BCMPS0(ICODE, SUFF, PREF, SHORT_JMP_OPCODE)                                               \
-  {ICODE##SUFF, "l r r", #PREF " 3B r1 R2;" SHORT_JMP_OPCODE " l0", 0},    /*cmp r0,r1;jxx rel8*/ \
-    {ICODE##SUFF, "l r m3", #PREF " 3B r1 m2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp r0,m1;...*/      \
-    {ICODE##SUFF, "l r i0", #PREF " 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/  \
-    {ICODE##SUFF, "l r i2", #PREF " 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/  \
-    {ICODE##SUFF, "l m3 i0", #PREF " 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/  \
-    {ICODE##SUFF, "l m3 i2", #PREF " 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/
+#define BCMPS(ICODE, SHORT_JMP_OPCODE)                                                     \
+  {ICODE, "l r r", "X 3B r1 R2;" SHORT_JMP_OPCODE " l0", 0},        /*cmp r0,r1;jxx rel8*/ \
+    {ICODE, "l r m3", "X 3B r1 m2;" SHORT_JMP_OPCODE " l0", 0},     /*cmp r0,m1;...*/      \
+    {ICODE, "l r i0", "X 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/      \
+    {ICODE, "l r i2", "X 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/      \
+    {ICODE, "l m3 i0", "X 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/      \
+    {ICODE, "l m3 i2", "X 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/
+#define SBCMPS(ICODE, SHORT_JMP_OPCODE)                                                    \
+  {ICODE, "l r r", "Y 3B r1 R2;" SHORT_JMP_OPCODE " l0", 0},        /*cmp r0,r1;jxx rel8*/ \
+    {ICODE, "l r m2", "Y 3B r1 m2;" SHORT_JMP_OPCODE " l0", 0},     /*cmp r0,m1;...*/      \
+    {ICODE, "l r i0", "Y 83 /7 R1 i2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/      \
+    {ICODE, "l r i2", "Y 81 /7 R1 I2;" SHORT_JMP_OPCODE " l0", 0},  /*cmp r0,i1;...*/      \
+    {ICODE, "l m2 i0", "Y 83 /7 m1 i2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/      \
+    {ICODE, "l m2 i2", "Y 81 /7 m1 I2;" SHORT_JMP_OPCODE " l0", 0}, /*cmp m0,i1;...*/
 
-#define BCMPS(ICODE, SHORT_JMP_OPCODE)  \
-  BCMPS0 (ICODE, , X, SHORT_JMP_OPCODE) \
-  BCMPS0 (ICODE, S, Y, SHORT_JMP_OPCODE)
-
-#define BCMP0(ICODE, SUFF, PREF, LONG_JMP_OPCODE)                                                 \
-  {ICODE##SUFF, "L r r", #PREF " 3B r1 R2;" LONG_JMP_OPCODE " L0", 0},    /*cmp r0,r1;jxx rel32*/ \
-    {ICODE##SUFF, "L r m3", #PREF " 3B r1 m2;" LONG_JMP_OPCODE " L0", 0}, /*cmp r0,m1;...*/       \
-    {ICODE##SUFF, "L r i0", #PREF " 83 /7 R1 i2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/   \
-    {ICODE##SUFF, "L r i2", #PREF " 81 /7 R1 I2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/   \
-    {ICODE##SUFF, "L m3 i0", #PREF " 83 /7 m1 i2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/   \
-    {ICODE##SUFF, "L m3 i2", #PREF " 81 /7 m1 I2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/
-
-#define BCMP(ICODE, LONG_JMP_OPCODE)  \
-  BCMP0 (ICODE, , X, LONG_JMP_OPCODE) \
-  BCMP0 (ICODE, S, Y, LONG_JMP_OPCODE)
+#define BCMP(ICODE, LONG_JMP_OPCODE)                                                       \
+  {ICODE, "L r r", "X 3B r1 R2;" LONG_JMP_OPCODE " L0", 0},        /*cmp r0,r1;jxx rel32*/ \
+    {ICODE, "L r m3", "X 3B r1 m2;" LONG_JMP_OPCODE " L0", 0},     /*cmp r0,m1;...*/       \
+    {ICODE, "L r i0", "X 83 /7 R1 i2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/       \
+    {ICODE, "L r i2", "X 81 /7 R1 I2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/       \
+    {ICODE, "L m3 i0", "X 83 /7 m1 i2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/       \
+    {ICODE, "L m3 i2", "X 81 /7 m1 I2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/
+#define SBCMP(ICODE, LONG_JMP_OPCODE)                                                      \
+  {ICODE, "L r r", "Y 3B r1 R2;" LONG_JMP_OPCODE " L0", 0},        /*cmp r0,r1;jxx rel32*/ \
+    {ICODE, "L r m2", "Y 3B r1 m2;" LONG_JMP_OPCODE " L0", 0},     /*cmp r0,m1;...*/       \
+    {ICODE, "L r i0", "Y 83 /7 R1 i2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/       \
+    {ICODE, "L r i2", "Y 81 /7 R1 I2;" LONG_JMP_OPCODE " L0", 0},  /*cmp r0,i1;...*/       \
+    {ICODE, "L m2 i0", "Y 83 /7 m1 i2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/       \
+    {ICODE, "L m2 i2", "Y 81 /7 m1 I2;" LONG_JMP_OPCODE " L0", 0}, /*cmp m0,i1;...*/
 
 #define FBCMPS(ICODE, SHORT_JMP_OPCODE) \
   {ICODE, "l r r", "Y 0F 2E r1 R2;" SHORT_JMP_OPCODE " l0", 0}, /* ucomiss r0,r1;jxx rel8*/
@@ -1790,11 +1796,23 @@ static struct pattern patterns[] = {
   BCMPS (MIR_BGT, "7F") BCMPS (MIR_UBGT, "77") /* 4. int compare and branch */
   BCMPS (MIR_BGE, "7D") BCMPS (MIR_UBGE, "73") /* 5. int compare and branch */
 
+  SBCMPS (MIR_BEQS, "74") SBCMPS (MIR_BNES, "75")  /* 1. short compare and branch */
+  SBCMPS (MIR_BLTS, "7C") SBCMPS (MIR_UBLTS, "72") /* 2. short compare and branch */
+  SBCMPS (MIR_BLES, "7E") SBCMPS (MIR_UBLES, "76") /* 3. short compare and branch */
+  SBCMPS (MIR_BGTS, "7F") SBCMPS (MIR_UBGTS, "77") /* 4. short compare and branch */
+  SBCMPS (MIR_BGES, "7D") SBCMPS (MIR_UBGES, "73") /* 5. short compare and branch */
+
   BCMP (MIR_BEQ, "0F 84") BCMP (MIR_BNE, "0F 85")  /* 1. int compare and branch */
   BCMP (MIR_BLT, "0F 8C") BCMP (MIR_UBLT, "0F 82") /* 2. int compare and branch */
   BCMP (MIR_BLE, "0F 8E") BCMP (MIR_UBLE, "0F 86") /* 3. int compare and branch */
   BCMP (MIR_BGT, "0F 8F") BCMP (MIR_UBGT, "0F 87") /* 4. int compare and branch */
   BCMP (MIR_BGE, "0F 8D") BCMP (MIR_UBGE, "0F 83") /* 5. int compare and branch */
+
+  SBCMP (MIR_BEQS, "0F 84") SBCMP (MIR_BNES, "0F 85")  /* 1. short compare and branch */
+  SBCMP (MIR_BLTS, "0F 8C") SBCMP (MIR_UBLTS, "0F 82") /* 2. short compare and branch */
+  SBCMP (MIR_BLES, "0F 8E") SBCMP (MIR_UBLES, "0F 86") /* 3. short compare and branch */
+  SBCMP (MIR_BGTS, "0F 8F") SBCMP (MIR_UBGTS, "0F 87") /* 4. short compare and branch */
+  SBCMP (MIR_BGES, "0F 8D") SBCMP (MIR_UBGES, "0F 83") /* 5. short compare and branch */
 
 #if 0 /* it is switched off because we change the following insn in machinize pass: */
   FBCMP (MIR_FBLT, "0F 82") DBCMP (MIR_DBLT, "0F 82")   /* 1. fp cmp and branch */
