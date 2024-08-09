@@ -72,9 +72,9 @@ static htab_hash_t bb_gen_info_hash (bb_gen_info_t bb_gen_info, void *arg) {
   return mir_hash_finish (mir_hash_step (mir_hash_init (0x42), (uint64_t) bb_gen_info->bb));
 }
 
-static void init_bb_gen_info (void) {
-  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, 64, bb_gen_info_hash, bb_gen_info_eq, NULL);
-  VARR_CREATE (bb_gen_info_t, bb_gen_infos, 0);
+static void init_bb_gen_info (MIR_alloc_t alloc) {
+  HTAB_CREATE (bb_gen_info_t, bb_gen_info_tab, alloc, 64, bb_gen_info_hash, bb_gen_info_eq, NULL);
+  VARR_CREATE (bb_gen_info_t, bb_gen_infos, alloc, 0);
 }
 
 static void clear_bb_gen_info (bb_gen_info_t bb_gen_info) {
@@ -162,7 +162,8 @@ static void add_phi_op_eval (LLVMBasicBlockRef from_bb, LLVMBasicBlockRef phi_bb
   DLIST_APPEND (edge_phi_op_eval_t, e->op_evals, pi);
 }
 
-static void add_bb_dest (LLVMBasicBlockRef bb, LLVMBasicBlockRef dest_bb, MIR_insn_t mir_insn) {
+static void add_bb_dest (MIR_alloc_t alloc, LLVMBasicBlockRef bb, LLVMBasicBlockRef dest_bb,
+                         MIR_insn_t mir_insn) {
   struct bb_gen_info temp_bb_gen_info;
   bb_gen_info_t bb_gen_info;
   out_edge_t e;
@@ -173,7 +174,7 @@ static void add_bb_dest (LLVMBasicBlockRef bb, LLVMBasicBlockRef dest_bb, MIR_in
   res = HTAB_DO (bb_gen_info_t, bb_gen_info_tab, &temp_bb_gen_info, HTAB_FIND, bb_gen_info);
   assert (res);
   e = get_out_edge (bb_gen_info, dest_bb);
-  if (e->br_insns == NULL) VARR_CREATE (MIR_insn_t, e->br_insns, 16);
+  if (e->br_insns == NULL) VARR_CREATE (MIR_insn_t, e->br_insns, alloc, 16);
   VARR_PUSH (MIR_insn_t, e->br_insns, mir_insn);
 }
 
@@ -795,9 +796,9 @@ static void generate_edge_phi_op_eval (bb_gen_info_t bi) {
   }
 }
 
-static void init_phi_generation (void) {
+static void init_phi_generation (MIR_alloc_t alloc) {
   curr_set_insn_check = curr_phi_loop_reg_num = 0;
-  VARR_CREATE (set_insn_t, set_insns, 0);
+  VARR_CREATE (set_insn_t, set_insns, alloc, 0);
 }
 
 static void finish_phi_generation (void) { VARR_DESTROY (set_insn_t, set_insns); }
@@ -1375,6 +1376,7 @@ static void process_expr (LLVMOpcode opcode, LLVMValueRef expr) {
 }
 
 MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
+  MIR_alloc_t alloc = MIR_get_alloc (c);
   int ptr_size;
   const char *id;
   size_t len;
@@ -1397,17 +1399,17 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
 
   context = c;
   TD = LLVMGetModuleDataLayout (module);
-  init_bb_gen_info ();
-  HTAB_CREATE (expr_res_t, expr_res_tab, 512, expr_res_hash, expr_res_eq, NULL);
-  HTAB_CREATE (item_t, item_tab, 64, item_hash, item_eq, NULL);
+  init_bb_gen_info (alloc);
+  HTAB_CREATE (expr_res_t, expr_res_tab, alloc, 512, expr_res_hash, expr_res_eq, NULL);
+  HTAB_CREATE (item_t, item_tab, alloc, 64, item_hash, item_eq, NULL);
   id = LLVMGetModuleIdentifier (module, &len);
   curr_mir_module = MIR_new_module (context, id);
   ptr_size = LLVMPointerSize (TD);
   assert (ptr_size == 4 || ptr_size == 8);
-  VARR_CREATE (char, string, 0);
-  VARR_CREATE (MIR_var_t, mir_vars, 0);
-  VARR_CREATE (MIR_op_t, mir_ops, 0);
-  VARR_CREATE (LLVMTypeRef, types, 0);
+  VARR_CREATE (char, string, alloc, 0);
+  VARR_CREATE (MIR_var_t, mir_vars, alloc, 0);
+  VARR_CREATE (MIR_op_t, mir_ops, alloc, 0);
+  VARR_CREATE (LLVMTypeRef, types, alloc, 0);
   /* Loop through all globals in the module: */
   for (LLVMValueRef global = LLVMGetFirstGlobal (module); global;
        global = LLVMGetNextGlobal (global)) {
@@ -1494,7 +1496,7 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
       }
     }
     mir_2nd_mem_addr_reg = 0;
-    init_phi_generation ();
+    init_phi_generation (alloc);
     /* Loop through all the basic blocks in the function: */
     for (LLVMBasicBlockRef bb = LLVMGetFirstBasicBlock (func); bb;
          bb = LLVMGetNextBasicBlock (bb)) {
@@ -1534,7 +1536,7 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
             mir_insn = MIR_new_insn (context, MIR_JMP,
                                      MIR_new_label_op (context, get_mir_bb_label (dest_bb)));
             MIR_append_insn (context, curr_mir_func, mir_insn);
-            add_bb_dest (bb, dest_bb, mir_insn);
+            add_bb_dest (alloc, bb, dest_bb, mir_insn);
           } else {
             op0 = LLVMGetOperand (insn, 0);
             assert (LLVMGetNumSuccessors (insn) == 2);
@@ -1551,14 +1553,14 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
               = MIR_new_insn (context, mir_insn_code,
                               MIR_new_label_op (context, get_mir_bb_label (dest_bb)), mir_op0);
             MIR_append_insn (context, curr_mir_func, mir_insn);
-            add_bb_dest (bb, dest_bb, mir_insn);
+            add_bb_dest (alloc, bb, dest_bb, mir_insn);
             if (jump_bb == LLVMGetNextBasicBlock (bb)) {
-              add_bb_dest (bb, jump_bb, NULL);
+              add_bb_dest (alloc, bb, jump_bb, NULL);
             } else {
               mir_insn = MIR_new_insn (context, MIR_JMP,
                                        MIR_new_label_op (context, get_mir_bb_label (jump_bb)));
               MIR_append_insn (context, curr_mir_func, mir_insn);
-              add_bb_dest (bb, jump_bb, mir_insn);
+              add_bb_dest (alloc, bb, jump_bb, mir_insn);
             }
           }
           break;
@@ -1584,13 +1586,13 @@ MIR_module_t llvm2mir (MIR_context_t c, LLVMModuleRef module) {
                                      MIR_new_label_op (context, get_mir_bb_label (dest_bb)),
                                      mir_op0, get_mir_op (caseval, MIR_T_I64));
             MIR_append_insn (context, curr_mir_func, mir_insn);
-            add_bb_dest (bb, dest_bb, mir_insn);
+            add_bb_dest (alloc, bb, dest_bb, mir_insn);
           }
           dest_bb = LLVMGetSwitchDefaultDest (insn);
           mir_insn = MIR_new_insn (context, MIR_JMP,
                                    MIR_new_label_op (context, get_mir_bb_label (dest_bb)));
           MIR_append_insn (context, curr_mir_func, mir_insn);
-          add_bb_dest (bb, dest_bb, mir_insn);
+          add_bb_dest (alloc, bb, dest_bb, mir_insn);
           break;
         }
         case LLVMIndirectBr: {

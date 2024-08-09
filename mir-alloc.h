@@ -6,6 +6,7 @@
 #define MIR_ALLOC_H
 
 #include <assert.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {

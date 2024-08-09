@@ -6,6 +6,8 @@
 #include <sys/stat.h>
 #include "mir-gen.h"  // mir.h gets included as well
 
+#include "mir-alloc-default.c"
+
 #define MIR_TYPE_INTERP 1
 #define MIR_TYPE_INTERP_NAME "interp"
 #define MIR_TYPE_GEN 2
@@ -292,9 +294,9 @@ int main (int argc, char **argv, char **envp) {
   MIR_val_t val;
   int exit_code;
 
-  VARR_CREATE (char, temp_string, 0);
-  VARR_CREATE (lib_t, extra_libs, 16);
-  VARR_CREATE (char_ptr_t, lib_dirs, 16);
+  VARR_CREATE (char, temp_string, &default_alloc, 0);
+  VARR_CREATE (lib_t, extra_libs, &default_alloc, 16);
+  VARR_CREATE (char_ptr_t, lib_dirs, &default_alloc, 16);
   for (int i = 0; i < sizeof (std_lib_dirs) / sizeof (char_ptr_t); i++)
     VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[i]);
   lib_dirs_from_env_var ("LD_LIBRARY_PATH");
