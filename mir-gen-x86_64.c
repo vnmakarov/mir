@@ -1434,15 +1434,17 @@ struct pattern {
   /* fld m1;fld m2;op;fstp m0: */ \
   {ICODE, "mld mld mld", "DB /5 m1; DB /5 m2; " OP_CODE "; DB /7 m0", 0},
 
-#define SHOP0(ICODE, SUFF, PREF, CL_OP_CODE, I8_OP_CODE)                       \
-  {ICODE##SUFF, "r 0 h1", #PREF " " CL_OP_CODE " R0", 0},       /* sh r0,cl */ \
-    {ICODE##SUFF, "m3 0 h1", #PREF " " CL_OP_CODE " m0", 0},    /* sh m0,cl */ \
-    {ICODE##SUFF, "r 0 i0", #PREF " " I8_OP_CODE " R0 i2", 0},  /* sh r0,i2 */ \
-    {ICODE##SUFF, "m3 0 i0", #PREF " " I8_OP_CODE " m0 i2", 0}, /* sh m0,i2 */
+#define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)                      \
+  {ICODE, "r 0 h1", "X " CL_OP_CODE " R0"},       /* sh r0,cl */ \
+    {ICODE, "m3 0 h1", "X " CL_OP_CODE " m0"},    /* sh m0,cl */ \
+    {ICODE, "r 0 i0", "X " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
+    {ICODE, "m3 0 i0", "X " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
-#define SHOP(ICODE, CL_OP_CODE, I8_OP_CODE)  \
-  SHOP0 (ICODE, , X, CL_OP_CODE, I8_OP_CODE) \
-  SHOP0 (ICODE, S, Y, CL_OP_CODE, I8_OP_CODE)
+#define SHOPS(ICODE, CL_OP_CODE, I8_OP_CODE)                     \
+  {ICODE, "r 0 h1", "Y " CL_OP_CODE " R0"},       /* sh r0,cl */ \
+    {ICODE, "m2 0 h1", "Y " CL_OP_CODE " m0"},    /* sh m0,cl */ \
+    {ICODE, "r 0 i0", "Y " I8_OP_CODE " R0 i2"},  /* sh r0,i2 */ \
+    {ICODE, "m2 0 i0", "Y " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
 /* cmp ...; setx r0: */
 #define CMP0(ICODE, SUFF, PREF, SETX)                                                    \
@@ -1732,6 +1734,9 @@ static struct pattern patterns[] = {
 
   SHOP (MIR_LSH, "D3 /4", "C1 /4") SHOP (MIR_RSH, "D3 /7", "C1 /7") /* arithm shifts */
   SHOP (MIR_URSH, "D3 /5", "C1 /5")                                 /* logical shifts */
+
+  SHOPS (MIR_LSHS, "D3 /4", "C1 /4") SHOPS (MIR_RSHS, "D3 /7", "C1 /7") /* arithm shifts */
+  SHOPS (MIR_URSHS, "D3 /5", "C1 /5")                                   /* logical shifts */
 
   CMP (MIR_EQ, "0F 94") CMP (MIR_NE, "0F 95") CMP (MIR_LT, "0F 9C")   /* 1.int cmps */
   CMP (MIR_ULT, "0F 92") CMP (MIR_LE, "0F 9E") CMP (MIR_ULE, "0F 96") /* 2.int cmps */
