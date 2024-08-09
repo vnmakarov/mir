@@ -20,6 +20,8 @@ extern "C" {
 #include "mir-dlist.h"
 #include "mir-varr.h"
 #include "mir-htab.h"
+#include "mir-alloc.h"
+#include "mir-code-alloc.h"
 
 #define MIR_API_VERSION 0.2
 
@@ -469,17 +471,22 @@ static inline int MIR_overflow_insn_code_p (MIR_insn_code_t code) {
 }
 
 extern double _MIR_get_api_version (void);
-extern MIR_context_t _MIR_init (void);
+extern MIR_context_t _MIR_init (MIR_alloc_t alloc, MIR_code_alloc_t code_alloc);
 
-/* Use only the following API to create MIR code.  */
-static inline MIR_context_t MIR_init (void) {
+/* Use only either the following API to create MIR code... */
+static inline MIR_context_t MIR_init2 (MIR_alloc_t alloc, MIR_code_alloc_t code_alloc) {
   if (MIR_API_VERSION != _MIR_get_api_version ()) {
     fprintf (stderr,
              "mir.h header has version %g different from used mir code version %g -- good bye!\n",
              MIR_API_VERSION, _MIR_get_api_version ());
     exit (1);
   }
-  return _MIR_init ();
+  return _MIR_init (alloc, code_alloc);
+}
+
+/* ...or this one. */
+static inline MIR_context_t MIR_init (void) {
+  return MIR_init2 (NULL, NULL);
 }
 
 extern void MIR_finish (MIR_context_t ctx);
@@ -529,6 +536,8 @@ extern void MIR_finish_module (MIR_context_t ctx);
 
 extern MIR_error_func_t MIR_get_error_func (MIR_context_t ctx);
 extern void MIR_set_error_func (MIR_context_t ctx, MIR_error_func_t func);
+
+extern MIR_alloc_t MIR_get_alloc (MIR_context_t ctx);
 
 extern int MIR_get_func_redef_permission_p (MIR_context_t ctx);
 extern void MIR_set_func_redef_permission (MIR_context_t ctx, int flag_p);
@@ -636,7 +645,7 @@ extern void MIR_set_interp_interface (MIR_context_t ctx, MIR_item_t func_item);
 
 /* Private: */
 extern double _MIR_get_api_version (void);
-extern MIR_context_t _MIR_init (void);
+extern MIR_context_t _MIR_init (MIR_alloc_t alloc, MIR_code_alloc_t code_alloc);
 extern const char *_MIR_uniq_string (MIR_context_t ctx, const char *str);
 extern int _MIR_reserved_ref_name_p (MIR_context_t ctx, const char *name);
 extern int _MIR_reserved_name_p (MIR_context_t ctx, const char *name);
@@ -682,8 +691,9 @@ struct MIR_code_reloc {
 
 typedef struct MIR_code_reloc MIR_code_reloc_t;
 
-extern void _MIR_set_code (size_t prot_start, size_t prot_len, uint8_t *base, size_t nloc,
-                           const MIR_code_reloc_t *relocs, size_t reloc_size);
+extern void _MIR_set_code (MIR_code_alloc_t alloc, size_t prot_start, size_t prot_len,
+                           uint8_t *base, size_t nloc, const MIR_code_reloc_t *relocs,
+                           size_t reloc_size);
 extern void _MIR_change_code (MIR_context_t ctx, uint8_t *addr, const uint8_t *code,
                               size_t code_len);
 extern void _MIR_update_code_arr (MIR_context_t ctx, uint8_t *base, size_t nloc,
