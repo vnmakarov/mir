@@ -1447,17 +1447,21 @@ struct pattern {
     {ICODE, "m2 0 i0", "Y " I8_OP_CODE " m0 i2"}, /* sh m0,i2 */
 
 /* cmp ...; setx r0: */
-#define CMP0(ICODE, SUFF, PREF, SETX)                                                    \
-  {ICODE##SUFF, "r r r", #PREF " 3B r1 R2; Y " SETX " S0", 0},        /* cmp r1,r2;...*/ \
-    {ICODE##SUFF, "r r m3", #PREF " 3B r1 m2; Y " SETX " S0", 0},     /* cmp r1,m2;...*/ \
-    {ICODE##SUFF, "r r i0", #PREF " 83 /7 R1 i2; Y " SETX " S0", 0},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r r i2", #PREF " 81 /7 R1 I2; Y " SETX " S0", 0},  /* cmp r1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i0", #PREF " 83 /7 m1 i2; Y " SETX " S0", 0}, /* cmp m1,i2;...*/ \
-    {ICODE##SUFF, "r m3 i2", #PREF " 81 /7 m1 I2; Y " SETX " S0", 0}, /* cmp m1,i2;...*/
+#define CMP(ICODE, SETX)                                                                 \
+  {ICODE, "r r r", "X 3B r1 R2; Y " SETX " R0;X 0F B6 r0 R0"},        /* cmp r1,r2;...*/ \
+    {ICODE, "r r m3", "X 3B r1 m2; Y " SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
+    {ICODE, "r r i0", "X 83 /7 R1 i2; Y " SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE, "r r i2", "X 81 /7 R1 I2; Y " SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE, "r m3 i0", "X 83 /7 m1 i2; Y " SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
+    {ICODE, "r m3 i2", "X 81 /7 m1 I2; Y " SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
 
-#define CMP(ICODE, SET_OPCODE)  \
-  CMP0 (ICODE, , X, SET_OPCODE) \
-  CMP0 (ICODE, S, Y, SET_OPCODE)
+#define CMPS(ICODE, SETX)                                                                \
+  {ICODE, "r r r", "Y 3B r1 R2; Y " SETX " R0;X 0F B6 r0 R0"},        /* cmp r1,r2;...*/ \
+    {ICODE, "r r m2", "Y 3B r1 m2; Y " SETX " R0;X 0F B6 r0 R0"},     /* cmp r1,m2;...*/ \
+    {ICODE, "r r i0", "Y 83 /7 R1 i2; Y " SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE, "r r i2", "Y 81 /7 R1 I2; Y " SETX " R0;X 0F B6 r0 R0"},  /* cmp r1,i2;...*/ \
+    {ICODE, "r m2 i0", "Y 83 /7 m1 i2; Y " SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/ \
+    {ICODE, "r m2 i2", "Y 81 /7 m1 I2; Y " SETX " R0;X 0F B6 r0 R0"}, /* cmp m1,i2;...*/
 
 #define FEQ(ICODE, V, SET_OPCODE)                                                            \
   /*xor %eax,%eax;ucomiss r1,{r,m2};mov V,%edx;set[n]p r0;cmovne %rdx,%rax; mov %rax,r0:  */ \
@@ -1742,6 +1746,11 @@ static struct pattern patterns[] = {
   CMP (MIR_ULT, "0F 92") CMP (MIR_LE, "0F 9E") CMP (MIR_ULE, "0F 96") /* 2.int cmps */
   CMP (MIR_GT, "0F 9F") CMP (MIR_UGT, "0F 97") CMP (MIR_GE, "0F 9D")  /* 3.int cmps */
   CMP (MIR_UGE, "0F 93")                                              /* 4.int cmps */
+
+  CMPS (MIR_EQS, "0F 94") CMPS (MIR_NES, "0F 95") CMPS (MIR_LTS, "0F 9C")   /* 1.short cmps */
+  CMPS (MIR_ULTS, "0F 92") CMPS (MIR_LES, "0F 9E") CMPS (MIR_ULES, "0F 96") /* 2.short cmps */
+  CMPS (MIR_GTS, "0F 9F") CMPS (MIR_UGTS, "0F 97") CMPS (MIR_GES, "0F 9D")  /* 3.short cmps */
+  CMPS (MIR_UGES, "0F 93")                                                  /* 4.short cmps */
 
   FEQ (MIR_FEQ, "V0", "0F 9B") DEQ (MIR_DEQ, "V0", "0F 9B")   /* 1. fp cmps */
   LDEQ (MIR_LDEQ, "V0", "0F 9B") FEQ (MIR_FNE, "V1", "0F 9A") /* 2. fp cmps */
