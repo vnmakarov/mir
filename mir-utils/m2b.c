@@ -1,7 +1,6 @@
 /* Transform mir textual form from stdin into mir binary to
    stdout.  */
 
-#include "mir-alloc.h"
 #include "mir.h"
 
 #ifdef _WIN32
@@ -17,7 +16,6 @@ DEF_VARR (char);
 
 int main (int argc, char *argv[]) {
   MIR_context_t ctx = MIR_init ();
-  MIR_alloc_t alloc = MIR_get_alloc (ctx);
   VARR (char) * str;
   int c;
 
@@ -26,7 +24,7 @@ int main (int argc, char *argv[]) {
     fprintf (stderr, "Usage: %s < mir-text-file > mir-binary-file\n", argv[1]);
     return 1;
   }
-  VARR_CREATE (char, str, alloc, 1024 * 1024);
+  VARR_CREATE (char, str, 1024 * 1024);
   while ((c = getchar ()) != EOF) VARR_PUSH (char, str, c);
   VARR_PUSH (char, str, 0);
   MIR_scan_string (ctx, VARR_ADDR (char, str));

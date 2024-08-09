@@ -4,11 +4,9 @@
    File contains MIR interpreter which is an obligatory part of MIR API.
 */
 
-#include "mir-alloc.h"
-#include "mir.h"
 #ifdef MIR_NO_INTERP
 static void interp_init (MIR_context_t ctx) {}
-static void finish_func_interpretation (MIR_item_t func_item, MIR_alloc_t alloc) {}
+static void finish_func_interpretation (MIR_item_t func_item) {}
 static void interp_finish (MIR_context_t ctx) {}
 void MIR_interp (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs, ...) {}
 void MIR_interp_arr_varg (MIR_context_t ctx, MIR_item_t func_item, MIR_val_t *results, size_t nargs,
@@ -504,7 +502,7 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
     }
   }
   func_item->data = func_desc
-    = MIR_malloc (ctx->alloc, sizeof (struct func_desc) + VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
+    = malloc (sizeof (struct func_desc) + VARR_LENGTH (MIR_val_t, code_varr) * sizeof (MIR_val_t));
   if (func_desc == NULL)
     (*MIR_get_error_func (ctx)) (MIR_alloc_error, "no memory for interpreter code");
   memmove (func_desc->code, VARR_ADDR (MIR_val_t, code_varr),
@@ -522,13 +520,13 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
   func_desc->func_item = func_item;
 }
 
-static void finish_func_interpretation (MIR_item_t func_item, MIR_alloc_t alloc) {
+static void finish_func_interpretation (MIR_item_t func_item) {
   mir_assert (func_item->item_type == MIR_func_item);
   if (func_item->data == NULL) return;
   for (MIR_insn_t insn = DLIST_HEAD (MIR_insn_t, func_item->u.func->insns); insn != NULL;
        insn = DLIST_NEXT (MIR_insn_t, insn))
     insn->data = NULL; /* it was used for interpretation preparation */
-  MIR_free (alloc, func_item->data);
+  free (func_item->data);
   func_item->data = NULL;
 }
 
@@ -1734,10 +1732,7 @@ static int ff_interface_eq (ff_interface_t i1, ff_interface_t i2, void *arg MIR_
   return TRUE;
 }
 
-static void ff_interface_clear (ff_interface_t ffi, void *arg) {
-  MIR_alloc_t alloc = (MIR_alloc_t) arg;
-  MIR_free (alloc, ffi);
-}
+static void ff_interface_clear (ff_interface_t ffi, void *arg MIR_UNUSED) { free (ffi); }
 
 static void *get_ff_interface (MIR_context_t ctx, size_t arg_vars_num, size_t nres,
                                MIR_type_t *res_types, size_t nargs, _MIR_arg_desc_t *arg_descs,
@@ -1754,8 +1749,8 @@ static void *get_ff_interface (MIR_context_t ctx, size_t arg_vars_num, size_t nr
   ffi_s.arg_descs = arg_descs;
   if (HTAB_DO (ff_interface_t, ff_interface_tab, &ffi_s, HTAB_FIND, tab_ffi))
     return tab_ffi->interface_addr;
-  ffi = MIR_malloc (ctx->alloc, sizeof (struct ff_interface) + sizeof (_MIR_arg_desc_t) * nargs
-                    + sizeof (MIR_type_t) * nres);
+  ffi = malloc (sizeof (struct ff_interface) + sizeof (_MIR_arg_desc_t) * nargs
+                + sizeof (MIR_type_t) * nres);
   ffi->arg_vars_num = arg_vars_num;
   ffi->nres = nres;
   ffi->nargs = nargs;
@@ -1871,27 +1866,26 @@ static void call (MIR_context_t ctx, MIR_val_t *bp, MIR_op_t *insn_arg_ops, code
 }
 
 static void interp_init (MIR_context_t ctx) {
-  MIR_alloc_t alloc = ctx->alloc;
   struct interp_ctx *interp_ctx;
 
   addr_offset8 = _MIR_addr_offset (ctx, MIR_ADDR8);
   addr_offset16 = _MIR_addr_offset (ctx, MIR_ADDR16);
   addr_offset32 = _MIR_addr_offset (ctx, MIR_ADDR32);
-  if ((interp_ctx = ctx->interp_ctx = MIR_malloc (alloc, sizeof (struct interp_ctx))) == NULL)
+  if ((interp_ctx = ctx->interp_ctx = malloc (sizeof (struct interp_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
 #if DIRECT_THREADED_DISPATCH
   eval (ctx, NULL, NULL, NULL);
 #endif
-  VARR_CREATE (MIR_insn_t, branches, alloc, 0);
-  VARR_CREATE (MIR_val_t, code_varr, alloc, 0);
-  VARR_CREATE (MIR_val_t, arg_vals_varr, alloc, 0);
+  VARR_CREATE (MIR_insn_t, branches, 0);
+  VARR_CREATE (MIR_val_t, code_varr, 0);
+  VARR_CREATE (MIR_val_t, arg_vals_varr, 0);
   arg_vals = VARR_ADDR (MIR_val_t, arg_vals_varr);
-  VARR_CREATE (MIR_val_t, call_res_args_varr, alloc, 0);
-  VARR_CREATE (_MIR_arg_desc_t, call_arg_descs_varr, alloc, 0);
+  VARR_CREATE (MIR_val_t, call_res_args_varr, 0);
+  VARR_CREATE (_MIR_arg_desc_t, call_arg_descs_varr, 0);
   call_res_args = VARR_ADDR (MIR_val_t, call_res_args_varr);
   call_arg_descs = VARR_ADDR (_MIR_arg_desc_t, call_arg_descs_varr);
-  HTAB_CREATE_WITH_FREE_FUNC (ff_interface_t, ff_interface_tab, alloc, 1000, ff_interface_hash,
-                              ff_interface_eq, ff_interface_clear, alloc);
+  HTAB_CREATE_WITH_FREE_FUNC (ff_interface_t, ff_interface_tab, 1000, ff_interface_hash,
+                              ff_interface_eq, ff_interface_clear, NULL);
 #if MIR_INTERP_TRACE
   trace_insn_ident = 0;
 #endif
@@ -1909,7 +1903,7 @@ static void interp_finish (MIR_context_t ctx) {
   VARR_DESTROY (_MIR_arg_desc_t, call_arg_descs_varr);
   HTAB_DESTROY (ff_interface_t, ff_interface_tab);
   /* Clear func descs???  */
-  MIR_free (ctx->alloc, ctx->interp_ctx);
+  free (ctx->interp_ctx);
   ctx->interp_ctx = NULL;
 }
 

@@ -22,8 +22,6 @@
 #include <setjmp.h>
 #include <math.h>
 #include <wchar.h>
-#include "mir-alloc.h"
-#include "mir.h"
 #include "time.h"
 
 #include "c2mir.h"
@@ -348,13 +346,8 @@ typedef struct {
 #error "undefined or unsupported generation target for C"
 #endif
 
-static inline MIR_alloc_t c2m_alloc (c2m_ctx_t c2m_ctx) {
-  return MIR_get_alloc (c2m_ctx->ctx);
-}
-
 static void *reg_malloc (c2m_ctx_t c2m_ctx, size_t s) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  void *mem = MIR_malloc (alloc, s);
+  void *mem = malloc (s);
 
   if (mem == NULL) alloc_error (c2m_ctx, "no memory");
   VARR_PUSH (void_ptr_t, reg_memory, mem);
@@ -362,9 +355,7 @@ static void *reg_malloc (c2m_ctx_t c2m_ctx, size_t s) {
 }
 
 static void reg_memory_pop (c2m_ctx_t c2m_ctx, size_t mark) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  while (VARR_LENGTH (void_ptr_t, reg_memory) > mark)
-    MIR_free (alloc, VARR_POP (void_ptr_t, reg_memory));
+  while (VARR_LENGTH (void_ptr_t, reg_memory) > mark) free (VARR_POP (void_ptr_t, reg_memory));
 }
 
 static size_t MIR_UNUSED reg_memory_mark (c2m_ctx_t c2m_ctx) {
@@ -375,10 +366,7 @@ static void reg_memory_finish (c2m_ctx_t c2m_ctx) {
   VARR_DESTROY (void_ptr_t, reg_memory);
 }
 
-static void reg_memory_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  VARR_CREATE (void_ptr_t, reg_memory, alloc, 4096);
-}
+static void reg_memory_init (c2m_ctx_t c2m_ctx) { VARR_CREATE (void_ptr_t, reg_memory, 4096); }
 
 static int char_is_signed_p (void) { return MIR_CHAR_MAX == MIR_SCHAR_MAX; }
 
@@ -400,9 +388,8 @@ static htab_hash_t str_key_hash (tab_str_t str, void *arg MIR_UNUSED) {
 static str_t uniq_cstr (c2m_ctx_t c2m_ctx, const char *str);
 
 static void str_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  HTAB_CREATE (tab_str_t, str_tab, alloc, 1000, str_hash, str_eq, NULL);
-  HTAB_CREATE (tab_str_t, str_key_tab, alloc, 200, str_key_hash, str_key_eq, NULL);
+  HTAB_CREATE (tab_str_t, str_tab, 1000, str_hash, str_eq, NULL);
+  HTAB_CREATE (tab_str_t, str_key_tab, 200, str_key_hash, str_key_eq, NULL);
   empty_str = uniq_cstr (c2m_ctx, "");
 }
 
@@ -447,20 +434,16 @@ static void str_finish (c2m_ctx_t c2m_ctx) {
 }
 
 static void *c2mir_calloc (c2m_ctx_t c2m_ctx, size_t size) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  void *res = MIR_calloc (alloc, 1, size);
+  void *res = calloc (1, size);
 
   if (res == NULL) (*MIR_get_error_func (c2m_ctx->ctx)) (MIR_alloc_error, "no memory");
   return res;
 }
 
 void c2mir_init (MIR_context_t ctx) {
-  MIR_alloc_t alloc = MIR_get_alloc (ctx);
   struct c2m_ctx **c2m_ctx_ptr = c2m_ctx_loc (ctx), *c2m_ctx;
 
-  *c2m_ctx_ptr = c2m_ctx = MIR_calloc (alloc, 1, sizeof (struct c2m_ctx));
-  if (c2m_ctx == NULL) (*MIR_get_error_func (ctx)) (MIR_alloc_error, "no memory");
-
+  *c2m_ctx_ptr = c2m_ctx = c2mir_calloc (NULL, sizeof (struct c2m_ctx));
   c2m_ctx->ctx = ctx;
   reg_memory_init (c2m_ctx);
   str_init (c2m_ctx);
@@ -923,9 +906,8 @@ static void warning (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
 #define TAB_STOP 8
 
 static void init_streams (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   cs = eof_s = NULL;
-  VARR_CREATE (stream_t, streams, alloc, 32);
+  VARR_CREATE (stream_t, streams, 32);
 }
 
 static void free_stream (stream_t s) {
@@ -940,10 +922,10 @@ static void finish_streams (c2m_ctx_t c2m_ctx) {
   VARR_DESTROY (stream_t, streams);
 }
 
-static stream_t new_stream (MIR_alloc_t alloc, FILE *f, const char *fname, int (*getc_func) (c2m_ctx_t)) {
-  stream_t s = MIR_malloc (alloc, sizeof (struct stream));
+static stream_t new_stream (FILE *f, const char *fname, int (*getc_func) (c2m_ctx_t)) {
+  stream_t s = malloc (sizeof (struct stream));
 
-  VARR_CREATE (char, s->ln, alloc, 128);
+  VARR_CREATE (char, s->ln, 128);
   s->f = f;
   s->fname = s->pos.fname = fname;
   s->pos.lno = 0;
@@ -957,13 +939,12 @@ static stream_t new_stream (MIR_alloc_t alloc, FILE *f, const char *fname, int (
 static void add_stream (c2m_ctx_t c2m_ctx, FILE *f, const char *fname,
                         int (*getc_func) (c2m_ctx_t)) {
   assert (fname != NULL);
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   if (cs != NULL && cs->f != NULL && cs->f != stdin) {
     fgetpos (cs->f, &cs->fpos);
     fclose (cs->f);
     cs->f = NULL;
   }
-  cs = new_stream (alloc, f, fname, getc_func);
+  cs = new_stream (f, fname, getc_func);
   VARR_PUSH (stream_t, streams, cs);
 }
 
@@ -1070,9 +1051,8 @@ static void cs_unget (c2m_ctx_t c2m_ctx, int c) {
 
 static void set_string_stream (c2m_ctx_t c2m_ctx, const char *str, pos_t pos,
                                void (*transform) (const char *, VARR (char) *)) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   /* read from string str */
-  cs = new_stream (alloc, NULL, NULL, NULL);
+  cs = new_stream (NULL, NULL, NULL);
   VARR_PUSH (stream_t, streams, cs);
   cs->pos = pos;
   if (transform != NULL) {
@@ -2072,22 +2052,21 @@ static void new_std_macro (c2m_ctx_t c2m_ctx, const char *id_str) {
 }
 
 static void init_macros (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   VARR (token_t) * params;
 
-  VARR_CREATE (macro_t, macros, alloc, 2048);
-  HTAB_CREATE (macro_t, macro_tab, alloc, 2048, macro_hash, macro_eq, NULL);
+  VARR_CREATE (macro_t, macros, 2048);
+  HTAB_CREATE (macro_t, macro_tab, 2048, macro_hash, macro_eq, NULL);
   /* Standard macros : */
   new_std_macro (c2m_ctx, "__DATE__");
   new_std_macro (c2m_ctx, "__TIME__");
   new_std_macro (c2m_ctx, "__FILE__");
   new_std_macro (c2m_ctx, "__LINE__");
   if (!c2m_options->pedantic_p) {
-    VARR_CREATE (token_t, params, alloc, 1);
+    VARR_CREATE (token_t, params, 1);
     VARR_PUSH (token_t, params, new_id_token (c2m_ctx, no_pos, "$"));
     new_macro (c2m_ctx, new_id_token (c2m_ctx, no_pos, "__has_include"), params, NULL);
-    VARR_CREATE (token_t, params, alloc, 1);
+    VARR_CREATE (token_t, params, 1);
     VARR_PUSH (token_t, params, new_id_token (c2m_ctx, no_pos, "$"));
     new_macro (c2m_ctx, new_id_token (c2m_ctx, no_pos, "__has_builtin"), params, NULL);
   }
@@ -2123,14 +2102,14 @@ static void finish_macros (c2m_ctx_t c2m_ctx) {
   if (macro_tab != NULL) HTAB_DESTROY (macro_t, macro_tab);
 }
 
-static macro_call_t new_macro_call (MIR_alloc_t alloc, macro_t m, pos_t pos) {
+static macro_call_t new_macro_call (macro_t m, pos_t pos) {
   macro_call_t mc = malloc (sizeof (struct macro_call));
 
   mc->macro = m;
   mc->pos = pos;
   mc->repl_pos = 0;
   mc->args = NULL;
-  VARR_CREATE (token_t, mc->repl_buffer, alloc, 64);
+  VARR_CREATE (token_t, mc->repl_buffer, 64);
   return mc;
 }
 
@@ -2163,7 +2142,6 @@ static void pop_ifstate (c2m_ctx_t c2m_ctx) {
 }
 
 static void pre_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx;
   time_t t, time_loc;
   struct tm *tm, tm_loc MIR_UNUSED;
@@ -2187,12 +2165,12 @@ static void pre_init (c2m_ctx_t c2m_ctx) {
   date_str[strlen (date_str) - 1] = '\0';
   strcpy (time_str, time_str_repr + 1);
   time_str[strlen (time_str) - 1] = '\0';
-  VARR_CREATE (char_ptr_t, once_include_files, alloc, 64);
-  VARR_CREATE (token_t, temp_tokens, alloc, 128);
-  VARR_CREATE (token_t, output_buffer, alloc, 2048);
+  VARR_CREATE (char_ptr_t, once_include_files, 64);
+  VARR_CREATE (token_t, temp_tokens, 128);
+  VARR_CREATE (token_t, output_buffer, 2048);
   init_macros (c2m_ctx);
-  VARR_CREATE (ifstate_t, ifs, alloc, 512);
-  VARR_CREATE (macro_call_t, macro_call_stack, alloc, 512);
+  VARR_CREATE (ifstate_t, ifs, 512);
+  VARR_CREATE (macro_call_t, macro_call_stack, 512);
 }
 
 static void pre_finish (c2m_ctx_t c2m_ctx) {
@@ -2287,7 +2265,6 @@ static int replacement_eq_p (VARR (token_t) * r1, VARR (token_t) * r2) {
 }
 
 static void define (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   VARR (token_t) * repl, *params;
   token_t id, t;
@@ -2304,10 +2281,10 @@ static void define (c2m_ctx_t c2m_ctx) {
   }
   id = t;
   t = get_next_pptoken (c2m_ctx);
-  VARR_CREATE (token_t, repl, alloc, 64);
+  VARR_CREATE (token_t, repl, 64);
   params = NULL;
   if (t->code == '(') {
-    VARR_CREATE (token_t, params, alloc, 16);
+    VARR_CREATE (token_t, params, 16);
     t = get_next_pptoken (c2m_ctx); /* skip '(' */
     if (t->code == ' ') t = get_next_pptoken (c2m_ctx);
     if (t->code != ')') {
@@ -2602,7 +2579,6 @@ static void pop_macro_call (c2m_ctx_t c2m_ctx) {
 }
 
 static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just read a parenthesis */
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   macro_t m;
   token_t t;
   int va_p, level = 0;
@@ -2611,8 +2587,8 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
   VARR (token_t) * arg, *temp_arr;
 
   m = mc->macro;
-  VARR_CREATE (token_arr_t, args, alloc, 16);
-  VARR_CREATE (token_t, arg, alloc, 16);
+  VARR_CREATE (token_arr_t, args, 16);
+  VARR_CREATE (token_t, arg, 16);
   params_len = VARR_LENGTH (token_t, m->params);
   va_p = params_len == 1 && VARR_GET (token_t, m->params, 0)->code == T_DOTS;
 #ifdef C2MIR_PREPRO_DEBUG
@@ -2639,7 +2615,7 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
 #ifdef C2MIR_PREPRO_DEBUG
       fprintf (stderr, "\n#    arg %d:", VARR_LENGTH (token_arr_t, args));
 #endif
-      VARR_CREATE (token_t, arg, alloc, 16);
+      VARR_CREATE (token_t, arg, 16);
       if (VARR_LENGTH (token_arr_t, args) == params_len - 1
           && strcmp (VARR_GET (token_t, m->params, params_len - 1)->repr, "...") == 0)
         va_p = 1;
@@ -2683,7 +2659,7 @@ static void find_args (c2m_ctx_t c2m_ctx, macro_call_t mc) { /* we have just rea
     error (c2m_ctx, t->pos, "too many args for call of macro %s", m->id->repr);
   } else if (VARR_LENGTH (token_arr_t, args) < params_len) {
     for (; VARR_LENGTH (token_arr_t, args) < params_len;) {
-      VARR_CREATE (token_t, arg, alloc, 16);
+      VARR_CREATE (token_t, arg, 16);
       VARR_PUSH (token_arr_t, args, arg);
     }
     error (c2m_ctx, t->pos, "not enough args for call of macro %s", m->id->repr);
@@ -3016,7 +2992,6 @@ static const char *get_header_name (c2m_ctx_t c2m_ctx, VARR (token_t) * buffer, 
 }
 
 static void process_directive (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t, t1;
   int true_p;
@@ -3034,7 +3009,7 @@ static void process_directive (c2m_ctx_t c2m_ctx) {
     skip_nl (c2m_ctx, NULL, NULL);
     return;
   }
-  VARR_CREATE (token_t, temp_buffer, alloc, 64);
+  VARR_CREATE (token_t, temp_buffer, 64);
   if (strcmp (t->repr, "ifdef") == 0 || strcmp (t->repr, "ifndef") == 0) {
     t1 = t;
     if (VARR_LENGTH (ifstate_t, ifs) != 0 && VARR_LAST (ifstate_t, ifs)->skip_p) {
@@ -3375,7 +3350,6 @@ static void replace_defined (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer) {
 static struct val eval (c2m_ctx_t c2m_ctx, node_t tree);
 
 static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, token_t if_token) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   size_t i, j;
   token_t t, ppt;
@@ -3394,7 +3368,7 @@ static struct val eval_expr (c2m_ctx_t c2m_ctx, VARR (token_t) * expr_buffer, to
   replace_defined (c2m_ctx, output_buffer);
   no_out_p = FALSE;
   reverse_move_tokens (expr_buffer, output_buffer);
-  VARR_CREATE (token_t, temp_buffer, alloc, VARR_LENGTH (token_t, expr_buffer));
+  VARR_CREATE (token_t, temp_buffer, VARR_LENGTH (token_t, expr_buffer));
   for (i = j = 0; i < VARR_LENGTH (token_t, expr_buffer); i++) {
     int change_p = TRUE;
 
@@ -3577,7 +3551,6 @@ static struct val eval (c2m_ctx_t c2m_ctx, node_t tree) {
 }
 
 static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t macro_id) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   macro_call_t mc;
   token_t t1 = get_next_pptoken (c2m_ctx), t2 = NULL;
@@ -3596,7 +3569,7 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
     out_token (c2m_ctx, macro_id);
     return NULL;
   }
-  mc = new_macro_call (alloc, m, macro_id->pos);
+  mc = new_macro_call (m, macro_id->pos);
   find_args (c2m_ctx, mc);
   VARR_PUSH (macro_call_t, macro_call_stack, mc);
   return mc;
@@ -3613,7 +3586,6 @@ static macro_call_t try_param_macro_call (c2m_ctx_t c2m_ctx, macro_t m, token_t 
 #define PROP_NE "__builtin_prop_ne"
 
 static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   token_t t;
   struct macro macro_struct;
@@ -3775,7 +3747,7 @@ static void processing (c2m_ctx_t c2m_ctx, int ignore_directive_p) {
 #ifdef C2MIR_PREPRO_DEBUG
       fprintf (stderr, "# push back <EOR>\n");
 #endif
-      mc = new_macro_call (alloc, m, t->pos);
+      mc = new_macro_call (m, t->pos);
       add_tokens (mc->repl_buffer, m->replacement);
       copy_and_push_back (c2m_ctx, do_concat (c2m_ctx, mc->repl_buffer), mc->pos);
       m->ignore_p = TRUE;
@@ -3998,10 +3970,9 @@ static htab_hash_t tpname_hash (tpname_t tpname, void *arg MIR_UNUSED) {
 }
 
 static void tpname_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
 
-  HTAB_CREATE (tpname_t, tpname_tab, alloc, 1000, tpname_hash, tpname_eq, NULL);
+  HTAB_CREATE (tpname_t, tpname_tab, 1000, tpname_hash, tpname_eq, NULL);
 }
 
 static int tpname_find (c2m_ctx_t c2m_ctx, node_t id, node_t scope, tpname_t *res) {
@@ -5433,7 +5404,6 @@ static void kw_add (c2m_ctx_t c2m_ctx, const char *name, token_code_t tc, size_t
 }
 
 static void parse_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   parse_ctx_t parse_ctx;
 
   c2m_ctx->parse_ctx = parse_ctx = c2mir_calloc (c2m_ctx, sizeof (struct parse_ctx));
@@ -5442,8 +5412,8 @@ static void parse_init (c2m_ctx_t c2m_ctx) {
   record_level = 0;
   curr_uid = 0;
   init_streams (c2m_ctx);
-  VARR_CREATE (token_t, recorded_tokens, alloc, 32);
-  VARR_CREATE (token_t, buffered_tokens, alloc, 32);
+  VARR_CREATE (token_t, recorded_tokens, 32);
+  VARR_CREATE (token_t, buffered_tokens, 32);
   pre_init (c2m_ctx);
   kw_add (c2m_ctx, "_Bool", T_BOOL, 0);
   kw_add (c2m_ctx, "_Complex", T_COMPLEX, 0);
@@ -5618,8 +5588,7 @@ static htab_hash_t symbol_hash (symbol_t s, void *arg MIR_UNUSED) {
 static void symbol_clear (symbol_t sym, void *arg MIR_UNUSED) { VARR_DESTROY (node_t, sym.defs); }
 
 static void symbol_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
-  HTAB_CREATE_WITH_FREE_FUNC (symbol_t, symbol_tab, alloc, 5000, symbol_hash, symbol_eq, symbol_clear,
+  HTAB_CREATE_WITH_FREE_FUNC (symbol_t, symbol_tab, 5000, symbol_hash, symbol_eq, symbol_clear,
                               NULL);
 }
 
@@ -5638,7 +5607,6 @@ static int symbol_find (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, nod
 
 static void symbol_insert (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, node_t scope,
                            node_t def_node, node_t aux_node) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   symbol_t el, symbol;
 
   symbol.mode = mode;
@@ -5646,17 +5614,16 @@ static void symbol_insert (c2m_ctx_t c2m_ctx, enum symbol_mode mode, node_t id, 
   symbol.scope = scope;
   symbol.def_node = def_node;
   symbol.aux_node = aux_node;
-  VARR_CREATE (node_t, symbol.defs, alloc, 4);
+  VARR_CREATE (node_t, symbol.defs, 4);
   VARR_PUSH (node_t, symbol.defs, def_node);
   HTAB_DO (symbol_t, symbol_tab, symbol, HTAB_INSERT, el);
 }
 
 static void symbol_def_replace (c2m_ctx_t c2m_ctx, symbol_t symbol, node_t def_node) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   symbol_t el;
   VARR (node_t) * defs;
 
-  VARR_CREATE (node_t, defs, alloc, 4);
+  VARR_CREATE (node_t, defs, 4);
   for (size_t i = 0; i < VARR_LENGTH (node_t, symbol.defs); i++)
     VARR_PUSH (node_t, defs, VARR_GET (node_t, symbol.defs, i));
   symbol.defs = defs;
@@ -10064,21 +10031,20 @@ static void do_context (c2m_ctx_t c2m_ctx, node_t r) {
 }
 
 static void context_init (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   check_ctx_t check_ctx;
 
   c2m_ctx->check_ctx = check_ctx = c2mir_calloc (c2m_ctx, sizeof (struct check_ctx));
   n_i1_node = new_i_node (c2m_ctx, 1, no_pos);
-  VARR_CREATE (node_t, context_stack, alloc, 64);
+  VARR_CREATE (node_t, context_stack, 64);
   check (c2m_ctx, n_i1_node, NULL);
   func_block_scope = curr_scope = NULL;
-  VARR_CREATE (node_t, label_uses, alloc, 0);
+  VARR_CREATE (node_t, label_uses, 0);
   symbol_init (c2m_ctx);
   in_params_p = FALSE;
   curr_unnamed_anon_struct_union_member = NULL;
-  HTAB_CREATE (case_t, case_tab, alloc, 100, case_hash, case_eq, NULL);
-  VARR_CREATE (decl_t, func_decls_for_allocation, alloc, 1024);
-  VARR_CREATE (node_t, possible_incomplete_decls, alloc, 512);
+  HTAB_CREATE (case_t, case_tab, 100, case_hash, case_eq, NULL);
+  VARR_CREATE (decl_t, func_decls_for_allocation, 1024);
+  VARR_CREATE (node_t, possible_incomplete_decls, 512);
 }
 
 static void context_finish (c2m_ctx_t c2m_ctx) {
@@ -10213,11 +10179,10 @@ static int reg_var_eq (reg_var_t r1, reg_var_t r2, void *arg MIR_UNUSED) {
 }
 
 static void init_reg_vars (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
 
   reg_free_mark = 0;
-  HTAB_CREATE (reg_var_t, reg_var_tab, alloc, 128, reg_var_hash, reg_var_eq, NULL);
+  HTAB_CREATE (reg_var_t, reg_var_tab, 128, reg_var_hash, reg_var_eq, NULL);
 }
 
 static void finish_curr_func_reg_vars (c2m_ctx_t c2m_ctx) {
@@ -13538,14 +13503,13 @@ static MIR_item_t get_mir_proto (c2m_ctx_t c2m_ctx, int vararg_p) {
 }
 
 static void gen_mir_protos (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
   node_t call, func, op1;
   struct type *type;
   struct func_type *func_type;
 
   curr_mir_proto_num = 0;
-  HTAB_CREATE (MIR_item_t, proto_tab, alloc, 512, proto_hash, proto_eq, NULL);
+  HTAB_CREATE (MIR_item_t, proto_tab, 512, proto_hash, proto_eq, NULL);
   for (size_t i = 0; i < VARR_LENGTH (node_t, call_nodes); i++) {
     call = VARR_GET (node_t, call_nodes, i);
     assert (call->code == N_CALL);
@@ -13584,7 +13548,6 @@ static void gen_finish (c2m_ctx_t c2m_ctx) {
 }
 
 static void gen_mir (c2m_ctx_t c2m_ctx, node_t r) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   gen_ctx_t gen_ctx;
   MIR_context_t ctx = c2m_ctx->ctx;
 
@@ -13593,15 +13556,15 @@ static void gen_mir (c2m_ctx_t c2m_ctx, node_t r) {
   one_op = new_op (NULL, MIR_new_int_op (ctx, 1));
   minus_one_op = new_op (NULL, MIR_new_int_op (ctx, -1));
   init_reg_vars (c2m_ctx);
-  VARR_CREATE (MIR_var_t, proto_info.arg_vars, alloc, 32);
-  VARR_CREATE (MIR_type_t, proto_info.ret_types, alloc, 16);
+  VARR_CREATE (MIR_var_t, proto_info.arg_vars, 32);
+  VARR_CREATE (MIR_type_t, proto_info.ret_types, 16);
   gen_mir_protos (c2m_ctx);
-  VARR_CREATE (MIR_op_t, call_ops, alloc, 32);
-  VARR_CREATE (MIR_op_t, ret_ops, alloc, 8);
-  VARR_CREATE (MIR_op_t, switch_ops, alloc, 128);
-  VARR_CREATE (case_t, switch_cases, alloc, 64);
-  VARR_CREATE (init_el_t, init_els, alloc, 128);
-  VARR_CREATE (node_t, node_stack, alloc, 8);
+  VARR_CREATE (MIR_op_t, call_ops, 32);
+  VARR_CREATE (MIR_op_t, ret_ops, 8);
+  VARR_CREATE (MIR_op_t, switch_ops, 128);
+  VARR_CREATE (case_t, switch_cases, 64);
+  VARR_CREATE (init_el_t, init_els, 128);
+  VARR_CREATE (node_t, node_stack, 8);
   memset_proto = memset_item = memcpy_proto = memcpy_item = NULL;
   top_gen (c2m_ctx, r, NULL, NULL, NULL);
   gen_finish (c2m_ctx);
@@ -14020,11 +13983,10 @@ static void print_node (c2m_ctx_t c2m_ctx, FILE *f, node_t n, int indent, int at
 }
 
 static void init_include_dirs (c2m_ctx_t c2m_ctx) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   int MIR_UNUSED added_p = FALSE;
 
-  VARR_CREATE (char_ptr_t, headers, alloc, 0);
-  VARR_CREATE (char_ptr_t, system_headers, alloc, 0);
+  VARR_CREATE (char_ptr_t, headers, 0);
+  VARR_CREATE (char_ptr_t, system_headers, 0);
   for (size_t i = 0; i < c2m_options->include_dirs_num; i++) {
     VARR_PUSH (char_ptr_t, headers, c2m_options->include_dirs[i]);
     VARR_PUSH (char_ptr_t, system_headers, c2m_options->include_dirs[i]);
@@ -14083,7 +14045,6 @@ static int check_id_p (c2m_ctx_t c2m_ctx, const char *str) {
 }
 
 static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *def) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   pre_ctx_t pre_ctx = c2m_ctx->pre_ctx;
   pos_t pos;
   token_t t, id;
@@ -14094,7 +14055,7 @@ static void define_cmd_macro (c2m_ctx_t c2m_ctx, const char *name, const char *d
   pos.fname = COMMAND_LINE_SOURCE_NAME;
   pos.lno = 1;
   pos.ln_pos = 0;
-  VARR_CREATE (token_t, repl, alloc, 16);
+  VARR_CREATE (token_t, repl, 16);
   id = new_id_token (c2m_ctx, pos, name);
   VARR_TRUNC (char, temp_string, 0);
   for (; *def != '\0'; def++) VARR_PUSH (char, temp_string, *def);
@@ -14143,21 +14104,20 @@ static void process_macro_commands (c2m_ctx_t c2m_ctx) {
 
 static void compile_init (c2m_ctx_t c2m_ctx, struct c2mir_options *ops, int (*getc_func) (void *),
                           void *getc_data) {
-  MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
   c2m_options = ops;
   n_errors = n_warnings = 0;
   c_getc = getc_func;
   c_getc_data = getc_data;
-  VARR_CREATE (char, symbol_text, alloc, 128);
-  VARR_CREATE (char, temp_string, alloc, 128);
-  VARR_CREATE (pos_t, node_positions, alloc, 128);
+  VARR_CREATE (char, symbol_text, 128);
+  VARR_CREATE (char, temp_string, 128);
+  VARR_CREATE (pos_t, node_positions, 128);
   parse_init (c2m_ctx);
   context_init (c2m_ctx);
   init_include_dirs (c2m_ctx);
   process_macro_commands (c2m_ctx);
-  VARR_CREATE (node_t, call_nodes, alloc, 128); /* used in context and gen */
-  VARR_CREATE (node_t, containing_anon_members, alloc, 8);
-  VARR_CREATE (init_object_t, init_object_path, alloc, 8);
+  VARR_CREATE (node_t, call_nodes, 128); /* used in context and gen */
+  VARR_CREATE (node_t, containing_anon_members, 8);
+  VARR_CREATE (init_object_t, init_object_path, 8);
 }
 
 static void compile_finish (c2m_ctx_t c2m_ctx) {

@@ -1,17 +1,13 @@
-#include "mir-alloc.h"
 #include "mir-varr.h"
-
-#include "mir-alloc-default.c"
 
 DEF_VARR (int);
 int main (void) {
-  MIR_alloc_t alloc = &default_alloc;
   int status, elem;
   VARR (int) * test;
   size_t ind;
   int arr[] = {1, 2, 3};
 
-  VARR_CREATE (int, test, alloc, 0);
+  VARR_CREATE (int, test, 0);
   status = VARR_LENGTH (int, test) == 0;
   VARR_PUSH (int, test, 42);
   status &= VARR_LAST (int, test) == 42;

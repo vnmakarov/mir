@@ -3,19 +3,17 @@
 */
 
 #include "mir-ppc64.h"
-#include "mir-alloc.h"
-#include "mir.h"
 
 /* All BLK type values is passed in int regs, and if the regs are not enough, the rest is passed on
    the stack. RBLK is always passed by address.  */
 
 #define VA_LIST_IS_ARRAY_P 1 /* one element which is a pointer to args */
 
-static void ppc64_push_func_desc (MIR_alloc_t alloc, VARR (uint8_t) * *insn_varr);
-void (*ppc64_func_desc) (MIR_alloc_t alloc, VARR (uint8_t) * *insn_varr) = ppc64_push_func_desc;
+static void ppc64_push_func_desc (VARR (uint8_t) * *insn_varr);
+void (*ppc64_func_desc) (VARR (uint8_t) * *insn_varr) = ppc64_push_func_desc;
 
-static void ppc64_push_func_desc (MIR_alloc_t alloc, VARR (uint8_t) * *insn_varr) {
-  VARR_CREATE (uint8_t, *insn_varr, alloc, 128);
+static void ppc64_push_func_desc (VARR (uint8_t) * *insn_varr) {
+  VARR_CREATE (uint8_t, *insn_varr, 128);
   for (int i = 0; i < PPC64_FUNC_DESC_LEN; i++)
     VARR_PUSH (uint8_t, *insn_varr, ((uint8_t *) ppc64_func_desc)[i]);
 }
@@ -120,7 +118,7 @@ void *_MIR_get_bstart_builtin (MIR_context_t ctx) {
   };
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (ctx->alloc, &code);
+  ppc64_push_func_desc (&code);
   push_insns (code, bstart_code, sizeof (bstart_code));
   return ppc64_publish_func_and_redirect (ctx, code);
 }
@@ -132,7 +130,7 @@ void *_MIR_get_bend_builtin (MIR_context_t ctx) {
   };
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (ctx->alloc, &code);
+  ppc64_push_func_desc (&code);
   ppc64_gen_ld (code, 0, 1, 0, MIR_T_I64);                /* r0 = 0(r1) */
   ppc64_gen_st (code, 0, 3, 0, MIR_T_I64);                /* 0(r3) = r0 */
   ppc64_gen_ld (code, 0, 1, PPC64_TOC_OFFSET, MIR_T_I64); /* r0 = toc_offset(r1) */
@@ -147,7 +145,7 @@ void *_MIR_get_thunk (MIR_context_t ctx) { /* emit 3 doublewords for func descri
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
   for (int i = 0; i < max_thunk_len / 4; i++) push_insn (code, TARGET_NOP);
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
   VARR_DESTROY (uint8_t, code);
@@ -161,7 +159,7 @@ static const uint32_t thunk_code_end[] = {
 
 void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
   VARR (uint8_t) * code;
-  VARR_CREATE (uint8_t, code, ctx->alloc, 256);
+  VARR_CREATE (uint8_t, code, 256);
   ppc64_gen_address (code, 12, to);
   push_insns (code, thunk_code_end, sizeof (thunk_code_end));
   mir_assert ((VARR_LENGTH (uint8_t, code) & 0x3) == 0
@@ -240,7 +238,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   int disp, blk_disp, param_offset, param_size = 0;
   VARR (uint8_t) * code;
 
-  ppc64_push_func_desc (ctx->alloc, &code);
+  ppc64_push_func_desc (&code);
   for (uint32_t i = 0; i < nargs; i++) {
     type = arg_descs[i].type;
     if (MIR_blk_type_p (type))
@@ -377,7 +375,7 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 256);
+  VARR_CREATE (uint8_t, code, 256);
   frame_size = PPC64_STACK_HEADER_SIZE + 64; /* header + 8(param area) */
   local_var_size = nres * 16 + 16;           /* saved r14, r15, results */
   if (vararg_p) {
@@ -510,7 +508,7 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   size_t offset;
   VARR (uint8_t) * code;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 64);
+  VARR_CREATE (uint8_t, code, 64);
   ppc64_gen_address (code, 11, bb_version); /* x11 = bb_version */
   offset = VARR_LENGTH (uint8_t, code);
   for (int i = 0; i < max_thunk_len / 4; i++) push_insn (code, TARGET_NOP);
@@ -540,7 +538,7 @@ void _MIR_replace_bb_thunk (MIR_context_t ctx, void *thunk, void *to) {
   }
   mir_assert (i <= 5);
   offset = i * 4;
-  VARR_CREATE (uint8_t, code, ctx->alloc, 64);
+  VARR_CREATE (uint8_t, code, 64);
   redirect_bb_thunk (ctx, code, (char *) thunk + offset, to);
   VARR_DESTROY (uint8_t, code);
 }
@@ -557,7 +555,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   void *res;
   int frame_size = wrapper_frame_size;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 256);
+  VARR_CREATE (uint8_t, code, 256);
   push_insns (code, prologue, sizeof (prologue));
   /* stdu r1,n(r1): header + 8(gp args) + 13(fp args) + 8(param area): */
   if (frame_size % 16 != 0) frame_size += 8;
@@ -590,7 +588,7 @@ void *_MIR_get_wrapper_end (MIR_context_t ctx) {
   int frame_size = wrapper_frame_size;
 
   if (frame_size % 16 != 0) frame_size += 8;
-  VARR_CREATE (uint8_t, code, ctx->alloc, 256);
+  VARR_CREATE (uint8_t, code, 256);
   for (unsigned reg = 5; reg <= 10; reg++) /* std rn,dispn(r1) : */
     ppc64_gen_st (code, reg, 1, PPC64_STACK_HEADER_SIZE + (reg - 3) * 8 + 64, MIR_T_I64);
   for (unsigned reg = 1; reg <= 13; reg++) /* stfd fn,dispn(r1) : */
@@ -633,7 +631,7 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   void *res;
   VARR (uint8_t) * code;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 256);
+  VARR_CREATE (uint8_t, code, 256);
   push_insns (code, prologue, sizeof (prologue));
   /* stdu r1,n(r1): header + 14(gp regs, r{1,2,11} space alloc is not used) + 14(fp args) + 8(param
    * area): */

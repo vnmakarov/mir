@@ -9,4 +9,3 @@
 *.a
 /mir-run
 /build
-/.cache

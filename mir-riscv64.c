@@ -357,7 +357,7 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
   VARR (uint8_t) * code;
   void *res;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
   mir_assert (__SIZEOF_LONG_DOUBLE__ == 16);
   for (size_t i = 0; i < nargs; i++) { /* calculate offset for blk params */
     type = arg_descs[i].type;
@@ -590,8 +590,8 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
   uint32_t pat, n_xregs, n_fregs, parts;
 
   assert (__SIZEOF_LONG_DOUBLE__ == 16);
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
-  VARR_CREATE (uint8_t, code2, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
+  VARR_CREATE (uint8_t, code2, 128);
   push_insns (code, &t0_sp, sizeof (t0_sp));           /* t0 = sp */
   push_insns (code, &sub_arg_sp, sizeof (sub_arg_sp)); /* sp -= <sp_offset> */
   sp_offset = 0;
@@ -861,7 +861,7 @@ void *_MIR_get_wrapper (MIR_context_t ctx, MIR_item_t called_func, void *hook_ad
   uint32_t insns[MAX_JUMP_CODE];
   int len = 64; /* initial len */
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
   for (;;) { /* dealing with moving code to another page as the immediate call is pc relative */
     base_addr = _MIR_get_new_code_addr (ctx, len);
     if (base_addr == NULL) break;
@@ -914,7 +914,7 @@ void *_MIR_get_wrapper_end (MIR_context_t ctx) {
   uint8_t *res_code;
   VARR (uint8_t) * code;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
   push_insns (code, &sub_sp, sizeof (sub_sp));
   push_insns (code, &save_ra, sizeof (save_ra));
   push_insns (code, save_insns, sizeof (save_insns));
@@ -1100,7 +1100,7 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   void *res;
   VARR (uint8_t) * code;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 64);
+  VARR_CREATE (uint8_t, code, 64);
   assert (MAX_JUMP_CODE == 6);
   push_insns (code, pat, sizeof (pat));
   for (int i = 0; i < MAX_JUMP_CODE + 2; i++)
@@ -1149,7 +1149,7 @@ void *_MIR_get_bb_wrapper (MIR_context_t ctx, void *data, void *hook_address) {
   size_t args_start, offset;
   VARR (uint8_t) * code;
 
-  VARR_CREATE (uint8_t, code, ctx->alloc, 128);
+  VARR_CREATE (uint8_t, code, 128);
   VARR_TRUNC (uint8_t, code, 0);
   push_insns (code, &sub_sp, sizeof (sub_sp));
   push_insns (code, &save_ra, sizeof (save_ra));

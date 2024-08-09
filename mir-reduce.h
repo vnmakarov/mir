@@ -34,7 +34,6 @@
 #include <string.h>
 #include <assert.h>
 #include "mir-hash.h"
-#include "mir-alloc.h"
 
 #define FALSE 0
 #define TRUE 1
@@ -287,9 +286,8 @@ static void _reduce_reset_next (struct reduce_data *data) {
 
 #define _REDUCE_CHECK_HASH_SEED 42
 
-static inline struct reduce_data *reduce_encode_start (MIR_alloc_t alloc, reduce_writer_t writer,
-                                                       void *aux_data) {
-  struct reduce_data *data = MIR_malloc (alloc, sizeof (struct reduce_data));
+static inline struct reduce_data *reduce_encode_start (reduce_writer_t writer, void *aux_data) {
+  struct reduce_data *data = malloc (sizeof (struct reduce_data));
   char prefix[] = _REDUCE_DATA_PREFIX;
   size_t prefix_size = strlen (prefix);
 
@@ -335,19 +333,18 @@ static inline void reduce_encode_put (struct reduce_data *data, int c) {
   data->buf[data->buf_bound++] = c;
 }
 
-static inline int reduce_encode_finish (MIR_alloc_t alloc, struct reduce_data *data) {
+static inline int reduce_encode_finish (struct reduce_data *data) {
   int ok_p;
 
   _reduce_encode_buf (data);
   _reduce_hash_write (data, data->check_hash);
   ok_p = data->ok_p;
-  MIR_free (alloc, data);
+  free (data);
   return ok_p;
 }
 
-static inline struct reduce_data *reduce_decode_start (MIR_alloc_t alloc, reduce_reader_t reader,
-                                                       void *aux_data) {
-  struct reduce_data *data = MIR_malloc (alloc, sizeof (struct reduce_data));
+static inline struct reduce_data *reduce_decode_start (reduce_reader_t reader, void *aux_data) {
+  struct reduce_data *data = malloc (sizeof (struct reduce_data));
   struct _reduce_decode_data *decode_data = &data->u.decode;
   char prefix[] = _REDUCE_DATA_PREFIX, str[sizeof (prefix)];
   size_t prefix_size = strlen (prefix);
@@ -424,35 +421,33 @@ static inline int reduce_decode_get (struct reduce_data *data) {
   return -1;
 }
 
-static inline int reduce_decode_finish (MIR_alloc_t alloc, struct reduce_data *data) {
+static inline int reduce_decode_finish (struct reduce_data *data) {
   uint8_t tag;
   int ok_p
     = data->ok_p && data->u.decode.eof_p && data->u.decode.reader (&tag, 1, data->aux_data) == 0;
 
-  MIR_free (alloc, data);
+  free (data);
   return ok_p;
 }
 
 #define _REDUCE_WRITE_IO_LEN 256
-static inline int reduce_encode (MIR_alloc_t alloc, reduce_reader_t reader, reduce_writer_t writer,
-                                 void *aux_data) {
+static inline int reduce_encode (reduce_reader_t reader, reduce_writer_t writer, void *aux_data) {
   size_t i, size;
   uint8_t buf[_REDUCE_WRITE_IO_LEN];
-  struct reduce_data *data = reduce_encode_start (alloc, writer, aux_data);
+  struct reduce_data *data = reduce_encode_start (writer, aux_data);
 
   if (data == NULL) return FALSE;
   for (;;) {
     if ((size = reader (buf, _REDUCE_WRITE_IO_LEN, data->aux_data)) == 0) break;
     for (i = 0; i < size; i++) reduce_encode_put (data, buf[i]);
   }
-  return reduce_encode_finish (alloc, data);
+  return reduce_encode_finish (data);
 }
 
-static inline int reduce_decode (MIR_alloc_t alloc, reduce_reader_t reader, reduce_writer_t writer,
-                                 void *aux_data) {
+static inline int reduce_decode (reduce_reader_t reader, reduce_writer_t writer, void *aux_data) {
   int c, i;
   uint8_t buf[_REDUCE_WRITE_IO_LEN];
-  struct reduce_data *data = reduce_decode_start (alloc, reader, aux_data);
+  struct reduce_data *data = reduce_decode_start (reader, aux_data);
 
   if (data == NULL) return FALSE;
   for (;;) {
@@ -460,7 +455,7 @@ static inline int reduce_decode (MIR_alloc_t alloc, reduce_reader_t reader, redu
     if (i != 0) writer (buf, i, aux_data);
     if (c < 0) break;
   }
-  return reduce_decode_finish (alloc, data);
+  return reduce_decode_finish (data);
 }
 
 #endif /* #ifndef MIR_REDUCE_H */

@@ -862,7 +862,6 @@ int main (int argc, const char *argv[]) {
   VARR (char) * input;
   MIR_module_t m;
   MIR_context_t ctx = MIR_init ();
-  MIR_alloc_t alloc = MIR_get_alloc (ctx);
 
   if (argc == 1)
     f = stdin;
@@ -875,7 +874,7 @@ int main (int argc, const char *argv[]) {
     fprintf (stderr, "usage: %s < file or %s mir-file\n", argv[0], argv[0]);
     exit (1);
   }
-  VARR_CREATE (char, input, alloc, 0);
+  VARR_CREATE (char, input, 0);
   while ((c = getc (f)) != EOF) VARR_PUSH (char, input, c);
   VARR_PUSH (char, input, 0);
   if (ferror (f)) {
