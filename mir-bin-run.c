@@ -4,7 +4,6 @@
 #include <alloca.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
-#include "mir-alloc-default.c"
 #include "mir-gen.h"  // mir.h gets included as well
 
 #define MIR_TYPE_INTERP 1
@@ -281,7 +280,6 @@ void open_extra_libs (void) {
 }
 
 int main (int argc, char **argv, char **envp) {
-  MIR_alloc_t alloc = &default_alloc;
   // from binfmt_misc we expect the arguments to be:
   // `mir-run /full/path/to/mir-binary mir-binary <args...>`
   if (argc < 3) {
@@ -294,9 +292,9 @@ int main (int argc, char **argv, char **envp) {
   MIR_val_t val;
   int exit_code;
 
-  VARR_CREATE (char, temp_string, alloc, 0);
-  VARR_CREATE (lib_t, extra_libs, alloc, 16);
-  VARR_CREATE (char_ptr_t, lib_dirs, alloc, 16);
+  VARR_CREATE (char, temp_string, 0);
+  VARR_CREATE (lib_t, extra_libs, 16);
+  VARR_CREATE (char_ptr_t, lib_dirs, 16);
   for (int i = 0; i < sizeof (std_lib_dirs) / sizeof (char_ptr_t); i++)
     VARR_PUSH (char_ptr_t, lib_dirs, std_lib_dirs[i]);
   lib_dirs_from_env_var ("LD_LIBRARY_PATH");
