@@ -19,7 +19,7 @@
 ## Disclaimer
    * **There is absolutely no warranty that the code will work for any tests except ones given here and on platforms
      other than x86_64 Linux/OSX, aarch64 Linux/OSX(Apple M1), and ppc64le/s390x/riscv64 Linux**
-  
+
 ## MIR
   * MIR is strongly typed IR
   * MIR can represent machine 32-bit and 64-bit insns of different architectures
@@ -178,7 +178,7 @@ ex100:    func v, 0
   * Running code from the above example could look like the following (here `m1` and `m2` are modules
     `m_sieve` and `m_e100`, `func` is function `ex100`, `sieve` is function `sieve`):
 ```c
-    /* ctx is a context created by MIR_init */
+    /* ctx is a context created by MIR_init / MIR_init2 */
     MIR_load_module (ctx, m1); MIR_load_module (ctx, m2);
     MIR_load_external (ctx, "printf", printf);
     MIR_link (ctx, MIR_set_interp_interface, import_resolver);
@@ -316,8 +316,8 @@ The executable is "configurable" with environment variables:
    * Files `mir-gen-x86_64.c`, `mir-gen-aarch64.c`, `mir-gen-ppc64.c`, `mir-gen-s390x.c`,
    and `mir-gen-riscv64.c` is machine dependent code of JIT compiler
  * Files `mir-<target>.c` contain simple machine dependent code common for interpreter and
-   JIT compiler 
- * Files `mir-<target>.h` contain declarations common for interpreter and JIT compiler 
+   JIT compiler
+ * Files `mir-<target>.h` contain declarations common for interpreter and JIT compiler
  * Files `mir2c/mir2c.h` and `mir2c/mir2c.c` contain code for MIR to C compiler.  The generated code might be not portable
  * Files `c2mir/c2mir.h`, `c2mir/c2mir.c`, `c2mir/c2mir-driver.c`, and `c2mir/mirc.h` contain code for
    C to MIR compiler.  Files in directories `c2mir/x86_64` and `c2mir/aarch64`, `c2mir/ppc64`, `c2mir/s390x`,
@@ -346,7 +346,7 @@ The executable is "configurable" with environment variables:
    [1] is based on wall time of compilation of C sieve code (w/o any include file and with
    using memory file system for GCC) and the corresponding MIR sieve code by MIR-interpreter
    and MIR-generator with optimization level 2
-    
+
    [2] is based on the best wall time of 10 runs with used MIR-generator optimization level 2
 
    [3] is based on stripped sizes of cc1 for GCC and MIR core and interpreter or generator for MIR
@@ -388,7 +388,7 @@ The executable is "configurable" with environment variables:
     * wasi LLVM is a C to webassember clang compiler (11.0.0) with wasmer (1.0.2) based on LLVM backend
     * wasi singlepass is a C to webassember clang compiler (11.0.0) with wasmer (1.0.2) based on singlepass backend
     * wasi wasmtime is a C to webassember clang compiler (11.0.0) with wasmtime (0.26.0) runtime based on cranelift backend
-    
+
     |                                                  |  Average  |   Geomean |
     |--------------------------------------------------|-----------|-----------|
     | gcc -O2                                          |    1.00   |   1.00    |

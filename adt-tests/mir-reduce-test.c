@@ -1,7 +1,10 @@
 #include <stdio.h>
+#include "mir-alloc.h"
 #include "mir-reduce.h"
 #include "mir-varr.h"
 #include "real-time.h"
+
+#include "mir-alloc-default.c"
 
 DEF_VARR (uint8_t);
 static VARR (uint8_t) * orig, *buf1, *buf2;
@@ -43,6 +46,7 @@ static size_t writer2 (const void *start, size_t len, void *aux_data) {
 }
 
 int main (int argc, const char *argv[]) {
+  MIR_alloc_t alloc = &default_alloc;
   size_t i, n;
   double start = real_usec_time ();
 
@@ -50,18 +54,18 @@ int main (int argc, const char *argv[]) {
     fprintf (stderr, "usage: %s <inputfile>\n", argv[0]);
     return 1;
   }
-  VARR_CREATE (uint8_t, orig, 0);
-  VARR_CREATE (uint8_t, buf1, 0);
-  if (!reduce_encode (reader1, writer1, NULL)) {
+  VARR_CREATE (uint8_t, orig, alloc, 0);
+  VARR_CREATE (uint8_t, buf1, alloc, 0);
+  if (!reduce_encode (alloc, reader1, writer1, NULL)) {
     fprintf (stderr, "Error in reducing input file!\n");
     return 1;
   }
   fprintf (stderr, "Compression:   original len = %llu, result = %llu, ration=%.2f, time=%.2fms\n",
            (unsigned long long) input_length1, (unsigned long long) output_length1,
            (input_length1 + 0.0) / output_length1, (real_usec_time () - start) / 1000.0);
-  VARR_CREATE (uint8_t, buf2, 0);
+  VARR_CREATE (uint8_t, buf2, alloc, 0);
   start = real_usec_time ();
-  if (!reduce_decode (reader2, writer2, NULL)) {
+  if (!reduce_decode (alloc, reader2, writer2, NULL)) {
     fprintf (stderr, "Corrupted input file!\n");
     return 1;
   }
