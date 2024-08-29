@@ -8831,6 +8831,7 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
     }
   }
   insn_change_p = FALSE;
+  success_p = TRUE;
   while (VARR_LENGTH (MIR_reg_t, insn_vars) != 0) {
     var = VARR_POP (MIR_reg_t, insn_vars);
     if ((def_insn = get_uptodate_def_insn (gen_ctx, var)) == NULL) continue;
@@ -8843,16 +8844,23 @@ static int combine_substitute (gen_ctx_t gen_ctx, bb_insn_t *bb_insn_ref, long *
       if (!out_p && op_ref->mode == MIR_OP_VAR && op_ref->u.var == var) {
         /* It is not safe to substitute if there is another use after def insn before
            the current as we delete def insn after substitution. */
-        insn->ops[i] = def_insn->ops[1];
+        *op_ref = def_insn->ops[1];
         insn_var_change_p = op_change_p = TRUE;
-      } else {
-        gen_assert (op_ref->mode != MIR_OP_VAR_MEM
-                    || (op_ref->u.var_mem.base != var && op_ref->u.var_mem.index != var));
+      } else if (op_ref->mode == MIR_OP_VAR_MEM
+                 && (op_ref->u.var_mem.base == var || op_ref->u.var_mem.index == var)) {
+        if (def_insn->ops[1].mode != MIR_OP_VAR) {
+          success_p = FALSE;
+        } else {
+          if (op_ref->u.var_mem.base == var) op_ref->u.var_mem.base = def_insn->ops[1].u.var;
+          if (op_ref->u.var_mem.index == var) op_ref->u.var_mem.index = def_insn->ops[1].u.var;
+          insn_var_change_p = op_change_p = TRUE;
+        }
       }
       if (op_change_p) VARR_PUSH (size_t, changed_op_numbers, i);
     }
     if (insn_var_change_p) {
-      if ((success_p = i >= nops && target_insn_ok_p (gen_ctx, insn))) insn_change_p = TRUE;
+      if (success_p) success_p = i >= nops && target_insn_ok_p (gen_ctx, insn);
+      if (success_p) insn_change_p = TRUE;
       while (VARR_LENGTH (size_t, changed_op_numbers)) {
         i = VARR_POP (size_t, changed_op_numbers);
         if (success_p)
