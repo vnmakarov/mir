@@ -61,11 +61,7 @@ typedef enum {
 
 DEF_VARR (char);
 
-typedef struct pos {
-  const char *fname;
-  int lno, ln_pos;
-} pos_t;
-
+#define pos_t c2mir_pos
 static const pos_t no_pos = {NULL, -1, -1};
 
 typedef struct c2m_ctx *c2m_ctx_t;
@@ -883,7 +879,7 @@ static const char *get_token_name (c2m_ctx_t c2m_ctx, int token_code) {
   case T_DOTS: return "...";
   default:
     if ((s = str_find_by_key (c2m_ctx, token_code)) != NULL) return s;
-    if (isprint (token_code))
+    if (token_code < 256 && isprint (token_code))
       sprintf (temp_str_buff, "%c", token_code);
     else
       sprintf (temp_str_buff, "%d", token_code);
@@ -891,32 +887,68 @@ static const char *get_token_name (c2m_ctx_t c2m_ctx, int token_code) {
   }
 }
 
-static void error (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
-  va_list args;
+static int log_message (c2m_ctx_t c2m_ctx, c2mir_log_type type, pos_t *pos, const char *message, va_list args) {
+  int logged = 0;
   FILE *f;
+  if ((f = c2m_options->message_file) != NULL) {
+    if (pos && pos->lno >= 0) {
+      fprintf (f, "%s: %d:%d: ", pos->fname, pos->lno, pos->ln_pos);
+    }
+    switch (type) {
+      case log_warning: fprintf (f, "warning: "); break;
+      case log_error: fprintf (f, "error: "); break;
+      case log_fatal_error: fprintf (f, "fatal error: "); break;
+    }
+    vfprintf (f, message, args);
+    fprintf (f, "\n");
+    logged++;
+  }
+  if (c2m_options->console_log) {
+    c2m_options->console_log (c2m_options->console_instance, type, pos, message, args);
+    logged++;
+  }
+  return logged;
+}
 
-  if ((f = c2m_options->message_file) == NULL) return;
-  n_errors++;
+static void fatal_error (c2m_ctx_t c2m_ctx, C_error_code_t code MIR_UNUSED, const char *format, ...) {
+  va_list args;
   va_start (args, format);
-  print_pos (f, pos, TRUE);
-  vfprintf (f, format, args);
+  log_message (c2m_ctx, log_fatal_error, NULL, format, args);
   va_end (args);
-  fprintf (f, "\n");
+  longjmp (c2m_ctx->env, 1);
+}
+
+static void syntax_error_core (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
+  n_errors++;
+  va_list args;
+  va_start (args, format);
+  log_message (c2m_ctx, log_syntax_error, &pos, format, args);
+  va_end (args);
+}
+
+static void error (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
+  n_errors++;
+  va_list args;
+  va_start (args, format);
+  log_message (c2m_ctx, log_error, &pos, format, args);
+  va_end (args);
 }
 
 static void warning (c2m_ctx_t c2m_ctx, pos_t pos, const char *format, ...) {
-  va_list args;
-  FILE *f;
-
-  if ((f = c2m_options->message_file) == NULL) return;
   n_warnings++;
-  if (!c2m_options->ignore_warnings_p) {
+  if (c2m_options->ignore_warnings_p) return;
+  va_list args;
+  va_start (args, format);
+  log_message (c2m_ctx, log_warning, &pos, format, args);
+  va_end (args);
+}
+
+static void verbose (c2m_ctx_t c2m_ctx, const char *format, ...) {
+  if (c2m_options->verbose_p) {
+    va_list args;
     va_start (args, format);
-    print_pos (f, pos, TRUE);
-    fprintf (f, "warning -- ");
-    vfprintf (f, format, args);
+    log_message (c2m_ctx, log_verbose, NULL, format, args);
     va_end (args);
-    fprintf (f, "\n");
   }
 }
 
@@ -2224,8 +2256,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
     if (strcmp (fname, VARR_GET (char_ptr_t, once_include_files, i)) == 0) return;
   assert (fname != NULL);
   if (content == NULL && (f = fopen (fname, "rb")) == NULL) {
-    if (c2m_options->message_file != NULL)
-      error (c2m_ctx, err_pos, "error in opening file %s", fname);
+    error (c2m_ctx, err_pos, "error in opening file %s", fname);
     longjmp (c2m_ctx->env, 1);  // ???
   }
   if (content == NULL)
@@ -2236,7 +2267,7 @@ static void add_include_stream (c2m_ctx_t c2m_ctx, const char *fname, const char
 }
 
 static void skip_nl (c2m_ctx_t c2m_ctx, token_t t,
-                     VARR (token_t) * buffer) { /* skip until new line */
+  VARR (token_t) * buffer) { /* skip until new line */
   if (t == NULL) t = get_next_pptoken (c2m_ctx);
   for (; t->code != '\n' && t->code != T_EOU; t = get_next_pptoken (c2m_ctx))  // ??>
     if (buffer != NULL) VARR_PUSH (token_t, buffer, t);
@@ -3968,8 +3999,8 @@ static void record_stop (c2m_ctx_t c2m_ctx, size_t mark, int restore_p) {
 static void syntax_error (c2m_ctx_t c2m_ctx, const char *expected_name) {
   parse_ctx_t parse_ctx = c2m_ctx->parse_ctx;
 
+  /*
   FILE *f;
-
   if ((f = c2m_options->message_file) == NULL) return;
   print_pos (f, curr_token->pos, TRUE);
   fprintf (f, "syntax error on %s", get_token_name (c2m_ctx, curr_token->code));
@@ -3984,7 +4015,13 @@ static void syntax_error (c2m_ctx_t c2m_ctx, const char *expected_name) {
   }
 #endif
   fprintf (f, "\n");
-  n_errors++;
+  */
+
+  const char *token_name = get_token_name (c2m_ctx, curr_token->code);
+  const char *format;
+  if (expected_name[0]) format = "syntax error on %s (expected '%s')";
+  else format = "syntax error on %s";
+  syntax_error_core (c2m_ctx, curr_token->pos, format, token_name, expected_name);
 }
 
 static int tpname_eq (tpname_t tpname1, tpname_t tpname2, void *arg MIR_UNUSED) {
@@ -5421,11 +5458,6 @@ D (transl_unit) {
     error_recovery (c2m_ctx, 0, "<declarator>");
   }
   return new_node1 (c2m_ctx, N_MODULE, list);
-}
-
-static void fatal_error (c2m_ctx_t c2m_ctx, C_error_code_t code MIR_UNUSED, const char *message) {
-  if (c2m_options->message_file != NULL) fprintf (c2m_options->message_file, "%s\n", message);
-  longjmp (c2m_ctx->env, 1);
 }
 
 static void kw_add (c2m_ctx_t c2m_ctx, const char *name, token_code_t tc, size_t flags) {
@@ -14196,34 +14228,24 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
     return 0;
   }
   compile_init (c2m_ctx, ops, getc_func, getc_data);
-  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-    fprintf (c2m_options->message_file, "C2MIR init end           -- %.0f usec\n",
-             real_usec_time () - start_time);
+  verbose (c2m_ctx, "C2MIR init end           -- %.0f usec\n", real_usec_time () - start_time);
   add_stream (c2m_ctx, NULL, source_name, top_level_getc);
   if (!c2m_options->no_prepro_p) add_standard_includes (c2m_ctx);
   pre (c2m_ctx);
-  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-    fprintf (c2m_options->message_file, "  C2MIR preprocessor end    -- %.0f usec\n",
-             real_usec_time () - start_time);
+  verbose (c2m_ctx, "C2MIR preprocessor end    -- %.0f usec\n", real_usec_time () - start_time);
   if (!c2m_options->prepro_only_p) {
     r = parse (c2m_ctx);
-    if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-      fprintf (c2m_options->message_file, "  C2MIR parser end          -- %.0f usec\n",
-               real_usec_time () - start_time);
-    if (c2m_options->verbose_p && c2m_options->message_file != NULL && n_errors)
-      fprintf (c2m_options->message_file, "parser - FAIL\n");
+    verbose (c2m_ctx, "C2MIR parser end          -- %.0f usec\n", real_usec_time () - start_time);
+    if (n_errors) verbose (c2m_ctx, "parser - FAIL\n");
     if (!c2m_options->syntax_only_p) {
       n_error_before = n_errors;
       do_context (c2m_ctx, r);
       if (n_errors > n_error_before) {
         if (c2m_options->debug_p) print_node (c2m_ctx, c2m_options->message_file, r, 0, FALSE);
-        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-          fprintf (c2m_options->message_file, "C2MIR context checker - FAIL\n");
+        verbose (c2m_ctx, "C2MIR context checker - FAIL\n");
       } else {
         if (c2m_options->debug_p) print_node (c2m_ctx, c2m_options->message_file, r, 0, TRUE);
-        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-          fprintf (c2m_options->message_file, "  C2MIR context checker end -- %.0f usec\n",
-                   real_usec_time () - start_time);
+        verbose (c2m_ctx, "C2MIR context checker end -- %.0f usec\n", real_usec_time () - start_time);
         m = MIR_new_module (ctx, get_module_name (c2m_ctx));
         gen_mir (c2m_ctx, r);
         if ((c2m_options->asm_p || c2m_options->object_p) && n_errors == 0) {
@@ -14239,16 +14261,12 @@ int c2mir_compile (MIR_context_t ctx, struct c2mir_options *ops, int (*getc_func
           }
         }
         MIR_finish_module (ctx);
-        if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-          fprintf (c2m_options->message_file, "  C2MIR generator end       -- %.0f usec\n",
-                   real_usec_time () - start_time);
+        verbose (c2m_ctx, "  C2MIR generator end       -- %.0f usec\n", real_usec_time () - start_time);
       }
     }
   }
   compile_finish (c2m_ctx);
-  if (c2m_options->verbose_p && c2m_options->message_file != NULL)
-    fprintf (c2m_options->message_file, "C2MIR compiler end                -- %.0f usec\n",
-             real_usec_time () - start_time);
+  verbose (c2m_ctx, "C2MIR compiler end                -- %.0f usec\n", real_usec_time () - start_time);
   return n_errors == 0;
 }
 
