@@ -34,6 +34,13 @@ else
     ARCH="other"
 fi
 
+# busybox diff (e.g. on Alpine) lacks --strip-trailing-cr
+if diff --strip-trailing-cr /dev/null /dev/null >/dev/null 2>&1;then
+    DIFF_STRIP_CR=--strip-trailing-cr
+else
+    DIFF_STRIP_CR=
+fi
+
 runtest () {
 	t=$1
 	if test -f $t.mach && ! $GREP -E "`uname -m`" $t.mach >/dev/null; then
@@ -57,14 +64,14 @@ runtest () {
 	$TIMEOUT sh $execution_program $compiler $t $add_main 2>$stderrf >$outf
 	code=$?
 	if test $code = $expect_code; then
-	    if test x$expect_out != x && ! diff --strip-trailing-cr -up $expect_out $outf >$errf;then
+	    if test x$expect_out != x && ! diff $DIFF_STRIP_CR -up $expect_out $outf >$errf;then
 	            $ECHO Output mismatch
 		    cat $errf
             else
 		    ok=`expr $ok + 1`
 	            $ECHO -ne "OK               \r"
 	    fi
-	    if test x$stderr_expect_out != x && ! diff --strip-trailing-cr -up $stderr_expect_out $stderrf >$errf;then
+	    if test x$stderr_expect_out != x && ! diff $DIFF_STRIP_CR -up $stderr_expect_out $stderrf >$errf;then
 	            $ECHO Stderr mismatch
 		    cat $errf
             else
