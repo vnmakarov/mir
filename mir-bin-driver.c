@@ -24,7 +24,25 @@ static struct lib {
   char *name;
   void *handler;
 } libs[] = {
-#if !defined(__APPLE__)
+#if defined(__linux__) && !defined(__GLIBC__)
+/* A non-glibc Linux libc, e.g. musl on Alpine: everything lives in one
+   shared object, installed as the dynamic loader on musl.  */
+#if defined(__x86_64__)
+  {"/lib/ld-musl-x86_64.so.1", NULL}
+#elif defined(__aarch64__)
+  {"/lib/ld-musl-aarch64.so.1", NULL}
+#elif defined(__PPC64__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+  {"/lib/ld-musl-powerpc64le.so.1", NULL}
+#elif defined(__PPC64__)
+  {"/lib/ld-musl-powerpc64.so.1", NULL}
+#elif defined(__s390x__)
+  {"/lib/ld-musl-s390x.so.1", NULL}
+#elif defined(__riscv)
+  {"/lib/ld-musl-riscv64.so.1", NULL}
+#else
+#error cannot recognize the non-glibc linux target
+#endif
+#elif !defined(__APPLE__)
   {"/lib64/libc.so.6", NULL}, {"/lib64/libm.so.6", NULL}, {"/lib64/libpthread.so.0", NULL}
 #else
   {"/usr/lib/libc.dylib", NULL}, {"/usr/lib/libm.dylib", NULL}

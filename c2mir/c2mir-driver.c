@@ -65,7 +65,29 @@ struct lib {
 typedef struct lib lib_t;
 
 #if defined(__unix__)
-#if UINTPTR_MAX == 0xffffffff
+#if defined(__linux__) && !defined(__GLIBC__)
+/* A non-glibc Linux libc, e.g. musl on Alpine: libc, libm, libpthread, and
+   libdl all live in one shared object, installed as the dynamic loader
+   /lib/ld-musl-<arch>.so.1 on musl.  */
+#if defined(__x86_64__)
+#define MUSL_LIB_ARCH "x86_64"
+#elif defined(__aarch64__)
+#define MUSL_LIB_ARCH "aarch64"
+#elif defined(__PPC64__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#define MUSL_LIB_ARCH "powerpc64le"
+#elif defined(__PPC64__)
+#define MUSL_LIB_ARCH "powerpc64"
+#elif defined(__s390x__)
+#define MUSL_LIB_ARCH "s390x"
+#elif defined(__riscv)
+#define MUSL_LIB_ARCH "riscv64"
+#else
+#error cannot recognize the non-glibc linux target
+#endif
+static lib_t std_libs[]
+  = {{"/lib/ld-musl-" MUSL_LIB_ARCH ".so.1", NULL}, {"/usr/lib/libc.so", NULL}};
+static const char *std_lib_dirs[] = {"/lib", "/usr/lib"};
+#elif UINTPTR_MAX == 0xffffffff
 static lib_t std_libs[]
   = {{"/lib/libc.so", NULL},         {"/lib/libm.so", NULL},          {"/lib/libc.so.6", NULL},
      {"/lib32/libc.so.6", NULL},     {"/lib/libm.so.6", NULL},        {"/lib32/libm.so.6", NULL},
