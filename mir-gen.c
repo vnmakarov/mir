@@ -6652,6 +6652,12 @@ static void jump_opt (gen_ctx_t gen_ctx) {
     bb_insn_t bb_insn;
     int i, start_nop, bound_nop;
 
+    /* Labels whose address is taken (laddr) can be reached by jmpi and must
+       not be removed (issue #424): */
+    for (bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
+         bb_insn = DLIST_NEXT (bb_insn_t, bb_insn))
+      if (bb_insn->insn->code == MIR_LADDR)
+        bitmap_set_bit_p (temp_bitmap, bb_insn->insn->ops[1].u.label->ops[0].u.u);
     if ((bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns)) == NULL) continue;
     if (bb_insn->insn->code == MIR_SWITCH) {
       start_nop = 1;
@@ -6664,6 +6670,12 @@ static void jump_opt (gen_ctx_t gen_ctx) {
     }
     for (i = start_nop; i < bound_nop; i++)
       bitmap_set_bit_p (temp_bitmap, bb_insn->insn->ops[i].u.label->ops[0].u.u);
+  }
+  /* The same holds for labels whose address is stored in lref data, and
+     gen_setup_lrefs would read the freed label insns (issue #424): */
+  for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL; lref = lref->next) {
+    bitmap_set_bit_p (temp_bitmap, lref->label->ops[0].u.u);
+    if (lref->label2 != NULL) bitmap_set_bit_p (temp_bitmap, lref->label2->ops[0].u.u);
   }
   for (bb = DLIST_EL (bb_t, curr_cfg->bbs, 2); bb != NULL; bb = next_bb) {
     edge_t e, out_e;
