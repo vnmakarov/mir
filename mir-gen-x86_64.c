@@ -859,24 +859,14 @@ static void target_machinize (gen_ctx_t gen_ctx) {
       MIR_op_t va_op = insn->ops[0];
       MIR_reg_t va_reg;
 #ifndef _WIN32
-      int gp_offset = 0, fp_offset = 48, mem_offset = 0;
-      MIR_var_t var;
+      /* Use the arg passing state left by the prologue walk above: it is the
+         only way to agree with the actual layout (register classes of block
+         args, 8-byte rounding of memory-passed blocks, reg exhaustion). */
+      int gp_offset = (int) (int_arg_num > 6 ? 48 : int_arg_num * 8);
+      int fp_offset = (int) (48 + (fp_arg_num > 8 ? 128 : fp_arg_num * 16));
+      int64_t mem_offset = (int64_t) (mem_size - spill_space_size);
 
       assert (func->vararg_p && va_op.mode == MIR_OP_VAR);
-      for (uint32_t narg = 0; narg < func->nargs; narg++) {
-        var = VARR_GET (MIR_var_t, func->vars, narg);
-        if (var.type == MIR_T_F || var.type == MIR_T_D) {
-          fp_offset += 16;
-          if (gp_offset >= 176) mem_offset += 8;
-        } else if (var.type == MIR_T_LD) {
-          mem_offset += 16;
-        } else if (MIR_blk_type_p (var.type)) {
-          mem_offset += var.size;
-        } else { /* including RBLK */
-          gp_offset += 8;
-          if (gp_offset >= 48) mem_offset += 8;
-        }
-      }
       va_reg = va_op.u.var;
       /* Insns can be not simplified as soon as they match a machine insn.  */
       /* mem32[va_reg] = gp_offset; mem32[va_reg] = fp_offset */
