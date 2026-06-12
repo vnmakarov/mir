@@ -256,7 +256,7 @@ static void gen_blk_mov (gen_ctx_t gen_ctx, MIR_insn_t anchor, size_t to_disp,
   if (save_regs > 1)
     gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, A1_HARD_REG), treg_op2);
   if (save_regs > 2)
-    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, R2_HARD_REG), treg_op3);
+    gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, A2_HARD_REG), treg_op3);
 }
 
 #define FMVXW_CODE 0
@@ -388,16 +388,22 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
         }
         continue;
       }
-      /* Put on stack and pass the address: */
-      gen_blk_mov (gen_ctx, call_insn, blk_offset, SP_HARD_REG, arg_op.u.mem.base, qwords,
-                   int_arg_num);
+      /* Put on stack and pass the address.  The copy and the address
+         computation must stay BEFORE all the argument hard reg loads: for
+         qwords > 16 the copy is a call to mir.blk_mov, which would clobber
+         argument values already loaded into caller-saved regs (fa0-fa7,
+         a0-a7) if emitted next to the call insn.  Advance
+         curr_prev_call_insn to the ADD itself so several block args keep
+         this prologue region contiguous.  */
+      MIR_reg_t blk_base_reg = arg_op.u.mem.base;
       arg_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
       gen_assert (curr_prev_call_insn
                   != NULL); /* call_insn should not be 1st after simplification */
       new_insn = MIR_new_insn (gen_ctx->ctx, MIR_ADD, arg_op, _MIR_new_var_op (ctx, SP_HARD_REG),
                                MIR_new_int_op (ctx, blk_offset));
       gen_add_insn_after (gen_ctx, curr_prev_call_insn, new_insn);
-      curr_prev_call_insn = DLIST_NEXT (MIR_insn_t, new_insn);
+      gen_blk_mov (gen_ctx, new_insn, blk_offset, SP_HARD_REG, blk_base_reg, qwords, 0);
+      curr_prev_call_insn = new_insn;
       blk_offset += qwords * 8;
     }
     if ((arg_reg
