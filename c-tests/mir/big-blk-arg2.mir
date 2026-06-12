@@ -1,0 +1,85 @@
+# Variadic mirror of the same bug, modeled on slimcc's emission for its
+# function2.c struct_test130/131: every value is pre-loaded into a typed
+# temp before the call (so several FP/LD temps are live across the block
+# copies) and the per-call proto names all actual args before the "...".
+# (Distinct va_block_arg dest buffers on purpose: reusing one register
+# for both crashes gen copy_prop - separate bug.)
+# Unfixed aarch64 read ld1 as the *last* LD's value, the int as a stale
+# blk_mov size, and the doubles as 0.
+m_bba2:	module
+pv:	proto	i64, i64:a0, i64:a1, ld:a2, blk:999(a3), i64:a4, d:a5, d:a6, d:a7, d:a8, blk:999(a9), ld:a10, ...
+vf:	func	i64, i64:i0, i64:i1, ...
+	local	i64:va, i64:p, i64:bs, i64:bs2, i64:t, i64:x, d:dv, d:dx, ld:lv, ld:lx
+	alloca	va, 48
+	alloca	bs, 1000
+	alloca	bs2, 1000
+	va_start	va
+	va_arg	p, va, ld:0
+	ldmov	lv, ld:0(p)
+	ldmov	lx, 2.5L
+	ldbne	fail1, lv, lx
+	va_block_arg	bs, va, 999, 0
+	mov	t, i8:123(bs)
+	mov	x, 77
+	bne	fail2, t, x
+	va_arg	p, va, i64:0
+	mov	t, i64:0(p)
+	mov	x, 33
+	bne	fail3, t, x
+	va_arg	p, va, d:0
+	dmov	dv, d:0(p)
+	dmov	dx, 4.5
+	dbne	fail4, dv, dx
+	va_arg	p, va, d:0
+	dmov	dv, d:0(p)
+	dmov	dx, 5.5
+	dbne	fail4, dv, dx
+	va_arg	p, va, d:0
+	dmov	dv, d:0(p)
+	dmov	dx, 6.5
+	dbne	fail4, dv, dx
+	va_arg	p, va, d:0
+	dmov	dv, d:0(p)
+	dmov	dx, 7.5
+	dbne	fail4, dv, dx
+	va_block_arg	bs2, va, 999, 0
+	mov	t, i8:456(bs2)
+	mov	x, 78
+	bne	fail5, t, x
+	va_arg	p, va, ld:0
+	ldmov	lv, ld:0(p)
+	ldmov	lx, 11.5L
+	ldbne	fail6, lv, lx
+	va_end	va
+	ret	0
+fail1:	ret	1
+fail2:	ret	2
+fail3:	ret	3
+fail4:	ret	4
+fail5:	ret	5
+fail6:	ret	6
+	endfunc
+main:	func	i64
+	local	i64:a, i64:r, i64:t, i64:v1, i64:v2, i64:v3, ld:c1, ld:c2
+	local	d:d1, d:d2, d:d3, d:d4
+	alloca	a, 1000
+	mov	t, 77
+	mov	i8:123(a), t
+	mov	t, 78
+	mov	i8:456(a), t
+	mov	v1, 11
+	mov	v2, 22
+	ldmov	c1, 2.5L
+	mov	v3, 33
+	dmov	d1, 4.5
+	dmov	d2, 5.5
+	dmov	d3, 6.5
+	dmov	d4, 7.5
+	ldmov	c2, 11.5L
+	call	pv, vf, r, v1, v2, c1, blk:999(a), v3, d1, d2, d3, d4, blk:999(a), c2
+	bne	fail, r, 0
+	ret	0
+fail:	ret	r
+	endfunc
+	export	main
+	endmodule
