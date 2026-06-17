@@ -6260,7 +6260,22 @@ static void set_type_layout (c2m_ctx_t c2m_ctx, struct type *type) {
 
           if (anon_process_p) update_members_offset (decl->decl_spec.type, MIR_SIZE_MAX);
           set_type_layout (c2m_ctx, decl->decl_spec.type);
-          if ((member_size = type_size (c2m_ctx, decl->decl_spec.type)) == 0) continue;
+          if ((member_size = type_size (c2m_ctx, decl->decl_spec.type)) == 0) {
+            /* A zero-size member -- a GNU zero-length array, e.g. `char a[0];`
+               -- occupies no storage and does not advance the layout, but it
+               still has a position: GCC places it at the current offset (just
+               past the preceding members).  `continue`-ing left decl->offset at
+               its default 0, so &s.a aliased the first member.  Set its offset
+               to the current (aligned) running offset; do not grow the type. */
+            member_align = type_align (decl->decl_spec.type);
+            if (decl->decl_spec.align > member_align) member_align = decl->decl_spec.align;
+            decl->offset = type->mode == TM_UNION
+                             ? 0
+                             : (overall_size + member_align - 1) / member_align * member_align;
+            decl->bit_offset = -1;
+            decl->width = -1;
+            continue;
+          }
           member_align = type_align (decl->decl_spec.type);
           bits
             = width->code == N_IGNORE || !(expr = width->attr)->const_p ? -1 : (int) expr->c.u_val;
