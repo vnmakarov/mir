@@ -11922,7 +11922,37 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
     if (rel_offset < size) /* fill the tail: */
       gen_memset (c2m_ctx, offset + rel_offset, base, size - rel_offset);
   } else {
+    VARR (MIR_op_t) * pregen_vals;
+    MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
+
     assert (var.mir_op.mode == MIR_OP_REF);
+    /* PR middle-end/24109: pre-compute the element values FIRST, so any
+       out-of-line data a value generates (a compound literal's storage, a
+       string-literal address) is emitted into the module BEFORE this object's
+       own data items.  Otherwise the 2nd+ such sub-object's data is appended
+       into the MIDDLE of this object (the 1st works only because its value is
+       gen'd before this object's first data item exists), and the element's
+       trailing `ref` becomes an anonymous data item attached to the sub-object
+       instead of this object -- truncating it.  Constants gen
+       position-independently, so pre-genning them does not change output;
+       bit-field members (handled inline below) are constants too and need no
+       caching.  Indexed parallel to init_els[init_start..]. */
+    VARR_CREATE (MIR_op_t, pregen_vals, alloc, VARR_LENGTH (init_el_t, init_els) - init_start);
+    for (size_t k = init_start; k < VARR_LENGTH (init_el_t, init_els); k++) {
+      init_el_t pe = VARR_GET (init_el_t, init_els, k);
+      struct expr *pex = pe.init->attr;
+      MIR_op_t pv;
+
+      pv.mode = MIR_OP_UNDEF; /* unused for const-addr elements */
+      if (!pex->const_addr_p) {
+        if (pex->const_p) {
+          convert_value (pex, pe.el_type);
+          pex->type = pe.el_type; /* right value in the gen below */
+        }
+        pv = val_gen (c2m_ctx, pe.init).mir_op;
+      }
+      VARR_PUSH (MIR_op_t, pregen_vals, pv);
+    }
     for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
       init_el = VARR_GET (init_el_t, init_els, i);
       if (i != init_start && init_el.offset == VARR_GET (init_el_t, init_els, i - 1).offset
@@ -11930,11 +11960,9 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
         continue;
       e = init_el.init->attr;
       if (!e->const_addr_p) {
-        if (e->const_p) {
-          convert_value (e, init_el.el_type);
-          e->type = init_el.el_type; /* to get the right value in the subsequent gen call */
-        }
-        val = val_gen (c2m_ctx, init_el.init);
+        /* value (and any out-of-line data) already computed in the pre-pass */
+        val.decl = NULL;
+        val.mir_op = VARR_GET (MIR_op_t, pregen_vals, i - init_start);
         assert (val.mir_op.mode == MIR_OP_INT || val.mir_op.mode == MIR_OP_UINT
                 || val.mir_op.mode == MIR_OP_FLOAT || val.mir_op.mode == MIR_OP_DOUBLE
                 || val.mir_op.mode == MIR_OP_LDOUBLE || val.mir_op.mode == MIR_OP_STR
@@ -12054,6 +12082,7 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
       data = MIR_new_bss (ctx, global_name, size - rel_offset);
       if (global_name != NULL) var.decl->u.item = data;
     }
+    VARR_DESTROY (MIR_op_t, pregen_vals);
   }
 }
 
