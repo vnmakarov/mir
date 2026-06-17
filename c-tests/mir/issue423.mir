@@ -1,0 +1,42 @@
+M0:	module
+# GVN forwarded a store's raw 64-bit register to a narrower typed reload,
+# losing the load's sign/zero extension (issue #423).
+f:	func	i64, i64:t, i64:v
+	local	i64:r
+	mov	i32:0(t), v
+	mov	r, i32:0(t)
+	ret	r
+	endfunc
+fu:	func	i64, i64:t, i64:v
+	local	i64:r
+	mov	u32:0(t), v
+	mov	r, u32:0(t)
+	ret	r
+	endfunc
+fb:	func	i64, i64:t, i64:v
+	local	i64:r
+	mov	i8:0(t), v
+	mov	r, i8:0(t)
+	ret	r
+	endfunc
+p:	proto	i64, i64:t, i64:v
+main:	func	i32
+	local	i64:buf, i64:r, i64:fa
+	alloca	buf, 16
+# v = 0x00000000fffffe95: i32 reload must sign-extend to -363
+	mov	fa, f
+	call	p, fa, r, buf, 4294966933
+	bne	fail, r, -363
+# v = 0xfffffffffffffe95: u32 reload must zero-extend to 4294966933
+	mov	fa, fu
+	call	p, fa, r, buf, -363
+	bne	fail, r, 4294966933
+# v = 0x0000000000000095: i8 reload must sign-extend to -107
+	mov	fa, fb
+	call	p, fa, r, buf, 149
+	bne	fail, r, -107
+	ret	0
+fail:	ret	1
+	endfunc
+	export	main
+	endmodule
