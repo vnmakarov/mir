@@ -2766,6 +2766,14 @@ static void make_conventional_ssa (gen_ctx_t gen_ctx) { /* requires life info */
       }
       for (se = insn->ops[0].data; se != NULL; se = se->next_use)
         if (se->use->bb != bb) break;
+      if (se == NULL) /* lost-copy hazard: a self-loop puts a phi-input copy of dest_var at the
+                         end of this bb (before the tail branch), so a use renamed to dest_var
+                         at/after that point would read the next iteration's value */
+        for (e = DLIST_HEAD (in_edge_t, bb->in_edges); e != NULL; e = DLIST_NEXT (in_edge_t, e))
+          if (e->src == bb) {
+            se = insn->ops[0].data;
+            break;
+          }
       if (se == NULL) { /* we should do this only after adding moves at the end of bbs */
         /* r=phi(...), all r uses in the same bb: change new_r = phi(...) and all uses by new_r */
         insn->ops[0].u.var = dest_var;
