@@ -91,7 +91,7 @@ void *va_arg_builtin (void *p, uint64_t t) {
     va->__gr_offs += 8;
   } else {
     if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16)
-      va->__stack = (void *) (((uint64_t) va->__stack + 15) % 16);
+      va->__stack = (void *) (((uint64_t) va->__stack + 15) / 16 * 16);
     a = va->__stack;
     va->__stack
       = (char *) va->__stack + (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16 ? 16 : 8);
@@ -414,7 +414,8 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
       if (n_vregs < 8) {
         pat |= offset_imm | n_vregs++;
       } else {
-        if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16) sp_offset = (sp_offset + 15) % 16;
+        if (type == MIR_T_LD && __SIZEOF_LONG_DOUBLE__ == 16)
+          sp_offset = (sp_offset + 15) / 16 * 16;
         pat |= offset_imm | temp_reg;
         push_insns (code, &pat, sizeof (pat));
         pat = type == MIR_T_F                                  ? sts_pat
