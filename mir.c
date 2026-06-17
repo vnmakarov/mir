@@ -313,7 +313,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_UBO, "ubo", {MIR_OP_LABEL, MIR_OP_BOUND}},
   {MIR_BNO, "bno", {MIR_OP_LABEL, MIR_OP_BOUND}},
   {MIR_UBNO, "ubno", {MIR_OP_LABEL, MIR_OP_BOUND}},
-  {MIR_LADDR, "laddr", {MIR_OP_INT, MIR_OP_LABEL, MIR_OP_BOUND}},
+  {MIR_LADDR, "laddr", {MIR_OP_INT | OUT_FLAG, MIR_OP_LABEL, MIR_OP_BOUND}},
   {MIR_JMPI, "jmpi", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_CALL, "call", {MIR_OP_BOUND}},
   {MIR_INLINE, "inline", {MIR_OP_BOUND}},

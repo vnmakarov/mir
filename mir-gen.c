@@ -214,6 +214,8 @@ struct gen_ctx {
 #endif
   VARR (void_ptr_t) * to_free;
   int addr_insn_p;    /* true if we have address insns in the input func */
+  int jmpi_p;         /* true if the input func has indirect jumps (JMPI):
+                         their successor edges cannot be split */
   bitmap_t tied_regs; /* regs tied to hard reg */
   bitmap_t addr_regs; /* regs in addr insns as 2nd op */
   bitmap_t insn_to_consider, temp_bitmap, temp_bitmap2, temp_bitmap3;
@@ -254,6 +256,7 @@ struct gen_ctx {
 #define debug_level gen_ctx->debug_level
 #define to_free gen_ctx->to_free
 #define addr_insn_p gen_ctx->addr_insn_p
+#define jmpi_p gen_ctx->jmpi_p
 #define tied_regs gen_ctx->tied_regs
 #define addr_regs gen_ctx->addr_regs
 #define insn_to_consider gen_ctx->insn_to_consider
@@ -1585,6 +1588,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
   curr_cfg->max_var = MAX_HARD_REG;
   curr_cfg->root_loop_node = NULL;
   curr_bb_index = 0;
+  jmpi_p = FALSE;
   for (i = 0; i < VARR_LENGTH (MIR_var_t, func->vars); i++) {
     mir_var = VARR_GET (MIR_var_t, func->vars, i);
     update_max_var (gen_ctx, MIR_reg (ctx, mir_var.name, func) + MAX_HARD_REG);
@@ -1803,6 +1807,7 @@ static void build_func_cfg (gen_ctx_t gen_ctx) {
       VARR_PUSH (MIR_insn_t, temp_insns2, insn->ops[1].u.label);
     } else if (insn->code == MIR_JMPI) {
       VARR_PUSH (MIR_insn_t, temp_insns, insn);
+      jmpi_p = TRUE;
     }
     nops = MIR_insn_nops (ctx, insn);
     if (next_insn != NULL
@@ -7563,7 +7568,7 @@ static void assign (gen_ctx_t gen_ctx) {
   MIR_func_t func = curr_func_item->u.func;
   bitmap_t global_hard_regs = _MIR_get_module_global_var_hard_regs (ctx, curr_func_item->module);
   const char *msg;
-  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2 || jmpi_p;
   bitmap_t conflict_locs = conflict_locs1, spill_lr_starts = temp_bitmap2;
 
   func_stack_slots_num = 0;
@@ -7608,11 +7613,13 @@ static void assign (gen_ctx_t gen_ctx) {
     bm = bitmap_create2 (alloc, MAX_HARD_REG + 1);
     if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
     VARR_PUSH (bitmap_t, used_locs, bm);
-    if (!simplified_p) {
-      bm = bitmap_create2 (alloc, MAX_HARD_REG + 1);
-      if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
-      VARR_PUSH (bitmap_t, busy_used_locs, bm);
-    }
+    /* Keep busy_used_locs in sync with used_locs even for the simplified
+       RA: simplified_p can vary per function (e.g. functions with
+       indirect jumps), and a later function using the full RA clears
+       busy_used_locs entries up to the shared used_locs length. */
+    bm = bitmap_create2 (alloc, MAX_HARD_REG + 1);
+    if (global_hard_regs != NULL) bitmap_copy (bm, global_hard_regs);
+    VARR_PUSH (bitmap_t, busy_used_locs, bm);
   }
   nregs = (int) VARR_LENGTH (allocno_info_t, sorted_regs);
   qsort (VARR_ADDR (allocno_info_t, sorted_regs), nregs, sizeof (allocno_info_t),
@@ -8223,7 +8230,7 @@ static void rewrite (gen_ctx_t gen_ctx) {
   size_t insns_num = 0, movs_num = 0, deleted_movs_num = 0;
   bitmap_t global_hard_regs
     = _MIR_get_module_global_var_hard_regs (gen_ctx->ctx, curr_func_item->module);
-  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2 || jmpi_p;
 
   if (simplified_p) {
     for (insn = DLIST_HEAD (MIR_insn_t, curr_func_item->u.func->insns); insn != NULL;
@@ -8519,7 +8526,7 @@ static void split (gen_ctx_t gen_ctx) { /* split by putting spill/restore insns 
 
 static void reg_alloc (gen_ctx_t gen_ctx) {
   MIR_reg_t reg, max_var = get_max_var (gen_ctx);
-  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2;
+  const int simplified_p = ONLY_SIMPLIFIED_RA || optimize_level < 2 || jmpi_p;
 
   build_live_ranges (gen_ctx);
   assign (gen_ctx);
