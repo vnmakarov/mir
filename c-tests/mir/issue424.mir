@@ -1,0 +1,22 @@
+M0:	module
+# jump_opt merged away a label-only BB whose label was referenced only by
+# lref data / laddr (not by any direct branch), freeing the label insn that
+# gen_setup_lrefs later reads and leaving the runtime label table pointing
+# at freed code (issue #424).
+	forward	la1
+main:	func	i32
+	local	i64:a, i64:r
+	mov	r, 0
+	mov	a, la1
+	mov	a, i64:0(a)
+	jmpi	a
+l1:
+l2:	add	r, r, 1
+	jmp	done
+done:	bne	fail, r, 1
+	ret	0
+fail:	ret	1
+	endfunc
+la1:	lref	l1
+	export	main
+	endmodule
