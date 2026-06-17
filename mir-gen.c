@@ -3805,7 +3805,8 @@ static int fixed_place_insn_p (MIR_insn_t insn) {
   return (insn->code == MIR_RET || insn->code == MIR_JRET || insn->code == MIR_SWITCH
           || insn->code == MIR_LABEL || MIR_call_code_p (insn->code) || insn->code == MIR_ALLOCA
           || insn->code == MIR_BSTART || insn->code == MIR_BEND || insn->code == MIR_VA_START
-          || insn->code == MIR_VA_ARG || insn->code == MIR_VA_END);
+          || insn->code == MIR_VA_ARG || insn->code == MIR_VA_BLOCK_ARG
+          || insn->code == MIR_VA_END);
 }
 
 static int gvn_insn_p (MIR_insn_t insn) { return !fixed_place_insn_p (insn); }
