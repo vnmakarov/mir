@@ -7529,7 +7529,11 @@ static int check_const_addr_p (c2m_ctx_t c2m_ctx, node_t r, node_t *base, mir_ll
     *base = r;
     *offset = 0;
     *deref = 0;
-    return curr_scope == top_scope;
+    /* A string literal has static storage duration at ANY scope (C11
+       6.4.5p6), so its address is a valid address constant in a static
+       initializer even inside a function.  The static-init data emitter
+       handles an N_STR base at any scope (get_string_data). */
+    return TRUE;
   case N_LABEL_ADDR:
     *base = r;
     *offset = 0;
