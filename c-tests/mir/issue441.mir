@@ -1,0 +1,20 @@
+mcp:	module
+p:	proto	i64, i64:a0, ...
+f:	func	i64, i64:i0, ...
+	local	i64:va, i64:bs
+	alloca	va, 48
+	alloca	bs, 16
+	va_start	va
+	va_block_arg	bs, va, 16, 0
+	va_block_arg	bs, va, 16, 0
+	va_end	va
+	ret	0
+	endfunc
+main:	func	i64
+	local	i64:a, i64:r
+	alloca	a, 16
+	call	p, f, r, 1, blk:16(a), blk:16(a)
+	ret	r
+	endfunc
+	export	main
+	endmodule

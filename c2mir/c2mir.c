@@ -12880,9 +12880,15 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       }
       if (type->mode == TM_STRUCT || type->mode == TM_UNION) {
         if (desirable_dest == NULL) {
+          /* A struct/union va_arg used as an rvalue (no destination object)
+             still needs storage to receive the aggregate; allocate a frame
+             temporary and use its address.  Previously this was a stub that
+             moved 0 into res, so va_block_arg wrote the aggregate to address
+             0 (NULL) -- a miscompile / runtime crash. */
           res = get_new_temp (c2m_ctx, MIR_T_I64);
           MIR_append_insn (ctx, curr_func,
-                           MIR_new_insn (ctx, MIR_MOV, res.mir_op, MIR_new_int_op (ctx, 0)));
+                           MIR_new_insn (ctx, MIR_ALLOCA, res.mir_op,
+                                         MIR_new_int_op (ctx, type_size (c2m_ctx, type))));
         } else {
           assert (desirable_dest->mir_op.mode == MIR_OP_MEM);
           res = mem_to_address (c2m_ctx, *desirable_dest, TRUE);
@@ -12892,7 +12898,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                        MIR_new_int_op (ctx, type_size (c2m_ctx, type)),
                                        MIR_new_int_op (ctx, target_get_blk_type (c2m_ctx, type)
                                                               - MIR_T_BLK)));
-        if (desirable_dest != NULL) res = *desirable_dest;
+        if (desirable_dest != NULL)
+          res = *desirable_dest;
+        else /* present the freshly allocated buffer as the aggregate lvalue */
+          res.mir_op = MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, res.mir_op.u.reg, 0, 1);
       } else {
         MIR_append_insn (ctx, curr_func,
                          MIR_new_insn (ctx, MIR_VA_ARG, op1.mir_op, op2.mir_op,
