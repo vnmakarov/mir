@@ -10800,10 +10800,17 @@ static op_t force_val (c2m_ctx_t c2m_ctx, op_t op, int arr_p) {
   MIR_context_t ctx = c2m_ctx->ctx;
   op_t temp_op;
   int sh;
+  MIR_type_t t;
 
   if (arr_p && op.mir_op.mode == MIR_OP_MEM) {
     /* an array -- use a pointer: */
     return mem_to_address (c2m_ctx, op, FALSE);
+  }
+  if (op.decl != NULL && op.mir_op.mode == MIR_OP_REG
+      && integer_type_p (op.decl->decl_spec.type)) {
+    t = get_mir_type (c2m_ctx, op.decl->decl_spec.type);
+    if (t == MIR_T_I8 || t == MIR_T_U8 || t == MIR_T_I16 || t == MIR_T_U16)
+      return cast (c2m_ctx, op, t, TRUE);
   }
   if (op.decl == NULL || op.decl->bit_offset < 0) return op;
   assert (op.mir_op.mode == MIR_OP_MEM);
