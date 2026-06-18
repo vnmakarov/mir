@@ -4729,7 +4729,19 @@ static size_t put_ldouble (MIR_context_t ctx, writer_func_t writer, long double 
   size_t len;
 
   if (writer == NULL) return 0;
+  /* Zero the whole union first: an 80-bit long double occupies only 10 of the
+     16 bytes, so u.ld = ld leaves the 6 padding bytes uninitialized — writing
+     them makes binary MIR non-deterministic (the decoder reads back only the
+     valid bits, so content matches but raw bytes vary, breaking the bootstrap
+     self-consistency test). */
+  u.u[0] = u.u[1] = 0;
   u.ld = ld;
+#if defined(__i386__) || defined(__x86_64__)
+  /* x86 80-bit extended long double occupies only 10 of the 16 bytes; the
+     assignment may still copy the source's 6 padding bytes (e.g. via a 16-byte
+     SSE move), so mask to the meaningful 80 bits (bytes 0-9) for determinism. */
+  u.u[1] &= 0xffffULL;
+#endif
   len = put_uint (ctx, writer, u.u[0], sizeof (uint64_t));
   return put_uint (ctx, writer, u.u[1], sizeof (uint64_t)) + len;
 }
