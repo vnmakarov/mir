@@ -226,6 +226,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_op_t arg_op, temp_op, arg_reg_op, ret_op, mem_op, ret_val_op, call_res_op;
   MIR_insn_code_t new_insn_code, ext_code;
   MIR_insn_t new_insn, ext_insn;
+  MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
 
   if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
@@ -316,9 +317,17 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                         SP_HARD_REG, MIR_NON_VAR, 1);
           gen_mov (gen_ctx, call_insn, MIR_LDMOV, mem_op, arg_op);
         } else {
+          /* The copy must happen BEFORE all the argument hard reg loads: for
+             qwords > 16 it is a call to mir.blk_mov, which would clobber
+             argument values already loaded into caller-saved regs (f0-f6,
+             r2-r6) if emitted next to the call insn.  Anchoring at the insn
+             following prev_call_insn puts it ahead of every arg load emitted
+             so far (SP is fixed here: the value area is part of the frame).  */
           qwords = (arg_op.u.mem.disp + 7) / 8;
-          gen_blk_mov (gen_ctx, call_insn, S390X_STACK_HEADER_SIZE + blk_ld_value_disp, SP_HARD_REG,
-                       0, arg_op.u.mem.base, qwords, n_iregs);
+          gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st */
+          gen_blk_mov (gen_ctx, DLIST_NEXT (MIR_insn_t, prev_call_insn),
+                       S390X_STACK_HEADER_SIZE + blk_ld_value_disp, SP_HARD_REG, 0,
+                       arg_op.u.mem.base, qwords, 0);
         }
       }
       arg_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));

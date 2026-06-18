@@ -1,0 +1,31 @@
+# Args already in caller-saved regs (FP args in v0-v7, int args past the
+# old save_regs band-aid in x3-x7 on aarch64) used to be clobbered by the
+# mir.blk_mov call copying a by-reference (> 16 qwords) block arg, because
+# the copy was emitted after the argument hard reg loads.  c2mir never
+# emits such calls (it lowers big aggregates itself), so this needs a raw
+# MIR test.  Expected result: 1.5+2.25+10+20+30+40+100+4.25 = 208.0.
+m_bba:  module
+pf:     proto d, d:d1, d:d2, i64:i1, i64:i2, i64:i3, i64:i4, blk:200(b), d:d3
+fsum:   func d, d:d1, d:d2, i64:i1, i64:i2, i64:i3, i64:i4, blk:200(b), d:d3
+        local i64:t, i64:tc, d:s, d:td
+        dadd s, d1, d2
+        dadd s, s, d3
+        add t, i1, i2
+        add t, t, i3
+        add t, t, i4
+        mov tc, i8:100(b)
+        add t, t, tc
+        i2d td, t
+        dadd s, s, td
+        ret s
+        endfunc
+main:   func i64
+        local i64:a, d:r
+        alloca a, 200
+        mov i8:100(a), 100
+        call pf, fsum, r, 1.5, 2.25, 10, 20, 30, 40, blk:200(a), 4.25
+        dbne fail, r, 208.0
+        ret 0
+fail:   ret 1
+        endfunc
+        endmodule
