@@ -140,6 +140,7 @@ static char aarch64_mirc[]
     "#define __ARM_ARCH_8_3__ 1\n"
     "typedef struct {unsigned long hi, lo;} __uint128_t;\n"
     "extern float __nan (void);\n"
+    "#define _Float16 short\n"
 #endif
     "\n"
     "void *alloca (unsigned long);\n";
