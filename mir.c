@@ -4361,10 +4361,33 @@ DEF_VARR (code_holder_t);
 struct machine_code_ctx {
   VARR (code_holder_t) * code_holders;
   size_t page_size;
+  uint8_t *code_reserve_start, *code_reserve_free, *code_reserve_bound;
 };
 
 #define code_holders ctx->machine_code_ctx->code_holders
 #define page_size ctx->machine_code_ctx->page_size
+#define code_reserve_start ctx->machine_code_ctx->code_reserve_start
+#define code_reserve_free ctx->machine_code_ctx->code_reserve_free
+#define code_reserve_bound ctx->machine_code_ctx->code_reserve_bound
+
+/* Generated code, thunks, and wrappers reference each other with direct
+   branches whose reach is limited on some targets (e.g. +-128MB on aarch64).
+   Carving all code holders out of one contiguous address-space reservation
+   keeps every piece of generated code within direct branch range of every
+   other one.  The reservation is address space only: untouched pages cost no
+   memory.  Without it, code mappings can end up scattered across the address
+   space -- the libc allocator's own mmaps land between them -- which breaks
+   the bb thunk -> bb wrapper and generated-code -> bb thunk branches of
+   lazy basic-block generation (seen with musl libc's allocator on aarch64).
+   If the reservation is exhausted or unavailable, fall back to individual
+   mappings as before.  */
+#ifndef MIR_CODE_RESERVE_SIZE
+#if UINTPTR_MAX == 0xffffffffffffffffu && !defined(_WIN32)
+#define MIR_CODE_RESERVE_SIZE (128 * 1024 * 1024)
+#else
+#define MIR_CODE_RESERVE_SIZE 0 /* scarce address space (or Windows commit charge) */
+#endif
+#endif
 
 static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   uint8_t *mem;
@@ -4378,8 +4401,13 @@ static code_holder_t *get_last_code_holder (MIR_context_t ctx, size_t size) {
   }
   npages = (size + page_size) / page_size;
   len = page_size * npages;
-  mem = (uint8_t *) MIR_mem_map (ctx->code_alloc, len);
-  if (mem == MAP_FAILED) return NULL;
+  if (code_reserve_start != NULL && (size_t) (code_reserve_bound - code_reserve_free) >= len) {
+    mem = code_reserve_free;
+    code_reserve_free += len;
+  } else {
+    mem = (uint8_t *) MIR_mem_map (ctx->code_alloc, len);
+    if (mem == MAP_FAILED) return NULL;
+  }
   ch.start = mem;
   ch.free = mem;
   ch.bound = mem + len;
@@ -4494,13 +4522,26 @@ static void code_init (MIR_context_t ctx) {
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   page_size = mem_page_size ();
   VARR_CREATE (code_holder_t, code_holders, ctx->alloc, 128);
+  code_reserve_start = code_reserve_free = code_reserve_bound = NULL;
+  if (MIR_CODE_RESERVE_SIZE != 0) {
+    uint8_t *mem = (uint8_t *) MIR_mem_map (ctx->code_alloc, MIR_CODE_RESERVE_SIZE);
+    if (mem != MAP_FAILED) {
+      code_reserve_start = code_reserve_free = mem;
+      code_reserve_bound = mem + MIR_CODE_RESERVE_SIZE;
+    }
+  }
 }
 
 static void code_finish (MIR_context_t ctx) {
   while (VARR_LENGTH (code_holder_t, code_holders) != 0) {
     code_holder_t ch = VARR_POP (code_holder_t, code_holders);
+    if (code_reserve_start != NULL && ch.start >= code_reserve_start
+        && ch.start < code_reserve_bound)
+      continue; /* carved from the reservation, unmapped below as a whole */
     MIR_mem_unmap (ctx->code_alloc, ch.start, ch.bound - ch.start);
   }
+  if (code_reserve_start != NULL)
+    MIR_mem_unmap (ctx->code_alloc, code_reserve_start, code_reserve_bound - code_reserve_start);
   VARR_DESTROY (code_holder_t, code_holders);
   MIR_free (ctx->alloc, ctx->machine_code_ctx);
   ctx->machine_code_ctx = NULL;

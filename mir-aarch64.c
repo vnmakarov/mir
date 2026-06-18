@@ -207,8 +207,10 @@ void *_MIR_get_thunk (MIR_context_t ctx) {
   return _MIR_publish_code (ctx, (uint8_t *) pat, sizeof (pat));
 }
 
-void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
-  static const uint32_t branch_pat1 = 0xd61f0120; /* br x9 */
+/* The far form clobbers x<temp_reg>: callers must pick a register that holds
+   nothing live at the redirect site.  */
+static void redirect_thunk_by_reg (MIR_context_t ctx, void *thunk, void *to,
+                                   unsigned temp_reg) {
   static const uint32_t branch_pat2 = 0x14000000; /* b x */
   int64_t offset = (uint32_t *) to - (uint32_t *) thunk;
   uint32_t code[4];
@@ -218,11 +220,15 @@ void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
     code[0] = branch_pat2 | ((uint32_t) offset & BR_OFFSET_MASK);
     _MIR_change_code (ctx, thunk, (uint8_t *) &code[0], sizeof (code[0]));
   } else {
-    code[0] = 0x58000049; /* ldr x9,8 (pc-relative) */
-    code[1] = branch_pat1;
+    code[0] = 0x58000040 | temp_reg;        /* ldr x<temp_reg>,8 (pc-relative) */
+    code[1] = 0xd61f0000 | (temp_reg << 5); /* br x<temp_reg> */
     *(void **) &code[2] = to;
     _MIR_change_code (ctx, thunk, (uint8_t *) code, sizeof (code));
   }
+}
+
+void _MIR_redirect_thunk (MIR_context_t ctx, void *thunk, void *to) {
+  redirect_thunk_by_reg (ctx, thunk, to, 9);
 }
 
 void *_MIR_get_thunk_addr (MIR_context_t ctx MIR_UNUSED, void *thunk) {
@@ -757,7 +763,12 @@ void *_MIR_get_bb_thunk (MIR_context_t ctx, void *bb_version, void *handler) {
   offset = gen_mov_addr (code, 9, bb_version); /* x9 = bb_version */
   push_insns (code, pat, sizeof (pat));
   res = _MIR_publish_code (ctx, VARR_ADDR (uint8_t, code), VARR_LENGTH (uint8_t, code));
-  _MIR_redirect_thunk (ctx, (uint8_t *) res + offset, handler);
+  /* x9 carries bb_version to the handler, so the branch to the handler must
+     not use _MIR_redirect_thunk's x9-based far form: when the thunk ends up
+     farther than a direct branch can reach (+-128MB) from the handler, the
+     handler would receive its own address instead of bb_version.  Use x10,
+     the other fixed temp not used in machinized code.  */
+  redirect_thunk_by_reg (ctx, (uint8_t *) res + offset, handler, 10);
 #if 0
   if (getenv ("MIR_code_dump") != NULL)
     _MIR_dump_code ("bb thunk:", res, VARR_LENGTH (uint8_t, code));
