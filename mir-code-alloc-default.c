@@ -30,7 +30,9 @@ static inline int get_native_mem_protect_flags (MIR_mem_protect_t prot) {
 #include <pthread.h>
 #endif
 
-static int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, void *user_data CODE_ALLOC_UNUSED) {
+#if !defined(MIR_BOOTSTRAP) || !defined(__APPLE__) || !defined(__aarch64__)
+int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot,
+                         void *user_data CODE_ALLOC_UNUSED) {
   int native_prot = get_native_mem_protect_flags (prot);
 #if !defined(__APPLE__) || !defined(__aarch64__)
   return mprotect (addr, len, native_prot);
@@ -51,6 +53,12 @@ static int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, 
 #endif
 }
 
+#else /* MIR_BOOTSTRAP && __APPLE__ && __aarch64__ */
+/* In bootstrap mode on Apple Silicon these are provided by the native binary.  Declaration is needed so the
+   struct initializer and import_resolver can reference it — the MIR linker resolves it via import_resolver.  */
+int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, void *user_data);
+#endif
+
 static int default_mem_unmap (void *addr, size_t len, void *user_data CODE_ALLOC_UNUSED) {
   return munmap (addr, len);
 }
@@ -63,7 +71,8 @@ static void *default_mem_map (size_t len, void *user_data CODE_ALLOC_UNUSED) {
   return mmap (NULL, len, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #endif
 }
-#else
+
+#else /* _WIN32 */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -80,7 +89,7 @@ static int default_mem_unmap (void *addr, size_t len, void *user_data CODE_ALLOC
 static void *default_mem_map (size_t len, void *user_data CODE_ALLOC_UNUSED) {
   return VirtualAlloc (NULL, len, MEM_COMMIT, PAGE_EXECUTE);
 }
-#endif
+#endif /* _WIN32 */
 
 static struct MIR_code_alloc default_code_alloc = {
   .mem_map = default_mem_map,

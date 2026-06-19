@@ -57,6 +57,8 @@ typedef pthread_attr_t mir_thread_attr_t;
 
 #include "mir-alloc-default.c"
 
+extern int default_mem_protect (void *addr, size_t len, MIR_mem_protect_t prot, void *user_data);
+
 struct lib {
   char *name;
   void *handler;
@@ -475,6 +477,7 @@ static void *import_resolver (const char *name) {
 #if defined(__APPLE__) && defined(__aarch64__)
     if (strcmp (name, "__nan") == 0) return __nan;
     if (strcmp (name, "_MIR_set_code") == 0) return _MIR_set_code;
+    if (strcmp (name, "default_mem_protect") == 0) return default_mem_protect;
 #endif
 #endif
     fprintf (stderr, "can not load symbol %s\n", name);
