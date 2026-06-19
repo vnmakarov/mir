@@ -11956,32 +11956,30 @@ static void gen_initializer (c2m_ctx_t c2m_ctx, size_t init_start, op_t var,
     MIR_alloc_t alloc = c2m_alloc (c2m_ctx);
 
     assert (var.mir_op.mode == MIR_OP_REF);
-    /* PR middle-end/24109: pre-compute the element values FIRST, so any
-       out-of-line data a value generates (a compound literal's storage, a
-       string-literal address) is emitted into the module BEFORE this object's
-       own data items.  Otherwise the 2nd+ such sub-object's data is appended
-       into the MIDDLE of this object (the 1st works only because its value is
-       gen'd before this object's first data item exists), and the element's
-       trailing `ref` becomes an anonymous data item attached to the sub-object
-       instead of this object -- truncating it.  Constants gen
-       position-independently, so pre-genning them does not change output;
-       bit-field members (handled inline below) are constants too and need no
-       caching.  Indexed parallel to init_els[init_start..]. */
+    /* gcc/20050929-1.c: pre-compute the element values FIRST, so any out-of-line data a value
+       generates (a compound literal's storage, a string-literal address) is emitted into the module
+       BEFORE this object's own data items.  Otherwise the 2nd+ such sub-object's data is appended
+       into the MIDDLE of this object (the 1st works only because its value is gen'd before this
+       object's first data item exists), and the element's trailing `ref` becomes an anonymous data
+       item attached to the sub-object instead of this object -- truncating it.  Constants gen
+       position-independently, so pre-genning them does not change output; bit-field members
+       (handled inline below) are constants too and need no caching.  Indexed parallel to
+       init_els[init_start..]. */
     VARR_CREATE (MIR_op_t, pregen_vals, alloc, VARR_LENGTH (init_el_t, init_els) - init_start);
     for (size_t k = init_start; k < VARR_LENGTH (init_el_t, init_els); k++) {
-      init_el_t pe = VARR_GET (init_el_t, init_els, k);
-      struct expr *pex = pe.init->attr;
-      MIR_op_t pv;
+      init_el_t init_el = VARR_GET (init_el_t, init_els, k);
+      struct expr *init_expr = init_el.init->attr;
+      MIR_op_t init_val;
 
-      pv.mode = MIR_OP_UNDEF; /* unused for const-addr elements */
-      if (!pex->const_addr_p) {
-        if (pex->const_p) {
-          convert_value (pex, pe.el_type);
-          pex->type = pe.el_type; /* right value in the gen below */
+      init_val.mode = MIR_OP_UNDEF; /* unused for const-addr elements */
+      if (!init_expr->const_addr_p) {
+        if (init_expr->const_p) {
+          convert_value (init_expr, init_el.el_type);
+          init_expr->type = init_el.el_type; /* right value in the gen below */
         }
-        pv = val_gen (c2m_ctx, pe.init).mir_op;
+        init_val = val_gen (c2m_ctx, init_el.init).mir_op;
       }
-      VARR_PUSH (MIR_op_t, pregen_vals, pv);
+      VARR_PUSH (MIR_op_t, pregen_vals, init_val);
     }
     for (size_t i = init_start; i < VARR_LENGTH (init_el_t, init_els); i++) {
       init_el = VARR_GET (init_el_t, init_els, i);
