@@ -3,6 +3,8 @@ extern void printf (const char *, ...);
 register void *ret_addr asm ("r13");
 #elif defined(__s390x__)
 register void *ret_addr asm ("r7");
+#elif defined(__aarch64__)
+register void *ret_addr asm ("r28");
 #else
 register void *ret_addr asm ("r19");
 #endif
