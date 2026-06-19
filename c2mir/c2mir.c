@@ -10177,6 +10177,12 @@ struct gen_ctx {
   int reg_free_mark;
   MIR_label_t continue_label, break_label;
   op_t top_gen_last_op;
+  node_t stmtexpr_last_expr; /* the value-producing last expression of the
+                               statement-expression currently being gen'd, so
+                               its expression-statement is evaluated in value
+                               context (val_p) -- needed for ops that only
+                               materialize their result when used (post ++/--).
+                               Saved/restored across nested statement exprs. */
   struct {
     int res_ref_p; /* flag of returning an aggregate by reference */
     VARR (MIR_type_t) * ret_types;
@@ -10202,6 +10208,7 @@ struct gen_ctx {
 #define continue_label gen_ctx->continue_label
 #define break_label gen_ctx->break_label
 #define top_gen_last_op gen_ctx->top_gen_last_op
+#define stmtexpr_last_expr gen_ctx->stmtexpr_last_expr
 #define proto_info gen_ctx->proto_info
 #define init_els gen_ctx->init_els
 #define memset_proto gen_ctx->memset_proto
@@ -13104,6 +13111,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
             && NL_HEAD (declarator->u.ops)->code == N_ID);
     assert (decl_type->mode == TM_FUNC);
     reg_free_mark = 0;
+    stmtexpr_last_expr = NULL;
     curr_func_def = r;
     curr_call_arg_area_offset = 0;
     collect_args_and_func_types (c2m_ctx, decl_type->u.func_type);
@@ -13194,8 +13202,38 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     break;
   }
   case N_STMTEXPR: {
-    gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, FALSE, NULL, NULL);
+    struct type *stmtexpr_type = ((struct expr *) r->attr)->type;
+    node_t block = NL_HEAD (r->u.ops);
+    node_t last_stmt = NL_TAIL (NL_EL (block->u.ops, 1)->u.ops);
+    node_t saved_last_expr = stmtexpr_last_expr;
+
+    /* The value of the statement expression is its block's last expression.
+       Mark that expression so its expression-statement is gen'd in value
+       context (val_p): ops that only materialize their result when used --
+       post ++/-- -- otherwise leave an undef operand here.  Save/restore for
+       nested statement expressions. */
+    stmtexpr_last_expr
+      = (last_stmt != NULL && last_stmt->code == N_EXPR) ? NL_EL (last_stmt->u.ops, 1) : NULL;
+    gen (c2m_ctx, block, NULL, NULL, FALSE, NULL, NULL);
+    stmtexpr_last_expr = saved_last_expr;
     res = top_gen_last_op;
+    /* A statement expression whose value is a struct/union yields the lvalue
+       of an in-block local, but that local's stack storage can be reused by a
+       sibling scope -- e.g. `({..A..}).x - ({..B..}).x`, where c2mir assigns
+       the A and B block-locals the same fp slot.  Because the member loads are
+       deferred to the enclosing operator, both would read whichever block ran
+       last (B), giving 0.  Copy the aggregate out into a fresh temporary so
+       each statement-expression value has independent storage, matching GCC. */
+    if (stmtexpr_type->mode == TM_STRUCT || stmtexpr_type->mode == TM_UNION) {
+      mir_size_t size = type_size (c2m_ctx, stmtexpr_type);
+      op_t addr = get_new_temp (c2m_ctx, MIR_T_I64);
+      op_t tmp;
+
+      emit2 (c2m_ctx, MIR_ALLOCA, addr.mir_op, MIR_new_int_op (ctx, size));
+      tmp = new_op (NULL, MIR_new_mem_op (ctx, MIR_T_UNDEF, 0, addr.mir_op.u.reg, 0, 1));
+      block_move (c2m_ctx, tmp, res, size);
+      res = tmp;
+    }
     break;
   }
   case N_BLOCK:
@@ -13479,11 +13517,19 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
                                           VARR_ADDR (MIR_op_t, ret_ops)));
     break;
   }
-  case N_EXPR:
+  case N_EXPR: {
+    node_t e = NL_EL (r->u.ops, 1);
+
     assert (false_label == NULL && true_label == NULL);
     emit_label (c2m_ctx, r);
-    top_gen (c2m_ctx, NL_EL (r->u.ops, 1), NULL, NULL, NULL);
+    if (e == stmtexpr_last_expr)
+      /* Value-producing last expression of a statement expression: evaluate in
+         value context so post ++/-- materialize their result (see N_STMTEXPR). */
+      top_gen_last_op = gen (c2m_ctx, e, NULL, NULL, TRUE, NULL, NULL);
+    else
+      top_gen (c2m_ctx, e, NULL, NULL, NULL);
     break;
+  }
   default: abort ();
   }
 finish:
