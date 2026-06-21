@@ -2372,6 +2372,7 @@ static void minimize_ssa (gen_ctx_t gen_ctx, size_t insns_num) {
   }
 }
 
+#if !MIR_NO_GEN_DEBUG
 static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
   ssa_edge_t se;
 
@@ -2385,6 +2386,7 @@ static void print_op_data (gen_ctx_t gen_ctx, void *op_data, bb_insn_t from) {
     fprintf (debug_file, ")");
   }
 }
+#endif
 
 static ssa_edge_t add_ssa_edge_1 (gen_ctx_t gen_ctx, bb_insn_t def, int def_op_num, bb_insn_t use,
                                   int use_op_num, int dup_p MIR_UNUSED) {
@@ -5110,6 +5112,7 @@ static void initiate_mem_live_info (gen_ctx_t gen_ctx) {
   }
 }
 
+#if !MIR_NO_GEN_DEBUG
 static void print_mem_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
   fprintf (debug_file, "BB %3lu:\n", (unsigned long) bb->index);
   output_bitmap (gen_ctx, "   Mem live in:", bb->mem_live_in, FALSE, NULL);
@@ -5117,6 +5120,7 @@ static void print_mem_bb_live_info (gen_ctx_t gen_ctx, bb_t bb) {
   output_bitmap (gen_ctx, "   Mem live gen:", bb->mem_live_gen, FALSE, NULL);
   output_bitmap (gen_ctx, "   Mem live kill:", bb->mem_live_kill, FALSE, NULL);
 }
+#endif
 
 static void calculate_mem_live_info (gen_ctx_t gen_ctx) {
   initiate_mem_live_info (gen_ctx);
@@ -9300,7 +9304,9 @@ static void *generate_func_code (MIR_context_t ctx, MIR_item_t func_item, int ma
   uint8_t *code;
   void *machine_code = NULL;
   size_t code_len = 0;
+#if !MIR_NO_GEN_DEBUG
   double start_time = real_usec_time ();
+#endif
   uint32_t bbs_num;
 
   gen_assert (func_item->item_type == MIR_func_item && func_item->data == NULL);
@@ -9634,6 +9640,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
                || insn->code == MIR_PRBEQ || insn->code == MIR_PRBNE;
   }
   bb_stubs[n_bbs - 1].last_insn = DLIST_TAIL (MIR_insn_t, curr_func_item->u.func->insns);
+#if !MIR_NO_GEN_DEBUG
   if (debug_file != NULL) {
     fprintf (debug_file, "BBs for lazy code generation:\n");
     for (size_t i = 0; i < n_bbs; i++) {
@@ -9644,6 +9651,7 @@ static void create_bb_stubs (gen_ctx_t gen_ctx) {
       }
     }
   }
+#endif
   for (MIR_lref_data_t lref = curr_func_item->u.func->first_lref; lref != NULL; lref = lref->next) {
     bb_stub_t lab_bb_stub = lref->label->data;
     void *addr, *addr2;
