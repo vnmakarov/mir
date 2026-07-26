@@ -195,7 +195,7 @@ test: readme-example-test mir-bin-run-test c2mir-test
 
 test-all: adt-test simplify-test io-test scan-test mir2c-test $(L2M-TEST) test
 
-bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench
+bench: interp-bench gen-bench gen-bench2 io-bench mir2c-bench c2mir-sieve-bench gen-speed c2mir-bench prolog-bench
 	@echo ==============================Bench is done
 
 # ------------------ MIR --------------------------
@@ -737,6 +737,7 @@ l2m-test2: $(BUILD_DIR)/l2m
 
 .PHONY: clean-bench
 .PHONY: io-bench interp-bench gen-bench gen-bench2 gen-speed c2mir-sieve-bench c2mir-bench mir2c-bench
+.PHONY: prolog-bench
 
 io-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/io-bench.c
 	@echo ========io-bench can take upto 2 min===============
@@ -785,9 +786,17 @@ mir2c-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir2c/mir2c.c
 	$(COMPILE_AND_LINK) -DTEST_MIR2C $^ $(EXEO)$(BUILD_DIR)/mir2c-bench$(EXE) $(LDLIBS)
 	$(BUILD_DIR)/mir2c-bench -v && size $(BUILD_DIR)/mir2c-bench
 
+# Isolates the cost of the function prolog/epilog: heavy is a callee whose
+# body forces every callee-saved hard reg into use, leaf is a callee that
+# stays a leaf (empty prolog/epilog) and serves as a control that a change
+# to save/restore codegen should not affect.
+prolog-bench: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/prolog-bench.c
+	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/prolog-bench$(EXE) $(LDLIBS)
+	$(BUILD_DIR)/prolog-bench
+
 clean-bench:
 	$(RM) $(BUILD_DIR)/io-bench$(EXE) $(BUILD_DIR)/interp-bench$(EXE) $(BUILD_DIR)/gen-bench$(EXE)
-	$(RM) $(BUILD_DIR)/gen-speed$(EXE) $(BUILD_DIR)/mir2c-bench$(EXE)
+	$(RM) $(BUILD_DIR)/gen-speed$(EXE) $(BUILD_DIR)/mir2c-bench$(EXE) $(BUILD_DIR)/prolog-bench$(EXE)
 
 # ------------------ miscellaneous ----------------------
 
