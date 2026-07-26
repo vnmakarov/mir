@@ -1017,6 +1017,84 @@ static void fsave (gen_ctx_t gen_ctx, MIR_insn_t anchor, int disp, MIR_reg_t bas
 }
 #endif
 
+/* Codes of unspec insns for aarch64 load/store pair insns.  We use them to save/restore
+   callee saved hard registers in the function prolog/epilog.  */
+#define STP_CODE 0
+#define LDP_CODE 1
+#define VSTP_CODE 2
+#define VLDP_CODE 3
+
+/* Return TRUE if DISP can be represented by the scaled 7-bit signed immediate of ldp/stp
+   insn with SIZE bytes long elements.  */
+static int pair_disp_p (MIR_disp_t disp, MIR_disp_t size) {
+  return disp % size == 0 && disp / size >= -64 && disp / size <= 63;
+}
+
+/* Save (if SAVE_P) or restore callee saved hard registers used in the function before ANCHOR.
+   The registers are placed starting with frame offset OFFSET (relative to FP) as before.  Two
+   consecutive registers of the same class are processed by one stp/ldp when their offset can be
+   represented by the pair insn immediate.  */
+static void save_restore_regs (gen_ctx_t gen_ctx, MIR_insn_t anchor, bitmap_t used_hard_regs,
+                               size_t offset, int save_p) {
+  MIR_context_t ctx = gen_ctx->ctx;
+  MIR_insn_t new_insn;
+  MIR_op_t mem_op, reg_op, reg_op2;
+  MIR_type_t type;
+  size_t i, i2, size;
+
+  for (i = 0; i <= MAX_HARD_REG; i++) {
+    if (target_call_used_hard_reg_p (i, MIR_T_UNDEF) || !bitmap_bit_p (used_hard_regs, i)) continue;
+    if (i < V0_HARD_REG) {
+      type = MIR_T_I64;
+      size = 8;
+    } else {
+      if (offset % 16 != 0) offset = (offset + 15) / 16 * 16;
+      type = MIR_T_LD;
+      size = 16;
+    }
+    for (i2 = i + 1; i2 <= MAX_HARD_REG; i2++) /* the next saved reg */
+      if (!target_call_used_hard_reg_p (i2, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i2))
+        break;
+    if (i2 <= MAX_HARD_REG && (i < V0_HARD_REG) == (i2 < V0_HARD_REG)
+        && pair_disp_p ((MIR_disp_t) offset, (MIR_disp_t) size)) { /* stp/ldp of regs i and i2 */
+      mem_op = _MIR_new_var_mem_op (ctx, type, (MIR_disp_t) offset, FP_HARD_REG, MIR_NON_VAR, 1);
+      reg_op = _MIR_new_var_op (ctx, i);
+      reg_op2 = _MIR_new_var_op (ctx, i2);
+      if (save_p)
+        new_insn
+          = _MIR_new_unspec_insn (ctx, 4,
+                                  MIR_new_int_op (ctx, i < V0_HARD_REG ? STP_CODE : VSTP_CODE),
+                                  mem_op, reg_op, reg_op2);
+      else
+        new_insn
+          = _MIR_new_unspec_insn (ctx, 4,
+                                  MIR_new_int_op (ctx, i < V0_HARD_REG ? LDP_CODE : VLDP_CODE),
+                                  reg_op, reg_op2, mem_op);
+      gen_add_insn_before (gen_ctx, anchor, new_insn);
+      offset += 2 * size;
+      i = i2;
+      continue;
+    }
+    mem_op = new_hard_reg_mem_op (gen_ctx, anchor, type, (MIR_disp_t) offset, FP_HARD_REG);
+    reg_op = _MIR_new_var_op (ctx, i);
+    if (i < V0_HARD_REG) {
+      if (save_p)
+        gen_mov (gen_ctx, anchor, MIR_MOV, mem_op, reg_op);
+      else
+        gen_mov (gen_ctx, anchor, MIR_MOV, reg_op, mem_op);
+    } else {
+      new_insn = save_p ? gen_mov (gen_ctx, anchor, MIR_LDMOV, mem_op, reg_op)
+                        : gen_mov (gen_ctx, anchor, MIR_LDMOV, reg_op, mem_op);
+#if defined(__APPLE__)
+      /* MIR API can change insn code - change it back as we need to generate code to save all
+       * vreg. */
+      if (new_insn->code == MIR_DMOV) new_insn->code = MIR_LDMOV;
+#endif
+    }
+    offset += size;
+  }
+}
+
 static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_regs,
                                        size_t stack_slots_num) {
   MIR_context_t ctx = gen_ctx->ctx;
@@ -1120,26 +1198,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
 #endif
   /* Saving callee saved hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
-  for (i = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
-      if (i < V0_HARD_REG) {
-        gen_mov (gen_ctx, anchor, MIR_MOV,
-                 new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_I64, offset, FP_HARD_REG),
-                 _MIR_new_var_op (ctx, i));
-        offset += 8;
-      } else {
-        if (offset % 16 != 0) offset = (offset + 15) / 16 * 16;
-        new_insn = gen_mov (gen_ctx, anchor, MIR_LDMOV,
-                            new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_LD, offset, FP_HARD_REG),
-                            _MIR_new_var_op (ctx, i));
-#if defined(__APPLE__)
-        /* MIR API can change insn code - change it back as we need to generate code to save all
-         * vreg. */
-        if (new_insn->code == MIR_DMOV) new_insn->code = MIR_LDMOV;
-#endif
-        offset += 16;
-      }
-    }
+  save_restore_regs (gen_ctx, anchor, used_hard_regs, offset, TRUE);
   if (small_aggregate_save_area != 0) {  // ??? duplication with vararg saved regs
     if (small_aggregate_save_area % 16 != 0)
       small_aggregate_save_area = (small_aggregate_save_area + 15) / 16 * 16;
@@ -1154,22 +1213,7 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
   if (anchor == NULL) return;
   /* Restoring hard registers: */
   offset = frame_size - frame_size_after_saved_regs;
-  for (i = 0; i <= MAX_HARD_REG; i++)
-    if (!target_call_used_hard_reg_p (i, MIR_T_UNDEF) && bitmap_bit_p (used_hard_regs, i)) {
-      if (i < V0_HARD_REG) {
-        gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, i),
-                 new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_I64, offset, FP_HARD_REG));
-        offset += 8;
-      } else {
-        if (offset % 16 != 0) offset = (offset + 15) / 16 * 16;
-        new_insn = gen_mov (gen_ctx, anchor, MIR_LDMOV, _MIR_new_var_op (ctx, i),
-                            new_hard_reg_mem_op (gen_ctx, anchor, MIR_T_LD, offset, FP_HARD_REG));
-#if defined(__APPLE__)
-        if (new_insn->code == MIR_DMOV) new_insn->code = MIR_LDMOV;
-#endif
-        offset += 16;
-      }
-    }
+  save_restore_regs (gen_ctx, anchor, used_hard_regs, offset, FALSE);
   /* Restore lr, sp, fp */
   if (!func->jret_p)
     gen_mov (gen_ctx, anchor, MIR_MOV, _MIR_new_var_op (ctx, LINK_HARD_REG),
@@ -1209,6 +1253,12 @@ struct pattern {
      Ms[0-3] - signed int type memory of size 8,16,32,64-bits
      Mu[0-3] - unsigned int type memory of size 8,16,32,64-bits
        zero extended scaled 12-bit offset (field[10..21])
+
+       memory with immediate offset for ldp/stp:
+     P3 - 64-bit int type memory, Pld - memory of long double
+       sign extended scaled 7-bit offset (field[15..21])
+
+     c<one or more decimal digits> - unspec insn with the given code as the 1st operand
 
      N[0-2] - 2nd immediate (or reference) operand can be created by movn and n movk insns
      Z[0-2] - 2nd immediate (or reference) operand can be created by movz and n movk insns
@@ -1252,6 +1302,9 @@ struct pattern {
      h(d,n,m)<one or two hex digits> - hardware register with given number in rd,rn,rm field
      m = 1st or 2nd operand is (8-,16-,32-,64-bit) mem with base, scaled index
      M = 1st or 2nd operand is (8-,16-,32-,64-bit) mem with base, scaled imm12 disp [10..21]
+     P = ldp/stp mem operand with base and scaled signed imm7 disp [15..21]
+     ra[0-3] - put n-th operand register into rt2 field [10..14]
+     va[0-3] - the same but for a vector (fp) register
      S - immr[16..21]  for right shift SR/Sr
      SL, Sl - immr[16..21] and imms[10..15] for left shift SL/Sl
 
@@ -1274,7 +1327,17 @@ struct pattern {
 #define MUL_BNO (MUL_BO + 1)
 #define ARM_INSN_BOUND (MUL_BNO + 1)
 
+#define STR(c) #c
+#define STR_VAL(c) STR (c)
+
 static const struct pattern patterns[] = {
+  /* stp Rt,Rt2,[Rn,#imm7]; ldp Rt,Rt2,[Rn,#imm7]: */
+  {MIR_UNSPEC, "c" STR_VAL (STP_CODE) " P3 r r", "a9000000:ffc00000 rd2 ra3 P"},
+  {MIR_UNSPEC, "c" STR_VAL (LDP_CODE) " r r P3", "a9400000:ffc00000 rd1 ra2 P"},
+  /* stp Qt,Qt2,[Rn,#imm7]; ldp Qt,Qt2,[Rn,#imm7]: */
+  {MIR_UNSPEC, "c" STR_VAL (VSTP_CODE) " Pld r r", "ad000000:ffc00000 vd2 va3 P"},
+  {MIR_UNSPEC, "c" STR_VAL (VLDP_CODE) " r r Pld", "ad400000:ffc00000 vd1 va2 P"},
+
   {MIR_MOV, "r h31", "91000000:fffffc00 rd0 hn1f"}, /* mov Rd,SP */
   {MIR_MOV, "h31 r", "91000000:fffffc00 hd1f rn1"}, /* mov SP,Rn */
   {MIR_MOV, "r r", "aa0003e0:ffe0ffe0 rd0 rm1"},    /* mov Rd,Rm */
@@ -1807,6 +1870,22 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
     *hr1 = R11_HARD_REG;
 }
 
+static int dec_value (int ch) { return '0' <= ch && ch <= '9' ? ch - '0' : -1; }
+
+static uint64_t read_dec (const char **ptr) {
+  int v;
+  const char *p;
+  uint64_t res = 0;
+
+  for (p = *ptr; (v = dec_value (*p)) >= 0; p++) {
+    gen_assert ((res >> 60) == 0);
+    res = res * 10 + v;
+  }
+  gen_assert (p != *ptr);
+  *ptr = p - 1;
+  return res;
+}
+
 static int pattern_index_cmp (const void *a1, const void *a2) {
   int i1 = *(const int *) a1, i2 = *(const int *) a2;
   int c1 = (int) patterns[i1].code, c2 = (int) patterns[i2].code;
@@ -1920,9 +1999,38 @@ static int pattern_match_p (gen_ctx_t gen_ctx, const struct pattern *pat, MIR_in
     op = insn->ops[nop];
     switch (start_ch = *p) {
     case 'X': break;
+    case 'c': {
+      uint64_t code;
+
+      p++;
+      code = read_dec (&p);
+      if ((op.mode != MIR_OP_INT && op.mode != MIR_OP_UINT) || op.u.u != code) return FALSE;
+      break;
+    }
     case 'r':
       if (op.mode != MIR_OP_VAR) return FALSE;
       break;
+    case 'P': {
+      MIR_type_t type;
+      int scale;
+
+      if (op.mode != MIR_OP_VAR_MEM) return FALSE;
+      ch = *++p;
+      if (ch == 'l') {
+        ch = *++p;
+        gen_assert (ch == 'd');
+        type = MIR_T_LD;
+        scale = 16;
+      } else {
+        gen_assert (ch == '3');
+        type = MIR_T_I64;
+        scale = 8;
+      }
+      if (op.u.var_mem.type != type || op.u.var_mem.index != MIR_NON_VAR
+          || !pair_disp_p (op.u.var_mem.disp, scale))
+        return FALSE;
+      break;
+    }
     case 'h':
       if (op.mode != MIR_OP_VAR) return FALSE;
       ch = *++p;
@@ -2177,7 +2285,7 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
   for (insn_str = replacement;; insn_str = p + 1) {
     char ch, ch2, start_ch, d;
     uint32_t opcode = 0, opcode_mask = 0xffffffff;
-    int rd = -1, rn = -1, rm = -1, ra = -1, disp = -1, scale = -1;
+    int rd = -1, rn = -1, rm = -1, ra = -1, disp = -1, scale = -1, disp7 = -1;
     int immr = -1, imms = -1, imm16 = -1, imm16_shift = -1, imm12 = -1, imm12_shift = -1;
     MIR_op_t op;
     int label_ref_num = -1, switch_table_addr_p = FALSE;
@@ -2209,15 +2317,16 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         int reg;
 
         ch2 = *++p;
-        gen_assert (ch2 == 'd' || ch2 == 'n' || ch2 == 'm'
-                    || (ch2 == 'a'
-                        && (insn->code == MIR_MOD || insn->code == MIR_MODS
-                            || insn->code == MIR_UMOD || insn->code == MIR_UMODS)));
+        gen_assert (
+          ch2 == 'd' || ch2 == 'n' || ch2 == 'm'
+          || (ch2 == 'a'
+              && (insn->code == MIR_MOD || insn->code == MIR_MODS || insn->code == MIR_UMOD
+                  || insn->code == MIR_UMODS || insn->code == MIR_UNSPEC)));
         ch = *++p;
         if (start_ch == 'h') {
           reg = read_hex (&p);
         } else {
-          gen_assert ('0' <= ch && ch <= '2' && ch - '0' < (int) insn->nops);
+          gen_assert ('0' <= ch && ch <= '3' && ch - '0' < (int) insn->nops);
           op = insn->ops[ch - '0'];
           gen_assert (op.mode == MIR_OP_VAR);
           reg = op.u.var;
@@ -2245,6 +2354,21 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
         rm = op.u.var_mem.index == MIR_NON_VAR ? ZR_HARD_REG : op.u.var_mem.index;
         scale = op.u.var_mem.scale;
         break;
+      case 'c':
+        p++;
+        gen_assert (dec_value (*p) >= 0);
+        read_dec (&p);
+        break;
+      case 'P': { /* ldp/stp mem operand */
+        int dsize;
+
+        op = insn->ops[1].mode == MIR_OP_VAR_MEM ? insn->ops[1] : insn->ops[3];
+        dsize = op.u.var_mem.type == MIR_T_LD ? 16 : 8;
+        gen_assert (pair_disp_p (op.u.var_mem.disp, dsize));
+        rn = op.u.var_mem.base;
+        disp7 = (int) (op.u.var_mem.disp / dsize) & 0x7f;
+        break;
+      }
       case 'M': {
         int dsize = 1;
 
@@ -2391,6 +2515,11 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       gen_assert (disp < (1 << 12));
       opcode |= disp << 10;
       opcode_mask = check_and_set_mask (opcode_mask, 0xfff << 10);
+    }
+    if (disp7 >= 0) {
+      gen_assert (disp7 < (1 << 7));
+      opcode |= disp7 << 15;
+      opcode_mask = check_and_set_mask (opcode_mask, 0x7f << 15);
     }
     if (immr >= 0) {
       gen_assert (immr < (1 << 6));
@@ -2661,12 +2790,21 @@ static void target_redirect_bb_origin_branch (gen_ctx_t gen_ctx, target_bb_versi
 static void target_init (gen_ctx_t gen_ctx) {
   MIR_alloc_t alloc = gen_alloc (gen_ctx);
   MIR_context_t ctx = gen_ctx->ctx;
+  MIR_type_t int_res[] = {MIR_T_I64, MIR_T_I64};
+  MIR_type_t ld_res[] = {MIR_T_LD, MIR_T_LD};
+  MIR_var_t int_args[] = {{MIR_T_I64, "t", 0}, {MIR_T_I64, "t2", 0}};
+  MIR_var_t ld_args[] = {{MIR_T_LD, "t", 0}, {MIR_T_LD, "t2", 0}};
 
   gen_ctx->target_ctx = gen_malloc (gen_ctx, sizeof (struct target_ctx));
   VARR_CREATE (uint8_t, result_code, alloc, 0);
   VARR_CREATE (label_ref_t, label_refs, alloc, 0);
   VARR_CREATE (uint64_t, abs_address_locs, alloc, 0);
   VARR_CREATE (MIR_code_reloc_t, relocs, alloc, 0);
+  /* Unspec insns to save/restore two callee saved hard regs by one insn: */
+  _MIR_register_unspec_insn (ctx, STP_CODE, "stp", 1, int_res, 2, FALSE, int_args);
+  _MIR_register_unspec_insn (ctx, LDP_CODE, "ldp", 2, int_res, 1, FALSE, int_args);
+  _MIR_register_unspec_insn (ctx, VSTP_CODE, "vstp", 1, ld_res, 2, FALSE, ld_args);
+  _MIR_register_unspec_insn (ctx, VLDP_CODE, "vldp", 2, ld_res, 1, FALSE, ld_args);
   patterns_init (gen_ctx);
   temp_jump = MIR_new_insn (ctx, MIR_JMP, MIR_new_label_op (ctx, NULL));
   temp_jump_replacement = find_insn_pattern_replacement (gen_ctx, temp_jump);
