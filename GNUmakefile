@@ -163,7 +163,7 @@ debug2: LDFLAGS:=$(LD2FLAGS)
 debug2: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
 
 install: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-alloc.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
+	install -m a+r $(SRC_DIR)/mir.h $(SRC_DIR)/mir-alloc.h $(SRC_DIR)/mir-code-alloc.h $(SRC_DIR)/mir-dlist.h $(SRC_DIR)/mir-varr.h $(SRC_DIR)/mir-htab.h\
 		       $(SRC_DIR)/mir-gen.h $(SRC_DIR)/c2mir/c2mir.h $(PREFIX)/include
 	install -m a+r $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(PREFIX)/lib
 ifeq ($(OS),Windows_NT)
@@ -183,7 +183,7 @@ $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin:
 	   mkdir -p $@
 
 uninstall: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES) | $(PREFIX)/include $(PREFIX)/lib $(PREFIX)/bin
-	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-alloc.h $(PREFIX)/include/mir-dlist.h $(PREFIX)/include/mir-varr.h $(PREFIX)/include/mir-htab.h\
+	$(RM) $(PREFIX)/include/mir.h $(PREFIX)/include/mir-alloc.h $(PREFIX)/include/mir-code-alloc.h $(PREFIX)/include/mir-dlist.h $(PREFIX)/include/mir-varr.h $(PREFIX)/include/mir-htab.h\
 		       $(PREFIX)/include/mir-gen.h $(PREFIX)/include/c2mir.h
 	$(RM) $(PREFIX)/lib/libmir.$(LIBSUFF) $(PREFIX)/lib/$(SOLIB)
 ifeq ($(OS),Windows_NT)
