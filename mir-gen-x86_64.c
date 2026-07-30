@@ -190,7 +190,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   uint32_t n_iregs, n_xregs, n_fregs;
 
   assert (prev_call_insn != NULL);
-  if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
+  if (call_insn->code == MIR_INLAY || call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -1857,6 +1857,7 @@ static struct pattern patterns[] = {
   /* fld m2;fld m1;fucomip st,st1;fstp st;jp rel32;jne rel32 */
   {MIR_LDBNE, "L mld mld", "DB /5 m2; DB /5 m1; DF E9; DD D8; 0F 8A L0; 0F 85 L0", 0},
 
+  /* MIR_INLINE and MIR_INLAY are machinized into MIR_CALL: */
   {MIR_CALL, "X i3 $", "FF /2 P1", 0},  /* call *rel32(rip)  */
   {MIR_CALL, "X r $", "Y FF /2 R1", 0}, /* call *r1 */
   {MIR_RET, "$", "C3", 0},              /* ret ax, dx, xmm0, xmm1, st0, st1  */

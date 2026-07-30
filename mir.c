@@ -317,6 +317,7 @@ static const struct insn_desc insn_descs[] = {
   {MIR_JMPI, "jmpi", {MIR_OP_INT, MIR_OP_BOUND}},
   {MIR_CALL, "call", {MIR_OP_BOUND}},
   {MIR_INLINE, "inline", {MIR_OP_BOUND}},
+  {MIR_INLAY, "inlay", {MIR_OP_BOUND}},
   {MIR_JCALL, "jcall", {MIR_OP_BOUND}},
   {MIR_SWITCH, "switch", {MIR_OP_BOUND}},
   {MIR_RET, "ret", {MIR_OP_BOUND}},
@@ -2125,6 +2126,7 @@ MIR_op_mode_t MIR_insn_op_mode (MIR_context_t ctx, MIR_insn_t insn, size_t nop, 
   case MIR_USE: return insn->ops[nop].mode;
   case MIR_CALL:
   case MIR_INLINE:
+  case MIR_INLAY:
   case MIR_UNSPEC: {
     MIR_op_t proto_op;
     MIR_proto_t proto;
@@ -4053,16 +4055,22 @@ static void process_inlines (MIR_context_t ctx, MIR_item_t func_item) {
       called_func_item = called_func_item->ref_def;
     if (called_func_item == NULL || called_func_item->item_type != MIR_func_item
         || func_item == called_func_item) { /* Simplify function operand in the inline insn */
+      if (func_insn->code == MIR_INLAY) func_insn->code = MIR_INLINE;
       simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }
     called_func = called_func_item->u.func;
     called_func_insns_num = DLIST_LENGTH (MIR_insn_t, called_func->insns);
-    if (called_func->first_lref != NULL || called_func->vararg_p || called_func->jret_p
-        || called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
-                                                                : MIR_MAX_INSNS_FOR_CALL_INLINE)
-        || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
-            && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE)) {
+    if (called_func->first_lref != NULL || called_func->vararg_p || called_func->jret_p) {
+      if (func_insn->code == MIR_INLAY) func_insn->code = MIR_INLINE;
+      simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
+      continue;
+    }
+    if (func_insn->code != MIR_INLAY
+        && (called_func_insns_num > (func_insn->code != MIR_CALL ? MIR_MAX_INSNS_FOR_INLINE
+                                                                 : MIR_MAX_INSNS_FOR_CALL_INLINE)
+            || (func_insns_num > MIR_MAX_FUNC_INLINE_GROWTH * original_func_insns_num / 100
+                && func_insns_num > MIR_MAX_CALLER_SIZE_FOR_ANY_GROWTH_INLINE))) {
       simplify_op (ctx, func_item, func_insn, 1, FALSE, func_insn->code, FALSE, TRUE);
       continue;
     }

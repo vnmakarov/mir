@@ -434,9 +434,9 @@ static void generate_icode (MIR_context_t ctx, MIR_item_t func_item) {
                           || ops[1].u.ref->item_type == MIR_forward_item
                           || ops[1].u.ref->item_type == MIR_func_item));
       push_insn_start (interp_ctx,
-                       imm_call_p           ? (code == MIR_JCALL ? IC_IMM_JCALL : IC_IMM_CALL)
-                       : code == MIR_INLINE ? MIR_CALL
-                                            : code,
+                       imm_call_p              ? (code == MIR_JCALL ? IC_IMM_JCALL : IC_IMM_CALL)
+                       : code == MIR_INLINE || code == MIR_INLAY ? MIR_CALL
+                                                                 : code,
                        insn);
       if (code == MIR_SWITCH) {
         VARR_PUSH (MIR_insn_t, branches, insn);
@@ -1013,7 +1013,7 @@ static void OPTIMIZE eval (MIR_context_t ctx, func_desc_t func_desc, MIR_val_t *
     REP8 (LAB_EL, MIR_BGTS, MIR_UBGT, MIR_UBGTS, MIR_FBGT, MIR_DBGT, MIR_LDBGT, MIR_BGE, MIR_BGES);
     REP5 (LAB_EL, MIR_UBGE, MIR_UBGES, MIR_FBGE, MIR_DBGE, MIR_LDBGE);
     REP6 (LAB_EL, MIR_BO, MIR_UBO, MIR_BNO, MIR_UBNO, MIR_LADDR, MIR_JMPI);
-    REP6 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_JCALL, MIR_SWITCH, MIR_RET, MIR_JRET);
+    REP7 (LAB_EL, MIR_CALL, MIR_INLINE, MIR_INLAY, MIR_JCALL, MIR_SWITCH, MIR_RET, MIR_JRET);
     REP3 (LAB_EL, MIR_ALLOCA, MIR_BSTART, MIR_BEND);
     REP4 (LAB_EL, MIR_VA_ARG, MIR_VA_BLOCK_ARG, MIR_VA_START, MIR_VA_END);
     REP8 (LAB_EL, IC_LDI8, IC_LDU8, IC_LDI16, IC_LDU16, IC_LDI32, IC_LDU32, IC_LDI64, IC_LDF);
@@ -1578,6 +1578,7 @@ common_addr:;
   }
 
   SCASE (MIR_INLINE, 0, mir_assert (FALSE));
+  SCASE (MIR_INLAY, 0, mir_assert (FALSE));
 
   CASE (MIR_JCALL, 0) {
     int (*func_addr) (void *buf) = *get_aop (bp, ops + 4);

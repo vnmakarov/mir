@@ -134,7 +134,7 @@ typedef enum {
   /* 1st operand is a prototype, 2nd one is ref or op containing func
      address, 3rd and subsequent ops are optional result (if result in
      the prototype is not of void type), call arguments. */
-  REP3 (INSN_EL, CALL, INLINE, JCALL),
+  REP4 (INSN_EL, CALL, INLINE, INLAY, JCALL),
   /* 1st operand is an index, subsequent ops are labels to which goto
      according the index (1st label has index zero).  The insn
      behavior is undefined if there is no label for the index. */
@@ -441,7 +441,7 @@ static inline int MIR_FP_branch_code_p (MIR_insn_code_t code) {
 }
 
 static inline int MIR_call_code_p (MIR_insn_code_t code) {
-  return code == MIR_CALL || code == MIR_INLINE || code == MIR_JCALL;
+  return code == MIR_CALL || code == MIR_INLINE || code == MIR_INLAY || code == MIR_JCALL;
 }
 
 static inline int MIR_int_branch_code_p (MIR_insn_code_t code) {

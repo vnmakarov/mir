@@ -4528,7 +4528,6 @@ DA (declaration_specs) {
     } else if ((r = TRY_A (type_spec, prev_type_spec)) != err_node) {
       prev_type_spec = r;
     } else if ((r = try_attr_spec (c2m_ctx, spec_pos, FALSE)) != err_node && r != NULL) {
-      continue; /* ignore attrs for declaration specs (type attrs) */
     } else
       break;
     op_append (c2m_ctx, list, r);
@@ -5866,7 +5865,7 @@ struct expr {
 struct decl_spec {
   unsigned int typedef_p : 1, extern_p : 1, static_p : 1;
   unsigned int auto_p : 1, register_p : 1, thread_local_p : 1;
-  unsigned int inline_p : 1, no_return_p : 1; /* func specifiers  */
+  unsigned int inline_p : 1, always_inline_p : 1, no_return_p : 1; /* func specifiers  */
   int align;                                  // negative value means undefined
   node_t align_node;                          //  strictest valid N_ALIGNAS node
   node_code_t linkage;  // N_IGNORE - none, N_STATIC - internal, N_EXTERN - external
@@ -6454,7 +6453,7 @@ static void convert_value (struct expr *e, struct type *to) { cast_value (e, e, 
 
 static int non_reg_decl_spec_p (struct decl_spec *ds) {
   return (ds->typedef_p || ds->extern_p || ds->static_p || ds->auto_p || ds->thread_local_p
-          || ds->inline_p || ds->no_return_p || ds->align_node);
+          || ds->inline_p || ds->always_inline_p || ds->no_return_p || ds->align_node);
 }
 
 static void create_node_scope (c2m_ctx_t c2m_ctx, node_t node) {
@@ -6631,7 +6630,7 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
   r->attr = res = reg_malloc (c2m_ctx, sizeof (struct decl_spec));
   res->typedef_p = res->extern_p = res->static_p = FALSE;
   res->auto_p = res->register_p = res->thread_local_p = FALSE;
-  res->inline_p = res->no_return_p = FALSE;
+  res->inline_p = res->always_inline_p = res->no_return_p = FALSE;
   res->align = -1;
   res->align_node = NULL;
   res->linkage = N_IGNORE;
@@ -6941,6 +6940,23 @@ static struct decl_spec check_decl_spec (c2m_ctx_t c2m_ctx, node_t r, node_t dec
         if (align != 0 && res->align < align) {
           res->align = align;
           res->align_node = n;
+        }
+      }
+      break;
+    }
+    case N_LIST: {
+      node_t attr;
+      for (attr = NL_HEAD (n->u.ops); attr != NULL; attr = NL_NEXT (attr)) {
+        node_t attr_id;
+        if (attr->code != N_ATTR) continue;
+        attr_id = NL_HEAD (attr->u.ops);
+        if (attr_id->code != N_ID) continue;
+        if (strcmp (attr_id->u.s.s, "always_inline") == 0
+            || strcmp (attr_id->u.s.s, "__always_inline__") == 0) {
+          if (!func_p)
+            error (c2m_ctx, POS (n), "non-function declaration with always_inline");
+          else
+            res->always_inline_p = TRUE;
         }
       }
       break;
@@ -8455,6 +8471,10 @@ static const char *check_attrs (c2m_ctx_t c2m_ctx, node_t r, decl_t decl, node_t
     assert (n->code == N_ATTR);
     id = NL_HEAD (n->u.ops);
     assert (id->code == N_ID);
+    if (strcmp (id->u.s.s, "always_inline") == 0 || strcmp (id->u.s.s, "__always_inline__") == 0) {
+      if (check_p) decl->decl_spec.always_inline_p = TRUE;
+      continue;
+    }
     if (strcmp (id->u.s.s, "antialias") != 0) continue;
     list = NL_NEXT (id);
     assert (list->code == N_LIST);
@@ -12816,7 +12836,7 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     int prop_set_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_SET) == 0;
     int prop_eq_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_EQ) == 0;
     int prop_ne_p = call_expr->builtin_call_p && strcmp (func->u.s.s, PROP_NE) == 0;
-    int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE;
+    int builtin_call_p = alloca_p || va_arg_p || va_start_p, inline_p = FALSE, always_inline_p = FALSE;
     node_t block = NL_EL (curr_func_def->u.ops, 3);
     struct node_scope *ns = block->attr;
     target_arg_info_t arg_info;
@@ -12918,9 +12938,13 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
       proto_item = func_type->u.func_type->proto_item;  // ???
       VARR_PUSH (MIR_op_t, call_ops, MIR_new_ref_op (ctx, proto_item));
       op1 = val_gen (c2m_ctx, func);
-      if (!jcall_p && op1.mir_op.mode == MIR_OP_REF && func->code == N_ID
-          && ((decl_t) func_expr->def_node->attr)->decl_spec.inline_p)
-        inline_p = TRUE;
+      if (!jcall_p && op1.mir_op.mode == MIR_OP_REF && func->code == N_ID) {
+        struct decl_spec *ds = &((decl_t) func_expr->def_node->attr)->decl_spec;
+        if (ds->always_inline_p)
+          always_inline_p = TRUE;
+        else if (ds->inline_p)
+          inline_p = TRUE;
+      }
       VARR_PUSH (MIR_op_t, call_ops, op1.mir_op);
     }
     target_init_arg_vars (c2m_ctx, &arg_info);
@@ -13039,9 +13063,10 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         if (param != NULL) param = NL_NEXT (param);
       }
       call_insn = MIR_new_insn_arr (ctx,
-                                    (jcall_p    ? MIR_JCALL
-                                     : inline_p ? MIR_INLINE
-                                                : MIR_CALL),
+                                    (jcall_p           ? MIR_JCALL
+                                     : always_inline_p ? MIR_INLAY
+                                     : inline_p        ? MIR_INLINE
+                                                       : MIR_CALL),
                                     VARR_LENGTH (MIR_op_t, call_ops) - ops_start,
                                     VARR_ADDR (MIR_op_t, call_ops) + ops_start);
       MIR_append_insn (ctx, curr_func, call_insn);
@@ -13931,6 +13956,7 @@ static void print_decl_spec (c2m_ctx_t c2m_ctx, FILE *f, struct decl_spec *decl_
   if (decl_spec->register_p) fprintf (f, " register, ");
   if (decl_spec->thread_local_p) fprintf (f, " thread local, ");
   if (decl_spec->inline_p) fprintf (f, " inline, ");
+  if (decl_spec->always_inline_p) fprintf (f, " always_inline, ");
   if (decl_spec->no_return_p) fprintf (f, " no return, ");
   if (decl_spec->align >= 0) fprintf (f, " align = %d, ", decl_spec->align);
   if (decl_spec->align_node != NULL)

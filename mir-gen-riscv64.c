@@ -280,7 +280,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_insn_t curr_prev_call_insn = prev_call_insn;
 
   assert (__SIZEOF_LONG_DOUBLE__ == 16);
-  if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
+  if (call_insn->code == MIR_INLAY || call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -1744,13 +1744,12 @@ static const struct pattern patterns[] = {
   {MIR_D2F, "r r", "O53 F7 f20 hS1 rd0 rs1"}, /* fcvt.s.d rd,rs1 */
 // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
+/* MIR_INLINE and MIR_INLAY are machinized into MIR_CALL: */
 #if COMPRESS_INSNS
   {MIR_CALL, "X r $", "o2 b9 rd1"},   /* c.jalr rd */
-  {MIR_INLINE, "X r $", "o2 b9 rd1"}, /* c.jalr rd */
   {MIR_RET, "$", "o2 b8 hd1"},        /* c.jr ra  */
 #endif
   {MIR_CALL, "X r $", "O67 F0 hd1 rs1 i0"},   /* jalr rd,rs1 */
-  {MIR_INLINE, "X r $", "O67 F0 hd1 rs1 i0"}, /* jalr rd,rs1 */
   {MIR_RET, "$", "O67 F0 hd0 hs1 i0"},        /* jalr hr0,hr1,0  */
 
   {MIR_JCALL, "X r $", "O67 F0 hd0 rs1 i0"}, /* jmp *r: jalr zero,r,0 */
@@ -2558,7 +2557,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 'L':
       case 'U':
         n = 0;
-        if (insn->code == MIR_CALL || insn->code == MIR_INLINE || insn->code == MIR_LADDR) n = 1;
+        if (insn->code == MIR_CALL || insn->code == MIR_LADDR)
+          n = 1;
         op = insn->ops[n];
         gen_assert (op.mode == MIR_OP_LABEL || op.mode == MIR_OP_REF);
         lr.abs_addr_p = FALSE;

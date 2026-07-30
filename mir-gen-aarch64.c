@@ -249,7 +249,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_insn_t curr_prev_call_insn = prev_call_insn;
   uint32_t n_iregs, n_vregs;
 
-  if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
+  if (call_insn->code == MIR_INLAY || call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -1818,10 +1818,9 @@ static const struct pattern patterns[] = {
   {MIR_D2F, "r r", "1e624000:fffffc00 vd0 vn1"},  /* fcvt Sd,Dn */
   // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
+  /* MIR_INLINE and MIR_INLAY are machinized into MIR_CALL: */
   {MIR_CALL, "X r $", "d63f0000:fffffc1f rn1"},   /* blr *Rn */
   {MIR_CALL, "X L $", "94000000:fc000000 rn1"},   /* bl address */
-  {MIR_INLINE, "X r $", "d63f0000:fffffc1f rn1"}, /* blr *Rn */
-  {MIR_INLINE, "X L $", "94000000:fc000000 rn1"}, /* bl address */
   {MIR_RET, "$", "d65f0000:fffffc1f hn1e"},       /* ret R30  */
 
   {MIR_JCALL, "X r $", "d61f0000:fffffc00 rn1"}, /* br r1 */
@@ -2417,7 +2416,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       case 'l':
       case 'L': {
         int nop = 0;
-        if (insn->code == MIR_LADDR || insn->code == MIR_CALL || insn->code == MIR_INLINE) nop = 1;
+        if (insn->code == MIR_LADDR || insn->code == MIR_CALL)
+          nop = 1;
         op = insn->ops[nop];
         gen_assert (op.mode == MIR_OP_LABEL || (start_ch == 'L' && op.mode == MIR_OP_REF));
         lr.abs_addr_p = FALSE;

@@ -346,7 +346,8 @@ static void out_insn (MIR_context_t ctx, FILE *f, MIR_insn_t insn) {
     fprintf (f, ");\n");
     break;
   case MIR_CALL:
-  case MIR_INLINE: {
+  case MIR_INLINE:
+  case MIR_INLAY: {
     MIR_proto_t proto;
     size_t start = 2;
 

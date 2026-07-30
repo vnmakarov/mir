@@ -418,11 +418,11 @@ clean-mir-utility-tests:
 .PHONY: clean-mir-interp-tests
 .PHONY: interp-test interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7
 .PHONY: interp-test8 interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14
-.PHONY: interp-test15 interp-test16
+.PHONY: interp-test15 interp-test16 interp-test18
 
 interp-test: interp-test1 interp-test2 interp-test3 interp-test4 interp-test5 interp-test6 interp-test7\
 	     interp-test8 interp-test9 interp-test10 interp-test11 interp-test12 interp-test13 interp-test14\
-	     interp-test15 interp-test16
+	     interp-test15 interp-test16 interp-test18
 
 interp-test1: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/loop-interp.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DMIR_INTERP_DEBUG=1 $^ $(EXEO)$(BUILD_DIR)/mir-tests/interp-test1$(EXE)
@@ -483,6 +483,9 @@ interp-test15: $(BUILD_DIR)/run-test$(EXE)
 interp-test16: $(BUILD_DIR)/run-test$(EXE)
 	$(BUILD_DIR)/run-test$(EXE) -i $(SRC_DIR)/mir-tests/test16.mir
 
+interp-test18: $(BUILD_DIR)/run-test$(EXE)
+	$(BUILD_DIR)/run-test$(EXE) -i $(SRC_DIR)/mir-tests/test18.mir
+
 clean-mir-interp-tests:
 	$(RM) $(BUILD_DIR)/mir-tests/interp-test1$(EXE) $(BUILD_DIR)/mir-tests/interp-test2$(EXE)
 	$(RM) $(BUILD_DIR)/mir-tests/interp-test3$(EXE) $(BUILD_DIR)/mir-tests/interp-test4$(EXE)
@@ -495,9 +498,10 @@ clean-mir-interp-tests:
 .PHONY: gen-test gen-test-loop gen-test-sieve gen-issue219-test gen-test-get-thunk-addr
 .PHONY: gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7
 .PHONY: gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
+.PHONY: gen-test18 gen-inlay-test gen-inline-test
 
-gen-test: gen-test-loop gen-test-sieve gen-test-get-thunk-addr gen-issue219-test gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7\
-          gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16
+gen-test: gen-test-loop gen-test-sieve gen-test-get-thunk-addr gen-issue219-test gen-inlay-test gen-inline-test gen-test1 gen-test2 gen-test3 gen-test4 gen-test5 gen-test6 gen-test7\
+          gen-test8 gen-test9 gen-test10 gen-test11 gen-test12 gen-test13 gen-test14 gen-test15 gen-test16 gen-test18
 
 gen-test-loop: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/loop-sieve-gen.c | $(BUILD_DIR)/mir-tests
 	$(COMPILE_AND_LINK) -DTEST_GEN_LOOP -DTEST_GEN_DEBUG=1 $^ $(LDLIBS) $(EXEO)$(BUILD_DIR)/mir-tests/gen-loop-test$(EXE)
@@ -567,9 +571,21 @@ gen-test15: $(BUILD_DIR)/run-test$(EXE)
 gen-test16: $(BUILD_DIR)/run-test$(EXE)
 	$(BUILD_DIR)/run-test$(EXE) -g $(SRC_DIR)/mir-tests/test16.mir
 
+gen-test18: $(BUILD_DIR)/run-test$(EXE)
+	$(BUILD_DIR)/run-test$(EXE) -g $(SRC_DIR)/mir-tests/test18.mir
+
+gen-inlay-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/inlay-test.c | $(BUILD_DIR)/mir-tests
+	$(COMPILE_AND_LINK) $^ $(LDLIBS) $(EXEO)$(BUILD_DIR)/mir-tests/inlay-test$(EXE)
+	$(BUILD_DIR)/mir-tests/inlay-test
+
+gen-inline-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/c2mir/c2mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/inline-test.c | $(BUILD_DIR)/mir-tests
+	$(COMPILE_AND_LINK) $^ $(LDLIBS) $(EXEO)$(BUILD_DIR)/mir-tests/inline-test$(EXE)
+	$(BUILD_DIR)/mir-tests/inline-test
+
 clean-mir-gen-tests:
 	$(RM) $(BUILD_DIR)/mir-tests/gen-loop-test$(EXE) $(BUILD_DIR)/mir-tests/gen-sieve-test$(EXE)
 	$(RM) $(BUILD_DIR)/mir-tests/issue219$(EXE) $(BUILD_DIR)/mir-tests/gen-get-thunk-addr-test
+	$(RM) $(BUILD_DIR)/mir-tests/inlay-test$(EXE) $(BUILD_DIR)/mir-tests/inline-test$(EXE)
 
 # ------------------ MIR run tests --------------------------
 

@@ -207,7 +207,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_insn_t new_insn, ext_insn;
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
 
-  if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
+  if (call_insn->code == MIR_INLAY || call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -1432,6 +1432,7 @@ static const struct pattern patterns[] = {
   {MIR_D2F, "r r", "o63 O12 rt0 rb1"}, /* frsp rt,rb */
                                        // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
+  /* MIR_INLINE and MIR_INLAY are machinized into MIR_CALL: */
   {MIR_CALL, "X h12 $", "o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mtctr r12; bcctrl */
   {MIR_CALL, "X r $",
    "o31 O444 ha12 rs1 rb1; o31 O467 rs1 sr9; o19 O528 BO20 BI0 LK1"}, /* mr r12,r; mtctr r; bcctrl
@@ -1474,7 +1475,7 @@ static void target_get_early_clobbered_hard_regs (MIR_insn_t insn, MIR_reg_t *hr
     *hr1 = F0_HARD_REG;
   } else if (code == MIR_LDMOV) { /* if mem base reg is R0 */
     *hr1 = R11_HARD_REG; /* don't use arg regs as ldmov can be used in param passing part */
-  } else if (code == MIR_CALL || code == MIR_INLINE) {
+  } else if (code == MIR_CALL) {
     *hr1 = R12_HARD_REG;
   } else if (code == MIR_SWITCH) {
     *hr1 = R10_HARD_REG;

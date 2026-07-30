@@ -12,9 +12,9 @@ int main (void) {
   ctx = MIR_init ();
   func = create_mir_func_sieve (ctx, NULL, &m);
   MIR_load_module (ctx, func->module);
-  MIR_gen_init (ctx, 1);
+  MIR_gen_init (ctx);
   MIR_link (ctx, MIR_set_gen_interface, NULL);
-  fun = MIR_gen (ctx, 0, func);
+  fun = MIR_gen (ctx, func);
   fun = _MIR_get_thunk_addr (ctx, fun);
   res = fun ();
   fprintf (stderr, "sieve () -> %ld\n", (long) res);

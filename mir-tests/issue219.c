@@ -30,7 +30,7 @@ endmodule\n\
 
 int main (void) {
   void* ctx = MIR_init ();
-  MIR_gen_init (ctx, 1);
+  MIR_gen_init (ctx);
   MIR_scan_string (ctx, ir_add);
   void* m_add = MIR_get_last_module (ctx);
   MIR_load_module (ctx, m_add);

@@ -228,7 +228,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_insn_t new_insn, ext_insn;
   MIR_insn_t prev_call_insn = DLIST_PREV (MIR_insn_t, call_insn);
 
-  if (call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
+  if (call_insn->code == MIR_INLAY || call_insn->code == MIR_INLINE) call_insn->code = MIR_CALL;
   if (proto->args == NULL) {
     nargs = 0;
   } else {
@@ -1435,6 +1435,7 @@ static const struct pattern patterns[] = {
   {MIR_D2F, "r r", "b344 r0 R1"},     /* ledbr r0,r1 */
   // i2ld, ui2ld, ld2i, f2ld, d2ld, ld2f, ld2d are builtins
 
+  /* MIR_INLINE and MIR_INLAY are machinized into MIR_CALL: */
   {MIR_CALL, "X r $", "0d* h14 R1"}, /* basr h14,r0 */
   {MIR_RET, "$", "07* ma15 H14"},    /* bcr m15,14 */
 
