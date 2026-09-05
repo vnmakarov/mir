@@ -40,9 +40,19 @@ typedef uint32_t mir_char32;
 #define MIR_WCHAR_MIN 0
 #define MIR_WCHAR_MAX UINT32_MAX
 
+/* Plain char is a target property: signed on Apple arm64 (and Windows arm64),
+   UNSIGNED on the AAPCS64 linux ABI -- aarch64-linux-gnu-gcc and clang
+   predefine __CHAR_UNSIGNED__ there, and `char c = (char) 200; c < 0` is false.
+   char_is_signed_p () (c2mir.c) and the shipped <limits.h> read these. */
+#if defined(__APPLE__) || defined(_WIN32)
 typedef mir_schar mir_char;
 #define MIR_CHAR_MIN MIR_SCHAR_MIN
 #define MIR_CHAR_MAX MIR_SCHAR_MAX
+#else
+typedef mir_uchar mir_char;
+#define MIR_CHAR_MIN 0
+#define MIR_CHAR_MAX MIR_UCHAR_MAX
+#endif
 
 typedef float mir_float;
 typedef double mir_double;
