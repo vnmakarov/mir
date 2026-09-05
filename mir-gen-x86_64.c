@@ -438,6 +438,12 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                        : type == MIR_T_D  ? MIR_DMOV
                        : type == MIR_T_LD ? MIR_LDMOV
                                           : MIR_MOV);
+#ifndef _WIN32
+      /* SysV 3.2.3: a memory argument is aligned to its type -- a long double
+         takes a 16-byte ALIGNED stack slot, so after an odd number of
+         eightbytes the caller pads one (gcc/clang callees read it there) */
+      if (type == MIR_T_LD) arg_stack_size = (arg_stack_size + 15) / 16 * 16;
+#endif
       mem_op = _MIR_new_var_mem_op (ctx, mem_type, arg_stack_size, SP_HARD_REG, MIR_NON_VAR, 1);
       new_insn = MIR_new_insn (ctx, new_insn_code, mem_op, arg_op);
       gen_assert (prev_call_insn != NULL); /* call_insn should not be 1st after simplification */
@@ -813,6 +819,11 @@ static void target_machinize (gen_ctx_t gen_ctx) {
                        : type == MIR_T_D  ? MIR_DMOV
                        : type == MIR_T_LD ? MIR_LDMOV
                                           : MIR_MOV);
+#ifndef _WIN32
+      /* the caller's 16-byte aligned slot for a long double (see the call
+         side): the incoming argument area starts 16-byte aligned */
+      if (type == MIR_T_LD) mem_size = (mem_size + 15) / 16 * 16;
+#endif
       mem_op = _MIR_new_var_mem_op (ctx, mem_type,
                                     mem_size + 8 /* ret */
                                       + start_sp_from_bp_offset,
