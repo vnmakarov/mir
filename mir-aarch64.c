@@ -603,7 +603,10 @@ void *_MIR_get_interp_shim (MIR_context_t ctx, MIR_item_t func_item, void *handl
         sp_offset += 8;
       } else {
         pat = ((type == MIR_T_F ? lds_pat : ldd_pat) & base_reg_mask) | (9 << 5);
-        pat |= stack_arg_sp_offset | temp_reg;
+        /* the caller's stack slot offset is an imm12 SCALED by the access size,
+           in bits [21:10]; the raw byte offset OR-ed into the register fields was
+           right only for the first stack FP argument (offset 0) */
+        pat |= ((stack_arg_sp_offset >> scale) << 10) | temp_reg;
         push_insns (code, &pat, sizeof (pat));
         pat = (type == MIR_T_F ? sts_pat : std_pat) | ((sp_offset >> scale) << 10) | temp_reg
               | (sp << 5);
