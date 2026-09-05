@@ -1291,13 +1291,17 @@ static MIR_proto_t create_proto (MIR_context_t ctx, const char *name, size_t nre
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for creation of proto %s", name);
   proto->name = get_ctx_str (ctx, name);
   proto->res_types = (MIR_type_t *) ((char *) proto + sizeof (struct MIR_proto));
-  if (nres != 0) memcpy (proto->res_types, res_types, nres * sizeof (MIR_type_t));
+  /* canonicalized like the func's result and var types (new_func_arr): on a
+     host whose long double is double a raw MIR_T_LD here would meet the
+     canonical D register of a call's result or argument operand */
+  for (size_t i = 0; i < nres; i++) proto->res_types[i] = canon_type (res_types[i]);
   proto->nres = (uint32_t) nres;
   proto->vararg_p = vararg_p != 0;
   VARR_CREATE (MIR_var_t, proto->args, ctx->alloc, nargs);
   for (size_t i = 0; i < nargs; i++) {
     arg = args[i];
     arg.name = get_ctx_str (ctx, arg.name);
+    arg.type = canon_type (arg.type);
     VARR_PUSH (MIR_var_t, proto->args, arg);
   }
   return proto;
@@ -1476,6 +1480,11 @@ static MIR_reg_t new_func_reg (MIR_context_t ctx, MIR_func_t func, MIR_type_t ty
 
   if (func == NULL)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "func can not be NULL for new reg creation");
+  /* MIR_LD_IS_D hosts canonicalize MIR_T_LD to MIR_T_D on data, func vars,
+     memory operands and insn codes; a register was the one typed slot left
+     out, so an ldouble reg asked for by a front end on such a host reached the
+     type check of an i2d as 'ldouble' where 'double' was expected */
+  type = canon_type (type);
   if (type != MIR_T_I64 && type != MIR_T_F && type != MIR_T_D && type != MIR_T_LD)
     MIR_get_error_func (ctx) (MIR_reg_type_error, "wrong type for var %s: got '%s'", name,
                               type_str (ctx, type));
