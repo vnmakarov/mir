@@ -968,7 +968,7 @@ static void add_stream (c2m_ctx_t c2m_ctx, FILE *f, const char *fname,
 
 static int str_getc (c2m_ctx_t c2m_ctx) {
   if (*cs->curr == '\0') return EOF;
-  return *cs->curr++;
+  return (unsigned char) *cs->curr++;
 }
 
 static void add_string_stream (c2m_ctx_t c2m_ctx, const char *pos_fname, const char *str) {
@@ -1052,7 +1052,9 @@ static int cs_get (c2m_ctx_t c2m_ctx) {
       assert (VARR_GET (char, cs->ln, 0) == '\n');
     } else if (len > 0) {
       cs->pos.ln_pos++;
-      return VARR_POP (char, cs->ln);
+      /* A source byte as unsigned char, the way fgetc returns it: where char is signed,
+         byte 0xFF would otherwise read back as -1, i.e. EOF. */
+      return (unsigned char) VARR_POP (char, cs->ln);
     }
     if (cs->fname == NULL || !get_line (c2m_ctx)) return EOF;
     len = VARR_LENGTH (char, cs->ln);
@@ -1063,6 +1065,9 @@ static int cs_get (c2m_ctx_t c2m_ctx) {
 }
 
 static void cs_unget (c2m_ctx_t c2m_ctx, int c) {
+  /* EOF never entered the line buffer, so it is not pushed back: the next cs_get finds the
+     end again.  Stored in a char it would read back as a byte (255 where char is unsigned). */
+  if (c == EOF) return;
   cs->pos.ln_pos--;
   VARR_PUSH (char, cs->ln, c);
 }
