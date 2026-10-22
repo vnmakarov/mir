@@ -13109,6 +13109,34 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
             }
             if (i >= VARR_LENGTH (node_t, sym.defs)) /* No item yet or no decl with intializer: */
               decl->u.item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
+          } else if (decl->scope != top_scope && !decl->decl_spec.static_p
+                     && !decl->decl_spec.thread_local_p && decl->used_p
+                     && integer_type_p (decl->decl_spec.type)) {
+            /* An uninitialized narrow (i8/u8/i16/u16) auto local homed in a
+               reg starts as stale 64-bit garbage: no extending store ever
+               ran, so a read can yield a value outside the type's range.
+               Extend it once at its declaration so reads keep needing no
+               extension (issue 458 follow-up).  Memory-homed decls (addr_p
+               etc.) read through typed loads, which already extend -- gen
+               yields a non-reg op for them and they are skipped. */
+            MIR_type_t vt = get_mir_type (c2m_ctx, decl->decl_spec.type);
+            if (vt == MIR_T_I8 || vt == MIR_T_U8 || vt == MIR_T_I16 || vt == MIR_T_U16) {
+              if (id->attr == NULL) { /* as in the initializer path below */
+                node_t saved_scope = curr_scope;
+
+                curr_scope = decl->scope;
+                check (c2m_ctx, id, NULL);
+                curr_scope = saved_scope;
+              }
+              op_t vr = gen (c2m_ctx, id, NULL, NULL, FALSE, NULL, NULL);
+              if (vr.mir_op.mode == MIR_OP_REG)
+                emit2 (c2m_ctx,
+                       vt == MIR_T_I8    ? MIR_EXT8
+                       : vt == MIR_T_U8  ? MIR_UEXT8
+                       : vt == MIR_T_I16 ? MIR_EXT16
+                                         : MIR_UEXT16,
+                       vr.mir_op, vr.mir_op);
+            }
           }
         } else if (initializer->code != N_IGNORE) {  // ??? general code
           init_start = VARR_LENGTH (init_el_t, init_els);
