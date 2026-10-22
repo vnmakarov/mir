@@ -2175,7 +2175,8 @@ static void out_insn (gen_ctx_t gen_ctx, MIR_insn_t insn, const char *replacemen
       && (insn->ops[1].mode == MIR_OP_INT || insn->ops[1].mode == MIR_OP_UINT))
     insn->ops[1].u.u = (insn->ops[1].u.u + 15) & -16;
   for (insn_str = replacement;; insn_str = p + 1) {
-    char ch, ch2, start_ch, d;
+    char ch, ch2, start_ch;
+    int d; /* hex_value () result: -1 ends a digit run, so not a char (unsigned on linux) */
     uint32_t opcode = 0, opcode_mask = 0xffffffff;
     int rd = -1, rn = -1, rm = -1, ra = -1, disp = -1, scale = -1;
     int immr = -1, imms = -1, imm16 = -1, imm16_shift = -1, imm12 = -1, imm12_shift = -1;
