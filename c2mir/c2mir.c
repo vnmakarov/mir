@@ -10473,6 +10473,23 @@ static void get_type_alias_name (c2m_ctx_t c2m_ctx, struct type *type, VARR (cha
   }
 }
 
+/* The OUTERMOST anonymous union a member is declared inside (NULL if none):
+   the member's storage overlaps every other member of that union, so its
+   accesses belong to the union's alias class.  An anonymous struct on the way
+   changes nothing (its members do not overlap); an anonymous union nested in
+   another anonymous union is covered by the outer one. */
+static struct type *enclosing_anon_union_type (decl_t decl) {
+  struct type *res = NULL;
+
+  for (node_t m = decl->containing_unnamed_anon_struct_union_member; m != NULL;) {
+    decl_t md = m->attr;
+
+    if (md->decl_spec.type->mode == TM_UNION) res = md->decl_spec.type;
+    m = md->containing_unnamed_anon_struct_union_member;
+  }
+  return res;
+}
+
 static MIR_alias_t get_type_alias (c2m_ctx_t c2m_ctx, struct type *type) {
   MIR_context_t ctx = c2m_ctx->ctx;
   gen_ctx_t gen_ctx = c2m_ctx->gen_ctx;
@@ -12636,11 +12653,20 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     decl = def_node->attr;
     op1 = gen (c2m_ctx, NL_HEAD (r->u.ops), NULL, NULL, r->code == N_DEREF_FIELD, NULL, NULL);
     t = get_mir_type (c2m_ctx, decl->decl_spec.type);
+    /* A member reached through an ANONYMOUS union shares storage with that
+       union's other members, so the access carries the UNION's alias class
+       (get_type_alias registers the member-class conflicts), exactly as a
+       named-union access does.  With the member type's own class instead,
+       `struct { union { long long ival; double fval; }; } v; v.fval = 1.5;
+       return v.ival;` read the stale ival at -O2 (GVN saw two non-conflicting
+       classes) -- issue #473. */
+    struct type *anon_union_type = enclosing_anon_union_type (decl);
     if (r->code == N_FIELD) {
       assert (op1.mir_op.mode == MIR_OP_MEM);
       alias = (op1.mir_op.u.mem.alias != 0 && MIR_alias_name (ctx, op1.mir_op.u.mem.alias)[0] == 'U'
                  ? op1.mir_op.u.mem.alias
-                 : get_type_alias (c2m_ctx, e->type));
+               : anon_union_type != NULL ? get_type_alias (c2m_ctx, anon_union_type)
+                                         : get_type_alias (c2m_ctx, e->type));
       op1.mir_op
         = MIR_new_alias_mem_op (ctx, t, op1.mir_op.u.mem.disp + decl->offset, op1.mir_op.u.mem.base,
                                 op1.mir_op.u.mem.index, op1.mir_op.u.mem.scale, alias,
@@ -12654,7 +12680,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         = MIR_new_alias_mem_op (ctx, t, decl->offset, op1.mir_op.u.reg, 0, 1,
                                 get_type_alias (c2m_ctx, left->type->u.ptr_type->mode == TM_UNION
                                                            ? left->type->u.ptr_type
-                                                           : e->type),
+                                                         : anon_union_type != NULL ? anon_union_type
+                                                                                   : e->type),
                                 decl->decl_spec.type->antialias);
     }
     res = new_op (decl, op1.mir_op);

@@ -378,7 +378,7 @@ clean-mir-tests: clean-mir-utility-tests clean-mir-interp-tests clean-mir-gen-te
 
 # ------------------ MIR utility tests ------------------------
 
-.PHONY: simplify-test scan-test io-test aarch64-mem-disp-test clean-mir-utility-tests
+.PHONY: simplify-test scan-test io-test ssa-combine-loop-phi-test aarch64-mem-disp-test clean-mir-utility-tests
 
 simplify-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/simplify.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/simplify-test $(LDLIBS) && $(BUILD_DIR)/simplify-test$(EXE)
@@ -388,6 +388,8 @@ hello-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DI
 
 aarch64-mem-disp-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/aarch64-mem-disp.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/aarch64-mem-disp-test $(LDLIBS) && $(BUILD_DIR)/aarch64-mem-disp-test$(EXE)
+ssa-combine-loop-phi-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(BUILD_DIR)/mir-gen.$(OBJSUFF) $(SRC_DIR)/mir-tests/ssa-combine-loop-phi.c
+	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/ssa-combine-loop-phi-test $(LDLIBS) && $(BUILD_DIR)/ssa-combine-loop-phi-test$(EXE)
 
 scan-test: $(BUILD_DIR)/mir.$(OBJSUFF) $(SRC_DIR)/mir-tests/scan-test.c
 	$(COMPILE_AND_LINK) $^ $(EXEO)$(BUILD_DIR)/scan-test $(LDLIBS) && $(BUILD_DIR)/scan-test$(EXE)
