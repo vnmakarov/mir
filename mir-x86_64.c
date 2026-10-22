@@ -57,6 +57,10 @@ void *va_arg_builtin (void *p, uint64_t t) {
     a = (char *) va->reg_save_area + va->gp_offset;
     va->gp_offset += 8;
   } else {
+    /* SysV 3.5.7 step 7: a long double takes a 16-byte ALIGNED slot of the
+       overflow area (gcc/clang callers place it there) */
+    if (type == MIR_T_LD)
+      va->overflow_arg_area = (uint64_t *) (((uint64_t) va->overflow_arg_area + 15) / 16 * 16);
     a = va->overflow_arg_area;
     va->overflow_arg_area += type == MIR_T_LD ? 2 : 1;
   }
@@ -461,6 +465,9 @@ void *_MIR_get_ff_call (MIR_context_t ctx, size_t nres, MIR_type_t *res_types, s
         sp_offset += 8;
       }
     } else if (type == MIR_T_LD) {
+      /* a 16-byte aligned stack slot (SysV 3.2.3); the area below is 16-byte
+         aligned at the call */
+      sp_offset = (sp_offset + 15) / 16 * 16;
       gen_ldst80 (code, sp_offset, (uint32_t) ((i + nres) * sizeof (long double)));
       sp_offset += 16;
     } else if (MIR_blk_type_p (type)) {
