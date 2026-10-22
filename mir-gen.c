@@ -3524,6 +3524,14 @@ static void update_mem_availability (gen_ctx_t gen_ctx, bitmap_t mem_av, bb_insn
   bitmap_set_bit_p (mem_av, mem_bb_insn->mem_index);
 }
 
+/* Insns that may change memory not visible in their operands: calls, and the
+   va_* insns, which update the va_list until the target lowers them (after
+   GVN) into calls. */
+static int mem_clobber_insn_p (MIR_insn_t insn) {
+  return (MIR_call_code_p (insn->code) || insn->code == MIR_VA_START || insn->code == MIR_VA_ARG
+          || insn->code == MIR_VA_BLOCK_ARG || insn->code == MIR_VA_END);
+}
+
 static void calculate_memory_availability (gen_ctx_t gen_ctx) {
   MIR_context_t ctx = gen_ctx->ctx;
 
@@ -3538,7 +3546,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
       mem_expr_t e;
       size_t mem_num;
 
-      if (MIR_call_code_p (insn->code)) { /* ??? improving */
+      if (mem_clobber_insn_p (insn)) { /* ??? improving */
         bitmap_clear (bb->gen);
         continue;
       }
@@ -4388,7 +4396,7 @@ static void gvn_modify (gen_ctx_t gen_ctx) {
         print_bb_insn_value (gen_ctx, bb_insn);
         continue;
       }
-      if (MIR_call_code_p (insn->code)) bitmap_clear (curr_available_mem);
+      if (mem_clobber_insn_p (insn)) bitmap_clear (curr_available_mem);
       if (!gvn_insn_p (insn)) continue;
       const_p = FALSE;
       switch (insn->code) {
