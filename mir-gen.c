@@ -5608,11 +5608,23 @@ static int get_int_const (gen_ctx_t gen_ctx, MIR_op_t *op_ref, int64_t *c) {
   return TRUE;
 }
 
-static int cycle_phi_p (bb_insn_t bb_insn) { /* we are not in pure SSA at this stage */
-  ssa_edge_t se;
+/* TRUE for a PHI at a LOOP HEADER: a block with an incoming back edge.  We
+   are not in pure SSA at this stage -- such a PHI's target register is
+   rewritten along the backedge (the conventional-SSA copy lives in the loop
+   body), so at any use reached after that copy the register holds the NEXT
+   iteration's value, and an address fold that walks through the PHI would
+   read the wrong snapshot.  The old test here (some operand defined in the
+   PHI's own block) only recognized single-BB self-loops; a multi-BB loop's
+   backedge operand is defined in the loop body, so those slipped through and
+   ssa_combine folded wrong addresses (issue #467: segfault and hang at
+   optimize level 2, correct at level 1).  Callers need CURRENT back_edge_p
+   marks -- ssa_combine recomputes them at entry. */
+static int cycle_phi_p (bb_insn_t bb_insn) {
+  edge_t e;
   if (bb_insn->insn->code != MIR_PHI) return FALSE;
-  for (size_t i = 1; i < bb_insn->insn->nops; i++)
-    if ((se = bb_insn->insn->ops[i].data) != NULL && se->def->bb == bb_insn->bb) return TRUE;
+  for (e = DLIST_HEAD (in_edge_t, bb_insn->bb->in_edges); e != NULL;
+       e = DLIST_NEXT (in_edge_t, e))
+    if (e->back_edge_p) return TRUE;
   return FALSE;
 }
 
@@ -5849,6 +5861,14 @@ static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
   ssa_edge_t se;
   addr_info_t addr_info;
 
+  /* cycle_phi_p consults back_edge_p, and the CFG may have changed since the
+     last enumeration (make_conventional_ssa runs just before us).  DFS only
+     ever SETS the mark, so clear first, then recompute for the CFG we see. */
+  for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb))
+    for (edge_t e = DLIST_HEAD (out_edge_t, bb->out_edges); e != NULL;
+         e = DLIST_NEXT (out_edge_t, e))
+      e->back_edge_p = FALSE;
+  enumerate_bbs (gen_ctx);
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     DEBUG (2, { fprintf (debug_file, "Processing bb%lu\n", (unsigned long) bb->index); });
     for (bb_insn = DLIST_TAIL (bb_insn_t, bb->bb_insns); bb_insn != NULL; bb_insn = prev_bb_insn) {
