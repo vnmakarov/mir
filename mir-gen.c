@@ -5895,22 +5895,28 @@ static void ssa_combine (gen_ctx_t gen_ctx) {  // tied reg, alias ???
         insn = bb_insn->insn;
       }
       for (size_t i = 0; i < insn->nops; i++) {
+        MIR_op_t saved_op;
+
         if (insn->ops[i].mode != MIR_OP_VAR_MEM) continue;
         if (!update_addr_p (gen_ctx, bb, &insn->ops[i], &temp_op, &addr_info)) continue;
-        remove_ssa_edge (gen_ctx, insn->ops[i].data);
+        saved_op = insn->ops[i];
         insn->ops[i].u.var_mem.disp = addr_info.disp;
-        insn->ops[i].u.var_mem.base = insn->ops[i].u.var_mem.index = MIR_NON_VAR;
-        if (addr_info.base != NULL) {
-          insn->ops[i].u.var_mem.base = addr_info.base->u.var;
-          if ((se = addr_info.base->data) != NULL)
-            add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, (int) i);
-        }
-        if (addr_info.index != NULL) {
-          insn->ops[i].u.var_mem.index = addr_info.index->u.var;
-          if ((se = addr_info.index->data) != NULL)
-            add_ssa_edge_dup (gen_ctx, se->def, se->def_op_num, bb_insn, (int) i);
-        }
+        insn->ops[i].u.var_mem.base
+          = addr_info.base != NULL ? addr_info.base->u.var : MIR_NON_VAR;
+        insn->ops[i].u.var_mem.index
+          = addr_info.index != NULL ? addr_info.index->u.var : MIR_NON_VAR;
         insn->ops[i].u.var_mem.scale = addr_info.scale;
+        /* The combined address must still be encodable, e.g. aarch64 scaled FP
+           load/store offsets must be multiples of the access size: */
+        if (!target_insn_ok_p (gen_ctx, insn)) {
+          insn->ops[i] = saved_op;
+          continue;
+        }
+        remove_ssa_edge (gen_ctx, saved_op.data);
+        if (addr_info.base != NULL && (se = addr_info.base->data) != NULL)
+          add_ssa_edge (gen_ctx, se->def, se->def_op_num, bb_insn, (int) i);
+        if (addr_info.index != NULL && (se = addr_info.index->data) != NULL)
+          add_ssa_edge_dup (gen_ctx, se->def, se->def_op_num, bb_insn, (int) i);
         DEBUG (2, {
           fprintf (debug_file, "    changing mem op %lu to ", (unsigned long) i);
           print_insn (gen_ctx, insn, TRUE);
