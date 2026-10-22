@@ -13075,16 +13075,28 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
     const char *name;
 
     decl = (decl_t) r->attr;
+    /* C17 6.9.2p1: a file-scope object declaration WITH an initializer is an
+       external DEFINITION even when it also says `extern` -- gcc, clang and
+       MSVC all define the object (gcc and clang warn).  Emitting an import for
+       it dropped the initializer: the object was defined nowhere ("import of
+       undefined item") or, with a definition in another unit, its initializer
+       was silently ignored (issue #472). */
+    int extern_def_p
+      = (declarator != NULL && declarator->code == N_DECL && decl->decl_spec.extern_p
+         && decl->scope == top_scope && decl->decl_spec.type->mode != TM_FUNC
+         && !decl->decl_spec.typedef_p && !decl->asm_p && initializer->code != N_IGNORE);
     if (declarator != NULL && declarator->code != N_IGNORE && decl->u.item == NULL) {
       id = NL_HEAD (declarator->u.ops);
       name = (decl->scope != top_scope && decl->decl_spec.static_p
                 ? get_func_static_var_name (c2m_ctx, id->u.s.s, decl)
                 : id->u.s.s);
+      if (extern_def_p)
+        warning (c2m_ctx, POS (id), "'%s' initialized and declared 'extern'", id->u.s.s);
       if (decl->asm_p) {
       } else if (decl->used_p && decl->scope != top_scope && decl->decl_spec.linkage == N_STATIC) {
         decl->u.item = MIR_new_forward (ctx, name);
         move_item_forward (c2m_ctx, decl->u.item);
-      } else if (decl->used_p && decl->decl_spec.linkage != N_IGNORE) {
+      } else if (decl->used_p && decl->decl_spec.linkage != N_IGNORE && !extern_def_p) {
         if (symbol_find (c2m_ctx, S_REGULAR, id,
                          decl->decl_spec.linkage == N_EXTERN ? top_scope : decl->scope, &sym)
             && (decl->u.item = get_ref_item (c2m_ctx, sym.def_node, name)) == NULL) {
@@ -13097,7 +13109,8 @@ static op_t gen (c2m_ctx_t c2m_ctx, node_t r, MIR_label_t true_label, MIR_label_
         if (decl->scope != top_scope) move_item_forward (c2m_ctx, decl->u.item);
       }
       if (declarator->code == N_DECL && decl->decl_spec.type->mode != TM_FUNC
-          && !decl->decl_spec.typedef_p && !decl->decl_spec.extern_p && !decl->asm_p) {
+          && !decl->decl_spec.typedef_p && (!decl->decl_spec.extern_p || extern_def_p)
+          && !decl->asm_p) {
         if (initializer->code == N_IGNORE) {
           if (decl->scope != top_scope && decl->decl_spec.static_p) {
             decl->u.item = MIR_new_bss (ctx, name, raw_type_size (c2m_ctx, decl->decl_spec.type));
