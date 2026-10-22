@@ -25,6 +25,10 @@ static char aarch64_mirc[]
     "#define __ORDER_LITTLE_ENDIAN__ 1234\n"
     "#define __ORDER_BIG_ENDIAN__ 4321\n"
     "#define __AARCH64EL__ 1\n"
+#if !defined(__APPLE__) && !defined(_WIN32)
+    /* the AAPCS64 linux ABI: plain char is unsigned (caarch64.h mir_char) */
+    "#define __CHAR_UNSIGNED__ 1\n"
+#endif
     "\n"
     "/* Some GCC predefined macros: */\n"
     "#define __SIZE_TYPE__ unsigned long\n"
