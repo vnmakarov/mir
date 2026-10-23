@@ -4398,6 +4398,9 @@ static node_t try_attr_spec (c2m_ctx_t c2m_ctx, pos_t pos, node_t *asm_part) {
     else {
       /*warning (c2m_ctx, pos, "GCC attributes are not implemented -- ignoring them")*/
     }
+    node_t r2;
+    while ((r2 = TRY (attr_spec)) != err_node)
+      op_flat_append (c2m_ctx, r, r2);
   }
   return r;
 }
