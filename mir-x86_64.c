@@ -88,6 +88,9 @@ void va_block_arg_builtin (void *res, void *p, size_t s, uint64_t ncase) {
     if (res != NULL) memcpy (res, &u, s);
     return;
   case 2:
+    /* Each SSE eightbyte takes a 16-byte slot of the 48..176 save area; a
+       block that doesn't fit is in the overflow area. */
+    if (va->fp_offset + size * 2 > 176) break;
     u[0].d = *(double *) ((char *) va->reg_save_area + va->fp_offset);
     va->fp_offset += 16;
     if (size > 8) {
