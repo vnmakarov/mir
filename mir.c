@@ -1378,9 +1378,6 @@ static MIR_item_t new_func_arr (MIR_context_t ctx, const char *name, size_t nres
     MIR_get_error_func (ctx) (MIR_nested_func_error,
                               "Creating function when previous function %s is not finished",
                               curr_func->name);
-  if (nargs == 0 && vararg_p)
-    MIR_get_error_func (ctx) (MIR_vararg_func_error,
-                              "Variable arg function %s w/o any mandatory argument", name);
   for (size_t i = 0; i < nres; i++)
     if (wrong_type_p (res_types[i]))
       MIR_get_error_func (ctx) (MIR_wrong_type_error, "wrong result type in func %s", name);

@@ -1,0 +1,33 @@
+M0:	module
+# C23 allows variadic functions without any named parameter (int f(...)).
+# Nothing in the implementation needs a named argument: the register save
+# area and va_start lowering depend only on vararg_p.
+vasum:	func	i64, ...
+	local	i64:cnt, i64:sum, i64:i, i64:v, i64:va
+	alloca	va, 48
+	va_start	va
+	va_arg	v, va, i64:0
+	mov	cnt, i64:0(v)
+	mov	sum, 0
+	mov	i, 0
+loop:
+	bge	fin, i, cnt
+	va_arg	v, va, i64:0
+	add	sum, sum, i64:0(v)
+	add	i, i, 1
+	jmp	loop
+fin:
+	va_end	va
+	ret	sum
+	endfunc
+p:	proto	i64, ...
+main:	func	i32
+	local	i64:r, i64:fa
+	mov	fa, vasum
+	call	p, fa, r, 3, 10, 20, 12
+	bne	fail, r, 42
+	ret	0
+fail:	ret	1
+	endfunc
+	export	main
+	endmodule
