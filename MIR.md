@@ -50,7 +50,15 @@
      * `MIR_T_BLK` .. `MIR_T_BLK + MIR_BLK_NUM - 1` -- block data with given case.  This type can be used only
        for argument of function.  Different case numbers can denote different ways to pass the block data
        on a particular target to implement the target call ABI.  Currently there are 6 block
-       types (`MIR_BLK_NUM = 5`)
+       types (`MIR_BLK_NUM = 5`).  The cases used now:
+       * x86-64 (SysV): `MIR_T_BLK + 1` -- passed in integer registers, `+ 2` -- in SSE registers,
+         `+ 3`/`+ 4` -- the first/second eightbyte in an integer register and the other in an SSE one
+       * aarch64: `MIR_T_BLK + 1`, `+ 2`, `+ 3` -- a homogeneous floating-point aggregate (HFA)
+         of 1-4 floats, doubles or long doubles (the member count is the block size divided
+         by the member size): passed in consecutive FP registers, or copied to the stack
+         in its memory layout when not enough FP registers are left
+       * riscv64: `MIR_T_BLK + 1` -- a block passed in an aligned (even) integer register pair
+       * other cases are passed as `MIR_T_BLK`, by the target's general rule for blocks
      * `MIR_T_RBLK` -- return block data.  This type can be used only for argument of function
    * MIR textual representation of the types are correspondingly `i8`,
      `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f`, `d`, `ld`, `p`,
