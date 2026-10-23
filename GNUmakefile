@@ -142,8 +142,18 @@ Q=@
 
 # Entries should be used for building and installation
 .PHONY: all debug install uninstall clean test bench
+.PHONY: header-test
+
+ifeq ($(CC),cl)
+  HEADER_CHECK_FLAGS = -Zs
+else
+  HEADER_CHECK_FLAGS = -std=c11 -fsyntax-only
+endif
 
 all: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
+
+header-test:
+	$(CC) $(CPPFLAGS) $(HEADER_CHECK_FLAGS) $(SRC_DIR)/mir-tests/header.c
 
 debug: CFLAGS:=$(subst $(COPTFLAGS),$(CDEBFLAGS),$(CFLAGS))
 debug: $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB) $(EXECUTABLES)
@@ -191,7 +201,7 @@ endif
 clean: clean-mir clean-c2m clean-utils clean-l2m clean-adt-tests clean-mir-tests clean-mir2c-test clean-bench
 	$(RM) $(EXECUTABLES) $(BUILD_DIR)/libmir.$(LIBSUFF) $(BUILD_DIR)/$(SOLIB)
 
-test: readme-example-test mir-bin-run-test c2mir-test
+test: header-test readme-example-test mir-bin-run-test c2mir-test
 
 test-all: adt-test simplify-test io-test scan-test mir2c-test $(L2M-TEST) test
 
