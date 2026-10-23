@@ -1636,10 +1636,19 @@ static struct pattern patterns[] = {
   {MIR_UEXT32, "r r", "Y 8B r0 R1", 0},     /* mov r0,r1 */
   {MIR_UEXT32, "r m2", "Y 8B r0 m1", 0},    /* mov r0,m1 */
 
-  {MIR_I2F, "r r", "F3 X 0F 2A r0 R1", 0},                  /* cvtsi2ss r0,r1 */
-  {MIR_I2F, "r m3", "F3 X 0F 2A r0 m1", 0},                 /* cvtsi2ss r0,m1 */
-  {MIR_I2D, "r r", "F2 X 0F 2A r0 R1", 0},                  /* cvtsi2sd r0,r1 */
-  {MIR_I2D, "r m3", "F2 X 0F 2A r0 m1", 0},                 /* cvtsi2sd r0,m1 */
+  /* The scalar converts below MERGE into the destination (bits above the
+     result are preserved), so a bare cvt makes the result falsely depend on
+     the destination register's PREVIOUS writer -- in call-heavy FP code that
+     is the previous call's return-value chain, which serializes calls the
+     OoO core could otherwise overlap (2.6-3.2x on sin/cos-heavy loops vs
+     gcc -O0 at identical dynamic instruction counts).  Break the dependency
+     the way gcc and clang do: zero the destination first (pxor dst,dst).
+     The tied "r 0" F2D/D2F forms keep the bare encoding: dst==src is a REAL
+     dependency, and the pxor would destroy the source. */
+  {MIR_I2F, "r r", "66 Y 0F EF r0 R0; F3 X 0F 2A r0 R1", 0},  /* pxor r0,r0; cvtsi2ss r0,r1 */
+  {MIR_I2F, "r m3", "66 Y 0F EF r0 R0; F3 X 0F 2A r0 m1", 0}, /* pxor r0,r0; cvtsi2ss r0,m1 */
+  {MIR_I2D, "r r", "66 Y 0F EF r0 R0; F2 X 0F 2A r0 R1", 0},  /* pxor r0,r0; cvtsi2sd r0,r1 */
+  {MIR_I2D, "r m3", "66 Y 0F EF r0 R0; F2 X 0F 2A r0 m1", 0}, /* pxor r0,r0; cvtsi2sd r0,m1 */
   {MIR_I2LD, "mld r", "X 89 r1 mt; DF /5 mt; DB /7 m0", 0}, /*mov -16(sp),r1;fild -16(sp);fstp m0 */
 
   {MIR_F2I, "r r", "F3 X 0F 2C r0 R1", 0},  /* cvttss2si r0,r1 */
@@ -1647,13 +1656,15 @@ static struct pattern patterns[] = {
   {MIR_D2I, "r r", "F2 X 0F 2C r0 R1", 0},  /* cvttsd2si r0,r1 */
   {MIR_D2I, "r md", "F2 X 0F 2C r0 m1", 0}, /* cvttsd2si r0,m1 */
 
-  {MIR_F2D, "r r", "F3 Y 0F 5A r0 R1", 0},  /* cvtss2sd r0,r1 */
-  {MIR_F2D, "r mf", "F3 Y 0F 5A r0 m1", 0}, /* cvtss2sd r0,m1 */
+  {MIR_F2D, "r 0", "F3 Y 0F 5A r0 R1", 0},                    /* cvtss2sd r0,r0 */
+  {MIR_F2D, "r r", "66 Y 0F EF r0 R0; F3 Y 0F 5A r0 R1", 0},  /* pxor r0,r0; cvtss2sd r0,r1 */
+  {MIR_F2D, "r mf", "66 Y 0F EF r0 R0; F3 Y 0F 5A r0 m1", 0}, /* pxor r0,r0; cvtss2sd r0,m1 */
                                             /* fld m1;fstpl -16(sp);movsd r0,-16(sp): */
   {MIR_LD2D, "r mld", "DB /5 m1; DD /3 mt; F2 Y 0F 10 r0 mt", 0},
 
-  {MIR_D2F, "r r", "F2 Y 0F 5A r0 R1", 0},  /* cvtsd2ss r0,r1 */
-  {MIR_D2F, "r md", "F2 Y 0F 5A r0 m1", 0}, /* cvtsd2ss r0,m1 */
+  {MIR_D2F, "r 0", "F2 Y 0F 5A r0 R1", 0},                    /* cvtsd2ss r0,r0 */
+  {MIR_D2F, "r r", "66 Y 0F EF r0 R0; F2 Y 0F 5A r0 R1", 0},  /* pxor r0,r0; cvtsd2ss r0,r1 */
+  {MIR_D2F, "r md", "66 Y 0F EF r0 R0; F2 Y 0F 5A r0 m1", 0}, /* pxor r0,r0; cvtsd2ss r0,m1 */
   /* fld m1;fstps -16(sp);movss r0, -16(sp): */
   {MIR_LD2F, "r mld", "DB /5 m1; D9 /3 mt; F3 Y 0F 10 r0 mt", 0},
 
