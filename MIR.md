@@ -125,6 +125,12 @@
          there is a warranty label addresses to be defined only at the beginning of the function execution
       * textual representation of label reference items `[<name>:] lref <label>[, <label2>][, <disp>]`
 
+  * You can find item with given name in given module by using function
+    `MIR_item_t MIR_get_module_item (MIR_context_t ctx, MIR_module_t module, const char *name)`
+
+  * You can find a global item with given name in all module by using function
+    `MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name)`
+
   * Long double data item is changed to double one, if long double coincides with double for given target or ABI
 
   * Names of MIR functions, imports, and prototypes should be unique in a module

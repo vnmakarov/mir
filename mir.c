@@ -429,7 +429,7 @@ static struct string get_ctx_string (MIR_context_t ctx, MIR_str_t str) {
 }
 
 static const char *get_ctx_str (MIR_context_t ctx, const char *string) {
-  return get_ctx_string (ctx, (MIR_str_t) {strlen (string) + 1, string}).str.s;
+  return get_ctx_string (ctx, (MIR_str_t){strlen (string) + 1, string}).str.s;
 }
 
 static void string_finish (MIR_alloc_t alloc, VARR (string_t) * *strs, HTAB (string_t) * *str_tab) {
@@ -453,7 +453,7 @@ struct alias_ctx {
 
 MIR_alias_t MIR_alias (MIR_context_t ctx, const char *name) {
   return (MIR_alias_t) string_store (ctx, &aliases, &alias_tab,
-                                     (MIR_str_t) {strlen (name) + 1, name})
+                                     (MIR_str_t){strlen (name) + 1, name})
     .num;
 }
 
@@ -627,24 +627,26 @@ static void push_data (MIR_context_t ctx, uint8_t *els, size_t size) {
   for (size_t i = 0; i < size; i++) VARR_PUSH (uint8_t, temp_data, els[i]);
 }
 
-const char *MIR_item_name (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
+static const char **item_name_ptr (MIR_item_t item) {
   mir_assert (item != NULL);
   switch (item->item_type) {
-  case MIR_func_item: return item->u.func->name;
-  case MIR_proto_item: return item->u.proto->name;
-  case MIR_import_item: return item->u.import_id;
-  case MIR_export_item: return item->u.export_id;
-  case MIR_forward_item: return item->u.forward_id;
-  case MIR_bss_item: return item->u.bss->name;
-  case MIR_data_item: return item->u.data->name;
-  case MIR_ref_data_item: return item->u.ref_data->name;
-  case MIR_lref_data_item: return item->u.lref_data->name;
-  case MIR_expr_data_item: return item->u.expr_data->name;
-  default: mir_assert (FALSE); return NULL;
+  case MIR_func_item: return &item->u.func->name;
+  case MIR_proto_item: return &item->u.proto->name;
+  case MIR_import_item: return &item->u.import_id;
+  case MIR_export_item: return &item->u.export_id;
+  case MIR_forward_item: return &item->u.forward_id;
+  case MIR_bss_item: return &item->u.bss->name;
+  case MIR_data_item: return &item->u.data->name;
+  case MIR_ref_data_item: return &item->u.ref_data->name;
+  case MIR_lref_data_item: return &item->u.lref_data->name;
+  case MIR_expr_data_item: return &item->u.expr_data->name;
+  default: mir_assert (FALSE);
   }
 }
 
-MIR_func_t MIR_get_item_func (MIR_context_t ctx MIR_UNUSED, MIR_item_t item) {
+const char *MIR_item_name (MIR_context_t ctx, MIR_item_t item) { return *item_name_ptr (item); }
+
+MIR_func_t MIR_get_item_func (MIR_context_t ctx, MIR_item_t item) {
   mir_assert (item != NULL);
   if (item->item_type == MIR_func_item) {
     return item->u.func;
@@ -1876,6 +1878,26 @@ static MIR_item_t load_bss_data_section (MIR_context_t ctx, MIR_item_t item, int
   return last_item;
 }
 
+MIR_item_t MIR_get_module_item (MIR_context_t ctx, MIR_module_t module, const char *name) {
+  mir_assert (module != NULL);
+  for (MIR_item_t item = DLIST_HEAD (MIR_item_t, module->items); item != NULL;
+       item = DLIST_NEXT (MIR_item_t, item)) {
+    if (strcmp (MIR_item_name (ctx, item), name) == 0) {
+      return item;
+    }
+  }
+  return NULL;
+}
+
+MIR_item_t MIR_get_global_item (MIR_context_t ctx, const char *name) {
+  for (MIR_module_t module = DLIST_HEAD (MIR_module_t, *MIR_get_module_list (ctx)); module != NULL;
+       module = DLIST_NEXT (MIR_module_t, module)) {
+    MIR_item_t ret = MIR_get_module_item (ctx, module, name);
+    if (ret != NULL) return ret;
+  }
+  return NULL;
+}
+
 static void link_module_lrefs (MIR_context_t ctx, MIR_module_t m) {
   for (MIR_item_t item = DLIST_HEAD (MIR_item_t, m->items); item != NULL;
        item = DLIST_NEXT (MIR_item_t, item)) {
@@ -2808,22 +2830,7 @@ void _MIR_restore_func_insns (MIR_context_t ctx, MIR_item_t func_item) {
   }
 }
 
-static void set_item_name (MIR_item_t item, const char *name) {
-  mir_assert (item != NULL);
-  switch (item->item_type) {
-  case MIR_func_item: item->u.func->name = name; break;
-  case MIR_proto_item: item->u.proto->name = name; break;
-  case MIR_import_item: item->u.import_id = name; break;
-  case MIR_export_item: item->u.export_id = name; break;
-  case MIR_forward_item: item->u.forward_id = name; break;
-  case MIR_bss_item: item->u.bss->name = name; break;
-  case MIR_data_item: item->u.data->name = name; break;
-  case MIR_ref_data_item: item->u.ref_data->name = name; break;
-  case MIR_lref_data_item: item->u.lref_data->name = name; break;
-  case MIR_expr_data_item: item->u.expr_data->name = name; break;
-  default: mir_assert (FALSE);
-  }
-}
+static void set_item_name (MIR_item_t item, const char *name) { *item_name_ptr (item) = name; }
 
 static void change_var_names (MIR_context_t new_ctx, VARR (MIR_var_t) * vars) {
   for (size_t i = 0; i < VARR_LENGTH (MIR_var_t, vars); i++) {
@@ -3080,7 +3087,7 @@ void _MIR_output_data_item_els (MIR_context_t ctx, FILE *f, MIR_item_t item, int
   }
   if (data->el_type == MIR_T_U8 && data->nel != 0 && data->u.els[data->nel - 1] == '\0') {
     fprintf (f, c_p ? "/* " : " # "); /* print possible string as a comment */
-    MIR_output_str (ctx, f, (MIR_str_t) {data->nel, (char *) data->u.els});
+    MIR_output_str (ctx, f, (MIR_str_t){data->nel, (char *) data->u.els});
     if (c_p) fprintf (f, " */");
   }
 }
@@ -4828,11 +4835,11 @@ static size_t write_str (MIR_context_t ctx, writer_func_t writer, MIR_str_t str)
   return write_str_tag (ctx, writer, str, TAG_STR1);
 }
 static size_t write_name (MIR_context_t ctx, writer_func_t writer, const char *name) {
-  return write_str_tag (ctx, writer, (MIR_str_t) {strlen (name) + 1, name}, TAG_NAME1);
+  return write_str_tag (ctx, writer, (MIR_str_t){strlen (name) + 1, name}, TAG_NAME1);
 }
 
 static size_t write_reg (MIR_context_t ctx, writer_func_t writer, const char *reg_name) {
-  size_t len = write_str_tag (ctx, writer, (MIR_str_t) {strlen (reg_name) + 1, reg_name}, TAG_REG1);
+  size_t len = write_str_tag (ctx, writer, (MIR_str_t){strlen (reg_name) + 1, reg_name}, TAG_REG1);
 
   output_regs_len += len;
   return len;
@@ -6143,7 +6150,7 @@ static void scan_string (MIR_context_t ctx, token_t *t, int c, int get_char (MIR
   t->code = TC_STR;
   t->u.str
     = string_store (ctx, &strings, &string_tab,
-                    (MIR_str_t) {VARR_LENGTH (char, temp_string), VARR_ADDR (char, temp_string)})
+                    (MIR_str_t){VARR_LENGTH (char, temp_string), VARR_ADDR (char, temp_string)})
         .str;
 }
 
