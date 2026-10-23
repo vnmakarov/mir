@@ -174,7 +174,7 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
   MIR_func_t func = curr_func_item->u.func;
   MIR_proto_t proto = call_insn->ops[0].u.ref->u.proto;
   size_t size, nargs, nops = MIR_insn_nops (ctx, call_insn), start = proto->nres + 2;
-  size_t int_arg_num = 0, fp_arg_num = 0, xmm_args = 0;
+  size_t int_arg_num = 0, fp_arg_num = 0;
   size_t init_arg_stack_size = spill_space_size, arg_stack_size = init_arg_stack_size;
 #ifdef _WIN32
   size_t block_offset = spill_space_size;
@@ -226,7 +226,6 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
                                      "passing float variadic arg (should be passed as double)");
       type = mode == MIR_OP_DOUBLE ? MIR_T_D : mode == MIR_OP_LDOUBLE ? MIR_T_LD : MIR_T_I64;
     }
-    if (xmm_args < 8 && (type == MIR_T_F || type == MIR_T_D)) xmm_args++;
     ext_insn = NULL;
     if ((ext_code = get_ext_code (type)) != MIR_INVALID_INSN) { /* extend arg if necessary */
       temp_op = _MIR_new_var_op (ctx, gen_new_temp_reg (gen_ctx, MIR_T_I64, func));
@@ -463,8 +462,10 @@ static void machinize_call (gen_ctx_t gen_ctx, MIR_insn_t call_insn) {
 #ifndef _WIN32
   if (proto->vararg_p) {
     setup_call_hard_reg_args (gen_ctx, call_insn, AX_HARD_REG);
+    /* %al: the number of XMM registers used, including those of block args
+       passed in registers (MIR_T_BLK + 2..4). */
     new_insn = MIR_new_insn (ctx, MIR_MOV, _MIR_new_var_op (ctx, AX_HARD_REG),
-                             MIR_new_int_op (ctx, xmm_args));
+                             MIR_new_int_op (ctx, fp_arg_num < 8 ? fp_arg_num : 8));
     gen_add_insn_before (gen_ctx, call_insn, new_insn);
   }
 #else
