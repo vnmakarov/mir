@@ -759,7 +759,7 @@ MIR_context_t _MIR_init (MIR_alloc_t alloc, MIR_code_alloc_t code_alloc) {
   curr_func = NULL;
   curr_label_num = 0;
   if ((ctx->string_ctx = MIR_malloc (alloc, sizeof (struct string_ctx))) == NULL
-      || (ctx->alias_ctx = MIR_malloc (alloc, sizeof (struct string_ctx))) == NULL)
+      || (ctx->alias_ctx = MIR_malloc (alloc, sizeof (struct alias_ctx))) == NULL)
     MIR_get_error_func (ctx) (MIR_alloc_error, "Not enough memory for ctx");
   string_init (alloc, &strings, &string_tab);
   string_init (alloc, &aliases, &alias_tab);
