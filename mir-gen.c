@@ -2850,13 +2850,18 @@ static void finish_ssa (gen_ctx_t gen_ctx) {
    (skipping moves) are memory address.  Collect insns which bb_insn uses are memory in
    bb_mem_insns. */
 static int collect_addr_uses (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
-                              VARR (bb_insn_t) * bb_mem_insns) {
+                              VARR (bb_insn_t) * bb_mem_insns, size_t var_size) {
   int res = TRUE;
 
   gen_assert (MIR_addr_code_p (bb_insn->insn->code) || move_p (bb_insn->insn));
   for (ssa_edge_t se = bb_insn->insn->ops[0].data; se != NULL; se = se->next_use) {
     if (se->use->insn->ops[se->use_op_num].mode == MIR_OP_VAR_MEM) {
       gen_assert (move_code_p (se->use->insn->code) && se->use_op_num <= 1);
+      /* A store of less than the whole pseudo changes only part of it, but
+         transform_addrs would make it an assignment of the whole pseudo: */
+      if (se->use_op_num == 0
+          && _MIR_type_size (gen_ctx->ctx, se->use->insn->ops[0].u.var_mem.type) < var_size)
+        res = FALSE;
       if (bb_mem_insns != NULL) VARR_PUSH (bb_insn_t, bb_mem_insns, se->use);
       continue;
     }
@@ -2874,14 +2879,25 @@ static int collect_addr_uses (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
 static int addr_eliminable_p (gen_ctx_t gen_ctx, bb_insn_t bb_insn,
                               VARR (bb_insn_t) * bb_mem_insns) {
   int res = TRUE;
+  MIR_insn_t insn = bb_insn->insn;
+  /* The size of what the addr insn addresses: a part of the pseudo for addr8,
+     addr16 and addr32. */
+  size_t var_size
+    = (insn->code == MIR_ADDR8    ? 1
+       : insn->code == MIR_ADDR16 ? 2
+       : insn->code == MIR_ADDR32 ? 4
+                                  : _MIR_type_size (gen_ctx->ctx,
+                                                    MIR_reg_type (gen_ctx->ctx,
+                                                                  insn->ops[1].u.var - MAX_HARD_REG,
+                                                                  curr_func_item->u.func)));
 
   bitmap_clear (temp_bitmap2);
   VARR_TRUNC (bb_insn_t, temp_bb_insns2, 0);
   if (bb_mem_insns != NULL) VARR_TRUNC (bb_insn_t, bb_mem_insns, 0);
-  if (!collect_addr_uses (gen_ctx, bb_insn, bb_mem_insns)) res = FALSE;
+  if (!collect_addr_uses (gen_ctx, bb_insn, bb_mem_insns, var_size)) res = FALSE;
   while (VARR_LENGTH (bb_insn_t, temp_bb_insns2) != 0) {
     bb_insn_t copy_bb_insn = VARR_POP (bb_insn_t, temp_bb_insns2);
-    if (!collect_addr_uses (gen_ctx, copy_bb_insn, bb_mem_insns)) res = FALSE;
+    if (!collect_addr_uses (gen_ctx, copy_bb_insn, bb_mem_insns, var_size)) res = FALSE;
   }
   return res;
 }
