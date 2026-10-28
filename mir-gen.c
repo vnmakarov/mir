@@ -3492,7 +3492,10 @@ static int mem_av_trans_func (gen_ctx_t gen_ctx, bb_t bb) {
       alias_p = FALSE;
       insn = VARR_GET (mem_expr_t, mem_exprs, nel)->insn;
       mem_ref = insn->ops[0].mode == MIR_OP_VAR_MEM ? &insn->ops[0] : &insn->ops[1];
-      FOREACH_BITMAP_BIT (bi2, bb->gen, nel2) { /* consider only stores */
+      /* Check every store of the BB, not only the ones still available at its end:
+         a store made unavailable by a later store which may alias it still changed
+         memory, and may-alias is not transitive (alias 0 aliases anything). */
+      FOREACH_BITMAP_BIT (bi2, bb->kill, nel2) { /* consider only stores */
         mem_insn = VARR_GET (mem_expr_t, mem_exprs, nel2)->insn;
         if (mem_insn->ops[0].mode == MIR_OP_VAR_MEM
             && may_mem_alias_p (mem_ref, &mem_insn->ops[0])) {
@@ -3542,6 +3545,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
   for (bb_t bb = DLIST_HEAD (bb_t, curr_cfg->bbs); bb != NULL; bb = DLIST_NEXT (bb_t, bb)) {
     DEBUG (2, { fprintf (debug_file, "  BB%lu:\n", (unsigned long) bb->index); });
     bitmap_clear (bb->gen);
+    bitmap_clear (bb->kill); /* all stores of the BB, for mem_av_trans_func */
     for (bb_insn_t bb_insn = DLIST_HEAD (bb_insn_t, bb->bb_insns); bb_insn != NULL;
          bb_insn = DLIST_NEXT (bb_insn_t, bb_insn)) {
       MIR_insn_t insn = bb_insn->insn;
@@ -3566,6 +3570,7 @@ static void calculate_memory_availability (gen_ctx_t gen_ctx) {
       e->mem_num = (uint32_t) mem_num;
       e->next = NULL;
       VARR_PUSH (mem_expr_t, mem_exprs, e);
+      if (insn->ops[0].mode == MIR_OP_VAR_MEM) bitmap_set_bit_p (bb->kill, mem_num);
       if (insn->ops[0].mode == MIR_OP_VAR_MEM || insn->ops[1].mode == MIR_OP_VAR_MEM)
         update_mem_availability (gen_ctx, bb->gen, bb_insn);
     }
