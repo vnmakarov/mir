@@ -16,6 +16,19 @@ struct c2mir_macro_command {
   const char *name, *def; /* def is used only when def_p is true */
 };
 
+typedef enum {
+  log_verbose,
+  log_warning,
+  log_error,
+  log_syntax_error,
+  log_fatal_error
+} c2mir_log_type;
+
+typedef struct c2mir_pos {
+  const char *fname;
+  int lno, ln_pos;
+} c2mir_pos;
+
 struct c2mir_options {
   FILE *message_file;
   int debug_p, verbose_p, ignore_warnings_p, no_prepro_p, prepro_only_p;
@@ -26,6 +39,8 @@ struct c2mir_options {
   size_t macro_commands_num, include_dirs_num;
   struct c2mir_macro_command *macro_commands;
   const char **include_dirs;
+  void (*console_log) (void *instance, c2mir_log_type type, c2mir_pos *pos, const char *message, va_list args);
+  void *console_instance;
 };
 
 void c2mir_init (MIR_context_t ctx);
