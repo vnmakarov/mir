@@ -98,7 +98,7 @@ static char x86_64_mirc[]
     "typedef unsigned short char16_t;\n"
     "typedef unsigned int char32_t;\n"
     "\n"
-#if defined(__linux__)
+#if defined(__linux__) || defined(__wasm__)
     "#define __gnu_linux__ 1\n"
     "#define __linux 1\n"
     "#define __linux__ 1\n"

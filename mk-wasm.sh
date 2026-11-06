@@ -1,0 +1,1 @@
+emsdk-env emcc -I. -MMD -MP -fPIC -g -std=gnu11 -Wno-abi -fsigned-char -O3 -DNDEBUG mir.c mir-gen.c c2mir/c2mir.c c2mir/c2mir-driver.c -lm -ldl -lpthread -o c2m.wasm
