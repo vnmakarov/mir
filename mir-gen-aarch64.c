@@ -1106,8 +1106,10 @@ static void target_make_prolog_epilog (gen_ctx_t gen_ctx, bitmap_t used_hard_reg
       else
         saved_fregs_num++;
     }
+  /* lr is allocatable and call-used: a leaf function that uses it needs the prologue, which saves it */
   if (leaf_p && !alloca_p && saved_iregs_num == 0 && saved_fregs_num == 0 && !func->vararg_p
-      && stack_slots_num == 0 && !block_arg_func_p && small_aggregate_save_area == 0)
+      && stack_slots_num == 0 && !block_arg_func_p && small_aggregate_save_area == 0
+      && !bitmap_bit_p (used_hard_regs, LINK_HARD_REG))
     return;
   sp_reg_op = _MIR_new_var_op (ctx, SP_HARD_REG);
   fp_reg_op = _MIR_new_var_op (ctx, FP_HARD_REG);
